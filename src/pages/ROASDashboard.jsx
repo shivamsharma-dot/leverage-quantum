@@ -26,7 +26,7 @@ function parseNum(val) {
 }
 
 export default function ROASDashboard() {
-  const { data, loading, error, refetch, lastUpdated } = useROASData()
+  const { data, loading, error, refetch, lastUpdated, source } = useROASData()
   const [channelFilter, setChannelFilter] = useState('All')
   const [search, setSearch] = useState('')
 
@@ -102,7 +102,7 @@ export default function ROASDashboard() {
             <p className={styles.breadcrumb}>Dashboards / ROAS</p>
             <h1 className={styles.title}>ROAS 2025</h1>
             <p className={styles.subtitle}>
-              {lastUpdated ? `Last synced: ${lastUpdated.toLocaleTimeString()}` : 'Loading from Google Sheets…'}
+              {lastUpdated ? (source === 'live' ? `Live data · ${lastUpdated.toLocaleTimeString()}` : source === 'csv' ? `Sheet data · ${lastUpdated.toLocaleTimeString()}` : `Demo data · ${lastUpdated.toLocaleTimeString()}`) : 'Connecting to Google Sheet…'}
               {error && <span className={styles.errorChip}> ⚠ Using demo data</span>}
             </p>
           </div>
