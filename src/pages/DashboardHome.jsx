@@ -20,11 +20,11 @@ const DASHBOARDS = [
   },
   {
     id: 'leadquality',
-    to: '#',
+    to: '/dashboard/lead-quality',
     label: 'Lead Quality',
     description: 'L→QL→STU funnel conversion rates broken down by source, campaign and geography.',
     metrics: ['OPPs', 'QLs', 'STUs', 'L→Q%'],
-    status: 'soon',
+    status: 'live',
     color: 'green',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -34,11 +34,11 @@ const DASHBOARDS = [
   },
   {
     id: 'channelmix',
-    to: '#',
+    to: '/dashboard/lead-quality',
     label: 'Channel Mix',
     description: 'Spend allocation and performance comparison across paid, organic and affiliate channels.',
     metrics: ['Paid', 'Organic', 'Affiliate', 'Referral'],
-    status: 'soon',
+    status: 'live',
     color: 'teal',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -48,11 +48,11 @@ const DASHBOARDS = [
   },
   {
     id: 'revenue',
-    to: '#',
+    to: '/dashboard/lead-quality',
     label: 'Revenue',
     description: 'AC and VAS revenue tracking with projected vs actual comparison by month.',
     metrics: ['AC', 'VAS', 'Projected', 'Actual'],
-    status: 'soon',
+    status: 'live',
     color: 'navy',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

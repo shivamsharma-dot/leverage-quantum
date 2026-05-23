@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth'
 import LoginPage from './pages/LoginPage'
 import DashboardHome from './pages/DashboardHome'
 import ROASDashboard from './pages/ROASDashboard'
+import LeadQualityDashboard from './pages/LeadQualityDashboard'
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth()
@@ -14,16 +15,9 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={
-        <ProtectedRoute>
-          <DashboardHome />
-        </ProtectedRoute>
-      } />
-      <Route path="/dashboard/roas" element={
-        <ProtectedRoute>
-          <ROASDashboard />
-        </ProtectedRoute>
-      } />
+      <Route path="/" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
+      <Route path="/dashboard/roas" element={<ProtectedRoute><ROASDashboard /></ProtectedRoute>} />
+      <Route path="/dashboard/lead-quality" element={<ProtectedRoute><LeadQualityDashboard /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
