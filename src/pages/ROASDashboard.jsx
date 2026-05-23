@@ -164,33 +164,30 @@ export default function ROASDashboard(){
 
         <div className={styles.chartsRow}>
           <div className={styles.chartCard}>
-            <h3 className={styles.chartTitle}>Monthly Spend vs Revenue</h3>
+            <h3 className={styles.chartTitle}>Monthly Spend — All 2025</h3>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={monthlyTrend}>
                 <XAxis dataKey="month" tick={{fontSize:10,fill:'#9CA3AF'}}/>
-                <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} tickFormatter={v=>fmt(v)}/>
-                <Tooltip {...TS} formatter={v=>[fmt(v)]}/>
-                <Legend wrapperStyle={{fontSize:11}}/>
-                <Bar dataKey="spend" name="Spend"   fill="#1C9FD4" radius={[3,3,0,0]} fillOpacity={0.85}/>
-                <Bar dataKey="rev"   name="Revenue" fill="#4BAE8A" radius={[3,3,0,0]} fillOpacity={0.85}/>
+                <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} tickFormatter={v=>fmt(v)} width={65}/>
+                <Tooltip {...TS} formatter={v=>[fmt(v),'Spend']}/>
+                <Bar dataKey="spend" name="Spend" fill="#1C9FD4" radius={[3,3,0,0]} fillOpacity={0.85}/>
               </BarChart>
             </ResponsiveContainer>
           </div>
           <div className={styles.chartCard}>
-            <h3 className={styles.chartTitle}>ROAS vs Projected ROAS</h3>
+            <h3 className={styles.chartTitle}>ROAS trend — Aug to Dec 2025</h3>
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={monthlyTrend}>
+              <LineChart data={monthlyTrend.filter(d=>d.roas!==null)}>
                 <XAxis dataKey="month" tick={{fontSize:10,fill:'#9CA3AF'}}/>
-                <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} tickFormatter={v=>v+'x'}/>
-                <Tooltip {...TS} formatter={v=>[v+'x']}/>
+                <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} tickFormatter={v=>v+'x'} width={45}/>
+                <Tooltip {...TS} formatter={(v,n)=>[v+'x',n]}/>
                 <Legend wrapperStyle={{fontSize:11}}/>
-                <Line type="monotone" dataKey="roas"     name="ROAS"      stroke="#4BAE8A" strokeWidth={2.5} dot={{r:3}}/>
+                <Line type="monotone" dataKey="roas" name="ROAS" stroke="#4BAE8A" strokeWidth={2.5} dot={{r:4,fill:'#4BAE8A'}}/>
                 <Line type="monotone" dataKey="projRoas" name="Proj ROAS" stroke="#818CF8" strokeWidth={2} strokeDasharray="5 5" dot={{r:3}}/>
               </LineChart>
             </ResponsiveContainer>
           </div>
         </div>
-
         <div className={styles.chartsRow}>
           <div className={styles.chartCard}>
             <h3 className={styles.chartTitle}>Spend by Channel</h3>
