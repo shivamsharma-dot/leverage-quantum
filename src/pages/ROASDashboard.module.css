@@ -282,3 +282,25 @@ td.numCell { text-align: right; font-variant-numeric: tabular-nums; }
   .chartsRow .chartCard:last-child { grid-column: span 1; }
   .kpiGrid { grid-template-columns: repeat(2,1fr); }
 }
+
+.liveChip { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:500; color:#059669; background:#ECFDF5; border:1px solid #A7F3D0; border-radius:100px; padding:5px 12px; white-space:nowrap; }
+.liveDot { width:5px; height:5px; background:#059669; border-radius:50%; animation:blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+.fg { display:flex; flex-direction:column; gap:5px; }
+.fg label { font-size:10px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#9CA3AF; }
+.fsel { background:#fff; border:1px solid #E5E7EB; border-radius:7px; padding:7px 28px 7px 10px; color:#111827; font-size:12px; font-weight:500; cursor:pointer; min-width:140px; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2.5' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 8px center; box-shadow:0 1px 2px rgba(0,0,0,0.04); outline:none; }
+.legend { display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+.legendItem { display:flex; align-items:center; gap:7px; font-size:11.5px; color:#6B7280; }
+.legendDot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.legendVal { margin-left:auto; color:#111827; font-weight:600; font-size:11.5px; }
+.roasGood { color:#059669 !important; font-weight:700; }
+.roasOk   { color:#D97706 !important; font-weight:700; }
+.roas_    { color:#9CA3AF !important; }
+.r        { text-align:right; }
+
+/* MoM delta badges */
+.momLabel { color:#1C9FD4; font-weight:600; }
+.momChip { display:flex; align-items:center; padding:6px 12px; background:#EFF8FD; border:1px solid #BAE6FD; border-radius:7px; font-size:11.5px; font-weight:500; color:#1C9FD4; white-space:nowrap; }
+.kpiBottom { display:flex; align-items:center; justify-content:space-between; margin-top:4px; gap:4px; }
+.deltaUp { display:inline-flex; align-items:center; gap:2px; font-size:10px; font-weight:700; color:#059669; background:#DCFCE7; border-radius:4px; padding:1px 5px; white-space:nowrap; }
+.deltaDown { display:inline-flex; align-items:center; gap:2px; font-size:10px; font-weight:700; color:#DC2626; background:#FEE2E2; border-radius:4px; padding:1px 5px; white-space:nowrap; }
