@@ -1,67 +1,87 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, createContext, useContext } from 'react'
 import { jwtDecode } from 'jwt-decode'
 
 const AuthContext = createContext(null)
 
+const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 const ALLOWED_DOMAIN = 'leverageedu.com'
 
-// ── EMAIL WHITELIST — only these people can access Leverage Quantum ──
-const ALLOWED_EMAILS = [
-  'shivam.sharma@leverageedu.com',
-  'ruchi.singh@leverageedu.com',
-  'manish@leverageedu.com',
-  'akshay@leverageedu.com',
-  'aman@leverageedu.com',
-  'shashwat.goswami@leverageedu.com',
-  'chilukoti.sriteja@leverageedu.com',
-  'zuber.saifi@leverageedu.com',
-  'nishant.bhatia@leverageedu.com',
-]
+async function checkUserAccess(email) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}&select=email,role`,
+    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+  )
+  if (!res.ok) return null
+  const data = await res.json()
+  return data.length > 0 ? data[0] : null
+}
 
-// ── ADMINS — can manage user access from Settings panel ──
-const ADMIN_EMAILS = [
-  'shivam.sharma@leverageedu.com',
-  'ruchi.singh@leverageedu.com',
-]
+export async function getAccessList() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/allowed_users?select=email,role,added_by,created_at&order=created_at.asc`,
+    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+  )
+  if (!res.ok) return []
+  return await res.json()
+}
 
-function getAllowedEmails() {
-  try {
-    const stored = localStorage.getItem('lq_allowed_emails')
-    return stored ? JSON.parse(stored) : ALLOWED_EMAILS
-  } catch { return ALLOWED_EMAILS }
+export async function addUserAccess(email, role = 'viewer', addedBy = '') {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/allowed_users`,
+    {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ email: email.toLowerCase().trim(), role, added_by: addedBy })
+    }
+  )
+  return res.ok || res.status === 201
+}
+
+export async function removeUserAccess(email) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}`,
+    {
+      method: 'DELETE',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    }
+  )
+  return res.ok
 }
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    // Check if user already logged in (persisted in localStorage)
     try {
       const saved = localStorage.getItem('lq_user')
       return saved ? JSON.parse(saved) : null
-    } catch {
-      return null
-    }
+    } catch { return null }
   })
 
-  const loginWithGoogle = (credentialResponse) => {
+  const loginWithGoogle = async (credentialResponse) => {
     try {
       const decoded = jwtDecode(credentialResponse.credential)
-      const email = decoded.email || ''
+      const email = (decoded.email || '').toLowerCase()
 
-      // Enforce domain restriction
       if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
         throw new Error(`Access denied. Only @${ALLOWED_DOMAIN} accounts are allowed.`)
       }
 
-      // Enforce whitelist
-      const allowedEmails = getAllowedEmails()
-      if (!allowedEmails.includes(email.toLowerCase())) {
-        throw new Error(`Access denied. Your account does not have permission to access Leverage Quantum. Contact your admin.`)
+      // Check Supabase whitelist
+      const access = await checkUserAccess(email)
+      if (!access) {
+        throw new Error('Access denied. Your account does not have permission to access Leverage Quantum. Contact your admin.')
       }
 
       const userData = {
         name: decoded.name,
         email: decoded.email,
         picture: decoded.picture,
+        role: access.role,
         token: credentialResponse.credential,
         loginTime: Date.now()
       }
@@ -74,27 +94,25 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const loginWithEmail = (email, password) => {
-    // Enforce domain restriction
+  const loginWithEmail = async (email, password) => {
+    email = email.toLowerCase().trim()
     if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
       return { success: false, error: `Only @${ALLOWED_DOMAIN} emails are allowed.` }
-    }
-
-    // Enforce whitelist
-    const allowedEmails = getAllowedEmails()
-    if (!allowedEmails.includes(email.toLowerCase())) {
-      return { success: false, error: `Access denied. Your account does not have permission to access Leverage Quantum.` }
     }
     if (!password || password.length < 6) {
       return { success: false, error: 'Password must be at least 6 characters.' }
     }
 
-    // For email login, in production you'd call your backend API here
-    // For now we create a session with the email
+    const access = await checkUserAccess(email)
+    if (!access) {
+      return { success: false, error: 'Access denied. Your account does not have permission to access Leverage Quantum.' }
+    }
+
     const userData = {
       name: email.split('@')[0].replace('.', ' '),
       email,
       picture: null,
+      role: access.role,
       token: btoa(email + ':' + Date.now()),
       loginTime: Date.now()
     }
@@ -121,16 +139,13 @@ export function useAuth() {
 }
 
 export function isAdmin(email) {
-  return ADMIN_EMAILS.includes((email||'').toLowerCase())
-}
-
-export function getAccessList() {
-  return getAllowedEmails()
-}
-
-export function saveAccessList(emails) {
+  // Check role from stored user
   try {
-    localStorage.setItem('lq_allowed_emails', JSON.stringify(emails.map(e=>e.toLowerCase().trim())))
-    return true
-  } catch { return false }
+    const saved = localStorage.getItem('lq_user')
+    if (saved) {
+      const u = JSON.parse(saved)
+      return u.role === 'admin'
+    }
+  } catch {}
+  return false
 }
