@@ -15,8 +15,8 @@ const NAV = [
     label: 'Coming Soon',
     items: [
       { to: '/dashboard/lead-quality', icon: <FunnelIcon />, label: 'Lead Quality', soon: false },
-      { to: '#', icon: <MixIcon />,   label: 'Channel Mix',  soon: true },
-      { to: '#', icon: <RevenueIcon />, label: 'Revenue',    soon: true },
+      { to: '/dashboard/channel-mix', icon: <MixIcon />,   label: 'Channel Mix',  soon: false },
+      { to: '/dashboard/revenue',    icon: <RevenueIcon />, label: 'Revenue',    soon: false },
     ]
   }
 ]
