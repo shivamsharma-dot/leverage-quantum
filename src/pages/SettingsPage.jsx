@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
-import { useAuth } from '../hooks/useAuth'
+import { useAuth, isAdmin, getAccessList, saveAccessList } from '../hooks/useAuth'
 import styles from './SettingsPage.module.css'
 
 // Claude API call
@@ -44,6 +44,44 @@ const DEFAULT_SR_FEE = 90000
 export default function SettingsPage() {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState('chat')
+  const userIsAdmin = isAdmin(user?.email)
+
+  // User management state (admin only)
+  const [accessList, setAccessList] = useState(() => getAccessList())
+  const [newEmail, setNewEmail] = useState('')
+  const [accessSaved, setAccessSaved] = useState(false)
+  const [accessMsg, setAccessMsg] = useState('')
+
+  const addUser = () => {
+    const email = newEmail.trim().toLowerCase()
+    if (!email.includes('@leverageedu.com')) {
+      setAccessMsg('Only @leverageedu.com emails allowed')
+      return
+    }
+    if (accessList.includes(email)) {
+      setAccessMsg('Email already has access')
+      return
+    }
+    const updated = [...accessList, email]
+    setAccessList(updated)
+    saveAccessList(updated)
+    setNewEmail('')
+    setAccessMsg(`✓ ${email} added`)
+    setTimeout(() => setAccessMsg(''), 3000)
+  }
+
+  const removeUser = (email) => {
+    if (email === user?.email) {
+      setAccessMsg("You can't remove yourself")
+      setTimeout(() => setAccessMsg(''), 3000)
+      return
+    }
+    const updated = accessList.filter(e => e !== email)
+    setAccessList(updated)
+    saveAccessList(updated)
+    setAccessMsg(`✓ ${email} removed`)
+    setTimeout(() => setAccessMsg(''), 3000)
+  }
 
   // SR Fee setting
   const [srFee, setSrFee] = useState(() => {
@@ -133,6 +171,7 @@ export default function SettingsPage() {
           {[
             { id:'chat',    label:'🤖 Quantum AI Chat' },
             { id:'data',    label:'📊 Data Settings' },
+            ...(userIsAdmin ? [{ id:'users', label:'👥 User Access' }] : []),
             { id:'profile', label:'👤 Profile' },
           ].map(t => (
             <button key={t.id} className={`${styles.tab} ${activeTab===t.id?styles.tabActive:''}`}
@@ -246,6 +285,81 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* USER ACCESS TAB — admin only */}
+        {activeTab === 'users' && userIsAdmin && (
+          <div className={styles.settingsWrap}>
+            <div className={styles.settingCard}>
+              <h3 className={styles.settingTitle}>User Access Management</h3>
+              <p className={styles.settingDesc}>Only admins can manage who has access to Leverage Quantum. Changes take effect immediately.</p>
+
+              {/* Add new user */}
+              <div className={styles.settingRow}>
+                <label>Add User</label>
+                <div className={styles.inputGroup}>
+                  <input
+                    type="email"
+                    className={styles.settingInput}
+                    style={{width:240}}
+                    placeholder="email@leverageedu.com"
+                    value={newEmail}
+                    onChange={e => setNewEmail(e.target.value)}
+                    onKeyDown={e => e.key==='Enter' && addUser()}
+                  />
+                  <button className={styles.saveBtn} onClick={addUser}>Add</button>
+                </div>
+              </div>
+              {accessMsg && (
+                <div className={styles.settingNote} style={{color: accessMsg.startsWith('✓')?'#059669':'#DC2626'}}>
+                  {accessMsg}
+                </div>
+              )}
+
+              {/* Current users list */}
+              <div style={{marginTop:16}}>
+                <p style={{fontSize:11,fontWeight:600,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8}}>
+                  {accessList.length} users with access
+                </p>
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  {accessList.map(email => (
+                    <div key={email} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 13px',background:'#F9FAFB',borderRadius:8,border:'1px solid #F3F4F6'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:9}}>
+                        <div style={{width:28,height:28,borderRadius:'50%',background:'#EFF8FD',border:'1px solid #BAE6FD',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#1C9FD4',flexShrink:0}}>
+                          {email[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{fontSize:12.5,fontWeight:600,color:'#111827'}}>{email}</div>
+                          {email===user?.email && <div style={{fontSize:10,color:'#059669'}}>You (Admin)</div>}
+                        </div>
+                      </div>
+                      {email !== user?.email && (
+                        <button
+                          onClick={() => removeUser(email)}
+                          style={{background:'none',border:'none',color:'#9CA3AF',cursor:'pointer',fontSize:11,fontWeight:500,padding:'3px 8px',borderRadius:5,transition:'all .15s'}}
+                          onMouseOver={e=>e.target.style.color='#DC2626'}
+                          onMouseOut={e=>e.target.style.color='#9CA3AF'}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.settingCard}>
+              <h3 className={styles.settingTitle}>Admin Accounts</h3>
+              <p className={styles.settingDesc}>Admins can manage user access. To change admins, update the code in useAuth.jsx.</p>
+              {['shivam.sharma@leverageedu.com','ruchi.singh@leverageedu.com'].map(e=>(
+                <div key={e} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'#FFFBEB',borderRadius:7,border:'1px solid #FDE68A',marginBottom:6}}>
+                  <span style={{fontSize:12px,color:'#92400E'}}>👑</span>
+                  <span style={{fontSize:12.5,fontWeight:600,color:'#92400E'}}>{e}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
