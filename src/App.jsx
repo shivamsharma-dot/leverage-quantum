@@ -6,6 +6,7 @@ import ROASDashboard from './pages/ROASDashboard'
 import LeadQualityDashboard from './pages/LeadQualityDashboard'
 import ChannelMixDashboard from './pages/ChannelMixDashboard'
 import RevenueDashboard from './pages/RevenueDashboard'
+import MTDDashboard from './pages/MTDDashboard'
 import SettingsPage from './pages/SettingsPage'
 
 function ProtectedRoute({ children }) {
@@ -21,6 +22,7 @@ export default function App() {
       <Route path="/" element={<ProtectedRoute><DashboardHome /></ProtectedRoute>} />
       <Route path="/dashboard/roas" element={<ProtectedRoute><ROASDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/lead-quality" element={<ProtectedRoute><LeadQualityDashboard /></ProtectedRoute>} />
+      <Route path="/dashboard/mtd"          element={<ProtectedRoute><MTDDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/channel-mix"   element={<ProtectedRoute><ChannelMixDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/revenue"       element={<ProtectedRoute><RevenueDashboard /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
