@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
-import { useAuth, isAdmin, getAccessList, saveAccessList } from '../hooks/useAuth'
+import { useAuth, isAdmin, getAccessList, addUserAccess, removeUserAccess } from '../hooks/useAuth'
 import styles from './SettingsPage.module.css'
 
 // Claude API call
@@ -46,41 +46,57 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('chat')
   const userIsAdmin = isAdmin(user?.email)
 
-  // User management state (admin only)
-  const [accessList, setAccessList] = useState(() => getAccessList())
-  const [newEmail, setNewEmail] = useState('')
-  const [accessSaved, setAccessSaved] = useState(false)
-  const [accessMsg, setAccessMsg] = useState('')
+  // User management — Supabase backed
+  const [accessList, setAccessList]   = useState([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [newEmail, setNewEmail]         = useState('')
+  const [newRole, setNewRole]           = useState('viewer')
+  const [accessMsg, setAccessMsg]       = useState('')
 
-  const addUser = () => {
-    const email = newEmail.trim().toLowerCase()
-    if (!email.includes('@leverageedu.com')) {
-      setAccessMsg('Only @leverageedu.com emails allowed')
-      return
-    }
-    if (accessList.includes(email)) {
-      setAccessMsg('Email already has access')
-      return
-    }
-    const updated = [...accessList, email]
-    setAccessList(updated)
-    saveAccessList(updated)
-    setNewEmail('')
-    setAccessMsg(`✓ ${email} added`)
-    setTimeout(() => setAccessMsg(''), 3000)
+  const loadUsers = async () => {
+    setUsersLoading(true)
+    const list = await getAccessList()
+    setAccessList(list)
+    setUsersLoading(false)
   }
 
-  const removeUser = (email) => {
-    if (email === user?.email) {
-      setAccessMsg("You can't remove yourself")
-      setTimeout(() => setAccessMsg(''), 3000)
-      return
+  useEffect(() => { if (userIsAdmin) loadUsers() }, [userIsAdmin])
+
+  const addUser = async () => {
+    const email = newEmail.trim().toLowerCase()
+    if (!email.includes('@leverageedu.com')) {
+      setAccessMsg('❌ Only @leverageedu.com emails allowed'); return
     }
-    const updated = accessList.filter(e => e !== email)
-    setAccessList(updated)
-    saveAccessList(updated)
-    setAccessMsg(`✓ ${email} removed`)
-    setTimeout(() => setAccessMsg(''), 3000)
+    if (accessList.find(u => u.email === email)) {
+      setAccessMsg('❌ User already has access'); return
+    }
+    setUsersLoading(true)
+    const ok = await addUserAccess(email, newRole, user?.email)
+    if (ok) {
+      setAccessMsg(`✅ ${email} added successfully`)
+      setNewEmail(''); setNewRole('viewer')
+      await loadUsers()
+    } else {
+      setAccessMsg('❌ Failed to add user. Try again.')
+    }
+    setUsersLoading(false)
+    setTimeout(() => setAccessMsg(''), 4000)
+  }
+
+  const removeUser = async (email) => {
+    if (email === user?.email) {
+      setAccessMsg("❌ You can't remove yourself"); return
+    }
+    setUsersLoading(true)
+    const ok = await removeUserAccess(email)
+    if (ok) {
+      setAccessMsg(`✅ ${email} removed`)
+      await loadUsers()
+    } else {
+      setAccessMsg('❌ Failed to remove. Try again.')
+    }
+    setUsersLoading(false)
+    setTimeout(() => setAccessMsg(''), 4000)
   }
 
   // SR Fee setting
@@ -294,72 +310,94 @@ export default function SettingsPage() {
           <div className={styles.settingsWrap}>
             <div className={styles.settingCard}>
               <h3 className={styles.settingTitle}>User Access Management</h3>
-              <p className={styles.settingDesc}>Only admins can manage who has access to Leverage Quantum. Changes take effect immediately.</p>
+              <p className={styles.settingDesc}>Manage who can access Leverage Quantum. Changes are saved to the database instantly and apply to all devices.</p>
 
               {/* Add new user */}
               <div className={styles.settingRow}>
                 <label>Add User</label>
-                <div className={styles.inputGroup}>
-                  <input
-                    type="email"
-                    className={styles.settingInput}
-                    style={{width:240}}
-                    placeholder="email@leverageedu.com"
-                    value={newEmail}
-                    onChange={e => setNewEmail(e.target.value)}
-                    onKeyDown={e => e.key==='Enter' && addUser()}
-                  />
-                  <button className={styles.saveBtn} onClick={addUser}>Add</button>
+                <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
+                  <div className={styles.inputGroup}>
+                    <input
+                      type="email"
+                      className={styles.settingInput}
+                      style={{width:220}}
+                      placeholder="email@leverageedu.com"
+                      value={newEmail}
+                      onChange={e => setNewEmail(e.target.value)}
+                      onKeyDown={e => e.key==='Enter' && addUser()}
+                    />
+                  </div>
+                  <select
+                    value={newRole}
+                    onChange={e => setNewRole(e.target.value)}
+                    style={{padding:'8px 12px',border:'1px solid #E5E7EB',borderRadius:8,fontSize:12,fontFamily:'Inter,sans-serif',color:'#374151',background:'#fff',cursor:'pointer'}}
+                  >
+                    <option value="viewer">Viewer</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <button className={styles.saveBtn} style={{borderRadius:8,padding:'8px 18px'}} onClick={addUser} disabled={usersLoading}>
+                    {usersLoading ? '...' : '+ Add'}
+                  </button>
                 </div>
               </div>
+
               {accessMsg && (
-                <div className={styles.settingNote} style={{color: accessMsg.startsWith('✓')?'#059669':'#DC2626'}}>
+                <div className={styles.settingNote} style={{
+                  color: accessMsg.startsWith('✅')?'#059669':'#DC2626',
+                  background: accessMsg.startsWith('✅')?'#ECFDF5':'#FEF2F2',
+                  border: `1px solid ${accessMsg.startsWith('✅')?'#A7F3D0':'#FECACA'}`
+                }}>
                   {accessMsg}
                 </div>
               )}
 
-              {/* Current users list */}
+              {/* Users list */}
               <div style={{marginTop:16}}>
-                <p style={{fontSize:11,fontWeight:600,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:8}}>
-                  {accessList.length} users with access
-                </p>
-                <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                  {accessList.map(email => (
-                    <div key={email} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'9px 13px',background:'#F9FAFB',borderRadius:8,border:'1px solid #F3F4F6'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:9}}>
-                        <div style={{width:28,height:28,borderRadius:'50%',background:'#EFF8FD',border:'1px solid #BAE6FD',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#1C9FD4',flexShrink:0}}>
-                          {email[0].toUpperCase()}
-                        </div>
-                        <div>
-                          <div style={{fontSize:12.5,fontWeight:600,color:'#111827'}}>{email}</div>
-                          {email===user?.email && <div style={{fontSize:10,color:'#059669'}}>You (Admin)</div>}
-                        </div>
-                      </div>
-                      {email !== user?.email && (
-                        <button
-                          onClick={() => removeUser(email)}
-                          style={{background:'none',border:'none',color:'#9CA3AF',cursor:'pointer',fontSize:11,fontWeight:500,padding:'3px 8px',borderRadius:5,transition:'all .15s'}}
-                          onMouseOver={e=>e.target.style.color='#DC2626'}
-                          onMouseOut={e=>e.target.style.color='#9CA3AF'}
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                  <p style={{fontSize:11,fontWeight:600,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.06em'}}>
+                    {usersLoading ? 'Loading...' : `${accessList.length} users with access`}
+                  </p>
+                  <button onClick={loadUsers} style={{fontSize:11,color:'#1C9FD4',background:'none',border:'none',cursor:'pointer'}}>
+                    ↻ Refresh
+                  </button>
                 </div>
-              </div>
-            </div>
 
-            <div className={styles.settingCard}>
-              <h3 className={styles.settingTitle}>Admin Accounts</h3>
-              <p className={styles.settingDesc}>Admins can manage user access. To change admins, update the code in useAuth.jsx.</p>
-              {['shivam.sharma@leverageedu.com','ruchi.singh@leverageedu.com'].map(e=>(
-                <div key={e} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'#FFFBEB',borderRadius:7,border:'1px solid #FDE68A',marginBottom:6}}>
-                  <span style={{fontSize:12px,color:'#92400E'}}>👑</span>
-                  <span style={{fontSize:12.5,fontWeight:600,color:'#92400E'}}>{e}</span>
-                </div>
-              ))}
+                {usersLoading ? (
+                  <div style={{textAlign:'center',padding:'24px',color:'#9CA3AF',fontSize:12}}>Loading users...</div>
+                ) : (
+                  <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                    {accessList.map(u => (
+                      <div key={u.email} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',background:'#F9FAFB',borderRadius:9,border:'1px solid #F3F4F6'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:10}}>
+                          <div style={{width:30,height:30,borderRadius:'50%',background: u.role==='admin'?'#FFFBEB':'#EFF8FD',border:`1px solid ${u.role==='admin'?'#FDE68A':'#BAE6FD'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:u.role==='admin'?'#D97706':'#1C9FD4',flexShrink:0}}>
+                            {u.email[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{fontSize:12.5,fontWeight:600,color:'#111827',display:'flex',alignItems:'center',gap:6}}>
+                              {u.email}
+                              {u.role==='admin' && <span style={{fontSize:9.5,background:'#FEF3C7',color:'#D97706',border:'1px solid #FDE68A',borderRadius:4,padding:'1px 6px',fontWeight:700}}>ADMIN</span>}
+                              {u.email===user?.email && <span style={{fontSize:9.5,background:'#ECFDF5',color:'#059669',border:'1px solid #A7F3D0',borderRadius:4,padding:'1px 6px',fontWeight:700}}>YOU</span>}
+                            </div>
+                            <div style={{fontSize:10,color:'#9CA3AF',marginTop:1}}>
+                              Added {u.added_by?`by ${u.added_by}`:'by system'} · {new Date(u.created_at).toLocaleDateString('en-IN')}
+                            </div>
+                          </div>
+                        </div>
+                        {u.email !== user?.email && (
+                          <button
+                            onClick={() => removeUser(u.email)}
+                            style={{background:'none',border:'1px solid #E5E7EB',color:'#9CA3AF',cursor:'pointer',fontSize:11,fontWeight:500,padding:'4px 10px',borderRadius:6,transition:'all .15s'}}
+                            onMouseOver={e=>{e.currentTarget.style.borderColor='#EF4444';e.currentTarget.style.color='#EF4444'}}
+                            onMouseOut={e=>{e.currentTarget.style.borderColor='#E5E7EB';e.currentTarget.style.color='#9CA3AF'}}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
