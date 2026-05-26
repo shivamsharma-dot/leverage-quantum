@@ -1,6 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="#111118"/>
-  <path d="M16 4L6 9.5L16 15L26 9.5L16 4Z" stroke="#7C6CF8" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-  <path d="M6 22L16 27.5L26 22" stroke="#22D3A5" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
-  <path d="M6 15.5L16 21L26 15.5" stroke="#7C6CF8" stroke-width="1.5" stroke-linejoin="round" fill="none" opacity="0.5"/>
+  <!-- Dark navy background -->
+  <rect width="32" height="32" rx="8" fill="#0A1628"/>
+  <!-- Bar chart bars in LE brand colors -->
+  <rect x="4" y="18" width="6" height="10" rx="1.5" fill="#4BAE8A"/>
+  <rect x="13" y="12" width="6" height="16" rx="1.5" fill="#1C9FD4"/>
+  <rect x="22" y="6" width="6" height="22" rx="1.5" fill="#1F3C84"/>
+  <!-- Live dots -->
+  <circle cx="27" cy="4" r="2.5" fill="#4BAE8A"/>
 </svg>
