@@ -191,9 +191,9 @@ export default function LeadQualityDashboard() {
                       borderLeft: `3px solid ${s.c}`
                     }}>
                       <span>{fmt(s.v)}</span>
-                      {s.sub && <span className={styles.fSub}>{s.sub}</span>}
                     </div>
                   </div>
+                  {s.sub && <span className={styles.fPct}>{s.sub}</span>}
                 </div>
               ))}
             </div>
