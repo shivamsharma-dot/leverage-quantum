@@ -48,6 +48,16 @@ export default function Sidebar() {
 
   const handleLogout = () => { logout(); navigate('/login') }
 
+  const userRole = user?.role || 'viewer'
+  const isROASOnly = userRole === 'roas_only'
+
+  function canSee(id) {
+    if (!userRole || userRole === 'admin' || userRole === 'viewer') return true
+    if (userRole === 'roas_only') return id === 'roas'
+    if (userRole?.startsWith('custom:')) return userRole.replace('custom:','').split(',').includes(id)
+    return true
+  }
+
   const initials = user?.name
     ? user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
     : user?.email?.[0]?.toUpperCase() || 'LQ'
@@ -78,7 +88,10 @@ export default function Sidebar() {
         {NAV.map(group => (
           <div key={group.label} className={styles.group}>
             <p className={styles.groupLabel}>{group.label}</p>
-            {group.items.map(item => (
+            {group.items.filter(item => {
+              const idMap = { 'Home':'home', 'ROAS':'roas', 'MTD':'mtd', 'Lead Quality':'lead_quality', 'Channel Mix':'channel_mix', 'Revenue':'revenue', 'Settings':'settings' }
+              return canSee(idMap[item.label] || item.label.toLowerCase())
+            }).map(item => (
               <NavLink
                 key={item.label}
                 to={item.to}
