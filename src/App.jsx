@@ -1,5 +1,7 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import React, { useEffect } from 'react'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
+import { logActivity } from './components/ActivityLogger'
 import LoginPage from './pages/LoginPage'
 import DashboardHome from './pages/DashboardHome'
 import ROASDashboard from './pages/ROASDashboard'
@@ -25,9 +27,16 @@ function canAccess(role, dashboardId) {
 
 function ProtectedRoute({ children, dashboardId }) {
   const { user } = useAuth()
+  const location = useLocation()
+
+  useEffect(() => {
+    if (user?.email && dashboardId) {
+      logActivity(user.email, 'view', location.pathname)
+    }
+  }, [location.pathname, user?.email])
+
   if (!user) return <Navigate to="/login" replace />
   if (dashboardId && !canAccess(user.role, dashboardId)) {
-    // Redirect to first allowed dashboard
     const allowed = getAllowedDashboards(user.role)
     if (allowed === 'all') return children
     if (allowed.includes('roas')) return <Navigate to="/dashboard/roas" replace />
