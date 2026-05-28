@@ -131,7 +131,7 @@ export default function ROASDashboard(){
               {CHANNELS.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
             {prevMonth&&<div className={styles.momBadge}>↕ vs {prevMonth.replace('-2025','')}</div>}
-            <ExportButton data={channelBreakdown} filename="roas_channel_summary"/>
+            <ExportButton data={filtered} filename="roas_data"/>
             <div className={styles.liveBadge}><span className={styles.liveDot}/>Live</div>
           </div>
         </div>
