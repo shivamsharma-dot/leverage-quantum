@@ -266,3 +266,18 @@
   .header { padding: 20px 16px 0; }
   .grid   { padding: 16px 16px 24px; grid-template-columns: 1fr; }
 }
+
+/* Search improvements */
+.searchWrap {
+  border-width: 1.5px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
+  min-width: 240px !important;
+  padding: 10px 14px !important;
+}
+.searchWrap:focus-within {
+  border-color: #1C9FD4 !important;
+  box-shadow: 0 0 0 3px rgba(28,159,212,0.1) !important;
+}
+.searchInput::placeholder { color: #B0B7C3 !important; }
+.clearSearch { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+.clearSearch:hover { background:#F3F4F6; color:#374151; }
