@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, ScatterChart, Scatter, ZAxis } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import ExportButton from '../components/ExportButton'
 import styles from './MTDDashboard.module.css'
 
 const SHEET_ID = '1OsMJ4QZ9XGRjvCig41zMBF0ZFKu7adeyxrmdCmCV-bk'
@@ -251,7 +252,8 @@ export default function MTDDashboard(){
               {sources.map(s=><option key={s} value={s}>{s==='All'?'All Sources':s}</option>)}
             </select>
             <input className={styles.fsearch} placeholder="Search campaign..." value={search} onChange={e=>setSearch(e.target.value)}/>
-            <button className={styles.refreshBtn} onClick={loadData} disabled={loading}>
+            <ExportButton data={filtered} filename="mtd_campaigns"/>
+              <button className={styles.refreshBtn} onClick={loadData} disabled={loading}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"
                 style={{animation:loading?'spin 1s linear infinite':'none'}}>
                 <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
