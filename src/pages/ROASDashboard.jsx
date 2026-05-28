@@ -95,18 +95,18 @@ export default function ROASDashboard(){
   },[filtered])
 
   const kpis=[
-    {label:'Total Spend',   value:fmt(tot.spend),    prev:prevTot?.spend,     sub:'Ad Spend',        color:'#6366F1', icon:'💰'},
-    {label:'AC Revenue',    value:fmt(tot.ac_rev),   prev:prevTot?.ac_rev,    sub:'Collected',       color:'#10B981', icon:'✅'},
-    {label:'VAS Revenue',   value:fmt(tot.vas_rev),  prev:prevTot?.vas_rev,   sub:'Collected',       color:'#10B981', icon:'✅'},
-    {label:'Total Revenue', value:fmt(tot.total_rev),prev:prevTot?.total_rev, sub:'AC + VAS',        color:'#10B981', icon:'💵'},
-    {label:'ROAS',          value:tot.roas+'x',      prevRaw:prevTot?.roas,   raw:tot.roas,          sub:'Rev / Spend',color:tot.roas>=1?'#10B981':tot.roas>=0.5?'#F59E0B':'#EF4444', icon:'📈'},
-    {label:'Proj Revenue',  value:fmt(tot.proj_rev), prev:prevTot?.proj_rev,  sub:'SR+AC+VAS Proj',  color:'#6366F1', icon:'🎯'},
-    {label:'Proj ROAS',     value:tot.proj_roas+'x', prevRaw:prevTot?.proj_roas,raw:tot.proj_roas,   sub:'Projected', color:'#6366F1', icon:'🎯'},
-    {label:'OPPs',          value:fn(tot.opps),      prev:prevTot?.opps,      sub:'Raw Leads',       color:'#3B82F6', icon:'👥'},
-    {label:'QLs',           value:fn(tot.qls),       prev:prevTot?.qls,       sub:'Qualified Leads', color:'#F59E0B', icon:'⭐'},
-    {label:'L→Q%',          value:tot.ltq+'%',       prev:null,               sub:'Conversion Rate', color:'#F59E0B', icon:'🔄'},
-    {label:'Apps (STUs)',   value:fn(tot.stus),      prev:prevTot?.stus,      sub:'Uni Applications',color:'#10B981', icon:'🎓'},
-    {label:'CPL',           value:tot.cpl>0?fmt(tot.cpl):'–',prev:prevTot?.cpl,sub:'Cost per QL',   color:'#EF4444', icon:'💸'},
+    {label:'Total Spend',   value:fmt(tot.spend),    prev:prevTot?.spend,       sub:'Ad Spend',         color:'#6366F1'},
+    {label:'AC Revenue',    value:fmt(tot.ac_rev),   prev:prevTot?.ac_rev,      sub:'Collected',        color:'#10B981'},
+    {label:'VAS Revenue',   value:fmt(tot.vas_rev),  prev:prevTot?.vas_rev,     sub:'Collected',        color:'#10B981'},
+    {label:'Total Revenue', value:fmt(tot.total_rev),prev:prevTot?.total_rev,   sub:'AC + VAS',         color:'#10B981'},
+    {label:'ROAS',          value:tot.roas+'x',      prevRaw:prevTot?.roas,     raw:tot.roas,           sub:'Rev / Spend',  color:tot.roas>=1?'#10B981':tot.roas>=0.5?'#F59E0B':'#EF4444'},
+    {label:'Proj Revenue',  value:fmt(tot.proj_rev), prev:prevTot?.proj_rev,    sub:'SR+AC+VAS Proj',   color:'#6366F1'},
+    {label:'Proj ROAS',     value:tot.proj_roas+'x', prevRaw:prevTot?.proj_roas,raw:tot.proj_roas,      sub:'Projected',    color:'#6366F1'},
+    {label:'OPPs',          value:fn(tot.opps),      prev:prevTot?.opps,        sub:'Raw Leads',        color:'#3B82F6'},
+    {label:'QLs',           value:fn(tot.qls),       prev:prevTot?.qls,         sub:'Qualified Leads',  color:'#F59E0B'},
+    {label:'L→Q%',          value:tot.ltq+'%',       prev:null,                 sub:'Conversion Rate',  color:'#F59E0B'},
+    {label:'Apps (STUs)',   value:fn(tot.stus),      prev:prevTot?.stus,        sub:'Uni Applications', color:'#10B981'},
+    {label:'CPL',           value:tot.cpl>0?fmt(tot.cpl):'–',prev:prevTot?.cpl,sub:'Cost per QL',      color:'#EF4444'},
   ]
 
   return(
@@ -141,14 +141,13 @@ export default function ROASDashboard(){
             const prevVal=k.prevRaw!=null?k.prevRaw:k.prev
             const delta=prevVal!=null?pctDiff(curr,prevVal):null
             return(
-              <div key={k.label} className={styles.kpiCard}>
-                <div className={styles.kpiTop}>
-                  <span className={styles.kpiIcon}>{k.icon}</span>
+              <div key={k.label} className={styles.kpiCard} style={{borderLeft:`3px solid ${k.color}`}}>
+                <div className={styles.kpiLabel}>{k.label}</div>
+                <div className={styles.kpiValue}>{k.value}</div>
+                <div className={styles.kpiBottom}>
+                  <span className={styles.kpiSub}>{k.sub}</span>
                   {delta&&<span className={delta.up?styles.up:styles.down}>{delta.up?'▲':'▼'}{delta.val}%</span>}
                 </div>
-                <div className={styles.kpiValue}>{k.value}</div>
-                <div className={styles.kpiLabel}>{k.label}</div>
-                <div className={styles.kpiSub}>{k.sub}</div>
               </div>
             )
           })}
