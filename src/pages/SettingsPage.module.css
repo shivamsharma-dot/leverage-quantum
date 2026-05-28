@@ -1,5 +1,5 @@
-.layout { display:flex; min-height:100vh; background:#F4F6F9; font-family:'Inter',sans-serif; }
-.main { flex:1; padding:28px 32px 36px; overflow-y:auto; display:flex; flex-direction:column; gap:18px; }
+.layout { display:flex; height:100vh; overflow:hidden; background:#F4F6F9; font-family:'Inter',sans-serif; }
+.main { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
 .header { margin-bottom:4px; }
 .breadcrumb { font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#9CA3AF; margin-bottom:5px; }
 .title { font-size:22px; font-weight:700; letter-spacing:-.025em; color:#111827; margin-bottom:3px; }
