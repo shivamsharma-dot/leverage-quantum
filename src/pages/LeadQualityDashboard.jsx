@@ -113,16 +113,17 @@ export default function LeadQualityDashboard() {
 
         {/* Header */}
         <div className={styles.header}>
-          <div>
+          <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / Lead Quality</p>
             <h1 className={styles.title}>Lead Quality 2025</h1>
-            <p className={styles.subtitle}>Full funnel: OPPs → Futwork QLs → University Applications</p>
           </div>
+          <div className={styles.headerRight}>
           <ExportButton data={channelBreakdown} filename="lead_quality_channels"/>
           <div className={styles.liveChip}>
             <span className={styles.liveDot} />
             BigQuery Data
           </div>
+          </div>{/* headerRight */}
         </div>
 
         {/* Filters */}
@@ -144,6 +145,7 @@ export default function LeadQualityDashboard() {
         </div>
 
         <div className={styles.content}>
+        <p style={{fontSize:12.5,color:'#9CA3AF',marginBottom:-8}}>Full funnel: OPPs → Futwork QLs → University Applications</p>
         {/* KPIs */}
         <div className={styles.kpiGrid}>
           {kpis.map(k => (
