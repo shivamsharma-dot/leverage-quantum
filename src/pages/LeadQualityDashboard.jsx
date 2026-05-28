@@ -118,30 +118,20 @@ export default function LeadQualityDashboard() {
             <h1 className={styles.title}>Lead Quality 2025</h1>
           </div>
           <div className={styles.headerRight}>
+          <select className={styles.fsel} value={selMonth} onChange={e => setSelMonth(e.target.value)}>
+              <option value="All">All Months</option>
+              {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <select className={styles.fsel} value={selChannel} onChange={e => setSelChannel(e.target.value)}>
+              <option value="All">All Channels</option>
+              {ALL_CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
           <ExportButton data={channelBreakdown} filename="lead_quality_channels"/>
           <div className={styles.liveChip}>
             <span className={styles.liveDot} />
             BigQuery Data
           </div>
           </div>{/* headerRight */}
-        </div>
-
-        {/* Filters */}
-        <div className={styles.filters}>
-          <div className={styles.fg}>
-            <label>Month</label>
-            <select className={styles.fsel} value={selMonth} onChange={e => setSelMonth(e.target.value)}>
-              <option value="All">All Months</option>
-              {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-          <div className={styles.fg}>
-            <label>Channel / Source</label>
-            <select className={styles.fsel} value={selChannel} onChange={e => setSelChannel(e.target.value)}>
-              <option value="All">All Channels</option>
-              {ALL_CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
         </div>
 
         <div className={styles.content}>
