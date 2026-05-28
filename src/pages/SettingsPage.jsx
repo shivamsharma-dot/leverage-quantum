@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import Sidebar from '../components/Sidebar'
 import { useAuth, isAdmin, getAccessList, addUserAccess, removeUserAccess } from '../hooks/useAuth'
 import { DATA_CONTEXT } from '../data/aiContext.js'
+import { getActivityLog } from '../components/ActivityLogger.js'
 import styles from './SettingsPage.module.css'
 
 const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
@@ -141,6 +142,15 @@ export default function SettingsPage() {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState('chat')
   const userIsAdmin = isAdmin(user?.email)
+  const [activityLog, setActivityLog] = useState([])
+  const [activityLoading, setActivityLoading] = useState(false)
+
+  const loadActivity = async () => {
+    setActivityLoading(true)
+    const logs = await getActivityLog(200)
+    setActivityLog(logs)
+    setActivityLoading(false)
+  }
 
   // SR Fee
   const [srFeeInput, setSrFeeInput] = useState(() => localStorage.getItem('lq_sr_fee') || '90000')
@@ -254,7 +264,7 @@ export default function SettingsPage() {
           {[
             { id:'chat',    label:'Quantum AI' },
             { id:'data',    label:'Data'       },
-            ...(userIsAdmin ? [{ id:'users', label:'User Access' }] : []),
+            ...(userIsAdmin ? [{ id:'users', label:'User Access' }, { id:'activity', label:'Activity Log' }] : []),
             { id:'profile', label:'Profile'    },
           ].map(t => (
             <button key={t.id}
@@ -483,6 +493,64 @@ export default function SettingsPage() {
                   )
                 })}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ACTIVITY LOG */}
+        {activeTab === 'activity' && userIsAdmin && (
+          <div className={styles.settingsWrap}>
+            <div className={styles.settingCard}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+                <div>
+                  <h3 className={styles.settingTitle}>Activity Log</h3>
+                  <p className={styles.settingDesc}>See who viewed which dashboard and when.</p>
+                </div>
+                <button onClick={loadActivity}
+                  style={{padding:'7px 14px',borderRadius:8,background:'#F3F4F6',border:'none',fontSize:12.5,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif',color:'#374151'}}>
+                  {activityLoading ? 'Loading...' : '↻ Load Log'}
+                </button>
+              </div>
+
+              {activityLog.length === 0 && !activityLoading && (
+                <div style={{textAlign:'center',padding:'40px 20px',color:'#9CA3AF',fontSize:13}}>
+                  Click "Load Log" to see activity.<br/>
+                  <span style={{fontSize:11,marginTop:4,display:'block'}}>Activity is tracked when users navigate to dashboards.</span>
+                </div>
+              )}
+
+              {activityLog.length > 0 && (
+                <div style={{overflowX:'auto'}}>
+                  <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+                    <thead>
+                      <tr>
+                        {['User','Action','Page','Time'].map(h => (
+                          <th key={h} style={{padding:'9px 14px',textAlign:'left',fontSize:10,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'#9CA3AF',background:'#FAFBFC',borderBottom:'1px solid #F3F4F6',whiteSpace:'nowrap'}}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activityLog.map((log, i) => (
+                        <tr key={i} style={{borderBottom:'1px solid #F9FAFB'}}>
+                          <td style={{padding:'9px 14px',color:'#111827',fontWeight:500}}>{log.email?.split('@')[0]}</td>
+                          <td style={{padding:'9px 14px'}}>
+                            <span style={{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4,
+                              background: log.action==='view'?'#EEF2FF':log.action==='login'?'#ECFDF5':'#FEF3C7',
+                              color: log.action==='view'?'#4F46E5':log.action==='login'?'#059669':'#D97706'
+                            }}>{log.action}</span>
+                          </td>
+                          <td style={{padding:'9px 14px',color:'#6B7280'}}>{log.page}</td>
+                          <td style={{padding:'9px 14px',color:'#9CA3AF',whiteSpace:'nowrap'}}>
+                            {new Date(log.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
