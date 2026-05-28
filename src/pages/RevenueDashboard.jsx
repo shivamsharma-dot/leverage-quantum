@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, AreaChart, Area } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import ExportButton from '../components/ExportButton'
 import styles from './RevenueDashboard.module.css'
 
 const SRC_COLORS = {
@@ -111,6 +112,7 @@ export default function RevenueDashboard(){
               <option value="AC">AC Only</option>
               <option value="VAS">VAS Only</option>
             </select>
+            <ExportButton data={srcPie} filename="revenue_by_source"/>
             <div className={styles.liveBadge}><span className={styles.liveDot}/>CIB Data</div>
           </div>
         </div>
