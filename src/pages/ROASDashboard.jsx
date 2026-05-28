@@ -1,7 +1,9 @@
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, CartesianGrid } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import ExportButton from '../components/ExportButton'
+import { DashboardSkeleton } from '../components/SkeletonLoader'
+import CompareMode from '../components/CompareMode'
 import styles from './ROASDashboard.module.css'
 
 const CH_COLORS = { Facebook:'#6366F1', Google:'#10B981', LinkedIn:'#3B82F6', Bing:'#F59E0B' }
@@ -50,6 +52,9 @@ const CustomTooltip=({active,payload,label})=>{
 }
 
 export default function ROASDashboard(){
+  const [pageLoading, setPageLoading] = React.useState(true)
+  React.useEffect(() => { const t = setTimeout(() => setPageLoading(false), 600); return () => clearTimeout(t) }, [])
+  const [showCompare, setShowCompare] = React.useState(false)
   const [selMonth,   setSelMonth]  =useState('All')
   const [selChannel, setSelChannel]=useState('All')
 
@@ -132,6 +137,11 @@ export default function ROASDashboard(){
             </select>
             {prevMonth&&<div className={styles.momBadge}>↕ vs {prevMonth.replace('-2025','')}</div>}
             <ExportButton data={filtered} filename="roas_data"/>
+            <button onClick={() => setShowCompare(true)}
+              style={{display:'flex',alignItems:'center',gap:6,padding:'7px 13px',borderRadius:8,background:'#EEF2FF',border:'1px solid #C7D2FE',color:'#4F46E5',fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+              Compare
+            </button>
             <div className={styles.liveBadge}><span className={styles.liveDot}/>Live</div>
           </div>
         </div>
@@ -317,6 +327,7 @@ export default function ROASDashboard(){
         </div>
 
       </main>
+      {showCompare && <CompareMode monthlyData={monthly} onClose={() => setShowCompare(false)}/>}
     </div>
   )
 }
