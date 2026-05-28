@@ -72,12 +72,10 @@ export default function Sidebar() {
         </div>
         <div className={styles.dividerLine}/>
         <div className={styles.quantumLabel}>
-          <svg width="14" height="14" viewBox="0 0 22 22" fill="none">
-            <rect x="1"  y="12" width="4" height="9"  rx="1.5" fill="#4BAE8A" className={styles.sbar1}/>
-            <rect x="7"  y="7"  width="4" height="14" rx="1.5" fill="#1C9FD4" className={styles.sbar2}/>
-            <rect x="13" y="4"  width="4" height="17" rx="1.5" fill="#1F3C84" className={styles.sbar3}/>
-            <circle cx="19" cy="3"  r="2" fill="#4BAE8A" className={styles.sdot1}/>
-            <circle cx="19" cy="10" r="2" fill="#1C9FD4" className={styles.sdot2}/>
+          <svg width="16" height="16" viewBox="0 0 22 22" fill="none">
+            <rect x="1"  y="12" width="4" height="9"  rx="1.5" fill="#4BAE8A"/>
+            <rect x="7"  y="7"  width="4" height="14" rx="1.5" fill="#1C9FD4"/>
+            <rect x="13" y="4"  width="4" height="17" rx="1.5" fill="#4BAE8A"/>
           </svg>
           <span>Quantum</span>
         </div>
