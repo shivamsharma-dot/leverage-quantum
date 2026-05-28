@@ -264,10 +264,6 @@ export default function MTDDashboard(){
         </div>
 
         <div className={styles.content}>
-        <p className={styles.pageSub}>
-          Month-to-date performance · Focus: CPL &amp; CPQL · {' '}
-          {lastSync && <span style={{color:isLive?'#059669':'#F59E0B',fontSize:12,fontWeight:500}}>{isLive?'● Live':'● Cached'} · Synced {lastSync.toLocaleTimeString()}</span>}
-        </p>
         {/* AI Insights */}
         <div className={styles.insightsBox}>
           <div className={styles.insightsHead}>
