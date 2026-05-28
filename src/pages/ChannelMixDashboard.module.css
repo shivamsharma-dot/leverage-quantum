@@ -45,6 +45,7 @@
 
 
 /* ─── STICKY HEADER ──────────────────────────────────────── */
+/* ─── STICKY HEADER ──────────────────────────────────────── */
 .header {
   position: sticky;
   top: 0;
@@ -57,15 +58,13 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  min-height: 60px;
-  background-image:
-    linear-gradient(90deg, #4BAE8A 0%, transparent 35%),
-    linear-gradient(90deg, #1C9FD4 0%, transparent 50%),
-    linear-gradient(90deg, #1F3C84 0%, transparent 65%);
-  background-repeat: no-repeat;
-  background-size: 100% 2px, 100% 1.5px, 100% 1px;
-  background-position: 0 0, 0 2px, 0 3.5px;
+  min-height: 58px;
 }
-.headerLeft { display:flex; flex-direction:column; justify-content:center; padding:12px 0; }
-.headerRight { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.content { padding:20px 32px 40px; display:flex; flex-direction:column; gap:20px; }
+
+
+
+
+
+
+
+.pageSub { font-size:12.5px; color:#9CA3AF; margin-bottom:-8px; }
