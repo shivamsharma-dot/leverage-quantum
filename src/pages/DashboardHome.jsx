@@ -98,9 +98,8 @@ export default function DashboardHome() {
             <p className={styles.sub}>Here are all your available dashboards.</p>
           </div>
           <div className={styles.headerRight}>
-            {/* Search bar */}
             <div className={styles.searchWrap}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" className={styles.searchIcon}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
               <input
