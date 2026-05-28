@@ -1,22 +1,6 @@
-/* ─── LAYOUT ─────────────────────────────────────────────── */
-.layout {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-  background: #F4F6F9;
-  font-family: 'Inter', sans-serif;
-}
+.layout { display:flex; height:100vh; overflow:hidden; background:#F4F6F9; font-family:'Inter',sans-serif; }
+.main   { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
 
-.main {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  max-width: 1500px;
-}
-
-/* ─── STICKY HEADER ──────────────────────────────────────── */
-/* ─── STICKY HEADER ──────────────────────────────────────── */
 .header {
   position: sticky;
   top: 0;
@@ -28,17 +12,30 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  flex-wrap: wrap;
-  min-height: 58px;
+  height: 56px;
+  flex-shrink: 0;
 }
+.headerLeft  { display:flex; flex-direction:column; justify-content:center; }
+.headerRight { display:flex; align-items:center; gap:8px; }
+.breadcrumb  { font-size:10px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#C0C6D2; margin-bottom:1px; }
+.pageTitle   { font-size:16px; font-weight:700; letter-spacing:-.02em; color:#111827; }
+.content     { padding:20px 32px 40px; display:flex; flex-direction:column; gap:20px; }
+/* ─── LAYOUT ─────────────────────────────────────────────── */
 
 
 
 
 
 
-.breadcrumb { font-size: 10px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: #C0C6D2; margin-bottom: 2px; }
-.pageTitle  { font-size: 16px; font-weight: 700; letter-spacing: -.02em; color: #111827; line-height: 1.2; }
+
+
+
+
+
+
+
+
+
 
 
 
@@ -144,4 +141,4 @@ td { padding:9px 14px; color:#6B7280; vertical-align:middle; white-space:nowrap;
 /* ─── RESPONSIVE ─────────────────────────────────────────── */
 @media(max-width:1200px) { .kpiGrid { grid-template-columns:repeat(4,1fr); } }
 @media(max-width:900px)  { .kpiGrid { grid-template-columns:repeat(3,1fr); } .chartGrid2 { grid-template-columns:1fr; } }
-@media(max-width:640px)  { .kpiGrid { grid-template-columns:repeat(2,1fr); }  .header { padding:0 16px; } }
+@media(max-width:640px)  { .kpiGrid { grid-template-columns:repeat(2,1fr); }   }
