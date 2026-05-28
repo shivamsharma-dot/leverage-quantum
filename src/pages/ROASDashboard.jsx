@@ -327,7 +327,7 @@ export default function ROASDashboard(){
         </div>
 
       </main>
-      {showCompare && <CompareMode monthlyData={monthly} onClose={() => setShowCompare(false)}/>}
+      {showCompare && <CompareMode monthlyData={monthlyChart} onClose={() => setShowCompare(false)}/>}
     </div>
   )
 }
