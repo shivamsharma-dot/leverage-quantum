@@ -103,14 +103,14 @@ export default function ChannelMixDashboard(){
   return(
     <div className={styles.layout}>
       <Sidebar/>
-      <main className={styles.main}>
-        <div className={styles.topBar}>
+      <div className={styles.main}>
+        <div className={styles.header}>
           <div>
             <p className={styles.breadcrumb}>Dashboards / Channel Mix</p>
             <h1 className={styles.pageTitle}>Channel Mix 2025</h1>
             <p className={styles.pageSub}>Lead volume, spend and revenue breakdown by source</p>
           </div>
-          <div className={styles.topRight}>
+          <div className={styles.headerRight}>
             <select className={styles.fsel} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>
               <option value="All">All Months</option>
               {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
@@ -120,6 +120,7 @@ export default function ChannelMixDashboard(){
           </div>
         </div>
 
+        <div className={styles.content}>
         {/* Unidentified warning */}
         {filtered.some(r=>r.is_unidentified&&(r.opps>0||r.total_rev>0))&&(
           <div className={styles.unidWarning}>
@@ -294,7 +295,8 @@ export default function ChannelMixDashboard(){
             </table>
           </div>
         </div>
-      </main>
+        </div>{/* end content */}
+      </div>{/* end main */}
     </div>
   )
 }
