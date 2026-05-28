@@ -118,15 +118,15 @@ export default function ROASDashboard(){
   return(
     <div className={styles.layout}>
       <Sidebar/>
-      <main className={styles.main}>
+      <div className={styles.main}>
 
-        {/* TOP BAR */}
-        <div className={styles.topBar}>
-          <div className={styles.topLeft}>
+        {/* STICKY HEADER */}
+        <div className={styles.header}>
+          <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / ROAS</p>
             <h1 className={styles.pageTitle}>ROAS Dashboard 2025</h1>
           </div>
-          <div className={styles.topRight}>
+          <div className={styles.headerRight}>
             <select className={styles.filterSelect} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>
               <option value="All">All Months</option>
               {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
@@ -146,7 +146,8 @@ export default function ROASDashboard(){
           </div>
         </div>
 
-        {/* KPI GRID */}
+        {/* SCROLLABLE CONTENT */}
+        <div className={styles.content}>
         <div className={styles.kpiGrid}>
           {kpis.map(k=>{
             const curr=k.raw!=null?k.raw:parseFloat(String(k.v||k.value).replace(/[₹,LKCrx ]/g,''))
@@ -326,7 +327,8 @@ export default function ROASDashboard(){
           </div>
         </div>
 
-      </main>
+        </div>{/* end content */}
+      </div>{/* end main */}
       {showCompare && <CompareMode monthlyData={monthlyChart} onClose={() => setShowCompare(false)}/>}
     </div>
   )
