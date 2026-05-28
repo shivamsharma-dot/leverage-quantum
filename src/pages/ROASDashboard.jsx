@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, CartesianGrid } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import ExportButton from '../components/ExportButton'
 import styles from './ROASDashboard.module.css'
 
 const CH_COLORS = { Facebook:'#6366F1', Google:'#10B981', LinkedIn:'#3B82F6', Bing:'#F59E0B' }
@@ -130,6 +131,7 @@ export default function ROASDashboard(){
               {CHANNELS.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
             {prevMonth&&<div className={styles.momBadge}>↕ vs {prevMonth.replace('-2025','')}</div>}
+            <ExportButton data={channelBreakdown} filename="roas_channel_summary"/>
             <div className={styles.liveBadge}><span className={styles.liveDot}/>Live</div>
           </div>
         </div>
