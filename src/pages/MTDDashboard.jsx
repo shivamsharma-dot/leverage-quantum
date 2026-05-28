@@ -238,10 +238,10 @@ export default function MTDDashboard(){
   return(
     <div className={styles.layout}>
       <Sidebar/>
-      <main className={styles.main}>
+      <div className={styles.main}>
 
         {/* Header */}
-        <div className={styles.topBar}>
+        <div className={styles.header}>
           <div>
             <p className={styles.breadcrumb}>Dashboards / MTD</p>
             <h1 className={styles.pageTitle}>MTD Dashboard — May 2026</h1>
@@ -250,7 +250,7 @@ export default function MTDDashboard(){
               {lastSync && <span style={{color:isLive?'#059669':'#F59E0B'}}>{isLive?'🟢 Live':'🟡 Cached'} · Synced {lastSync.toLocaleTimeString()}</span>}
             </p>
           </div>
-          <div className={styles.topRight}>
+          <div className={styles.headerRight}>
             <select className={styles.fsel} value={selSource} onChange={e=>setSelSource(e.target.value)}>
               {sources.map(s=><option key={s} value={s}>{s==='All'?'All Sources':s}</option>)}
             </select>
@@ -267,6 +267,7 @@ export default function MTDDashboard(){
           </div>
         </div>
 
+        <div className={styles.content}>
         {/* AI Insights */}
         <div className={styles.insightsBox}>
           <div className={styles.insightsHead}>
@@ -461,7 +462,8 @@ export default function MTDDashboard(){
             </table>
           </div>
         </div>
-      </main>
+        </div>{/* end content */}
+      </div>{/* end main */}
     </div>
   )
 }
