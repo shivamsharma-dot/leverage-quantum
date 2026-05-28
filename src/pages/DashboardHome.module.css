@@ -33,46 +33,113 @@
   z-index: 1;
 }
 
-.breadcrumb {
+.headerRight { display: flex; align-items: center; gap: 10px; }
+
+.breadcrumb { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #9CA3AF; margin-bottom: 6px; }
+.greeting { font-size: 24px; font-weight: 700; letter-spacing: -0.025em; color: #111827; margin-bottom: 5px; line-height: 1.2; }
+.sub { font-size: 13px; color: #6B7280; }
+
+/* Search */
+.searchWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  padding: 8px 14px;
+  min-width: 220px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: border .15s;
+}
+.searchWrap:focus-within { border-color: #1C9FD4; }
+.searchIcon { flex-shrink: 0; }
+.searchInput {
+  border: none;
+  outline: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: #111827;
+  flex: 1;
+  background: transparent;
+}
+.searchInput::placeholder { color: #9CA3AF; }
+.clearSearch {
+  background: none;
+  border: none;
+  color: #9CA3AF;
+  cursor: pointer;
   font-size: 11px;
+  padding: 0;
+  line-height: 1;
+}
+.noResults {
+  grid-column: 1/-1;
+  text-align: center;
+  padding: 40px;
+  color: #9CA3AF;
+  font-size: 14px;
+}
+
+/* Tags */
+.liveTag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #9CA3AF;
-  margin-bottom: 6px;
-}
-
-.greeting {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: #111827;
-  margin-bottom: 5px;
-  line-height: 1.2;
-}
-
-.sub { font-size: 13px; color: #6B7280; }
-
-.liveChip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
-  font-weight: 500;
   color: #059669;
   background: #ECFDF5;
   border: 1px solid #A7F3D0;
   border-radius: 100px;
-  padding: 6px 14px;
-  white-space: nowrap;
+  padding: 3px 9px;
 }
-
-.liveDot {
-  width: 6px; height: 6px;
+.liveTagDot {
+  width: 5px; height: 5px;
   background: #059669;
   border-radius: 50%;
-  animation: pulse 2s ease-in-out infinite;
+  animation: pulse 2s infinite;
 }
+.dataTag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6B7280;
+  background: #F3F4F6;
+  border: 1px solid #E5E7EB;
+  border-radius: 100px;
+  padding: 3px 9px;
+}
+
+/* Card footer */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+.dataSource {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: #9CA3AF;
+  font-weight: 500;
+}
+.openBtn {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1C9FD4;
+}
+
+/* icon colors - add purple */
+.icon_purple { background: #F5F3FF; color: #7C3AED; border: 1px solid #DDD6FE; }
 
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
