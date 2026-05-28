@@ -109,7 +109,7 @@ export default function LeadQualityDashboard() {
   return (
     <div className={styles.layout}>
       <Sidebar />
-      <main className={styles.main}>
+      <div className={styles.main}>
 
         {/* Header */}
         <div className={styles.header}>
@@ -143,6 +143,7 @@ export default function LeadQualityDashboard() {
           </div>
         </div>
 
+        <div className={styles.content}>
         {/* KPIs */}
         <div className={styles.kpiGrid}>
           {kpis.map(k => (
@@ -275,7 +276,8 @@ export default function LeadQualityDashboard() {
             </div>
           </div>
         </div>
-      </main>
+        </div>{/* end content */}
+      </div>{/* end main */}
     </div>
   )
 }
