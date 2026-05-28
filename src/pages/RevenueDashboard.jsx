@@ -120,7 +120,6 @@ export default function RevenueDashboard(){
         </div>
 
         <div className={styles.content}>
-        <p style={{fontSize:12.5,color:'#9CA3AF',marginBottom:-8}}>AC &amp; VAS revenue — collected vs projected</p>
         {/* Unidentified warning */}
         {totals.unid_rev>0&&(
           <div className={styles.unidWarning}>
