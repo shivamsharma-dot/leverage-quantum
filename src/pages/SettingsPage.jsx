@@ -7,7 +7,7 @@ import styles from './SettingsPage.module.css'
 const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 const GEMINI_KEY  = 'AIzaSyDB5rRgbQV5yw_iXC-I8IbsB_G1cyOTXGo'
-const GEMINI_URL  = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY
+const GEMINI_URL  = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY
 
 function buildSystemPrompt() {
   const t = DATA_CONTEXT.totals
