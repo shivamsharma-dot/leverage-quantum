@@ -242,13 +242,9 @@ export default function MTDDashboard(){
 
         {/* Header */}
         <div className={styles.header}>
-          <div>
+          <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / MTD</p>
             <h1 className={styles.pageTitle}>MTD Dashboard — May 2026</h1>
-            <p className={styles.pageSub}>
-              Month-to-date performance · Focus: CPL & CPQL · {' '}
-              {lastSync && <span style={{color:isLive?'#059669':'#F59E0B'}}>{isLive?'🟢 Live':'🟡 Cached'} · Synced {lastSync.toLocaleTimeString()}</span>}
-            </p>
           </div>
           <div className={styles.headerRight}>
             <select className={styles.fsel} value={selSource} onChange={e=>setSelSource(e.target.value)}>
@@ -268,6 +264,10 @@ export default function MTDDashboard(){
         </div>
 
         <div className={styles.content}>
+        <p className={styles.pageSub}>
+          Month-to-date performance · Focus: CPL &amp; CPQL · {' '}
+          {lastSync && <span style={{color:isLive?'#059669':'#F59E0B',fontSize:12,fontWeight:500}}>{isLive?'● Live':'● Cached'} · Synced {lastSync.toLocaleTimeString()}</span>}
+        </p>
         {/* AI Insights */}
         <div className={styles.insightsBox}>
           <div className={styles.insightsHead}>
