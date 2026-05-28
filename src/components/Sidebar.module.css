@@ -11,47 +11,47 @@
   overflow: hidden;
 }
 
-/* LOGO */
 .logoArea {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 20px 16px 18px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  padding: 18px 16px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.15);
 }
 
 .logoPill {
   background: #FFFFFF;
   border-radius: 8px;
-  padding: 5px 10px;
+  padding: 5px 9px;
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
 
 .logoImg {
-  height: 22px;
+  height: 20px;
   width: auto;
   display: block;
 }
 
 .dividerLine {
   width: 1px;
-  height: 20px;
-  background: rgba(255,255,255,0.12);
+  height: 22px;
+  background: rgba(255,255,255,0.2);
   flex-shrink: 0;
 }
 
 .quantumLabel {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  color: #1C9FD4;
-  letter-spacing: -0.01em;
+  font-size: 14px;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: 0.01em;
 }
 
 /* Animated bars in sidebar logo */
