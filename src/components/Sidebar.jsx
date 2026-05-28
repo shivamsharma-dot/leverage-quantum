@@ -1,29 +1,18 @@
+import React from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import styles from './Sidebar.module.css'
-
-// ── WHITELIST — only these emails can access the panel ──
-const ALLOWED_EMAILS = [
-  'shivam.sharma@leverageedu.com',
-  'ruchi.singh@leverageedu.com',
-  // Add more emails here
-]
-
-export function isAllowedUser(email) {
-  if (!email) return false
-  return ALLOWED_EMAILS.includes(email.toLowerCase())
-}
 
 const NAV = [
   {
     label: 'Dashboards',
     items: [
-      { to: '/',                      icon: <HomeIcon />,    label: 'Home',         end: true  },
-      { to: '/dashboard/roas',        icon: <ChartIcon />,   label: 'ROAS',         end: false },
-      { to: '/dashboard/mtd',         icon: <MTDIcon />,     label: 'MTD',          end: false },
-      { to: '/dashboard/lead-quality',icon: <FunnelIcon />,  label: 'Lead Quality', end: false },
-      { to: '/dashboard/channel-mix', icon: <MixIcon />,     label: 'Channel Mix',  end: false },
-      { to: '/dashboard/revenue',     icon: <RevenueIcon />, label: 'Revenue',      end: false },
+      { to: '/',                       icon: <HomeIcon />,    label: 'Home',         end: true  },
+      { to: '/dashboard/roas',         icon: <ChartIcon />,   label: 'ROAS',         end: false },
+      { to: '/dashboard/mtd',          icon: <MTDIcon />,     label: 'MTD',          end: false },
+      { to: '/dashboard/lead-quality', icon: <FunnelIcon />,  label: 'Lead Quality', end: false },
+      { to: '/dashboard/channel-mix',  icon: <MixIcon />,     label: 'Channel Mix',  end: false },
+      { to: '/dashboard/revenue',      icon: <RevenueIcon />, label: 'Revenue',      end: false },
     ]
   },
   {
@@ -37,20 +26,36 @@ const NAV = [
 function HomeIcon()    { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> }
 function ChartIcon()   { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> }
 function FunnelIcon()  { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 3H2l8 9.46V19l4 2V12.46L22 3z"/></svg> }
-function MTDIcon()     { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg> }
+function MTDIcon()     { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> }
 function MixIcon()     { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> }
 function RevenueIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg> }
 function SettingsIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg> }
+
+// Collapsed icon map
+const ICON_MAP = {
+  'Home': <HomeIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
+  'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
+  'Revenue': <RevenueIcon/>, 'Settings': <SettingsIcon/>
+}
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
+  // Persist collapse state
+  const [collapsed, setCollapsed] = React.useState(() => {
+    try { return localStorage.getItem('lq_sidebar_collapsed') === 'true' } catch { return false }
+  })
+
+  const toggle = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    try { localStorage.setItem('lq_sidebar_collapsed', String(next)) } catch {}
+  }
+
   const handleLogout = () => { logout(); navigate('/login') }
 
   const userRole = user?.role || 'viewer'
-  const isROASOnly = userRole === 'roas_only'
-
   function canSee(id) {
     if (!userRole || userRole === 'admin' || userRole === 'viewer') return true
     if (userRole === 'roas_only') return id === 'roas'
@@ -62,10 +67,43 @@ export default function Sidebar() {
     ? user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
     : user?.email?.[0]?.toUpperCase() || 'LQ'
 
+  const idMap = { 'Home':'home','ROAS':'roas','MTD':'mtd','Lead Quality':'lead_quality','Channel Mix':'channel_mix','Revenue':'revenue','Settings':'settings' }
+
+  if (collapsed) {
+    // Collapsed state — show only icons
+    return (
+      <aside className={styles.sidebarCollapsed}>
+        {/* Toggle button */}
+        <button className={styles.collapseBtn} onClick={toggle} title="Expand sidebar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+
+        {/* Nav icons */}
+        <div className={styles.collapsedNav}>
+          {NAV.map(group => group.items.filter(item => canSee(idMap[item.label])).map(item => (
+            <NavLink key={item.label} to={item.to} end={item.end}
+              className={({ isActive }) => `${styles.collapsedItem} ${isActive ? styles.collapsedActive : ''}`}
+              title={item.label}>
+              {item.icon}
+            </NavLink>
+          )))}
+        </div>
+
+        {/* Avatar */}
+        <div className={styles.collapsedAvatar} title={user?.email}>
+          <div className={styles.avatar}>
+            {user?.picture ? <img src={user.picture} alt={user.name}/> : initials}
+          </div>
+        </div>
+      </aside>
+    )
+  }
+
   return (
     <aside className={styles.sidebar}>
-
-      {/* Logo */}
+      {/* Logo + collapse button */}
       <div className={styles.logoArea}>
         <div className={styles.logoPill}>
           <img src="https://publicassets.leverageedu.com/landing-pages-new/logo-dark.svg" alt="Leverage Edu" className={styles.logoImg}/>
@@ -79,6 +117,11 @@ export default function Sidebar() {
           </svg>
           <span>Quantum</span>
         </div>
+        <button className={styles.collapseBtnExpanded} onClick={toggle} title="Collapse sidebar">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
       </div>
 
       {/* Nav */}
@@ -86,16 +129,9 @@ export default function Sidebar() {
         {NAV.map(group => (
           <div key={group.label} className={styles.group}>
             <p className={styles.groupLabel}>{group.label}</p>
-            {group.items.filter(item => {
-              const idMap = { 'Home':'home', 'ROAS':'roas', 'MTD':'mtd', 'Lead Quality':'lead_quality', 'Channel Mix':'channel_mix', 'Revenue':'revenue', 'Settings':'settings' }
-              return canSee(idMap[item.label] || item.label.toLowerCase())
-            }).map(item => (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-              >
+            {group.items.filter(item => canSee(idMap[item.label])).map(item => (
+              <NavLink key={item.label} to={item.to} end={item.end}
+                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
                 <span className={styles.navIcon}>{item.icon}</span>
                 <span>{item.label}</span>
               </NavLink>
