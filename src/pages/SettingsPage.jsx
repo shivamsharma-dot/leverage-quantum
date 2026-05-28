@@ -6,8 +6,8 @@ import styles from './SettingsPage.module.css'
 
 const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
-const GEMINI_KEY  = 'AIzaSyCCjhEfGR2g8oafhmc_lyqUQaiYfHLknvM'
-const GEMINI_URL  = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY
+const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 function buildSystemPrompt() {
   const t = DATA_CONTEXT.totals
@@ -66,28 +66,27 @@ function buildSystemPrompt() {
   ].join('\n')
 }
 
-async function askGemini(messages) {
+async function askGroq(messages) {
   const systemPrompt = buildSystemPrompt()
-  const contents = messages.map(m => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }]
-  }))
-
-  const res = await fetch(GEMINI_URL, {
+  const res = await fetch(GROQ_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + GROQ_KEY },
     body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents,
-      generationConfig: { temperature: 0.3, maxOutputTokens: 1200 }
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
+      ],
+      temperature: 0.3,
+      max_tokens: 1200
     })
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.error?.message || 'Gemini API error ' + res.status)
+    throw new Error(err.error?.message || 'Groq API error ' + res.status)
   }
   const data = await res.json()
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini'
+  return data.choices?.[0]?.message?.content || 'No response'
 }
 
 async function updateUserRole(email, role) {
@@ -205,7 +204,7 @@ export default function SettingsPage() {
   // Chat
   const [messages, setMessages] = useState([{
     role: 'assistant',
-    content: 'Hi! I am Quantum AI, powered by Gemini.\n\nI have access to your complete 2025 marketing data:\n- Rs.29.45 Cr total spend (Jan-Dec)\n- 18.69L OPPs, 98.6K QLs, 18.3K Apps\n- Revenue data Aug-Dec (AC + VAS)\n- Channel breakdown: Facebook, Google, Affiliate\n\nAsk me anything about ROAS, CPL, revenue, funnel, or channel performance!'
+    content: 'Hi! I am Quantum AI, powered by Llama 3 (Groq).\n\nI have access to your complete 2025 marketing data:\n- Rs.29.45 Cr total spend (Jan-Dec)\n- 18.69L OPPs, 98.6K QLs, 18.3K Apps\n- Revenue data Aug-Dec (AC + VAS)\n- Channel breakdown: Facebook, Google, Affiliate\n\nAsk me anything about ROAS, CPL, revenue, funnel, or channel performance!'
   }])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
@@ -222,7 +221,7 @@ export default function SettingsPage() {
     setMessages(updated)
     setChatLoading(true)
     try {
-      const reply = await askGemini(updated.slice(-10))
+      const reply = await askGroq(updated.slice(-10), buildSystemPrompt())
       setMessages(p => [...p, { role: 'assistant', content: reply }])
     } catch (e) {
       setChatError('Error: ' + e.message)
