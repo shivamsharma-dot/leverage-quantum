@@ -175,7 +175,8 @@ export default function SettingsPage() {
     setChatLoading(true)
     try {
       const history=[...messages,{role:'user',content:msg}].map(m=>({role:m.role,content:m.content}))
-      setMessages(p=>[...p,{role:'assistant',content:await askClaude(history.slice(-10))}])
+      const reply = await askClaude(history.slice(-10))
+      setMessages(p=>[...p,{role:'assistant',content:reply}])
     } catch(e){ setChatError('Could not reach Claude API.') }
     finally { setChatLoading(false) }
   }
