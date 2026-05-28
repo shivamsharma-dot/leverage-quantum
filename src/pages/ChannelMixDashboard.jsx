@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, AreaChart, Area } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import ExportButton from '../components/ExportButton'
 import styles from './ChannelMixDashboard.module.css'
 
 const SRC_COLORS = {
@@ -111,6 +112,7 @@ export default function ChannelMixDashboard(){
               <option value="All">All Months</option>
               {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
             </select>
+            <ExportButton data={srcBreakdown} filename="channel_mix_sources"/>
             <div className={styles.liveBadge}><span className={styles.liveDot}/>Live</div>
           </div>
         </div>
