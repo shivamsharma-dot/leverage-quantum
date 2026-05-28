@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, AreaChart, Area } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import ExportButton from '../components/ExportButton'
+import { DashboardSkeleton } from '../components/SkeletonLoader'
 import styles from './ChannelMixDashboard.module.css'
 
 const SRC_COLORS = {
@@ -46,6 +47,8 @@ const CustomTooltip=({active,payload,label})=>{
 }
 
 export default function ChannelMixDashboard(){
+  const [pageLoading, setPageLoading] = React.useState(true)
+  React.useEffect(() => { const t = setTimeout(() => setPageLoading(false), 600); return () => clearTimeout(t) }, [])
   const [selMonth, setSelMonth] = useState('All')
 
   const filtered = useMemo(()=>
