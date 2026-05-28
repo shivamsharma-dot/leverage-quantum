@@ -98,14 +98,14 @@ export default function RevenueDashboard(){
   return(
     <div className={styles.layout}>
       <Sidebar/>
-      <main className={styles.main}>
-        <div className={styles.topBar}>
+      <div className={styles.main}>
+        <div className={styles.header}>
           <div>
             <p className={styles.breadcrumb}>Dashboards / Revenue</p>
             <h1 className={styles.pageTitle}>Revenue Dashboard 2025</h1>
             <p className={styles.pageSub}>AC & VAS revenue — collected vs projected</p>
           </div>
-          <div className={styles.topRight}>
+          <div className={styles.headerRight}>
             <select className={styles.fsel} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>
               <option value="All">All Months</option>
               {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
@@ -120,6 +120,7 @@ export default function RevenueDashboard(){
           </div>
         </div>
 
+        <div className={styles.content}>
         {/* Unidentified warning */}
         {totals.unid_rev>0&&(
           <div className={styles.unidWarning}>
@@ -291,7 +292,8 @@ export default function RevenueDashboard(){
             </table>
           </div>
         </div>
-      </main>
+        </div>{/* end content */}
+      </div>{/* end main */}
     </div>
   )
 }
