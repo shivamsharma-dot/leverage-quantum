@@ -84,32 +84,32 @@ function generateInsights(tot, bySource, topCPL, worstCPL){
   
   // Overall health
   if(tot.roas >= 1){
-    insights.push({type:'positive', icon:'✅', text:`Overall ROAS is ${tot.roas.toFixed(2)}x — revenue exceeds ad spend this month.`})
+    insights.push({type:'positive', icon:'↑', text:`Overall ROAS is ${tot.roas.toFixed(2)}x — revenue exceeds ad spend this month.`})
   } else {
-    insights.push({type:'warning', icon:'⚠️', text:`ROAS is ${tot.roas.toFixed(2)}x — spending more than earning. Revenue pipeline needs attention.`})
+    insights.push({type:'warning', icon:'!', text:`ROAS is ${tot.roas.toFixed(2)}x — spending more than earning. Revenue pipeline needs attention.`})
   }
 
   // CPL insight
   const avgCPL = tot.spend > 0 && tot.qualified > 0 ? tot.spend/tot.qualified : 0
   if(avgCPL > 0 && avgCPL < 1500){
-    insights.push({type:'positive', icon:'💚', text:`Avg CPL of ₹${Math.round(avgCPL).toLocaleString()} is healthy. Top campaign: ${topCPL?.name?.slice(0,40)} at ₹${Math.round(topCPL?.cpl||0).toLocaleString()}/QL.`})
+    insights.push({type:'positive', icon:'↓', text:`Avg CPL of ₹${Math.round(avgCPL).toLocaleString()} is healthy. Top campaign: ${topCPL?.name?.slice(0,40)} at ₹${Math.round(topCPL?.cpl||0).toLocaleString()}/QL.`})
   } else if(avgCPL >= 1500) {
-    insights.push({type:'warning', icon:'🔴', text:`Avg CPL of ₹${Math.round(avgCPL).toLocaleString()} is high. Review underperforming campaigns to reduce cost.`})
+    insights.push({type:'warning', icon:'!', text:`Avg CPL of ₹${Math.round(avgCPL).toLocaleString()} is high. Review underperforming campaigns to reduce cost.`})
   }
 
   // QL conversion
   const qlPct = tot.leads > 0 ? (tot.qualified/tot.leads*100) : 0
   if(qlPct >= 15){
-    insights.push({type:'positive', icon:'⭐', text:`QL rate of ${qlPct.toFixed(1)}% is strong — Futwork qualification is performing well.`})
+    insights.push({type:'positive', icon:'↑', text:`QL rate of ${qlPct.toFixed(1)}% is strong — Futwork qualification is performing well.`})
   } else if(qlPct > 0 && qlPct < 10){
-    insights.push({type:'warning', icon:'📉', text:`QL rate is only ${qlPct.toFixed(1)}%. Large volume of leads not qualifying — check targeting quality.`})
+    insights.push({type:'warning', icon:'↓', text:`QL rate is only ${qlPct.toFixed(1)}%. Large volume of leads not qualifying — check targeting quality.`})
   }
 
   // Spend concentration
   Object.entries(bySource).forEach(([src, v])=>{
     const pct = tot.spend > 0 ? v.spend/tot.spend*100 : 0
     if(pct > 60){
-      insights.push({type:'info', icon:'ℹ️', text:`${src} accounts for ${pct.toFixed(0)}% of total spend. Consider diversifying to reduce channel risk.`})
+      insights.push({type:'info', icon:'i', text:`${src} accounts for ${pct.toFixed(0)}% of total spend. Consider diversifying to reduce channel risk.`})
     }
   })
 
@@ -117,7 +117,7 @@ function generateInsights(tot, bySource, topCPL, worstCPL){
   const zeroQL = Object.values(bySource).filter(v=>v.spend>100000&&v.qualified===0)
   if(zeroQL.length > 0){
     const totalWasted = zeroQL.reduce((s,v)=>s+v.spend,0)
-    insights.push({type:'warning', icon:'🚨', text:`${zeroQL.length} source(s) have spent ${fmt(totalWasted)} with 0 qualified leads this month. Immediate review needed.`})
+    insights.push({type:'warning', icon:'!', text:`${zeroQL.length} source(s) have spent ${fmt(totalWasted)} with 0 qualified leads this month. Immediate review needed.`})
   }
 
   // Best performing source
@@ -126,7 +126,7 @@ function generateInsights(tot, bySource, topCPL, worstCPL){
   ).reverse()[0]
   if(bestSrc && bestSrc[1].qualified > 0){
     const cpl = bestSrc[1].spend/bestSrc[1].qualified
-    insights.push({type:'positive', icon:'🏆', text:`${bestSrc[0]} has the best CPL at ₹${Math.round(cpl).toLocaleString()} with ${bestSrc[1].qualified.toLocaleString()} QLs generated.`})
+    insights.push({type:'positive', icon:'↑', text:`${bestSrc[0]} has the best CPL at ₹${Math.round(cpl).toLocaleString()} with ${bestSrc[1].qualified.toLocaleString()} QLs generated.`})
   }
 
   return insights
