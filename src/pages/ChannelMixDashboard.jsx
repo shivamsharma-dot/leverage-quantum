@@ -120,7 +120,6 @@ export default function ChannelMixDashboard(){
         </div>
 
         <div className={styles.content}>
-        <p style={{fontSize:12.5,color:'#9CA3AF',marginBottom:-8}}>Lead volume, spend and revenue breakdown by source</p>
         {/* Unidentified warning */}
         {filtered.some(r=>r.is_unidentified&&(r.opps>0||r.total_rev>0))&&(
           <div className={styles.unidWarning}>
