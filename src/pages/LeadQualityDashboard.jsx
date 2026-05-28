@@ -135,7 +135,6 @@ export default function LeadQualityDashboard() {
         </div>
 
         <div className={styles.content}>
-        <p style={{fontSize:12.5,color:'#9CA3AF',marginBottom:-8}}>Full funnel: OPPs → Futwork QLs → University Applications</p>
         {/* KPIs */}
         <div className={styles.kpiGrid}>
           {kpis.map(k => (
