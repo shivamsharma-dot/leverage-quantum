@@ -122,13 +122,30 @@ export function AuthProvider({ children }) {
     return { success: true }
   }
 
+  const loginWithOTP = async (email) => {
+    email = email.toLowerCase().trim()
+    const access = await checkUserAccess(email)
+    if (!access) return { success: false, error: 'Access denied. Contact your admin.' }
+    const userData = {
+      name: email.split('@')[0].split('.').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+      email,
+      picture: null,
+      role: access.role,
+      token: btoa(email + ':' + Date.now()),
+      loginTime: Date.now()
+    }
+    setUser(userData)
+    localStorage.setItem('lq_user', JSON.stringify(userData))
+    return { success: true }
+  }
+
   const logout = () => {
     setUser(null)
     localStorage.removeItem('lq_user')
   }
 
   return (
-    <AuthContext.Provider value={{ user, loginWithGoogle, loginWithEmail, logout }}>
+    <AuthContext.Provider value={{ user, loginWithGoogle, loginWithEmail, loginWithOTP, logout }}>
       {children}
     </AuthContext.Provider>
   )
