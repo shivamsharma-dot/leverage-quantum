@@ -105,10 +105,9 @@ export default function ChannelMixDashboard(){
       <Sidebar/>
       <div className={styles.main}>
         <div className={styles.header}>
-          <div>
+          <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / Channel Mix</p>
             <h1 className={styles.pageTitle}>Channel Mix 2025</h1>
-            <p className={styles.pageSub}>Lead volume, spend and revenue breakdown by source</p>
           </div>
           <div className={styles.headerRight}>
             <select className={styles.fsel} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>
@@ -121,6 +120,7 @@ export default function ChannelMixDashboard(){
         </div>
 
         <div className={styles.content}>
+        <p style={{fontSize:12.5,color:'#9CA3AF',marginBottom:-8}}>Lead volume, spend and revenue breakdown by source</p>
         {/* Unidentified warning */}
         {filtered.some(r=>r.is_unidentified&&(r.opps>0||r.total_rev>0))&&(
           <div className={styles.unidWarning}>
