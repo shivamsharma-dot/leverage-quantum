@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, ScatterChart, Scatter, ZAxis } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import ExportButton from '../components/ExportButton'
+import { DashboardSkeleton } from '../components/SkeletonLoader'
 import styles from './MTDDashboard.module.css'
 
 const SHEET_ID = '1OsMJ4QZ9XGRjvCig41zMBF0ZFKu7adeyxrmdCmCV-bk'
@@ -133,6 +134,8 @@ function generateInsights(tot, bySource, topCPL, worstCPL){
 }
 
 export default function MTDDashboard(){
+  const [pageLoading, setPageLoading] = React.useState(true)
+  React.useEffect(() => { const t = setTimeout(() => setPageLoading(false), 600); return () => clearTimeout(t) }, [])
   const [campaigns, setCampaigns] = useState(FALLBACK)
   const [loading, setLoading]     = useState(true)
   const [isLive, setIsLive]       = useState(false)
