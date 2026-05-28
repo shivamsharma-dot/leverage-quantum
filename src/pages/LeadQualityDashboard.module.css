@@ -1,6 +1,6 @@
 .layout { display:flex; height:100vh; overflow:hidden; background:#F4F6F9; font-family:'Inter',sans-serif; }
-.main { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
-/* ─── STICKY HEADER ──────────────────────────────────────── */
+.main   { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+
 .header {
   position: sticky;
   top: 0;
@@ -11,15 +11,26 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 56px;
+  gap: 16px;
+  height: 56px;
+  flex-shrink: 0;
 }
-.headerLeft { display:flex; flex-direction:column; justify-content:center; padding:10px 0; flex-shrink:0; }
-.headerRight { display:flex; align-items:center; gap:8px; flex-shrink:0; overflow-x:auto; }
-.content { padding:20px 32px 40px; display:flex; flex-direction:column; gap:20px; }
-.pageSub { font-size:12px; color:#9CA3AF; margin:0 0 -8px; }
+.headerLeft  { display:flex; flex-direction:column; justify-content:center; }
+.headerRight { display:flex; align-items:center; gap:8px; }
+.breadcrumb  { font-size:10px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#C0C6D2; margin-bottom:1px; }
+.pageTitle   { font-size:16px; font-weight:700; letter-spacing:-.02em; color:#111827; }
+.content     { padding:20px 32px 40px; display:flex; flex-direction:column; gap:20px; }
+
+
+
+
+
+
+
+
 
 
 .fsel { background:#F9FAFB; border:1px solid #E5E7EB; border-radius:7px; padding:6px 28px 6px 10px; color:#374151; font-family:'Inter',sans-serif; font-size:12px; font-weight:500; cursor:pointer; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2.5' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 8px center; outline:none; }
 .fsel:hover { background-color:#fff; border-color:#D1D5DB; }
 .fsel:focus { border-color:#1C9FD4; background-color:#fff; }
+.title { font-size:16px; font-weight:700; letter-spacing:-.02em; color:#111827; }
