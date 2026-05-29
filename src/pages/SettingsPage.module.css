@@ -1,9 +1,24 @@
 .layout { display:flex; height:100vh; overflow:hidden; background:#F4F6F9; font-family:'Inter',sans-serif; }
-.main { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
-.header { margin-bottom:4px; }
-.breadcrumb { font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#9CA3AF; margin-bottom:5px; }
-.title { font-size:22px; font-weight:700; letter-spacing:-.025em; color:#111827; margin-bottom:3px; }
-.subtitle { font-size:12px; color:#6B7280; }
+.main   { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: #fff;
+  border-bottom: 1px solid #E9EBF0;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 56px;
+  flex-shrink: 0;
+}
+.headerLeft { display:flex; flex-direction:column; justify-content:center; }
+.breadcrumb { font-size:10px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#C0C6D2; margin-bottom:1px; }
+.title      { font-size:16px; font-weight:700; letter-spacing:-.02em; color:#111827; }
+.content    { padding:20px 32px 40px; display:flex; flex-direction:column; gap:20px; flex:1; }
 
 /* TABS */
 .tabs { display:flex; gap:6px; border-bottom:1px solid #E5E7EB; padding-bottom:0; }
@@ -81,4 +96,4 @@
 .infoLabel { font-size:12px; color:#6B7280; }
 .infoVal { font-size:12px; font-weight:600; color:#111827; }
 
-@media(max-width:640px) { .main { padding:16px; } .settingRow { flex-direction:column; align-items:flex-start; } }
+@media(max-width:640px) {  .settingRow { flex-direction:column; align-items:flex-start; } }
