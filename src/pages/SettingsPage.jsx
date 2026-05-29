@@ -390,91 +390,125 @@ export default function SettingsPage() {
         {activeTab === 'users' && userIsAdmin && (
           <div className={styles.settingsWrap}>
             <div className={styles.settingCard}>
-              <h3 className={styles.settingTitle}>User Access Management</h3>
-              <p className={styles.settingDesc}>Add users and control which dashboards they can access. Changes apply instantly.</p>
 
-              <div style={{background:'#F9FAFB',borderRadius:10,padding:'14px',marginBottom:14,border:'1px solid #F3F4F6'}}>
-                <p style={{fontSize:12,fontWeight:600,color:'#374151',marginBottom:10}}>Add New User</p>
-                <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-                  <input type="email"
-                    style={{padding:'8px 12px',border:'1px solid #E5E7EB',borderRadius:8,fontSize:12.5,fontFamily:'Inter,sans-serif',color:'#111827',outline:'none',width:240}}
-                    placeholder="email@leverageedu.com"
-                    value={newEmail}
-                    onChange={e => setNewEmail(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addUser()}/>
-                  <button onClick={addUser} disabled={usersLoading}
-                    style={{padding:'8px 18px',borderRadius:8,background:'#111827',color:'#fff',border:'none',fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
-                    {usersLoading ? '...' : '+ Add'}
-                  </button>
+              {/* Header row */}
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:20}}>
+                <div>
+                  <h3 style={{fontSize:14,fontWeight:700,color:'#111827',margin:'0 0 3px'}}>Team Access</h3>
+                  <p style={{fontSize:12,color:'#9CA3AF',margin:0}}>{usersLoading ? 'Loading...' : accessList.length + ' members · Changes apply instantly'}</p>
                 </div>
-              </div>
-
-              {accessMsg && (
-                <div style={{padding:'9px 14px',borderRadius:8,marginBottom:12,fontSize:12.5,
-                  color: accessMsg.startsWith('Added') || accessMsg.startsWith('Access') ? '#059669' : '#DC2626',
-                  background: accessMsg.startsWith('Added') || accessMsg.startsWith('Access') ? '#ECFDF5' : '#FEF2F2',
-                  border: '1px solid ' + (accessMsg.startsWith('Added') || accessMsg.startsWith('Access') ? '#A7F3D0' : '#FECACA')
-                }}>{accessMsg}</div>
-              )}
-
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
-                <p style={{fontSize:11,fontWeight:600,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                  {usersLoading ? 'Loading...' : accessList.length + ' users'}
-                </p>
                 <button onClick={loadUsers}
-                  style={{fontSize:11,color:'#1C9FD4',background:'none',border:'none',cursor:'pointer'}}>
+                  style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:7,border:'1px solid #E5E7EB',background:'#fff',color:'#6B7280',fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif',transition:'all .15s'}}
+                  onMouseOver={e=>e.currentTarget.style.borderColor='#1C9FD4'}
+                  onMouseOut={e=>e.currentTarget.style.borderColor='#E5E7EB'}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
                   Refresh
                 </button>
               </div>
 
-              <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                {accessList.map(u => {
+              {/* Add user */}
+              <div style={{display:'flex',gap:8,marginBottom:16}}>
+                <input type="email"
+                  style={{flex:1,padding:'9px 14px',border:'1px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'Inter,sans-serif',color:'#111827',outline:'none',background:'#fff',transition:'border-color .15s'}}
+                  placeholder="name@leverageedu.com"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addUser()}
+                  onFocus={e=>e.target.style.borderColor='#1C9FD4'}
+                  onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+                <button onClick={addUser} disabled={usersLoading}
+                  style={{padding:'9px 18px',borderRadius:8,background:'#0F172A',color:'#fff',border:'none',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif',whiteSpace:'nowrap',opacity:usersLoading?.6:1}}>
+                  {usersLoading ? 'Adding…' : '+ Add member'}
+                </button>
+              </div>
+
+              {/* Message */}
+              {accessMsg && (
+                <div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',borderRadius:8,marginBottom:14,fontSize:12.5,
+                  color: accessMsg.startsWith('Added') || accessMsg.startsWith('Access') ? '#059669' : '#DC2626',
+                  background: accessMsg.startsWith('Added') || accessMsg.startsWith('Access') ? '#F0FDF4' : '#FEF2F2',
+                  border: '1px solid ' + (accessMsg.startsWith('Added') || accessMsg.startsWith('Access') ? '#BBF7D0' : '#FECACA')
+                }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    {accessMsg.startsWith('Added') || accessMsg.startsWith('Access')
+                      ? <polyline points="20 6 9 17 4 12"/>
+                      : <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>
+                    }
+                  </svg>
+                  {accessMsg}
+                </div>
+              )}
+
+              {/* User list */}
+              <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                {accessList.map((u, idx) => {
                   const rl = getRoleDisplay(u.role)
                   const isEditing = editingUser === u.email
+                  const isYou = u.email === user?.email
                   return (
-                    <div key={u.email} style={{background:'#fff',borderRadius:10,border:'1px solid #F3F4F6',overflow:'hidden',boxShadow:'0 1px 2px rgba(0,0,0,0.04)'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:10,padding:'11px 14px'}}>
-                        <div style={{width:32,height:32,borderRadius:'50%',background:rl.bg,border:'1px solid '+rl.border,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:rl.color,flexShrink:0}}>
+                    <div key={u.email}>
+                      <div style={{
+                        display:'flex',alignItems:'center',gap:12,padding:'11px 12px',
+                        borderRadius:10,border:'1px solid transparent',
+                        background: isEditing ? '#F8FAFF' : 'transparent',
+                        transition:'background .15s',
+                      }}
+                        onMouseOver={e=>{ if(!isEditing) e.currentTarget.style.background='#FAFBFC' }}
+                        onMouseOut={e=>{ if(!isEditing) e.currentTarget.style.background='transparent' }}>
+
+                        {/* Avatar */}
+                        <div style={{width:34,height:34,borderRadius:10,background:rl.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:rl.color,flexShrink:0,fontFamily:'Inter,sans-serif'}}>
                           {u.email[0].toUpperCase()}
                         </div>
+
+                        {/* Email + role */}
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:12.5,fontWeight:600,color:'#111827',display:'flex',alignItems:'center',gap:5,flexWrap:'wrap'}}>
-                            {u.email}
-                            {u.email === user?.email && (
-                              <span style={{fontSize:9.5,background:'#ECFDF5',color:'#059669',border:'1px solid #A7F3D0',borderRadius:4,padding:'1px 6px',fontWeight:700}}>YOU</span>
-                            )}
+                          <div style={{display:'flex',alignItems:'center',gap:6}}>
+                            <span style={{fontSize:13,fontWeight:500,color:'#111827',letterSpacing:'-.01em'}}>
+                              {u.email.split('@')[0]}
+                            </span>
+                            <span style={{fontSize:11,color:'#9CA3AF'}}>@leverageedu.com</span>
+                            {isYou && <span style={{fontSize:10,fontWeight:700,background:'#EEF2FF',color:'#6366F1',borderRadius:4,padding:'1px 6px',letterSpacing:'.03em'}}>YOU</span>}
                           </div>
-                          <span style={{fontSize:11,fontWeight:600,color:rl.color,background:rl.bg,border:'1px solid '+rl.border,borderRadius:4,padding:'1px 7px',marginTop:3,display:'inline-block'}}>
-                            {rl.label}
-                          </span>
                         </div>
-                        {u.email !== user?.email && (
-                          <div style={{display:'flex',gap:6}}>
+
+                        {/* Role badge */}
+                        <span style={{fontSize:11,fontWeight:600,color:rl.color,background:rl.bg,borderRadius:20,padding:'3px 10px',whiteSpace:'nowrap',flexShrink:0}}>
+                          {rl.label}
+                        </span>
+
+                        {/* Actions */}
+                        {!isYou && (
+                          <div style={{display:'flex',gap:4,flexShrink:0}}>
                             <button onClick={() => isEditing ? setEditingUser(null) : startEdit(u)}
-                              style={{padding:'5px 11px',borderRadius:6,border:'1px solid #E5E7EB',background:'#fff',color:'#374151',fontSize:11.5,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
+                              style={{padding:'5px 12px',borderRadius:7,border:'1px solid '+(isEditing?'#C7D2FE':'#E5E7EB'),background:isEditing?'#EEF2FF':'#fff',color:isEditing?'#4F46E5':'#374151',fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif',transition:'all .15s'}}>
                               {isEditing ? 'Cancel' : 'Edit'}
                             </button>
                             <button onClick={() => removeUser(u.email)}
-                              style={{padding:'5px 11px',borderRadius:6,border:'1px solid #FECACA',background:'#FEF2F2',color:'#DC2626',fontSize:11.5,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
-                              Remove
+                              style={{padding:'5px 10px',borderRadius:7,border:'1px solid transparent',background:'transparent',color:'#9CA3AF',fontSize:12,cursor:'pointer',fontFamily:'Inter,sans-serif',transition:'all .15s'}}
+                              onMouseOver={e=>{e.currentTarget.style.background='#FEF2F2';e.currentTarget.style.color='#DC2626';e.currentTarget.style.borderColor='#FECACA'}}
+                              onMouseOut={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='#9CA3AF';e.currentTarget.style.borderColor='transparent'}}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                             </button>
                           </div>
                         )}
                       </div>
+
+                      {/* Edit panel */}
                       {isEditing && (
-                        <div style={{borderTop:'1px solid #F3F4F6',padding:'14px',background:'#FAFBFF'}}>
-                          <p style={{fontSize:11.5,fontWeight:600,color:'#374151',marginBottom:10}}>
-                            Dashboard access for {u.email}:
+                        <div style={{margin:'0 0 8px',padding:'14px 16px',background:'#F8FAFF',borderRadius:10,border:'1px solid #E0E7FF'}}>
+                          <p style={{fontSize:11.5,fontWeight:600,color:'#4F46E5',marginBottom:12,letterSpacing:'.02em',textTransform:'uppercase'}}>
+                            Dashboard permissions
                           </p>
-                          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
-                            <label style={{display:'flex',alignItems:'center',gap:5,padding:'6px 10px',borderRadius:7,border:'1.5px solid '+(editIsAdmin?'#D97706':'#E5E7EB'),background:editIsAdmin?'#FFFBEB':'#fff',cursor:'pointer',fontSize:12,fontWeight:editIsAdmin?600:400}}>
+                          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
+                            <label style={{display:'flex',alignItems:'center',gap:5,padding:'6px 11px',borderRadius:8,border:'1.5px solid '+(editIsAdmin?'#D97706':'#E5E7EB'),background:editIsAdmin?'#FFFBEB':'#fff',cursor:'pointer',fontSize:12,fontWeight:editIsAdmin?600:400,transition:'all .15s'}}>
                               <input type="checkbox" checked={editIsAdmin} onChange={e => setEditIsAdmin(e.target.checked)} style={{accentColor:'#D97706'}}/>
-                              Admin
+                              👑 Admin
                             </label>
                             {!editIsAdmin && DASHBOARDS.map(d => {
                               const checked = editIds.includes(d.id)
                               return (
-                                <label key={d.id} style={{display:'flex',alignItems:'center',gap:5,padding:'6px 10px',borderRadius:7,border:'1.5px solid '+(checked?'#6366F1':'#E5E7EB'),background:checked?'#EEF2FF':'#fff',cursor:'pointer',fontSize:12,fontWeight:checked?600:400,color:checked?'#4F46E5':'#374151'}}>
+                                <label key={d.id} style={{display:'flex',alignItems:'center',gap:5,padding:'6px 11px',borderRadius:8,border:'1.5px solid '+(checked?'#6366F1':'#E5E7EB'),background:checked?'#EEF2FF':'#fff',cursor:'pointer',fontSize:12,fontWeight:checked?600:400,color:checked?'#4F46E5':'#374151',transition:'all .15s'}}>
                                   <input type="checkbox" checked={checked}
                                     onChange={() => setEditIds(p => checked ? p.filter(x => x !== d.id) : [...p, d.id])}
                                     style={{accentColor:'#6366F1'}}/>
@@ -484,15 +518,21 @@ export default function SettingsPage() {
                             })}
                           </div>
                           <button onClick={() => saveEdit(u.email)}
-                            style={{padding:'7px 16px',borderRadius:8,background:'#6366F1',color:'#fff',border:'none',fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
-                            Save Changes
+                            style={{padding:'7px 18px',borderRadius:8,background:'#6366F1',color:'#fff',border:'none',fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
+                            Save changes
                           </button>
                         </div>
+                      )}
+
+                      {/* Divider */}
+                      {idx < accessList.length - 1 && !isEditing && (
+                        <div style={{height:1,background:'#F3F4F6',margin:'0 12px'}}/>
                       )}
                     </div>
                   )
                 })}
               </div>
+
             </div>
           </div>
         )}
