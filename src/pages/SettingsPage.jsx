@@ -251,15 +251,15 @@ export default function SettingsPage() {
   return (
     <div className={styles.layout}>
       <Sidebar />
-      <main className={styles.main}>
+      <div className={styles.main}>
         <div className={styles.header}>
-          <div>
+          <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Settings</p>
             <h1 className={styles.title}>Settings & Quantum AI</h1>
-            <p className={styles.subtitle}>Analytics assistant and team access management</p>
           </div>
         </div>
 
+        <div className={styles.content}>
         <div className={styles.tabs}>
           {[
             { id:'chat',    label:'Quantum AI' },
@@ -576,7 +576,8 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
-      </main>
+        </div>{/* end content */}
+      </div>{/* end main */}
     </div>
   )
 }
