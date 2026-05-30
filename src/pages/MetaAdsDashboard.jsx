@@ -51,8 +51,10 @@ function fmtINR(usd) {
 }
 
 // ─── KPI CARD ─────────────────────────────────────────────
-function KPI({ label, value, prev, sub, color = '#1C9FD4' }) {
-  const delta = prev != null && prev > 0 ? ((value - prev) / prev * 100).toFixed(1) : null
+function KPI({ label, value, rawValue, rawPrev, sub, color = '#1C9FD4' }) {
+  const delta = rawPrev != null && rawPrev > 0 && rawValue != null
+    ? ((rawValue - rawPrev) / rawPrev * 100).toFixed(1)
+    : null
   return (
     <div className={styles.kpiCard} style={{ borderLeftColor: color }}>
       <p className={styles.kpiLabel}>{label}</p>
@@ -147,11 +149,11 @@ export default function MetaAdsDashboard() {
 
       const [insNow, insPrev, campaigns, pixelsRes] = await Promise.all([
         graphGet(`${AD_ACCOUNT}/insights`, t, {
-          fields: 'spend,impressions,clicks,cpm,ctr',
+          fields: 'spend,impressions,clicks,cpm,ctr,actions',
           time_range: JSON.stringify(thisWeek), level: 'account'
         }),
         graphGet(`${AD_ACCOUNT}/insights`, t, {
-          fields: 'spend,impressions,clicks,cpm,ctr',
+          fields: 'spend,impressions,clicks,cpm,ctr,actions',
           time_range: JSON.stringify(lastWeek), level: 'account'
         }),
         graphGet(`${AD_ACCOUNT}/campaigns`, t, {
@@ -165,36 +167,27 @@ export default function MetaAdsDashboard() {
       const now  = insNow.data?.[0]  || {}
       const prev = insPrev.data?.[0] || {}
 
-      // Pixel events
-      let pixelEvents = {}
-      PIXEL_EVENTS.forEach(ev => { pixelEvents[ev] = { curr: 0, prev: 0 } })
+      // Helper: get action value by type
+      const getAction = (actions, type) =>
+        parseInt(actions?.find(a => a.action_type === type)?.value || 0)
 
-      if (pixelsRes.data?.length) {
-        const pid = pixelsRes.data[0].id
-        try {
-          const [evNow, evPrev] = await Promise.all([
-            graphGet(`${pid}/stats`, t, {
-              start_time: Math.floor(new Date(thisWeek.since).getTime()/1000),
-              end_time:   Math.floor((new Date(thisWeek.until).getTime()/1000) + 86400),
-            }),
-            graphGet(`${pid}/stats`, t, {
-              start_time: Math.floor(new Date(lastWeek.since).getTime()/1000),
-              end_time:   Math.floor((new Date(lastWeek.until).getTime()/1000) + 86400),
-            }),
-          ])
-          const toMap = arr => {
-            const m = {}
-            ;(arr.data || arr || []).forEach(d => {
-              const n = d.event || d.event_name || d.type
-              if (n) m[n] = (m[n] || 0) + (parseInt(d.count) || 0)
-            })
-            return m
-          }
-          const nm = toMap(evNow); const pm = toMap(evPrev)
-          PIXEL_EVENTS.forEach(ev => {
-            pixelEvents[ev] = { curr: nm[ev] || 0, prev: pm[ev] || 0 }
-          })
-        } catch {}
+      // Map actual Meta action types to our pixel event labels
+      const nowActions  = now.actions  || []
+      const prevActions = prev.actions || []
+
+      const pixelEvents = {
+        'Leads (Total)': {
+          curr: getAction(nowActions,  'lead'),
+          prev: getAction(prevActions, 'lead'),
+        },
+        'Pixel Leads': {
+          curr: getAction(nowActions,  'offsite_conversion.fb_pixel_lead'),
+          prev: getAction(prevActions, 'offsite_conversion.fb_pixel_lead'),
+        },
+        'Web Leads (Onsite)': {
+          curr: getAction(nowActions,  'onsite_web_lead'),
+          prev: getAction(prevActions, 'onsite_web_lead'),
+        },
       }
 
       setData({ now, prev, campaigns: campaigns.data || [], pixelEvents, pixel: pixelsRes.data || [], range: thisWeek })
@@ -324,20 +317,20 @@ export default function MetaAdsDashboard() {
             </p>
 
             <div className={styles.kpiGrid}>
-              <KPI label="AD SPEND"    value={fmtINR(spend)}  prev={spendP}   sub="INR equiv · last 7d" color="#6366F1"/>
-              <KPI label="IMPRESSIONS" value={impr.toLocaleString()} prev={imprP} sub="Total impressions" color="#1C9FD4"/>
-              <KPI label="CLICKS"      value={clicks.toLocaleString()} prev={clicksP} sub="Link clicks" color="#10B981"/>
-              <KPI label="CTR"         value={ctr.toFixed(2) + '%'} sub="Click-through rate" color="#F59E0B"/>
-              <KPI label="CAMPAIGNS"   value={data.campaigns.length} sub="Total campaigns fetched" color="#8B5CF6"/>
-              <KPI label="PIXEL"       value={data.pixel[0]?.name || 'Not found'} sub={data.pixel[0]?.id || '—'} color="#EC4899"/>
+              <KPI label="AD SPEND"    value={fmtINR(spend)}           rawValue={spend}  rawPrev={spendP}  sub="INR equiv · last 7d"     color="#6366F1"/>
+              <KPI label="IMPRESSIONS" value={impr.toLocaleString()}    rawValue={impr}   rawPrev={imprP}   sub="Total impressions"         color="#1C9FD4"/>
+              <KPI label="CLICKS"      value={clicks.toLocaleString()}  rawValue={clicks} rawPrev={clicksP} sub="Link clicks"               color="#10B981"/>
+              <KPI label="CTR"         value={ctr.toFixed(2) + '%'}     rawValue={ctr}    rawPrev={parseFloat(prev.ctr||0)} sub="Click-through rate" color="#F59E0B"/>
+              <KPI label="CAMPAIGNS"   value={data.campaigns.length}    sub="Total campaigns fetched"       color="#8B5CF6"/>
+              <KPI label="PIXEL"       value={data.pixel[0]?.name?.trim() || 'Not found'} sub={data.pixel[0]?.id || '—'} color="#EC4899"/>
             </div>
 
             {/* Pixel Integrity */}
             <div className={styles.tableWrap}>
               <div className={styles.tableHead}>
                 <div>
-                  <p className={styles.tableTitle}>Pixel Integrity Report</p>
-                  <p className={styles.tableSub}>Event fires — last 7 days vs previous 7 days · {data.pixel[0]?.name || 'Pixel'}</p>
+                  <p className={styles.tableTitle}>Lead Event Report</p>
+                  <p className={styles.tableSub}>Event fires — last 7 days vs previous 7 days · {data.pixel[0]?.name?.trim() || 'Pixel'}</p>
                 </div>
               </div>
               <table>
@@ -345,8 +338,8 @@ export default function MetaAdsDashboard() {
                   <tr><th>Event</th><th>This Week</th><th>Last Week</th><th>Change</th><th>Status</th></tr>
                 </thead>
                 <tbody>
-                  {PIXEL_EVENTS.map(ev => (
-                    <PixelRow key={ev} event={ev} curr={data.pixelEvents[ev]?.curr || 0} prev={data.pixelEvents[ev]?.prev || 0}/>
+                  {Object.entries(data.pixelEvents).map(([ev, val]) => (
+                    <PixelRow key={ev} event={ev} curr={val.curr} prev={val.prev}/>
                   ))}
                 </tbody>
               </table>
