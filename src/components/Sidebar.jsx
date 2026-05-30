@@ -1,5 +1,5 @@
 import React from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import styles from './Sidebar.module.css'
 
@@ -13,7 +13,17 @@ const NAV = [
       { to: '/dashboard/lead-quality', icon: <FunnelIcon />,  label: 'Lead Quality', end: false },
       { to: '/dashboard/channel-mix',  icon: <MixIcon />,     label: 'Channel Mix',  end: false },
       { to: '/dashboard/revenue',      icon: <RevenueIcon />, label: 'Revenue',      end: false },
-      { to: '/dashboard/meta-ads',      icon: <MetaIcon />,    label: 'Meta Ads',     end: false },
+      {
+        to: '/dashboard/meta-ads',
+        icon: <MetaIcon />,
+        label: 'Meta Ads',
+        end: false,
+        subItems: [
+          { to: '/dashboard/meta-ads?tab=campaigns', label: 'Campaigns',  icon: '📊' },
+          { to: '/dashboard/meta-ads?tab=creatives', label: 'Creatives',  icon: '🎨' },
+          { to: '/dashboard/meta-ads?tab=vasu',      label: 'VASU AI',    icon: '✦'  },
+        ]
+      },
     ]
   },
   {
@@ -46,11 +56,16 @@ const ICON_MAP = {
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
-  // Persist collapse state
   const [collapsed, setCollapsed] = React.useState(() => {
     try { return localStorage.getItem('lq_sidebar_collapsed') === 'true' } catch { return false }
   })
+
+  // Auto-expand Meta Ads if on that route
+  const onMetaRoute = location.pathname.startsWith('/dashboard/meta-ads')
+  const [metaExpanded, setMetaExpanded] = React.useState(onMetaRoute)
+  React.useEffect(() => { if (onMetaRoute) setMetaExpanded(true) }, [onMetaRoute])
 
   const toggle = () => {
     const next = !collapsed
@@ -74,18 +89,15 @@ export default function Sidebar() {
 
   const idMap = { 'Home':'home','ROAS':'roas','MTD':'mtd','Lead Quality':'lead_quality','Channel Mix':'channel_mix','Revenue':'revenue','Meta Ads':'meta_ads','VASU AI':'vasu','Settings':'settings' }
 
+  // Current tab from URL
+  const currentTab = new URLSearchParams(location.search).get('tab') || 'campaigns'
+
   if (collapsed) {
-    // Collapsed state — show only icons
     return (
       <aside className={styles.sidebarCollapsed}>
-        {/* Toggle button */}
         <button className={styles.collapseBtn} onClick={toggle} title="Expand sidebar">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <polyline points="9 18 15 12 9 6"/>
-          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
-
-        {/* Nav icons */}
         <div className={styles.collapsedNav}>
           {NAV.map(group => group.items.filter(item => canSee(idMap[item.label])).map(item => (
             <NavLink key={item.label} to={item.to} end={item.end}
@@ -95,8 +107,6 @@ export default function Sidebar() {
             </NavLink>
           )))}
         </div>
-
-        {/* Avatar */}
         <div className={styles.collapsedAvatar} title={user?.email}>
           <div className={styles.avatar}>
             {user?.picture ? <img src={user.picture} alt={user.name}/> : initials}
@@ -108,7 +118,6 @@ export default function Sidebar() {
 
   return (
     <aside className={styles.sidebar}>
-      {/* Logo + collapse button */}
       <div className={styles.logoArea}>
         <div className={styles.logoPill}>
           <img src="https://publicassets.leverageedu.com/landing-pages-new/logo-dark.svg" alt="Leverage Edu" className={styles.logoImg}/>
@@ -123,29 +132,62 @@ export default function Sidebar() {
           <span>Quantum</span>
         </div>
         <button className={styles.collapseBtnExpanded} onClick={toggle} title="Collapse sidebar">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
       </div>
 
-      {/* Nav */}
       <nav className={styles.nav}>
         {NAV.map(group => (
           <div key={group.label} className={styles.group}>
             <p className={styles.groupLabel}>{group.label}</p>
-            {group.items.filter(item => canSee(idMap[item.label])).map(item => (
-              <NavLink key={item.label} to={item.to} end={item.end}
-                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
-                <span className={styles.navIcon}>{item.icon}</span>
-                <span>{item.label}</span>
-              </NavLink>
-            ))}
+            {group.items.filter(item => canSee(idMap[item.label])).map(item => {
+              if (item.subItems) {
+                const isParentActive = location.pathname.startsWith(item.to)
+                return (
+                  <div key={item.label}>
+                    <button
+                      className={`${styles.navItem} ${isParentActive ? styles.active : ''}`}
+                      onClick={() => { setMetaExpanded(e => !e); if (!isParentActive) navigate(item.to + '?tab=campaigns') }}
+                      style={{width:'100%',textAlign:'left',background:'none',border:'none',cursor:'pointer',font:'inherit'}}>
+                      <span className={styles.navIcon}>{item.icon}</span>
+                      <span style={{flex:1}}>{item.label}</span>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                        style={{transform: metaExpanded ? 'rotate(180deg)' : 'none', transition:'transform .2s', opacity:.5}}>
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
+                    </button>
+                    {metaExpanded && (
+                      <div className={styles.subNav}>
+                        {item.subItems.map(sub => {
+                          const subTab = new URLSearchParams(sub.to.split('?')[1]).get('tab')
+                          const isSubActive = isParentActive && currentTab === subTab
+                          return (
+                            <button key={sub.label}
+                              className={`${styles.subNavItem} ${isSubActive ? styles.subNavActive : ''}`}
+                              onClick={() => navigate(sub.to)}
+                              style={{width:'100%',textAlign:'left',background:'none',border:'none',cursor:'pointer',font:'inherit'}}>
+                              <span style={{fontSize:11}}>{sub.icon}</span>
+                              <span>{sub.label}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+              return (
+                <NavLink key={item.label} to={item.to} end={item.end}
+                  className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+                  <span className={styles.navIcon}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </NavLink>
+              )
+            })}
           </div>
         ))}
       </nav>
 
-      {/* User */}
       <div className={styles.userArea}>
         <div className={styles.avatar}>
           {user?.picture ? <img src={user.picture} alt={user.name}/> : initials}
