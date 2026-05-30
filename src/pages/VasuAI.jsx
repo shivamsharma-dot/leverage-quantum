@@ -9,39 +9,33 @@ const AD_ACCOUNT = 'act_641914389215638'
 
 function buildSystemPrompt(metaData) {
   const dataSection = metaData ? `
-You have access to the following LIVE Meta Ads data for Leverage Edu (act_641914389215638):
+You have access to LIFETIME Meta Ads data for Leverage Edu (act_641914389215638):
 
-AD SPEND last 7d: ${metaData.spend}
+LIFETIME SPEND: ${metaData.spend}
 IMPRESSIONS: ${metaData.impressions}
 CLICKS: ${metaData.clicks}
 CTR: ${metaData.ctr}%
+CPM: ${metaData.cpm}
+TOTAL LEADS: ${metaData.totalLeads?.toLocaleString?.() || '—'}
+COST PER LEAD: ${metaData.costPerLead}
 PIXEL: ${metaData.pixelName} (${metaData.pixelId})
 
-LEAD EVENTS last 7d vs prev 7d:
-${Object.entries(metaData.pixelEvents||{}).map(([k,v])=>`- ${k}: ${v.curr.toLocaleString()} vs ${v.prev.toLocaleString()} (${v.prev>0?((v.curr-v.prev)/v.prev*100).toFixed(1)+'%':'new'})`).join('\n')}
-
-TOP CAMPAIGNS last 7d:
-${(metaData.campaigns||[]).slice(0,15).map(c=>{
+ALL CAMPAIGNS (lifetime):
+${(metaData.campaigns||[]).slice(0,20).map(c=>{
   const ins = c.insights?.data?.[0]||{}
-  return `- ${c.name} | ${c.status} | Spend: $${parseFloat(ins.spend||0).toFixed(0)} | Impr: ${parseInt(ins.impressions||0).toLocaleString()} | Clicks: ${parseInt(ins.clicks||0).toLocaleString()} | Leads: ${parseInt(ins.actions?.find(a=>a.action_type==='lead')?.value||0)}`
+  return `- ${c.name} | ${c.status} | Spend: $${parseFloat(ins.spend||0).toFixed(0)} | Impr: ${parseInt(ins.impressions||0).toLocaleString()} | CTR: ${parseFloat(ins.ctr||0).toFixed(2)}% | Leads: ${parseInt(ins.actions?.find(a=>a.action_type==='lead')?.value||0)}`
 }).join('\n')}
 
-TOP ADSETS last 7d:
+TOP ADSETS (lifetime):
 ${(metaData.adsets||[]).slice(0,10).map(a=>{
   const ins = a.insights?.data?.[0]||{}
-  return `- ${a.name} | ${a.status} | Optimising for: ${a.optimization_goal||'unknown'} | Spend: $${parseFloat(ins.spend||0).toFixed(0)} | CTR: ${parseFloat(ins.ctr||0).toFixed(2)}%`
+  return `- ${a.name} | ${a.status} | Goal: ${a.optimization_goal||'unknown'} | Spend: $${parseFloat(ins.spend||0).toFixed(0)} | CTR: ${parseFloat(ins.ctr||0).toFixed(2)}%`
 }).join('\n')}
-
-TOP ADS last 7d:
-${(metaData.ads||[]).slice(0,10).map(a=>{
-  const ins = a.insights?.data?.[0]||{}
-  return `- ${a.name} | ${a.status} | Spend: $${parseFloat(ins.spend||0).toFixed(0)} | Clicks: ${parseInt(ins.clicks||0)} | CTR: ${parseFloat(ins.ctr||0).toFixed(2)}%`
-}).join('\n')}
-` : 'No Meta Ads data loaded. User needs to connect their Meta account on the Meta Ads dashboard first.'
+` : 'No Meta Ads data loaded. User needs to connect via the Meta Ads dashboard first.'
 
   return `You are VASU AI (Visual Analytics & Strategy Unit) — the Meta Ads intelligence layer inside Leverage Quantum, Leverage Edu's internal marketing platform.
 
-Your entire focus is Meta Ads: campaign performance, pixel integrity, lead funnel health, CPL optimization, and ROAS improvement for Leverage Edu.
+Your entire focus is Meta Ads: campaign performance, pixel integrity, lead funnel health, CPL optimisation, and ROAS improvement for Leverage Edu. You analyse LIFETIME data — the full account history, not just recent days.
 
 ${dataSection}
 
@@ -109,72 +103,53 @@ export default function VasuAI() {
   const loadMetaContext = async (token) => {
     setMetaLoading(true)
     try {
-      const getDateRange = (daysAgo, len=7) => {
-        const e = new Date(); e.setDate(e.getDate()-daysAgo)
-        const s = new Date(e); s.setDate(s.getDate()-len+1)
-        const f = d => d.toISOString().slice(0,10)
-        return { since:f(s), until:f(e) }
-      }
-      const thisWeek = getDateRange(0,7), lastWeek = getDateRange(7,7)
       const getAction = (actions,type) => parseInt(actions?.find(a=>a.action_type===type)?.value||0)
 
-      // Wide fetch — account + campaigns + adsets + ads + pixels all parallel
-      const [insNow, insPrev, campaigns, adsets, ads, pixels] = await Promise.all([
+      // LIFETIME data — no date filter
+      const [insLife, campaigns, adsets, ads, pixels] = await Promise.all([
         graphGet(`${AD_ACCOUNT}/insights`, token, {
-          fields:'spend,impressions,clicks,ctr,cpm,actions,cost_per_action_type',
-          time_range:JSON.stringify(thisWeek), level:'account'
-        }),
-        graphGet(`${AD_ACCOUNT}/insights`, token, {
-          fields:'spend,impressions,clicks,ctr,actions',
-          time_range:JSON.stringify(lastWeek), level:'account'
+          fields:'spend,impressions,clicks,ctr,cpm,actions',
+          date_preset:'maximum', level:'account'
         }),
         graphGet(`${AD_ACCOUNT}/campaigns`, token, {
-          fields:'name,status,objective,daily_budget,lifetime_budget,insights{spend,impressions,clicks,ctr,actions,cost_per_action_type}',
-          limit:50, date_preset:'last_7d'
+          fields:'name,status,objective,daily_budget,lifetime_budget,insights{spend,impressions,clicks,ctr,actions}',
+          limit:50, date_preset:'maximum'
         }),
         graphGet(`${AD_ACCOUNT}/adsets`, token, {
-          fields:'name,status,daily_budget,billing_event,optimization_goal,targeting,insights{spend,impressions,clicks,ctr,actions}',
-          limit:50, date_preset:'last_7d'
+          fields:'name,status,daily_budget,optimization_goal,insights{spend,impressions,clicks,ctr,actions}',
+          limit:50, date_preset:'maximum'
         }).catch(()=>({data:[]})),
         graphGet(`${AD_ACCOUNT}/ads`, token, {
-          fields:'name,status,creative{title,body,thumbnail_url},insights{spend,impressions,clicks,ctr,actions}',
-          limit:50, date_preset:'last_7d'
+          fields:'name,status,insights{spend,impressions,clicks,ctr,actions}',
+          limit:50, date_preset:'maximum'
         }).catch(()=>({data:[]})),
         graphGet(`${AD_ACCOUNT}/adspixels`, token, { fields:'id,name,last_fired_time' })
       ])
 
-      const now  = insNow.data?.[0]  || {}
-      const prev = insPrev.data?.[0] || {}
-      const na = now.actions||[], pa = prev.actions||[]
+      const acc = insLife.data?.[0] || {}
+      const na  = acc.actions || []
       const totalLeads = getAction(na,'lead')
 
       const data = {
-        spend:       `$${parseFloat(now.spend||0).toFixed(2)} (~₹${(parseFloat(now.spend||0)*83/1e7).toFixed(2)} Cr)`,
-        impressions: parseInt(now.impressions||0).toLocaleString(),
-        clicks:      parseInt(now.clicks||0).toLocaleString(),
-        ctr:         parseFloat(now.ctr||0).toFixed(2),
-        cpm:         `$${parseFloat(now.cpm||0).toFixed(2)}`,
-        costPerLead: totalLeads > 0
-          ? `₹${(parseFloat(now.spend||0)*83/totalLeads).toFixed(0)}`
-          : 'N/A',
+        spend:       `$${parseFloat(acc.spend||0).toFixed(2)} (~₹${(parseFloat(acc.spend||0)*83/1e7).toFixed(2)} Cr)`,
+        impressions: parseInt(acc.impressions||0).toLocaleString(),
+        clicks:      parseInt(acc.clicks||0).toLocaleString(),
+        ctr:         parseFloat(acc.ctr||0).toFixed(2),
+        cpm:         `$${parseFloat(acc.cpm||0).toFixed(2)}`,
+        costPerLead: totalLeads > 0 ? `₹${(parseFloat(acc.spend||0)*83/totalLeads).toFixed(0)}` : 'N/A',
         pixelName:   pixels.data?.[0]?.name || 'Unknown',
         pixelId:     pixels.data?.[0]?.id   || '—',
         campaigns:   campaigns.data || [],
         adsets:      adsets.data   || [],
         ads:         ads.data      || [],
-        pixelEvents: {
-          'Leads (Total)':      { curr:getAction(na,'lead'),                               prev:getAction(pa,'lead') },
-          'Pixel Leads':        { curr:getAction(na,'offsite_conversion.fb_pixel_lead'),   prev:getAction(pa,'offsite_conversion.fb_pixel_lead') },
-          'Web Leads (Onsite)': { curr:getAction(na,'onsite_web_lead'),                    prev:getAction(pa,'onsite_web_lead') },
-        },
-        prevSpend:   parseFloat(prev.spend||0),
+        totalLeads,
       }
 
       setMetaData(data)
       setConnected(true)
       setMessages([{
         role: 'assistant',
-        content: `Hi! I'm **VASU AI** — connected to your Meta Ads account ✅\n\n**Quick snapshot (last 7 days):**\n- Spend: ${data.spend} | CPM: ${data.cpm}\n- Impressions: ${data.impressions} | Clicks: ${data.clicks} | CTR: ${data.ctr}%\n- Leads: ${data.pixelEvents['Leads (Total)'].curr.toLocaleString()} | Cost per Lead: ${data.costPerLead}\n- Pixel: ${data.pixelName}\n- **${data.campaigns.length} campaigns · ${data.adsets.length} adsets · ${data.ads.length} ads** — all loaded\n\nI have full access to your campaigns, adsets, individual ads and creatives. Ask me anything!`
+        content: `Hi! I'm **VASU AI** — connected to your Meta Ads ✅\n\n**Lifetime account data:**\n- Total Spend: ${data.spend}\n- Impressions: ${data.impressions} | Clicks: ${data.clicks} | CTR: ${data.ctr}%\n- Total Leads: ${totalLeads.toLocaleString()} | Cost per Lead: ${data.costPerLead}\n- Pixel: ${data.pixelName}\n- ${data.campaigns.length} campaigns · ${data.adsets.length} adsets · ${data.ads.length} ads loaded\n\nI analyse your **lifetime** Meta Ads data. Ask me anything about campaigns, creatives, spend, or what to do next.`
       }])
     } catch(e) {
       setMessages([{ role:'assistant', content:`⚠️ Couldn't load Meta Ads data: ${e.message}\n\nGo to **Meta Ads** dashboard, disconnect and reconnect your account.` }])
