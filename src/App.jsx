@@ -1,4 +1,4 @@
-import MetaAdsDashboard from './pages/MetaAdsDashboard'
+import React, { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { logActivity } from './components/ActivityLogger'
