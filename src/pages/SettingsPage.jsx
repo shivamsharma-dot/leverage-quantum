@@ -22,7 +22,7 @@ function buildSystemPrompt() {
   ).join('\n')
 
   return [
-    'You are Quantum AI, the analytics assistant embedded in Leverage Quantum — an internal marketing dashboard for Leverage Edu.',
+    'You are VASU AI, the analytics assistant embedded in Leverage Quantum — an internal marketing dashboard for Leverage Edu.',
     '',
     '=== YOUR ROLE ===',
     'Analyse the 2025 marketing data below and answer questions about ROAS, CPL, leads, revenue, funnel performance, and channel efficiency.',
@@ -214,7 +214,7 @@ export default function SettingsPage() {
   // Chat
   const [messages, setMessages] = useState([{
     role: 'assistant',
-    content: 'Hi! I am Quantum AI, powered by Llama 3 (Groq).\n\nI have access to your complete 2025 marketing data:\n- Rs.29.45 Cr total spend (Jan-Dec)\n- 18.69L OPPs, 98.6K QLs, 18.3K Apps\n- Revenue data Aug-Dec (AC + VAS)\n- Channel breakdown: Facebook, Google, Affiliate\n\nAsk me anything about ROAS, CPL, revenue, funnel, or channel performance!'
+    content: 'Hi! I am VASU AI, powered by Llama 3 (Groq).\n\nI have access to your complete 2025 marketing data:\n- Rs.29.45 Cr total spend (Jan-Dec)\n- 18.69L OPPs, 98.6K QLs, 18.3K Apps\n- Revenue data Aug-Dec (AC + VAS)\n- Channel breakdown: Facebook, Google, Affiliate\n\nAsk me anything about ROAS, CPL, revenue, funnel, or channel performance!'
   }])
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
@@ -255,14 +255,14 @@ export default function SettingsPage() {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Settings</p>
-            <h1 className={styles.title}>Settings & Quantum AI</h1>
+            <h1 className={styles.title}>Settings</h1>
           </div>
         </div>
 
         <div className={styles.content}>
         <div className={styles.tabs}>
           {[
-            { id:'chat',    label:'Quantum AI' },
+            { id:'chat',    label:'VASU AI' },
             { id:'data',    label:'Data'       },
             ...(userIsAdmin ? [{ id:'users', label:'User Access' }, { id:'activity', label:'Activity Log' }] : []),
             { id:'profile', label:'Profile'    },
