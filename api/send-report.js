@@ -32,11 +32,13 @@ async function getStoredToken() {
   } catch { return null }
 }
 
-function fmtINR(usd) {
-  const n = usd * 83
+function fmtINR(inr) {
+  // Meta API returns spend in INR directly for Indian accounts
+  const n = parseFloat(inr) || 0
   if (n >= 1e7) return '₹' + (n/1e7).toFixed(2) + ' Cr'
   if (n >= 1e5) return '₹' + (n/1e5).toFixed(1) + 'L'
-  return '₹' + Math.round(n).toLocaleString('en-IN')
+  if (n >= 1000) return '₹' + Math.round(n).toLocaleString('en-IN')
+  return '₹' + Math.round(n)
 }
 
 function fatigue(ctr, avgCTR, freq) {
