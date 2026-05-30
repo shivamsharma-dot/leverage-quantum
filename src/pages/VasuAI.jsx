@@ -218,11 +218,14 @@ export default function VasuAI() {
             </div>
 
             <div className={styles.inputRow}>
-              <input className={styles.input} value={input}
-                onChange={e=>setInput(e.target.value)}
-                onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&send()}
-                placeholder={connected ? "Ask about your Meta Ads campaigns…" : "Connect Meta Ads first to start chatting…"}
-                disabled={loading||!connected}/>
+              <textarea className={styles.input} value={input}
+                onChange={e => { setInput(e.target.value); e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,160)+'px' }}
+                onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send() } }}
+                placeholder={connected ? "Ask about your Meta Ads campaigns… (Shift+Enter for new line)" : "Connect Meta Ads first to start chatting…"}
+                disabled={loading||!connected}
+                rows={1}
+                style={{resize:'none',overflowY:'auto'}}
+              />
               <button className={styles.sendBtn} onClick={()=>send()} disabled={loading||!input.trim()||!connected}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               </button>
