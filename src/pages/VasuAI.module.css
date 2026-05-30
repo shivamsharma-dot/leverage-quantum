@@ -53,11 +53,11 @@
 .quickBtn:disabled { opacity:.5; cursor:not-allowed; }
 
 /* Input */
-.inputRow { display:flex; gap:8px; padding:12px 16px; border-top:1px solid #F3F4F6; }
+.inputRow { display:flex; gap:8px; padding:12px 16px; border-top:1px solid #F3F4F6; align-items:flex-end; }
 .input {
   flex:1; padding:10px 14px; border:1px solid #E5E7EB; border-radius:10px;
-  font-size:13px; font-family:'Inter',sans-serif; color:#111827;
-  outline:none; transition:border-color .15s;
+  font-size:13px; font-family:'Inter',sans-serif; color:#111827; line-height:1.5;
+  outline:none; transition:border-color .15s; min-height:40px; max-height:160px;
 }
 .input:focus { border-color:#1C9FD4; }
 .sendBtn {
