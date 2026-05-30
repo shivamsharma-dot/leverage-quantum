@@ -19,7 +19,8 @@ const NAV = [
   {
     label: 'Account',
     items: [
-      { to: '/settings', icon: <SettingsIcon />, label: 'Settings', end: false },
+      { to: '/vasu',      icon: <VasuIcon />,     label: 'VASU AI',  end: false },
+      { to: '/settings',  icon: <SettingsIcon />, label: 'Settings', end: false },
     ]
   }
 ]
@@ -32,12 +33,14 @@ function MixIcon()     { return <svg width="14" height="14" viewBox="0 0 24 24" 
 function RevenueIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg> }
 function MetaIcon()    { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg> }
 function SettingsIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg> }
+function VasuIcon()    { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7h1a1 1 0 010 2h-1v1a2 2 0 01-2 2H5a2 2 0 01-2-2v-1H2a1 1 0 010-2h1a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2z"/><path d="M10 12v4M14 12v4"/></svg> }
 
 // Collapsed icon map
 const ICON_MAP = {
   'Home': <HomeIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
   'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
-  'Revenue': <RevenueIcon/>, 'Settings': <SettingsIcon/>
+  'Revenue': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>,
+  'VASU AI': <VasuIcon/>, 'Settings': <SettingsIcon/>
 }
 
 export default function Sidebar() {
@@ -69,7 +72,7 @@ export default function Sidebar() {
     ? user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
     : user?.email?.[0]?.toUpperCase() || 'LQ'
 
-  const idMap = { 'Home':'home','ROAS':'roas','MTD':'mtd','Lead Quality':'lead_quality','Channel Mix':'channel_mix','Revenue':'revenue','Meta Ads':'meta_ads','Settings':'settings' }
+  const idMap = { 'Home':'home','ROAS':'roas','MTD':'mtd','Lead Quality':'lead_quality','Channel Mix':'channel_mix','Revenue':'revenue','Meta Ads':'meta_ads','VASU AI':'vasu','Settings':'settings' }
 
   if (collapsed) {
     // Collapsed state — show only icons
