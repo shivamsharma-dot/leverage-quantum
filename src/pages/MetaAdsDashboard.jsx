@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import styles from './MetaAdsDashboard.module.css'
@@ -192,6 +193,7 @@ function CampaignsTab({ data }) {
 function CreativesTab({ data }) {
   const { account, ads, accountAvgCTR } = data
   const [expanded, setExpanded] = useState(null)
+  const [viewMode, setViewMode] = useState('grid')
 
   const kpis = [
     { label:'Total Spend', value: fmtINR(parseFloat(account.spend||0)) },
@@ -208,9 +210,14 @@ function CreativesTab({ data }) {
     const clks = parseInt(ins.clicks||0)
     const ctr  = parseFloat(ins.ctr||0)
     const freq = parseFloat(ins.frequency||1)
+    const imgUrl = ad.creative?.image_url || ad.creative?.thumbnail_url || null
     const { score, label } = computeFatigue(impr, clks, ctr, freq, accountAvgCTR)
-    return { ...ad, ins, impr, clks, ctr, freq, score, label }
-  }).sort((a,b) => b.score - a.score) // highest fatigue first
+    return { ...ad, ins, impr, clks, ctr, freq, score, label, imgUrl }
+  }).sort((a, b) => {
+    const order = { healthy: 0, moderate: 1, high: 2 }
+    if (order[a.label] !== order[b.label]) return order[a.label] - order[b.label]
+    return parseFloat(b.ins.spend||0) - parseFloat(a.ins.spend||0)
+  })
 
   const healthCount = {
     healthy:  scoredAds.filter(a => a.label === 'healthy').length,
@@ -228,28 +235,38 @@ function CreativesTab({ data }) {
         <div className={styles.healthBarFill} style={{flex: healthCount.moderate, background:'#F59E0B'}}/>
         <div className={styles.healthBarFill} style={{flex: healthCount.high || 0.1, background:'#EF4444'}}/>
       </div>
-      <div style={{display:'flex',gap:16,marginBottom:16,fontSize:12}}>
-        <span style={{color:'#059669'}}>● {healthCount.healthy} healthy</span>
-        <span style={{color:'#D97706'}}>● {healthCount.moderate} moderate</span>
-        <span style={{color:'#DC2626'}}>● {healthCount.high} high</span>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:16,marginBottom:8}}>
+        <div style={{display:'flex',gap:16,fontSize:12}}>
+          <span style={{color:'#059669',fontWeight:600}}>● {healthCount.healthy} healthy</span>
+          <span style={{color:'#D97706',fontWeight:600}}>● {healthCount.moderate} moderate</span>
+          <span style={{color:'#DC2626',fontWeight:600}}>● {healthCount.high} high</span>
+        </div>
+        <div style={{display:'flex',border:'1px solid #E5E7EB',borderRadius:8,overflow:'hidden'}}>
+          <button onClick={()=>setViewMode('grid')} style={{padding:'6px 10px',background:viewMode==='grid'?'#F3F4F6':'#fff',border:'none',cursor:'pointer',color:viewMode==='grid'?'#111827':'#9CA3AF'}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          </button>
+          <button onClick={()=>setViewMode('list')} style={{padding:'6px 10px',background:viewMode==='list'?'#F3F4F6':'#fff',border:'none',borderLeft:'1px solid #E5E7EB',cursor:'pointer',color:viewMode==='list'?'#111827':'#9CA3AF'}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+        </div>
       </div>
 
-      <div className={styles.creativeGrid}>
+      {viewMode === 'grid' && <div className={styles.creativeGrid}>
         {scoredAds.map(ad => {
-          const thumb = ad.creative?.thumbnail_url || ad.creative?.image_url
           const isOpen = expanded === ad.id
-          const recommendation =
-            ad.label === 'high'    ? 'Refresh Creative — high fatigue, performance degrading' :
-            ad.label === 'moderate'? (ad.ctr > 0 ? 'Monitor — moderate fatigue with signals' : 'No strong signals; monitor') :
-                                     'Healthy — CTR above account average'
+          const rec = ad.label==='high' ? 'Refresh Creative' : ad.label==='moderate' ? 'Monitor' : 'Keep Running'
+          const signal = ad.impr===0 ? 'No impressions in period' : ad.label==='high' ? 'High Creative Fatigue — refresh needed' : ad.ctr < accountAvgCTR ? `Moderate fatigue (score ${ad.score}) — CTR below avg` : `Healthy — CTR above account average`
+          const sigColor = ad.label==='high'?'#DC2626':ad.label==='moderate'?'#D97706':'#059669'
           return (
             <div key={ad.id} className={`${styles.creativeCard} ${styles['creative_'+ad.label]}`}>
-              {/* Thumbnail */}
               <div className={styles.creativeThumb}>
-                {thumb
-                  ? <img src={thumb} alt={ad.name} className={styles.thumbImg}/>
-                  : <div className={styles.thumbPlaceholder}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
-                }
+                {ad.imgUrl
+                  ? <img src={ad.imgUrl} alt={ad.name} className={styles.thumbImg} loading="lazy"
+                      onError={e=>{e.target.style.display='none';e.target.nextSibling&&(e.target.nextSibling.style.display='flex')}}/>
+                  : null}
+                <div className={styles.thumbPlaceholder} style={{display:ad.imgUrl?'none':'flex'}}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                </div>
                 <div className={styles.creativeBadges}>
                   <HealthBadge label={ad.label}/>
                   <ScoreBadge score={ad.score} label={ad.label}/>
@@ -266,12 +283,7 @@ function CreativesTab({ data }) {
                   <div className={styles.metricPair}><span>CTR</span><strong>{ad.ctr.toFixed(2)}%</strong></div>
                 </div>
 
-                {/* Signal */}
-                <div className={styles.creativeSignal}>
-                  <span className={ad.label==='high'?styles.insightRed:ad.label==='moderate'?styles.insightYellow:styles.insightGreen}>
-                    {ad.label==='high'?'⚠ High Creative Fatigue':ad.label==='moderate'?'○ Moderate creative fatigue (score '+ad.score+')':'↗ Below fatigue threshold with CTR above account average'}
-                  </span>
-                </div>
+                <p className={styles.creativeSignal} style={{color:sigColor}}>{signal}</p>
 
                 {/* More detail toggle */}
                 <button className={styles.moreDetailBtn} onClick={() => setExpanded(isOpen ? null : ad.id)}>
@@ -289,8 +301,8 @@ function CreativesTab({ data }) {
                     )}
                     <div className={styles.detailSection}>
                       <p style={{fontSize:11,fontWeight:700,color:'#6366F1',marginBottom:4}}>💡 Recommendation</p>
-                      <p style={{fontSize:12,fontWeight:600,color:'#111827',marginBottom:2}}>{ad.label==='high'?'Refresh Creative':ad.label==='moderate'?'Monitor':'Keep Running'}</p>
-                      <p style={{fontSize:11.5,color:'#6B7280'}}>{recommendation}</p>
+                      <p style={{fontSize:12,fontWeight:600,color:'#111827',marginBottom:2}}>{rec}</p>
+                      <p style={{fontSize:11.5,color:'#6B7280'}}>{signal}</p>
                     </div>
                     <div className={styles.detailSection}>
                       <p style={{fontSize:11,fontWeight:700,color:'#059669',marginBottom:4}}>🛒 Upsell / Cross-sell</p>
@@ -303,7 +315,40 @@ function CreativesTab({ data }) {
             </div>
           )
         })}
-      </div>
+      </div>}
+
+      {/* List view */}
+      {viewMode === 'list' && (
+        <div className={styles.tableWrap}>
+          <table>
+            <thead>
+              <tr>
+                <th>Creative</th><th>Health</th><th>Score</th>
+                <th>Impressions</th><th>Clicks</th><th>Spend</th><th>CTR</th><th>Signal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {scoredAds.map(ad => (
+                <tr key={ad.id}>
+                  <td>
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      {ad.imgUrl && <img src={ad.imgUrl} alt="" style={{width:44,height:36,objectFit:'cover',borderRadius:4,flexShrink:0}} loading="lazy"/>}
+                      <span style={{fontSize:12,fontWeight:500,color:'#111827',maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={ad.name}>{ad.name}</span>
+                    </div>
+                  </td>
+                  <td><HealthBadge label={ad.label}/></td>
+                  <td style={{fontWeight:700,color:ad.label==='high'?'#DC2626':ad.label==='moderate'?'#D97706':'#059669'}}>{ad.score}</td>
+                  <td>{ad.impr.toLocaleString()}</td>
+                  <td>{ad.clks.toLocaleString()}</td>
+                  <td style={{fontWeight:500}}>{fmtINR(parseFloat(ad.ins.spend||0))}</td>
+                  <td>{ad.ctr.toFixed(2)}%</td>
+                  <td style={{fontSize:11,color:ad.label==='high'?'#DC2626':ad.label==='moderate'?'#D97706':'#059669',maxWidth:180}}>{ad.label==='high'?'High Fatigue — Refresh':ad.label==='moderate'?'Monitor':'Healthy'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
@@ -415,80 +460,98 @@ Guidelines: Be concise, lead with the number, always give a specific action. Rea
   )
 }
 
+// Date preset helper
+function getDateRange(preset) {
+  const e = new Date()
+  const s = new Date(e)
+  if (preset === 'yesterday') {
+    e.setDate(e.getDate() - 1); s.setDate(e.getDate())
+  } else if (preset === 'last_7d')  { s.setDate(s.getDate() - 7) }
+  else if (preset === 'last_14d') { s.setDate(s.getDate() - 14) }
+  else if (preset === 'last_30d') { s.setDate(s.getDate() - 30) }
+  const f = d => d.toISOString().slice(0, 10)
+  return { since: f(s), until: f(e) }
+}
+
 // ─── MAIN ─────────────────────────────────────────────────
 export default function MetaAdsDashboard() {
-  const [token, setToken]     = useState(() => localStorage.getItem(TOKEN_KEY)||'')
-  const [activeTab, setTab]   = useState('campaigns')
-  const [loading, setLoading] = useState(false)
+  const location  = useLocation()
+  const navigate  = useNavigate()
+  const activeTab = new URLSearchParams(location.search).get('tab') || 'campaigns'
+
+  const [token, setToken]       = useState(() => localStorage.getItem(TOKEN_KEY) || '')
+  const [loading, setLoading]   = useState(false)
   const [pageLoad, setPageLoad] = useState(true)
-  const [error, setError]     = useState('')
-  const [data, setData]       = useState(null)
+  const [error, setError]       = useState('')
+  const [data, setData]         = useState(null)
   const [sdkReady, setSdkReady] = useState(false)
   const [lastSync, setLastSync] = useState(null)
+  const [datePreset, setDatePreset] = useState('last_7d')
 
   useEffect(() => { setTimeout(() => setPageLoad(false), 600) }, [])
 
   useEffect(() => {
-    window.fbAsyncInit = () => { window.FB.init({ appId:APP_ID, version:'v19.0', xfbml:false, cookie:true }); setSdkReady(true) }
+    window.fbAsyncInit = () => { window.FB.init({ appId: APP_ID, version: 'v19.0', xfbml: false, cookie: true }); setSdkReady(true) }
     if (!document.getElementById('fb-sdk')) {
-      const s = document.createElement('script'); s.id='fb-sdk'; s.src='https://connect.facebook.net/en_US/sdk.js'; s.async=true; document.head.appendChild(s)
+      const s = document.createElement('script'); s.id = 'fb-sdk'; s.src = 'https://connect.facebook.net/en_US/sdk.js'; s.async = true; document.head.appendChild(s)
     } else if (window.FB) setSdkReady(true)
   }, [])
 
-  useEffect(() => { if (token) loadAllData(token) }, [token])
+  useEffect(() => { if (token) loadAllData(token, datePreset) }, [token])
 
   const handleConnect = () => {
     if (!window.FB) { setError('Facebook SDK loading, please wait…'); return }
     setLoading(true); setError('')
     window.FB.login(r => {
-      if (r.authResponse?.accessToken) { const t=r.authResponse.accessToken; localStorage.setItem(TOKEN_KEY,t); setToken(t) }
+      if (r.authResponse?.accessToken) { const t = r.authResponse.accessToken; localStorage.setItem(TOKEN_KEY, t); setToken(t) }
       else { setError('Authorization cancelled. Try pasting token manually.'); setLoading(false) }
-    }, { scope:'ads_read,ads_management,business_management' })
+    }, { scope: 'ads_read,ads_management,business_management' })
   }
 
-  const handlePaste = (t) => { if (!t.trim()) return; localStorage.setItem(TOKEN_KEY,t.trim()); setToken(t.trim()) }
+  const handlePaste = (t) => { if (!t.trim()) return; localStorage.setItem(TOKEN_KEY, t.trim()); setToken(t.trim()) }
 
-  const loadAllData = async (t) => {
+  const loadAllData = async (t, preset = datePreset) => {
     setLoading(true); setError('')
     try {
-      const getRange = (ago, len=7) => {
-        const e=new Date(); e.setDate(e.getDate()-ago)
-        const s=new Date(e); s.setDate(s.getDate()-len+1)
-        const f=d=>d.toISOString().slice(0,10)
-        return { since:f(s), until:f(e) }
-      }
-      const week = getRange(0,7)
+      const range = getDateRange(preset)
+      const timeRange = JSON.stringify(range)
 
       const [accIns, campaigns, adsRaw, pixels] = await Promise.all([
         graphGet(`${AD_ACCOUNT}/insights`, t, {
-          fields:'spend,impressions,clicks,ctr,cpm,reach,frequency,actions',
-          time_range:JSON.stringify(week), level:'account'
+          fields: 'spend,impressions,clicks,ctr,cpm,reach,frequency,actions',
+          time_range: timeRange, level: 'account'
         }),
         graphGet(`${AD_ACCOUNT}/campaigns`, t, {
-          fields:'name,status,objective,created_time,insights{spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}',
-          limit:50, date_preset:'last_7d'
+          fields: 'name,status,objective,created_time,insights{spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}',
+          limit: 50,
+          time_range: timeRange
         }),
+        // Fetch ads with BOTH image_url and thumbnail_url for best quality
         graphGet(`${AD_ACCOUNT}/ads`, t, {
-          fields:'name,status,creative{thumbnail_url,image_url,body,title},insights{spend,impressions,clicks,ctr,reach,frequency,actions}',
-          limit:100, date_preset:'last_7d'
+          fields: 'name,status,creative{id,name,image_url,thumbnail_url,body,title,object_story_spec},insights{spend,impressions,clicks,ctr,reach,frequency,actions}',
+          limit: 100,
+          time_range: timeRange
         }),
-        graphGet(`${AD_ACCOUNT}/adspixels`, t, { fields:'id,name,last_fired_time' })
+        graphGet(`${AD_ACCOUNT}/adspixels`, t, { fields: 'id,name,last_fired_time' })
       ])
 
       const account = accIns.data?.[0] || {}
       const accountAvgCTR = parseFloat(account.ctr || 0)
 
-      setData({ account, campaigns:campaigns.data||[], ads:adsRaw.data||[], pixels:pixels.data||[], accountAvgCTR, range:week })
+      setData({ account, campaigns: campaigns.data || [], ads: adsRaw.data || [], pixels: pixels.data || [], accountAvgCTR, range, preset })
       setLastSync(new Date())
-    } catch(e) {
+      setDatePreset(preset)
+    } catch (e) {
       setError(e.message)
-      if (e.message?.includes('190')||e.message?.includes('token')||e.message?.includes('OAuth')) {
+      if (e.message?.includes('190') || e.message?.includes('token') || e.message?.includes('OAuth')) {
         localStorage.removeItem(TOKEN_KEY); setToken('')
       }
     } finally { setLoading(false) }
   }
 
   const disconnect = () => { localStorage.removeItem(TOKEN_KEY); setToken(''); setData(null); setError('') }
+
+  const handleDateChange = (preset) => { loadAllData(token, preset) }
 
   if (pageLoad) return <div className={styles.layout}><Sidebar/><DashboardSkeleton/></div>
 
@@ -504,19 +567,29 @@ export default function MetaAdsDashboard() {
     </div>
   )
 
+  const PRESETS = [
+    { id:'yesterday', label:'Yesterday' },
+    { id:'last_7d',   label:'Last 7 days' },
+    { id:'last_14d',  label:'Last 14 days' },
+    { id:'last_30d',  label:'Last 30 days' },
+  ]
+
   return (
     <div className={styles.layout}>
       <Sidebar/>
       <div className={styles.main}>
-        {/* HEADER */}
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / Meta Ads</p>
-            <h1 className={styles.pageTitle}>Meta Ads</h1>
+            <h1 className={styles.pageTitle}>Meta Ads — {activeTab === 'campaigns' ? 'Campaigns' : activeTab === 'creatives' ? 'Creatives' : 'VASU AI'}</h1>
           </div>
           <div className={styles.headerRight}>
+            {/* Date filter */}
+            <select value={datePreset} onChange={e => handleDateChange(e.target.value)} className={styles.dateSelect} disabled={loading}>
+              {PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+            </select>
             {lastSync && <span className={styles.syncTag}>Synced {lastSync.toLocaleTimeString()}</span>}
-            <button className={styles.refreshBtn} onClick={()=>loadAllData(token)} disabled={loading}>
+            <button className={styles.refreshBtn} onClick={() => loadAllData(token, datePreset)} disabled={loading}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
               {loading ? 'Loading…' : 'Refresh'}
             </button>
@@ -526,24 +599,10 @@ export default function MetaAdsDashboard() {
 
         {error && <div className={styles.errorBanner}>{error}</div>}
 
-        {/* TABS */}
-        <div className={styles.tabBar}>
-          {[
-            { id:'campaigns', label:'Campaigns', icon:'📊' },
-            { id:'creatives', label:'Creatives', icon:'🎨' },
-            { id:'vasu',      label:'VASU AI',   icon:'✦' },
-          ].map(t => (
-            <button key={t.id} className={`${styles.tabBtn} ${activeTab===t.id?styles.tabActive:''}`} onClick={()=>setTab(t.id)}>
-              <span>{t.icon}</span> {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* TAB CONTENT */}
         {loading && !data ? (
-          <div style={{textAlign:'center',padding:60,color:'#9CA3AF'}}>
+          <div style={{ textAlign: 'center', padding: 60, color: '#9CA3AF' }}>
             <div className={styles.bigSpinner}/>
-            <p style={{marginTop:16,fontSize:13}}>Loading Meta Ads data…</p>
+            <p style={{ marginTop: 16, fontSize: 13 }}>Loading Meta Ads data…</p>
           </div>
         ) : data ? (
           <>
