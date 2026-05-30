@@ -574,6 +574,8 @@ export default function MetaAdsDashboard() {
     } finally { setLoading(false) }
   }
 
+  const disconnect = () => { localStorage.removeItem(TOKEN_KEY); setToken(''); setData(null); setError('') }
+
   const [sending, setSending]   = useState(false)
   const [sendMsg, setSendMsg]   = useState('')
 
