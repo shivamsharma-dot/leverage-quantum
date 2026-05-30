@@ -133,3 +133,14 @@ td { padding:10px 14px; color:#6B7280; vertical-align:middle; white-space:nowrap
 
 /* Crisper image rendering */
 .thumbImg { width:100%; height:100%; object-fit:cover; image-rendering:-webkit-optimize-contrast; image-rendering:crisp-edges; }
+
+.sendReportBtn {
+  display:flex; align-items:center; gap:5px;
+  padding:6px 14px; border-radius:7px;
+  border:1px solid #1C9FD4; background:#F0FBFF;
+  color:#1C9FD4; font-size:12px; font-weight:600;
+  cursor:pointer; font-family:'Inter',sans-serif; white-space:nowrap;
+  transition:all .15s;
+}
+.sendReportBtn:hover:not(:disabled) { background:#1C9FD4; color:#fff; }
+.sendReportBtn:disabled { opacity:.5; cursor:not-allowed; }
