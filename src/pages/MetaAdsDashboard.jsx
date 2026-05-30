@@ -49,12 +49,13 @@ function computeFatigue(impressions, clicks, ctr, frequency, accountAvgCTR) {
   return { score: Math.round(score), label }
 }
 
-function fmtINR(usd) {
-  const n = usd * 83
+function fmtINR(inr) {
+  // Meta API returns spend already in INR for Indian accounts
+  const n = parseFloat(inr) || 0
   if (n >= 1e7) return '₹' + (n/1e7).toFixed(2) + ' Cr'
   if (n >= 1e5) return '₹' + (n/1e5).toFixed(1) + 'L'
-  if (n >= 1000) return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
-  return '₹' + n.toFixed(0)
+  if (n >= 1000) return '₹' + Math.round(n).toLocaleString('en-IN')
+  return '₹' + Math.round(n)
 }
 const getAction = (actions, type) =>
   parseInt(actions?.find(a => a.action_type === type)?.value || 0)
@@ -141,8 +142,8 @@ function CampaignsTab({ data }) {
     { label:'Impressions', value: parseInt(account.impressions||0).toLocaleString() },
     { label:'Clicks', value: parseInt(account.clicks||0).toLocaleString() },
     { label:'Avg CTR', value: parseFloat(account.ctr||0).toFixed(2)+'%' },
-    { label:'Avg CPC', value: '₹'+((parseFloat(account.spend||0)*83)/Math.max(1,parseInt(account.clicks||0))).toFixed(0) },
-    { label:'Avg CPM', value: '₹'+((parseFloat(account.cpm||0)*83)).toFixed(0) },
+    { label:'Avg CPC', value: '₹'+Math.round(parseFloat(account.spend||0)/Math.max(1,parseInt(account.clicks||0))).toLocaleString('en-IN') },
+    { label:'Avg CPM', value: '₹'+Math.round(parseFloat(account.cpm||0)).toLocaleString('en-IN') },
     { label:'Total Leads', value: leads.toLocaleString() },
     { label:'Active', value: campaigns.filter(c=>c.status==='ACTIVE').length },
   ]
@@ -186,7 +187,7 @@ function CampaignsTab({ data }) {
                 <div className={styles.metricPair}><span>Clicks</span><strong>{parseInt(ins.clicks||0).toLocaleString()}</strong></div>
                 <div className={styles.metricPair}><span>Spend</span><strong>{fmtINR(spend)}</strong></div>
                 <div className={styles.metricPair}><span>CTR</span><strong>{parseFloat(ins.ctr||0).toFixed(2)}%</strong></div>
-                <div className={styles.metricPair}><span>CPC</span><strong>{spend>0&&parseInt(ins.clicks||0)>0?'₹'+((spend*83)/parseInt(ins.clicks||1)).toFixed(0):'—'}</strong></div>
+                <div className={styles.metricPair}><span>CPC</span><strong>{spend>0&&parseInt(ins.clicks||0)>0?'₹'+Math.round(spend/parseInt(ins.clicks||1)).toLocaleString('en-IN'):'—'}</strong></div>
                 <div className={styles.metricPair}><span>Leads</span><strong>{cLeads.toLocaleString()}</strong></div>
               </div>
               {ins.ctr > 0 && (
@@ -216,7 +217,7 @@ function CreativesTab({ data }) {
     { label:'Total Impr', value: parseInt(account.impressions||0).toLocaleString() },
     { label:'Total Clicks', value: parseInt(account.clicks||0).toLocaleString() },
     { label:'Avg CTR', value: parseFloat(account.ctr||0).toFixed(2)+'%' },
-    { label:'Avg CPM', value: '₹'+(parseFloat(account.cpm||0)*83).toFixed(0) },
+    { label:'Avg CPM', value: '₹'+Math.round(parseFloat(account.cpm||0)).toLocaleString('en-IN') },
     { label:'Total Ads', value: ads.length },
   ]
 
@@ -400,7 +401,7 @@ function VasuAITab({ data }) {
 You have access to live Meta Ads data for account act_641914389215638 (last 7 days):
 - Spend: ${fmtINR(parseFloat(data.account.spend||0))}
 - Impressions: ${parseInt(data.account.impressions||0).toLocaleString()} | Clicks: ${parseInt(data.account.clicks||0).toLocaleString()}
-- CTR: ${parseFloat(data.account.ctr||0).toFixed(2)}% | CPM: ₹${(parseFloat(data.account.cpm||0)*83).toFixed(0)}
+- CTR: ${parseFloat(data.account.ctr||0).toFixed(2)}% | CPM: ₹${Math.round(parseFloat(data.account.cpm||0)).toLocaleString('en-IN')}
 - Total Leads: ${getAction(data.account.actions,'lead').toLocaleString()}
 - ${data.campaigns.length} campaigns, ${data.ads.length} ads
 
