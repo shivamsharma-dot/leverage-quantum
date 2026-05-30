@@ -9,6 +9,7 @@ import LeadQualityDashboard from './pages/LeadQualityDashboard'
 import ChannelMixDashboard from './pages/ChannelMixDashboard'
 import RevenueDashboard from './pages/RevenueDashboard'
 import MTDDashboard from './pages/MTDDashboard'
+import MetaAdsDashboard from './pages/MetaAdsDashboard'
 import SettingsPage from './pages/SettingsPage'
 
 // Parse which dashboards a user can access based on their role
