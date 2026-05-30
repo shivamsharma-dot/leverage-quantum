@@ -71,7 +71,14 @@ const QUICK = [
 
 export default function VasuAI() {
   const { user } = useAuth()
-  const [messages, setMessages]     = useState([])
+  const HISTORY_KEY = 'lq_vasu_history'
+
+  const [messages, setMessages]     = useState(() => {
+    try {
+      const saved = localStorage.getItem(HISTORY_KEY)
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
   const [input, setInput]           = useState('')
   const [loading, setLoading]       = useState(false)
   const [metaData, setMetaData]     = useState(null)
@@ -83,9 +90,15 @@ export default function VasuAI() {
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   useEffect(() => {
+    if (messages.length > 0) {
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-50))) } catch {}
+    }
+  }, [messages])
+
+  useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY)
     if (token) loadMetaContext(token)
-    else {
+    else if (messages.length === 0) {
       setMessages([{
         role: 'assistant',
         content: `Hi! I'm **VASU AI** — your Meta Ads intelligence layer.\n\nTo get started, go to **Meta Ads** in the sidebar and connect your account. Once connected, I'll have full lifetime access to your campaigns, adsets, creatives and pixel data.`
@@ -125,10 +138,13 @@ export default function VasuAI() {
       }
       setMetaData(data)
       setConnected(true)
-      setMessages([{
-        role: 'assistant',
-        content: `Connected to your Meta Ads account ✅\n\n**Lifetime snapshot:**\n- Spend: ${data.spend}\n- Impressions: ${data.impressions} · Clicks: ${data.clicks} · CTR: ${data.ctr}%\n- Total Leads: ${totalLeads.toLocaleString()} · Cost per Lead: ${data.costPerLead}\n- Pixel: ${data.pixelName}\n- ${data.campaigns.length} campaigns · ${data.adsets.length} adsets · ${data.ads.length} ads loaded\n\nI have your full lifetime Meta Ads data. Ask me anything.`
-      }])
+      // Only set welcome message if no existing history
+      if (messages.length === 0) {
+        setMessages([{
+          role: 'assistant',
+          content: `Connected to your Meta Ads account ✅\n\n**Lifetime snapshot:**\n- Spend: ${data.spend}\n- Impressions: ${data.impressions} · Clicks: ${data.clicks} · CTR: ${data.ctr}%\n- Total Leads: ${totalLeads.toLocaleString()} · Cost per Lead: ${data.costPerLead}\n- Pixel: ${data.pixelName}\n- ${data.campaigns.length} campaigns · ${data.adsets.length} adsets · ${data.ads.length} ads loaded\n\nI have your full lifetime Meta Ads data. Ask me anything.`
+        }])
+      }
     } catch (e) {
       setMessages([{ role: 'assistant', content: `⚠️ Couldn't load Meta Ads data: ${e.message}\n\nPlease go to **Meta Ads** dashboard, disconnect and reconnect your account.` }])
     } finally { setMetaLoading(false) }
@@ -181,6 +197,14 @@ export default function VasuAI() {
             VASU AI · Llama 3.3
           </div>
           {connected && <div className={styles.connectedPill}>● Meta Ads connected</div>}
+          <div style={{flex:1}}/>
+          {messages.length > 1 && (
+            <button onClick={() => { setMessages([]); localStorage.removeItem(HISTORY_KEY) }}
+              style={{background:'none',border:'none',color:'#9CA3AF',fontSize:12,cursor:'pointer',fontFamily:'Inter,sans-serif',display:'flex',alignItems:'center',gap:4}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+              Clear history
+            </button>
+          )}
         </div>
 
         {/* Messages area — full height, no box */}
