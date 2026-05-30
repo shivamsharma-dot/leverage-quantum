@@ -482,6 +482,21 @@ export default function SettingsPage() {
                           {rl.label}
                         </span>
 
+                        {/* Reports toggle */}
+                        <label title="Receive daily Meta Ads report" style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer',flexShrink:0}}>
+                          <input type="checkbox" checked={!!u.receive_reports}
+                            onChange={async e => {
+                              const checked = e.target.checked
+                              await fetch(`https://tsyekthwthxszmsgqfej.supabase.co/rest/v1/allowed_users?email=eq.${u.email}`, {
+                                method:'PATCH', headers:{'Content-Type':'application/json','apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'},
+                                body: JSON.stringify({ receive_reports: checked })
+                              })
+                              loadUsers()
+                            }}
+                            style={{accentColor:'#1C9FD4'}}/>
+                          <span style={{fontSize:11,color:'#9CA3AF',whiteSpace:'nowrap'}}>Reports</span>
+                        </label>
+
                         {/* Actions */}
                         {!isYou && (
                           <div style={{display:'flex',gap:4,flexShrink:0}}>
