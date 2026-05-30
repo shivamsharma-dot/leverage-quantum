@@ -19,9 +19,8 @@ const NAV = [
         label: 'Meta Ads',
         end: false,
         subItems: [
-          { to: '/dashboard/meta-ads?tab=campaigns', label: 'Campaigns',  icon: '📊' },
-          { to: '/dashboard/meta-ads?tab=creatives', label: 'Creatives',  icon: '🎨' },
-          { to: '/dashboard/meta-ads?tab=vasu',      label: 'VASU AI',    icon: '✦'  },
+          { to: '/dashboard/meta-ads?tab=campaigns', label: 'Campaigns' },
+          { to: '/dashboard/meta-ads?tab=creatives', label: 'Creatives' },
         ]
       },
     ]
@@ -166,7 +165,7 @@ export default function Sidebar() {
                               className={`${styles.subNavItem} ${isSubActive ? styles.subNavActive : ''}`}
                               onClick={() => navigate(sub.to)}
                               style={{width:'100%',textAlign:'left',background:'none',border:'none',cursor:'pointer',font:'inherit'}}>
-                              <span style={{fontSize:11}}>{sub.icon}</span>
+                              <span style={{width:5,height:5,borderRadius:'50%',background:isSubActive?'#1C9FD4':'rgba(255,255,255,0.25)',flexShrink:0,display:'inline-block'}}/>
                               <span>{sub.label}</span>
                             </button>
                           )
