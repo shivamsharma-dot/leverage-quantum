@@ -10,6 +10,7 @@ import ChannelMixDashboard from './pages/ChannelMixDashboard'
 import RevenueDashboard from './pages/RevenueDashboard'
 import MTDDashboard from './pages/MTDDashboard'
 import MetaAdsDashboard from './pages/MetaAdsDashboard'
+import VasuAI from './pages/VasuAI'
 import SettingsPage from './pages/SettingsPage'
 
 // Parse which dashboards a user can access based on their role
@@ -57,6 +58,7 @@ export default function App() {
       <Route path="/dashboard/channel-mix"  element={<ProtectedRoute dashboardId="channel_mix"><ChannelMixDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/revenue"      element={<ProtectedRoute dashboardId="revenue">     <RevenueDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/meta-ads"     element={<ProtectedRoute dashboardId="meta_ads">    <MetaAdsDashboard /></ProtectedRoute>} />
+      <Route path="/vasu"                    element={<ProtectedRoute dashboardId="vasu">         <VasuAI /></ProtectedRoute>} />
       <Route path="/settings"               element={<ProtectedRoute dashboardId="settings">    <SettingsPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
