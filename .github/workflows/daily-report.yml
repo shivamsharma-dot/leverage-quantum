@@ -1,0 +1,17 @@
+name: Daily Meta Campaign Report
+
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger daily report
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X GET "https://leverage-quantum.vercel.app/api/send-report")
+          echo "HTTP Status: $RESPONSE"
+          if [ "$RESPONSE" != "200" ]; then echo "Failed"; exit 1; fi
+          echo "Meta Campaign Report sent successfully!"
