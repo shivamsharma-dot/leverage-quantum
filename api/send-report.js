@@ -1,12 +1,9 @@
-// Vercel serverless function — GET/POST /api/send-report
-// Uses Claude Sonnet to write the audit, Resend to send it
-
 const RESEND_KEY   = process.env.RESEND_API_KEY
+const GROQ_KEY     = process.env.VITE_GROQ_API_KEY
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY
 const AD_ACCOUNT   = 'act_641914389215638'
 
-// ── Helpers ──────────────────────────────────────────────
 async function graphGet(path, token, params = {}) {
   const qs = new URLSearchParams({ access_token: token, ...params }).toString()
   const res = await fetch(`https://graph.facebook.com/v19.0/${path}?${qs}`)
@@ -47,7 +44,6 @@ async function getRecipients() {
   } catch { return [] }
 }
 
-// ── Fetch Meta Data ───────────────────────────────────────
 async function fetchMetaData(token) {
   const e = new Date(), s = new Date()
   s.setDate(s.getDate() - 30)
@@ -72,185 +68,229 @@ async function fetchMetaData(token) {
     .filter(c => parseFloat(c.ins.spend || 0) > 0)
     .sort((a, b) => parseFloat(b.ins.spend||0) - parseFloat(a.ins.spend||0))
 
-  return { acc, avgCTR, camps, dateRange: `${fmt(s)} to ${fmt(e)}` }
+  return { acc, avgCTR, camps, since: fmt(s), until: fmt(e) }
 }
 
-// ── Ask Claude Sonnet ─────────────────────────────────────
-async function askClaude(prompt) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+async function askGroq(prompt) {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a Senior Performance Marketing Analyst specializing in Meta Ads for edtech companies. You write precise, data-driven audit reports. You always reference exact campaign names, exact ₹ figures, and give specific verdicts. You follow NeoLook's audit methodology strictly. Output only clean HTML using inline styles — no markdown, no code blocks, no explanations outside the HTML.`
+        },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.2,
       max_tokens: 4000,
-      messages: [{ role: 'user', content: prompt }]
     })
   })
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'Groq error') }
   const d = await res.json()
-  if (d.error) throw new Error(d.error.message)
-  return d.content?.[0]?.text || ''
+  return d.choices?.[0]?.message?.content || ''
 }
 
-// ── Build Report ──────────────────────────────────────────
 async function buildReport(token) {
-  const { acc, avgCTR, camps, dateRange } = await fetchMetaData(token)
-  const today = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
+  const { acc, avgCTR, camps, since, until } = await fetchMetaData(token)
+  const today      = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
   const totalLeads = getAction(acc.actions, 'lead')
-  const spend = parseFloat(acc.spend || 0)
+  const spend      = parseFloat(acc.spend || 0)
+  const totalImpr  = parseInt(acc.impressions || 0)
+  const totalClicks= parseInt(acc.clicks || 0)
+  const avgFreq    = parseFloat(acc.frequency || 0)
+  const avgCPM     = parseFloat(acc.cpm || 0)
 
-  // Build data summary for Claude
-  const campSummary = camps.slice(0, 20).map(c => {
+  // Compute derived metrics
+  const totalSpend   = camps.reduce((s,c) => s + parseFloat(c.ins.spend||0), 0)
+  const top5Spend    = camps.slice(0,5).reduce((s,c) => s + parseFloat(c.ins.spend||0), 0)
+  const top5Pct      = totalSpend > 0 ? (top5Spend/totalSpend*100).toFixed(1) : 0
+  const fatigueCamps = camps.filter(c => parseFloat(c.ins.frequency||0) > 3.0)
+  const lowCTRHiSpnd = camps.filter(c => parseFloat(c.ins.ctr||0) < avgCTR * 0.5 && parseFloat(c.ins.spend||0) > 100000)
+  const topCTR       = [...camps].sort((a,b) => parseFloat(b.ins.ctr||0) - parseFloat(a.ins.ctr||0)).slice(0,3)
+
+  // UK campaigns analysis
+  const ukCamps = camps.filter(c => c.name.toLowerCase().includes('uk'))
+  const ukSpend = ukCamps.reduce((s,c) => s + parseFloat(c.ins.spend||0), 0)
+
+  const campTable = camps.slice(0,20).map(c => {
     const s   = parseFloat(c.ins.spend||0)
     const clk = parseInt(c.ins.clicks||0)
     const ctr = parseFloat(c.ins.ctr||0)
     const fr  = parseFloat(c.ins.frequency||1)
     const l   = getAction(c.ins.actions,'lead')
-    return `- ${c.name} | ${c.status} | Spend:${fmtINR(s)} | Impr:${parseInt(c.ins.impressions||0).toLocaleString()} | Clicks:${clk.toLocaleString()} | CTR:${ctr.toFixed(2)}% | CPC:${clk>0?fmtINR(s/clk):'—'} | Freq:${fr.toFixed(1)}x | Leads:${l}`
+    const cpc = clk > 0 ? s/clk : 0
+    return `${c.name}|${c.status}|${fmtINR(s)}|${parseInt(c.ins.impressions||0).toLocaleString()}|${clk.toLocaleString()}|${ctr.toFixed(2)}%|${cpc>0?fmtINR(cpc):'—'}|${fr.toFixed(1)}x|${l}`
   }).join('\n')
 
-  const accountSummary = `
-ACCOUNT: Leverage Edu | act_641914389215638 | Period: ${dateRange}
+  const prompt = `You are a Senior Performance Marketing Analyst. Write a rigorous 5-section Meta Ads audit for Leverage Edu (Indian edtech company — helps students study abroad in UK, Germany, Italy, Nigeria, Dubai, Ireland).
+
+ACCOUNT DATA (Last 30 days: ${since} to ${until}):
 Total Spend: ${fmtINR(spend)}
-Impressions: ${parseInt(acc.impressions||0).toLocaleString()}
-Clicks: ${parseInt(acc.clicks||0).toLocaleString()}
-Avg CTR: ${avgCTR.toFixed(2)}%
-Avg CPM: ${fmtINR(acc.cpm||0)}
-Avg Frequency: ${parseFloat(acc.frequency||0).toFixed(2)}x
-Total Reach: ${parseInt(acc.reach||0).toLocaleString()}
-Total Leads: ${totalLeads.toLocaleString()}
-Active Campaigns: ${camps.length}
+Impressions: ${totalImpr.toLocaleString()} | Clicks: ${totalClicks.toLocaleString()} | Avg CTR: ${avgCTR.toFixed(2)}%
+Avg CPM: ${fmtINR(avgCPM)} | Avg Frequency: ${avgFreq.toFixed(2)}x | Total Reach: ${parseInt(acc.reach||0).toLocaleString()}
+Total Leads: ${totalLeads.toLocaleString()} | Active Campaigns: ${camps.length}
 
-CAMPAIGNS (sorted by spend):
-${campSummary}
-`
+CAMPAIGNS (Name|Status|Spend|Impressions|Clicks|CTR|CPC|Frequency|Leads):
+${campTable}
 
-  // Ask Claude to write the full audit
-  const audit = await askClaude(`You are a Senior Performance Marketing Analyst. Write a comprehensive Meta Ads campaign audit report for Leverage Edu (an edtech company helping Indian students study abroad — UK, Germany, Italy, Ireland, Nigeria, Dubai etc.).
+KEY DERIVED FACTS (use these exactly):
+- Top 5 campaigns consume ${fmtINR(top5Spend)} = ${top5Pct}% of total spend
+- ${ukCamps.length} UK campaigns running simultaneously, total UK spend: ${fmtINR(ukSpend)}
+- ${fatigueCamps.length} campaigns above 3.0x frequency: ${fatigueCamps.slice(0,3).map(c=>c.name+' ('+parseFloat(c.ins.frequency||0).toFixed(1)+'x)').join(', ')}
+- ${lowCTRHiSpnd.length} campaigns with CTR below 50% of account avg but spend >₹1L: ${lowCTRHiSpnd.slice(0,2).map(c=>c.name).join(', ')}
+- Top CTR performer: ${topCTR[0]?.name} at ${parseFloat(topCTR[0]?.ins.ctr||0).toFixed(2)}%
+- Edtech Lead Gen CTR benchmark: 0.8% - 1.2%
+- Account avg CTR ${avgCTR.toFixed(2)}% is ${avgCTR < 0.8 ? 'BELOW' : 'WITHIN'} benchmark
 
-Here is the raw campaign data for the last 30 days:
-${accountSummary}
+Write EXACTLY these 5 HTML sections using inline styles only. Be ruthlessly specific — use actual campaign names and ₹ figures everywhere. No generic statements.
 
-Write a detailed HTML audit report with these exact sections. Use inline CSS only (no <style> tags). The output must be clean HTML that renders well in Gmail.
+SECTION 1 — STEP 2: Campaign Insights Breakdown
+Analyze performance distribution. Which campaigns are carrying the account? Which are dragging it? CTR spread analysis. Frequency distribution. Geographic market performance summary.
 
-Structure:
-1. STEP 1: Account-Level Spend Summary — brief narrative overview of account health
-2. STEP 2: Campaign Insights Breakdown — analyze top performers, worst performers, CTR distribution, frequency issues
-3. STEP 3: Senior Marketing Audit covering:
-   - Objective Classification (lead gen vs awareness breakdown)
-   - Pareto Analysis (which campaigns justify their spend — give YES/NO/PARTIAL verdict for top 5)
-   - Audience Overlap Risk (which campaigns are competing against each other, estimate ₹ at risk)
-   - Geographic Concentration (over-indexed markets with 2x+ efficiency, under-indexed ones)
-   - Creative Fatigue Flags (campaigns above 3x frequency with specific recommendations)
-   - Static Creative Diagnosis (CTR vs 0.8-1.2% edtech benchmark per campaign)
-4. TOP 5 ACTIONS ranked by ₹ impact — be specific with ₹ estimates and exact action steps
+SECTION 2 — STEP 3A: Objective Classification & Pareto Analysis
+Classify all campaigns by objective type. Then do 80/20 analysis — list top 5 campaigns by spend, give explicit YES/NO/PARTIAL verdict on whether each justifies its spend with reasoning.
 
-Formatting rules:
-- Use <div> blocks with inline styles
-- Alert boxes: padding:14px 16px; border-radius:8px; border-left:4px solid [color]; margin-bottom:12px
-- Red alerts: background:#FFF5F5; border-color:#FC8181; color:#742A2A
-- Yellow alerts: background:#FFFBEB; border-color:#F6AD55; color:#7B341E  
-- Green alerts: background:#F0FFF4; border-color:#68D391; color:#22543D
-- Blue alerts: background:#EBF8FF; border-color:#63B3ED; color:#2A4365
-- Section headers: font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#9CA3AF; margin-bottom:14px; padding-bottom:8px; border-bottom:2px solid #E2E8F0
-- Action items: numbered circles with background:#0A1628; color:white; width:28px; height:28px; border-radius:50%
-- Be specific, data-driven, and actionable. Reference actual campaign names and ₹ figures throughout.
-- Do NOT include any <html>, <head>, <body> tags. Just the inner content div.`)
+SECTION 3 — STEP 3B: Audience Overlap Risk Assessment  
+Identify campaigns competing for same audience (especially UK). Estimate ₹ wasted from self-competition. Give specific consolidation recommendation.
 
-  // Build the full email HTML
+SECTION 4 — STEP 3C: Geographic + Creative Fatigue Analysis
+Over-indexed markets (>1.5x account avg CTR) = scale signals. Under-indexed (CPC >2x avg) = reduce/optimize. Then flag every campaign above 3.0x frequency with action: REFRESH/PAUSE/MONITOR.
+
+SECTION 5 — TOP 5 ACTIONS RANKED BY ₹ IMPACT
+For each action: numbered circle, bold title with ₹ opportunity, specific 2-3 sentence action description, expected impact statement. Make these genuinely specific to this account's data.
+
+HTML style rules:
+- Wrap each section in: <div style="margin-bottom:28px">
+- Section title: <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6B7280;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #F3F4F6">TITLE</div>
+- Red alert: <div style="padding:14px 16px;border-radius:8px;background:#FFF5F5;border-left:4px solid #EF4444;color:#7F1D1D;margin-bottom:10px;font-size:13px">
+- Yellow alert: <div style="padding:14px 16px;border-radius:8px;background:#FFFBEB;border-left:4px solid #F59E0B;color:#78350F;margin-bottom:10px;font-size:13px">
+- Green alert: <div style="padding:14px 16px;border-radius:8px;background:#F0FDF4;border-left:4px solid #22C55E;color:#14532D;margin-bottom:10px;font-size:13px">
+- Blue info: <div style="padding:14px 16px;border-radius:8px;background:#EFF6FF;border-left:4px solid #3B82F6;color:#1E3A8A;margin-bottom:10px;font-size:13px">
+- Metric highlight: <span style="font-weight:700;background:#FEF9C3;padding:1px 5px;border-radius:3px">VALUE</span>
+- Action item: <div style="display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:1px solid #E5E7EB;border-radius:10px;margin-bottom:10px"><div style="width:28px;height:28px;border-radius:50%;background:#0F172A;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">N</div><div><strong style="color:#0F172A;font-size:13px">TITLE WITH ₹ IMPACT</strong><br><span style="color:#6B7280;font-size:12.5px">Detail</span></div></div>
+
+Output only the HTML. No preamble, no explanation.`
+
+  const auditHTML = await askGroq(prompt)
+
+  // Build full email
   return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Meta Campaign Report · Leverage Edu · ${today}</title>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Meta Campaign Audit · Leverage Edu · ${today}</title>
 </head>
-<body style="margin:0;padding:20px;background:#F5F7FA;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a202c;line-height:1.6">
-<div style="max-width:860px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+<body style="margin:0;padding:24px;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0F172A;line-height:1.65">
 
-  <!-- HEADER -->
-  <div style="background:linear-gradient(135deg,#0A1628 0%,#1F3C84 100%);padding:28px 36px;color:#fff">
-    <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin-bottom:8px">Leverage Quantum</div>
-    <div style="font-size:22px;font-weight:800;margin-bottom:4px">Meta Campaign Performance Audit</div>
-    <div style="font-size:13px;opacity:.7">act_641914389215638 · Last 30 Days · Generated ${today}</div>
-  </div>
+<div style="max-width:880px;margin:0 auto">
 
-  <!-- KPI SUMMARY -->
-  <div style="padding:24px 36px 0">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9CA3AF;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #E2E8F0">Account Overview</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px">
-      ${[
-        ['Total Spend', fmtINR(spend)],
-        ['Impressions', parseInt(acc.impressions||0).toLocaleString('en-IN')],
-        ['Clicks', parseInt(acc.clicks||0).toLocaleString('en-IN')],
-        ['Avg CTR', avgCTR.toFixed(2)+'%'],
-        ['Total Leads', totalLeads.toLocaleString('en-IN')],
-        ['Active Camps', camps.length],
-      ].map(([l,v]) => `<div style="flex:1;min-width:110px;padding:14px;border-radius:10px;border:1px solid #E2E8F0;background:#FAFBFF">
-        <div style="font-size:20px;font-weight:800;color:#0A1628;margin-bottom:2px">${v}</div>
-        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#9CA3AF">${l}</div>
-      </div>`).join('')}
+  <!-- HEADER CARD -->
+  <div style="background:linear-gradient(135deg,#0A1628 0%,#1E3A8A 60%,#1C9FD4 100%);border-radius:16px 16px 0 0;padding:32px 40px;color:#fff;position:relative;overflow:hidden">
+    <div style="position:absolute;top:-20px;right:-20px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,0.04)"></div>
+    <div style="position:absolute;bottom:-40px;right:60px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.03)"></div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.5;margin-bottom:10px">Leverage Quantum · Automated Report</div>
+    <div style="font-size:26px;font-weight:800;letter-spacing:-.02em;margin-bottom:6px">Meta Campaign Performance Audit</div>
+    <div style="font-size:13px;opacity:.65">Leverage Edu · act_641914389215638 · ${since} → ${until} · Generated ${today}</div>
+    <div style="margin-top:16px;display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600">
+      <span style="width:6px;height:6px;border-radius:50%;background:#4ADE80;display:inline-block"></span>
+      Senior Performance Marketing Analysis
     </div>
   </div>
 
-  <!-- CAMPAIGN TABLE -->
-  <div style="padding:0 36px 24px">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9CA3AF;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #E2E8F0">Active Campaigns — Last 30 Days</div>
-    <div style="overflow-x:auto;border:1px solid #E2E8F0;border-radius:10px">
+  <!-- KPI ROW -->
+  <div style="background:#fff;padding:24px 40px;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0">
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px">
+      ${[
+        ['Total Spend', fmtINR(spend), '#6366F1'],
+        ['Impressions', totalImpr>=1e6?(totalImpr/1e6).toFixed(1)+'M':totalImpr.toLocaleString('en-IN'), '#0EA5E9'],
+        ['Clicks', totalClicks>=1e5?(totalClicks/1e5).toFixed(1)+'L':totalClicks.toLocaleString('en-IN'), '#10B981'],
+        ['Avg CTR', avgCTR.toFixed(2)+'%', avgCTR>=0.8?'#10B981':'#EF4444'],
+        ['Total Leads', totalLeads>=1000?(totalLeads/1000).toFixed(1)+'K':totalLeads.toString(), '#F59E0B'],
+        ['Campaigns', camps.length.toString(), '#8B5CF6'],
+      ].map(([l,v,c]) => `
+        <div style="padding:16px 14px;border-radius:12px;border:1px solid #F1F5F9;background:#FAFBFF;border-top:3px solid ${c}">
+          <div style="font-size:20px;font-weight:800;color:#0F172A;margin-bottom:4px;letter-spacing:-.02em">${v}</div>
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#94A3B8">${l}</div>
+        </div>`).join('')}
+    </div>
+  </div>
+
+  <!-- STEP 1: CAMPAIGN TABLE -->
+  <div style="background:#fff;padding:24px 40px;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;border-top:1px solid #F1F5F9">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94A3B8;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #F1F5F9">
+      📊 Step 1 — Active Campaigns · Last 30 Days (${camps.length} with spend)
+    </div>
+    <div style="overflow-x:auto;border:1px solid #E2E8F0;border-radius:12px">
       <table style="width:100%;border-collapse:collapse;font-size:12.5px">
         <thead>
-          <tr style="background:#F7FAFC">
-            ${['Campaign','Status','Spend','Impr','CTR','CPC','Freq','Leads'].map(h =>
-              `<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#718096;border-bottom:2px solid #E2E8F0;white-space:nowrap">${h}</th>`
+          <tr style="background:#F8FAFC">
+            ${['Campaign','Status','Spend','Impressions','Clicks','CTR','CPC','Freq','Leads'].map(h =>
+              `<th style="padding:11px 13px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748B;border-bottom:2px solid #E2E8F0;white-space:nowrap">${h}</th>`
             ).join('')}
           </tr>
         </thead>
         <tbody>
-          ${camps.slice(0,20).map(c => {
+          ${camps.slice(0,20).map((c,i) => {
             const s   = parseFloat(c.ins.spend||0)
             const clk = parseInt(c.ins.clicks||0)
             const ctr = parseFloat(c.ins.ctr||0)
             const fr  = parseFloat(c.ins.frequency||1)
             const l   = getAction(c.ins.actions,'lead')
-            const fatigued = fr > 3.5
-            const lowCTR   = ctr < avgCTR * 0.5 && s > 100000
-            return `<tr style="border-bottom:1px solid #F3F4F6${fatigued||lowCTR?';background:#FFFBF0':''}">
-              <td style="padding:10px 12px;font-weight:600;color:#0A1628;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.name}">${c.name.length>38?c.name.slice(0,35)+'...':c.name}</td>
-              <td style="padding:10px 12px"><span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;background:${c.status==='ACTIVE'?'#DCFCE7':'#F3F4F6'};color:${c.status==='ACTIVE'?'#166534':'#9CA3AF'}">${c.status}</span></td>
-              <td style="padding:10px 12px;font-weight:700">${fmtINR(s)}</td>
-              <td style="padding:10px 12px">${parseInt(c.ins.impressions||0).toLocaleString('en-IN')}</td>
-              <td style="padding:10px 12px;font-weight:700;color:${ctr>=avgCTR?'#166534':'#742A2A'}">${ctr.toFixed(2)}%</td>
-              <td style="padding:10px 12px">${clk>0?fmtINR(s/clk):'—'}</td>
-              <td style="padding:10px 12px;color:${fr>3.5?'#C05621':'#374151'};font-weight:${fr>3.5?'700':'400'}">${fr.toFixed(1)}x${fr>3.5?' ⚠️':''}</td>
-              <td style="padding:10px 12px;font-weight:600">${l.toLocaleString()}</td>
+            const cpc = clk > 0 ? s/clk : 0
+            const hi  = fr > 3.5 || (ctr < avgCTR*0.5 && s > 100000)
+            return `<tr style="border-bottom:1px solid #F8FAFC;background:${hi?'#FFFBF0':'#fff'}">
+              <td style="padding:10px 13px;font-weight:600;color:#0F172A;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.name}">${c.name.length>40?c.name.slice(0,37)+'...':c.name}</td>
+              <td style="padding:10px 13px"><span style="display:inline-block;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;background:${c.status==='ACTIVE'?'#DCFCE7':'#F1F5F9'};color:${c.status==='ACTIVE'?'#166534':'#94A3B8'}">${c.status}</span></td>
+              <td style="padding:10px 13px;font-weight:700;color:#0F172A">${fmtINR(s)}</td>
+              <td style="padding:10px 13px;color:#475569">${parseInt(c.ins.impressions||0).toLocaleString('en-IN')}</td>
+              <td style="padding:10px 13px;color:#475569">${clk.toLocaleString('en-IN')}</td>
+              <td style="padding:10px 13px;font-weight:700;color:${ctr>=0.8?'#166534':ctr>=avgCTR?'#1E3A8A':'#991B1B'}">${ctr.toFixed(2)}%</td>
+              <td style="padding:10px 13px;color:#475569">${cpc>0?fmtINR(cpc):'—'}</td>
+              <td style="padding:10px 13px;font-weight:600;color:${fr>3.5?'#C2410C':'#475569'}">${fr.toFixed(1)}x${fr>3.5?' ⚠':''}${fr>3.0&&fr<=3.5?' ⚡':''}</td>
+              <td style="padding:10px 13px;font-weight:600;color:#0F172A">${l.toLocaleString()}</td>
             </tr>`
           }).join('')}
         </tbody>
       </table>
     </div>
+    ${camps.length > 20 ? `<div style="padding:10px 13px;font-size:12px;color:#94A3B8;text-align:center">Showing top 20 of ${camps.length} active campaigns sorted by spend</div>` : ''}
+    <div style="margin-top:10px;padding:10px 14px;background:#F8FAFC;border-radius:8px;font-size:12px;color:#64748B">
+      ⚡ Frequency >3.0x · ⚠ Frequency >3.5x (refresh needed) · <span style="color:#991B1B;font-weight:600">Red CTR</span> = below account avg · <span style="color:#166534;font-weight:600">Green CTR</span> = at/above 0.8% benchmark
+    </div>
   </div>
 
-  <!-- CLAUDE AUDIT -->
-  <div style="padding:0 36px 36px">
-    ${audit}
+  <!-- CLAUDE AUDIT SECTIONS -->
+  <div style="background:#fff;padding:24px 40px 32px;border:1px solid #E2E8F0;border-top:none">
+    ${auditHTML}
   </div>
 
   <!-- FOOTER -->
-  <div style="background:#F7FAFC;padding:18px 36px;border-top:1px solid #E2E8F0;text-align:center;font-size:12px;color:#9CA3AF">
-    <strong style="color:#374151">Leverage Quantum</strong> · Meta Campaign Audit · ${today}<br>
-    <span>Powered by Claude Sonnet · Generated automatically · Do not reply</span>
+  <div style="background:#0F172A;border-radius:0 0 16px 16px;padding:20px 40px;display:flex;align-items:center;justify-content:space-between">
+    <div>
+      <div style="color:#fff;font-size:13px;font-weight:600">Leverage Quantum</div>
+      <div style="color:#64748B;font-size:11px;margin-top:2px">Automated Meta Campaign Audit · ${today}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="color:#64748B;font-size:11px">Powered by Llama 3.3 · Groq</div>
+      <div style="color:#334155;font-size:11px;margin-top:2px">Do not reply to this email</div>
+    </div>
   </div>
 
 </div>
-</body></html>`
+</body>
+</html>`
 }
 
-// ── Handler ───────────────────────────────────────────────
 export default async function handler(req, res) {
-  if (req.method !== 'POST' && req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
-
+  if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
   try {
     let token = req.body?.token || null
     if (!token) token = await getStoredToken()
-    if (!token) return res.status(400).json({ error: 'No Meta token. Please connect Meta Ads first.' })
+    if (!token) return res.status(400).json({ error: 'No Meta token. Connect Meta Ads first.' })
 
     let recipients = await getRecipients()
     if (recipients.length === 0) recipients = ['shivam.sharma@leverageedu.com']
@@ -264,14 +304,12 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: 'Leverage Quantum <onboarding@resend.dev>',
         to: recipients,
-        subject: `Meta Campaign Report — Leverage Edu · ${today}`,
+        subject: `Meta Campaign Audit — Leverage Edu · ${today}`,
         html,
       })
     })
-
     const sendData = await sendRes.json()
     if (!sendRes.ok) throw new Error(sendData.message || JSON.stringify(sendData))
-
     return res.status(200).json({ success: true, recipients, id: sendData.id })
   } catch (e) {
     console.error('[send-report]', e.message)
