@@ -124,12 +124,12 @@ export default function VasuAI() {
       const totalLeads = getAction(na, 'lead')
 
       const data = {
-        spend:       `$${parseFloat(acc.spend||0).toFixed(2)} (~₹${(parseFloat(acc.spend||0)*83/1e7).toFixed(2)} Cr)`,
+        spend:       `$${parseFloat(acc.spend||0).toFixed(2)} (~₹${(parseFloat(acc.spend||0)/1e7).toFixed(2)} Cr)`,
         impressions: parseInt(acc.impressions||0).toLocaleString(),
         clicks:      parseInt(acc.clicks||0).toLocaleString(),
         ctr:         parseFloat(acc.ctr||0).toFixed(2),
         cpm:         `$${parseFloat(acc.cpm||0).toFixed(2)}`,
-        costPerLead: totalLeads > 0 ? `₹${(parseFloat(acc.spend||0)*83/totalLeads).toFixed(0)}` : 'N/A',
+        costPerLead: totalLeads > 0 ? `₹${(parseFloat(acc.spend||0)/totalLeads).toFixed(0)}` : 'N/A',
         pixelName:   pixels.data?.[0]?.name || 'Unknown',
         campaigns:   campaigns.data || [],
         adsets:      adsets.data   || [],
