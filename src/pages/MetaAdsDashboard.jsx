@@ -581,7 +581,7 @@ export default function MetaAdsDashboard() {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / Meta Ads</p>
-            <h1 className={styles.pageTitle}>Meta Ads — {activeTab === 'campaigns' ? 'Campaigns' : activeTab === 'creatives' ? 'Creatives' : 'VASU AI'}</h1>
+            <h1 className={styles.pageTitle}>Meta Ads — {activeTab === 'campaigns' ? 'Campaigns' : activeTab === 'creatives' ? 'Creatives' : 'Campaigns'}</h1>
           </div>
           <div className={styles.headerRight}>
             {/* Date filter */}
@@ -608,7 +608,7 @@ export default function MetaAdsDashboard() {
           <>
             {activeTab === 'campaigns' && <CampaignsTab data={data}/>}
             {activeTab === 'creatives' && <CreativesTab data={data}/>}
-            {activeTab === 'vasu'      && <VasuAITab data={data}/>}
+            {activeTab === 'vasu'      && null}
           </>
         ) : null}
       </div>
