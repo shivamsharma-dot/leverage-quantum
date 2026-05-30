@@ -112,8 +112,11 @@ export default function MetaAdsDashboard() {
 
   useEffect(() => { if (token) loadData(token) }, [token])
 
+  const [showTokenInput, setShowTokenInput] = useState(false)
+  const [manualToken, setManualToken] = useState('')
+
   const handleConnect = () => {
-    if (!window.FB) { setError('Facebook SDK not loaded. Please refresh.'); return }
+    if (!window.FB) { setShowTokenInput(true); return }
     setLoading(true); setError('')
     window.FB.login(response => {
       if (response.authResponse?.accessToken) {
@@ -121,10 +124,19 @@ export default function MetaAdsDashboard() {
         localStorage.setItem(TOKEN_KEY, t)
         setToken(t)
       } else {
-        setError('Authorization cancelled or failed. Please try again.')
+        setError('')
         setLoading(false)
+        setShowTokenInput(true)
       }
     }, { scope: 'ads_read,ads_management,business_management' })
+  }
+
+  const handleManualToken = () => {
+    const t = manualToken.trim()
+    if (!t) return
+    localStorage.setItem(TOKEN_KEY, t)
+    setToken(t)
+    setShowTokenInput(false)
   }
 
   const loadData = async (t) => {
@@ -227,14 +239,40 @@ export default function MetaAdsDashboard() {
               ))}
             </div>
             {error && <div className={styles.connectError}>{error}</div>}
-            <button className={styles.connectBtn} onClick={handleConnect} disabled={loading || !sdkReady}>
-              {loading
-                ? <><span className={styles.spinner}/> Connecting…</>
-                : !sdkReady
-                ? 'Loading SDK…'
-                : <><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg> Continue with Meta</>
-              }
-            </button>
+            {!showTokenInput ? <>
+              <button className={styles.connectBtn} onClick={handleConnect} disabled={loading || !sdkReady}>
+                {loading ? <><span className={styles.spinner}/> Connecting…</>
+                  : !sdkReady ? 'Loading SDK…'
+                  : <><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg> Continue with Meta</>
+                }
+              </button>
+              <button onClick={() => setShowTokenInput(true)}
+                style={{ background:'none', border:'none', color:'#9CA3AF', fontSize:12, cursor:'pointer', fontFamily:'Inter,sans-serif', marginTop:4 }}>
+                Paste access token manually →
+              </button>
+            </> : <>
+              <p style={{ fontSize:12.5, color:'#374151', marginBottom:8, textAlign:'left', fontWeight:500 }}>
+                Paste your Meta Access Token
+              </p>
+              <p style={{ fontSize:11.5, color:'#9CA3AF', marginBottom:10, textAlign:'left', lineHeight:1.5 }}>
+                Get it from{' '}
+                <a href="https://developers.facebook.com/tools/explorer" target="_blank" rel="noreferrer"
+                  style={{ color:'#1877F2' }}>Meta Graph API Explorer</a>
+                {' '}→ Get Token → select <code>ads_read</code>
+              </p>
+              <input type="text"
+                placeholder="EAAxxxxxxxxxxxxxxx..."
+                value={manualToken}
+                onChange={e => setManualToken(e.target.value)}
+                style={{ width:'100%', padding:'9px 12px', border:'1px solid #E5E7EB', borderRadius:8, fontSize:12, fontFamily:'monospace', marginBottom:8, boxSizing:'border-box', outline:'none' }}/>
+              <button className={styles.connectBtn} onClick={handleManualToken} disabled={!manualToken.trim()}>
+                Connect
+              </button>
+              <button onClick={() => setShowTokenInput(false)}
+                style={{ background:'none', border:'none', color:'#9CA3AF', fontSize:12, cursor:'pointer', fontFamily:'Inter,sans-serif', marginTop:4 }}>
+                ← Back
+              </button>
+            </>}
             <p className={styles.connectNote}>Token stored locally in your browser only.</p>
           </div>
         </div>
