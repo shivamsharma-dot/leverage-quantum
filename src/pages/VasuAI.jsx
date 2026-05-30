@@ -1,51 +1,50 @@
 import { useState, useRef, useEffect } from 'react'
+import { useAuth } from '../hooks/useAuth'
 import Sidebar from '../components/Sidebar'
 import styles from './VasuAI.module.css'
 
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY
-const TOKEN_KEY = 'lq_meta_token'
+const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions'
+const GROQ_KEY   = import.meta.env.VITE_GROQ_API_KEY
+const TOKEN_KEY  = 'lq_meta_token'
 const AD_ACCOUNT = 'act_641914389215638'
 
+async function graphGet(path, token, params = {}) {
+  const qs = new URLSearchParams({ access_token: token, ...params }).toString()
+  const res = await fetch(`https://graph.facebook.com/v19.0/${path}?${qs}`)
+  const d = await res.json()
+  if (d.error) throw new Error(d.error.message)
+  return d
+}
+
 function buildSystemPrompt(metaData) {
-  const dataSection = metaData ? `
-You have access to LIFETIME Meta Ads data for Leverage Edu (act_641914389215638):
-
-LIFETIME SPEND: ${metaData.spend}
-IMPRESSIONS: ${metaData.impressions}
-CLICKS: ${metaData.clicks}
-CTR: ${metaData.ctr}%
-CPM: ${metaData.cpm}
-TOTAL LEADS: ${metaData.totalLeads?.toLocaleString?.() || '—'}
-COST PER LEAD: ${metaData.costPerLead}
-PIXEL: ${metaData.pixelName} (${metaData.pixelId})
-
-ALL CAMPAIGNS (lifetime):
-${(metaData.campaigns||[]).slice(0,20).map(c=>{
-  const ins = c.insights?.data?.[0]||{}
-  return `- ${c.name} | ${c.status} | Spend: $${parseFloat(ins.spend||0).toFixed(0)} | Impr: ${parseInt(ins.impressions||0).toLocaleString()} | CTR: ${parseFloat(ins.ctr||0).toFixed(2)}% | Leads: ${parseInt(ins.actions?.find(a=>a.action_type==='lead')?.value||0)}`
-}).join('\n')}
-
-TOP ADSETS (lifetime):
-${(metaData.adsets||[]).slice(0,10).map(a=>{
-  const ins = a.insights?.data?.[0]||{}
-  return `- ${a.name} | ${a.status} | Goal: ${a.optimization_goal||'unknown'} | Spend: $${parseFloat(ins.spend||0).toFixed(0)} | CTR: ${parseFloat(ins.ctr||0).toFixed(2)}%`
-}).join('\n')}
-` : 'No Meta Ads data loaded. User needs to connect via the Meta Ads dashboard first.'
+  if (!metaData) return `You are VASU AI — the Meta Ads intelligence layer inside Leverage Quantum (Leverage Edu's internal marketing platform). No Meta data is connected yet. Ask the user to connect via the Meta Ads dashboard.`
 
   return `You are VASU AI (Visual Analytics & Strategy Unit) — the Meta Ads intelligence layer inside Leverage Quantum, Leverage Edu's internal marketing platform.
 
-Your entire focus is Meta Ads: campaign performance, pixel integrity, lead funnel health, CPL optimisation, and ROAS improvement for Leverage Edu. You analyse LIFETIME data — the full account history, not just recent days.
+You have access to LIFETIME Meta Ads data for account act_641914389215638:
 
-${dataSection}
+LIFETIME SPEND: ${metaData.spend}
+IMPRESSIONS: ${metaData.impressions} | CLICKS: ${metaData.clicks} | CTR: ${metaData.ctr}% | CPM: ${metaData.cpm}
+TOTAL LEADS: ${metaData.totalLeads?.toLocaleString?.() || '—'} | COST PER LEAD: ${metaData.costPerLead}
+PIXEL: ${metaData.pixelName}
+
+ALL CAMPAIGNS (lifetime):
+${(metaData.campaigns||[]).slice(0,20).map(c=>{
+  const ins=c.insights?.data?.[0]||{}
+  return `- ${c.name} | ${c.status} | Spend: $${parseFloat(ins.spend||0).toFixed(0)} | CTR: ${parseFloat(ins.ctr||0).toFixed(2)}% | Leads: ${parseInt(ins.actions?.find(a=>a.action_type==='lead')?.value||0)}`
+}).join('\n')}
+
+TOP ADSETS:
+${(metaData.adsets||[]).slice(0,10).map(a=>{
+  const ins=a.insights?.data?.[0]||{}
+  return `- ${a.name} | ${a.status} | Goal: ${a.optimization_goal||'—'} | Spend: $${parseFloat(ins.spend||0).toFixed(0)} | CTR: ${parseFloat(ins.ctr||0).toFixed(2)}%`
+}).join('\n')}
 
 Guidelines:
-- Lead with the key metric or finding, then explain why it matters.
-- Always give specific, actionable next steps — not generic advice.
-- Flag anomalies: pixel drops, CTR spikes, CPL changes, paused campaigns.
-- Format numbers: ₹ for INR (multiply USD × 83), K/L/Cr for scale.
-- If pixel events show 0, diagnose: wrong event name, pixel not installed, wrong ad account, permission issue.
-- You are read-only — never claim to make changes to campaigns.`
+- Lead with the key metric, then the insight. Be specific and actionable.
+- Flag anomalies: spend drops, CTR changes, high fatigue, paused campaigns.
+- Format numbers: use ₹ (multiply USD × 83), K/L/Cr for scale.
+- You are read-only — never claim to modify campaigns.`
 }
 
 async function askGroq(messages, metaData) {
@@ -56,7 +55,7 @@ async function askGroq(messages, metaData) {
       model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'system', content: buildSystemPrompt(metaData) }, ...messages],
       temperature: 0.3,
-      max_tokens: 1024,
+      max_tokens: 1500,
     })
   })
   if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'Groq error') }
@@ -64,28 +63,22 @@ async function askGroq(messages, metaData) {
   return d.choices?.[0]?.message?.content || '(no response)'
 }
 
-async function graphGet(path, token, params={}) {
-  const qs = new URLSearchParams({ access_token: token, ...params }).toString()
-  const res = await fetch(`https://graph.facebook.com/v19.0/${path}?${qs}`)
-  const d = await res.json()
-  if (d.error) throw new Error(d.error.message)
-  return d
-}
-
-const QUICK_PROMPTS = [
-  'Analyse my campaigns', 'Why is CPL high?', 'Pixel health check',
-  'Best performing campaign', 'Where to cut spend?', 'Lead drop analysis',
-  'CTR benchmark', 'Recommendations this week',
+const QUICK = [
+  'Analyse campaigns', 'Why is CTR low?', 'Best performing campaign',
+  'Where to cut spend?', 'High fatigue creatives', 'Scale recommendations',
+  'Lead drop analysis', 'CPL this month',
 ]
 
 export default function VasuAI() {
-  const [messages, setMessages]   = useState([])
-  const [input, setInput]         = useState('')
-  const [loading, setLoading]     = useState(false)
-  const [metaData, setMetaData]   = useState(null)
+  const { user } = useAuth()
+  const [messages, setMessages]     = useState([])
+  const [input, setInput]           = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [metaData, setMetaData]     = useState(null)
   const [metaLoading, setMetaLoading] = useState(false)
-  const [connected, setConnected] = useState(false)
+  const [connected, setConnected]   = useState(false)
   const bottomRef = useRef(null)
+  const textareaRef = useRef(null)
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
@@ -95,7 +88,7 @@ export default function VasuAI() {
     else {
       setMessages([{
         role: 'assistant',
-        content: `Hi! I'm **VASU AI** — your Meta Ads intelligence layer.\n\nI need your Meta Ads data to analyse. Please go to the **Meta Ads** dashboard first and connect your account. Once connected, come back here and I'll have full access to your campaigns, pixel events and lead data.`
+        content: `Hi! I'm **VASU AI** — your Meta Ads intelligence layer.\n\nTo get started, go to **Meta Ads** in the sidebar and connect your account. Once connected, I'll have full lifetime access to your campaigns, adsets, creatives and pixel data.`
       }])
     }
   }, [])
@@ -103,32 +96,19 @@ export default function VasuAI() {
   const loadMetaContext = async (token) => {
     setMetaLoading(true)
     try {
-      const getAction = (actions,type) => parseInt(actions?.find(a=>a.action_type===type)?.value||0)
+      const getAction = (actions, type) => parseInt(actions?.find(a => a.action_type === type)?.value || 0)
 
-      // LIFETIME data — no date filter
       const [insLife, campaigns, adsets, ads, pixels] = await Promise.all([
-        graphGet(`${AD_ACCOUNT}/insights`, token, {
-          fields:'spend,impressions,clicks,ctr,cpm,actions',
-          date_preset:'maximum', level:'account'
-        }),
-        graphGet(`${AD_ACCOUNT}/campaigns`, token, {
-          fields:'name,status,objective,daily_budget,lifetime_budget,insights{spend,impressions,clicks,ctr,actions}',
-          limit:50, date_preset:'maximum'
-        }),
-        graphGet(`${AD_ACCOUNT}/adsets`, token, {
-          fields:'name,status,daily_budget,optimization_goal,insights{spend,impressions,clicks,ctr,actions}',
-          limit:50, date_preset:'maximum'
-        }).catch(()=>({data:[]})),
-        graphGet(`${AD_ACCOUNT}/ads`, token, {
-          fields:'name,status,insights{spend,impressions,clicks,ctr,actions}',
-          limit:50, date_preset:'maximum'
-        }).catch(()=>({data:[]})),
-        graphGet(`${AD_ACCOUNT}/adspixels`, token, { fields:'id,name,last_fired_time' })
+        graphGet(`${AD_ACCOUNT}/insights`, token, { fields: 'spend,impressions,clicks,ctr,cpm,actions', date_preset: 'maximum', level: 'account' }),
+        graphGet(`${AD_ACCOUNT}/campaigns`, token, { fields: 'name,status,objective,insights{spend,impressions,clicks,ctr,actions}', limit: 50, date_preset: 'maximum' }),
+        graphGet(`${AD_ACCOUNT}/adsets`,    token, { fields: 'name,status,optimization_goal,insights{spend,impressions,clicks,ctr,actions}', limit: 50, date_preset: 'maximum' }).catch(() => ({ data: [] })),
+        graphGet(`${AD_ACCOUNT}/ads`,       token, { fields: 'name,status,insights{spend,impressions,clicks,ctr}', limit: 50, date_preset: 'maximum' }).catch(() => ({ data: [] })),
+        graphGet(`${AD_ACCOUNT}/adspixels`, token, { fields: 'id,name,last_fired_time' }),
       ])
 
-      const acc = insLife.data?.[0] || {}
-      const na  = acc.actions || []
-      const totalLeads = getAction(na,'lead')
+      const acc  = insLife.data?.[0] || {}
+      const na   = acc.actions || []
+      const totalLeads = getAction(na, 'lead')
 
       const data = {
         spend:       `$${parseFloat(acc.spend||0).toFixed(2)} (~₹${(parseFloat(acc.spend||0)*83/1e7).toFixed(2)} Cr)`,
@@ -138,113 +118,163 @@ export default function VasuAI() {
         cpm:         `$${parseFloat(acc.cpm||0).toFixed(2)}`,
         costPerLead: totalLeads > 0 ? `₹${(parseFloat(acc.spend||0)*83/totalLeads).toFixed(0)}` : 'N/A',
         pixelName:   pixels.data?.[0]?.name || 'Unknown',
-        pixelId:     pixels.data?.[0]?.id   || '—',
         campaigns:   campaigns.data || [],
         adsets:      adsets.data   || [],
         ads:         ads.data      || [],
         totalLeads,
       }
-
       setMetaData(data)
       setConnected(true)
       setMessages([{
         role: 'assistant',
-        content: `Hi! I'm **VASU AI** — connected to your Meta Ads ✅\n\n**Lifetime account data:**\n- Total Spend: ${data.spend}\n- Impressions: ${data.impressions} | Clicks: ${data.clicks} | CTR: ${data.ctr}%\n- Total Leads: ${totalLeads.toLocaleString()} | Cost per Lead: ${data.costPerLead}\n- Pixel: ${data.pixelName}\n- ${data.campaigns.length} campaigns · ${data.adsets.length} adsets · ${data.ads.length} ads loaded\n\nI analyse your **lifetime** Meta Ads data. Ask me anything about campaigns, creatives, spend, or what to do next.`
+        content: `Connected to your Meta Ads account ✅\n\n**Lifetime snapshot:**\n- Spend: ${data.spend}\n- Impressions: ${data.impressions} · Clicks: ${data.clicks} · CTR: ${data.ctr}%\n- Total Leads: ${totalLeads.toLocaleString()} · Cost per Lead: ${data.costPerLead}\n- Pixel: ${data.pixelName}\n- ${data.campaigns.length} campaigns · ${data.adsets.length} adsets · ${data.ads.length} ads loaded\n\nI have your full lifetime Meta Ads data. Ask me anything.`
       }])
-    } catch(e) {
-      setMessages([{ role:'assistant', content:`⚠️ Couldn't load Meta Ads data: ${e.message}\n\nGo to **Meta Ads** dashboard, disconnect and reconnect your account.` }])
+    } catch (e) {
+      setMessages([{ role: 'assistant', content: `⚠️ Couldn't load Meta Ads data: ${e.message}\n\nPlease go to **Meta Ads** dashboard, disconnect and reconnect your account.` }])
     } finally { setMetaLoading(false) }
   }
 
   const send = async (text) => {
-    const q = (text||input).trim()
+    const q = (text || input).trim()
     if (!q || loading) return
     setInput('')
-    const updated = [...messages, { role:'user', content:q }]
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    const updated = [...messages, { role: 'user', content: q }]
     setMessages(updated)
     setLoading(true)
     try {
-      const reply = await askGroq(updated.slice(-12), metaData)
-      setMessages(m => [...m, { role:'assistant', content:reply }])
-    } catch(e) {
-      setMessages(m => [...m, { role:'assistant', content:`⚠️ ${e.message}` }])
+      const reply = await askGroq(updated.slice(-14), metaData)
+      setMessages(m => [...m, { role: 'assistant', content: reply }])
+    } catch (e) {
+      setMessages(m => [...m, { role: 'assistant', content: `⚠️ ${e.message}` }])
     } finally { setLoading(false) }
   }
 
-  const render = c => c.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br/>')
+  // Render markdown-lite: bold, code, newlines, bullet lists
+  const renderContent = (text) => {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code style="background:#F3F4F6;padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace">$1</code>')
+      .split('\n')
+      .map(line => {
+        if (line.match(/^[-•]\s/)) return `<div style="display:flex;gap:8px;margin:2px 0"><span style="color:#9CA3AF;flex-shrink:0">•</span><span>${line.replace(/^[-•]\s/, '')}</span></div>`
+        return line || '<br/>'
+      })
+      .join('\n')
+      .replace(/\n(<br\/>)\n/g, '<br/>')
+  }
+
+  // Get user initials
+  const initials = 'SS' // Shivam Sharma
 
   return (
     <div className={styles.layout}>
       <Sidebar/>
       <div className={styles.main}>
-        <div className={styles.header}>
-          <div className={styles.headerLeft}>
-            <p className={styles.breadcrumb}>Account / VASU AI</p>
-            <h1 className={styles.pageTitle}>VASU AI</h1>
+
+        {/* Top bar — minimal, just model badge */}
+        <div className={styles.topBar}>
+          <div className={styles.modelTag}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
+            </svg>
+            VASU AI · Llama 3.3
           </div>
-          <div className={styles.headerRight}>
-            {connected
-              ? <span className={styles.connectedBadge}>● Meta Ads connected</span>
-              : <span className={styles.disconnectedBadge}>○ Not connected</span>
-            }
-            <span className={styles.modelBadge}>Llama 3.3 · Groq</span>
-          </div>
+          {connected && <div className={styles.connectedPill}>● Meta Ads connected</div>}
         </div>
 
-        <div className={styles.content}>
-          <div className={styles.chatWrap}>
-            <div className={styles.messages}>
-              {metaLoading ? (
-                <div style={{textAlign:'center',padding:40,color:'#9CA3AF',fontSize:13}}>
-                  <div className={styles.bigSpinner}/>
-                  <p style={{marginTop:12}}>Loading Meta Ads context…</p>
-                </div>
-              ) : messages.map((m,i) => (
-                <div key={i} className={m.role==='user' ? styles.userMsg : styles.asstMsg}>
-                  {m.role==='assistant' && (
-                    <div className={styles.avatar}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round">
-                        <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
-                      </svg>
-                    </div>
-                  )}
-                  <div className={styles.bubble} dangerouslySetInnerHTML={{__html:render(m.content)}}/>
-                </div>
-              ))}
-              {loading && (
-                <div className={styles.asstMsg}>
-                  <div className={styles.avatar}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round">
-                      <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
-                    </svg>
-                  </div>
-                  <div className={styles.bubble}><span className={styles.typing}><span/><span/><span/></span></div>
-                </div>
-              )}
-              <div ref={bottomRef}/>
+        {/* Messages area — full height, no box */}
+        <div className={styles.messagesArea}>
+          {metaLoading ? (
+            <div className={styles.loadingCenter}>
+              <div className={styles.loadSpinner}/>
+              <p>Connecting to Meta Ads…</p>
             </div>
-
-            <div className={styles.quickRow}>
-              {QUICK_PROMPTS.map(p => (
-                <button key={p} className={styles.quickBtn} onClick={()=>send(p)} disabled={loading||!connected}>{p}</button>
-              ))}
+          ) : messages.length === 0 ? (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyIcon}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round">
+                  <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
+                </svg>
+              </div>
+              <p>Ask me anything about your Meta Ads</p>
             </div>
+          ) : (
+            messages.map((m, i) => (
+              <div key={i} className={m.role === 'user' ? styles.userTurn : styles.asstTurn}>
+                <div className={styles.turnAvatar}>
+                  {m.role === 'user'
+                    ? <div className={styles.userAvatar}>{initials}</div>
+                    : <div className={styles.vasuAvatar}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round">
+                          <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
+                        </svg>
+                      </div>
+                  }
+                </div>
+                <div className={styles.turnBody}>
+                  <p className={styles.turnName}>{m.role === 'user' ? 'You' : 'VASU AI'}</p>
+                  <div className={styles.turnContent} dangerouslySetInnerHTML={{ __html: renderContent(m.content) }}/>
+                </div>
+              </div>
+            ))
+          )}
+          {loading && (
+            <div className={styles.asstTurn}>
+              <div className={styles.turnAvatar}>
+                <div className={styles.vasuAvatar}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round">
+                    <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
+                  </svg>
+                </div>
+              </div>
+              <div className={styles.turnBody}>
+                <p className={styles.turnName}>VASU AI</p>
+                <div className={styles.typing}><span/><span/><span/></div>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef}/>
+        </div>
 
-            <div className={styles.inputRow}>
-              <textarea className={styles.input} value={input}
-                onChange={e => { setInput(e.target.value); e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,160)+'px' }}
-                onKeyDown={e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send() } }}
-                placeholder={connected ? "Ask about your Meta Ads campaigns… (Shift+Enter for new line)" : "Connect Meta Ads first to start chatting…"}
-                disabled={loading||!connected}
-                rows={1}
-                style={{resize:'none',overflowY:'auto'}}
-              />
-              <button className={styles.sendBtn} onClick={()=>send()} disabled={loading||!input.trim()||!connected}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        {/* Quick prompts — only when no messages or first load */}
+        {messages.length <= 1 && !loading && connected && (
+          <div className={styles.quickRow}>
+            {QUICK.map(p => (
+              <button key={p} className={styles.quickBtn} onClick={() => send(p)}>{p}</button>
+            ))}
+          </div>
+        )}
+
+        {/* Input box — large, floating style */}
+        <div className={styles.inputWrap}>
+          <div className={styles.inputBox}>
+            <textarea
+              ref={textareaRef}
+              className={styles.inputField}
+              value={input}
+              onChange={e => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 180) + 'px' }}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+              placeholder="Message VASU AI..."
+              disabled={loading}
+              rows={1}
+              style={{ resize: 'none', overflowY: 'auto' }}
+            />
+            <div className={styles.inputFooter}>
+              <div className={styles.metaBadge}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>
+                Meta Ads
+              </div>
+              <button
+                className={`${styles.sendBtn} ${input.trim() && !loading ? styles.sendActive : ''}`}
+                onClick={() => send()}
+                disabled={!input.trim() || loading}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
               </button>
             </div>
           </div>
         </div>
+
       </div>
     </div>
   )
