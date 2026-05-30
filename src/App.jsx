@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import MetaAdsDashboard from './pages/MetaAdsDashboard'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { logActivity } from './components/ActivityLogger'
@@ -55,6 +55,7 @@ export default function App() {
       <Route path="/dashboard/lead-quality" element={<ProtectedRoute dashboardId="lead_quality"><LeadQualityDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/channel-mix"  element={<ProtectedRoute dashboardId="channel_mix"><ChannelMixDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/revenue"      element={<ProtectedRoute dashboardId="revenue">     <RevenueDashboard /></ProtectedRoute>} />
+      <Route path="/dashboard/meta-ads"     element={<ProtectedRoute dashboardId="meta_ads">    <MetaAdsDashboard /></ProtectedRoute>} />
       <Route path="/settings"               element={<ProtectedRoute dashboardId="settings">    <SettingsPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
