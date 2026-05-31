@@ -574,27 +574,27 @@ export default function MetaAdsDashboard() {
       const account = accIns.data?.[0] || {}
       const accountAvgCTR = parseFloat(account.ctr || 0)
 
-      // Fetch thumbnail URLs — batch via Meta root endpoint
+      // Fetch thumbnail URLs — chunked batch (max 50 IDs per request)
       const adsRawData = adsRaw.data || []
-      const creativeIds = adsRawData.map(a => a.creative?.id).filter(Boolean)
+      const creativeIds = [...new Set(adsRawData.map(a => a.creative?.id).filter(Boolean))]
       let creativeThumbs = {}
       if (creativeIds.length > 0) {
         try {
-          // Meta batch lookup: GET /v19.0?ids=id1,id2&fields=...
-          const qs = new URLSearchParams({
-            access_token: t,
-            ids: creativeIds.join(','),
-            fields: 'id,thumbnail_url,image_url,picture'
-          }).toString()
-          const thumbRes = await fetch(`https://graph.facebook.com/v19.0?${qs}`)
-          const thumbData = await thumbRes.json()
-          if (thumbData.error) {
-            console.error('Thumb batch error:', thumbData.error.message)
-          } else {
-            Object.entries(thumbData).forEach(([id, c]) => {
+          const chunks = []
+          for (let i = 0; i < creativeIds.length; i += 50) chunks.push(creativeIds.slice(i, i + 50))
+          await Promise.all(chunks.map(async chunk => {
+            const qs = new URLSearchParams({
+              access_token: t,
+              ids: chunk.join(','),
+              fields: 'id,thumbnail_url,image_url,picture'
+            }).toString()
+            const res = await fetch(`https://graph.facebook.com/v19.0?${qs}`)
+            const d = await res.json()
+            if (d.error) { console.error('Thumb batch error:', d.error.message); return }
+            Object.entries(d).forEach(([id, c]) => {
               creativeThumbs[id] = c.image_url || c.thumbnail_url || c.picture || null
             })
-          }
+          }))
         } catch(e) { console.error('Thumb fetch failed:', e.message) }
       }
 
