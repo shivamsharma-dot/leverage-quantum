@@ -10,6 +10,8 @@ const TOKEN_KEY  = 'lq_meta_token'
 const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_KEY   = import.meta.env.VITE_GROQ_API_KEY
 
+const proxyImg = url => url ? `/api/img-proxy?url=${encodeURIComponent(url)}` : null
+
 const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 
@@ -228,7 +230,7 @@ function CreativesTab({ data }) {
     const ctr  = parseFloat(ins.ctr||0)
     const freq = parseFloat(ins.frequency||1)
     // picture = highest res available from Meta API for both image + video ads
-    const imgUrl = ad.creative?._thumbUrl || null
+    const imgUrl = proxyImg(ad.creative?._thumbUrl) || null
     const isVideo = !!ad.creative?.video_id
     const { score, label } = computeFatigue(impr, clks, ctr, freq, accountAvgCTR)
     return { ...ad, ins, impr, clks, ctr, freq, score, label, imgUrl }
