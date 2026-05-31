@@ -210,7 +210,7 @@ function CampaignsTab({ data }) {
 
 // ─── CREATIVES TAB ────────────────────────────────────────
 function CreativesTab({ data }) {
-  const { account, ads, accountAvgCTR } = data
+  const { account, ads, accountAvgCTR, insightsMap = {} } = data
   const [expanded, setExpanded] = useState(null)
   const [viewMode, setViewMode] = useState('grid')
 
@@ -633,7 +633,7 @@ export default function MetaAdsDashboard() {
         }
       })
 
-      setData({ account, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, range, preset })
+      setData({ account, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, range, preset })
       setLastSync(new Date())
       setDatePreset(preset)
     } catch (e) {
