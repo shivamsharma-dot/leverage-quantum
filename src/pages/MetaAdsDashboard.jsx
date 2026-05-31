@@ -108,7 +108,32 @@ function ConnectScreen({ onConnect, onPaste, error, loading }) {
   )
 }
 
-// ─── ACCOUNT KPI BAR ──────────────────────────────────────
+// ─── NEOLOOK-STYLE KPI SECTION (lifetime row + period row) ───────────────
+function NeolookKPIs({ lifetime, period }) {
+  return (
+    <div style={{marginBottom:16}}>
+      <div className={styles.kpiBar} style={{marginBottom:8}}>
+        {lifetime.map(k => (
+          <div key={k.label} className={styles.kpiTile} style={{borderColor: k.color||'#E5E7EB'}}>
+            <p className={styles.kpiTileVal} style={{color: k.color||'inherit'}}>{k.value}</p>
+            <p className={styles.kpiTileLabel}>{k.label}</p>
+            {k.sub && <p style={{fontSize:10,color:'#9CA3AF',marginTop:1}}>{k.sub}</p>}
+          </div>
+        ))}
+      </div>
+      <div className={styles.kpiBar}>
+        {period.map(k => (
+          <div key={k.label} className={styles.kpiTile} style={{borderColor: k.color||'#E5E7EB'}}>
+            <p className={styles.kpiTileVal} style={{color: k.color||'inherit'}}>{k.value}</p>
+            <p className={styles.kpiTileLabel}>{k.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// keep old KPIBar for backward compat
 function KPIBar({ kpis }) {
   return (
     <div className={styles.kpiBar}>
@@ -136,19 +161,28 @@ function ScoreBadge({ score, label }) {
 
 // ─── CAMPAIGN TAB ─────────────────────────────────────────
 function CampaignsTab({ data }) {
-  const { account, campaigns, accountAvgCTR } = data
+  const { account, lifetimeAccount = {}, activeCampaignCount = 0, pausedCampaignCount = 0, campaigns, accountAvgCTR } = data
   const leads = getAction(account.actions, 'lead')
 
-  const kpis = [
-    { label:'Total Spend', value: fmtINR(parseFloat(account.spend||0)) },
+  const lifetimeKpis = [
+    { label:'Total Amount Spent', value: fmtINR(parseFloat(lifetimeAccount.spend||0)), color:'#7C3AED' },
+    { label:'Total Campaigns', value: (activeCampaignCount + pausedCampaignCount).toLocaleString(), sub: `${activeCampaignCount} active · ${pausedCampaignCount} paused`, color:'#DC2626' },
+    { label:'Total Impressions', value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9' },
+    { label:'Total Clicks', value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#0EA5E9' },
+    { label:'Total Reach', value: parseInt(lifetimeAccount.reach||0).toLocaleString(), color:'#0EA5E9' },
+    { label:'Total Leads', value: leads.toLocaleString(), color:'#059669' },
+  ]
+
+  const periodKpis = [
+    { label:'Spend', value: fmtINR(parseFloat(account.spend||0)) },
     { label:'Impressions', value: parseInt(account.impressions||0).toLocaleString() },
     { label:'Clicks', value: parseInt(account.clicks||0).toLocaleString() },
     { label:'Avg CTR', value: parseFloat(account.ctr||0).toFixed(2)+'%' },
     { label:'Avg CPC', value: '₹'+Math.round(parseFloat(account.spend||0)/Math.max(1,parseInt(account.clicks||0))).toLocaleString('en-IN') },
     { label:'Avg CPM', value: '₹'+Math.round(parseFloat(account.cpm||0)).toLocaleString('en-IN') },
-    { label:'Total Leads', value: leads.toLocaleString() },
-    { label:'Active', value: campaigns.filter(c=>c.status==='ACTIVE').length },
   ]
+
+  const kpis = periodKpis // keep for any legacy usage
 
   // Sort by spend desc
   const sorted = [...campaigns].sort((a,b) => parseFloat(b.insights?.data?.[0]?.spend||0) - parseFloat(a.insights?.data?.[0]?.spend||0))
@@ -164,7 +198,7 @@ function CampaignsTab({ data }) {
 
   return (
     <div className={styles.tabContent}>
-      <KPIBar kpis={kpis}/>
+      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis}/>
       <p style={{fontSize:12,color:'#9CA3AF',marginBottom:4}}>{campaigns.length} campaigns · sorted by spend</p>
       <div className={styles.campaignGrid}>
         {sorted.map(c => {
@@ -210,18 +244,30 @@ function CampaignsTab({ data }) {
 
 // ─── CREATIVES TAB ────────────────────────────────────────
 function CreativesTab({ data }) {
-  const { account, ads, accountAvgCTR, insightsMap = {} } = data
+  const { account, lifetimeAccount = {}, activeCampaignCount = 0, pausedCampaignCount = 0, ads, accountAvgCTR, insightsMap = {} } = data
   const [expanded, setExpanded] = useState(null)
   const [viewMode, setViewMode] = useState('grid')
+  const leads = getAction(account.actions, 'lead')
 
-  const kpis = [
-    { label:'Total Spend', value: fmtINR(parseFloat(account.spend||0)) },
-    { label:'Total Impr', value: parseInt(account.impressions||0).toLocaleString() },
-    { label:'Total Clicks', value: parseInt(account.clicks||0).toLocaleString() },
+  const lifetimeKpis = [
+    { label:'Total Amount Spent', value: fmtINR(parseFloat(lifetimeAccount.spend||0)), color:'#7C3AED' },
+    { label:'Total Campaigns', value: (activeCampaignCount + pausedCampaignCount).toLocaleString(), sub: `${activeCampaignCount} active · ${pausedCampaignCount} paused`, color:'#DC2626' },
+    { label:'Total Impressions', value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9' },
+    { label:'Total Clicks', value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#0EA5E9' },
+    { label:'Total Reach', value: parseInt(lifetimeAccount.reach||0).toLocaleString(), color:'#0EA5E9' },
+    { label:'Total Leads', value: leads.toLocaleString(), color:'#059669' },
+  ]
+
+  const periodKpis = [
+    { label:'Spend', value: fmtINR(parseFloat(account.spend||0)) },
+    { label:'Impressions', value: parseInt(account.impressions||0).toLocaleString() },
+    { label:'Clicks', value: parseInt(account.clicks||0).toLocaleString() },
     { label:'Avg CTR', value: parseFloat(account.ctr||0).toFixed(2)+'%' },
     { label:'Avg CPM', value: '₹'+Math.round(parseFloat(account.cpm||0)).toLocaleString('en-IN') },
     { label:'Total Ads', value: ads.length },
   ]
+
+  const kpis = periodKpis
 
   const scoredAds = ads.map(ad => {
     const ins = insightsMap[ad.id] || {}
@@ -248,7 +294,7 @@ function CreativesTab({ data }) {
 
   return (
     <div className={styles.tabContent}>
-      <KPIBar kpis={kpis}/>
+      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis}/>
 
       {/* Health summary bar */}
       <div className={styles.healthBar}>
@@ -561,11 +607,20 @@ export default function MetaAdsDashboard() {
                        : preset === 'this_month' ? 'last_30d'
                        : 'last_7d'
 
-      const [accIns, campaigns, adsRaw, pixels] = await Promise.all([
-        // Account-level insights - use time_range for custom date support
+      const [accIns, lifetimeIns, campaignsSummary, campaigns, adsRaw, pixels] = await Promise.all([
+        // Account-level insights for selected period
         graphGet(`${AD_ACCOUNT}/insights`, t, {
           fields: 'spend,impressions,clicks,ctr,cpm,reach,frequency,actions',
           time_range: timeRange, level: 'account'
+        }),
+        // Lifetime account insights (no date filter)
+        graphGet(`${AD_ACCOUNT}/insights`, t, {
+          fields: 'spend,impressions,clicks,reach',
+          date_preset: 'maximum', level: 'account'
+        }),
+        // Campaign count summary (all time, for active/paused counts)
+        graphGet(`${AD_ACCOUNT}/campaigns`, t, {
+          fields: 'status', limit: 500
         }),
         // Campaigns - use date_preset for nested insights (avoids 400)
         graphGet(`${AD_ACCOUNT}/campaigns`, t, {
@@ -583,6 +638,10 @@ export default function MetaAdsDashboard() {
 
       const account = accIns.data?.[0] || {}
       const accountAvgCTR = parseFloat(account.ctr || 0)
+      const lifetimeAccount = lifetimeIns.data?.[0] || {}
+      const allCampaigns = campaignsSummary.data || []
+      const activeCampaignCount = allCampaigns.filter(c => c.status === 'ACTIVE').length
+      const pausedCampaignCount = allCampaigns.filter(c => c.status === 'PAUSED').length
 
       // Fetch insights separately for all ad IDs (chunked, 50 at a time)
       const adsRawData = adsRaw.data || []
@@ -640,7 +699,7 @@ export default function MetaAdsDashboard() {
         }
       })
 
-      setData({ account, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, range, preset })
+      setData({ account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, range, preset })
       setLastSync(new Date())
       setDatePreset(preset)
     } catch (e) {
