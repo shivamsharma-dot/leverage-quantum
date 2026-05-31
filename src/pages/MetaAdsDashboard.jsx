@@ -484,11 +484,15 @@ Guidelines: Be concise, lead with the number, always give a specific action. Rea
 // Date preset helper
 function getDateRange(preset) {
   const f = d => d.toISOString().slice(0, 10)
-  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
+  const today = new Date()
+  const yesterday = new Date(); yesterday.setDate(today.getDate() - 1)
   const s = new Date(yesterday)
 
   if (preset === 'yesterday') {
     return { since: f(yesterday), until: f(yesterday) }
+  } else if (preset === 'this_month') {
+    const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+    return { since: f(firstOfMonth), until: f(today) }
   } else if (preset === 'last_7d')  { s.setDate(s.getDate() - 6) }
   else if (preset === 'last_14d') { s.setDate(s.getDate() - 13) }
   else if (preset === 'last_30d') { s.setDate(s.getDate() - 29) }
@@ -548,10 +552,13 @@ export default function MetaAdsDashboard() {
       const range     = getDateRange(preset)
       const timeRange = JSON.stringify(range)
 
-      // Map preset to Meta's date_preset for nested insights (more reliable)
+      // Map preset to Meta's date_preset for nested insights
+      // this_month uses time_range instead of date_preset
+      const useTimeRange = preset === 'this_month'
       const metaPreset = preset === 'yesterday' ? 'yesterday'
                        : preset === 'last_14d'  ? 'last_14d'
                        : preset === 'last_30d'  ? 'last_30d'
+                       : preset === 'this_month' ? 'last_30d'
                        : 'last_7d'
 
       const [accIns, campaigns, adsRaw, pixels] = await Promise.all([
@@ -562,7 +569,7 @@ export default function MetaAdsDashboard() {
         }),
         // Campaigns - use date_preset for nested insights (avoids 400)
         graphGet(`${AD_ACCOUNT}/campaigns`, t, {
-          fields: `name,status,objective,created_time,insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}`,
+          fields: `name,status,objective,created_time,insights${useTimeRange ? `.time_range(${timeRange})` : `.date_preset(${metaPreset})`}{spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}`,
           limit: 50
         }),
         // Ads + creatives - fetch ALL active ads without insights (so no date filter excludes them)
@@ -589,7 +596,7 @@ export default function MetaAdsDashboard() {
             const insRes = await graphGet(`${AD_ACCOUNT}/insights`, t, {
               fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
               level: 'ad',
-              date_preset: metaPreset,
+              ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }),
               filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
               limit: 50
             })
@@ -681,10 +688,11 @@ export default function MetaAdsDashboard() {
   )
 
   const PRESETS = [
-    { id:'yesterday', label:'Yesterday' },
-    { id:'last_7d',   label:'Last 7 days' },
-    { id:'last_14d',  label:'Last 14 days' },
-    { id:'last_30d',  label:'Last 30 days' },
+    { id:'yesterday',  label:'Yesterday' },
+    { id:'last_7d',    label:'Last 7 days' },
+    { id:'last_14d',   label:'Last 14 days' },
+    { id:'last_30d',   label:'Last 30 days' },
+    { id:'this_month', label:'This Month' },
   ]
 
   return (
