@@ -165,10 +165,10 @@ function NeolookKPIs({ lifetime, period, periodLabel }) {
           {lifetime.map(k => (
             <div key={k.label} className={styles.kpiTile}>
               <div className={styles.kpiTileTop}>
-                <p className={`${styles.kpiTileVal} ${styles.kpiTileValLifetime}`}>{k.value}</p>
                 {k.icon && <div className={styles.kpiTileIcon} style={{background:k.iconBg||'#F3F4F6'}}>{k.icon}</div>}
+                <p className={styles.kpiTileLabel}>{k.label}</p>
               </div>
-              <p className={styles.kpiTileLabel}>{k.label}</p>
+              <p className={`${styles.kpiTileVal} ${styles.kpiTileValLifetime}`}>{k.value}</p>
               {k.sub && <p className={styles.kpiTileSub}>{k.sub}</p>}
             </div>
           ))}
@@ -181,10 +181,10 @@ function NeolookKPIs({ lifetime, period, periodLabel }) {
           {period.map(k => (
             <div key={k.label} className={styles.kpiTile}>
               <div className={styles.kpiTileTop}>
-                <p className={styles.kpiTileVal}>{k.value || '-'}</p>
                 {k.icon && <div className={styles.kpiTileIcon} style={{background:k.iconBg||'#F3F4F6'}}>{k.icon}</div>}
+                <p className={styles.kpiTileLabel}>{k.label}</p>
               </div>
-              <p className={styles.kpiTileLabel}>{k.label}</p>
+              <p className={styles.kpiTileVal}>{k.value || '-'}</p>
             </div>
           ))}
         </div>
@@ -231,17 +231,15 @@ function CampaignsTab({ data }) {
     { label:'Total Impressions',  value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
     { label:'Total Clicks',       value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
     { label:'Total Reach',        value: parseInt(lifetimeAccount.reach||0).toLocaleString(), color:'#10B981', iconBg:'#D1FAE5', icon:<Globe size={15} color='#10B981'/> },
+    { label:'Total Ads',          value: ads.length.toLocaleString(), color:'#64748B', iconBg:'#F1F5F9', icon:<Activity size={15} color='#64748B'/> },
+    { label:'Total Leads',        value: leads.toLocaleString(), color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
   ]
 
   const periodKpis = [
-    { label:'Spend',       value: fmtINR(parseFloat(account.spend||0)),                                              color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
-    { label:'Impressions', value: parseInt(account.impressions||0).toLocaleString(),                                 color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
-    { label:'Clicks',      value: parseInt(account.clicks||0).toLocaleString(),                                      color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
-    { label:'Avg CTR',     value: parseFloat(account.ctr||0).toFixed(2)+'%',                                        color:'#F59E0B', iconBg:'#FEF3C7', icon:<TrendingUp size={15} color='#F59E0B'/> },
-    { label:'Avg CPC',     value: '₹'+Math.round(parseFloat(account.spend||0)/Math.max(1,parseInt(account.clicks||0))).toLocaleString('en-IN'), color:'#EC4899', iconBg:'#FCE7F3', icon:<Zap size={15} color='#EC4899'/> },
-    { label:'Avg CPM',     value: '₹'+Math.round(parseFloat(account.cpm||0)).toLocaleString('en-IN'),               color:'#8B5CF6', iconBg:'#EDE9FE', icon:<BarChart2 size={15} color='#8B5CF6'/> },
-    { label:'Leads',       value: leads.toLocaleString(),                                                            color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
-    { label:'CPL',         value: cpl > 0 ? '₹'+cpl.toLocaleString('en-IN') : '-',                                 color:'#DC2626', iconBg:'#FEE2E2', icon:<Target size={15} color='#DC2626'/> },
+    { label:'Spend',       value: fmtINR(parseFloat(account.spend||0)),               color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
+    { label:'Impressions', value: parseInt(account.impressions||0).toLocaleString(),  color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
+    { label:'Clicks',      value: parseInt(account.clicks||0).toLocaleString(),       color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
+    { label:'Avg CTR',     value: parseFloat(account.ctr||0).toFixed(2)+'%',          color:'#F59E0B', iconBg:'#FEF3C7', icon:<TrendingUp size={15} color='#F59E0B'/> },
   ]
 
   const kpis = periodKpis // keep for any legacy usage
@@ -320,6 +318,7 @@ function CreativesTab({ data }) {
   const [viewMode, setViewMode] = useState('grid')
   const [adTypeFilter, setAdTypeFilter] = useState('all')
   const [healthFilter, setHealthFilter] = useState('all')
+  const [adNameSearch, setAdNameSearch] = useState('')
   const [showBackToTop, setShowBackToTop] = useState(false)
   const leads = getAction(account.actions, 'lead')
 
@@ -331,17 +330,15 @@ function CreativesTab({ data }) {
     { label:'Total Impressions',  value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
     { label:'Total Clicks',       value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
     { label:'Total Reach',        value: parseInt(lifetimeAccount.reach||0).toLocaleString(), color:'#10B981', iconBg:'#D1FAE5', icon:<Globe size={15} color='#10B981'/> },
+    { label:'Total Ads',          value: ads.length.toLocaleString(), color:'#64748B', iconBg:'#F1F5F9', icon:<Activity size={15} color='#64748B'/> },
+    { label:'Total Leads',        value: leads.toLocaleString(), color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
   ]
 
   const periodKpis = [
-    { label:'Spend',        value: fmtINR(parseFloat(account.spend||0)),                                             color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
-    { label:'Impressions',  value: parseInt(account.impressions||0).toLocaleString(),                                color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
-    { label:'Clicks',       value: parseInt(account.clicks||0).toLocaleString(),                                     color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
-    { label:'Avg CTR',      value: parseFloat(account.ctr||0).toFixed(2)+'%',                                       color:'#F59E0B', iconBg:'#FEF3C7', icon:<TrendingUp size={15} color='#F59E0B'/> },
-    { label:'Avg CPM',      value: '₹'+Math.round(parseFloat(account.cpm||0)).toLocaleString('en-IN'),              color:'#EC4899', iconBg:'#FCE7F3', icon:<BarChart2 size={15} color='#EC4899'/> },
-    { label:'Leads',        value: leads.toLocaleString(),                                                           color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
-    { label:'CPL',          value: cpl > 0 ? '₹'+cpl.toLocaleString('en-IN') : '-',                                color:'#DC2626', iconBg:'#FEE2E2', icon:<Target size={15} color='#DC2626'/> },
-    { label:'Total Ads',    value: ads.length,                                                                       color:'#64748B', iconBg:'#F1F5F9', icon:<Activity size={15} color='#64748B'/> },
+    { label:'Spend',       value: fmtINR(parseFloat(account.spend||0)),               color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
+    { label:'Impressions', value: parseInt(account.impressions||0).toLocaleString(),  color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
+    { label:'Clicks',      value: parseInt(account.clicks||0).toLocaleString(),       color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
+    { label:'Avg CTR',     value: parseFloat(account.ctr||0).toFixed(2)+'%',          color:'#F59E0B', iconBg:'#FEF3C7', icon:<TrendingUp size={15} color='#F59E0B'/> },
   ]
 
   const kpis = periodKpis
@@ -374,6 +371,7 @@ function CreativesTab({ data }) {
     if (healthFilter !== 'all' && ad.label !== healthFilter) return false
     if (adTypeFilter === 'video' && !ad.creative?.video_id) return false
     if (adTypeFilter === 'image' && !!ad.creative?.video_id) return false
+    if (adNameSearch && !ad.name?.toLowerCase().includes(adNameSearch.toLowerCase())) return false
     return true
   })
 
@@ -416,6 +414,13 @@ function CreativesTab({ data }) {
           </div>
         </div>
         <div className={styles.creativeControls}>
+          <input
+            type="text"
+            placeholder="Search ad name..."
+            value={adNameSearch}
+            onChange={e=>setAdNameSearch(e.target.value)}
+            style={{padding:'5px 10px',border:'1px solid #E5E7EB',borderRadius:7,background:'#F9FAFB',color:'#374151',fontSize:11.5,fontFamily:'Inter,sans-serif',outline:'none',width:160}}
+          />
           <select className={styles.creativeFilterSelect} value={adTypeFilter} onChange={e=>setAdTypeFilter(e.target.value)}>
             <option value="all">All Ad Types</option>
             <option value="video">Video</option>
