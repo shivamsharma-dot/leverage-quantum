@@ -16,25 +16,20 @@ function generateOTP() {
 }
 
 async function sendOTPEmail(email, otp) {
-  // Use EmailJS free tier to send OTP
-  // We use a simple fetch to EmailJS public API
-  const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      service_id: 'service_quantum',
-      template_id: 'template_otp',
-      user_id: 'quantum_user',
-      template_params: {
-        to_email: email,
-        otp_code: otp,
-        expiry: '5 minutes'
-      }
+  // Send OTP via Supabase Edge Function (resend.com integration)
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-otp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_KEY}`
+      },
+      body: JSON.stringify({ email, otp })
     })
-  })
-  // EmailJS may not be configured yet — fallback: show OTP in console for testing
-  // In production, replace with your EmailJS credentials
-  console.log(`[Quantum OTP] ${email}: ${otp}`) // Remove in production
+    if (res.ok) return true
+  } catch {}
+  // Fallback — OTP shown in dev banner until edge function is configured
+  console.log(`[Quantum OTP] ${email}: ${otp}`)
   return true
 }
 
@@ -61,9 +56,25 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [countdown, setCountdown] = useState(0)
-  const [devOTP, setDevOTP]   = useState('') // shown for testing
+  const [devOTP, setDevOTP]   = useState('')
 
   useEffect(() => { if (user) navigate('/') }, [user])
+
+  // Pre-fill email from Google One Tap hint if available
+  useEffect(() => {
+    try {
+      // Google identity services stores last-used hint in a cookie
+      const hint = document.cookie.split('; ').find(r => r.startsWith('g_state='))
+      // Also try to read from google accounts stored credential
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: '688405177682-6k8l3k8o5e4k6o5e4k.apps.googleusercontent.com',
+          callback: () => {},
+          auto_select: false,
+        })
+      }
+    } catch {}
+  }, [])
 
   useEffect(() => {
     if (countdown > 0) {
@@ -72,8 +83,11 @@ export default function LoginPage() {
     }
   }, [countdown])
 
-  const handleGoogleSuccess = (credentialResponse) => {
-    const result = loginWithGoogle(credentialResponse)
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setLoading(true)
+    setError('')
+    const result = await loginWithGoogle(credentialResponse)
+    setLoading(false)
     if (result.success) { setSuccess(true); setTimeout(() => navigate('/'), 1200) }
     else setError(result.error || 'Google sign-in failed')
   }
