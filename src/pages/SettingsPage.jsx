@@ -119,13 +119,15 @@ function parsePermissions(role) {
   if (role.startsWith('custom:')) return role.replace('custom:', '').split(',').filter(Boolean)
   return DASHBOARDS.map(d => d.id)
 }
-function buildRoleString(ids, isAdm) {
+function buildRoleString(ids, isAdm, isView) {
   if (isAdm) return 'admin'
+  if (isView) return 'viewer'
   if (ids.length === DASHBOARDS.length) return 'viewer'
   return 'custom:' + ids.join(',')
 }
 function getRoleDisplay(role) {
   if (role === 'admin') return { label:'Admin', color:'#D97706', bg:'#FFFBEB', border:'#FDE68A' }
+  if (role === 'viewer') return { label:'Viewer', color:'#6B7280', bg:'#F3F4F6', border:'#D1D5DB' }
   const ids = parsePermissions(role)
   if (ids.length === DASHBOARDS.length) return { label:'Full Access', color:'#059669', bg:'#ECFDF5', border:'#A7F3D0' }
   if (ids.length === 1 && ids[0] === 'roas') return { label:'ROAS Only', color:'#6366F1', bg:'#EEF2FF', border:'#C7D2FE' }
@@ -176,6 +178,7 @@ export default function SettingsPage() {
   const [editingUser, setEditingUser] = useState(null)
   const [editIds, setEditIds] = useState([])
   const [editIsAdmin, setEditIsAdmin] = useState(false)
+  const [editIsViewer, setEditIsViewer] = useState(false)
 
   const loadUsers = async () => {
     setUsersLoading(true)
@@ -205,11 +208,12 @@ export default function SettingsPage() {
   const startEdit = (u) => {
     setEditingUser(u.email)
     setEditIsAdmin(u.role === 'admin')
+    setEditIsViewer(u.role === 'viewer')
     setEditIds(parsePermissions(u.role))
   }
   const saveEdit = async (email) => {
     setUsersLoading(true)
-    const role = buildRoleString(editIds, editIsAdmin)
+    const role = buildRoleString(editIds, editIsAdmin, editIsViewer)
     if (await updateUserRole(email, role)) { setMsg('Access updated'); await loadUsers() }
     else setMsg('Failed')
     setEditingUser(null)
@@ -522,10 +526,16 @@ export default function SettingsPage() {
                           </p>
                           <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
                             <label style={{display:'flex',alignItems:'center',gap:5,padding:'6px 11px',borderRadius:8,border:'1.5px solid '+(editIsAdmin?'#D97706':'#E5E7EB'),background:editIsAdmin?'#FFFBEB':'#fff',cursor:'pointer',fontSize:12,fontWeight:editIsAdmin?600:400,transition:'all .15s'}}>
-                              <input type="checkbox" checked={editIsAdmin} onChange={e => setEditIsAdmin(e.target.checked)} style={{accentColor:'#D97706'}}/>
+                              <input type="checkbox" checked={editIsAdmin} onChange={e => { setEditIsAdmin(e.target.checked); if(e.target.checked) setEditIsViewer(false) }} style={{accentColor:'#D97706'}}/>
                               👑 Admin
                             </label>
-                            {!editIsAdmin && DASHBOARDS.map(d => {
+                            {!editIsAdmin && (
+                            <label style={{display:'flex',alignItems:'center',gap:5,padding:'6px 11px',borderRadius:8,border:'1.5px solid '+(editIsViewer?'#6B7280':'#E5E7EB'),background:editIsViewer?'#F3F4F6':'#fff',cursor:'pointer',fontSize:12,fontWeight:editIsViewer?600:400,color:editIsViewer?'#374151':'#374151',transition:'all .15s'}}>
+                              <input type="checkbox" checked={editIsViewer} onChange={e => { setEditIsViewer(e.target.checked); if(e.target.checked) setEditIsAdmin(false) }} style={{accentColor:'#6B7280'}}/>
+                              👁 Viewer
+                            </label>
+                            )}
+                            {!editIsAdmin && !editIsViewer && DASHBOARDS.map(d => {
                               const checked = editIds.includes(d.id)
                               return (
                                 <label key={d.id} style={{display:'flex',alignItems:'center',gap:5,padding:'6px 11px',borderRadius:8,border:'1.5px solid '+(checked?'#6366F1':'#E5E7EB'),background:checked?'#EEF2FF':'#fff',cursor:'pointer',fontSize:12,fontWeight:checked?600:400,color:checked?'#4F46E5':'#374151',transition:'all .15s'}}>
