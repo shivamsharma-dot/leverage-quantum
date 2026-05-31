@@ -258,17 +258,31 @@ function CampaignsTab({ data }) {
   const tierColor = { TOP:'#059669', AVERAGE:'#D97706', LOW:'#DC2626' }
   const tierBg    = { TOP:'#DCFCE7', AVERAGE:'#FEF3C7', LOW:'#FEE2E2' }
 
-  // Back to top - listen to .main scroll
+  // Back to top - find the actual scrolling container
   useEffect(() => {
-    const el = document.querySelector('.' + styles.main) || document.querySelector('[class*="main"]')
+    // The scrollable container is .main - try multiple selectors
+    const getEl = () => {
+      const candidates = [
+        document.querySelector('[class*="main_"]'),
+        document.querySelector('[class*="_main"]'),
+        ...Array.from(document.querySelectorAll('div')).filter(d => d.scrollHeight > d.clientHeight + 100 && d.clientHeight > 400)
+      ]
+      return candidates.find(Boolean)
+    }
+    const el = getEl()
     if (!el) return
-    const onScroll = () => setShowBackToTop(el.scrollTop > 400)
+    const onScroll = () => setShowBackToTop(el.scrollTop > 300)
     el.addEventListener('scroll', onScroll)
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
 
   const scrollToTop = () => {
-    const el = document.querySelector('.' + styles.main) || document.querySelector('[class*="main"]')
+    const candidates = [
+      document.querySelector('[class*="main_"]'),
+      document.querySelector('[class*="_main"]'),
+      ...Array.from(document.querySelectorAll('div')).filter(d => d.scrollHeight > d.clientHeight + 100 && d.clientHeight > 400)
+    ]
+    const el = candidates.find(Boolean)
     if (el) el.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -388,17 +402,31 @@ function CreativesTab({ data }) {
     high:     scoredAds.filter(a => a.label === 'high').length,
   }
 
-  // Back to top - listen to .main scroll
+  // Back to top - find the actual scrolling container
   useEffect(() => {
-    const el = document.querySelector('.' + styles.main) || document.querySelector('[class*="main"]')
+    // The scrollable container is .main - try multiple selectors
+    const getEl = () => {
+      const candidates = [
+        document.querySelector('[class*="main_"]'),
+        document.querySelector('[class*="_main"]'),
+        ...Array.from(document.querySelectorAll('div')).filter(d => d.scrollHeight > d.clientHeight + 100 && d.clientHeight > 400)
+      ]
+      return candidates.find(Boolean)
+    }
+    const el = getEl()
     if (!el) return
-    const onScroll = () => setShowBackToTop(el.scrollTop > 400)
+    const onScroll = () => setShowBackToTop(el.scrollTop > 300)
     el.addEventListener('scroll', onScroll)
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
 
   const scrollToTop = () => {
-    const el = document.querySelector('.' + styles.main) || document.querySelector('[class*="main"]')
+    const candidates = [
+      document.querySelector('[class*="main_"]'),
+      document.querySelector('[class*="_main"]'),
+      ...Array.from(document.querySelectorAll('div')).filter(d => d.scrollHeight > d.clientHeight + 100 && d.clientHeight > 400)
+    ]
+    const el = candidates.find(Boolean)
     if (el) el.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
