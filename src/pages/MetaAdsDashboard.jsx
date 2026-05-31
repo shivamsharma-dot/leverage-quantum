@@ -481,15 +481,17 @@ Guidelines: Be concise, lead with the number, always give a specific action. Rea
 
 // Date preset helper
 function getDateRange(preset) {
-  const e = new Date()
-  const s = new Date(e)
-  if (preset === 'yesterday') {
-    e.setDate(e.getDate() - 1); s.setDate(e.getDate())
-  } else if (preset === 'last_7d')  { s.setDate(s.getDate() - 7) }
-  else if (preset === 'last_14d') { s.setDate(s.getDate() - 14) }
-  else if (preset === 'last_30d') { s.setDate(s.getDate() - 30) }
   const f = d => d.toISOString().slice(0, 10)
-  return { since: f(s), until: f(e) }
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
+  const s = new Date(yesterday)
+
+  if (preset === 'yesterday') {
+    return { since: f(yesterday), until: f(yesterday) }
+  } else if (preset === 'last_7d')  { s.setDate(s.getDate() - 6) }
+  else if (preset === 'last_14d') { s.setDate(s.getDate() - 13) }
+  else if (preset === 'last_30d') { s.setDate(s.getDate() - 29) }
+
+  return { since: f(s), until: f(yesterday) }
 }
 
 // ─── MAIN ─────────────────────────────────────────────────
@@ -541,24 +543,30 @@ export default function MetaAdsDashboard() {
   const loadAllData = async (t, preset = datePreset) => {
     setLoading(true); setError('')
     try {
-      const range = getDateRange(preset)
+      const range     = getDateRange(preset)
       const timeRange = JSON.stringify(range)
 
+      // Map preset to Meta's date_preset for nested insights (more reliable)
+      const metaPreset = preset === 'yesterday' ? 'yesterday'
+                       : preset === 'last_14d'  ? 'last_14d'
+                       : preset === 'last_30d'  ? 'last_30d'
+                       : 'last_7d'
+
       const [accIns, campaigns, adsRaw, pixels] = await Promise.all([
+        // Account-level insights — use time_range for custom date support
         graphGet(`${AD_ACCOUNT}/insights`, t, {
           fields: 'spend,impressions,clicks,ctr,cpm,reach,frequency,actions',
           time_range: timeRange, level: 'account'
         }),
+        // Campaigns — use date_preset for nested insights (avoids 400)
         graphGet(`${AD_ACCOUNT}/campaigns`, t, {
-          fields: 'name,status,objective,created_time,insights{spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}',
-          limit: 50,
-          time_range: timeRange
+          fields: `name,status,objective,created_time,insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}`,
+          limit: 50
         }),
-        // Fetch ads with BOTH image_url and thumbnail_url for best quality
+        // Ads + creatives — date_preset for insights, no date filter for creative fields
         graphGet(`${AD_ACCOUNT}/ads`, t, {
-          fields: 'name,status,creative{id,name,image_url,thumbnail_url,picture,video_id,object_story_spec,asset_feed_spec},insights{spend,impressions,clicks,ctr,reach,frequency,actions}',
-          limit: 100,
-          time_range: timeRange
+          fields: `name,status,creative{id,name,image_url,thumbnail_url,picture,video_id,object_story_spec},insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions}`,
+          limit: 100
         }),
         graphGet(`${AD_ACCOUNT}/adspixels`, t, { fields: 'id,name,last_fired_time' })
       ])
