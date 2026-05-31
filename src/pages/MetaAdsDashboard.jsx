@@ -258,33 +258,14 @@ function CampaignsTab({ data }) {
   const tierColor = { TOP:'#059669', AVERAGE:'#D97706', LOW:'#DC2626' }
   const tierBg    = { TOP:'#DCFCE7', AVERAGE:'#FEF3C7', LOW:'#FEE2E2' }
 
-  // Back to top - find the actual scrolling container
+  // Back to top - uses window scroll
   useEffect(() => {
-    // The scrollable container is .main - try multiple selectors
-    const getEl = () => {
-      const candidates = [
-        document.querySelector('[class*="main_"]'),
-        document.querySelector('[class*="_main"]'),
-        ...Array.from(document.querySelectorAll('div')).filter(d => d.scrollHeight > d.clientHeight + 100 && d.clientHeight > 400)
-      ]
-      return candidates.find(Boolean)
-    }
-    const el = getEl()
-    if (!el) return
-    const onScroll = () => setShowBackToTop(el.scrollTop > 300)
-    el.addEventListener('scroll', onScroll)
-    return () => el.removeEventListener('scroll', onScroll)
+    const onScroll = () => setShowBackToTop(window.scrollY > 400)
+    window.addEventListener('scroll', onScroll)
+    return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  const scrollToTop = () => {
-    const candidates = [
-      document.querySelector('[class*="main_"]'),
-      document.querySelector('[class*="_main"]'),
-      ...Array.from(document.querySelectorAll('div')).filter(d => d.scrollHeight > d.clientHeight + 100 && d.clientHeight > 400)
-    ]
-    const el = candidates.find(Boolean)
-    if (el) el.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
 
   return (
     <div className={styles.tabContent}>
@@ -402,33 +383,14 @@ function CreativesTab({ data }) {
     high:     scoredAds.filter(a => a.label === 'high').length,
   }
 
-  // Back to top - find the actual scrolling container
+  // Back to top - uses window scroll
   useEffect(() => {
-    // The scrollable container is .main - try multiple selectors
-    const getEl = () => {
-      const candidates = [
-        document.querySelector('[class*="main_"]'),
-        document.querySelector('[class*="_main"]'),
-        ...Array.from(document.querySelectorAll('div')).filter(d => d.scrollHeight > d.clientHeight + 100 && d.clientHeight > 400)
-      ]
-      return candidates.find(Boolean)
-    }
-    const el = getEl()
-    if (!el) return
-    const onScroll = () => setShowBackToTop(el.scrollTop > 300)
-    el.addEventListener('scroll', onScroll)
-    return () => el.removeEventListener('scroll', onScroll)
+    const onScroll = () => setShowBackToTop(window.scrollY > 400)
+    window.addEventListener('scroll', onScroll)
+    return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  const scrollToTop = () => {
-    const candidates = [
-      document.querySelector('[class*="main_"]'),
-      document.querySelector('[class*="_main"]'),
-      ...Array.from(document.querySelectorAll('div')).filter(d => d.scrollHeight > d.clientHeight + 100 && d.clientHeight > 400)
-    ]
-    const el = candidates.find(Boolean)
-    if (el) el.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
 
   return (
     <div className={styles.tabContent}>
