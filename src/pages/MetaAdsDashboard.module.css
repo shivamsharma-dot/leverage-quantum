@@ -36,17 +36,20 @@
   background:#fff;
   border:1px solid #ECEEF2;
   border-radius:10px;
-  padding:14px 16px;
+  padding:12px 14px;
   display:flex;
-  flex-direction:column;
+  flex-direction:row;
+  align-items:center;
+  gap:12px;
   transition:box-shadow .15s;
 }
 .kpiTile:hover { box-shadow:0 2px 12px rgba(0,0,0,0.06); }
-.kpiTileIcon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-bottom:10px; }
-.kpiTileLabel { font-size:10px; color:#9CA3AF; font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.kpiTileVal   { font-size:18px; font-weight:700; color:#0F172A; letter-spacing:-.03em; line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.kpiTileSub   { font-size:10px; color:#6B7280; margin-top:5px; }
-.kpiTileTop   { display:none; } /* legacy - not used */
+.kpiTileIcon { width:36px; height:36px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.kpiTileBody { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+.kpiTileLabel { font-size:10px; color:#9CA3AF; font-weight:600; text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpiTileVal   { font-size:16px; font-weight:700; color:#0F172A; letter-spacing:-.02em; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpiTileSub   { font-size:10px; color:#6B7280; white-space:nowrap; }
+.kpiTileTop   { display:none; }
 .kpiTileValLifetime { color:#0F172A; }
 
 /* Bar (legacy) */
