@@ -40,15 +40,20 @@ async function graphGet(path, token, params = {}) {
 
 // ─── Fatigue score (reverse-engineered from NeoLook pattern) ─
 function computeFatigue(impressions, clicks, ctr, frequency, accountAvgCTR) {
-  if (impressions < 50) return { score: 40, label: 'moderate' }
-  let score = 25
-  if (ctr === 0)                         score += 30
-  else if (ctr < accountAvgCTR * 0.5)   score += 20
-  else if (ctr < accountAvgCTR)          score += 10
-  else                                   score -= 10
-  if (frequency > 3) score += Math.round((frequency - 3) * 5)
-  score = Math.max(5, Math.min(85, score))
-  const label = score < 30 ? 'healthy' : score < 52 ? 'moderate' : 'high'
+  // Low impression ads = no strong signal yet, score conservatively
+  if (impressions < 50) return { score: 15, label: 'healthy' }
+  let score = 15
+  // CTR signal (main driver)
+  if (ctr === 0)                         score += 35  // no engagement at scale
+  else if (ctr < accountAvgCTR * 0.5)   score += 20  // well below average
+  else if (ctr < accountAvgCTR)          score += 10  // below average
+  else if (ctr >= accountAvgCTR * 1.2)   score -= 10  // above average (healthy)
+  else                                   score += 0   // near average
+  // Frequency penalty (audience fatigue)
+  if (frequency > 4) score += Math.round((frequency - 4) * 4)
+  score = Math.max(5, Math.min(90, score))
+  // Aligned with Neolook: 0-30 healthy, 31-50 moderate, 51+ high
+  const label = score <= 30 ? 'healthy' : score <= 50 ? 'moderate' : 'high'
   return { score: Math.round(score), label }
 }
 
@@ -190,7 +195,6 @@ function CampaignsTab({ data }) {
     { label:'Total Impressions',  value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
     { label:'Total Clicks',       value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
     { label:'Total Reach',        value: parseInt(lifetimeAccount.reach||0).toLocaleString(), color:'#10B981', iconBg:'#D1FAE5', icon:<Globe size={15} color='#10B981'/> },
-    { label:'Total Leads',        value: leads.toLocaleString(), color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
   ]
 
   const periodKpis = [
@@ -279,7 +283,6 @@ function CreativesTab({ data }) {
     { label:'Total Impressions',  value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
     { label:'Total Clicks',       value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
     { label:'Total Reach',        value: parseInt(lifetimeAccount.reach||0).toLocaleString(), color:'#10B981', iconBg:'#D1FAE5', icon:<Globe size={15} color='#10B981'/> },
-    { label:'Total Leads',        value: leads.toLocaleString(), color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
   ]
 
   const periodKpis = [
@@ -325,17 +328,20 @@ function CreativesTab({ data }) {
       {/* Health summary bar */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
         <div style={{display:'flex',gap:8}}>
-          <div style={{display:'flex',alignItems:'center',gap:6,background:'#DCFCE7',borderRadius:20,padding:'5px 12px'}}>
-            <div style={{width:7,height:7,borderRadius:'50%',background:'#16A34A'}}/>
-            <span style={{fontSize:12,fontWeight:600,color:'#15803D'}}>{healthCount.healthy} Healthy</span>
+          <div style={{display:'flex',alignItems:'center',gap:5,background:'#DCFCE7',border:'1px solid #BBF7D0',borderRadius:20,padding:'5px 12px'}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <span style={{fontSize:12,fontWeight:700,color:'#15803D'}}>{healthCount.healthy}</span>
+            <span style={{fontSize:11,fontWeight:500,color:'#16A34A'}}>Healthy</span>
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:6,background:'#FEF3C7',borderRadius:20,padding:'5px 12px'}}>
-            <div style={{width:7,height:7,borderRadius:'50%',background:'#D97706'}}/>
-            <span style={{fontSize:12,fontWeight:600,color:'#B45309'}}>{healthCount.moderate} Moderate</span>
+          <div style={{display:'flex',alignItems:'center',gap:5,background:'#FEF3C7',border:'1px solid #FDE68A',borderRadius:20,padding:'5px 12px'}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style={{fontSize:12,fontWeight:700,color:'#B45309'}}>{healthCount.moderate}</span>
+            <span style={{fontSize:11,fontWeight:500,color:'#D97706'}}>Moderate</span>
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:6,background:'#FEE2E2',borderRadius:20,padding:'5px 12px'}}>
-            <div style={{width:7,height:7,borderRadius:'50%',background:'#DC2626'}}/>
-            <span style={{fontSize:12,fontWeight:600,color:'#B91C1C'}}>{healthCount.high} High Fatigue</span>
+          <div style={{display:'flex',alignItems:'center',gap:5,background:'#FEE2E2',border:'1px solid #FECACA',borderRadius:20,padding:'5px 12px'}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style={{fontSize:12,fontWeight:700,color:'#B91C1C'}}>{healthCount.high}</span>
+            <span style={{fontSize:11,fontWeight:500,color:'#DC2626'}}>High Fatigue</span>
           </div>
         </div>
         <div style={{display:'flex',border:'1px solid #E5E7EB',borderRadius:8,overflow:'hidden'}}>
