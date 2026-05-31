@@ -592,7 +592,11 @@ export default function MetaAdsDashboard() {
             const d = await res.json()
             if (d.error) { console.error('Thumb batch error:', d.error.message); return }
             Object.entries(d).forEach(([id, c]) => {
-              creativeThumbs[id] = c.image_url || c.thumbnail_url || c.picture || null
+              // image_url = full res; thumbnail_url default is tiny 64px — upgrade to 480px
+              const thumb = c.thumbnail_url
+                ? c.thumbnail_url.replace(/p64x64/, 'p480x480').replace(/s64x64/, 's480x480')
+                : null
+              creativeThumbs[id] = c.image_url || thumb || null
             })
           }))
         } catch(e) { console.error('Thumb fetch failed:', e.message) }
