@@ -41,7 +41,7 @@ async function graphGet(path, token, params = {}) {
 // ─── Fatigue score (reverse-engineered from NeoLook pattern) ─
 function computeFatigue(impressions, clicks, ctr, frequency, accountAvgCTR, prev) {
   // Not enough data yet
-  if (impressions < 50) return { score: 10, label: 'healthy' }
+  if (impressions < 50) return { score: 20, label: impressions < 10 ? 'healthy' : 'moderate' }  // new/low-volume ads - monitor
 
   let score = 0
 
@@ -158,20 +158,18 @@ function ConnectScreen({ onConnect, onPaste, error, loading }) {
 function NeolookKPIs({ lifetime, period, periodLabel }) {
   return (
     <div className={styles.kpiSection}>
-      {/* Row 1 - Lifetime */}
+      {/* Row 1 - All Time */}
       <div>
         <p className={styles.kpiRowLabel}>All Time</p>
-        <div className={`${styles.kpiRow} ${styles.kpiRowLifetime}`}>
+        <div className={`${styles.kpiSectionRow} ${styles.kpiRowLifetime}`}>
           {lifetime.map(k => (
-            <div key={k.label} className={styles.kpiTile} style={{borderLeft:`3px solid ${k.color||'#E5E7EB'}`}}>
-              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <p className={`${styles.kpiTileVal} ${styles.kpiTileValLifetime}`} style={{color:k.color||'#0F172A'}}>{k.value}</p>
-                  <p className={styles.kpiTileLabel}>{k.label}</p>
-                  {k.sub && <p className={styles.kpiTileSub}>{k.sub}</p>}
-                </div>
-                {k.icon && <div style={{width:32,height:32,borderRadius:8,background:k.iconBg||'#F3F4F6',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{k.icon}</div>}
+            <div key={k.label} className={styles.kpiTile}>
+              <div className={styles.kpiTileTop}>
+                <p className={`${styles.kpiTileVal} ${styles.kpiTileValLifetime}`}>{k.value}</p>
+                {k.icon && <div className={styles.kpiTileIcon} style={{background:k.iconBg||'#F3F4F6'}}>{k.icon}</div>}
               </div>
+              <p className={styles.kpiTileLabel}>{k.label}</p>
+              {k.sub && <p className={styles.kpiTileSub}>{k.sub}</p>}
             </div>
           ))}
         </div>
@@ -179,16 +177,14 @@ function NeolookKPIs({ lifetime, period, periodLabel }) {
       {/* Row 2 - Selected period */}
       <div>
         <p className={styles.kpiRowLabel}>{periodLabel || 'This Period'}</p>
-        <div className={`${styles.kpiRow} ${styles.kpiRowPeriod}`}>
+        <div className={`${styles.kpiSectionRow} ${styles.kpiRowPeriod}`}>
           {period.map(k => (
-            <div key={k.label} className={styles.kpiTile} style={{borderLeft:`3px solid ${k.color||'#E5E7EB'}`}}>
-              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
-                <div style={{flex:1,minWidth:0}}>
-                  <p className={styles.kpiTileVal} style={{color:k.color||'#0F172A'}}>{k.value || '-'}</p>
-                  <p className={styles.kpiTileLabel}>{k.label}</p>
-                </div>
-                {k.icon && <div style={{width:32,height:32,borderRadius:8,background:k.iconBg||'#F3F4F6',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{k.icon}</div>}
+            <div key={k.label} className={styles.kpiTile}>
+              <div className={styles.kpiTileTop}>
+                <p className={styles.kpiTileVal}>{k.value || '-'}</p>
+                {k.icon && <div className={styles.kpiTileIcon} style={{background:k.iconBg||'#F3F4F6'}}>{k.icon}</div>}
               </div>
+              <p className={styles.kpiTileLabel}>{k.label}</p>
             </div>
           ))}
         </div>
@@ -262,6 +258,20 @@ function CampaignsTab({ data }) {
   const tierColor = { TOP:'#059669', AVERAGE:'#D97706', LOW:'#DC2626' }
   const tierBg    = { TOP:'#DCFCE7', AVERAGE:'#FEF3C7', LOW:'#FEE2E2' }
 
+  // Back to top - listen to .main scroll
+  useEffect(() => {
+    const el = document.querySelector('.' + styles.main) || document.querySelector('[class*="main"]')
+    if (!el) return
+    const onScroll = () => setShowBackToTop(el.scrollTop > 400)
+    el.addEventListener('scroll', onScroll)
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+
+  const scrollToTop = () => {
+    const el = document.querySelector('.' + styles.main) || document.querySelector('[class*="main"]')
+    if (el) el.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   return (
     <div className={styles.tabContent}>
       <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'this_month' ? 'This Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
@@ -313,6 +323,9 @@ function CreativesTab({ data }) {
   const { account, lifetimeAccount = {}, activeCampaignCount = 0, pausedCampaignCount = 0, ads, accountAvgCTR, insightsMap = {}, prevInsightsMap = {} } = data
   const [expanded, setExpanded] = useState(null)
   const [viewMode, setViewMode] = useState('grid')
+  const [adTypeFilter, setAdTypeFilter] = useState('all')
+  const [healthFilter, setHealthFilter] = useState('all')
+  const [showBackToTop, setShowBackToTop] = useState(false)
   const leads = getAction(account.actions, 'lead')
 
   const cpl = leads > 0 ? Math.round(parseFloat(account.spend||0) / leads) : 0
@@ -362,10 +375,31 @@ function CreativesTab({ data }) {
     return parseFloat(b.ins.spend||0) - parseFloat(a.ins.spend||0)
   })
 
+  const filteredAds = scoredAds.filter(ad => {
+    if (healthFilter !== 'all' && ad.label !== healthFilter) return false
+    if (adTypeFilter === 'video' && !ad.creative?.video_id) return false
+    if (adTypeFilter === 'image' && !!ad.creative?.video_id) return false
+    return true
+  })
+
   const healthCount = {
     healthy:  scoredAds.filter(a => a.label === 'healthy').length,
     moderate: scoredAds.filter(a => a.label === 'moderate').length,
     high:     scoredAds.filter(a => a.label === 'high').length,
+  }
+
+  // Back to top - listen to .main scroll
+  useEffect(() => {
+    const el = document.querySelector('.' + styles.main) || document.querySelector('[class*="main"]')
+    if (!el) return
+    const onScroll = () => setShowBackToTop(el.scrollTop > 400)
+    el.addEventListener('scroll', onScroll)
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+
+  const scrollToTop = () => {
+    const el = document.querySelector('.' + styles.main) || document.querySelector('[class*="main"]')
+    if (el) el.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
@@ -402,7 +436,7 @@ function CreativesTab({ data }) {
       </div>
 
       {viewMode === 'grid' && <div className={styles.creativeGrid}>
-        {scoredAds.map(ad => {
+        {filteredAds.map(ad => {
           const isOpen = expanded === ad.id
           const rec = ad.label==='high' ? 'Refresh Creative' : ad.label==='moderate' ? 'Monitor' : 'Keep Running'
           const signal = ad.impr===0 ? 'No impressions in period' : ad.label==='high' ? 'High Creative Fatigue - refresh needed' : ad.ctr < accountAvgCTR ? `Moderate fatigue (score ${ad.score}) - CTR below avg` : `Healthy - CTR above account average`
