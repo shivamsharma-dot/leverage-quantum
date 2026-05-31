@@ -527,12 +527,12 @@ export default function SettingsPage() {
                           <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
                             <label style={{display:'flex',alignItems:'center',gap:5,padding:'6px 11px',borderRadius:8,border:'1.5px solid '+(editIsAdmin?'#D97706':'#E5E7EB'),background:editIsAdmin?'#FFFBEB':'#fff',cursor:'pointer',fontSize:12,fontWeight:editIsAdmin?600:400,transition:'all .15s'}}>
                               <input type="checkbox" checked={editIsAdmin} onChange={e => { setEditIsAdmin(e.target.checked); if(e.target.checked) setEditIsViewer(false) }} style={{accentColor:'#D97706'}}/>
-                              👑 Admin
+                              Admin
                             </label>
                             {!editIsAdmin && (
                             <label style={{display:'flex',alignItems:'center',gap:5,padding:'6px 11px',borderRadius:8,border:'1.5px solid '+(editIsViewer?'#6B7280':'#E5E7EB'),background:editIsViewer?'#F3F4F6':'#fff',cursor:'pointer',fontSize:12,fontWeight:editIsViewer?600:400,color:editIsViewer?'#374151':'#374151',transition:'all .15s'}}>
                               <input type="checkbox" checked={editIsViewer} onChange={e => { setEditIsViewer(e.target.checked); if(e.target.checked) setEditIsAdmin(false) }} style={{accentColor:'#6B7280'}}/>
-                              👁 Viewer
+                              Viewer
                             </label>
                             )}
                             {!editIsAdmin && !editIsViewer && DASHBOARDS.map(d => {
