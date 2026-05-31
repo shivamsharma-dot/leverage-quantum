@@ -228,7 +228,7 @@ function CreativesTab({ data }) {
     const ctr  = parseFloat(ins.ctr||0)
     const freq = parseFloat(ins.frequency||1)
     // picture = highest res available from Meta API for both image + video ads
-    const imgUrl = ad.creative?.picture || ad.creative?.image_url || ad.creative?.thumbnail_url || null
+    const imgUrl = ad.creative?._thumbUrl || null
     const isVideo = !!ad.creative?.video_id
     const { score, label } = computeFatigue(impr, clks, ctr, freq, accountAvgCTR)
     return { ...ad, ins, impr, clks, ctr, freq, score, label, imgUrl }
@@ -565,7 +565,7 @@ export default function MetaAdsDashboard() {
         }),
         // Ads + creatives — date_preset for insights, no date filter for creative fields
         graphGet(`${AD_ACCOUNT}/ads`, t, {
-          fields: `name,status,creative{id,name,image_url,thumbnail_url,picture,video_id,object_story_spec},insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions}`,
+          fields: `name,status,creative{id,name,video_id,object_story_spec},insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions}`,
           limit: 100
         }),
         graphGet(`${AD_ACCOUNT}/adspixels`, t, { fields: 'id,name,last_fired_time' })
@@ -574,7 +574,28 @@ export default function MetaAdsDashboard() {
       const account = accIns.data?.[0] || {}
       const accountAvgCTR = parseFloat(account.ctr || 0)
 
-      setData({ account, campaigns: campaigns.data || [], ads: adsRaw.data || [], pixels: pixels.data || [], accountAvgCTR, range, preset })
+      // Fetch thumbnail URLs for all creatives separately
+      const creativeIds = (adsRaw.data || []).map(a => a.creative?.id).filter(Boolean)
+      let creativeThumbs = {}
+      if (creativeIds.length > 0) {
+        try {
+          const thumbRes = await graphGet(``, t, {
+            ids: creativeIds.join(','),
+            fields: 'id,thumbnail_url,image_url,picture'
+          })
+          Object.entries(thumbRes).forEach(([id, c]) => {
+            creativeThumbs[id] = c.thumbnail_url || c.image_url || c.picture || null
+          })
+        } catch {}
+      }
+
+      // Merge thumbs into ads
+      const adsWithThumbs = (adsRaw.data || []).map(ad => ({
+        ...ad,
+        creative: { ...ad.creative, _thumbUrl: creativeThumbs[ad.creative?.id] || null }
+      }))
+
+      setData({ account, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, range, preset })
       setLastSync(new Date())
       setDatePreset(preset)
     } catch (e) {
