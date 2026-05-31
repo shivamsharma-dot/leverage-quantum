@@ -40,20 +40,45 @@ async function graphGet(path, token, params = {}) {
 
 // ─── Fatigue score (reverse-engineered from NeoLook pattern) ─
 function computeFatigue(impressions, clicks, ctr, frequency, accountAvgCTR) {
-  // Low impression ads = no strong signal yet, score conservatively
-  if (impressions < 50) return { score: 15, label: 'healthy' }
-  let score = 15
-  // CTR signal (main driver)
-  if (ctr === 0)                         score += 35  // no engagement at scale
-  else if (ctr < accountAvgCTR * 0.5)   score += 20  // well below average
-  else if (ctr < accountAvgCTR)          score += 10  // below average
-  else if (ctr >= accountAvgCTR * 1.2)   score -= 10  // above average (healthy)
-  else                                   score += 0   // near average
-  // Frequency penalty (audience fatigue)
-  if (frequency > 4) score += Math.round((frequency - 4) * 4)
-  score = Math.max(5, Math.min(90, score))
-  // Aligned with Neolook: 0-30 healthy, 31-50 moderate, 51+ high
-  const label = score <= 30 ? 'healthy' : score <= 50 ? 'moderate' : 'high'
+  // Not enough data yet - no strong signal
+  if (impressions < 50) return { score: 10, label: 'healthy' }
+
+  // ── Primary driver: Frequency (audience exposure) ──────────────────────
+  // Healthy: < 2.5 | Moderate: 2.5-4.5 | High: > 4.5
+  let freqScore = 0
+  if (frequency < 2.5)                         freqScore = 0    // healthy range
+  else if (frequency < 4.5)                    freqScore = 30   // moderate range
+  else                                          freqScore = 60   // high fatigue
+
+  // ── Secondary driver: CTR vs account average ────────────────────────────
+  // Used as a supporting signal to confirm or upgrade fatigue level
+  // Healthy: stable/above avg | Moderate: 10-25% drop | High: >25% drop
+  let ctrScore = 0
+  if (accountAvgCTR > 0) {
+    const ctrRatio = ctr / accountAvgCTR  // 1.0 = at average
+    if (ctrRatio >= 1.0)                   ctrScore = -5   // above avg = healthy signal
+    else if (ctrRatio >= 0.75)             ctrScore = 5    // slight drop (<25%) = minor concern
+    else if (ctrRatio >= 0.5)              ctrScore = 15   // 25-50% drop = moderate signal
+    else                                    ctrScore = 25   // >50% drop = strong fatigue signal
+  } else {
+    // No account average - use absolute CTR as fallback
+    if (ctr === 0)        ctrScore = 20
+    else if (ctr < 0.3)   ctrScore = 10
+    else                  ctrScore = 0
+  }
+
+  const score = Math.max(5, Math.min(95, freqScore + ctrScore))
+
+  // ── Classification ──────────────────────────────────────────────────────
+  // Frequency is the hard gate: if freq > 4.5 it's at minimum moderate
+  // CTR drop can push moderate -> high
+  let label
+  if (frequency < 2.5 && ctrScore <= 5)         label = 'healthy'
+  else if (frequency >= 4.5 && ctrScore >= 15)  label = 'high'
+  else if (frequency >= 4.5 || score >= 50)     label = 'high'
+  else if (frequency >= 2.5 || score >= 25)     label = 'moderate'
+  else                                           label = 'healthy'
+
   return { score: Math.round(score), label }
 }
 
