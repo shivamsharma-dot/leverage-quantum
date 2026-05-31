@@ -164,10 +164,8 @@ function NeolookKPIs({ lifetime, period, periodLabel }) {
         <div className={`${styles.kpiSectionRow} ${styles.kpiRowLifetime}`}>
           {lifetime.map(k => (
             <div key={k.label} className={styles.kpiTile}>
-              <div className={styles.kpiTileTop}>
-                {k.icon && <div className={styles.kpiTileIcon} style={{background:k.iconBg||'#F3F4F6'}}>{k.icon}</div>}
-                <p className={styles.kpiTileLabel}>{k.label}</p>
-              </div>
+              {k.icon && <div className={styles.kpiTileIcon} style={{background:k.iconBg||'#F3F4F6'}}>{k.icon}</div>}
+              <p className={styles.kpiTileLabel}>{k.label}</p>
               <p className={`${styles.kpiTileVal} ${styles.kpiTileValLifetime}`}>{k.value}</p>
               {k.sub && <p className={styles.kpiTileSub}>{k.sub}</p>}
             </div>
@@ -180,10 +178,8 @@ function NeolookKPIs({ lifetime, period, periodLabel }) {
         <div className={`${styles.kpiSectionRow} ${styles.kpiRowPeriod}`}>
           {period.map(k => (
             <div key={k.label} className={styles.kpiTile}>
-              <div className={styles.kpiTileTop}>
-                {k.icon && <div className={styles.kpiTileIcon} style={{background:k.iconBg||'#F3F4F6'}}>{k.icon}</div>}
-                <p className={styles.kpiTileLabel}>{k.label}</p>
-              </div>
+              {k.icon && <div className={styles.kpiTileIcon} style={{background:k.iconBg||'#F3F4F6'}}>{k.icon}</div>}
+              <p className={styles.kpiTileLabel}>{k.label}</p>
               <p className={styles.kpiTileVal}>{k.value || '-'}</p>
             </div>
           ))}
