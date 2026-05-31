@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { TrendingUp, Users, MousePointer, Eye, Target, DollarSign, BarChart2, Zap, Activity, Award, Globe, Layers } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
@@ -117,10 +118,15 @@ function NeolookKPIs({ lifetime, period, periodLabel }) {
         <p className={styles.kpiRowLabel}>All Time</p>
         <div className={`${styles.kpiRow} ${styles.kpiRowLifetime}`}>
           {lifetime.map(k => (
-            <div key={k.label} className={styles.kpiTile}>
-              <p className={`${styles.kpiTileVal} ${styles.kpiTileValLifetime}`}>{k.value}</p>
-              <p className={styles.kpiTileLabel}>{k.label}</p>
-              {k.sub && <p className={styles.kpiTileSub}>{k.sub}</p>}
+            <div key={k.label} className={styles.kpiTile} style={{borderLeft:`3px solid ${k.color||'#E5E7EB'}`}}>
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <p className={`${styles.kpiTileVal} ${styles.kpiTileValLifetime}`} style={{color:k.color||'#0F172A'}}>{k.value}</p>
+                  <p className={styles.kpiTileLabel}>{k.label}</p>
+                  {k.sub && <p className={styles.kpiTileSub}>{k.sub}</p>}
+                </div>
+                {k.icon && <div style={{width:32,height:32,borderRadius:8,background:k.iconBg||'#F3F4F6',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{k.icon}</div>}
+              </div>
             </div>
           ))}
         </div>
@@ -130,9 +136,14 @@ function NeolookKPIs({ lifetime, period, periodLabel }) {
         <p className={styles.kpiRowLabel}>{periodLabel || 'This Period'}</p>
         <div className={`${styles.kpiRow} ${styles.kpiRowPeriod}`}>
           {period.map(k => (
-            <div key={k.label} className={styles.kpiTile}>
-              <p className={styles.kpiTileVal}>{k.value || '-'}</p>
-              <p className={styles.kpiTileLabel}>{k.label}</p>
+            <div key={k.label} className={styles.kpiTile} style={{borderLeft:`3px solid ${k.color||'#E5E7EB'}`}}>
+              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <p className={styles.kpiTileVal} style={{color:k.color||'#0F172A'}}>{k.value || '-'}</p>
+                  <p className={styles.kpiTileLabel}>{k.label}</p>
+                </div>
+                {k.icon && <div style={{width:32,height:32,borderRadius:8,background:k.iconBg||'#F3F4F6',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{k.icon}</div>}
+              </div>
             </div>
           ))}
         </div>
@@ -171,22 +182,26 @@ function CampaignsTab({ data }) {
   const { account, lifetimeAccount = {}, activeCampaignCount = 0, pausedCampaignCount = 0, campaigns, accountAvgCTR } = data
   const leads = getAction(account.actions, 'lead')
 
+  const cpl = leads > 0 ? Math.round(parseFloat(account.spend||0) / leads) : 0
+
   const lifetimeKpis = [
-    { label:'Total Amount Spent', value: fmtINR(parseFloat(lifetimeAccount.spend||0)), color:'#7C3AED' },
-    { label:'Total Campaigns', value: (activeCampaignCount + pausedCampaignCount).toLocaleString(), sub: `${activeCampaignCount} active · ${pausedCampaignCount} paused`, color:'#DC2626' },
-    { label:'Total Impressions', value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9' },
-    { label:'Total Clicks', value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#0EA5E9' },
-    { label:'Total Reach', value: parseInt(lifetimeAccount.reach||0).toLocaleString(), color:'#0EA5E9' },
-    { label:'Total Leads', value: leads.toLocaleString(), color:'#059669' },
+    { label:'Total Amount Spent', value: fmtINR(parseFloat(lifetimeAccount.spend||0)), color:'#7C3AED', iconBg:'#F3E8FF', icon:<DollarSign size={15} color='#7C3AED'/> },
+    { label:'Total Campaigns',    value: (activeCampaignCount + pausedCampaignCount).toLocaleString(), sub: `${activeCampaignCount} active · ${pausedCampaignCount} paused`, color:'#F59E0B', iconBg:'#FEF3C7', icon:<Layers size={15} color='#F59E0B'/> },
+    { label:'Total Impressions',  value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
+    { label:'Total Clicks',       value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
+    { label:'Total Reach',        value: parseInt(lifetimeAccount.reach||0).toLocaleString(), color:'#10B981', iconBg:'#D1FAE5', icon:<Globe size={15} color='#10B981'/> },
+    { label:'Total Leads',        value: leads.toLocaleString(), color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
   ]
 
   const periodKpis = [
-    { label:'Spend', value: fmtINR(parseFloat(account.spend||0)) },
-    { label:'Impressions', value: parseInt(account.impressions||0).toLocaleString() },
-    { label:'Clicks', value: parseInt(account.clicks||0).toLocaleString() },
-    { label:'Avg CTR', value: parseFloat(account.ctr||0).toFixed(2)+'%' },
-    { label:'Avg CPC', value: '₹'+Math.round(parseFloat(account.spend||0)/Math.max(1,parseInt(account.clicks||0))).toLocaleString('en-IN') },
-    { label:'Avg CPM', value: '₹'+Math.round(parseFloat(account.cpm||0)).toLocaleString('en-IN') },
+    { label:'Spend',       value: fmtINR(parseFloat(account.spend||0)),                                              color:'#7C3AED', iconBg:'#F3E8FF', icon:<DollarSign size={15} color='#7C3AED'/> },
+    { label:'Impressions', value: parseInt(account.impressions||0).toLocaleString(),                                 color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
+    { label:'Clicks',      value: parseInt(account.clicks||0).toLocaleString(),                                      color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
+    { label:'Avg CTR',     value: parseFloat(account.ctr||0).toFixed(2)+'%',                                        color:'#F59E0B', iconBg:'#FEF3C7', icon:<TrendingUp size={15} color='#F59E0B'/> },
+    { label:'Avg CPC',     value: '₹'+Math.round(parseFloat(account.spend||0)/Math.max(1,parseInt(account.clicks||0))).toLocaleString('en-IN'), color:'#EC4899', iconBg:'#FCE7F3', icon:<Zap size={15} color='#EC4899'/> },
+    { label:'Avg CPM',     value: '₹'+Math.round(parseFloat(account.cpm||0)).toLocaleString('en-IN'),               color:'#8B5CF6', iconBg:'#EDE9FE', icon:<BarChart2 size={15} color='#8B5CF6'/> },
+    { label:'Leads',       value: leads.toLocaleString(),                                                            color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
+    { label:'CPL',         value: cpl > 0 ? '₹'+cpl.toLocaleString('en-IN') : '-',                                 color:'#DC2626', iconBg:'#FEE2E2', icon:<Target size={15} color='#DC2626'/> },
   ]
 
   const kpis = periodKpis // keep for any legacy usage
@@ -256,22 +271,26 @@ function CreativesTab({ data }) {
   const [viewMode, setViewMode] = useState('grid')
   const leads = getAction(account.actions, 'lead')
 
+  const cpl = leads > 0 ? Math.round(parseFloat(account.spend||0) / leads) : 0
+
   const lifetimeKpis = [
-    { label:'Total Amount Spent', value: fmtINR(parseFloat(lifetimeAccount.spend||0)), color:'#7C3AED' },
-    { label:'Total Campaigns', value: (activeCampaignCount + pausedCampaignCount).toLocaleString(), sub: `${activeCampaignCount} active · ${pausedCampaignCount} paused`, color:'#DC2626' },
-    { label:'Total Impressions', value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9' },
-    { label:'Total Clicks', value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#0EA5E9' },
-    { label:'Total Reach', value: parseInt(lifetimeAccount.reach||0).toLocaleString(), color:'#0EA5E9' },
-    { label:'Total Leads', value: leads.toLocaleString(), color:'#059669' },
+    { label:'Total Amount Spent', value: fmtINR(parseFloat(lifetimeAccount.spend||0)), color:'#7C3AED', iconBg:'#F3E8FF', icon:<DollarSign size={15} color='#7C3AED'/> },
+    { label:'Total Campaigns',    value: (activeCampaignCount + pausedCampaignCount).toLocaleString(), sub: `${activeCampaignCount} active · ${pausedCampaignCount} paused`, color:'#F59E0B', iconBg:'#FEF3C7', icon:<Layers size={15} color='#F59E0B'/> },
+    { label:'Total Impressions',  value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
+    { label:'Total Clicks',       value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
+    { label:'Total Reach',        value: parseInt(lifetimeAccount.reach||0).toLocaleString(), color:'#10B981', iconBg:'#D1FAE5', icon:<Globe size={15} color='#10B981'/> },
+    { label:'Total Leads',        value: leads.toLocaleString(), color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
   ]
 
   const periodKpis = [
-    { label:'Spend', value: fmtINR(parseFloat(account.spend||0)) },
-    { label:'Impressions', value: parseInt(account.impressions||0).toLocaleString() },
-    { label:'Clicks', value: parseInt(account.clicks||0).toLocaleString() },
-    { label:'Avg CTR', value: parseFloat(account.ctr||0).toFixed(2)+'%' },
-    { label:'Avg CPM', value: '₹'+Math.round(parseFloat(account.cpm||0)).toLocaleString('en-IN') },
-    { label:'Total Ads', value: ads.length },
+    { label:'Spend',        value: fmtINR(parseFloat(account.spend||0)),                                             color:'#7C3AED', iconBg:'#F3E8FF', icon:<DollarSign size={15} color='#7C3AED'/> },
+    { label:'Impressions',  value: parseInt(account.impressions||0).toLocaleString(),                                color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
+    { label:'Clicks',       value: parseInt(account.clicks||0).toLocaleString(),                                     color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
+    { label:'Avg CTR',      value: parseFloat(account.ctr||0).toFixed(2)+'%',                                       color:'#F59E0B', iconBg:'#FEF3C7', icon:<TrendingUp size={15} color='#F59E0B'/> },
+    { label:'Avg CPM',      value: '₹'+Math.round(parseFloat(account.cpm||0)).toLocaleString('en-IN'),              color:'#EC4899', iconBg:'#FCE7F3', icon:<BarChart2 size={15} color='#EC4899'/> },
+    { label:'Leads',        value: leads.toLocaleString(),                                                           color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
+    { label:'CPL',          value: cpl > 0 ? '₹'+cpl.toLocaleString('en-IN') : '-',                                color:'#DC2626', iconBg:'#FEE2E2', icon:<Target size={15} color='#DC2626'/> },
+    { label:'Total Ads',    value: ads.length,                                                                       color:'#64748B', iconBg:'#F1F5F9', icon:<Activity size={15} color='#64748B'/> },
   ]
 
   const kpis = periodKpis
@@ -304,16 +323,20 @@ function CreativesTab({ data }) {
       <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'this_month' ? 'This Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
 
       {/* Health summary bar */}
-      <div className={styles.healthBar}>
-        <div className={styles.healthBarFill} style={{flex: healthCount.healthy, background:'#4BAE8A'}}/>
-        <div className={styles.healthBarFill} style={{flex: healthCount.moderate, background:'#F59E0B'}}/>
-        <div className={styles.healthBarFill} style={{flex: healthCount.high || 0.1, background:'#EF4444'}}/>
-      </div>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:16,marginBottom:8}}>
-        <div style={{display:'flex',gap:16,fontSize:12}}>
-          <span style={{color:'#059669',fontWeight:600}}>● {healthCount.healthy} healthy</span>
-          <span style={{color:'#D97706',fontWeight:600}}>● {healthCount.moderate} moderate</span>
-          <span style={{color:'#DC2626',fontWeight:600}}>● {healthCount.high} high</span>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+        <div style={{display:'flex',gap:8}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,background:'#DCFCE7',borderRadius:20,padding:'5px 12px'}}>
+            <div style={{width:7,height:7,borderRadius:'50%',background:'#16A34A'}}/>
+            <span style={{fontSize:12,fontWeight:600,color:'#15803D'}}>{healthCount.healthy} Healthy</span>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:6,background:'#FEF3C7',borderRadius:20,padding:'5px 12px'}}>
+            <div style={{width:7,height:7,borderRadius:'50%',background:'#D97706'}}/>
+            <span style={{fontSize:12,fontWeight:600,color:'#B45309'}}>{healthCount.moderate} Moderate</span>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:6,background:'#FEE2E2',borderRadius:20,padding:'5px 12px'}}>
+            <div style={{width:7,height:7,borderRadius:'50%',background:'#DC2626'}}/>
+            <span style={{fontSize:12,fontWeight:600,color:'#B91C1C'}}>{healthCount.high} High Fatigue</span>
+          </div>
         </div>
         <div style={{display:'flex',border:'1px solid #E5E7EB',borderRadius:8,overflow:'hidden'}}>
           <button onClick={()=>setViewMode('grid')} style={{padding:'6px 10px',background:viewMode==='grid'?'#F3F4F6':'#fff',border:'none',cursor:'pointer',color:viewMode==='grid'?'#111827':'#9CA3AF'}}>
