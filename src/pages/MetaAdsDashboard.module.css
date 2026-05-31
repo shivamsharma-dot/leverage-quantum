@@ -1,6 +1,6 @@
 /* LAYOUT */
 .layout { display:flex; height:100vh; overflow:hidden; background:#F4F6F9; font-family:'Inter',sans-serif; }
-.main   { flex:1; overflow-y:auto; display:flex; flex-direction:column; scroll-behavior:smooth; }
+.main   { flex:1; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; scroll-behavior:smooth; }
 
 /* HEADER */
 .header { position:sticky; top:0; z-index:50; background:#fff; border-bottom:1px solid #E9EBF0; padding:0 32px; display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:64px; flex-shrink:0; }
@@ -22,13 +22,13 @@
 .tabActive { color:#1C9FD4 !important; border-bottom-color:#1C9FD4 !important; font-weight:600; }
 
 /* TAB CONTENT */
-.tabContent { padding:20px 32px 40px; display:flex; flex-direction:column; gap:16px; }
+.tabContent { padding:20px 32px 80px; display:flex; flex-direction:column; gap:16px; }
 
 /* KPI SECTION */
 .kpiSection { display:flex; flex-direction:column; gap:12px; margin-bottom:16px; }
 .kpiSectionRow { display:grid; gap:10px; }
-.kpiRowLifetime { grid-template-columns:repeat(5,1fr); }
-.kpiRowPeriod   { grid-template-columns:repeat(8,1fr); }
+.kpiRowLifetime { grid-template-columns:repeat(7,1fr); }
+.kpiRowPeriod   { grid-template-columns:repeat(4,1fr); }
 .kpiRowLabel { font-size:10px; font-weight:700; color:#9CA3AF; text-transform:uppercase; letter-spacing:.08em; margin-bottom:2px; }
 
 /* Tile — clean card style */
@@ -39,12 +39,12 @@
   padding:12px 14px;
   display:flex;
   flex-direction:column;
-  gap:6px;
+  gap:4px;
   transition:box-shadow .15s;
 }
 .kpiTile:hover { box-shadow:0 2px 12px rgba(0,0,0,0.06); }
-.kpiTileTop { display:flex; align-items:center; justify-content:space-between; gap:6px; }
-.kpiTileIcon { width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.kpiTileTop { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.kpiTileIcon { width:28px; height:28px; border-radius:7px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .kpiTileVal   { font-size:17px; font-weight:700; color:#0F172A; letter-spacing:-.02em; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .kpiTileLabel { font-size:10px; color:#9CA3AF; font-weight:500; text-transform:uppercase; letter-spacing:.04em; }
 .kpiTileSub   { font-size:10px; color:#6B7280; margin-top:1px; }
