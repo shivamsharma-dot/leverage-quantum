@@ -224,7 +224,7 @@ function CreativesTab({ data }) {
   ]
 
   const scoredAds = ads.map(ad => {
-    const ins = ad.insights?.data?.[0] || {}
+    const ins = insightsMap[ad.id] || {}
     const impr = parseInt(ins.impressions||0)
     const clks = parseInt(ins.clicks||0)
     const ctr  = parseFloat(ins.ctr||0)
@@ -565,10 +565,11 @@ export default function MetaAdsDashboard() {
           fields: `name,status,objective,created_time,insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}`,
           limit: 50
         }),
-        // Ads + creatives — date_preset for insights, no date filter for creative fields
+        // Ads + creatives — fetch ALL active ads without insights (so no date filter excludes them)
         graphGet(`${AD_ACCOUNT}/ads`, t, {
-          fields: `name,status,creative{id,name,video_id,object_story_spec},insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions}`,
-          limit: 100
+          fields: `name,status,effective_status,creative{id,name,video_id,object_story_spec}`,
+          filtering: JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE','PAUSED']}]),
+          limit: 200
         }),
         graphGet(`${AD_ACCOUNT}/adspixels`, t, { fields: 'id,name,last_fired_time' })
       ])
@@ -576,8 +577,26 @@ export default function MetaAdsDashboard() {
       const account = accIns.data?.[0] || {}
       const accountAvgCTR = parseFloat(account.ctr || 0)
 
-      // Fetch thumbnail URLs — chunked batch (max 50 IDs per request)
+      // Fetch insights separately for all ad IDs (chunked, 50 at a time)
       const adsRawData = adsRaw.data || []
+      let insightsMap = {}
+      if (adsRawData.length > 0) {
+        try {
+          const adIds = adsRawData.map(a => a.id)
+          const insChunks = []
+          for (let i = 0; i < adIds.length; i += 50) insChunks.push(adIds.slice(i, i + 50))
+          await Promise.all(insChunks.map(async chunk => {
+            const insRes = await graphGet(`${AD_ACCOUNT}/insights`, t, {
+              fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
+              level: 'ad',
+              date_preset: metaPreset,
+              filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
+              limit: 50
+            })
+            ;(insRes.data || []).forEach(ins => { insightsMap[ins.ad_id] = ins })
+          }))
+        } catch(e) { console.error('Insights fetch failed:', e.message) }
+      }
       const creativeIds = [...new Set(adsRawData.map(a => a.creative?.id).filter(Boolean))]
       let creativeThumbs = {}
       if (creativeIds.length > 0) {
