@@ -220,7 +220,7 @@ function ScoreBadge({ score, label }) {
 
 // ─── CAMPAIGN TAB ─────────────────────────────────────────
 function CampaignsTab({ data }) {
-  const { account, lifetimeAccount = {}, activeCampaignCount = 0, pausedCampaignCount = 0, campaigns, accountAvgCTR } = data
+  const { account, lifetimeAccount = {}, activeCampaignCount = 0, pausedCampaignCount = 0, campaigns, ads = [], accountAvgCTR } = data
   const leads = getAction(account.actions, 'lead')
 
   const cpl = leads > 0 ? Math.round(parseFloat(account.spend||0) / leads) : 0
