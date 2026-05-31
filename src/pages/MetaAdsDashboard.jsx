@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useAuth } from '../hooks/useAuth'
 import { TrendingUp, Users, MousePointer, Eye, Target, BarChart2, Zap, Activity, Award, Globe, Layers } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
@@ -30,6 +31,8 @@ async function storeTokenInSupabase(token) {
     })
   } catch {}
 }
+const TOKEN_EXPIRED_EVENT = 'lq:meta_token_expired'
+
 async function graphGet(path, token, params = {}) {
   const qs = new URLSearchParams({ access_token: token, ...params }).toString()
   const res = await fetch(`https://graph.facebook.com/v19.0/${path}?${qs}`)
