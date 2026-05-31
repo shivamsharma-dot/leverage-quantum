@@ -166,7 +166,7 @@ export default function ROASDashboard(){
           })}
         </div>
 
-        {/* MAIN CHARTS — 2 column */}
+        {/* MAIN CHARTS - 2 column */}
         <div className={styles.chartGrid2}>
 
           {/* Spend Area Chart */}
