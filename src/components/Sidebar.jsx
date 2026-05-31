@@ -75,7 +75,10 @@ export default function Sidebar() {
   const handleLogout = () => { logout(); navigate('/login') }
 
   const userRole = user?.role || 'viewer'
+  const isViewerRole = userRole === 'viewer'
   function canSee(id) {
+    // Viewers cannot access Settings or VASU AI
+    if (isViewerRole && (id === 'settings' || id === 'vasu')) return false
     if (!userRole || userRole === 'admin' || userRole === 'viewer') return true
     if (userRole === 'roas_only') return id === 'roas'
     if (userRole?.startsWith('custom:')) return userRole.replace('custom:','').split(',').includes(id)
@@ -192,7 +195,15 @@ export default function Sidebar() {
           {user?.picture ? <img src={user.picture} alt={user.name}/> : initials}
         </div>
         <div className={styles.userInfo}>
-          <p className={styles.userName}>{user?.name?.split(' ')[0] || 'User'}</p>
+          <div style={{display:'flex',alignItems:'center',gap:5}}>
+            <p className={styles.userName}>{user?.name?.split(' ')[0] || 'User'}</p>
+            <span style={{fontSize:9,fontWeight:700,padding:'1px 6px',borderRadius:10,
+              background: userRole==='admin' ? 'rgba(28,159,212,0.2)' : 'rgba(255,255,255,0.1)',
+              color: userRole==='admin' ? '#1C9FD4' : 'rgba(255,255,255,0.5)',
+              textTransform:'uppercase',letterSpacing:.04}}>
+              {userRole==='admin' ? 'Admin' : 'Viewer'}
+            </span>
+          </div>
           <p className={styles.userEmail}>{user?.email}</p>
         </div>
         <button onClick={handleLogout} className={styles.logoutBtn} title="Sign out">
