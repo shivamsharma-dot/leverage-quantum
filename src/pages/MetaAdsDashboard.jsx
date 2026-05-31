@@ -906,6 +906,21 @@ export default function MetaAdsDashboard() {
           <div className={styles.headerLeft}><p className={styles.breadcrumb}>Dashboards / Meta Ads</p><h1 className={styles.pageTitle}>Meta Ads</h1></div>
         </div>
         <ConnectScreen onConnect={handleConnect} onPaste={handlePaste} error={error} loading={loading}/>
+        {tokenExpired && token && (
+          <div style={{margin:'0 32px 12px',background:'#FEF3C7',border:'1px solid #FDE68A',borderRadius:8,padding:'10px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span style={{fontSize:13,fontWeight:600,color:'#92400E'}}>Your Meta session has expired.</span>
+              <span style={{fontSize:12,color:'#B45309'}}>Please reconnect to view live data.</span>
+            </div>
+            {!isViewerRole && (
+              <button onClick={() => { disconnect(); setTokenExpired(false) }}
+                style={{background:'#D97706',color:'#fff',border:'none',borderRadius:6,padding:'5px 12px',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
+                Reconnect
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
