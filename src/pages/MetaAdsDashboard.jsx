@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { TrendingUp, Users, MousePointer, Eye, Target, DollarSign, BarChart2, Zap, Activity, Award, Globe, Layers } from 'lucide-react'
+import { TrendingUp, Users, MousePointer, Eye, Target, BarChart2, Zap, Activity, Award, Globe, Layers } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
@@ -215,7 +215,7 @@ function CampaignsTab({ data }) {
   const cpl = leads > 0 ? Math.round(parseFloat(account.spend||0) / leads) : 0
 
   const lifetimeKpis = [
-    { label:'Total Amount Spent', value: fmtINR(parseFloat(lifetimeAccount.spend||0)), color:'#7C3AED', iconBg:'#F3E8FF', icon:<DollarSign size={15} color='#7C3AED'/> },
+    { label:'Total Amount Spent', value: fmtINR(parseFloat(lifetimeAccount.spend||0)), color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
     { label:'Total Campaigns',    value: (activeCampaignCount + pausedCampaignCount).toLocaleString(), sub: `${activeCampaignCount} active · ${pausedCampaignCount} paused`, color:'#F59E0B', iconBg:'#FEF3C7', icon:<Layers size={15} color='#F59E0B'/> },
     { label:'Total Impressions',  value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
     { label:'Total Clicks',       value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
@@ -223,7 +223,7 @@ function CampaignsTab({ data }) {
   ]
 
   const periodKpis = [
-    { label:'Spend',       value: fmtINR(parseFloat(account.spend||0)),                                              color:'#7C3AED', iconBg:'#F3E8FF', icon:<DollarSign size={15} color='#7C3AED'/> },
+    { label:'Spend',       value: fmtINR(parseFloat(account.spend||0)),                                              color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
     { label:'Impressions', value: parseInt(account.impressions||0).toLocaleString(),                                 color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
     { label:'Clicks',      value: parseInt(account.clicks||0).toLocaleString(),                                      color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
     { label:'Avg CTR',     value: parseFloat(account.ctr||0).toFixed(2)+'%',                                        color:'#F59E0B', iconBg:'#FEF3C7', icon:<TrendingUp size={15} color='#F59E0B'/> },
@@ -303,7 +303,7 @@ function CreativesTab({ data }) {
   const cpl = leads > 0 ? Math.round(parseFloat(account.spend||0) / leads) : 0
 
   const lifetimeKpis = [
-    { label:'Total Amount Spent', value: fmtINR(parseFloat(lifetimeAccount.spend||0)), color:'#7C3AED', iconBg:'#F3E8FF', icon:<DollarSign size={15} color='#7C3AED'/> },
+    { label:'Total Amount Spent', value: fmtINR(parseFloat(lifetimeAccount.spend||0)), color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
     { label:'Total Campaigns',    value: (activeCampaignCount + pausedCampaignCount).toLocaleString(), sub: `${activeCampaignCount} active · ${pausedCampaignCount} paused`, color:'#F59E0B', iconBg:'#FEF3C7', icon:<Layers size={15} color='#F59E0B'/> },
     { label:'Total Impressions',  value: parseInt(lifetimeAccount.impressions||0).toLocaleString(), color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
     { label:'Total Clicks',       value: parseInt(lifetimeAccount.clicks||0).toLocaleString(), color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
@@ -311,7 +311,7 @@ function CreativesTab({ data }) {
   ]
 
   const periodKpis = [
-    { label:'Spend',        value: fmtINR(parseFloat(account.spend||0)),                                             color:'#7C3AED', iconBg:'#F3E8FF', icon:<DollarSign size={15} color='#7C3AED'/> },
+    { label:'Spend',        value: fmtINR(parseFloat(account.spend||0)),                                             color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
     { label:'Impressions',  value: parseInt(account.impressions||0).toLocaleString(),                                color:'#0EA5E9', iconBg:'#E0F2FE', icon:<Eye size={15} color='#0EA5E9'/> },
     { label:'Clicks',       value: parseInt(account.clicks||0).toLocaleString(),                                     color:'#6366F1', iconBg:'#EEF2FF', icon:<MousePointer size={15} color='#6366F1'/> },
     { label:'Avg CTR',      value: parseFloat(account.ctr||0).toFixed(2)+'%',                                       color:'#F59E0B', iconBg:'#FEF3C7', icon:<TrendingUp size={15} color='#F59E0B'/> },
