@@ -574,26 +574,42 @@ export default function MetaAdsDashboard() {
       const account = accIns.data?.[0] || {}
       const accountAvgCTR = parseFloat(account.ctr || 0)
 
-      // Fetch thumbnail URLs for all creatives separately
-      const creativeIds = (adsRaw.data || []).map(a => a.creative?.id).filter(Boolean)
+      // Fetch thumbnail URLs — batch via Meta root endpoint
+      const adsRawData = adsRaw.data || []
+      const creativeIds = adsRawData.map(a => a.creative?.id).filter(Boolean)
       let creativeThumbs = {}
       if (creativeIds.length > 0) {
         try {
-          const thumbRes = await graphGet(`/`, t, {
+          // Meta batch lookup: GET /v19.0?ids=id1,id2&fields=...
+          const qs = new URLSearchParams({
+            access_token: t,
             ids: creativeIds.join(','),
             fields: 'id,thumbnail_url,image_url,picture'
-          })
-          Object.entries(thumbRes).forEach(([id, c]) => {
-            creativeThumbs[id] = c.thumbnail_url || c.image_url || c.picture || null
-          })
+          }).toString()
+          const thumbRes = await fetch(`https://graph.facebook.com/v19.0?${qs}`)
+          const thumbData = await thumbRes.json()
+          if (thumbData.error) {
+            console.error('Thumb batch error:', thumbData.error.message)
+          } else {
+            Object.entries(thumbData).forEach(([id, c]) => {
+              creativeThumbs[id] = c.image_url || c.thumbnail_url || c.picture || null
+            })
+          }
         } catch(e) { console.error('Thumb fetch failed:', e.message) }
       }
 
-      // Merge thumbs into ads
-      const adsWithThumbs = (adsRaw.data || []).map(ad => ({
-        ...ad,
-        creative: { ...ad.creative, _thumbUrl: creativeThumbs[ad.creative?.id] || null }
-      }))
+      // Merge thumbs + object_story_spec fallback into ads
+      const adsWithThumbs = adsRawData.map(ad => {
+        const specImg =
+          ad.creative?.object_story_spec?.link_data?.image_url ||
+          ad.creative?.object_story_spec?.link_data?.picture ||
+          ad.creative?.object_story_spec?.video_data?.image_url ||
+          null
+        return {
+          ...ad,
+          creative: { ...ad.creative, _thumbUrl: creativeThumbs[ad.creative?.id] || specImg || null }
+        }
+      })
 
       setData({ account, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, range, preset })
       setLastSync(new Date())
