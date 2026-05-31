@@ -39,46 +39,61 @@ async function graphGet(path, token, params = {}) {
 }
 
 // ─── Fatigue score (reverse-engineered from NeoLook pattern) ─
-function computeFatigue(impressions, clicks, ctr, frequency, accountAvgCTR) {
-  // Not enough data yet - no strong signal
+function computeFatigue(impressions, clicks, ctr, frequency, accountAvgCTR, prev) {
+  // Not enough data yet
   if (impressions < 50) return { score: 10, label: 'healthy' }
 
-  // ── Primary driver: Frequency (audience exposure) ──────────────────────
-  // Healthy: < 2.5 | Moderate: 2.5-4.5 | High: > 4.5
-  let freqScore = 0
-  if (frequency < 2.5)                         freqScore = 0    // healthy range
-  else if (frequency < 4.5)                    freqScore = 30   // moderate range
-  else                                          freqScore = 60   // high fatigue
+  let score = 0
 
-  // ── Secondary driver: CTR vs account average ────────────────────────────
-  // Used as a supporting signal to confirm or upgrade fatigue level
-  // Healthy: stable/above avg | Moderate: 10-25% drop | High: >25% drop
-  let ctrScore = 0
-  if (accountAvgCTR > 0) {
-    const ctrRatio = ctr / accountAvgCTR  // 1.0 = at average
-    if (ctrRatio >= 1.0)                   ctrScore = -5   // above avg = healthy signal
-    else if (ctrRatio >= 0.75)             ctrScore = 5    // slight drop (<25%) = minor concern
-    else if (ctrRatio >= 0.5)              ctrScore = 15   // 25-50% drop = moderate signal
-    else                                    ctrScore = 25   // >50% drop = strong fatigue signal
+  // ── 1. Frequency (audience exposure) ─────────────────────────────────
+  // Healthy: <2.5 | Moderate: 2.5-4.5 | High: >4.5
+  if (frequency >= 4.5)      score += 40
+  else if (frequency >= 2.5) score += 20
+  else                       score += 0
+
+  // ── 2. CTR trend vs previous period (week-over-week) ─────────────────
+  // This is the key signal Neolook uses — absolute CTR means nothing,
+  // but a CTR DECLINING from previous period signals fatigue
+  if (prev && prev.impressions >= 50 && prev.ctr > 0) {
+    const ctrDrop = (prev.ctr - ctr) / prev.ctr  // positive = CTR dropped
+    if (ctrDrop > 0.30)       score += 35   // >30% CTR drop = strong fatigue
+    else if (ctrDrop > 0.15)  score += 20   // 15-30% drop = moderate signal
+    else if (ctrDrop > 0.05)  score += 10   // 5-15% drop = mild signal
+    else if (ctrDrop < -0.10) score -= 5    // CTR improving = healthy signal
+    // CPM trend: spend rising for same reach = audience getting expensive
+    if (prev.spend > 0 && prev.impressions > 0) {
+      const prevCPM = (prev.spend / prev.impressions) * 1000
+      const currCPM = (parseFloat(ctr > 0 ? 1 : 1)) // placeholder, need spend
+      // CPM check handled below if spend passed
+    }
   } else {
-    // No account average - use absolute CTR as fallback
-    if (ctr === 0)        ctrScore = 20
-    else if (ctr < 0.3)   ctrScore = 10
-    else                  ctrScore = 0
+    // No previous data - use CTR vs account average as fallback
+    if (accountAvgCTR > 0) {
+      const ctrRatio = ctr / accountAvgCTR
+      if (ctrRatio >= 1.0)        score += 0    // at or above average = no penalty
+      else if (ctrRatio >= 0.75)  score += 10   // slightly below
+      else if (ctrRatio >= 0.50)  score += 20   // well below
+      else                        score += 30   // very low CTR
+    }
   }
 
-  const score = Math.max(5, Math.min(95, freqScore + ctrScore))
+  // ── 3. CPM trend (spend efficiency declining) ─────────────────────────
+  if (prev && prev.impressions >= 50 && prev.spend > 0) {
+    const currSpendPerImpr = (ctr / 100)  // proxy — we pass actual below
+    // Real CPM comparison if prev spend available
+    const prevCPM = (prev.spend / prev.impressions) * 1000
+    const currCPM = prev._currCPM || prevCPM  // injected below
+    if (currCPM > 0 && prevCPM > 0) {
+      const cpmRise = (currCPM - prevCPM) / prevCPM
+      if (cpmRise > 0.30)       score += 20   // CPM up >30%
+      else if (cpmRise > 0.10)  score += 10   // CPM up 10-30%
+    }
+  }
 
-  // ── Classification ──────────────────────────────────────────────────────
-  // Frequency is the hard gate: if freq > 4.5 it's at minimum moderate
-  // CTR drop can push moderate -> high
-  let label
-  if (frequency < 2.5 && ctrScore <= 5)         label = 'healthy'
-  else if (frequency >= 4.5 && ctrScore >= 15)  label = 'high'
-  else if (frequency >= 4.5 || score >= 50)     label = 'high'
-  else if (frequency >= 2.5 || score >= 25)     label = 'moderate'
-  else                                           label = 'healthy'
+  score = Math.max(5, Math.min(95, score))
 
+  // Classification
+  const label = score <= 20 ? 'healthy' : score <= 45 ? 'moderate' : 'high'
   return { score: Math.round(score), label }
 }
 
@@ -295,7 +310,7 @@ function CampaignsTab({ data }) {
 
 // ─── CREATIVES TAB ────────────────────────────────────────
 function CreativesTab({ data }) {
-  const { account, lifetimeAccount = {}, activeCampaignCount = 0, pausedCampaignCount = 0, ads, accountAvgCTR, insightsMap = {} } = data
+  const { account, lifetimeAccount = {}, activeCampaignCount = 0, pausedCampaignCount = 0, ads, accountAvgCTR, insightsMap = {}, prevInsightsMap = {} } = data
   const [expanded, setExpanded] = useState(null)
   const [viewMode, setViewMode] = useState('grid')
   const leads = getAction(account.actions, 'lead')
@@ -332,7 +347,14 @@ function CreativesTab({ data }) {
     // picture = highest res available from Meta API for both image + video ads
     const imgUrl = proxyImg(ad.creative?._thumbUrl) || null
     const isVideo = !!ad.creative?.video_id
-    const { score, label } = computeFatigue(impr, clks, ctr, freq, accountAvgCTR)
+    const prevIns = prevInsightsMap[ad.id] || null
+    const prev = prevIns ? {
+      impressions: parseInt(prevIns.impressions||0),
+      ctr: parseFloat(prevIns.ctr||0),
+      spend: parseFloat(prevIns.spend||0),
+      _currCPM: impr > 0 ? (parseFloat(ins.spend||0) / impr) * 1000 : 0
+    } : null
+    const { score, label } = computeFatigue(impr, clks, ctr, freq, accountAvgCTR, prev)
     return { ...ad, ins, impr, clks, ctr, freq, score, label, imgUrl }
   }).sort((a, b) => {
     const order = { healthy: 0, moderate: 1, high: 2 }
@@ -704,23 +726,44 @@ export default function MetaAdsDashboard() {
       const activeCampaignCount = allCampaigns.filter(c => c.status === 'ACTIVE').length
       const pausedCampaignCount = allCampaigns.filter(c => c.status === 'PAUSED').length
 
-      // Fetch insights separately for all ad IDs (chunked, 50 at a time)
+      // Fetch insights for current AND previous period (for WoW comparison)
       const adsRawData = adsRaw.data || []
       let insightsMap = {}
+      let prevInsightsMap = {}
+
+      // Build previous period time_range (same duration, shifted back)
+      const rangeDays = Math.round((new Date(range.until) - new Date(range.since)) / 86400000) + 1
+      const prevUntil = new Date(range.since); prevUntil.setDate(prevUntil.getDate() - 1)
+      const prevSince = new Date(prevUntil); prevSince.setDate(prevSince.getDate() - (rangeDays - 1))
+      const fmt = d => d.toISOString().slice(0,10)
+      const prevTimeRange = JSON.stringify({ since: fmt(prevSince), until: fmt(prevUntil) })
+
       if (adsRawData.length > 0) {
         try {
           const adIds = adsRawData.map(a => a.id)
           const insChunks = []
           for (let i = 0; i < adIds.length; i += 50) insChunks.push(adIds.slice(i, i + 50))
+
+          // Fetch current + previous period in parallel
           await Promise.all(insChunks.map(async chunk => {
-            const insRes = await graphGet(`${AD_ACCOUNT}/insights`, t, {
-              fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
-              level: 'ad',
-              ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }),
-              filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
-              limit: 50
-            })
-            ;(insRes.data || []).forEach(ins => { insightsMap[ins.ad_id] = ins })
+            const [currRes, prevRes] = await Promise.all([
+              graphGet(`${AD_ACCOUNT}/insights`, t, {
+                fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
+                level: 'ad',
+                ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }),
+                filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
+                limit: 50
+              }),
+              graphGet(`${AD_ACCOUNT}/insights`, t, {
+                fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency',
+                level: 'ad',
+                time_range: prevTimeRange,
+                filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
+                limit: 50
+              })
+            ])
+            ;(currRes.data || []).forEach(ins => { insightsMap[ins.ad_id] = ins })
+            ;(prevRes.data || []).forEach(ins => { prevInsightsMap[ins.ad_id] = ins })
           }))
         } catch(e) { console.error('Insights fetch failed:', e.message) }
       }
@@ -760,7 +803,7 @@ export default function MetaAdsDashboard() {
         }
       })
 
-      setData({ account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, range, preset })
+      setData({ account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, prevInsightsMap, range, preset })
       setLastSync(new Date())
       setDatePreset(preset)
     } catch (e) {
