@@ -702,7 +702,8 @@ export default function MetaAdsDashboard() {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / Meta Ads</p>
-            <h1 className={styles.pageTitle}>Meta Ads - {activeTab === 'campaigns' ? 'Campaigns' : activeTab === 'creatives' ? 'Creatives' : 'Campaigns'}</h1>
+            <h1 className={styles.pageTitle}>{activeTab === 'creatives' ? 'Meta Creatives Dashboard' : 'Meta Campaigns Dashboard'}</h1>
+            <p className={styles.pageSubtitle}>{activeTab === 'creatives' ? 'Monitor, analyze and optimize all your Meta ad creatives in one place' : 'Monitor, analyze and optimize all your Meta ad campaigns in one place'}</p>
           </div>
           <div className={styles.headerRight}>
             {/* Date filter */}
