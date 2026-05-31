@@ -3,7 +3,7 @@
 .main   { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
 
 /* HEADER */
-.header { position:sticky; top:0; z-index:50; background:#fff; border-bottom:1px solid #E9EBF0; padding:0 32px; display:flex; align-items:center; justify-content:space-between; gap:16px; height:56px; flex-shrink:0; }
+.header { position:sticky; top:0; z-index:50; background:#fff; border-bottom:1px solid #E9EBF0; padding:0 32px; display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:64px; flex-shrink:0; }
 .headerLeft  { display:flex; flex-direction:column; justify-content:center; }
 .headerRight { display:flex; align-items:center; gap:8px; }
 .breadcrumb  { font-size:10px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#C0C6D2; margin-bottom:1px; }
