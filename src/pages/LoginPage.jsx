@@ -16,21 +16,20 @@ function generateOTP() {
 }
 
 async function sendOTPEmail(email, otp) {
-  // Send OTP via Supabase Edge Function (resend.com integration)
+  // Send OTP via Vercel serverless function (uses Resend)
   try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-otp`, {
+    const res = await fetch('/api/send-otp', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_KEY}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, otp })
     })
-    if (res.ok) return true
-  } catch {}
-  // Fallback — OTP shown in dev banner until edge function is configured
-  console.log(`[Quantum OTP] ${email}: ${otp}`)
-  return true
+    const d = await res.json()
+    if (d.dev) console.log(`[Quantum OTP dev] ${email}: ${otp}`)
+    return true
+  } catch {
+    console.log(`[Quantum OTP fallback] ${email}: ${otp}`)
+    return true
+  }
 }
 
 function QuantumIcon() {
