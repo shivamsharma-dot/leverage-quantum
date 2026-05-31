@@ -108,32 +108,39 @@ function ConnectScreen({ onConnect, onPaste, error, loading }) {
   )
 }
 
-// ─── NEOLOOK-STYLE KPI SECTION (lifetime row + period row) ───────────────
-function NeolookKPIs({ lifetime, period }) {
+// ─── KPI SECTION (lifetime row + period row) ──────────────────────────────
+function NeolookKPIs({ lifetime, period, periodLabel }) {
   return (
-    <div style={{marginBottom:16}}>
-      <div className={styles.kpiBar} style={{marginBottom:8}}>
-        {lifetime.map(k => (
-          <div key={k.label} className={styles.kpiTile} style={{borderColor: k.color||'#E5E7EB'}}>
-            <p className={styles.kpiTileVal} style={{color: k.color||'inherit'}}>{k.value}</p>
-            <p className={styles.kpiTileLabel}>{k.label}</p>
-            {k.sub && <p style={{fontSize:10,color:'#9CA3AF',marginTop:1}}>{k.sub}</p>}
-          </div>
-        ))}
+    <div className={styles.kpiSection}>
+      {/* Row 1 - Lifetime */}
+      <div>
+        <p className={styles.kpiRowLabel}>All Time</p>
+        <div className={`${styles.kpiRow} ${styles.kpiRowLifetime}`}>
+          {lifetime.map(k => (
+            <div key={k.label} className={styles.kpiTile}>
+              <p className={`${styles.kpiTileVal} ${styles.kpiTileValLifetime}`}>{k.value}</p>
+              <p className={styles.kpiTileLabel}>{k.label}</p>
+              {k.sub && <p className={styles.kpiTileSub}>{k.sub}</p>}
+            </div>
+          ))}
+        </div>
       </div>
-      <div className={styles.kpiBar}>
-        {period.map(k => (
-          <div key={k.label} className={styles.kpiTile} style={{borderColor: k.color||'#E5E7EB'}}>
-            <p className={styles.kpiTileVal} style={{color: k.color||'inherit'}}>{k.value}</p>
-            <p className={styles.kpiTileLabel}>{k.label}</p>
-          </div>
-        ))}
+      {/* Row 2 - Selected period */}
+      <div>
+        <p className={styles.kpiRowLabel}>{periodLabel || 'This Period'}</p>
+        <div className={`${styles.kpiRow} ${styles.kpiRowPeriod}`}>
+          {period.map(k => (
+            <div key={k.label} className={styles.kpiTile}>
+              <p className={styles.kpiTileVal}>{k.value || '-'}</p>
+              <p className={styles.kpiTileLabel}>{k.label}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
 }
 
-// keep old KPIBar for backward compat
 function KPIBar({ kpis }) {
   return (
     <div className={styles.kpiBar}>
@@ -198,7 +205,7 @@ function CampaignsTab({ data }) {
 
   return (
     <div className={styles.tabContent}>
-      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis}/>
+      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'this_month' ? 'This Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
       <p style={{fontSize:12,color:'#9CA3AF',marginBottom:4}}>{campaigns.length} campaigns · sorted by spend</p>
       <div className={styles.campaignGrid}>
         {sorted.map(c => {
@@ -294,7 +301,7 @@ function CreativesTab({ data }) {
 
   return (
     <div className={styles.tabContent}>
-      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis}/>
+      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'this_month' ? 'This Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
 
       {/* Health summary bar */}
       <div className={styles.healthBar}>
@@ -762,7 +769,6 @@ export default function MetaAdsDashboard() {
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / Meta Ads</p>
             <h1 className={styles.pageTitle}>{activeTab === 'creatives' ? 'Meta Creatives Dashboard' : 'Meta Campaigns Dashboard'}</h1>
-            <p className={styles.pageSubtitle}>{activeTab === 'creatives' ? 'Monitor, analyze and optimize all your Meta ad creatives in one place' : 'Monitor, analyze and optimize all your Meta ad campaigns in one place'}</p>
           </div>
           <div className={styles.headerRight}>
             {/* Date filter */}
