@@ -189,14 +189,14 @@ function CampaignsTab({ data }) {
                 <div className={styles.metricPair}><span>Clicks</span><strong>{parseInt(ins.clicks||0).toLocaleString()}</strong></div>
                 <div className={styles.metricPair}><span>Spend</span><strong>{fmtINR(spend)}</strong></div>
                 <div className={styles.metricPair}><span>CTR</span><strong>{parseFloat(ins.ctr||0).toFixed(2)}%</strong></div>
-                <div className={styles.metricPair}><span>CPC</span><strong>{spend>0&&parseInt(ins.clicks||0)>0?'₹'+Math.round(spend/parseInt(ins.clicks||1)).toLocaleString('en-IN'):'—'}</strong></div>
+                <div className={styles.metricPair}><span>CPC</span><strong>{spend>0&&parseInt(ins.clicks||0)>0?'₹'+Math.round(spend/parseInt(ins.clicks||1)).toLocaleString('en-IN'):'-'}</strong></div>
                 <div className={styles.metricPair}><span>Leads</span><strong>{cLeads.toLocaleString()}</strong></div>
               </div>
               {ins.ctr > 0 && (
                 <div className={styles.campaignInsight}>
                   {parseFloat(ins.ctr) >= accountAvgCTR
-                    ? <><span className={styles.insightGreen}>↗</span> CTR above account average — ready to scale</>
-                    : <><span className={styles.insightYellow}>⚠</span> CTR below account average — review targeting</>
+                    ? <><span className={styles.insightGreen}>↗</span> CTR above account average - ready to scale</>
+                    : <><span className={styles.insightYellow}>⚠</span> CTR below account average - review targeting</>
                   }
                 </div>
               )}
@@ -276,7 +276,7 @@ function CreativesTab({ data }) {
         {scoredAds.map(ad => {
           const isOpen = expanded === ad.id
           const rec = ad.label==='high' ? 'Refresh Creative' : ad.label==='moderate' ? 'Monitor' : 'Keep Running'
-          const signal = ad.impr===0 ? 'No impressions in period' : ad.label==='high' ? 'High Creative Fatigue — refresh needed' : ad.ctr < accountAvgCTR ? `Moderate fatigue (score ${ad.score}) — CTR below avg` : `Healthy — CTR above account average`
+          const signal = ad.impr===0 ? 'No impressions in period' : ad.label==='high' ? 'High Creative Fatigue - refresh needed' : ad.ctr < accountAvgCTR ? `Moderate fatigue (score ${ad.score}) - CTR below avg` : `Healthy - CTR above account average`
           const sigColor = ad.label==='high'?'#DC2626':ad.label==='moderate'?'#D97706':'#059669'
           return (
             <div key={ad.id} className={`${styles.creativeCard} ${styles['creative_'+ad.label]}`}>
@@ -363,7 +363,7 @@ function CreativesTab({ data }) {
                   <td>{ad.clks.toLocaleString()}</td>
                   <td style={{fontWeight:500}}>{fmtINR(parseFloat(ad.ins.spend||0))}</td>
                   <td>{ad.ctr.toFixed(2)}%</td>
-                  <td style={{fontSize:11,color:ad.label==='high'?'#DC2626':ad.label==='moderate'?'#D97706':'#059669',maxWidth:180}}>{ad.label==='high'?'High Fatigue — Refresh':ad.label==='moderate'?'Monitor':'Healthy'}</td>
+                  <td style={{fontSize:11,color:ad.label==='high'?'#DC2626':ad.label==='moderate'?'#D97706':'#059669',maxWidth:180}}>{ad.label==='high'?'High Fatigue - Refresh':ad.label==='moderate'?'Monitor':'Healthy'}</td>
                 </tr>
               ))}
             </tbody>
@@ -396,11 +396,11 @@ function VasuAITab({ data }) {
 
     setMessages([{
       role: 'assistant',
-      content: `Hi! I'm **VASU AI** — connected to your Meta Ads ✅\n\n**Last 7 days snapshot:**\n- Spend: ${fmtINR(parseFloat(account.spend||0))} | Impressions: ${parseInt(account.impressions||0).toLocaleString()}\n- Clicks: ${parseInt(account.clicks||0).toLocaleString()} | CTR: ${parseFloat(account.ctr||0).toFixed(2)}%\n- Total Leads: ${leads.toLocaleString()} | ${campaigns.length} campaigns · ${ads.length} ads loaded\n\n**Top 5 campaigns by spend:**\n${topCampaigns}\n\nAsk me anything about your campaigns, creatives, or what actions to take this week.`
+      content: `Hi! I'm **VASU AI** - connected to your Meta Ads ✅\n\n**Last 7 days snapshot:**\n- Spend: ${fmtINR(parseFloat(account.spend||0))} | Impressions: ${parseInt(account.impressions||0).toLocaleString()}\n- Clicks: ${parseInt(account.clicks||0).toLocaleString()} | CTR: ${parseFloat(account.ctr||0).toFixed(2)}%\n- Total Leads: ${leads.toLocaleString()} | ${campaigns.length} campaigns · ${ads.length} ads loaded\n\n**Top 5 campaigns by spend:**\n${topCampaigns}\n\nAsk me anything about your campaigns, creatives, or what actions to take this week.`
     }])
   }, [])
 
-  const buildPrompt = () => `You are VASU AI — the Meta Ads intelligence layer inside Leverage Quantum (Leverage Edu's internal marketing dashboard).
+  const buildPrompt = () => `You are VASU AI - the Meta Ads intelligence layer inside Leverage Quantum (Leverage Edu's internal marketing dashboard).
 
 You have access to live Meta Ads data for account act_641914389215638 (last 7 days):
 - Spend: ${fmtINR(parseFloat(data.account.spend||0))}
@@ -415,7 +415,7 @@ ${data.campaigns.slice(0,10).map(c=>{const i=c.insights?.data?.[0]||{};return `-
 HIGH FATIGUE ADS (score 50+):
 ${data.ads.slice(0,5).map(ad=>{const i=ad.insights?.data?.[0]||{};const f=computeFatigue(parseInt(i.impressions||0),parseInt(i.clicks||0),parseFloat(i.ctr||0),parseFloat(i.frequency||1),data.accountAvgCTR);return f.label==='high'?`- ${ad.name} | Score:${f.score} | Spend:${fmtINR(parseFloat(i.spend||0))} | CTR:${parseFloat(i.ctr||0).toFixed(2)}%`:null}).filter(Boolean).join('\n')||'None detected'}
 
-Guidelines: Be concise, lead with the number, always give a specific action. Read-only analyst — never claim to modify campaigns.`
+Guidelines: Be concise, lead with the number, always give a specific action. Read-only analyst - never claim to modify campaigns.`
 
   const send = async (text) => {
     const q = (text||input).trim()
@@ -555,17 +555,17 @@ export default function MetaAdsDashboard() {
                        : 'last_7d'
 
       const [accIns, campaigns, adsRaw, pixels] = await Promise.all([
-        // Account-level insights — use time_range for custom date support
+        // Account-level insights - use time_range for custom date support
         graphGet(`${AD_ACCOUNT}/insights`, t, {
           fields: 'spend,impressions,clicks,ctr,cpm,reach,frequency,actions',
           time_range: timeRange, level: 'account'
         }),
-        // Campaigns — use date_preset for nested insights (avoids 400)
+        // Campaigns - use date_preset for nested insights (avoids 400)
         graphGet(`${AD_ACCOUNT}/campaigns`, t, {
           fields: `name,status,objective,created_time,insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}`,
           limit: 50
         }),
-        // Ads + creatives — fetch ALL active ads without insights (so no date filter excludes them)
+        // Ads + creatives - fetch ALL active ads without insights (so no date filter excludes them)
         graphGet(`${AD_ACCOUNT}/ads`, t, {
           fields: `name,status,effective_status,creative{id,name,video_id,object_story_spec}`,
           filtering: JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE','PAUSED']}]),
@@ -620,7 +620,7 @@ export default function MetaAdsDashboard() {
         } catch(e) { console.error('Thumb fetch failed:', e.message) }
       }
 
-      // Merge thumbs — video ads use video_data.image_url, static use batch image_url
+      // Merge thumbs - video ads use video_data.image_url, static use batch image_url
       const adsWithThumbs = adsRawData.map(ad => {
         const isVideo = !!ad.creative?.video_id
         const videoImg =
@@ -694,7 +694,7 @@ export default function MetaAdsDashboard() {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / Meta Ads</p>
-            <h1 className={styles.pageTitle}>Meta Ads — {activeTab === 'campaigns' ? 'Campaigns' : activeTab === 'creatives' ? 'Creatives' : 'Campaigns'}</h1>
+            <h1 className={styles.pageTitle}>Meta Ads - {activeTab === 'campaigns' ? 'Campaigns' : activeTab === 'creatives' ? 'Creatives' : 'Campaigns'}</h1>
           </div>
           <div className={styles.headerRight}>
             {/* Date filter */}
