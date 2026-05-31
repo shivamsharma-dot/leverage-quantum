@@ -567,7 +567,7 @@ export default function MetaAdsDashboard() {
         }),
         // Ads + creatives — date_preset for insights, no date filter for creative fields
         graphGet(`${AD_ACCOUNT}/ads`, t, {
-          fields: `name,status,creative{id,name,video_id,object_story_spec{page_id,video_data{image_url},link_data{image_url}}},insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions}`,
+          fields: `name,status,creative{id,name,video_id,object_story_spec},insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions}`,
           limit: 100
         }),
         graphGet(`${AD_ACCOUNT}/adspixels`, t, { fields: 'id,name,last_fired_time' })
