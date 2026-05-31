@@ -684,16 +684,27 @@ export default function MetaAdsDashboard() {
   const navigate  = useNavigate()
   const activeTab = new URLSearchParams(location.search).get('tab') || 'campaigns'
 
-  const [token, setToken]       = useState(() => localStorage.getItem(TOKEN_KEY) || '')
-  const [loading, setLoading]   = useState(false)
-  const [pageLoad, setPageLoad] = useState(true)
-  const [error, setError]       = useState('')
-  const [data, setData]         = useState(null)
+  const { user } = useAuth()
+  const isViewerRole = user?.role === 'viewer'
+
+  const [token, setToken]           = useState(() => localStorage.getItem(TOKEN_KEY) || '')
+  const [loading, setLoading]       = useState(false)
+  const [pageLoad, setPageLoad]     = useState(true)
+  const [error, setError]           = useState('')
+  const [data, setData]             = useState(null)
+  const [tokenExpired, setTokenExpired] = useState(false)
   const [sdkReady, setSdkReady] = useState(false)
   const [lastSync, setLastSync] = useState(null)
   const [datePreset, setDatePreset] = useState('last_7d')
 
   useEffect(() => { setTimeout(() => setPageLoad(false), 600) }, [])
+
+  // Listen for Meta token expiry (OAuthException code 190)
+  useEffect(() => {
+    const onExpired = () => setTokenExpired(true)
+    window.addEventListener(TOKEN_EXPIRED_EVENT, onExpired)
+    return () => window.removeEventListener(TOKEN_EXPIRED_EVENT, onExpired)
+  }, [])
 
   useEffect(() => {
     window.fbAsyncInit = () => { window.FB.init({ appId: APP_ID, version: 'v19.0', xfbml: false, cookie: true }); setSdkReady(true) }
@@ -930,7 +941,7 @@ export default function MetaAdsDashboard() {
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
               {loading ? 'Loading…' : 'Refresh'}
             </button>
-            <button className={styles.disconnectBtn} onClick={disconnect}>Disconnect</button>
+            {!isViewerRole && <button className={styles.disconnectBtn} onClick={disconnect}>Disconnect</button>}
           </div>
         </div>
 
