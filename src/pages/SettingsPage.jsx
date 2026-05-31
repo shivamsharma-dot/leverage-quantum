@@ -561,7 +561,7 @@ export default function SettingsPage() {
                             </div>
                           )}
                           <button onClick={() => saveEdit(u.email)}
-                            style={{padding:'7px 18px',borderRadius:8,background:'#6366F1',color:'#fff',border:'none',fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
+                            style={{marginTop:14,padding:'7px 18px',borderRadius:8,background:'#6366F1',color:'#fff',border:'none',fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
                             Save changes
                           </button>
                         </div>
