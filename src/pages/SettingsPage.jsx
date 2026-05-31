@@ -522,37 +522,42 @@ export default function SettingsPage() {
 
                       {/* Edit panel */}
                       {isEditing && (
-                        <div style={{margin:'0 0 8px',padding:'14px 16px',background:'#F8FAFF',borderRadius:10,border:'1px solid #E0E7FF'}}>
-                          <p style={{fontSize:11.5,fontWeight:600,color:'#4F46E5',marginBottom:12,letterSpacing:'.02em',textTransform:'uppercase'}}>
-                            Dashboard permissions
+                        <div style={{margin:'0 0 10px',padding:'18px 20px',background:'#F9FAFB',borderRadius:10,border:'1px solid #E5E7EB'}}>
+                          <p style={{fontSize:11,fontWeight:700,color:'#6B7280',marginBottom:14,letterSpacing:'.06em',textTransform:'uppercase'}}>
+                            Edit Permissions
                           </p>
-                          {/* Role selector */}
-                          <div style={{display:'flex',gap:8,marginBottom:14}}>
-                            <label style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:8,border:'1.5px solid '+(editIsAdmin?'#D97706':'#E5E7EB'),background:editIsAdmin?'#FFFBEB':'#fff',cursor:'pointer',fontSize:12.5,fontWeight:editIsAdmin?600:400,color:editIsAdmin?'#92400E':'#374151',transition:'all .15s'}}>
-                              <input type="radio" name="role" checked={editIsAdmin} onChange={() => { setEditIsAdmin(true); setEditIsViewer(false) }} style={{accentColor:'#D97706'}}/>
+
+                          {/* Role radio buttons */}
+                          <div style={{display:'flex',gap:8,marginBottom:16}}>
+                            <label style={{flex:1,display:'flex',alignItems:'center',gap:8,padding:'10px 14px',borderRadius:8,border:'1.5px solid '+(editIsAdmin?'#D97706':'#E5E7EB'),background:editIsAdmin?'#FFFBEB':'#fff',cursor:'pointer',fontSize:13,fontWeight:editIsAdmin?600:500,color:editIsAdmin?'#92400E':'#374151',transition:'all .15s'}}>
+                              <input type="radio" name="role" checked={editIsAdmin} onChange={() => { setEditIsAdmin(true); setEditIsViewer(false) }} style={{accentColor:'#D97706',width:14,height:14}}/>
                               Admin
+                              <span style={{marginLeft:'auto',fontSize:11,color:'#B45309',fontWeight:400}}>Full access</span>
                             </label>
-                            <label style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:8,border:'1.5px solid '+(editIsViewer?'#6366F1':'#E5E7EB'),background:editIsViewer?'#EEF2FF':'#fff',cursor:'pointer',fontSize:12.5,fontWeight:editIsViewer?600:400,color:editIsViewer?'#4F46E5':'#374151',transition:'all .15s'}}>
-                              <input type="radio" name="role" checked={editIsViewer} onChange={() => { setEditIsViewer(true); setEditIsAdmin(false) }} style={{accentColor:'#6366F1'}}/>
+                            <label style={{flex:1,display:'flex',alignItems:'center',gap:8,padding:'10px 14px',borderRadius:8,border:'1.5px solid '+(editIsViewer?'#6366F1':'#E5E7EB'),background:editIsViewer?'#EEF2FF':'#fff',cursor:'pointer',fontSize:13,fontWeight:editIsViewer?600:500,color:editIsViewer?'#4F46E5':'#374151',transition:'all .15s'}}>
+                              <input type="radio" name="role" checked={editIsViewer} onChange={() => { setEditIsViewer(true); setEditIsAdmin(false) }} style={{accentColor:'#6366F1',width:14,height:14}}/>
                               Viewer
+                              <span style={{marginLeft:'auto',fontSize:11,color:'#6366F1',fontWeight:400}}>Custom access</span>
                             </label>
                           </div>
-                          {/* Admin gets full access — no checkboxes needed */}
+
+                          {/* Admin — no checkboxes */}
                           {editIsAdmin && (
-                            <p style={{fontSize:11.5,color:'#9CA3AF',marginBottom:8}}>Admin has full access to all dashboards including Settings.</p>
+                            <p style={{fontSize:12,color:'#9CA3AF',marginBottom:16}}>Admin has full access to all dashboards and settings.</p>
                           )}
-                          {/* Viewer — pick which dashboards to allow */}
+
+                          {/* Viewer — dashboard checkboxes */}
                           {editIsViewer && (
-                            <div>
-                              <p style={{fontSize:11,color:'#6B7280',marginBottom:8,fontWeight:500}}>Select dashboards this viewer can access:</p>
+                            <div style={{marginBottom:16}}>
+                              <p style={{fontSize:11.5,color:'#6B7280',marginBottom:10,fontWeight:500}}>Select which dashboards this viewer can access:</p>
                               <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                                 {DASHBOARDS.map(d => {
                                   const checked = editIds.includes(d.id)
                                   return (
-                                    <label key={d.id} style={{display:'flex',alignItems:'center',gap:5,padding:'6px 11px',borderRadius:8,border:'1.5px solid '+(checked?'#6366F1':'#E5E7EB'),background:checked?'#EEF2FF':'#fff',cursor:'pointer',fontSize:12,fontWeight:checked?600:400,color:checked?'#4F46E5':'#374151',transition:'all .15s'}}>
+                                    <label key={d.id} style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:7,border:'1.5px solid '+(checked?'#6366F1':'#E5E7EB'),background:checked?'#EEF2FF':'#fff',cursor:'pointer',fontSize:12,fontWeight:checked?600:400,color:checked?'#4F46E5':'#374151',transition:'all .15s',userSelect:'none'}}>
                                       <input type="checkbox" checked={checked}
                                         onChange={() => setEditIds(p => checked ? p.filter(x => x !== d.id) : [...p, d.id])}
-                                        style={{accentColor:'#6366F1'}}/>
+                                        style={{accentColor:'#6366F1',width:12,height:12}}/>
                                       {d.label}
                                     </label>
                                   )
@@ -560,10 +565,18 @@ export default function SettingsPage() {
                               </div>
                             </div>
                           )}
-                          <button onClick={() => saveEdit(u.email)}
-                            style={{marginTop:14,padding:'7px 18px',borderRadius:8,background:'#6366F1',color:'#fff',border:'none',fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
-                            Save changes
-                          </button>
+
+                          {/* Action buttons */}
+                          <div style={{display:'flex',gap:8,marginTop:4}}>
+                            <button onClick={() => saveEdit(u.email)} disabled={usersLoading}
+                              style={{flex:1,padding:'10px',borderRadius:8,background:'#0F172A',color:'#fff',border:'none',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif',opacity:usersLoading?.6:1,transition:'opacity .15s'}}>
+                              {usersLoading ? 'Saving…' : 'Save changes'}
+                            </button>
+                            <button onClick={() => setEditingUser(null)}
+                              style={{padding:'10px 16px',borderRadius:8,background:'#fff',color:'#6B7280',border:'1px solid #E5E7EB',fontSize:13,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
+                              Cancel
+                            </button>
+                          </div>
                         </div>
                       )}
 
