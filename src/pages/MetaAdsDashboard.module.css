@@ -33,12 +33,12 @@
 /* Row */
 .kpiRow { display:grid; gap:0; }
 .kpiRowLifetime { grid-template-columns:repeat(6,1fr); background:#FAFBFC; border-bottom:1px solid #E9EBF0; }
-.kpiRowPeriod   { grid-template-columns:repeat(6,1fr); background:#fff; }
+.kpiRowPeriod   { grid-template-columns:repeat(8,1fr); background:#fff; }
 
 /* Tile */
-.kpiTile { padding:14px 16px; position:relative; }
+.kpiTile { padding:12px 14px; position:relative; }
 .kpiTile:not(:last-child) { border-right:1px solid #E9EBF0; }
-.kpiTileVal   { font-size:16px; font-weight:700; color:#0F172A; letter-spacing:-.02em; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.kpiTileVal   { font-size:15px; font-weight:700; color:#0F172A; letter-spacing:-.02em; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .kpiTileLabel { font-size:10px; color:#9CA3AF; font-weight:500; text-transform:uppercase; letter-spacing:.04em; }
 .kpiTileSub   { font-size:10px; color:#6B7280; margin-top:2px; }
 .kpiTileValLifetime { color:#0F172A; }
@@ -132,7 +132,7 @@
 .spinner    { width:14px; height:14px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; display:inline-block; }
 .bigSpinner { width:36px; height:36px; border:3px solid #E9EBF0; border-top-color:#1C9FD4; border-radius:50%; animation:spin .8s linear infinite; margin:0 auto; }
 
-@media(max-width:1200px) { .kpiBar{grid-template-columns:repeat(3,1fr)} .kpiRowLifetime,.kpiRowPeriod{grid-template-columns:repeat(3,1fr)} .creativeGrid{grid-template-columns:repeat(3,1fr)} }
+@media(max-width:1200px) { .kpiBar{grid-template-columns:repeat(3,1fr)} .kpiRowLifetime{grid-template-columns:repeat(3,1fr)} .kpiRowPeriod{grid-template-columns:repeat(4,1fr)} .creativeGrid{grid-template-columns:repeat(3,1fr)} }
 @media(max-width:900px)  { .kpiBar{grid-template-columns:repeat(2,1fr)} .kpiRowLifetime,.kpiRowPeriod{grid-template-columns:repeat(2,1fr)} .creativeGrid{grid-template-columns:repeat(2,1fr)} }
 
 /* Date select */
