@@ -50,15 +50,15 @@
 .insightRed   { color:#DC2626; font-weight:700; }
 
 /* CREATIVE GRID */
-.creativeGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
-.creativeCard { background:#fff; border:1px solid #ECEEF2; border-radius:12px; overflow:hidden; transition:box-shadow .2s; }
-.creativeCard:hover { box-shadow:0 4px 16px rgba(0,0,0,0.07); }
+.creativeGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+.creativeCard { background:#fff; border:1px solid #E5E7EB; border-radius:14px; overflow:hidden; transition:box-shadow .2s, transform .2s; }
+.creativeCard:hover { box-shadow:0 8px 24px rgba(0,0,0,0.10); transform:translateY(-2px); }
 .creative_high     { border-color:#FECACA; }
 .creative_moderate { border-color:#FDE68A; }
 .creative_healthy  { border-color:#A7F3D0; }
 
-.creativeThumb { position:relative; aspect-ratio:4/3; background:#F3F4F6; overflow:hidden; }
-.thumbImg { width:100%; height:100%; object-fit:cover; }
+.creativeThumb { position:relative; aspect-ratio:1/1; background:#0A0A0A; overflow:hidden; border-radius:0; }
+.thumbImg { width:100%; height:100%; object-fit:contain; display:block; }
 .thumbPlaceholder { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
 .creativeBadges { position:absolute; top:8px; left:8px; right:8px; display:flex; justify-content:space-between; }
 
@@ -132,7 +132,7 @@ tbody tr:last-child { border-bottom:none; }
 td { padding:10px 14px; color:#6B7280; vertical-align:middle; white-space:nowrap; font-family:'Inter',sans-serif; }
 
 /* Crisper image rendering */
-.thumbImg { width:100%; height:100%; object-fit:cover; image-rendering:-webkit-optimize-contrast; image-rendering:crisp-edges; }
+
 
 .sendReportBtn {
   display:flex; align-items:center; gap:5px;
