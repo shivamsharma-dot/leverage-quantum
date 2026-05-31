@@ -85,9 +85,9 @@ function generateInsights(tot, bySource, topCPL, worstCPL){
   
   // Overall health
   if(tot.roas >= 1){
-    insights.push({type:'positive', icon:'↑', text:`Overall ROAS is ${tot.roas.toFixed(2)}x — revenue exceeds ad spend this month.`})
+    insights.push({type:'positive', icon:'↑', text:`Overall ROAS is ${tot.roas.toFixed(2)}x - revenue exceeds ad spend this month.`})
   } else {
-    insights.push({type:'warning', icon:'!', text:`ROAS is ${tot.roas.toFixed(2)}x — spending more than earning. Revenue pipeline needs attention.`})
+    insights.push({type:'warning', icon:'!', text:`ROAS is ${tot.roas.toFixed(2)}x - spending more than earning. Revenue pipeline needs attention.`})
   }
 
   // CPL insight
@@ -101,9 +101,9 @@ function generateInsights(tot, bySource, topCPL, worstCPL){
   // QL conversion
   const qlPct = tot.leads > 0 ? (tot.qualified/tot.leads*100) : 0
   if(qlPct >= 15){
-    insights.push({type:'positive', icon:'↑', text:`QL rate of ${qlPct.toFixed(1)}% is strong — Futwork qualification is performing well.`})
+    insights.push({type:'positive', icon:'↑', text:`QL rate of ${qlPct.toFixed(1)}% is strong - Futwork qualification is performing well.`})
   } else if(qlPct > 0 && qlPct < 10){
-    insights.push({type:'warning', icon:'↓', text:`QL rate is only ${qlPct.toFixed(1)}%. Large volume of leads not qualifying — check targeting quality.`})
+    insights.push({type:'warning', icon:'↓', text:`QL rate is only ${qlPct.toFixed(1)}%. Large volume of leads not qualifying - check targeting quality.`})
   }
 
   // Spend concentration
@@ -244,7 +244,7 @@ export default function MTDDashboard(){
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / MTD</p>
-            <h1 className={styles.pageTitle}>MTD Dashboard — May 2026</h1>
+            <h1 className={styles.pageTitle}>MTD Dashboard - May 2026</h1>
           </div>
           <div className={styles.headerRight}>
             <select className={styles.fsel} value={selSource} onChange={e=>setSelSource(e.target.value)}>
@@ -272,7 +272,7 @@ export default function MTDDashboard(){
               <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
               <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84"/>
             </svg>
-            <span>Quantum AI Insights — Auto-generated from live data</span>
+            <span>Quantum AI Insights - Auto-generated from live data</span>
           </div>
           <div className={styles.insightsList}>
             {insights.map((ins,i)=>(
@@ -284,7 +284,7 @@ export default function MTDDashboard(){
           </div>
         </div>
 
-        {/* KPI Cards — CPL focus */}
+        {/* KPI Cards - CPL focus */}
         <div className={styles.kpiGrid}>
           {[
             {l:'Total Spend',    v:fmt(tot.spend),           s:'MTD Ad Spend',        c:'#6366F1', big:true},
@@ -309,7 +309,7 @@ export default function MTDDashboard(){
           ))}
         </div>
 
-        {/* Charts Row 1 — CPL Focus */}
+        {/* Charts Row 1 - CPL Focus */}
         <div className={styles.grid2}>
           <div className={styles.card}>
             <div className={styles.cardHead}>
@@ -331,7 +331,7 @@ export default function MTDDashboard(){
 
           <div className={styles.card}>
             <div className={styles.cardHead}>
-              <span className={styles.cardTitle}>Source Performance — CPL vs QLs</span>
+              <span className={styles.cardTitle}>Source Performance - CPL vs QLs</span>
               <span className={styles.cardSub}>Bubble size = Spend</span>
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:12,paddingTop:8}}>
@@ -409,7 +409,7 @@ export default function MTDDashboard(){
         <div className={styles.tableWrap}>
           <div className={styles.tableHead}>
             <div>
-              <h3 className={styles.tableTitle}>All Campaigns — MTD</h3>
+              <h3 className={styles.tableTitle}>All Campaigns - MTD</h3>
               <p className={styles.tableSub}>{filtered.length} campaigns · Sorted by {sortBy.toUpperCase()}</p>
             </div>
             <select className={styles.fsel} value={sortBy} onChange={e=>setSortBy(e.target.value)}>
