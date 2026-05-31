@@ -227,7 +227,9 @@ function CreativesTab({ data }) {
     const clks = parseInt(ins.clicks||0)
     const ctr  = parseFloat(ins.ctr||0)
     const freq = parseFloat(ins.frequency||1)
-    const imgUrl = ad.creative?.image_url || ad.creative?.thumbnail_url || null
+    // picture = highest res available from Meta API for both image + video ads
+    const imgUrl = ad.creative?.picture || ad.creative?.image_url || ad.creative?.thumbnail_url || null
+    const isVideo = !!ad.creative?.video_id
     const { score, label } = computeFatigue(impr, clks, ctr, freq, accountAvgCTR)
     return { ...ad, ins, impr, clks, ctr, freq, score, label, imgUrl }
   }).sort((a, b) => {
@@ -554,7 +556,7 @@ export default function MetaAdsDashboard() {
         }),
         // Fetch ads with BOTH image_url and thumbnail_url for best quality
         graphGet(`${AD_ACCOUNT}/ads`, t, {
-          fields: 'name,status,creative{id,name,image_url,thumbnail_url,body,title,object_story_spec},insights{spend,impressions,clicks,ctr,reach,frequency,actions}',
+          fields: 'name,status,creative{id,name,image_url,thumbnail_url,picture,video_id,object_story_spec,asset_feed_spec},insights{spend,impressions,clicks,ctr,reach,frequency,actions}',
           limit: 100,
           time_range: timeRange
         }),
