@@ -567,7 +567,7 @@ export default function MetaAdsDashboard() {
         }),
         // Ads + creatives — date_preset for insights, no date filter for creative fields
         graphGet(`${AD_ACCOUNT}/ads`, t, {
-          fields: `name,status,creative{id,name,video_id,object_story_spec},insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions}`,
+          fields: `name,status,creative{id,name,video_id,thumbnail_url,object_story_spec{page_id,video_data{image_url},link_data{image_url,picture}}},insights.date_preset(${metaPreset}){spend,impressions,clicks,ctr,reach,frequency,actions}`,
           limit: 100
         }),
         graphGet(`${AD_ACCOUNT}/adspixels`, t, { fields: 'id,name,last_fired_time' })
@@ -604,16 +604,16 @@ export default function MetaAdsDashboard() {
         } catch(e) { console.error('Thumb fetch failed:', e.message) }
       }
 
-      // Merge thumbs + object_story_spec fallback into ads
+      // Merge thumbs — video ads use video_data.image_url, static use batch image_url
       const adsWithThumbs = adsRawData.map(ad => {
-        const specImg =
-          ad.creative?.object_story_spec?.link_data?.image_url ||
-          ad.creative?.object_story_spec?.link_data?.picture ||
-          ad.creative?.object_story_spec?.video_data?.image_url ||
-          null
+        const isVideo = !!ad.creative?.video_id
+        const videoImg =
+          ad.creative?.object_story_spec?.video_data?.image_url || null
+        const staticImg = creativeThumbs[ad.creative?.id] || null
+        const thumbUrl = isVideo ? (videoImg || staticImg) : (staticImg || videoImg)
         return {
           ...ad,
-          creative: { ...ad.creative, _thumbUrl: creativeThumbs[ad.creative?.id] || specImg || null }
+          creative: { ...ad.creative, _thumbUrl: thumbUrl || null }
         }
       })
 
