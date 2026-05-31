@@ -406,32 +406,45 @@ function CreativesTab({ data }) {
     <div className={styles.tabContent}>
       <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'this_month' ? 'This Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
 
-      {/* Health summary bar */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-        <div style={{display:'flex',gap:8}}>
-          <div style={{display:'flex',alignItems:'center',gap:5,background:'#DCFCE7',border:'1px solid #BBF7D0',borderRadius:20,padding:'5px 12px'}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <span style={{fontSize:12,fontWeight:700,color:'#15803D'}}>{healthCount.healthy}</span>
-            <span style={{fontSize:11,fontWeight:500,color:'#16A34A'}}>Healthy</span>
-          </div>
-          <div style={{display:'flex',alignItems:'center',gap:5,background:'#FEF3C7',border:'1px solid #FDE68A',borderRadius:20,padding:'5px 12px'}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span style={{fontSize:12,fontWeight:700,color:'#B45309'}}>{healthCount.moderate}</span>
-            <span style={{fontSize:11,fontWeight:500,color:'#D97706'}}>Moderate</span>
-          </div>
-          <div style={{display:'flex',alignItems:'center',gap:5,background:'#FEE2E2',border:'1px solid #FECACA',borderRadius:20,padding:'5px 12px'}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span style={{fontSize:12,fontWeight:700,color:'#B91C1C'}}>{healthCount.high}</span>
-            <span style={{fontSize:11,fontWeight:500,color:'#DC2626'}}>High Fatigue</span>
+      {/* Creative List header with filters */}
+      <div className={styles.creativeListHeader}>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <span className={styles.creativeListTitle}>Creative List <span className={styles.creativeListCount}>({filteredAds.length}/{scoredAds.length})</span></span>
+          <div style={{display:'flex',gap:6}}>
+            <div style={{display:'flex',alignItems:'center',gap:4,background:'#DCFCE7',border:'1px solid #BBF7D0',borderRadius:20,padding:'3px 10px'}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <span style={{fontSize:11,fontWeight:700,color:'#15803D'}}>{healthCount.healthy} Healthy</span>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:4,background:'#FEF3C7',border:'1px solid #FDE68A',borderRadius:20,padding:'3px 10px'}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span style={{fontSize:11,fontWeight:700,color:'#B45309'}}>{healthCount.moderate} Moderate</span>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:4,background:'#FEE2E2',border:'1px solid #FECACA',borderRadius:20,padding:'3px 10px'}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span style={{fontSize:11,fontWeight:700,color:'#B91C1C'}}>{healthCount.high} High Fatigue</span>
+            </div>
           </div>
         </div>
-        <div style={{display:'flex',border:'1px solid #E5E7EB',borderRadius:8,overflow:'hidden'}}>
-          <button onClick={()=>setViewMode('grid')} style={{padding:'6px 10px',background:viewMode==='grid'?'#F3F4F6':'#fff',border:'none',cursor:'pointer',color:viewMode==='grid'?'#111827':'#9CA3AF'}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          </button>
-          <button onClick={()=>setViewMode('list')} style={{padding:'6px 10px',background:viewMode==='list'?'#F3F4F6':'#fff',border:'none',borderLeft:'1px solid #E5E7EB',cursor:'pointer',color:viewMode==='list'?'#111827':'#9CA3AF'}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-          </button>
+        <div className={styles.creativeControls}>
+          <select className={styles.creativeFilterSelect} value={adTypeFilter} onChange={e=>setAdTypeFilter(e.target.value)}>
+            <option value="all">All Ad Types</option>
+            <option value="video">Video</option>
+            <option value="image">Image</option>
+          </select>
+          <select className={styles.creativeFilterSelect} value={healthFilter} onChange={e=>setHealthFilter(e.target.value)}>
+            <option value="all">All Health</option>
+            <option value="healthy">Healthy</option>
+            <option value="moderate">Moderate</option>
+            <option value="high">High Fatigue</option>
+          </select>
+          <div className={styles.viewToggle}>
+            <button onClick={()=>setViewMode('grid')} className={`${styles.viewToggleBtn} ${viewMode==='grid'?styles.viewToggleActive:''}`}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </button>
+            <button onClick={()=>setViewMode('list')} className={`${styles.viewToggleBtn} ${viewMode==='list'?styles.viewToggleActive:''}`}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -640,6 +653,10 @@ Guidelines: Be concise, lead with the number, always give a specific action. Rea
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
+      {/* Back to top */}
+      <button onClick={scrollToTop} className={`${styles.backToTop} ${showBackToTop ? '' : styles.backToTopHidden}`} title="Back to top">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
     </div>
   )
 }
