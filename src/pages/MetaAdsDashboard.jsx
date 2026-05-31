@@ -579,14 +579,14 @@ export default function MetaAdsDashboard() {
       let creativeThumbs = {}
       if (creativeIds.length > 0) {
         try {
-          const thumbRes = await graphGet(``, t, {
+          const thumbRes = await graphGet(`/`, t, {
             ids: creativeIds.join(','),
             fields: 'id,thumbnail_url,image_url,picture'
           })
           Object.entries(thumbRes).forEach(([id, c]) => {
             creativeThumbs[id] = c.thumbnail_url || c.image_url || c.picture || null
           })
-        } catch {}
+        } catch(e) { console.error('Thumb fetch failed:', e.message) }
       }
 
       // Merge thumbs into ads
