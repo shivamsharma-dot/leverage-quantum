@@ -54,11 +54,20 @@ export async function removeUserAccess(email) {
   return res.ok
 }
 
+const SESSION_TTL = 8 * 60 * 60 * 1000 // 8 hours
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem('lq_user')
-      return saved ? JSON.parse(saved) : null
+      if (!saved) return null
+      const u = JSON.parse(saved)
+      // Enforce 8-hour session expiry
+      if (u.loginTime && Date.now() - u.loginTime > SESSION_TTL) {
+        localStorage.removeItem('lq_user')
+        return null
+      }
+      return u
     } catch { return null }
   })
 
@@ -156,13 +165,32 @@ export function useAuth() {
 }
 
 export function isAdmin(email) {
-  // Check role from stored user
   try {
     const saved = localStorage.getItem('lq_user')
-    if (saved) {
-      const u = JSON.parse(saved)
-      return u.role === 'admin'
-    }
+    if (saved) { const u = JSON.parse(saved); return u.role === 'admin' }
   } catch {}
   return false
+}
+
+export function isViewer() {
+  try {
+    const saved = localStorage.getItem('lq_user')
+    if (saved) { const u = JSON.parse(saved); return u.role === 'viewer' }
+  } catch {}
+  return true // default to viewer if unknown
+}
+
+export function updateUserRole(email, newRole) {
+  return fetch(
+    `${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ role: newRole })
+    }
+  ).then(r => r.ok)
 }
