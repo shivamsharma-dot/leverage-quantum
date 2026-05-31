@@ -24,11 +24,27 @@
 /* TAB CONTENT */
 .tabContent { padding:20px 32px 40px; display:flex; flex-direction:column; gap:16px; }
 
-/* KPI BAR */
-.kpiBar { display:grid; grid-template-columns:repeat(8,1fr); gap:8px; }
-.kpiTile { background:#fff; border:1px solid #ECEEF2; border-radius:10px; padding:12px 14px; text-align:center; }
-.kpiTileVal   { font-size:15px; font-weight:700; color:#0F172A; letter-spacing:-.02em; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* KPI SECTION - 2 rows */
+.kpiSection { display:flex; flex-direction:column; gap:0; margin-bottom:20px; border:1px solid #E9EBF0; border-radius:12px; overflow:hidden; }
+
+/* Row label */
+.kpiRowLabel { font-size:10px; font-weight:600; color:#9CA3AF; text-transform:uppercase; letter-spacing:.06em; padding:8px 16px 0; }
+
+/* Row */
+.kpiRow { display:grid; gap:0; }
+.kpiRowLifetime { grid-template-columns:repeat(6,1fr); background:#FAFBFC; border-bottom:1px solid #E9EBF0; }
+.kpiRowPeriod   { grid-template-columns:repeat(6,1fr); background:#fff; }
+
+/* Tile */
+.kpiTile { padding:14px 16px; position:relative; }
+.kpiTile:not(:last-child) { border-right:1px solid #E9EBF0; }
+.kpiTileVal   { font-size:16px; font-weight:700; color:#0F172A; letter-spacing:-.02em; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .kpiTileLabel { font-size:10px; color:#9CA3AF; font-weight:500; text-transform:uppercase; letter-spacing:.04em; }
+.kpiTileSub   { font-size:10px; color:#6B7280; margin-top:2px; }
+.kpiTileValLifetime { color:#0F172A; }
+
+/* Bar (legacy) */
+.kpiBar { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
 
 /* HEALTH BAR */
 .healthBar { display:flex; height:6px; border-radius:999px; overflow:hidden; gap:2px; }
@@ -116,8 +132,8 @@
 .spinner    { width:14px; height:14px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; display:inline-block; }
 .bigSpinner { width:36px; height:36px; border:3px solid #E9EBF0; border-top-color:#1C9FD4; border-radius:50%; animation:spin .8s linear infinite; margin:0 auto; }
 
-@media(max-width:1200px) { .kpiBar{grid-template-columns:repeat(4,1fr)} .creativeGrid{grid-template-columns:repeat(3,1fr)} }
-@media(max-width:900px)  { .kpiBar{grid-template-columns:repeat(2,1fr)} .creativeGrid{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:1200px) { .kpiBar{grid-template-columns:repeat(3,1fr)} .kpiRowLifetime,.kpiRowPeriod{grid-template-columns:repeat(3,1fr)} .creativeGrid{grid-template-columns:repeat(3,1fr)} }
+@media(max-width:900px)  { .kpiBar{grid-template-columns:repeat(2,1fr)} .kpiRowLifetime,.kpiRowPeriod{grid-template-columns:repeat(2,1fr)} .creativeGrid{grid-template-columns:repeat(2,1fr)} }
 
 /* Date select */
 .dateSelect { padding:6px 28px 6px 10px; border:1px solid #E5E7EB; border-radius:7px; background:#F9FAFB; color:#374151; font-size:12px; font-weight:500; font-family:'Inter',sans-serif; cursor:pointer; outline:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2.5' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 8px center; }
