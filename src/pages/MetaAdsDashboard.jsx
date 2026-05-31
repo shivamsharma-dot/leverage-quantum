@@ -586,7 +586,7 @@ export default function MetaAdsDashboard() {
             const qs = new URLSearchParams({
               access_token: t,
               ids: chunk.join(','),
-              fields: 'id,thumbnail_url,image_url,picture'
+              fields: 'id,thumbnail_url,image_url'
             }).toString()
             const res = await fetch(`https://graph.facebook.com/v19.0?${qs}`)
             const d = await res.json()
