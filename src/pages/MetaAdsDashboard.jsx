@@ -279,7 +279,7 @@ function CampaignsTab({ data }) {
 
   return (
     <div className={styles.tabContent}>
-      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'this_month' ? 'This Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
+      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'this_month' ? 'This Month' : data.preset === 'last_month' ? 'Last Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
       <p style={{fontSize:12,color:'#9CA3AF',marginBottom:4}}>{campaigns.length} campaigns · sorted by spend</p>
       <div className={styles.campaignGrid}>
         {sorted.map(c => {
@@ -404,7 +404,7 @@ function CreativesTab({ data }) {
 
   return (
     <div className={styles.tabContent}>
-      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'this_month' ? 'This Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
+      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'this_month' ? 'This Month' : data.preset === 'last_month' ? 'Last Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
 
       {/* Creative List header with filters */}
       <div className={styles.creativeListHeader}>
@@ -680,6 +680,10 @@ function getDateRange(preset) {
   } else if (preset === 'this_month') {
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
     return { since: f(firstOfMonth), until: f(today) }
+  } else if (preset === 'last_month') {
+    const firstOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+    const lastOfLastMonth  = new Date(today.getFullYear(), today.getMonth(), 0)
+    return { since: f(firstOfLastMonth), until: f(lastOfLastMonth) }
   } else if (preset === 'last_7d')  { s.setDate(s.getDate() - 6) }
   else if (preset === 'last_14d') { s.setDate(s.getDate() - 13) }
   else if (preset === 'last_30d') { s.setDate(s.getDate() - 29) }
@@ -764,11 +768,12 @@ export default function MetaAdsDashboard() {
 
       // Map preset to Meta's date_preset for nested insights
       // this_month uses time_range instead of date_preset
-      const useTimeRange = preset === 'this_month'
+      const useTimeRange = preset === 'this_month' || preset === 'last_month'
       const metaPreset = preset === 'yesterday' ? 'yesterday'
                        : preset === 'last_14d'  ? 'last_14d'
                        : preset === 'last_30d'  ? 'last_30d'
                        : preset === 'this_month' ? 'last_30d'
+                       : preset === 'last_month' ? 'last_month'
                        : 'last_7d'
 
       const [accIns, lifetimeIns, campaignsSummary, campaigns, adsRaw, pixels] = await Promise.all([
@@ -952,6 +957,7 @@ export default function MetaAdsDashboard() {
     { id:'last_14d',   label:'Last 14 days' },
     { id:'last_30d',   label:'Last 30 days' },
     { id:'this_month', label:'This Month' },
+    { id:'last_month', label:'Last Month' },
   ]
 
   return (
