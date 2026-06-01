@@ -187,3 +187,6 @@ td { padding:10px 14px; color:#6B7280; vertical-align:middle; white-space:nowrap
 }
 .sendReportBtn:hover:not(:disabled) { background:#1C9FD4; color:#fff; }
 .sendReportBtn:disabled { opacity:.5; cursor:not-allowed; }
+
+@keyframes spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }
+.refreshSpin { animation:spin .7s linear infinite; display:inline-flex; }
