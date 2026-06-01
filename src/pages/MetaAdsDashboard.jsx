@@ -762,10 +762,12 @@ export default function MetaAdsDashboard() {
     setToken(t.trim())
   }
 
-  const loadAllData = async (t, preset = datePreset) => {
+  const loadAllData = async (t, preset = datePreset, fromDate = null, toDate = null) => {
     setLoading(true); setError('')
     try {
-      const range     = getDateRange(preset)
+      const range     = preset === 'custom_range' && fromDate && toDate
+        ? { since: fromDate, until: toDate }
+        : getDateRange(preset)
       const timeRange = JSON.stringify(range)
 
       // Map preset to Meta's date_preset for nested insights
@@ -922,7 +924,10 @@ export default function MetaAdsDashboard() {
     finally { setSending(false); setTimeout(() => setSendMsg(''), 5000) }
   }
 
-  const handleDateChange = (preset) => { loadAllData(token, preset) }
+  const handleDateChange = (preset) => {
+    setDatePreset(preset)
+    if (preset !== 'custom_range') loadAllData(token, preset)
+  }
 
   if (pageLoad) return <div className={styles.layout}><Sidebar/><DashboardSkeleton/></div>
 
@@ -977,6 +982,21 @@ export default function MetaAdsDashboard() {
             <select value={datePreset} onChange={e => handleDateChange(e.target.value)} className={styles.dateSelect} disabled={loading}>
               {PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
+            {datePreset === 'custom_range' && (
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+                  style={{padding:'5px 8px',borderRadius:7,border:'1px solid #E5E7EB',fontSize:12,fontFamily:'Inter,sans-serif',color:'#374151',outline:'none',background:'#fff'}}/>
+                <span style={{fontSize:12,color:'#9CA3AF'}}>to</span>
+                <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+                  style={{padding:'5px 8px',borderRadius:7,border:'1px solid #E5E7EB',fontSize:12,fontFamily:'Inter,sans-serif',color:'#374151',outline:'none',background:'#fff'}}/>
+                <button
+                  disabled={!customFrom || !customTo || loading}
+                  onClick={() => customFrom && customTo && loadAllData(token, 'custom_range', customFrom, customTo)}
+                  style={{padding:'5px 12px',borderRadius:7,background:customFrom&&customTo?'#0F172A':'#E5E7EB',color:customFrom&&customTo?'#fff':'#9CA3AF',border:'none',fontSize:12,fontWeight:600,cursor:customFrom&&customTo?'pointer':'not-allowed',fontFamily:'Inter,sans-serif',transition:'all .15s'}}>
+                  Apply
+                </button>
+              </div>
+            )}
             {lastSync && <span className={styles.syncTag}>Synced {lastSync.toLocaleTimeString()}</span>}
             {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#059669':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
             <button className={styles.sendReportBtn} onClick={sendReport} disabled={sending||loading||!data}>
