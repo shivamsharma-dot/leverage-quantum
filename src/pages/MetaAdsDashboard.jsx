@@ -7,7 +7,7 @@ import { DashboardSkeleton } from '../components/SkeletonLoader'
 import styles from './MetaAdsDashboard.module.css'
 
 const APP_ID     = '2314692909338886'
-const AD_ACCOUNT = 'act_641914389215638'
+const DEFAULT_AD_ACCOUNT = 'act_641914389215638'
 const TOKEN_KEY  = 'lq_meta_token'
 const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_KEY   = import.meta.env.VITE_GROQ_API_KEY
@@ -783,6 +783,8 @@ export default function MetaAdsDashboard() {
   const isViewerRole = user?.role === 'viewer'
 
   const [token, setToken]           = useState(() => localStorage.getItem(TOKEN_KEY) || '')
+  const [adAccount, setAdAccount]   = useState(() => localStorage.getItem('lq_ad_account') || DEFAULT_AD_ACCOUNT)
+  const [adAccounts, setAdAccounts] = useState([])
   const [loading, setLoading]       = useState(false)
   const [pageLoad, setPageLoad]     = useState(true)
   const [error, setError]           = useState('')
@@ -831,8 +833,14 @@ export default function MetaAdsDashboard() {
       if (r.authResponse?.accessToken) {
         const t = r.authResponse.accessToken
         localStorage.setItem(TOKEN_KEY, t)
-        storeTokenInSupabase(t) // store for scheduled reports
+        storeTokenInSupabase(t)
         setToken(t)
+        // Fetch available ad accounts for this token
+        fetch(`https://graph.facebook.com/v19.0/me/adaccounts?fields=id,name,account_status&access_token=${t}`)
+          .then(r => r.json())
+          .then(d => {
+            if (d.data) setAdAccounts(d.data.filter(a => a.account_status === 1))
+          }).catch(() => {})
       } else { setError('Authorization cancelled. Try pasting token manually.'); setLoading(false) }
     }, { scope: 'ads_read,ads_management,business_management' })
   }
@@ -864,31 +872,31 @@ export default function MetaAdsDashboard() {
 
       const [accIns, lifetimeIns, campaignsSummary, campaigns, adsRaw, pixels] = await Promise.all([
         // Account-level insights for selected period
-        graphGet(`${AD_ACCOUNT}/insights`, t, {
+        graphGet(`${adAccount}/insights`, t, {
           fields: 'spend,impressions,clicks,ctr,cpm,reach,frequency,actions',
           time_range: timeRange, level: 'account'
         }),
         // Lifetime account insights (no date filter)
-        graphGet(`${AD_ACCOUNT}/insights`, t, {
+        graphGet(`${adAccount}/insights`, t, {
           fields: 'spend,impressions,clicks,reach',
           date_preset: 'maximum', level: 'account'
         }),
         // Campaign count summary (all time, for active/paused counts)
-        graphGet(`${AD_ACCOUNT}/campaigns`, t, {
+        graphGet(`${adAccount}/campaigns`, t, {
           fields: 'status', limit: 500
         }),
         // Campaigns - use date_preset for nested insights (avoids 400)
-        graphGet(`${AD_ACCOUNT}/campaigns`, t, {
+        graphGet(`${adAccount}/campaigns`, t, {
           fields: `name,status,objective,created_time,insights${useTimeRange ? `.time_range(${timeRange})` : `.date_preset(${metaPreset})`}{spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}`,
           limit: 50
         }),
         // Ads + creatives - fetch ALL active ads without insights (so no date filter excludes them)
-        graphGet(`${AD_ACCOUNT}/ads`, t, {
+        graphGet(`${adAccount}/ads`, t, {
           fields: `name,status,effective_status,creative{id,name,video_id,object_story_spec}`,
           filtering: JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE','PAUSED']}]),
           limit: 200
         }),
-        graphGet(`${AD_ACCOUNT}/adspixels`, t, { fields: 'id,name,last_fired_time' })
+        graphGet(`${adAccount}/adspixels`, t, { fields: 'id,name,last_fired_time' })
       ])
 
       const account = accIns.data?.[0] || {}
@@ -919,14 +927,14 @@ export default function MetaAdsDashboard() {
           // Fetch current + previous period in parallel
           await Promise.all(insChunks.map(async chunk => {
             const [currRes, prevRes] = await Promise.all([
-              graphGet(`${AD_ACCOUNT}/insights`, t, {
+              graphGet(`${adAccount}/insights`, t, {
                 fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
                 level: 'ad',
                 ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }),
                 filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
                 limit: 50
               }),
-              graphGet(`${AD_ACCOUNT}/insights`, t, {
+              graphGet(`${adAccount}/insights`, t, {
                 fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency',
                 level: 'ad',
                 time_range: prevTimeRange,
@@ -1061,6 +1069,18 @@ export default function MetaAdsDashboard() {
           </div>
           <div className={styles.headerRight}>
             {/* Date filter */}
+            {adAccounts.length > 1 && (
+              <select
+                value={adAccount}
+                onChange={e => { const acc = e.target.value; setAdAccount(acc); localStorage.setItem('lq_ad_account', acc); loadAllData(token, datePreset) }}
+                className={styles.dateSelect}
+                disabled={loading}
+                style={{maxWidth:200}}>
+                {adAccounts.map(a => (
+                  <option key={a.id} value={a.id}>{a.name || a.id}</option>
+                ))}
+              </select>
+            )}
             <select value={datePreset} onChange={e => handleDateChange(e.target.value)} className={styles.dateSelect} disabled={loading}>
               {PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
@@ -1082,9 +1102,12 @@ export default function MetaAdsDashboard() {
             <button className={styles.sendReportBtn} onClick={sendReport} disabled={sending||loading||!data}>
               {sending ? '⏳ Sending…' : '✉ Send Report'}
             </button>
-            <button className={styles.refreshBtn} onClick={() => loadAllData(token, datePreset)} disabled={loading}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-              {loading ? 'Loading…' : 'Refresh'}
+            <button className={styles.refreshBtn} onClick={() => loadAllData(token, datePreset)} disabled={loading}
+              style={{opacity: loading ? 0.7 : 1}}>
+              <span className={loading ? styles.refreshSpin : ''}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+              </span>
+              {loading ? 'Refreshing…' : 'Refresh'}
             </button>
             {!isViewerRole && <button className={styles.disconnectBtn} onClick={disconnect}>Disconnect</button>}
           </div>
