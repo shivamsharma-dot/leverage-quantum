@@ -25,11 +25,20 @@ async function storeTokenInSupabase(token) {
         'Content-Type': 'application/json',
         apikey: SUPABASE_KEY,
         Authorization: `Bearer ${SUPABASE_KEY}`,
-        Prefer: 'return=minimal'
+        Prefer: 'resolution=merge-duplicates,return=minimal'
       },
-      body: JSON.stringify({ email: 'shivam.sharma@leverageedu.com', token })
+      body: JSON.stringify({ id: 1, token, updated_at: new Date().toISOString() })
     })
   } catch {}
+}
+
+async function loadTokenFromSupabase() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/meta_tokens?select=token&order=id.desc&limit=1`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
+    const data = await res.json()
+    return data?.[0]?.token || null
+  } catch { return null }
 }
 const TOKEN_EXPIRED_EVENT = 'lq:meta_token_expired'
 
@@ -711,6 +720,18 @@ export default function MetaAdsDashboard() {
     if (!document.getElementById('fb-sdk')) {
       const s = document.createElement('script'); s.id = 'fb-sdk'; s.src = 'https://connect.facebook.net/en_US/sdk.js'; s.async = true; document.head.appendChild(s)
     } else if (window.FB) setSdkReady(true)
+  }, [])
+
+  // On mount: if no local token, try loading shared token from Supabase (for viewers)
+  useEffect(() => {
+    if (!token) {
+      loadTokenFromSupabase().then(t => {
+        if (t) {
+          localStorage.setItem(TOKEN_KEY, t)
+          setToken(t)
+        }
+      })
+    }
   }, [])
 
   useEffect(() => { if (token) loadAllData(token, datePreset) }, [token])
