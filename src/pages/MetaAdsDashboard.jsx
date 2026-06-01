@@ -862,13 +862,13 @@ export default function MetaAdsDashboard() {
 
       // Map preset to Meta's date_preset for nested insights
       // this_month uses time_range instead of date_preset
+      // last_month/this_month/custom_range all use time_range with exact computed dates
+      // so Meta's own date_preset is never used for these (avoids billing-period mismatches)
       const useTimeRange = preset === 'this_month' || preset === 'last_month' || preset === 'custom_range'
       const metaPreset = preset === 'yesterday' ? 'yesterday'
                        : preset === 'last_14d'  ? 'last_14d'
                        : preset === 'last_30d'  ? 'last_30d'
-                       : preset === 'this_month' ? 'last_30d'
-                       : preset === 'last_month' ? 'last_month'
-                       : 'last_7d'
+                       : 'last_7d'  // last_month/this_month/custom use time_range instead
 
       const [accIns, lifetimeIns, campaignsSummary, campaigns, adsRaw, pixels] = await Promise.all([
         // Account-level insights for selected period
