@@ -279,7 +279,7 @@ function CampaignsTab({ data }) {
 
   return (
     <div className={styles.tabContent}>
-      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'this_month' ? 'This Month' : data.preset === 'last_month' ? 'Last Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
+      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'custom_range' ? `${data.range?.since} to ${data.range?.until}` : data.preset === 'this_month' ? 'This Month' : data.preset === 'last_month' ? 'Last Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
       <p style={{fontSize:12,color:'#9CA3AF',marginBottom:4}}>{campaigns.length} campaigns · sorted by spend</p>
       <div className={styles.campaignGrid}>
         {sorted.map(c => {
@@ -404,7 +404,7 @@ function CreativesTab({ data }) {
 
   return (
     <div className={styles.tabContent}>
-      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'this_month' ? 'This Month' : data.preset === 'last_month' ? 'Last Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
+      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'custom_range' ? `${data.range?.since} to ${data.range?.until}` : data.preset === 'this_month' ? 'This Month' : data.preset === 'last_month' ? 'Last Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
 
       {/* Creative List header with filters */}
       <div className={styles.creativeListHeader}>
@@ -709,6 +709,8 @@ export default function MetaAdsDashboard() {
   const [sdkReady, setSdkReady] = useState(false)
   const [lastSync, setLastSync] = useState(null)
   const [datePreset, setDatePreset] = useState('last_7d')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo]     = useState('')
 
   useEffect(() => { setTimeout(() => setPageLoad(false), 600) }, [])
 
@@ -768,7 +770,7 @@ export default function MetaAdsDashboard() {
 
       // Map preset to Meta's date_preset for nested insights
       // this_month uses time_range instead of date_preset
-      const useTimeRange = preset === 'this_month' || preset === 'last_month'
+      const useTimeRange = preset === 'this_month' || preset === 'last_month' || preset === 'custom_range'
       const metaPreset = preset === 'yesterday' ? 'yesterday'
                        : preset === 'last_14d'  ? 'last_14d'
                        : preset === 'last_30d'  ? 'last_30d'
@@ -952,12 +954,13 @@ export default function MetaAdsDashboard() {
   )
 
   const PRESETS = [
-    { id:'yesterday',  label:'Yesterday' },
-    { id:'last_7d',    label:'Last 7 days' },
-    { id:'last_14d',   label:'Last 14 days' },
-    { id:'last_30d',   label:'Last 30 days' },
-    { id:'this_month', label:'This Month' },
-    { id:'last_month', label:'Last Month' },
+    { id:'yesterday',    label:'Yesterday' },
+    { id:'last_7d',      label:'Last 7 days' },
+    { id:'last_14d',     label:'Last 14 days' },
+    { id:'last_30d',     label:'Last 30 days' },
+    { id:'this_month',   label:'This Month' },
+    { id:'last_month',   label:'Last Month' },
+    { id:'custom_range', label:'Custom Range' },
   ]
 
   return (
