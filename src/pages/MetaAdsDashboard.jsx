@@ -692,6 +692,88 @@ function getDateRange(preset) {
 }
 
 // ─── MAIN ─────────────────────────────────────────────────
+
+// ─── INLINE DATE PICKER ────────────────────────────────────────────────────
+function DatePicker({ value, onChange, placeholder = 'Select date', maxDate }) {
+  const [open, setOpen] = useState(false)
+  const [viewYear, setViewYear] = useState(() => value ? new Date(value).getFullYear() : new Date().getFullYear())
+  const [viewMonth, setViewMonth] = useState(() => value ? new Date(value).getMonth() : new Date().getMonth())
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa']
+
+  const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate()
+  const firstDay    = (y, m) => new Date(y, m, 1).getDay()
+
+  const select = (day) => {
+    const d = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+    onChange(d)
+    setOpen(false)
+  }
+
+  const displayVal = value
+    ? new Date(value + 'T00:00:00').toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
+    : placeholder
+
+  const today = new Date().toISOString().slice(0,10)
+
+  return (
+    <div ref={ref} style={{position:'relative',userSelect:'none'}}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',borderRadius:7,border:`1.5px solid ${open?'#6366F1':'#E5E7EB'}`,background:'#fff',cursor:'pointer',fontSize:12,color:value?'#0F172A':'#9CA3AF',minWidth:130,transition:'border .15s'}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={value?'#6366F1':'#9CA3AF'} strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span style={{flex:1}}>{displayVal}</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      {open && (
+        <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:999,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,0.12)',padding:'12px',minWidth:240}}>
+          {/* Month/Year nav */}
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+            <button onClick={() => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y=>y-1) } else setViewMonth(m=>m-1) }}
+              style={{background:'none',border:'none',cursor:'pointer',padding:'2px 6px',borderRadius:5,fontSize:16,color:'#374151',lineHeight:1}}>‹</button>
+            <span style={{fontSize:13,fontWeight:700,color:'#0F172A'}}>{MONTHS[viewMonth]} {viewYear}</span>
+            <button onClick={() => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y=>y+1) } else setViewMonth(m=>m+1) }}
+              style={{background:'none',border:'none',cursor:'pointer',padding:'2px 6px',borderRadius:5,fontSize:16,color:'#374151',lineHeight:1}}>›</button>
+          </div>
+          {/* Day headers */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:4}}>
+            {DAYS.map(d => <div key={d} style={{textAlign:'center',fontSize:10,fontWeight:600,color:'#9CA3AF',padding:'2px 0'}}>{d}</div>)}
+          </div>
+          {/* Days grid */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
+            {Array.from({length: firstDay(viewYear, viewMonth)}).map((_,i) => <div key={'e'+i}/>)}
+            {Array.from({length: daysInMonth(viewYear, viewMonth)}).map((_,i) => {
+              const day = i + 1
+              const dateStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`
+              const isSelected = dateStr === value
+              const isToday = dateStr === today
+              const isFuture = maxDate ? dateStr > maxDate : dateStr > today
+              return (
+                <div key={day} onClick={() => !isFuture && select(day)}
+                  style={{textAlign:'center',padding:'5px 2px',borderRadius:6,fontSize:12,fontWeight:isSelected?700:400,
+                    background:isSelected?'#6366F1':isToday?'#EEF2FF':'transparent',
+                    color:isSelected?'#fff':isFuture?'#D1D5DB':isToday?'#6366F1':'#374151',
+                    cursor:isFuture?'not-allowed':'pointer',transition:'background .1s'}}
+                  onMouseEnter={e=>{ if(!isSelected&&!isFuture) e.target.style.background='#F3F4F6' }}
+                  onMouseLeave={e=>{ if(!isSelected&&!isFuture) e.target.style.background='transparent' }}>
+                  {day}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function MetaAdsDashboard() {
   const location  = useLocation()
   const navigate  = useNavigate()
@@ -984,15 +1066,13 @@ export default function MetaAdsDashboard() {
             </select>
             {datePreset === 'custom_range' && (
               <div style={{display:'flex',alignItems:'center',gap:6}}>
-                <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
-                  style={{padding:'5px 8px',borderRadius:7,border:'1px solid #E5E7EB',fontSize:12,fontFamily:'Inter,sans-serif',color:'#374151',outline:'none',background:'#fff'}}/>
+                <DatePicker value={customFrom} onChange={setCustomFrom} placeholder="From date" maxDate={customTo || new Date().toISOString().slice(0,10)}/>
                 <span style={{fontSize:12,color:'#9CA3AF'}}>to</span>
-                <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
-                  style={{padding:'5px 8px',borderRadius:7,border:'1px solid #E5E7EB',fontSize:12,fontFamily:'Inter,sans-serif',color:'#374151',outline:'none',background:'#fff'}}/>
+                <DatePicker value={customTo} onChange={setCustomTo} placeholder="To date" maxDate={new Date().toISOString().slice(0,10)}/>
                 <button
                   disabled={!customFrom || !customTo || loading}
                   onClick={() => customFrom && customTo && loadAllData(token, 'custom_range', customFrom, customTo)}
-                  style={{padding:'5px 12px',borderRadius:7,background:customFrom&&customTo?'#0F172A':'#E5E7EB',color:customFrom&&customTo?'#fff':'#9CA3AF',border:'none',fontSize:12,fontWeight:600,cursor:customFrom&&customTo?'pointer':'not-allowed',fontFamily:'Inter,sans-serif',transition:'all .15s'}}>
+                  style={{padding:'6px 14px',borderRadius:7,background:customFrom&&customTo?'#0F172A':'#E5E7EB',color:customFrom&&customTo?'#fff':'#9CA3AF',border:'none',fontSize:12,fontWeight:600,cursor:customFrom&&customTo?'pointer':'not-allowed',fontFamily:'Inter,sans-serif',transition:'all .15s'}}>
                   Apply
                 </button>
               </div>
