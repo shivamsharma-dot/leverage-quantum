@@ -117,8 +117,13 @@ function fmtINR(inr) {
   if (n >= 1000) return '₹' + Math.round(n).toLocaleString('en-IN')
   return '₹' + Math.round(n)
 }
-const getAction = (actions, type) =>
-  parseInt(actions?.find(a => a.action_type === type)?.value || 0)
+const getAction = (actions, type) => {
+  if (type === 'lead') {
+    const grouped = parseInt(actions?.find(a => a.action_type === 'onsite_conversion.lead_grouped')?.value || 0)
+    if (grouped > 0) return grouped
+  }
+  return parseInt(actions?.find(a => a.action_type === type)?.value || 0)
+}
 
 // ─── CONNECT SCREEN ───────────────────────────────────────
 function ConnectScreen({ onConnect, onPaste, error, loading }) {
