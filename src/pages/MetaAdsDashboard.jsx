@@ -490,14 +490,17 @@ function CreativesTab({ data }) {
           const sigColor = ad.label==='high'?'#DC2626':ad.label==='moderate'?'#D97706':'#059669'
           return (
             <div key={ad.id} className={`${styles.creativeCard} ${styles['creative_'+ad.label]}`}>
-              <div className={styles.creativeThumb} style={{cursor: ad.previewLink ? 'pointer' : 'default'}}
-                onClick={() => window.open(ad.previewLink || `https://www.facebook.com/ads/library/?id=${ad.id}`, '_blank')}
-                title='View ad preview'>
+              <div className={styles.creativeThumb}>
                 {ad.imgUrl
                   ? <img src={ad.imgUrl} alt={ad.name} className={styles.thumbImg} loading="lazy"
-                      onError={e=>{e.target.style.display='none';e.target.nextSibling&&(e.target.nextSibling.style.display='flex')}}/>
+                      onError={e=>{
+                        console.warn('[thumb fail]', ad.name, ad.imgUrl)
+                        e.target.style.display='none'
+                        const ph = e.target.parentElement?.querySelector('[data-placeholder]')
+                        if (ph) ph.style.display='flex'
+                      }}/>
                   : null}
-                <div className={styles.thumbPlaceholder} style={{display:ad.imgUrl?'none':'flex'}}>
+                <div data-placeholder="1" className={styles.thumbPlaceholder} style={{display:ad.imgUrl?'none':'flex'}}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                 </div>
                 <div className={styles.creativeBadges}>
@@ -1046,8 +1049,9 @@ export default function MetaAdsDashboard() {
         const thumbUrl = isVideo
           ? (videoImg || staticImg || inlineImg)
           : (staticImg || spec.link_data?.picture || carouselImg || inlineImg || videoImg)
-        // previewLink = Ads Library URL
+        // previewLink = Ads Library URL (kept for potential future use)
         const previewLink = `https://www.facebook.com/ads/library/?id=${ad.id}`
+        if (!thumbUrl) console.warn('[no thumb]', ad.name, 'creativeId:', ad.creative?.id, 'isVideo:', isVideo, 'spec keys:', Object.keys(spec))
         return {
           ...ad,
           creative: { ...ad.creative, _thumbUrl: thumbUrl || null },
