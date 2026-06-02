@@ -1,6 +1,5 @@
-const RESEND_KEY   = process.env.RESEND_API_KEY
-const GEMINI_KEY   = process.env.GEMINI_API_KEY
-const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`
+const RESEND_KEY = process.env.RESEND_API_KEY
+const GROQ_KEY   = process.env.VITE_GROQ_API_KEY
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY
 const AD_ACCOUNT   = 'act_641914389215638'
@@ -73,17 +72,19 @@ async function fetchMetaData(token) {
 }
 
 async function askGroq(prompt) {
-  const res = await fetch(GEMINI_URL, {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
     body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 2000 }
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_tokens: 2000
     })
   })
   const d = await res.json()
-  if (!res.ok) throw new Error(d.error?.message || 'Gemini error')
-  return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  if (!res.ok) throw new Error(d.error?.message || 'Groq error')
+  return d.choices?.[0]?.message?.content || ''
 }
 
 async function buildReport(token) {
@@ -268,7 +269,7 @@ Output only the HTML. No preamble, no explanation.`
       <div style="color:#64748B;font-size:11px;margin-top:2px">Automated Meta Campaign Audit · ${today}</div>
     </div>
     <div style="text-align:right">
-      <div style="color:#64748B;font-size:11px">Powered by Gemini 1.5 Flash · Google</div>
+      <div style="color:#64748B;font-size:11px">Powered by Llama 3.3 · Groq</div>
       <div style="color:#334155;font-size:11px;margin-top:2px">Do not reply to this email</div>
     </div>
   </div>
