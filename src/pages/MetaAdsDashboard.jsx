@@ -811,10 +811,15 @@ export default function MetaAdsDashboard() {
     return () => window.removeEventListener(TOKEN_EXPIRED_EVENT, onExpired)
   }, [])
 
-  // Close account picker on outside click
+  // Close account picker on outside click (use ref to exclude the picker itself)
+  const accountPickerRef = useRef(null)
   useEffect(() => {
     if (!accountPickerOpen) return
-    const handler = () => setAccountPickerOpen(false)
+    const handler = (e) => {
+      if (accountPickerRef.current && !accountPickerRef.current.contains(e.target)) {
+        setAccountPickerOpen(false)
+      }
+    }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [accountPickerOpen])
@@ -1092,7 +1097,7 @@ export default function MetaAdsDashboard() {
           <div className={styles.headerRight}>
             {/* Date filter */}
             {adAccounts.length > 0 && (
-              <div style={{position:'relative'}}>
+              <div style={{position:'relative'}} ref={accountPickerRef}>
                 <div
                   onClick={() => !loading && setAccountPickerOpen(o => !o)}
                   style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 10px',borderRadius:8,border:'1px solid #E5E7EB',background:'#fff',cursor:loading?'not-allowed':'pointer',minWidth:180,maxWidth:220,transition:'border .15s',borderColor:accountPickerOpen?'#1C9FD4':'#E5E7EB'}}>
