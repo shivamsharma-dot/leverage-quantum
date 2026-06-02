@@ -92,6 +92,7 @@
 .creative_healthy  { border-color:#ECEEF2; border-top:3px solid #10B981; }
 
 .creativeThumb { position:relative; aspect-ratio:1/1; background:#0A0A0A; overflow:hidden; }
+.creativeThumb:hover .previewIcon { opacity:1 !important; }
 .thumbImg { width:100%; height:100%; object-fit:contain; display:block; }
 .thumbPlaceholder { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
 .creativeBadges { position:absolute; top:8px; left:8px; right:8px; display:flex; justify-content:space-between; }
