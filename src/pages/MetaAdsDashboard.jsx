@@ -788,8 +788,9 @@ export default function MetaAdsDashboard() {
   const isViewerRole = user?.role === 'viewer'
 
   const [token, setToken]           = useState(() => localStorage.getItem(TOKEN_KEY) || '')
-  const [adAccount, setAdAccount]   = useState(() => localStorage.getItem('lq_ad_account') || DEFAULT_AD_ACCOUNT)
-  const [adAccounts, setAdAccounts] = useState([])
+  const [adAccount, setAdAccount]       = useState(() => localStorage.getItem('lq_ad_account') || DEFAULT_AD_ACCOUNT)
+  const [adAccounts, setAdAccounts]     = useState([])
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [loading, setLoading]       = useState(false)
   const [pageLoad, setPageLoad]     = useState(true)
   const [error, setError]           = useState('')
@@ -809,6 +810,14 @@ export default function MetaAdsDashboard() {
     window.addEventListener(TOKEN_EXPIRED_EVENT, onExpired)
     return () => window.removeEventListener(TOKEN_EXPIRED_EVENT, onExpired)
   }, [])
+
+  // Close account picker on outside click
+  useEffect(() => {
+    if (!accountPickerOpen) return
+    const handler = () => setAccountPickerOpen(false)
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [accountPickerOpen])
 
   useEffect(() => {
     window.fbAsyncInit = () => { window.FB.init({ appId: APP_ID, version: 'v19.0', xfbml: false, cookie: true }); setSdkReady(true) }
@@ -864,9 +873,10 @@ export default function MetaAdsDashboard() {
     setToken(t.trim())
   }
 
-  const loadAllData = async (t, preset = datePreset, fromDate = null, toDate = null) => {
+  const loadAllData = async (t, preset = datePreset, fromDate = null, toDate = null, accountOverride = null) => {
     setLoading(true); setError('')
     try {
+      const AD_ACCOUNT_ID = accountOverride || adAccount || DEFAULT_AD_ACCOUNT
       const range     = preset === 'custom_range' && fromDate && toDate
         ? { since: fromDate, until: toDate }
         : getDateRange(preset)
@@ -884,31 +894,31 @@ export default function MetaAdsDashboard() {
 
       const [accIns, lifetimeIns, campaignsSummary, campaigns, adsRaw, pixels] = await Promise.all([
         // Account-level insights for selected period
-        graphGet(`${adAccount}/insights`, t, {
+        graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
           fields: 'spend,impressions,clicks,ctr,cpm,reach,frequency,actions',
           time_range: timeRange, level: 'account'
         }),
         // Lifetime account insights (no date filter)
-        graphGet(`${adAccount}/insights`, t, {
+        graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
           fields: 'spend,impressions,clicks,reach',
           date_preset: 'maximum', level: 'account'
         }),
         // Campaign count summary (all time, for active/paused counts)
-        graphGet(`${adAccount}/campaigns`, t, {
+        graphGet(`${AD_ACCOUNT_ID}/campaigns`, t, {
           fields: 'status', limit: 500
         }),
         // Campaigns - use date_preset for nested insights (avoids 400)
-        graphGet(`${adAccount}/campaigns`, t, {
+        graphGet(`${AD_ACCOUNT_ID}/campaigns`, t, {
           fields: `name,status,objective,created_time,insights${useTimeRange ? `.time_range(${timeRange})` : `.date_preset(${metaPreset})`}{spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}`,
           limit: 50
         }),
         // Ads + creatives - fetch ALL active ads without insights (so no date filter excludes them)
-        graphGet(`${adAccount}/ads`, t, {
+        graphGet(`${AD_ACCOUNT_ID}/ads`, t, {
           fields: `name,status,effective_status,creative{id,name,video_id,object_story_spec}`,
           filtering: JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE','PAUSED']}]),
           limit: 200
         }),
-        graphGet(`${adAccount}/adspixels`, t, { fields: 'id,name,last_fired_time' })
+        graphGet(`${AD_ACCOUNT_ID}/adspixels`, t, { fields: 'id,name,last_fired_time' })
       ])
 
       const account = accIns.data?.[0] || {}
@@ -939,14 +949,14 @@ export default function MetaAdsDashboard() {
           // Fetch current + previous period in parallel
           await Promise.all(insChunks.map(async chunk => {
             const [currRes, prevRes] = await Promise.all([
-              graphGet(`${adAccount}/insights`, t, {
+              graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
                 fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
                 level: 'ad',
                 ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }),
                 filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
                 limit: 50
               }),
-              graphGet(`${adAccount}/insights`, t, {
+              graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
                 fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency',
                 level: 'ad',
                 time_range: prevTimeRange,
@@ -1082,16 +1092,40 @@ export default function MetaAdsDashboard() {
           <div className={styles.headerRight}>
             {/* Date filter */}
             {adAccounts.length > 0 && (
-              <select
-                value={adAccount}
-                onChange={e => { const acc = e.target.value; setAdAccount(acc); localStorage.setItem('lq_ad_account', acc); loadAllData(token, datePreset) }}
-                className={styles.dateSelect}
-                disabled={loading}
-                style={{maxWidth:200}}>
-                {adAccounts.map(a => (
-                  <option key={a.id} value={a.id}>{a.name || a.id}</option>
-                ))}
-              </select>
+              <div style={{position:'relative'}}>
+                <div
+                  onClick={() => !loading && setAccountPickerOpen(o => !o)}
+                  style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 10px',borderRadius:8,border:'1px solid #E5E7EB',background:'#fff',cursor:loading?'not-allowed':'pointer',minWidth:180,maxWidth:220,transition:'border .15s',borderColor:accountPickerOpen?'#1C9FD4':'#E5E7EB'}}>
+                  <div style={{width:24,height:24,borderRadius:6,background:'#EEF2FF',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366F1" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                  </div>
+                  <span style={{flex:1,fontSize:12,fontWeight:600,color:'#0F172A',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                    {adAccounts.find(a => a.id === adAccount)?.name || adAccount}
+                  </span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{flexShrink:0,transform:accountPickerOpen?'rotate(180deg)':'rotate(0deg)',transition:'transform .2s'}}><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+                {accountPickerOpen && (
+                  <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:200,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,0.1)',minWidth:240,overflow:'hidden'}}>
+                    <div style={{padding:'8px 12px 6px',fontSize:10,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'.06em',borderBottom:'1px solid #F3F4F6'}}>Ad Accounts</div>
+                    {adAccounts.map(a => (
+                      <div key={a.id}
+                        onClick={() => { setAdAccount(a.id); localStorage.setItem('lq_ad_account', a.id); setAccountPickerOpen(false); loadAllData(token, datePreset, null, null, a.id) }}
+                        style={{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',cursor:'pointer',background:a.id===adAccount?'#F8FAFF':'transparent',transition:'background .1s'}}
+                        onMouseEnter={e=>e.currentTarget.style.background='#F8FAFF'}
+                        onMouseLeave={e=>e.currentTarget.style.background=a.id===adAccount?'#F8FAFF':'transparent'}>
+                        <div style={{width:28,height:28,borderRadius:7,background: a.id===adAccount?'#6366F1':'#F3F4F6',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:11,fontWeight:700,color:a.id===adAccount?'#fff':'#6B7280'}}>
+                          {a.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12.5,fontWeight:a.id===adAccount?700:500,color:'#0F172A',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.name}</div>
+                          <div style={{fontSize:10,color:'#9CA3AF',marginTop:1}}>{a.id}</div>
+                        </div>
+                        {a.id===adAccount && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366F1" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
             <select value={datePreset} onChange={e => handleDateChange(e.target.value)} className={styles.dateSelect} disabled={loading}>
               {PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
