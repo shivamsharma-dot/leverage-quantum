@@ -272,7 +272,7 @@ Output only the HTML. No preamble, no explanation.`
       <div style="color:#64748B;font-size:11px;margin-top:2px">Automated Meta Campaign Audit · ${today}</div>
     </div>
     <div style="text-align:right">
-      <div style="color:#64748B;font-size:11px">Powered by Llama 3.3 · Groq</div>
+      <div style="color:#64748B;font-size:11px">Powered by Claude · Anthropic</div>
       <div style="color:#334155;font-size:11px;margin-top:2px">Do not reply to this email</div>
     </div>
   </div>
@@ -299,7 +299,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${RESEND_KEY}` },
       body: JSON.stringify({
-        from: 'Leverage Quantum <onboarding@resend.dev>',
+        from: 'Leverage Quantum <noreply@leverageedu.com>',
         to: recipients,
         subject: `Meta Campaign Audit — Leverage Edu · ${today}`,
         html,
