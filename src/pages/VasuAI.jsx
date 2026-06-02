@@ -3,8 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import Sidebar from '../components/Sidebar'
 import styles from './VasuAI.module.css'
 
-const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions'
-const GROQ_KEY   = import.meta.env.VITE_GROQ_API_KEY
+// Claude API is called server-side via /api/vasu-chat to keep the key secure
 const TOKEN_KEY  = 'lq_meta_token'
 const AD_ACCOUNT = 'act_641914389215638'
 
@@ -48,19 +47,18 @@ Guidelines:
 }
 
 async function askGroq(messages, metaData) {
-  const res = await fetch(GROQ_URL, {
+  const res = await fetch('/api/vasu-chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'system', content: buildSystemPrompt(metaData) }, ...messages],
-      temperature: 0.3,
-      max_tokens: 1500,
+      messages: [{ role: 'user', content: messages[messages.length-1]?.content || '' }],
+      systemPrompt: buildSystemPrompt(metaData),
+      history: messages.slice(0, -1)
     })
   })
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'Groq error') }
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Claude error') }
   const d = await res.json()
-  return d.choices?.[0]?.message?.content || '(no response)'
+  return d.content || '(no response)'
 }
 
 const QUICK = [
