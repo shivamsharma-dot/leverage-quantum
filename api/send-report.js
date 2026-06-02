@@ -1,5 +1,6 @@
-const RESEND_KEY     = process.env.RESEND_API_KEY
-const ANTHROPIC_KEY  = process.env.ANTHROPIC_API_KEY
+const RESEND_KEY   = process.env.RESEND_API_KEY
+const GEMINI_KEY   = process.env.GEMINI_API_KEY
+const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY
 const AD_ACCOUNT   = 'act_641914389215638'
@@ -72,22 +73,17 @@ async function fetchMetaData(token) {
 }
 
 async function askGroq(prompt) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch(GEMINI_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }]
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 2000 }
     })
   })
   const d = await res.json()
-  if (!res.ok) throw new Error(d.error?.message || 'Claude error')
-  return d.content?.[0]?.text || ''
+  if (!res.ok) throw new Error(d.error?.message || 'Gemini error')
+  return d.candidates?.[0]?.content?.parts?.[0]?.text || ''
 }
 
 async function buildReport(token) {
@@ -272,7 +268,7 @@ Output only the HTML. No preamble, no explanation.`
       <div style="color:#64748B;font-size:11px;margin-top:2px">Automated Meta Campaign Audit · ${today}</div>
     </div>
     <div style="text-align:right">
-      <div style="color:#64748B;font-size:11px">Powered by Claude · Anthropic</div>
+      <div style="color:#64748B;font-size:11px">Powered by Gemini 1.5 Flash · Google</div>
       <div style="color:#334155;font-size:11px;margin-top:2px">Do not reply to this email</div>
     </div>
   </div>
