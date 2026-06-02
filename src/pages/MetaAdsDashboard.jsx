@@ -490,7 +490,16 @@ function CreativesTab({ data }) {
           const sigColor = ad.label==='high'?'#DC2626':ad.label==='moderate'?'#D97706':'#059669'
           return (
             <div key={ad.id} className={`${styles.creativeCard} ${styles['creative_'+ad.label]}`}>
-              <div className={styles.creativeThumb}>
+              <div className={styles.creativeThumb} style={{cursor: ad.previewLink ? 'pointer' : 'default'}}
+                onClick={() => window.open(ad.previewLink || `https://www.facebook.com/ads/library/?id=${ad.id}`, '_blank')}
+                title='View ad preview'>
+                <div style={{position:'absolute',top:8,right:8,zIndex:5,opacity:0,transition:'opacity .2s'}}
+                  className={styles.previewIcon}>
+                  <div style={{background:'rgba(0,0,0,0.6)',borderRadius:6,padding:'4px 6px',display:'flex',alignItems:'center',gap:4}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    <span style={{fontSize:9,color:'#fff',fontWeight:600,fontFamily:'Inter,sans-serif'}}>View</span>
+                  </div>
+                </div>
                 {ad.imgUrl
                   ? <img src={ad.imgUrl} alt={ad.name} className={styles.thumbImg} loading="lazy"
                       onError={e=>{e.target.style.display='none';e.target.nextSibling&&(e.target.nextSibling.style.display='flex')}}/>
@@ -941,7 +950,7 @@ export default function MetaAdsDashboard() {
         }),
         // Ads + creatives - fetch ALL active ads without insights (so no date filter excludes them)
         graphGet(`${AD_ACCOUNT_ID}/ads`, t, {
-          fields: `name,status,effective_status,creative{id,name,video_id,object_story_spec}`,
+          fields: `name,status,effective_status,creative{id,name,video_id,object_story_spec},adcreatives{preview_shareable_link}`,
           filtering: JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE','PAUSED']}]),
           limit: 200
         }),
@@ -1026,8 +1035,10 @@ export default function MetaAdsDashboard() {
           ad.creative?.object_story_spec?.video_data?.image_url || null
         const staticImg = creativeThumbs[ad.creative?.id] || null
         const thumbUrl = isVideo ? (videoImg || staticImg) : (staticImg || videoImg)
+        const previewLink = ad.adcreatives?.data?.[0]?.preview_shareable_link || null
         return {
           ...ad,
+          previewLink,
           creative: { ...ad.creative, _thumbUrl: thumbUrl || null }
         }
       })
