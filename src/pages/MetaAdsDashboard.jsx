@@ -943,7 +943,7 @@ export default function MetaAdsDashboard() {
         }),
         // Ads + creatives - fetch ALL active ads without insights (so no date filter excludes them)
         graphGet(`${AD_ACCOUNT_ID}/ads`, t, {
-          fields: `name,status,effective_status,creative{id,name,video_id,object_story_spec}`,
+          fields: `name,status,effective_status,creative{id,name,video_id,object_story_spec},adcreatives{thumbnail_url,image_url,object_story_spec}`,
           filtering: JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE','PAUSED']}]),
           limit: 200
         }),
@@ -1008,14 +1008,19 @@ export default function MetaAdsDashboard() {
             const qs = new URLSearchParams({
               access_token: t,
               ids: chunk.join(','),
-              fields: 'id,thumbnail_url,image_url'
+              fields: 'id,thumbnail_url,image_url,object_story_spec,effective_object_story_id'
             }).toString()
             const res = await fetch(`https://graph.facebook.com/v19.0?${qs}`)
             const d = await res.json()
             if (d.error) { console.error('Thumb batch error:', d.error.message); return }
             Object.entries(d).forEach(([id, c]) => {
-              // image_url = full res static ad image; thumbnail_url = fallback (use as-is, URL is signed)
-              creativeThumbs[id] = c.image_url || c.thumbnail_url || null
+              // Priority: image_url (static) → object_story_spec image → carousel first card → thumbnail_url (video/fallback)
+              const spec = c.object_story_spec || {}
+              const linkData = spec.link_data || {}
+              const videoData = spec.video_data || {}
+              const carouselFirst = linkData.child_attachments?.[0]?.image_url || null
+              const specImage = linkData.picture || videoData.image_url || spec.photo_data?.url || carouselFirst || null
+              creativeThumbs[id] = c.image_url || specImage || c.thumbnail_url || null
             })
           }))
         } catch(e) { console.error('Thumb fetch failed:', e.message) }
@@ -1024,13 +1029,29 @@ export default function MetaAdsDashboard() {
       // Merge thumbs - video ads use video_data.image_url, static use batch image_url
       const adsWithThumbs = adsRawData.map(ad => {
         const isVideo = !!ad.creative?.video_id
-        const videoImg =
-          ad.creative?.object_story_spec?.video_data?.image_url || null
+        const spec = ad.creative?.object_story_spec || {}
+        const videoImg = spec.video_data?.image_url || null
         const staticImg = creativeThumbs[ad.creative?.id] || null
-        const thumbUrl = isVideo ? (videoImg || staticImg) : (staticImg || videoImg)
+        // Also check inline adcreatives field if present
+        const inlineCreative = ad.adcreatives?.data?.[0] || {}
+        const inlineSpec = inlineCreative.object_story_spec || {}
+        const inlineImg = inlineCreative.image_url ||
+          inlineSpec.link_data?.picture ||
+          inlineSpec.video_data?.image_url ||
+          inlineSpec.link_data?.child_attachments?.[0]?.image_url ||
+          inlineCreative.thumbnail_url || null
+        // Carousel: first child attachment image
+        const carouselImg = spec.link_data?.child_attachments?.[0]?.image_url || null
+        // Final priority chain
+        const thumbUrl = isVideo
+          ? (videoImg || staticImg || inlineImg)
+          : (staticImg || spec.link_data?.picture || carouselImg || inlineImg || videoImg)
+        // previewLink = Ads Library URL
+        const previewLink = `https://www.facebook.com/ads/library/?id=${ad.id}`
         return {
           ...ad,
-          creative: { ...ad.creative, _thumbUrl: thumbUrl || null }
+          creative: { ...ad.creative, _thumbUrl: thumbUrl || null },
+          previewLink
         }
       })
 
