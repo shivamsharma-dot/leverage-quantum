@@ -1,5 +1,5 @@
-const GEMINI_KEY = process.env.GEMINI_API_KEY
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`
+const GROQ_KEY = process.env.VITE_GROQ_API_KEY
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
@@ -7,31 +7,23 @@ export default async function handler(req, res) {
   if (!messages?.length) return res.status(400).json({ error: 'No messages' })
 
   try {
-    // Build Gemini contents array
-    const contents = []
-    // Add history
-    for (const m of history) {
-      contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })
-    }
-    // Add current message
-    for (const m of messages) {
-      contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })
-    }
-
-    const r = await fetch(GEMINI_URL, {
+    const r = await fetch(GROQ_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents,
-        generationConfig: { temperature: 0.3, maxOutputTokens: 1500 }
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 1500,
+        temperature: 0.3,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...history.map(m => ({ role: m.role, content: m.content })),
+          ...messages.map(m => ({ role: m.role || 'user', content: m.content }))
+        ]
       })
     })
-
     const d = await r.json()
-    if (!r.ok) return res.status(500).json({ error: d.error?.message || 'Gemini error' })
-    const text = d.candidates?.[0]?.content?.parts?.[0]?.text || ''
-    return res.status(200).json({ content: text })
+    if (!r.ok) return res.status(500).json({ error: d.error?.message || 'Groq error' })
+    return res.status(200).json({ content: d.choices?.[0]?.message?.content || '' })
   } catch (e) {
     return res.status(500).json({ error: e.message })
   }
