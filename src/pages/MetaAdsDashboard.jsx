@@ -817,15 +817,27 @@ export default function MetaAdsDashboard() {
     } else if (window.FB) setSdkReady(true)
   }, [])
 
-  // On mount: if no local token, try loading shared token from Supabase (for viewers)
+  // Helper to fetch all ad accounts for a token
+  const fetchAdAccounts = (t) => {
+    fetch(`https://graph.facebook.com/v19.0/me/adaccounts?fields=id,name,account_status&access_token=${t}`)
+      .then(r => r.json())
+      .then(d => { if (d.data) setAdAccounts(d.data.filter(a => a.account_status === 1)) })
+      .catch(() => {})
+  }
+
+  // On mount: load token from Supabase if not in localStorage, then fetch accounts
   useEffect(() => {
     if (!token) {
       loadTokenFromSupabase().then(t => {
         if (t) {
           localStorage.setItem(TOKEN_KEY, t)
           setToken(t)
+          fetchAdAccounts(t)
         }
       })
+    } else {
+      // Token already in localStorage — fetch accounts now
+      fetchAdAccounts(token)
     }
   }, [])
 
@@ -840,12 +852,7 @@ export default function MetaAdsDashboard() {
         localStorage.setItem(TOKEN_KEY, t)
         storeTokenInSupabase(t)
         setToken(t)
-        // Fetch available ad accounts for this token
-        fetch(`https://graph.facebook.com/v19.0/me/adaccounts?fields=id,name,account_status&access_token=${t}`)
-          .then(r => r.json())
-          .then(d => {
-            if (d.data) setAdAccounts(d.data.filter(a => a.account_status === 1))
-          }).catch(() => {})
+        fetchAdAccounts(t)
       } else { setError('Authorization cancelled. Try pasting token manually.'); setLoading(false) }
     }, { scope: 'ads_read,ads_management,business_management' })
   }
@@ -1074,7 +1081,7 @@ export default function MetaAdsDashboard() {
           </div>
           <div className={styles.headerRight}>
             {/* Date filter */}
-            {adAccounts.length > 1 && (
+            {adAccounts.length > 0 && (
               <select
                 value={adAccount}
                 onChange={e => { const acc = e.target.value; setAdAccount(acc); localStorage.setItem('lq_ad_account', acc); loadAllData(token, datePreset) }}
