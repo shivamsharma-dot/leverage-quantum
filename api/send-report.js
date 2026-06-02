@@ -1,5 +1,5 @@
-const RESEND_KEY   = process.env.RESEND_API_KEY
-const GROQ_KEY     = process.env.VITE_GROQ_API_KEY
+const RESEND_KEY     = process.env.RESEND_API_KEY
+const ANTHROPIC_KEY  = process.env.ANTHROPIC_API_KEY
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY
 const AD_ACCOUNT   = 'act_641914389215638'
@@ -72,25 +72,22 @@ async function fetchMetaData(token) {
 }
 
 async function askGroq(prompt) {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01'
+    },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a Senior Performance Marketing Analyst specializing in Meta Ads for edtech companies. You write precise, data-driven audit reports. You always reference exact campaign names, exact ₹ figures, and give specific verdicts. You follow NeoLook's audit methodology strictly. Output only clean HTML using inline styles — no markdown, no code blocks, no explanations outside the HTML.`
-        },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.2,
-      max_tokens: 4000,
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }]
     })
   })
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || 'Groq error') }
   const d = await res.json()
-  return d.choices?.[0]?.message?.content || ''
+  if (!res.ok) throw new Error(d.error?.message || 'Claude error')
+  return d.content?.[0]?.text || ''
 }
 
 async function buildReport(token) {
