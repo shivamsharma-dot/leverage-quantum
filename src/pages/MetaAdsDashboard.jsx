@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { usePresence } from '../hooks/usePresence'
 import { TrendingUp, Users, MousePointer, Eye, Target, BarChart2, Zap, Activity, Award, Globe, Layers } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
@@ -812,6 +813,7 @@ export default function MetaAdsDashboard() {
   const activeTab = new URLSearchParams(location.search).get('tab') || 'campaigns'
 
   const { user } = useAuth()
+  const activeUsers = usePresence(user)
   const isViewerRole = user?.role === 'viewer'
 
   const [token, setToken]           = useState(() => localStorage.getItem(TOKEN_KEY) || '')
@@ -1144,6 +1146,29 @@ export default function MetaAdsDashboard() {
             <h1 className={styles.pageTitle}>{activeTab === 'creatives' ? 'Meta Creatives Dashboard' : 'Meta Campaigns Dashboard'}</h1>
           </div>
           <div className={styles.headerRight}>
+            {/* Active users */}
+            {activeUsers.length > 0 && (
+              <div style={{display:'flex',alignItems:'center',gap:6,marginRight:4}}>
+                <div style={{display:'flex',alignItems:'center'}}>
+                  {activeUsers.slice(0, 5).map((u, idx) => (
+                    <div key={u.email} title={`${u.name || u.email} (active)`}
+                      style={{width:28,height:28,borderRadius:'50%',border:'2px solid #fff',marginLeft:idx===0?0:-8,zIndex:10-idx,position:'relative',overflow:'hidden',background:'#E0E7FF',flexShrink:0,boxShadow:'0 1px 3px rgba(0,0,0,0.15)'}}>
+                      {u.picture
+                        ? <img src={u.picture} alt={u.name} style={{width:'100%',height:'100%',objectFit:'cover'}} referrerPolicy="no-referrer"/>
+                        : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#4F46E5'}}>
+                            {(u.name || u.email).charAt(0).toUpperCase()}
+                          </div>}
+                      <div style={{position:'absolute',bottom:1,right:1,width:7,height:7,borderRadius:'50%',background:'#22C55E',border:'1.5px solid #fff'}}/>
+                    </div>
+                  ))}
+                </div>
+                {activeUsers.length > 1 && (
+                  <span style={{fontSize:11,color:'#6B7280',fontWeight:500,whiteSpace:'nowrap'}}>
+                    {activeUsers.length} online
+                  </span>
+                )}
+              </div>
+            )}
             {/* Date filter */}
             {adAccounts.length > 0 && (
               <div style={{position:'relative'}} ref={accountPickerRef}>
