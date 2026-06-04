@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts'
 import Sidebar from '../components/Sidebar'
 
@@ -83,13 +83,15 @@ export default function MTDDashboard(){
   const [error,setError]    = useState(null)
   const [lastSync,setLastSync]= useState(null)
 
+  const hasSetInitial = useRef(false)
+
   const loadData = useCallback(async()=>{
     try{
       const res = await fetch(SHEET_CSV)
       const csv = await res.text()
       const p   = parseCSV(csv)
       setMonths(p)
-      setSel(p.length-1)
+      if(!hasSetInitial.current){ setSel(p.length-1); hasSetInitial.current=true }
       setLastSync(new Date())
       setError(null)
     }catch(e){ setError('Failed: '+e.message) }
