@@ -35,8 +35,7 @@ function fmtNum(n){
 
 function parseCSV(csv){
   const LF = String.fromCharCode(10)
-  const rows = csv.replace(/
-/g,'').split(LF).map(line => {
+  const rows = csv.replace(new RegExp(String.fromCharCode(13),'g'),'').split(LF).map(line => {
     const cols = [], buf = []
     let inQ = false
     for(const ch of line){
