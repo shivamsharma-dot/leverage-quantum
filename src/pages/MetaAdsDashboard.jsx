@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { usePresence } from '../hooks/usePresence'
 import { TrendingUp, Users, MousePointer, Eye, Target, BarChart2, Zap, Activity, Award, Globe, Layers } from 'lucide-react'
@@ -238,359 +238,253 @@ function ScoreBadge({ score, label }) {
 
 // ─── CAMPAIGN TAB ─────────────────────────────────────────
 function CampaignsTab({ data }) {
-  const { account, lifetimeAccount = {}, activeCampaignCount = 0, pausedCampaignCount = 0, campaigns, ads = [], accountAvgCTR } = data
-  const leads = getAction(account.actions, 'lead')
-
-  const cpl = leads > 0 ? Math.round(parseFloat(account.spend||0) / leads) : 0
-
-  const lifetimeSpend   = parseFloat(lifetimeAccount.spend||0)
-  const lifetimeClicks  = parseInt(lifetimeAccount.clicks||0)
-  const lifetimeImpr    = parseInt(lifetimeAccount.impressions||0)
-  const lifetimeCTR     = lifetimeImpr > 0 ? (lifetimeClicks / lifetimeImpr * 100) : 0
-  const lifetimeCPC     = lifetimeClicks > 0 ? lifetimeSpend / lifetimeClicks : 0
-
-  const lifetimeKpis = [
-    { label:'Total Spend',      value: fmtINR(lifetimeSpend),                          color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
-    { label:'Total Campaigns',  value: (activeCampaignCount + pausedCampaignCount).toLocaleString(), sub: `${activeCampaignCount} active · ${pausedCampaignCount} paused`, color:'#F59E0B', iconBg:'#FEF3C7', icon:<Layers size={15} color='#F59E0B'/> },
-    { label:'Total Reach',      value: parseInt(lifetimeAccount.reach||0).toLocaleString(),          color:'#10B981', iconBg:'#D1FAE5', icon:<Globe size={15} color='#10B981'/> },
-    { label:'Overall CTR',      value: lifetimeCTR.toFixed(2)+'%',                     color:'#0EA5E9', iconBg:'#E0F2FE', icon:<TrendingUp size={15} color='#0EA5E9'/> },
-    { label:'Lifetime CPC',     value: lifetimeCPC > 0 ? '₹'+Math.round(lifetimeCPC).toLocaleString('en-IN') : '—', color:'#6366F1', iconBg:'#EEF2FF', icon:<Zap size={15} color='#6366F1'/> },
-  ]
-
-  const periodSpend   = parseFloat(account.spend||0)
-  const periodClicks  = parseInt(account.clicks||0)
-  const periodCTR     = parseFloat(account.ctr||0)
-  const periodCPC     = periodClicks > 0 ? periodSpend / periodClicks : 0
-  const periodCPM     = parseFloat(account.cpm||0)
-
-  const periodKpis = [
-    { label:'Spend',    value: fmtINR(periodSpend),                                         color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
-    { label:'Leads',    value: leads.toLocaleString(),                                       color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
-    { label:'CPL',      value: cpl > 0 ? '₹'+cpl.toLocaleString('en-IN') : '—',             color:'#DC2626', iconBg:'#FEE2E2', icon:<Target size={15} color='#DC2626'/> },
-    { label:'Avg CTR',  value: periodCTR.toFixed(2)+'%',                                    color:'#F59E0B', iconBg:'#FEF3C7', icon:<TrendingUp size={15} color='#F59E0B'/> },
-    { label:'Avg CPC',  value: periodCPC > 0 ? '₹'+Math.round(periodCPC).toLocaleString('en-IN') : '—', color:'#6366F1', iconBg:'#EEF2FF', icon:<Zap size={15} color='#6366F1'/> },
-  ]
-
-  const kpis = periodKpis // keep for any legacy usage
-
-  // Sort by spend desc
-  const sorted = [...campaigns].sort((a,b) => parseFloat(b.insights?.data?.[0]?.spend||0) - parseFloat(a.insights?.data?.[0]?.spend||0))
-
-  const tierOf = (ins) => {
-    const ctr = parseFloat(ins?.ctr||0)
-    if (ctr > accountAvgCTR * 1.2) return 'TOP'
-    if (ctr > accountAvgCTR * 0.5) return 'AVERAGE'
-    return 'LOW'
-  }
-  const tierColor = { TOP:'#059669', AVERAGE:'#D97706', LOW:'#DC2626' }
-  const tierBg    = { TOP:'#DCFCE7', AVERAGE:'#FEF3C7', LOW:'#FEE2E2' }
-
-  // Back to top - uses window scroll
-  useEffect(() => {
-    const onScroll = () => setShowBackToTop(window.scrollY > 400)
-    window.addEventListener('scroll', onScroll)
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
-  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
-
+  const { account, lifetimeAccount = {}, activeCampaignCount = 0, pausedCampaignCount = 0, campaigns = [], accountAvgCTR } = data
+  const [sortBy, setSortBy] = useState('spend')
+  const [sortDir, setSortDir] = useState('desc')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [search, setSearch] = useState('')
+  const [expanded, setExpanded] = useState(null)
+  const accSpend = parseFloat(account.spend || 0)
+  const accImpr = parseInt(account.impressions || 0)
+  const accClicks = parseInt(account.clicks || 0)
+  const accLeads = getAction(account.actions, 'lead')
+  const accCTRpct = accImpr > 0 ? (accClicks / accImpr * 100) : 0
+  const accCPL = accLeads > 0 ? Math.round(accSpend / accLeads) : 0
+  const accCPM = accImpr > 0 ? Math.round(accSpend / accImpr * 1000) : 0
+  const lifetimeSpend = parseFloat(lifetimeAccount.spend || 0)
+  const lifetimeClicks = parseInt(lifetimeAccount.clicks || 0)
+  const lifetimeCPC = lifetimeClicks > 0 ? lifetimeSpend / lifetimeClicks : 0
+  const processed = useMemo(() => (campaigns || []).map(c => {
+    const ins = c.insights?.data?.[0] || {}
+    const spend = parseFloat(ins.spend) || 0, impressions = parseInt(ins.impressions) || 0
+    const clicks = parseInt(ins.clicks) || 0, reach = parseInt(ins.reach) || 0
+    const frequency = parseFloat(ins.frequency) || 0, ctr = parseFloat(ins.ctr) || 0
+    const cpm = impressions > 0 ? spend / impressions * 1000 : 0
+    const cpc = clicks > 0 ? spend / clicks : 0
+    const actions = ins.actions || [], leads = getAction(actions, 'lead')
+    const cpl = leads > 0 ? Math.round(spend / leads) : 0
+    const convRate = clicks > 0 ? (leads / clicks * 100) : 0
+    const spendShare = accSpend > 0 ? (spend / accSpend * 100) : 0
+    const avg = (accountAvgCTR || 0) * 100 || accCTRpct
+    const signal = ctr > avg * 1.2 ? 'top' : (ctr < avg * 0.6 || (frequency > 4 && ctr < avg)) ? 'low' : 'average'
+    const fatigueLevel = frequency > 4.5 ? 'fatigue' : frequency > 3 ? 'watch' : 'healthy'
+    return { ...c, spend, impressions, clicks, reach, frequency, ctr, cpm, cpc, leads, cpl, convRate, spendShare, signal, fatigueLevel }
+  }), [campaigns, accSpend, accCTRpct, accountAvgCTR])
+  const filtered = useMemo(() => {
+    let out = processed
+    if (statusFilter !== 'all') out = out.filter(c => c.status?.toLowerCase() === statusFilter)
+    if (search) out = out.filter(c => c.name?.toLowerCase().includes(search.toLowerCase()))
+    return [...out].sort((a, b) => sortDir === 'desc' ? (b[sortBy]||0)-(a[sortBy]||0) : (a[sortBy]||0)-(b[sortBy]||0))
+  }, [processed, statusFilter, search, sortBy, sortDir])
+  const totFatigue = useMemo(() => processed.filter(c => c.fatigueLevel === 'fatigue').length, [processed])
+  const totActive = useMemo(() => processed.filter(c => c.status === 'ACTIVE').length, [processed])
+  const handleSort = col => { if (sortBy === col) setSortDir(d => d==='desc'?'asc':'desc'); else { setSortBy(col); setSortDir('desc') } }
+  const fmtN = n => n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':String(Math.round(n||0))
+  const sBadge = s => { const a=s==='ACTIVE'; return <span style={{ display:'inline-flex',alignItems:'center',gap:4,background:a?'#E9F8EF':'#F3F4F6',color:a?'#166534':'#6B7280',fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap' }}><span style={{ width:5,height:5,borderRadius:'50%',background:a?'#22C55E':'#9CA3AF',display:'inline-block' }}/>{a?'Active':'Paused'}</span> }
+  const sigBadge = sig => { const m={top:{bg:'#E9F8EF',c:'#166534',t:'▲ Top'},average:{bg:'#F3F4F6',c:'#6B7280',t:'→ Avg'},low:{bg:'#FEF2F2',c:'#991B1B',t:'▼ Low'}}[sig]||{bg:'#F3F4F6',c:'#6B7280',t:'→ Avg'}; return <span style={{ background:m.bg,color:m.c,fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap' }}>{m.t}</span> }
+  const fBadge = lv => { const m={healthy:{bg:'#E9F8EF',c:'#166534'},watch:{bg:'#FEF9C3',c:'#854D0E'},fatigue:{bg:'#FEF2F2',c:'#991B1B'}}[lv]||{bg:'#E9F8EF',c:'#166534'}; return <span style={{ background:m.bg,color:m.c,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:10,textTransform:'capitalize',whiteSpace:'nowrap' }}>{lv}</span> }
+  const cplCol = v => v>300?'#DC2626':v>150?'#D97706':v>0?'#059669':'#6B7280'
+  const SH = ({ col, lbl }) => <div onClick={()=>handleSort(col)} style={{ fontSize:11,fontWeight:600,color:sortBy===col?'#1F3C84':'#6B7280',cursor:'pointer',userSelect:'none',display:'flex',alignItems:'center',gap:2 }}>{lbl}<span style={{ opacity:sortBy===col?1:0.3,fontSize:9 }}>{sortBy===col?(sortDir==='desc'?'↓':'↑'):'↕'}</span></div>
+  const cols = '2.4fr 90px 80px 110px 110px 90px 80px 90px 90px 80px'
   return (
-    <div className={styles.tabContent}>
-      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'custom_range' ? `${data.range?.since} to ${data.range?.until}` : data.preset === 'this_month' ? 'This Month' : data.preset === 'last_month' ? 'Last Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
-      <p style={{fontSize:12,color:'#9CA3AF',marginBottom:4}}>{campaigns.length} campaigns · sorted by spend</p>
-      <div className={styles.campaignGrid}>
-        {sorted.map(c => {
-          const ins = c.insights?.data?.[0] || {}
-          const tier = tierOf(ins)
-          const cLeads = getAction(ins.actions, 'lead')
-          const spend = parseFloat(ins.spend||0)
-          return (
-            <div key={c.id} className={styles.campaignCard}>
-              <div className={styles.campaignCardTop}>
-                <div style={{flex:1,minWidth:0}}>
-                  <p className={styles.campaignName} title={c.name}>{c.name}</p>
-                  <p className={styles.campaignMeta}>{c.objective?.replace(/_/g,' ')} · {new Date(c.created_time||Date.now()).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}</p>
-                </div>
-                <div style={{display:'flex',gap:4,flexShrink:0}}>
-                  <span style={{fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:4,background:c.status==='ACTIVE'?'#DCFCE7':'#F3F4F6',color:c.status==='ACTIVE'?'#059669':'#9CA3AF'}}>{c.status}</span>
-                  <span style={{fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:4,background:tierBg[tier],color:tierColor[tier]}}>Performance: {tier}</span>
-                </div>
+    <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16 }}>
+        {[
+          { label:'ALL TIME SPEND',value:fmtINR(lifetimeSpend),sub:(activeCampaignCount+pausedCampaignCount).toLocaleString()+' total campaigns',accent:'#1F3C84',accentBg:'#E8EFF9' },
+          { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:totActive+' active · '+pausedCampaignCount+' paused',accent:'#1C9FD4',accentBg:'#E3F5FD' },
+          { label:'TOTAL LEADS',value:accLeads.toLocaleString('en-IN'),sub:'Current period',accent:'#059669',accentBg:'#E9F8EF' },
+          { label:'AVG CPL',value:accCPL>0?'₹'+accCPL.toLocaleString('en-IN'):'—',sub:'CTR '+accCTRpct.toFixed(2)+'% · CPM ₹'+accCPM,accent:'#D97706',accentBg:'#FEF9C3' },
+          { label:'FATIGUED',value:totFatigue,sub:'Campaigns freq >4.5',accent:totFatigue>0?'#DC2626':'#059669',accentBg:totFatigue>0?'#FEF2F2':'#E9F8EF' },
+        ].map(k => <div key={k.label} style={{ background:k.accentBg,borderLeft:'3px solid '+k.accent,border:'0.5px solid #E5E7EB',borderRadius:12,padding:'16px 18px' }}><div style={{ fontSize:10,fontWeight:600,color:k.accent,letterSpacing:'0.06em',marginBottom:6 }}>{k.label}</div><div style={{ fontSize:22,fontWeight:700,color:k.accent,letterSpacing:'-0.5px' }}>{k.value}</div><div style={{ fontSize:11,color:k.accent,opacity:0.7,marginTop:4 }}>{k.sub}</div></div>)}
+      </div>
+      <div style={{ display:'flex',gap:8,marginBottom:14,alignItems:'center',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 14px',flexWrap:'wrap' }}>
+        <input type="text" placeholder="Search campaigns..." value={search} onChange={e=>setSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:220,background:'#FAFAFA' }}/>
+        <div style={{ display:'flex',gap:3 }}>
+          {['all','active','paused'].map(s=><button key={s} onClick={()=>setStatusFilter(s)} style={{ padding:'5px 12px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:statusFilter===s?'#1F3C84':'#fff',color:statusFilter===s?'#fff':'#6B7280' }}>{s.charAt(0).toUpperCase()+s.slice(1)}</button>)}
+        </div>
+        <div style={{ marginLeft:'auto',fontSize:12,color:'#9CA3AF' }}>{filtered.length} campaigns · avg CTR {accCTRpct.toFixed(2)}% · lifetime CPC ₹{Math.round(lifetimeCPC)}</div>
+      </div>
+      <div style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden' }}>
+        <div style={{ display:'grid',gridTemplateColumns:cols,padding:'10px 16px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8,alignItems:'center' }}>
+          <div style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>Campaign</div>
+          <div style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>Status</div>
+          <div style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>Signal</div>
+          <SH col="spend" lbl="Spend"/><SH col="impressions" lbl="Impressions"/><SH col="clicks" lbl="Clicks"/><SH col="ctr" lbl="CTR"/><SH col="cpl" lbl="CPL"/><SH col="leads" lbl="Leads"/><SH col="frequency" lbl="Freq"/>
+        </div>
+        {filtered.length===0?<div style={{ padding:'48px',textAlign:'center',color:'#9CA3AF',fontSize:13 }}>No campaigns match your filters</div>:filtered.map((c,i)=>(
+          <div key={c.id||i}>
+            <div onClick={()=>setExpanded(expanded===c.id?null:c.id)} style={{ display:'grid',gridTemplateColumns:cols,padding:'11px 16px',borderBottom:'0.5px solid #F3F4F6',gap:8,cursor:'pointer',background:expanded===c.id?'#F9FAFB':'transparent',transition:'background .1s',alignItems:'center' }}>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontSize:13,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{c.name}</div>
+                <div style={{ fontSize:11,color:'#9CA3AF',marginTop:2 }}>{c.objective?.replace(/_/g,' ')} · {c.created_time?new Date(c.created_time).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'—'}</div>
+                <div style={{ marginTop:5,height:3,background:'#F3F4F6',borderRadius:2,overflow:'hidden',width:'90%' }}><div style={{ height:'100%',width:Math.min(100,c.spendShare)+'%',background:'#1F3C84',borderRadius:2 }}/></div>
               </div>
-              <div className={styles.campaignMetrics}>
-                <div className={styles.metricPair}><span>Impressions</span><strong>{parseInt(ins.impressions||0).toLocaleString()}</strong></div>
-                <div className={styles.metricPair}><span>Clicks</span><strong>{parseInt(ins.clicks||0).toLocaleString()}</strong></div>
-                <div className={styles.metricPair}><span>Spend</span><strong>{fmtINR(spend)}</strong></div>
-                <div className={styles.metricPair}><span>CTR</span><strong>{parseFloat(ins.ctr||0).toFixed(2)}%</strong></div>
-                <div className={styles.metricPair}><span>CPC</span><strong>{spend>0&&parseInt(ins.clicks||0)>0?'₹'+Math.round(spend/parseInt(ins.clicks||1)).toLocaleString('en-IN'):'-'}</strong></div>
-                <div className={styles.metricPair}><span>Leads</span><strong>{cLeads.toLocaleString()}</strong></div>
-              </div>
-              {ins.ctr > 0 && (
-                <div className={styles.campaignInsight}>
-                  {parseFloat(ins.ctr) >= accountAvgCTR
-                    ? <><span className={styles.insightGreen}>↗</span> CTR above account average - ready to scale</>
-                    : <><span className={styles.insightYellow}>⚠</span> CTR below account average - review targeting</>
-                  }
-                </div>
-              )}
+              <div>{sBadge(c.status)}</div><div>{sigBadge(c.signal)}</div>
+              <div><div style={{ fontSize:13,fontWeight:600,color:'#111827' }}>{fmtINR(c.spend)}</div><div style={{ fontSize:10,color:'#9CA3AF' }}>{c.spendShare.toFixed(1)}% of total</div></div>
+              <div style={{ fontSize:13,color:'#374151' }}>{fmtN(c.impressions)}</div>
+              <div style={{ fontSize:13,color:'#374151' }}>{fmtN(c.clicks)}</div>
+              <div><div style={{ fontSize:13,color:c.ctr<accCTRpct*0.6?'#DC2626':'#374151',fontWeight:c.ctr<accCTRpct*0.6?600:400 }}>{c.ctr.toFixed(2)}%</div><div style={{ fontSize:10,color:'#9CA3AF' }}>CPM ₹{Math.round(c.cpm)}</div></div>
+              <div style={{ fontSize:13,fontWeight:600,color:cplCol(c.cpl) }}>{c.cpl>0?'₹'+c.cpl.toLocaleString('en-IN'):'—'}</div>
+              <div style={{ fontSize:13,color:'#374151',fontWeight:500 }}>{c.leads>0?c.leads.toLocaleString('en-IN'):'—'}</div>
+              <div>{fBadge(c.fatigueLevel)}</div>
             </div>
-          )
-        })}
+            {expanded===c.id&&(
+              <div style={{ padding:'16px 16px 16px 32px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB' }}>
+                <div style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10,marginBottom:10 }}>
+                  {[{l:'Reach',v:fmtN(c.reach)},{l:'CPC',v:c.cpc>0?'₹'+Math.round(c.cpc):'—'},{l:'CPM',v:c.cpm>0?'₹'+Math.round(c.cpm):'—'},{l:'Conv. Rate',v:c.convRate>0?c.convRate.toFixed(2)+'%':'—'},{l:'Frequency',v:c.frequency>0?c.frequency.toFixed(2):'—',w:c.frequency>3},{l:'Spend Share',v:c.spendShare.toFixed(1)+'%'}].map(m=><div key={m.l} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:8,padding:'10px 14px' }}><div style={{ fontSize:10,color:'#9CA3AF',fontWeight:600,marginBottom:4 }}>{m.l}</div><div style={{ fontSize:16,fontWeight:700,color:m.w?'#DC2626':'#111827' }}>{m.v}</div></div>)}
+                </div>
+                {c.fatigueLevel!=='healthy'&&<div style={{ padding:'10px 14px',background:c.fatigueLevel==='fatigue'?'#FEF2F2':'#FEF9C3',borderRadius:8,fontSize:12,color:c.fatigueLevel==='fatigue'?'#991B1B':'#854D0E',fontWeight:500 }}>{c.fatigueLevel==='fatigue'?'⚠ High frequency ('+c.frequency.toFixed(1)+') — audience fatigued. Refresh creatives or expand targeting.':'⚡ Frequency '+c.frequency.toFixed(1)+' approaching fatigue. Monitor CTR closely.'}</div>}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )
 }
-
-// ─── CREATIVES TAB ────────────────────────────────────────
 function CreativesTab({ data }) {
-  const { account, lifetimeAccount = {}, activeCampaignCount = 0, pausedCampaignCount = 0, ads, accountAvgCTR, insightsMap = {}, prevInsightsMap = {} } = data
-  const [expanded, setExpanded] = useState(null)
+  const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, prevInsightsMap = {} } = data
   const [viewMode, setViewMode] = useState('grid')
   const [adTypeFilter, setAdTypeFilter] = useState('all')
   const [healthFilter, setHealthFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('spend')
   const [adNameSearch, setAdNameSearch] = useState('')
   const [showBackToTop, setShowBackToTop] = useState(false)
-  const leads = getAction(account.actions, 'lead')
-
-  const cpl = leads > 0 ? Math.round(parseFloat(account.spend||0) / leads) : 0
-
-  const lifetimeSpend   = parseFloat(lifetimeAccount.spend||0)
-  const lifetimeClicks  = parseInt(lifetimeAccount.clicks||0)
-  const lifetimeImpr    = parseInt(lifetimeAccount.impressions||0)
-  const lifetimeCTR     = lifetimeImpr > 0 ? (lifetimeClicks / lifetimeImpr * 100) : 0
-  const lifetimeCPC     = lifetimeClicks > 0 ? lifetimeSpend / lifetimeClicks : 0
-
-  const lifetimeKpis = [
-    { label:'Total Spend',      value: fmtINR(lifetimeSpend),                          color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
-    { label:'Total Campaigns',  value: (activeCampaignCount + pausedCampaignCount).toLocaleString(), sub: `${activeCampaignCount} active · ${pausedCampaignCount} paused`, color:'#F59E0B', iconBg:'#FEF3C7', icon:<Layers size={15} color='#F59E0B'/> },
-    { label:'Total Reach',      value: parseInt(lifetimeAccount.reach||0).toLocaleString(),          color:'#10B981', iconBg:'#D1FAE5', icon:<Globe size={15} color='#10B981'/> },
-    { label:'Overall CTR',      value: lifetimeCTR.toFixed(2)+'%',                     color:'#0EA5E9', iconBg:'#E0F2FE', icon:<TrendingUp size={15} color='#0EA5E9'/> },
-    { label:'Lifetime CPC',     value: lifetimeCPC > 0 ? '₹'+Math.round(lifetimeCPC).toLocaleString('en-IN') : '—', color:'#6366F1', iconBg:'#EEF2FF', icon:<Zap size={15} color='#6366F1'/> },
-  ]
-
-  const periodSpend   = parseFloat(account.spend||0)
-  const periodClicks  = parseInt(account.clicks||0)
-  const periodCTR     = parseFloat(account.ctr||0)
-  const periodCPC     = periodClicks > 0 ? periodSpend / periodClicks : 0
-  const periodCPM     = parseFloat(account.cpm||0)
-
-  const periodKpis = [
-    { label:'Spend',    value: fmtINR(periodSpend),                                         color:'#7C3AED', iconBg:'#F3E8FF', icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12M6 8h12M6 13l8 8M6 13h3a4 4 0 0 0 0-8"/></svg> },
-    { label:'Leads',    value: leads.toLocaleString(),                                       color:'#059669', iconBg:'#D1FAE5', icon:<Users size={15} color='#059669'/> },
-    { label:'CPL',      value: cpl > 0 ? '₹'+cpl.toLocaleString('en-IN') : '—',             color:'#DC2626', iconBg:'#FEE2E2', icon:<Target size={15} color='#DC2626'/> },
-    { label:'Avg CTR',  value: periodCTR.toFixed(2)+'%',                                    color:'#F59E0B', iconBg:'#FEF3C7', icon:<TrendingUp size={15} color='#F59E0B'/> },
-    { label:'Avg CPC',  value: periodCPC > 0 ? '₹'+Math.round(periodCPC).toLocaleString('en-IN') : '—', color:'#6366F1', iconBg:'#EEF2FF', icon:<Zap size={15} color='#6366F1'/> },
-  ]
-
-  const kpis = periodKpis
-
-  const scoredAds = ads.map(ad => {
-    const ins = insightsMap[ad.id] || {}
-    const impr = parseInt(ins.impressions||0)
-    const clks = parseInt(ins.clicks||0)
-    const ctr  = parseFloat(ins.ctr||0)
-    const freq = parseFloat(ins.frequency||1)
-    // picture = highest res available from Meta API for both image + video ads
-    const imgUrl = proxyImg(ad.creative?._thumbUrl) || null
-    const isVideo = !!ad.creative?.video_id
-    const prevIns = prevInsightsMap[ad.id] || null
-    const prev = prevIns ? {
-      impressions: parseInt(prevIns.impressions||0),
-      ctr: parseFloat(prevIns.ctr||0),
-      spend: parseFloat(prevIns.spend||0),
-      _currCPM: impr > 0 ? (parseFloat(ins.spend||0) / impr) * 1000 : 0
-    } : null
-    const { score, label } = computeFatigue(impr, clks, ctr, freq, accountAvgCTR, prev)
-    return { ...ad, ins, impr, clks, ctr, freq, score, label, imgUrl }
-  }).sort((a, b) => {
-    const order = { healthy: 0, moderate: 1, high: 2 }
-    if (order[a.label] !== order[b.label]) return order[a.label] - order[b.label]
-    return parseFloat(b.ins.spend||0) - parseFloat(a.ins.spend||0)
-  })
-
-  const filteredAds = scoredAds.filter(ad => {
-    if (healthFilter !== 'all' && ad.label !== healthFilter) return false
-    if (adTypeFilter === 'video' && !ad.creative?.video_id) return false
-    if (adTypeFilter === 'image' && !!ad.creative?.video_id) return false
-    if (adNameSearch && !ad.name?.toLowerCase().includes(adNameSearch.toLowerCase())) return false
-    return true
-  })
-
-  const healthCount = {
-    healthy:  scoredAds.filter(a => a.label === 'healthy').length,
-    moderate: scoredAds.filter(a => a.label === 'moderate').length,
-    high:     scoredAds.filter(a => a.label === 'high').length,
-  }
-
-  // Back to top - uses window scroll
-  useEffect(() => {
-    const onScroll = () => setShowBackToTop(window.scrollY > 400)
-    window.addEventListener('scroll', onScroll)
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-
-  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
-
+  const backTopRef = useRef(null)
+  const accSpend = parseFloat(account.spend || 0)
+  const accImpr = parseInt(account.impressions || 0)
+  const accClicks = parseInt(account.clicks || 0)
+  const accLeads = getAction(account.actions, 'lead')
+  const accCTRpct = accImpr > 0 ? (accClicks / accImpr * 100) : 0
+  const accCPL = accLeads > 0 ? Math.round(accSpend / accLeads) : 0
+  const lifetimeSpend = parseFloat(lifetimeAccount.spend || 0)
+  const processed = useMemo(() => (ads || []).map(ad => {
+    const cur = insightsMap[ad.id] || ad.insights?.data?.[0] || {}
+    const prev = prevInsightsMap[ad.id] || {}
+    const spend = parseFloat(cur.spend)||0, impressions = parseInt(cur.impressions)||0
+    const clicks = parseInt(cur.clicks)||0, reach = parseInt(cur.reach)||0
+    const ctr = parseFloat(cur.ctr)||0
+    const cpm = parseFloat(cur.cpm)||(impressions>0?spend/impressions*1000:0)
+    const cpc = clicks>0?spend/clicks:0, frequency = parseFloat(cur.frequency)||0
+    const actions = cur.actions||[], leads = getAction(actions,'lead')
+    const cpl = leads>0?Math.round(spend/leads):0
+    const convRate = clicks>0?(leads/clicks*100):0
+    const spendShare = accSpend>0?(spend/accSpend*100):0
+    const prevCTR = parseFloat(prev.ctr)||0
+    const ctrDelta = prevCTR>0?((ctr-prevCTR)/prevCTR*100):null
+    const videoViews = getAction(actions,'video_view')
+    const hookRate = impressions>0&&videoViews>0?(videoViews/impressions*100):0
+    let fatigueLabel = ad.fatigueLabel||'Healthy'
+    if (frequency>4.5) fatigueLabel='High Fatigue'
+    else if (frequency>3||(accCTRpct>0&&ctr<accCTRpct*0.55)) fatigueLabel='Moderate'
+    else if (!ad.fatigueLabel) fatigueLabel='Healthy'
+    const type = ad.adType||(ad.name?.toLowerCase().includes('video')||ad.name?.toLowerCase().includes('reel')?'video':ad.name?.toLowerCase().includes('carousel')?'carousel':'image')
+    let score=50
+    if (accCTRpct>0) score+=Math.min(25,Math.max(-25,(ctr-accCTRpct)/accCTRpct*25))
+    if (frequency>0) score-=Math.min(20,(frequency-1)*5)
+    if (cpl>0&&accCPL>0) score+=Math.min(15,Math.max(-15,(accCPL-cpl)/accCPL*15))
+    score=Math.round(Math.min(100,Math.max(0,score)))
+    return { ...ad, spend, impressions, clicks, reach, ctr, cpm, cpc, frequency, leads, cpl, convRate, spendShare, ctrDelta, videoViews, hookRate, fatigueLabel, type, score }
+  }).filter(a=>a.spend>0||a.impressions>0), [ads,insightsMap,prevInsightsMap,accSpend,accCTRpct,accCPL])
+  const filtered = useMemo(() => {
+    let out=processed
+    if (adTypeFilter!=='all') out=out.filter(a=>a.type===adTypeFilter)
+    if (healthFilter==='healthy') out=out.filter(a=>a.fatigueLabel==='Healthy')
+    else if (healthFilter==='moderate') out=out.filter(a=>a.fatigueLabel==='Moderate')
+    else if (healthFilter==='fatigue') out=out.filter(a=>a.fatigueLabel==='High Fatigue')
+    if (adNameSearch) out=out.filter(a=>a.name?.toLowerCase().includes(adNameSearch.toLowerCase()))
+    return [...out].sort((a,b)=>sortBy==='score'?b.score-a.score:(b[sortBy]||0)-(a[sortBy]||0))
+  }, [processed,adTypeFilter,healthFilter,adNameSearch,sortBy])
+  const summary = useMemo(() => ({
+    healthy:processed.filter(a=>a.fatigueLabel==='Healthy').length,
+    moderate:processed.filter(a=>a.fatigueLabel==='Moderate').length,
+    fatigue:processed.filter(a=>a.fatigueLabel==='High Fatigue').length,
+    total:processed.length,
+    totalLeads:processed.reduce((s,a)=>s+a.leads,0),
+  }),[processed])
+  const avgCPL=summary.totalLeads>0?Math.round(accSpend/summary.totalLeads):0
+  const hColor={'Healthy':'#166534','Moderate':'#854D0E','High Fatigue':'#991B1B'}
+  const hBg={'Healthy':'#E9F8EF','Moderate':'#FEF9C3','High Fatigue':'#FEF2F2'}
+  const tColor={video:'#1D4ED8',image:'#374151',carousel:'#7C3AED'}
+  const tBg={video:'#EFF6FF',image:'#F3F4F6',carousel:'#F5F3FF'}
+  const cplCol=v=>v>300?'#DC2626':v>150?'#D97706':v>0?'#059669':'#9CA3AF'
+  const fmtN=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':String(Math.round(n||0))
+  const SB=({score})=>(<div style={{ display:'flex',alignItems:'center',gap:5 }}><div style={{ flex:1,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:score+'%',background:score>65?'#22C55E':score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,fontWeight:700,color:'#6B7280',minWidth:22 }}>{score}</span></div>)
   return (
-    <div className={styles.tabContent}>
-      <NeolookKPIs lifetime={lifetimeKpis} period={periodKpis} periodLabel={`${data.preset === 'custom_range' ? `${data.range?.since} to ${data.range?.until}` : data.preset === 'this_month' ? 'This Month' : data.preset === 'last_month' ? 'Last Month' : data.preset === 'yesterday' ? 'Yesterday' : data.preset === 'last_14d' ? 'Last 14 Days' : data.preset === 'last_30d' ? 'Last 30 Days' : 'Last 7 Days'}`}/>
-
-      {/* Creative List header with filters */}
-      <div className={styles.creativeListHeader}>
-        <div style={{display:'flex',alignItems:'center',gap:12}}>
-          <span className={styles.creativeListTitle}>Creative List <span className={styles.creativeListCount}>({filteredAds.length}/{scoredAds.length})</span></span>
-          <div style={{display:'flex',gap:6}}>
-            <div style={{display:'flex',alignItems:'center',gap:4,background:'#DCFCE7',border:'1px solid #BBF7D0',borderRadius:20,padding:'3px 10px'}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <span style={{fontSize:11,fontWeight:700,color:'#15803D'}}>{healthCount.healthy} Healthy</span>
-            </div>
-            <div style={{display:'flex',alignItems:'center',gap:4,background:'#FEF3C7',border:'1px solid #FDE68A',borderRadius:20,padding:'3px 10px'}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span style={{fontSize:11,fontWeight:700,color:'#B45309'}}>{healthCount.moderate} Moderate</span>
-            </div>
-            <div style={{display:'flex',alignItems:'center',gap:4,background:'#FEE2E2',border:'1px solid #FECACA',borderRadius:20,padding:'3px 10px'}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span style={{fontSize:11,fontWeight:700,color:'#B91C1C'}}>{healthCount.high} High Fatigue</span>
-            </div>
-          </div>
+    <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10,marginBottom:16 }}>
+        {[
+          { label:'TOTAL CREATIVES',value:summary.total,sub:'With spend this period',accent:'#1F3C84',accentBg:'#E8EFF9' },
+          { label:'HEALTHY',value:summary.healthy,sub:'Freq <3, CTR stable',accent:'#166534',accentBg:'#E9F8EF' },
+          { label:'MODERATE',value:summary.moderate,sub:'Freq 3-4.5 or CTR dipping',accent:'#854D0E',accentBg:'#FEF9C3' },
+          { label:'HIGH FATIGUE',value:summary.fatigue,sub:'Freq >4.5 — refresh now',accent:'#991B1B',accentBg:'#FEF2F2' },
+          { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:'All Time: '+fmtINR(lifetimeSpend),accent:'#1C9FD4',accentBg:'#E3F5FD' },
+          { label:'AVG CPL',value:avgCPL>0?'₹'+avgCPL.toLocaleString('en-IN'):'—',sub:'Acct avg CTR '+accCTRpct.toFixed(2)+'%',accent:'#D97706',accentBg:'#FEF9C3' },
+        ].map(k=><div key={k.label} style={{ background:k.accentBg,borderLeft:'3px solid '+k.accent,border:'0.5px solid #E5E7EB',borderRadius:12,padding:'14px 16px' }}><div style={{ fontSize:10,fontWeight:600,color:k.accent,letterSpacing:'0.06em',marginBottom:6 }}>{k.label}</div><div style={{ fontSize:22,fontWeight:700,color:k.accent,letterSpacing:'-0.5px' }}>{k.value}</div><div style={{ fontSize:11,color:k.accent,opacity:0.7,marginTop:4 }}>{k.sub}</div></div>)}
+      </div>
+      <div style={{ display:'flex',gap:8,marginBottom:14,alignItems:'center',flexWrap:'wrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 14px' }}>
+        <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:200,background:'#FAFAFA' }}/>
+        <div style={{ display:'flex',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:10 }}>
+          {['all','video','image','carousel'].map(t=><button key={t} onClick={()=>setAdTypeFilter(t)} style={{ padding:'5px 11px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:adTypeFilter===t?'#1F3C84':'#fff',color:adTypeFilter===t?'#fff':'#6B7280' }}>{t.charAt(0).toUpperCase()+t.slice(1)}</button>)}
         </div>
-        <div className={styles.creativeControls}>
-          <input
-            type="text"
-            placeholder="Search ad name..."
-            value={adNameSearch}
-            onChange={e=>setAdNameSearch(e.target.value)}
-            style={{padding:'5px 10px',border:'1px solid #E5E7EB',borderRadius:7,background:'#F9FAFB',color:'#374151',fontSize:11.5,fontFamily:'Inter,sans-serif',outline:'none',width:160}}
-          />
-          <select className={styles.creativeFilterSelect} value={adTypeFilter} onChange={e=>setAdTypeFilter(e.target.value)}>
-            <option value="all">All Ad Types</option>
-            <option value="video">Video</option>
-            <option value="image">Image</option>
-          </select>
-          <select className={styles.creativeFilterSelect} value={healthFilter} onChange={e=>setHealthFilter(e.target.value)}>
-            <option value="all">All Health</option>
-            <option value="healthy">Healthy</option>
-            <option value="moderate">Moderate</option>
-            <option value="high">High Fatigue</option>
-          </select>
-          <div className={styles.viewToggle}>
-            <button onClick={()=>setViewMode('grid')} className={`${styles.viewToggleBtn} ${viewMode==='grid'?styles.viewToggleActive:''}`}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-            </button>
-            <button onClick={()=>setViewMode('list')} className={`${styles.viewToggleBtn} ${viewMode==='list'?styles.viewToggleActive:''}`}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            </button>
-          </div>
+        <div style={{ display:'flex',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:10 }}>
+          {[{v:'all',l:'All'},{v:'healthy',l:'Healthy'},{v:'moderate',l:'Moderate'},{v:'fatigue',l:'Fatigue'}].map(h=><button key={h.v} onClick={()=>setHealthFilter(h.v)} style={{ padding:'5px 11px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:healthFilter===h.v?(h.v==='all'?'#1F3C84':h.v==='healthy'?'#166534':h.v==='moderate'?'#854D0E':'#991B1B'):'#fff',color:healthFilter===h.v?'#fff':'#6B7280' }}>{h.l}</button>)}
+        </div>
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ padding:'5px 10px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:11,fontFamily:'inherit',cursor:'pointer',background:'#fff',color:'#374151',marginLeft:2 }}>
+          <option value="spend">Sort: Spend</option><option value="leads">Sort: Leads</option><option value="cpl">Sort: CPL</option><option value="ctr">Sort: CTR</option><option value="frequency">Sort: Frequency</option><option value="score">Sort: Score</option><option value="impressions">Sort: Impressions</option>
+        </select>
+        <div style={{ marginLeft:'auto',display:'flex',gap:4 }}>
+          {[{m:'grid',l:'⊞ Grid'},{m:'list',l:'☰ List'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} style={{ padding:'5px 10px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,cursor:'pointer',fontFamily:'inherit',background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
         </div>
       </div>
-
-      {viewMode === 'grid' && <div className={styles.creativeGrid}>
-        {filteredAds.map(ad => {
-          const isOpen = expanded === ad.id
-          const rec = ad.label==='high' ? 'Refresh Creative' : ad.label==='moderate' ? 'Monitor' : 'Keep Running'
-          const signal = ad.impr===0 ? 'No impressions in period' : ad.label==='high' ? 'High Creative Fatigue - refresh needed' : ad.ctr < accountAvgCTR ? `Moderate fatigue (score ${ad.score}) - CTR below avg` : `Healthy - CTR above account average`
-          const sigColor = ad.label==='high'?'#DC2626':ad.label==='moderate'?'#D97706':'#059669'
-          return (
-            <div key={ad.id} className={`${styles.creativeCard} ${styles['creative_'+ad.label]}`}>
-              <div className={styles.creativeThumb}>
-                {ad.imgUrl
-                  ? <img src={ad.imgUrl} alt={ad.name} className={styles.thumbImg} loading="lazy"
-                      onError={e=>{
-                        console.warn('[thumb fail]', ad.name, ad.imgUrl)
-                        e.target.style.display='none'
-                        const ph = e.target.parentElement?.querySelector('[data-placeholder]')
-                        if (ph) ph.style.display='flex'
-                      }}/>
-                  : null}
-                <div data-placeholder="1" className={styles.thumbPlaceholder} style={{display:ad.imgUrl?'none':'flex'}}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                </div>
-                <div className={styles.creativeBadges}>
-                  <HealthBadge label={ad.label}/>
-                  <ScoreBadge score={ad.score} label={ad.label}/>
-                </div>
+      <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · account avg CTR {accCTRpct.toFixed(2)}%</div>
+      {viewMode==='grid'?(
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(210px,1fr))',gap:12 }}>
+          {filtered.map((ad,i)=>(
+            <div key={ad.id||i} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden',transition:'border-color .15s,box-shadow .15s' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#1F3C84';e.currentTarget.style.boxShadow='0 2px 12px rgba(31,60,132,0.1)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#E5E7EB';e.currentTarget.style.boxShadow='none'}}>
+              <div style={{ position:'relative',height:130,background:'#F3F4F6',overflow:'hidden' }}>
+                {ad._thumbUrl?<img src={ad._thumbUrl} alt={ad.name} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>:<div style={{ width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4 }}><span style={{ fontSize:28,opacity:0.25 }}>{ad.type==='video'?'▶':ad.type==='carousel'?'▧':'□'}</span><span style={{ fontSize:10,color:'#9CA3AF' }}>{ad.type}</span></div>}
+                <span style={{ position:'absolute',top:8,right:8,background:hBg[ad.fatigueLabel]||'#E9F8EF',color:hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span>
+                <span style={{ position:'absolute',top:8,left:8,background:tBg[ad.type]||'#F3F4F6',color:tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span>
+                <div style={{ position:'absolute',bottom:8,left:8,right:8 }}><SB score={ad.score}/></div>
               </div>
-
-              {/* Info */}
-              <div className={styles.creativeInfo}>
-                <p className={styles.creativeName} title={ad.name}>{ad.name}</p>
-                <div className={styles.creativeMetrics}>
-                  <div className={styles.metricPair}><span>Impressions</span><strong>{ad.impr.toLocaleString()}</strong></div>
-                  <div className={styles.metricPair}><span>Clicks</span><strong>{ad.clks.toLocaleString()}</strong></div>
-                  <div className={styles.metricPair}><span>Spend</span><strong>{fmtINR(parseFloat(ad.ins.spend||0))}</strong></div>
-                  <div className={styles.metricPair}><span>CTR</span><strong>{ad.ctr.toFixed(2)}%</strong></div>
+              <div style={{ padding:'12px 14px' }}>
+                <div style={{ fontSize:12,fontWeight:600,color:'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:10 }} title={ad.name}>{ad.name}</div>
+                <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8 }}>
+                  {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'—',w:ad.cpl>300},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:String(ad.leads||0)},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'—',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'—'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#DC2626':'#111827' }}>{m.v}</div></div>)}
                 </div>
-
-                <p className={styles.creativeSignal} style={{color:sigColor}}>{signal}</p>
-
-                {/* More detail toggle */}
-                <button className={styles.moreDetailBtn} onClick={() => setExpanded(isOpen ? null : ad.id)}>
-                  {isOpen ? 'Less detail ▲' : 'More detail ▼'}
-                </button>
-
-                {isOpen && (
-                  <div className={styles.creativeDetail}>
-                    {ad.label === 'high' && (
-                      <div className={styles.detailSection} style={{borderColor:'#FECACA',background:'#FEF2F2'}}>
-                        <p style={{fontSize:11,fontWeight:700,color:'#DC2626',marginBottom:4}}>⚠ Needs Attention</p>
-                        <p style={{fontSize:12,color:'#374151',fontWeight:600}}>High Creative Fatigue</p>
-                        <p style={{fontSize:11.5,color:'#6B7280'}}>Refresh Creative</p>
-                      </div>
-                    )}
-                    <div className={styles.detailSection}>
-                      <p style={{fontSize:11,fontWeight:700,color:'#6366F1',marginBottom:4}}>💡 Recommendation</p>
-                      <p style={{fontSize:12,fontWeight:600,color:'#111827',marginBottom:2}}>{rec}</p>
-                      <p style={{fontSize:11.5,color:'#6B7280'}}>{signal}</p>
-                    </div>
-                    <div className={styles.detailSection}>
-                      <p style={{fontSize:11,fontWeight:700,color:'#059669',marginBottom:4}}>🛒 Upsell / Cross-sell</p>
-                      <p style={{fontSize:11.5,color:'#374151'}}>Upsell: test premium/upgrade offer as the next step after lead capture.</p>
-                      <p style={{fontSize:11.5,color:'#374151',marginTop:4}}>Cross-sell: test complementary bundle/next-best product offer alongside current creative.</p>
-                    </div>
-                  </div>
-                )}
+                {ad.ctrDelta!==null&&<div style={{ fontSize:11,color:ad.ctrDelta>=0?'#059669':'#DC2626',marginBottom:6,fontWeight:500 }}>{ad.ctrDelta>=0?'▲':'▼'} CTR {Math.abs(ad.ctrDelta).toFixed(1)}% vs last week</div>}
+                {ad.hookRate>0&&<div style={{ padding:'7px 10px',background:'#EFF6FF',borderRadius:7,marginBottom:6 }}><div style={{ fontSize:9,color:'#1D4ED8',fontWeight:600,textTransform:'uppercase',marginBottom:2 }}>Hook Rate</div><div style={{ fontSize:14,fontWeight:700,color:'#1D4ED8' }}>{ad.hookRate.toFixed(1)}%</div></div>}
+                {ad.fatigueLabel!=='Healthy'&&<div style={{ padding:'6px 8px',background:hBg[ad.fatigueLabel],borderRadius:6,fontSize:10,color:hColor[ad.fatigueLabel],lineHeight:1.4 }}>{ad.fatigueLabel==='High Fatigue'?'⚠ Freq '+ad.frequency.toFixed(1)+' — needs refresh':'⚡ Freq '+ad.frequency.toFixed(1)+' — watch closely'}</div>}
               </div>
             </div>
-          )
-        })}
-      </div>}
-
-      {/* List view */}
-      {viewMode === 'list' && (
-        <div className={styles.tableWrap}>
-          <table>
-            <thead>
-              <tr>
-                <th>Creative</th><th>Health</th><th>Score</th>
-                <th>Impressions</th><th>Clicks</th><th>Spend</th><th>CTR</th><th>Signal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scoredAds.map(ad => (
-                <tr key={ad.id}>
-                  <td>
-                    <div style={{display:'flex',alignItems:'center',gap:10}}>
-                      {ad.imgUrl && <img src={ad.imgUrl} alt="" style={{width:44,height:36,objectFit:'cover',borderRadius:4,flexShrink:0}} loading="lazy"/>}
-                      <span style={{fontSize:12,fontWeight:500,color:'#111827',maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={ad.name}>{ad.name}</span>
-                    </div>
-                  </td>
-                  <td><HealthBadge label={ad.label}/></td>
-                  <td style={{fontWeight:700,color:ad.label==='high'?'#DC2626':ad.label==='moderate'?'#D97706':'#059669'}}>{ad.score}</td>
-                  <td>{ad.impr.toLocaleString()}</td>
-                  <td>{ad.clks.toLocaleString()}</td>
-                  <td style={{fontWeight:500}}>{fmtINR(parseFloat(ad.ins.spend||0))}</td>
-                  <td>{ad.ctr.toFixed(2)}%</td>
-                  <td style={{fontSize:11,color:ad.label==='high'?'#DC2626':ad.label==='moderate'?'#D97706':'#059669',maxWidth:180}}>{ad.label==='high'?'High Fatigue - Refresh':ad.label==='moderate'?'Monitor':'Healthy'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          ))}
+        </div>
+      ):(
+        <div style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden' }}>
+          <div style={{ display:'grid',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 80px 90px 90px 80px 80px',padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
+            {['','Creative','Type','Health','Spend','Leads','CTR','CPL','Freq','Score','WoW CTR'].map(h=><div key={h} style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>{h}</div>)}
+          </div>
+          {filtered.map((ad,i)=>(
+            <div key={ad.id||i} style={{ display:'grid',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 80px 90px 90px 80px 80px',padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
+              <div style={{ width:32,height:32,borderRadius:6,background:'#F3F4F6',overflow:'hidden',flexShrink:0 }}>{ad._thumbUrl&&<img src={ad._thumbUrl} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div>
+              <div style={{ overflow:'hidden' }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }} title={ad.name}>{ad.name}</div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
+              <span style={{ background:tBg[ad.type]||'#F3F4F6',color:tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span>
+              <span style={{ background:hBg[ad.fatigueLabel]||'#E9F8EF',color:hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span>
+              <div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div>
+              <div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div>
+              <div style={{ fontSize:12,color:ad.ctr<accCTRpct*0.6&&ad.ctr>0?'#DC2626':'#374151',fontWeight:ad.ctr<accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div>
+              <div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div>
+              <div style={{ fontSize:12,color:ad.frequency>4.5?'#DC2626':ad.frequency>3?'#D97706':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div>
+              <div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#22C55E':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div>
+              <div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#059669':'#DC2626',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div>
+            </div>
+          ))}
         </div>
       )}
     </div>
   )
 }
-
-// ─── VASU AI TAB ──────────────────────────────────────────
 function VasuAITab({ data }) {
   const [messages, setMessages] = useState([])
   const [input, setInput]       = useState('')
