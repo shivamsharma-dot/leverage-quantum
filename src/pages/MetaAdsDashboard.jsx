@@ -801,42 +801,170 @@ export default function MetaAdsDashboard() {
     setToken(t.trim())
   }
 
-const loadAllData = async (t, preset = datePreset, fromDate = null, toDate = null, accountOverride = null) => {
-  setLoading(true)
-  setError(null)
-  setPageLoad(true)
-  try {
-    const AD_ACCOUNT_ID = accountOverride || adAccount || DEFAULT_AD_ACCOUNT
-    const params = new URLSearchParams({ account: AD_ACCOUNT_ID, preset: preset || 'last_7d' })
-    if (fromDate) params.set('from_date', fromDate)
-    if (toDate) params.set('to_date', toDate)
+  const loadAllData = async (t, preset = datePreset, fromDate = null, toDate = null, accountOverride = null) => {
+    setLoading(true); setError('')
+    try {
+      const AD_ACCOUNT_ID = accountOverride || adAccount || DEFAULT_AD_ACCOUNT
+      const range     = preset === 'custom_range' && fromDate && toDate
+        ? { since: fromDate, until: toDate }
+        : getDateRange(preset)
+      const timeRange = JSON.stringify(range)
 
-    const res = await fetch(`/api/refresh-meta?${params}`, {
-      headers: { 'x-meta-token': t }
-    })
-    const d = await res.json()
+      // Map preset to Meta's date_preset for nested insights
+      // this_month uses time_range instead of date_preset
+      // last_month/this_month/custom_range all use time_range with exact computed dates
+      // so Meta's own date_preset is never used for these (avoids billing-period mismatches)
+      const useTimeRange = preset === 'this_month' || preset === 'last_month' || preset === 'custom_range'
+      const metaPreset = preset === 'yesterday' ? 'yesterday'
+                       : preset === 'last_14d'  ? 'last_14d'
+                       : preset === 'last_30d'  ? 'last_30d'
+                       : 'last_7d'  // last_month/this_month/custom use time_range instead
 
-    if (!res.ok) {
-      if (d.tokenExpired) { localStorage.removeItem(TOKEN_KEY); setToken('') }
-      throw new Error(d.error || 'Failed to fetch Meta data')
-    }
+      const [accIns, lifetimeIns, campaignsSummary, campaigns, adsRaw, pixels] = await Promise.all([
+        // Account-level insights for selected period
+        graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
+          fields: 'spend,impressions,clicks,ctr,cpm,reach,frequency,actions',
+          time_range: timeRange, level: 'account'
+        }),
+        // Lifetime account insights (no date filter)
+        graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
+          fields: 'spend,impressions,clicks,reach',
+          date_preset: 'maximum', level: 'account'
+        }),
+        // Campaign count summary (all time, for active/paused counts)
+        graphGet(`${AD_ACCOUNT_ID}/campaigns`, t, {
+          fields: 'status', limit: 500
+        }),
+        // Campaigns - use date_preset for nested insights (avoids 400)
+        graphGet(`${AD_ACCOUNT_ID}/campaigns`, t, {
+          fields: `name,status,objective,created_time,insights${useTimeRange ? `.time_range(${timeRange})` : `.date_preset(${metaPreset})`}{spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}`,
+          limit: 50
+        }),
+        // Ads + creatives - fetch ALL active ads without insights (so no date filter excludes them)
+        graphGet(`${AD_ACCOUNT_ID}/ads`, t, {
+          fields: `name,status,effective_status,creative{id,name,video_id,object_story_spec},adcreatives{thumbnail_url,image_url,object_story_spec}`,
+          filtering: JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE','PAUSED']}]),
+          limit: 200
+        }),
+        graphGet(`${AD_ACCOUNT_ID}/adspixels`, t, { fields: 'id,name,last_fired_time' })
+      ])
 
-    setData(d)
-    setTokenExpired(false)
-    setLastSync(new Date())
-    setDatePreset(preset)
-  } catch (e) {
-    setError(e.message)
-    if (e.message?.includes('190') || e.message?.includes('token') || e.message?.includes('OAuth')) {
-      setTokenExpired(true)
-      localStorage.removeItem(TOKEN_KEY)
-      setToken('')
-    }
-  } finally {
-    setLoading(false)
-    setPageLoad(false)
+      const account = accIns.data?.[0] || {}
+      const accountAvgCTR = parseFloat(account.ctr || 0)
+      const lifetimeAccount = lifetimeIns.data?.[0] || {}
+      const allCampaigns = campaignsSummary.data || []
+      const activeCampaignCount = allCampaigns.filter(c => c.status === 'ACTIVE').length
+      const pausedCampaignCount = allCampaigns.filter(c => c.status === 'PAUSED').length
+
+      // Fetch insights for current AND previous period (for WoW comparison)
+      const adsRawData = adsRaw.data || []
+      let insightsMap = {}
+      let prevInsightsMap = {}
+
+      // Build previous period time_range (same duration, shifted back)
+      const rangeDays = Math.round((new Date(range.until) - new Date(range.since)) / 86400000) + 1
+      const prevUntil = new Date(range.since); prevUntil.setDate(prevUntil.getDate() - 1)
+      const prevSince = new Date(prevUntil); prevSince.setDate(prevSince.getDate() - (rangeDays - 1))
+      const fmt = d => d.toISOString().slice(0,10)
+      const prevTimeRange = JSON.stringify({ since: fmt(prevSince), until: fmt(prevUntil) })
+
+      if (adsRawData.length > 0) {
+        try {
+          const adIds = adsRawData.map(a => a.id)
+          const insChunks = []
+          for (let i = 0; i < adIds.length; i += 50) insChunks.push(adIds.slice(i, i + 50))
+
+          // Fetch current + previous period in parallel
+          await Promise.all(insChunks.map(async chunk => {
+            const [currRes, prevRes] = await Promise.all([
+              graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
+                fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
+                level: 'ad',
+                ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }),
+                filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
+                limit: 50
+              }),
+              graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
+                fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency',
+                level: 'ad',
+                time_range: prevTimeRange,
+                filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
+                limit: 50
+              })
+            ])
+            ;(currRes.data || []).forEach(ins => { insightsMap[ins.ad_id] = ins })
+            ;(prevRes.data || []).forEach(ins => { prevInsightsMap[ins.ad_id] = ins })
+          }))
+        } catch(e) { console.error('Insights fetch failed:', e.message) }
+      }
+      const creativeIds = [...new Set(adsRawData.map(a => a.creative?.id).filter(Boolean))]
+      let creativeThumbs = {}
+      if (creativeIds.length > 0) {
+        try {
+          const chunks = []
+          for (let i = 0; i < creativeIds.length; i += 50) chunks.push(creativeIds.slice(i, i + 50))
+          await Promise.all(chunks.map(async chunk => {
+            const qs = new URLSearchParams({
+              access_token: t,
+              ids: chunk.join(','),
+              fields: 'id,thumbnail_url,image_url,object_story_spec,effective_object_story_id'
+            }).toString()
+            const res = await fetch(`https://graph.facebook.com/v19.0?${qs}`)
+            const d = await res.json()
+            if (d.error) { console.error('Thumb batch error:', d.error.message); return }
+            Object.entries(d).forEach(([id, c]) => {
+              // Priority: image_url (static) → object_story_spec image → carousel first card → thumbnail_url (video/fallback)
+              const spec = c.object_story_spec || {}
+              const linkData = spec.link_data || {}
+              const videoData = spec.video_data || {}
+              const carouselFirst = linkData.child_attachments?.[0]?.image_url || null
+              const specImage = linkData.picture || videoData.image_url || spec.photo_data?.url || carouselFirst || null
+              creativeThumbs[id] = c.image_url || specImage || c.thumbnail_url || null
+            })
+          }))
+        } catch(e) { console.error('Thumb fetch failed:', e.message) }
+      }
+
+      // Merge thumbs - video ads use video_data.image_url, static use batch image_url
+      const adsWithThumbs = adsRawData.map(ad => {
+        const isVideo = !!ad.creative?.video_id
+        const spec = ad.creative?.object_story_spec || {}
+        const videoImg = spec.video_data?.image_url || null
+        const staticImg = creativeThumbs[ad.creative?.id] || null
+        // Also check inline adcreatives field if present
+        const inlineCreative = ad.adcreatives?.data?.[0] || {}
+        const inlineSpec = inlineCreative.object_story_spec || {}
+        const inlineImg = inlineCreative.image_url ||
+          inlineSpec.link_data?.picture ||
+          inlineSpec.video_data?.image_url ||
+          inlineSpec.link_data?.child_attachments?.[0]?.image_url ||
+          inlineCreative.thumbnail_url || null
+        // Carousel: first child attachment image
+        const carouselImg = spec.link_data?.child_attachments?.[0]?.image_url || null
+        // Final priority chain
+        const thumbUrl = isVideo
+          ? (videoImg || staticImg || inlineImg)
+          : (staticImg || spec.link_data?.picture || carouselImg || inlineImg || videoImg)
+        // previewLink = Ads Library URL (kept for potential future use)
+        const previewLink = `https://www.facebook.com/ads/library/?id=${ad.id}`
+        if (!thumbUrl) console.warn('[no thumb]', ad.name, 'creativeId:', ad.creative?.id, 'isVideo:', isVideo, 'spec keys:', Object.keys(spec))
+        return {
+          ...ad,
+          creative: { ...ad.creative, _thumbUrl: thumbUrl || null },
+          previewLink
+        }
+      })
+
+      setData({ account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, prevInsightsMap, range, preset })
+      setLastSync(new Date())
+      setDatePreset(preset)
+    } catch (e) {
+      setError(e.message)
+      if (e.message?.includes('190') || e.message?.includes('token') || e.message?.includes('OAuth')) {
+        localStorage.removeItem(TOKEN_KEY); setToken('')
+      }
+    } finally { setLoading(false) }
   }
-}
 
   const disconnect = () => { localStorage.removeItem(TOKEN_KEY); setToken(''); setData(null); setError('') }
 
