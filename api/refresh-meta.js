@@ -1,5 +1,3 @@
-import fetch from 'node-fetch'
-
 const GRAPH = 'https://graph.facebook.com/v19.0'
 
 async function graphGet(path, token, params = {}) {
