@@ -121,7 +121,7 @@ export default function MTDDashboard(){
   const qlColor   = v => v>15?'#059669':v>5?'#F59E0B':'#DC2626'
 
   return(
-    <div style={{display:'flex',height:'100vh',background:'var(--color-background-tertiary)',fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>
+    <div style={{display:'flex',height:'100vh',background:'#F4F5F7',fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>
       <Sidebar/>
       <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
 
