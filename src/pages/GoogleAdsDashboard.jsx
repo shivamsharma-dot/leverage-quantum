@@ -71,7 +71,8 @@ function CampaignsTab({data,loading}){
   const [exp,setExp]=useState(null)
   if(loading)return <Loader/>
   if(!data)return null
-  const{campaigns,total}=data
+  const{campaigns=[],total={}}=data||{}
+  if(!campaigns.length&&!loading)return <NotConnected/>
   const sorted=sort(campaigns)
   const chartData=campaigns.filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend).slice(0,8).map(c=>({name:c.name.length>18?c.name.slice(0,18)+'...':c.name,spend:Math.round(c.spend/1000)}))
   return <>
@@ -140,7 +141,7 @@ function KeywordsTab({data,loading}){
   const [search,setSearch]=useState('')
   if(loading)return <Loader/>
   if(!data)return null
-  const{keywords,total}=data
+  const{keywords=[],total={}}=data||{}
   const filtered=keywords.filter(k=>!search||k.text.toLowerCase().includes(search.toLowerCase()))
   const sorted=sort(filtered)
   const avgQS=keywords.filter(k=>k.qualityScore>0).reduce((s,k,_,a)=>s+k.qualityScore/a.filter(x=>x.qualityScore>0).length,0)
@@ -187,7 +188,7 @@ function SearchTermsTab({data,loading}){
   const [search,setSearch]=useState('')
   if(loading)return <Loader/>
   if(!data)return null
-  const{searchTerms}=data
+  const{searchTerms=[]}=data||{}
   const filtered=searchTerms.filter(s=>!search||s.text.toLowerCase().includes(search.toLowerCase()))
   const sorted=sort(filtered)
   return <>
@@ -223,7 +224,7 @@ function AdGroupsTab({data,loading}){
   const {sort,Th}=useSort('spend')
   if(loading)return <Loader/>
   if(!data)return null
-  const{adGroups,total}=data
+  const{adGroups=[],total={}}=data||{}
   const sorted=sort(adGroups)
   return <>
     <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:11,marginBottom:16}}>
@@ -273,9 +274,10 @@ export default function GoogleAdsDashboard(){
     try{
       const token=localStorage.getItem('quantum_token')
       const res=await fetch('/api/google-ads?tab='+tab+'&dateRange='+dr,{headers:{'Authorization':'Bearer '+(token||'')}})
-      if(res.status===503){setNotConnected(true);return}
+      if(res.status===503||res.status===401){setNotConnected(true);return}
       if(!res.ok)throw new Error('API error '+res.status)
       const json=await res.json()
+      if(json.error&&json.error.includes('credential')||json.notConnected){setNotConnected(true);return}
       setData(p=>({...p,[tab]:json}))
       loaded.current[k]=true
       setError(null)
