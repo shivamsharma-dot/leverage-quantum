@@ -11,15 +11,14 @@ function parseNum(v){ if(!v)return 0;return parseInt(String(v).replace(/[^0-9]/g
 function fmtINR(n){ if(!n||n===0)return '—';if(n>=1e7)return '₹'+(n/1e7).toFixed(2)+' Cr';if(n>=1e5)return '₹'+(n/1e5).toFixed(1)+'L';if(n>=1000)return '₹'+(n/1000).toFixed(1)+'K';return '₹'+Math.round(n).toLocaleString('en-IN') }
 function fmtNum(n){ if(!n||n===0)return '—';if(n>=1e5)return (n/1e5).toFixed(1)+'L';if(n>=1e3)return (n/1e3).toFixed(1)+'K';return Math.round(n).toLocaleString('en-IN') }
 function parseCSV(csv){
-  const rows=csv.split('
-').map(l=>{
+  const rows=csv.split('\n').map(l=>{
     const cols=[],cur=[];let inQ=false
     for(const ch of l){ if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){cols.push(cur.join('').trim());cur.length=0}else cur.push(ch) }
     cols.push(cur.join('').trim());return cols
   })
   const months=[];let i=0
   while(i<rows.length){
-    const m=rows[i][1]?.match(/^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}$/)
+    const m=rows[i][1]?.match(/^(January|February|March|April|May|June|July|August|September|October|November|December)\\s+\\d{4}$/)
     if(m){
       const name=rows[i][1];i+=3;const sources=[]
       while(i<rows.length&&rows[i][1]?.trim()){
