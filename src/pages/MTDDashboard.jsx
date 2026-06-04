@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
-  PieChart, Pie, Legend, ComposedChart, Line, CartesianGrid, ReferenceLine } from 'recharts'
+  PieChart, Pie, ComposedChart, Line, CartesianGrid, ReferenceLine } from 'recharts'
 import Sidebar from '../components/Sidebar'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT58jwL_E0MSciEW_nyrHQMA-0DiFqUN3wstB9yTpfM3gdhK-ctxaODRuqtdxurFRJwmhvbzqS_9EuM/pub?output=csv'
@@ -239,14 +239,19 @@ export default function MTDDashboard(){
                   <BarChart data={revStack} margin={{top:16,right:16,left:0,bottom:40}}>
                     <CartesianGrid strokeDasharray='3 3' stroke='#F3F4F6' vertical={false}/>
                     <XAxis dataKey='name' tick={{fontSize:10,fill:'#6B7280'}} angle={-35} textAnchor='end' interval={0} axisLine={false} tickLine={false}/>
-                    <YAxis tick={{fontSize:10,fill:'#6B7280'}} axisLine={false} tickLine={false} tickFormatter={v=>v>=100?'\u20B9'+(v/100).toFixed(1)+'Cr':'\u20B9'+v+'L'}/>
+                    <YAxis tick={{fontSize:10,fill:'#6B7280'}} axisLine={false} tickLine={false} tickFormatter={v=>v===0?'\u20B9'+'0':v>=100?'\u20B9'+(v/100).toFixed(1)+'Cr':'\u20B9'+v+'L'}/>
                     <Tooltip content={<ChartTip fmt={v=>v>=100?'\u20B9'+(v/100).toFixed(2)+' Cr':'\u20B9'+v+'L'}/>}/>
-                    <Legend iconType='circle' iconSize={8} wrapperStyle={{fontSize:11,paddingTop:8}}/>
+                    
                     <Bar dataKey='SR' name='SR Revenue' stackId='r' fill='#1F3C84' radius={[0,0,0,0]}/>
                     <Bar dataKey='AC' name='AC Revenue' stackId='r' fill='#1C9FD4' radius={[0,0,0,0]}/>
                     <Bar dataKey='VAS' name='VAS Revenue' stackId='r' fill='#4CAE6F' radius={[4,4,0,0]}/>
                   </BarChart>
                 </ResponsiveContainer>
+                <div style={{display:'flex',gap:16,justifyContent:'center',marginTop:8,fontSize:11,color:'#374151'}}>
+                      <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:10,borderRadius:2,background:'#1F3C84',display:'inline-block'}}/> SR Revenue</span>
+                      <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:10,borderRadius:2,background:'#1C9FD4',display:'inline-block'}}/> AC Revenue</span>
+                      <span style={{display:'flex',alignItems:'center',gap:5}}><span style={{width:10,height:10,borderRadius:2,background:'#4CAE6F',display:'inline-block'}}/> VAS Revenue</span>
+                    </div>
               </Card>
 
             </div>
