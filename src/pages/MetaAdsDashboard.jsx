@@ -116,6 +116,7 @@ function fmtINR(inr) {
   if (n >= 1e7) return '₹' + (n/1e7).toFixed(2) + ' Cr'
   if (n >= 1e5) return '₹' + (n/1e5).toFixed(1) + 'L'
   if (n >= 1000) return '₹' + Math.round(n).toLocaleString('en-IN')
+  if (n > 0 && n < 1) return '₹' + n.toFixed(2)
   return '₹' + Math.round(n)
 }
 const getAction = (actions, type) => {
@@ -420,14 +421,14 @@ function CreativesTab({ data }) {
           { label:'HIGH FATIGUE',value:summary.fatigue,sub:'Freq >4.5 — refresh now',accent:'#991B1B',accentBg:'#FEF2F2' },
           { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:'All Time: '+fmtINR(lifetimeSpend),accent:'#1C9FD4',accentBg:'#E3F5FD' },
           { label:'AVG CPL',value:avgCPL>0?'₹'+avgCPL.toLocaleString('en-IN'):'—',sub:'Acct avg CTR '+accCTRpct.toFixed(2)+'%',accent:'#D97706',accentBg:'#FEF9C3' },
-        ].map(k=><div key={k.label} style={{ background:k.accentBg,borderLeft:'3px solid '+k.accent,border:'0.5px solid #E5E7EB',borderRadius:12,padding:'14px 16px' }}><div style={{ fontSize:10,fontWeight:600,color:k.accent,letterSpacing:'0.06em',marginBottom:6 }}>{k.label}</div><div style={{ fontSize:22,fontWeight:700,color:k.accent,letterSpacing:'-0.5px' }}>{k.value}</div><div style={{ fontSize:11,color:k.accent,opacity:0.7,marginTop:4 }}>{k.sub}</div></div>)}
+        ].map(k=><div key={k.label} style={{ background:k.accentBg,borderLeft:'3px solid '+k.accent,border:'0.5px solid #E5E7EB',borderRadius:12,padding:'14px 16px',minWidth:0 }}><div style={{ fontSize:10,fontWeight:600,color:k.accent,letterSpacing:'0.06em',marginBottom:6 }}>{k.label}</div><div style={{ fontSize:22,fontWeight:700,color:k.accent,letterSpacing:'-0.5px' }}>{k.value}</div><div style={{ fontSize:11,color:k.accent,opacity:0.7,marginTop:4 }}>{k.sub}</div></div>)}
       </div>
       <div style={{ display:'flex',gap:8,marginBottom:14,alignItems:'center',flexWrap:'wrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 14px' }}>
         <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:200,background:'#FAFAFA' }}/>
-        <div style={{ display:'flex',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:10 }}>
+        <div style={{ display:'flex',alignItems:'center',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:10 }}><span style={{ fontSize:10,fontWeight:600,color:'#9CA3AF',marginRight:4,whiteSpace:'nowrap' }}>Format</span>
           {['all','video','image','carousel'].map(t=><button key={t} onClick={()=>setAdTypeFilter(t)} style={{ padding:'5px 11px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:adTypeFilter===t?'#1F3C84':'#fff',color:adTypeFilter===t?'#fff':'#6B7280' }}>{t.charAt(0).toUpperCase()+t.slice(1)}</button>)}
         </div>
-        <div style={{ display:'flex',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:10 }}>
+        <div style={{ display:'flex',alignItems:'center',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:10 }}><span style={{ fontSize:10,fontWeight:600,color:'#9CA3AF',marginRight:4,whiteSpace:'nowrap' }}>Health</span>
           {[{v:'all',l:'All'},{v:'healthy',l:'Healthy'},{v:'moderate',l:'Moderate'},{v:'fatigue',l:'Fatigue'}].map(h=><button key={h.v} onClick={()=>setHealthFilter(h.v)} style={{ padding:'5px 11px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:healthFilter===h.v?(h.v==='all'?'#1F3C84':h.v==='healthy'?'#166534':h.v==='moderate'?'#854D0E':'#991B1B'):'#fff',color:healthFilter===h.v?'#fff':'#6B7280' }}>{h.l}</button>)}
         </div>
         <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ padding:'5px 10px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:11,fontFamily:'inherit',cursor:'pointer',background:'#fff',color:'#374151',marginLeft:2 }}>
@@ -439,9 +440,9 @@ function CreativesTab({ data }) {
       </div>
       <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · account avg CTR {accCTRpct.toFixed(2)}%</div>
       {viewMode==='grid'?(
-        <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(210px,1fr))',gap:12 }}>
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:12 }}>
           {filtered.map((ad,i)=>(
-            <div key={ad.id||i} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden',transition:'border-color .15s,box-shadow .15s' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#1F3C84';e.currentTarget.style.boxShadow='0 2px 12px rgba(31,60,132,0.1)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#E5E7EB';e.currentTarget.style.boxShadow='none'}}>
+            <div key={ad.id||i} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden',transition:'border-color .15s,box-shadow .15s',display:'flex',flexDirection:'column' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#1F3C84';e.currentTarget.style.boxShadow='0 2px 12px rgba(31,60,132,0.1)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#E5E7EB';e.currentTarget.style.boxShadow='none'}}>
               <div style={{ position:'relative',height:130,background:'#F3F4F6',overflow:'hidden' }}>
                 {ad.creative?._thumbUrl?<img src={proxyImg(ad.creative._thumbUrl)} alt={ad.name} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>:<div style={{ width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4 }}><span style={{ fontSize:28,opacity:0.25 }}>{ad.type==='video'?'▶':ad.type==='carousel'?'▧':'□'}</span><span style={{ fontSize:10,color:'#9CA3AF' }}>{ad.type}</span></div>}
                 <span style={{ position:'absolute',top:8,right:8,background:hBg[ad.fatigueLabel]||'#E9F8EF',color:hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span>
@@ -451,10 +452,10 @@ function CreativesTab({ data }) {
               <div style={{ padding:'12px 14px' }}>
                 <div style={{ fontSize:12,fontWeight:600,color:'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:10 }} title={ad.name}>{ad.name}</div>
                 <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8 }}>
-                  {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'—',w:ad.cpl>300},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:String(ad.leads||0)},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'—',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'—'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#DC2626':'#111827' }}>{m.v}</div></div>)}
+                  {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'—',w:ad.cpl>300},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:ad.leads>0?ad.leads.toLocaleString('en-IN'):'\u2014'},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'—',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'—'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#DC2626':'#111827' }}>{m.v}</div></div>)}
                 </div>
                 {ad.ctrDelta!==null&&<div style={{ fontSize:11,color:ad.ctrDelta>=0?'#059669':'#DC2626',marginBottom:6,fontWeight:500 }}>{ad.ctrDelta>=0?'▲':'▼'} CTR {Math.abs(ad.ctrDelta).toFixed(1)}% vs last week</div>}
-                {ad.hookRate>0&&<div style={{ padding:'7px 10px',background:'#EFF6FF',borderRadius:7,marginBottom:6 }}><div style={{ fontSize:9,color:'#1D4ED8',fontWeight:600,textTransform:'uppercase',marginBottom:2 }}>Hook Rate</div><div style={{ fontSize:14,fontWeight:700,color:'#1D4ED8' }}>{ad.hookRate.toFixed(1)}%</div></div>}
+                <div style={{ padding:'7px 10px',background:'#EFF6FF',borderRadius:7,marginBottom:6 }}><div style={{ fontSize:9,color:'#1D4ED8',fontWeight:600,textTransform:'uppercase',marginBottom:2,letterSpacing:'0.05em' }}>Hook Rate</div><div style={{ fontSize:14,fontWeight:700,color:'#1D4ED8' }}>{ad.hookRate>0?ad.hookRate.toFixed(1)+'%':'\u2014'}</div></div>
                 {ad.fatigueLabel!=='Healthy'&&<div style={{ padding:'6px 8px',background:hBg[ad.fatigueLabel],borderRadius:6,fontSize:10,color:hColor[ad.fatigueLabel],lineHeight:1.4 }}>{ad.fatigueLabel==='High Fatigue'?'⚠ Freq '+ad.frequency.toFixed(1)+' — needs refresh':'⚡ Freq '+ad.frequency.toFixed(1)+' — watch closely'}</div>}
               </div>
             </div>
