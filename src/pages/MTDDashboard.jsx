@@ -141,7 +141,7 @@ export default function MTDDashboard(){
 
   const spendPie=useMemo(()=>srcs.filter(s=>s.spend>0).map(s=>({name:s.source,value:Math.round(s.spend/1000)})),[srcs])
   const cplBar=useMemo(()=>[...srcs].filter(s=>s.cpl>0).sort((a,b)=>a.cpl-b.cpl).map(s=>({name:s.source,cpl:s.cpl,color:sc(s.source)})),[srcs])
-  const revStack=useMemo(()=>srcs.filter(s=>s.totalRev>0).map(s=>({name:s.source,SR:Math.round(s.srRev/1000),AC:Math.round(s.acRev/1000),VAS:Math.round(s.vasRev/1000)})),[srcs])
+  const revStack=useMemo(()=>srcs.filter(s=>s.totalRev>0).map(s=>({name:s.source,SR:+(s.srRev/100000).toFixed(1),AC:+(s.acRev/100000).toFixed(1),VAS:+(s.vasRev/100000).toFixed(1)})),[srcs])
   const avgCPL=useMemo(()=>{ const a=srcs.filter(s=>s.cpl>0); return a.length?Math.round(a.reduce((t,s)=>t+s.cpl,0)/a.length):0 },[srcs])
 
   const fmt=new Intl.DateTimeFormat('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
@@ -234,13 +234,13 @@ export default function MTDDashboard(){
                 </div>
               </Card>
 
-              <Card title='Revenue breakdown' sub='SR vs AC vs VAS by channel (\u20B9K)'>
+              <Card title='Revenue breakdown' sub='SR vs AC vs VAS by channel (\u20B9L)'>
                 <ResponsiveContainer width='100%' height={280}>
                   <BarChart data={revStack} margin={{top:16,right:16,left:0,bottom:40}}>
                     <CartesianGrid strokeDasharray='3 3' stroke='#F3F4F6' vertical={false}/>
                     <XAxis dataKey='name' tick={{fontSize:10,fill:'#6B7280'}} angle={-35} textAnchor='end' interval={0} axisLine={false} tickLine={false}/>
-                    <YAxis tick={{fontSize:10,fill:'#6B7280'}} axisLine={false} tickLine={false} tickFormatter={v=>v+'K'}/>
-                    <Tooltip content={<ChartTip fmt={v=>'\u20B9'+v+'K'}/>}/>
+                    <YAxis tick={{fontSize:10,fill:'#6B7280'}} axisLine={false} tickLine={false} tickFormatter={v=>v>=100?'\u20B9'+(v/100).toFixed(1)+'Cr':'\u20B9'+v+'L'}/>
+                    <Tooltip content={<ChartTip fmt={v=>v>=100?'\u20B9'+(v/100).toFixed(2)+' Cr':'\u20B9'+v+'L'}/>}/>
                     <Legend iconType='circle' iconSize={8} wrapperStyle={{fontSize:11,paddingTop:8}}/>
                     <Bar dataKey='SR' name='SR Revenue' stackId='r' fill='#1F3C84' radius={[0,0,0,0]}/>
                     <Bar dataKey='AC' name='AC Revenue' stackId='r' fill='#1C9FD4' radius={[0,0,0,0]}/>
