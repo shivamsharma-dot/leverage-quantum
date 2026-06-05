@@ -1,6 +1,6 @@
 /* LAYOUT */
 .layout { display:flex; height:100vh; overflow:hidden; background:#F0F2F5; font-family:'Inter',sans-serif; }
-.main   { flex:1; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; scroll-behavior:smooth; }
+.main   { flex:1; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; scroll-behavior:smooth; border-left:1px solid #E9EBF0; }
 
 /* HEADER */
 .header { position:sticky; top:0; z-index:50; background:#fff; border-bottom:1px solid #E9EBF0; padding:0 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:58px; flex-shrink:0; }
@@ -44,7 +44,7 @@
 .kpiTileSub   { font-size:9.5px; color:#9CA3AF; white-space:nowrap; }
 .kpiTileTop   { display:none; }
 .kpiTileValLifetime { color:#0F172A; }
-.kpiBar { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
+.kpiBar { display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin:16px 28px 12px; }
 
 /* HEALTH BAR */
 .healthBar { display:flex; height:4px; border-radius:999px; overflow:hidden; gap:2px; }
@@ -84,7 +84,7 @@
 .backToTopHidden { opacity:0; pointer-events:none; transform:translateY(8px); }
 
 /* CREATIVE GRID */
-.creativeGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.creativeGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:14px 28px 24px; }
 .creativeCard { background:#fff; border:1px solid #ECEEF2; border-radius:12px; overflow:hidden; transition:box-shadow .2s, transform .2s; }
 .creativeCard:hover { box-shadow:0 8px 28px rgba(0,0,0,0.09); transform:translateY(-2px); }
 .creative_high     { border-color:#FECACA; border-top:3px solid #EF4444; }
