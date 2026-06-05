@@ -711,7 +711,7 @@ export default function MetaAdsDashboard() {
   const activeUsers = usePresence(user)
   const isViewerRole = user?.role === 'viewer'
 
-  const [token, setToken]           = useState(() => localStorage.getItem(TOKEN_KEY) || '')
+  const [token, setToken]           = useState('')
   const [adAccount, setAdAccount]       = useState(() => localStorage.getItem('lq_ad_account') || DEFAULT_AD_ACCOUNT)
   const [adAccounts, setAdAccounts]     = useState([])
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
@@ -763,20 +763,11 @@ export default function MetaAdsDashboard() {
       .catch(() => {})
   }
 
-  // On mount: load token from Supabase if not in localStorage, then fetch accounts
+  // On mount: always load token from Supabase (domain-agnostic)
   useEffect(() => {
-    if (!token) {
-      loadTokenFromSupabase().then(t => {
-        if (t) {
-          localStorage.setItem(TOKEN_KEY, t)
-          setToken(t)
-          fetchAdAccounts(t)
-        }
-      })
-    } else {
-      // Token already in localStorage — fetch accounts now
-      fetchAdAccounts(token)
-    }
+    loadTokenFromSupabase().then(t => {
+      if (t) { setToken(t); fetchAdAccounts(t) }
+    })
   }, [])
 
   useEffect(() => { if (token) loadAllData(token, datePreset) }, [token])
@@ -787,7 +778,6 @@ export default function MetaAdsDashboard() {
     window.FB.login(r => {
       if (r.authResponse?.accessToken) {
         const t = r.authResponse.accessToken
-        localStorage.setItem(TOKEN_KEY, t)
         storeTokenInSupabase(t)
         setToken(t)
         fetchAdAccounts(t)
@@ -797,7 +787,6 @@ export default function MetaAdsDashboard() {
 
   const handlePaste = (t) => {
     if (!t.trim()) return
-    localStorage.setItem(TOKEN_KEY, t.trim())
     storeTokenInSupabase(t.trim())
     setToken(t.trim())
   }
@@ -834,18 +823,18 @@ export default function MetaAdsDashboard() {
         }),
         // Campaign count summary (all time, for active/paused counts)
         graphGet(`${AD_ACCOUNT_ID}/campaigns`, t, {
-          fields: 'status', limit: 200
+          fields: 'status', limit: 500
         }),
         // Campaigns - use date_preset for nested insights (avoids 400)
         graphGet(`${AD_ACCOUNT_ID}/campaigns`, t, {
-          fields: `name,status,objective,created_time,insights${useTimeRange ? `.time_range(${timeRange})` : `.date_preset(${metaPreset})`}{spend,impressions,clicks,ctr,reach,frequency,actions}`,
-          limit: 300
+          fields: `name,status,objective,created_time,insights${useTimeRange ? `.time_range(${timeRange})` : `.date_preset(${metaPreset})`}{spend,impressions,clicks,ctr,reach,frequency,actions,cost_per_action_type}`,
+          limit: 50
         }),
         // Ads + creatives - fetch ALL active ads without insights (so no date filter excludes them)
         graphGet(`${AD_ACCOUNT_ID}/ads`, t, {
-          fields: `name,status,effective_status,creative{id,name,video_id,object_story_spec}`,
+          fields: `name,status,effective_status,creative{id,name,video_id,object_story_spec},adcreatives{thumbnail_url,image_url,object_story_spec}`,
           filtering: JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE','PAUSED']}]),
-          limit: 100
+          limit: 200
         }),
         graphGet(`${AD_ACCOUNT_ID}/adspixels`, t, { fields: 'id,name,last_fired_time' })
       ])
@@ -962,12 +951,12 @@ export default function MetaAdsDashboard() {
     } catch (e) {
       setError(e.message)
       if (e.message?.includes('190') || e.message?.includes('token') || e.message?.includes('OAuth')) {
-        localStorage.removeItem(TOKEN_KEY); setToken('')
+        setToken('')
       }
     } finally { setLoading(false) }
   }
 
-  const disconnect = () => { localStorage.removeItem(TOKEN_KEY); setToken(''); setData(null); setError('') }
+  const disconnect = () => { setToken(''); setData(null); setError('') }
 
   const [sending, setSending]   = useState(false)
   const [sendMsg, setSendMsg]   = useState('')
