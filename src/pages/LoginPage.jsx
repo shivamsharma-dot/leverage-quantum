@@ -194,7 +194,7 @@ export default function LoginPage() {
 
               <div className={styles.googleWrap}>
                 <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign-in failed.')}
-                  theme="filled_black" shape="rectangular" size="large" width="360" text="continue_with" hosted_domain="leverageedu.com"/>
+                  theme="outline" shape="pill" size="large" width="360" text="continue_with" hosted_domain="leverageedu.com"/>
               </div>
 
               <div className={styles.divider}><span>or sign in with email OTP</span></div>
