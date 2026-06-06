@@ -298,12 +298,12 @@ function CampaignsTab({ data }) {
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
       <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16 }}>
         {[
-          { label:'ALL TIME SPEND',value:fmtINR(lifetimeSpend),sub:(activeCampaignCount+pausedCampaignCount).toLocaleString()+' total campaigns',accent:'#1F3C84',accentBg:'#E8EFF9' },
+          { label:'IMPRESSIONS',value:accImpr.toLocaleString('en-IN'),sub:accClicks.toLocaleString('en-IN')+' clicks',accent:'#1F3C84',accentBg:'#E8EFF9' },
           { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:totActive+' active · '+pausedCampaignCount+' paused',accent:'#1C9FD4',accentBg:'#E3F5FD' },
           { label:'TOTAL LEADS',value:accLeads.toLocaleString('en-IN'),sub:'Current period',accent:'#059669',accentBg:'#E9F8EF' },
           { label:'AVG CPL',value:accCPL>0?'₹'+accCPL.toLocaleString('en-IN'):'—',sub:'CTR '+accCTRpct.toFixed(2)+'% · CPM ₹'+accCPM,accent:'#D97706',accentBg:'#FEF9C3' },
           { label:'FATIGUED',value:totFatigue,sub:'Campaigns freq >4.5',accent:totFatigue>0?'#DC2626':'#059669',accentBg:totFatigue>0?'#FEF2F2':'#E9F8EF' },
-        ].map(k => <div key={k.label} style={{ background:k.accentBg,borderLeft:'3px solid '+k.accent,border:'0.5px solid #E5E7EB',borderRadius:12,padding:'16px 18px' }}><div style={{ fontSize:10,fontWeight:600,color:k.accent,letterSpacing:'0.06em',marginBottom:6 }}>{k.label}</div><div style={{ fontSize:22,fontWeight:700,color:k.accent,letterSpacing:'-0.5px' }}>{k.value}</div><div style={{ fontSize:11,color:k.accent,opacity:0.7,marginTop:4 }}>{k.sub}</div></div>)}
+        ].map(k => <div key={k.label} style={{ background:k.accentBg,borderLeft:'3px solid '+k.accent,border:'0.5px solid #E5E7EB',borderRadius:12,padding:'16px 18px' }}><div style={{ fontSize:10,fontWeight:600,color:k.accent,letterSpacing:'0.06em',marginBottom:6 }}>{k.label}</div><div style={{ fontSize:18,fontWeight:700,color:k.accent,letterSpacing:'-0.5px' }}>{k.value}</div><div style={{ fontSize:11,color:k.accent,opacity:0.7,marginTop:4 }}>{k.sub}</div></div>)}
       </div>
       <div style={{ display:'flex',gap:8,marginBottom:14,alignItems:'center',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 14px',flexWrap:'wrap' }}>
         <input type="text" placeholder="Search campaigns..." value={search} onChange={e=>setSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:220,background:'#FAFAFA' }}/>
@@ -426,9 +426,9 @@ function CreativesTab({ data }) {
           { label:'HEALTHY',value:summary.healthy,sub:'Freq <3, CTR stable',accent:'#166534',accentBg:'#E9F8EF' },
           { label:'MODERATE',value:summary.moderate,sub:'Freq 3-4.5 or CTR dipping',accent:'#854D0E',accentBg:'#FEF9C3' },
           { label:'HIGH FATIGUE',value:summary.fatigue,sub:'Freq >4.5 — refresh now',accent:'#991B1B',accentBg:'#FEF2F2' },
-          { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:'All Time: '+fmtINR(lifetimeSpend),accent:'#1C9FD4',accentBg:'#E3F5FD' },
+          { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:accImpr.toLocaleString('en-IN')+' impressions',accent:'#1C9FD4',accentBg:'#E3F5FD' },
           { label:'AVG CPL',value:avgCPL>0?'₹'+avgCPL.toLocaleString('en-IN'):'—',sub:'Acct avg CTR '+accCTRpct.toFixed(2)+'%',accent:'#D97706',accentBg:'#FEF9C3' },
-        ].map(k=><div key={k.label} style={{ background:k.accentBg,borderLeft:'3px solid '+k.accent,border:'0.5px solid #E5E7EB',borderRadius:12,padding:'14px 16px',minWidth:0 }}><div style={{ fontSize:10,fontWeight:600,color:k.accent,letterSpacing:'0.06em',marginBottom:6 }}>{k.label}</div><div style={{ fontSize:22,fontWeight:700,color:k.accent,letterSpacing:'-0.5px' }}>{k.value}</div><div style={{ fontSize:11,color:k.accent,opacity:0.7,marginTop:4 }}>{k.sub}</div></div>)}
+        ].map(k=><div key={k.label} style={{ background:k.accentBg,borderLeft:'3px solid '+k.accent,border:'0.5px solid #E5E7EB',borderRadius:12,padding:'14px 16px',minWidth:0 }}><div style={{ fontSize:10,fontWeight:600,color:k.accent,letterSpacing:'0.06em',marginBottom:6 }}>{k.label}</div><div style={{ fontSize:18,fontWeight:700,color:k.accent,letterSpacing:'-0.5px' }}>{k.value}</div><div style={{ fontSize:11,color:k.accent,opacity:0.7,marginTop:4 }}>{k.sub}</div></div>)}
       </div>
       <div style={{ display:'flex',gap:8,marginBottom:14,alignItems:'center',flexWrap:'wrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 14px' }}>
         <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:200,background:'#FAFAFA' }}/>
@@ -1160,11 +1160,11 @@ export default function MetaAdsDashboard() {
             <p style={{ marginTop: 16, fontSize: 13 }}>Loading Meta Ads data…</p>
           </div>
         ) : data ? (
-          <>
+          <div style={{padding:'18px 28px'}}>
             {activeTab === 'campaigns' && <CampaignsTab data={data}/>}
             {activeTab === 'creatives' && <CreativesTab data={data}/>}
             {activeTab === 'vasu'      && null}
-          </>
+          </div>
         ) : null}
       </div>
     </div>
