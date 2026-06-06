@@ -753,7 +753,7 @@ export default function MetaAdsDashboard() {
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo]     = useState('')
 
-  useEffect(() => { setTimeout(() => setPageLoad(false), 600) }, [])
+  useEffect(() => { const t = setTimeout(() => setPageLoad(false), 8000); return () => clearTimeout(t) }, [])
 
   // Listen for Meta token expiry (OAuthException code 190)
   useEffect(() => {
@@ -794,7 +794,7 @@ export default function MetaAdsDashboard() {
   useEffect(() => {
     loadTokenFromSupabase().then(result => {
       if (result && result.token) { setToken(result.token); setTokenCreatedAt(result.createdAt); fetchAdAccounts(result.token) }
-    })
+    }).finally(() => setPageLoad(false))
   }, [])
 
   useEffect(() => { if (token) loadAllData(token, datePreset) }, [token])
