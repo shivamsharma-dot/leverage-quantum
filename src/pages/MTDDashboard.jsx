@@ -202,7 +202,7 @@ export default function MTDDashboard(){
               <Card title='Spend by source' sub='Share of total ad spend'>
                 <ResponsiveContainer width='100%' height={240}>
                   <PieChart>
-                    <Pie data={spendPie} cx='50%' cy='50%' innerRadius={55} outerRadius={85}
+                    <Pie data={spendPie} cx='50%' cy='50%' innerRadius={55} outerRadius={85} isAnimationActive={false}
                       dataKey='value' labelLine={false} label={PieLbl}>
                       {spendPie.map((e,i)=><Cell key={i} fill={sc(e.name)}/>)}
                     </Pie>
