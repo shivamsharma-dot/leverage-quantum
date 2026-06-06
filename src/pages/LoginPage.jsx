@@ -161,14 +161,7 @@ export default function LoginPage() {
 
   return (
     <div className={styles.scene}>
-      <div className={styles.swooshWrap}>
-        <svg className={styles.swooshSvg} viewBox="0 0 900 900" fill="none">
-          <path className={`${styles.swoosh} ${styles.s1}`} d="M 900 200 C 700 200, 500 400, 300 500 C 150 570, 50 620, -50 700" stroke="#4BAE8A" strokeWidth="28" strokeLinecap="round"/>
-          <path className={`${styles.swoosh} ${styles.s2}`} d="M 900 280 C 680 280, 480 460, 280 560 C 130 630, 20 670, -80 750" stroke="#1C9FD4" strokeWidth="28" strokeLinecap="round"/>
-          <path className={`${styles.swoosh} ${styles.s3}`} d="M 900 360 C 660 360, 460 520, 260 620 C 110 690, -10 720, -110 800" stroke="#1F3C84" strokeWidth="28" strokeLinecap="round"/>
-        </svg>
-      </div>
-      <div className={styles.grid}/>
+      <div className={styles.formPanel}>
 
       {!success ? (
         <div className={styles.card}>
@@ -267,6 +260,31 @@ export default function LoginPage() {
           <p className={styles.sub}>Redirecting to your dashboards…</p>
         </div>
       )}
+      </div>
+
+      <aside className={styles.brandPanel}>
+        <div className={styles.swooshWrap}>
+        <svg className={styles.swooshSvg} viewBox="0 0 900 900" fill="none">
+          <path className={`${styles.swoosh} ${styles.s1}`} d="M 900 200 C 700 200, 500 400, 300 500 C 150 570, 50 620, -50 700" stroke="#4BAE8A" strokeWidth="28" strokeLinecap="round"/>
+          <path className={`${styles.swoosh} ${styles.s2}`} d="M 900 280 C 680 280, 480 460, 280 560 C 130 630, 20 670, -80 750" stroke="#1C9FD4" strokeWidth="28" strokeLinecap="round"/>
+          <path className={`${styles.swoosh} ${styles.s3}`} d="M 900 360 C 660 360, 460 520, 260 620 C 110 690, -10 720, -110 800" stroke="#1F3C84" strokeWidth="28" strokeLinecap="round"/>
+        </svg>
+      </div>
+      <div className={styles.grid}/>
+        <div className={styles.brandContent}>
+          <div className={styles.brandMark}>
+            <QuantumIcon/>
+            <span className={styles.brandWord}>QUANTUM</span>
+          </div>
+          <h2 className={styles.brandTitle}>Meta Ads performance,<br/>in one command center.</h2>
+          <p className={styles.brandSub}>Creative analytics, ROAS, MTD, lead quality and channel mix. Unified, live, and built for the team.</p>
+          <ul className={styles.brandList}>
+            <li><span className={styles.brandTick}/>Real time creative fatigue and ROAS tracking</li>
+            <li><span className={styles.brandTick}/>Cross channel revenue and MTD in one view</li>
+            <li><span className={styles.brandTick}/>VASU AI for instant performance answers</li>
+          </ul>
+        </div>
+      </aside>
     </div>
   )
 }
