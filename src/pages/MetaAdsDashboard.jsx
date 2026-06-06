@@ -1143,7 +1143,7 @@ export default function MetaAdsDashboard() {
             </button>
             <button className={styles.refreshBtn} onClick={() => loadAllData(token, datePreset)} disabled={loading}
               style={{opacity: loading ? 0.7 : 1}}>
-              <span className={loading ? styles.refreshSpin : ''}>
+              <span style={{display:'inline-flex', animation: loading ? 'spin .7s linear infinite' : 'none'}}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
               </span>
               {loading ? 'Refreshing…' : 'Refresh'}
