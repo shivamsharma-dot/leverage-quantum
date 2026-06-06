@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
   PieChart, Pie, ComposedChart, Line, CartesianGrid, ReferenceLine } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import ExportButton from '../components/ExportButton'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT58jwL_E0MSciEW_nyrHQMA-0DiFqUN3wstB9yTpfM3gdhK-ctxaODRuqtdxurFRJwmhvbzqS_9EuM/pub?output=csv'
 
@@ -22,8 +23,6 @@ function parseNum(v){ if(!v)return 0; return parseInt(String(v).replace(/[^0-9]/
 function fmtINR(n){
   if(!n||n===0)return '\u2014'
   if(n>=1e7)return '\u20B9'+(n/1e7).toFixed(2)+' Cr'
-  if(n>=1e5)return '\u20B9'+(n/1e5).toFixed(1)+'L'
-  if(n>=1000)return '\u20B9'+(n/1000).toFixed(0)+'K'
   return '\u20B9'+Math.round(n).toLocaleString('en-IN')
 }
 function fmtNum(n){
@@ -84,15 +83,16 @@ const PieLbl = ({cx,cy,midAngle,outerRadius,percent,name})=>{
   </text>
 }
 
-const KPI=({label,value,sub,accent,prev,cur})=>{
+const KPI=({label,value,sub,accent,prev,cur,invert})=>{
   const d = (prev!=null&&cur!=null)?delta(cur,prev):null
+  const good = d==null?null:(invert?d<=0:d>=0)
   return <div style={{background:'#fff',borderTop:'3px solid '+(accent||'#1C9FD4'),borderRadius:10,padding:'14px 16px 12px',border:'0.5px solid #E5E7EB'}}>
     <div style={{fontSize:'9.5px',fontWeight:700,color:'#94A3B8',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:6}}>{label}</div>
     <div style={{fontSize:20,fontWeight:700,color:'#0F172A',letterSpacing:'-0.5px',lineHeight:1}}>{value}</div>
     <div style={{display:'flex',alignItems:'center',gap:6,marginTop:5}}>
       {sub&&<div style={{fontSize:11,color:'#94A3B8'}}>{sub}</div>}
       {d!=null&&<span style={{fontSize:10,fontWeight:700,padding:'1px 6px',borderRadius:10,
-        background:d>=0?'#E9F8EF':'#FEF2F2',color:d>=0?'#059669':'#DC2626'}}>
+        background:good?'#E9F8EF':'#FEF2F2',color:good?'#059669':'#DC2626'}}>
         {d>=0?'\u25B2':'\u25BC'}{Math.abs(d).toFixed(1)}%
       </span>}
     </div>
@@ -139,7 +139,7 @@ export default function MTDDashboard(){
   const prevTotal=prevMonth?.sources.find(s=>s.source==='Total')
   const srcs=month?.sources.filter(s=>s.source!=='Total'&&(s.spend>0||s.leads>0))||[]
 
-  const spendPie=useMemo(()=>srcs.filter(s=>s.spend>0).map(s=>({name:s.source,value:Math.round(s.spend/1000)})),[srcs])
+  const spendPie=useMemo(()=>srcs.filter(s=>s.spend>0).map(s=>({name:s.source,value:Math.round(s.spend)})),[srcs])
   const cplBar=useMemo(()=>[...srcs].filter(s=>s.cpl>0).sort((a,b)=>a.cpl-b.cpl).map(s=>({name:s.source,cpl:s.cpl,color:sc(s.source)})),[srcs])
   const revStack=useMemo(()=>srcs.filter(s=>s.totalRev>0).map(s=>({name:s.source,SR:+(s.srRev/100000).toFixed(1),AC:+(s.acRev/100000).toFixed(1),VAS:+(s.vasRev/100000).toFixed(1)})),[srcs])
   const avgCPL=useMemo(()=>{ const a=srcs.filter(s=>s.cpl>0); return a.length?Math.round(a.reduce((t,s)=>t+s.cpl,0)/a.length):0 },[srcs])
@@ -171,18 +171,19 @@ export default function MTDDashboard(){
             {months.map((m,i)=><option key={m.name} value={i}>{m.name}</option>)}
           </select>}
           <div style={{fontSize:11,color:'#94A3B8',borderLeft:'0.5px solid #E5E7EB',paddingLeft:14}}>{lastSync?'Synced '+fmt.format(lastSync):''}</div>
-          <button onClick={loadData} style={{padding:'6px 14px',borderRadius:8,border:'0.5px solid #E5E7EB',fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:'#fff',color:'#374151',display:'flex',alignItems:'center',gap:6}}>
-            <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/></svg>Refresh
+          <button onClick={loadData} disabled={loading} style={{padding:'6px 14px',borderRadius:8,border:'0.5px solid #E5E7EB',fontSize:12,fontWeight:500,cursor:loading?'wait':'pointer',fontFamily:'inherit',background:'#fff',color:'#374151',display:'flex',alignItems:'center',gap:6,opacity:loading?0.65:1,transition:'opacity .15s ease'}}>
+            <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' style={{animation:loading?'spin .8s linear infinite':'none'}}><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/></svg>{loading?'Refreshing':'Refresh'}
           </button>
+          <ExportButton data={srcs} filename='mtd-by-source'/>
         </div>
 
         <div style={{flex:1,overflowY:'auto',padding:22}}>
           {total&&(<>
 
             <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:12}}>
-              <KPI label='Total Spend' value={fmtINR(total.spend)} accent='#1F3C84' sub={prevTotal?'prev '+fmtINR(prevTotal.spend):undefined} cur={total.spend} prev={prevTotal?.spend}/>
+              <KPI label='Total Spend' value={fmtINR(total.spend)} accent='#1F3C84' sub={prevTotal?'prev '+fmtINR(prevTotal.spend):undefined} cur={total.spend} prev={prevTotal?.spend} invert/>
               <KPI label='Total Leads' value={fmtNum(total.leads)} accent='#1C9FD4' sub={prevTotal?'prev '+fmtNum(prevTotal.leads):undefined} cur={total.leads} prev={prevTotal?.leads}/>
-              <KPI label='CPL' value={fmtINR(total.cpl)} accent='#F59E0B' sub='Cost per lead' cur={total.cpl} prev={prevTotal?.cpl}/>
+              <KPI label='CPL' value={fmtINR(total.cpl)} accent='#F59E0B' sub='Cost per lead' cur={total.cpl} prev={prevTotal?.cpl} invert/>
               <KPI label='Total Revenue' value={fmtINR(total.totalRev)} accent='#059669' sub={prevTotal?'prev '+fmtINR(prevTotal.totalRev):undefined} cur={total.totalRev} prev={prevTotal?.totalRev}/>
               <KPI label='ROAS' value={total.roas>0?total.roas.toFixed(2)+'x':'\u2014'} accent={roasColor(total.roas)} cur={total.roas} prev={prevTotal?.roas}/>
             </div>
@@ -191,9 +192,9 @@ export default function MTDDashboard(){
               <KPI label='FW Qualified' value={fmtNum(total.fwQual)} accent='#1F3C84' sub={'of '+fmtNum(total.fwQ)+' queued'} cur={total.fwQual} prev={prevTotal?.fwQual}/>
               <KPI label='FW QL%' value={total.fwQL.toFixed(2)+'%'} accent='#1C9FD4' sub='Futwork quality' cur={total.fwQL} prev={prevTotal?.fwQL}/>
               <KPI label='SB Qualified' value={fmtNum(total.sbQual)} accent='#29B9C3' sub={total.sbQL.toFixed(2)+'% QL'} cur={total.sbQual} prev={prevTotal?.sbQual}/>
-              <KPI label='Applications' value={fmtNum(total.apps)} accent='#4CAE6F' sub={'CPQL '+fmtINR(total.cpql)} cur={total.apps} prev={prevTotal?.apps}/>
-              <KPI label='Est. RAU' value={total.rau>0?total.rau.toFixed(1):'\u2014'} accent='#F59E0B' sub='Revenue attr. units'/>
-              <KPI label='CPQL' value={fmtINR(total.cpql)} accent='#7C3AED' sub='Cost per qual. lead' cur={total.cpql} prev={prevTotal?.cpql}/>
+              <KPI label='Applications' value={fmtNum(total.apps)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtNum(prevTotal.apps):undefined} cur={total.apps} prev={prevTotal?.apps}/>
+              <KPI label='Est. RAU' value={total.rau>0?total.rau.toFixed(1):'\u2014'} accent='#F59E0B' sub='Revenue attr. units' cur={total.rau} prev={prevTotal?.rau}/>
+              <KPI label='CPQL' value={fmtINR(total.cpql)} accent='#29B9C3' sub='Cost per qual. lead' cur={total.cpql} prev={prevTotal?.cpql} invert/>
             </div>
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1.2fr',gap:14,marginBottom:14}}>
@@ -205,7 +206,7 @@ export default function MTDDashboard(){
                       dataKey='value' labelLine={false} label={PieLbl}>
                       {spendPie.map((e,i)=><Cell key={i} fill={sc(e.name)}/>)}
                     </Pie>
-                    <Tooltip content={<ChartTip fmt={v=>('\u20B9'+v+'K')}/>}/>
+                    <Tooltip content={<ChartTip fmt={v=>fmtINR(v)}/>}/>
                   </PieChart>
                 </ResponsiveContainer>
                 <div style={{display:'flex',flexWrap:'wrap',gap:'6px 14px',marginTop:8}}>
