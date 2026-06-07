@@ -122,8 +122,9 @@ export default function MTDDashboard(){
 
   const loadData=useCallback(async()=>{
     setLoading(true)
+    const _t0=Date.now()
     try{
-      const res=await fetch(SHEET_CSV)
+      const res=await fetch(SHEET_CSV+'&_=' + Date.now())
       const csv=await res.text()
       const p=parseCSV(csv)
       setMonths(p)
@@ -131,7 +132,7 @@ export default function MTDDashboard(){
       setLastSync(new Date())
       setError(null)
     }catch(e){setError('Failed: '+e.message)}
-    finally{setLoading(false)}
+    finally{const _w=Math.max(0,750-(Date.now()-_t0));setTimeout(()=>setLoading(false),_w)}
   },[])
 
   useEffect(()=>{loadData()},[loadData])
@@ -185,7 +186,7 @@ export default function MTDDashboard(){
             {months.map((m,i)=><option key={m.name} value={i}>{m.name}</option>)}
           </select>}
           <div style={{fontSize:11,color:'#94A3B8',borderLeft:'0.5px solid #E5E7EB',paddingLeft:14}}>{lastSync?'Synced '+fmt.format(lastSync):''}</div>
-          <button onClick={loadData} disabled={loading} style={{padding:'6px 14px',borderRadius:8,border:'0.5px solid #E5E7EB',fontSize:12,fontWeight:500,cursor:loading?'wait':'pointer',fontFamily:'inherit',background:'#fff',color:'#374151',display:'flex',alignItems:'center',gap:6,opacity:loading?0.65:1,transition:'opacity .15s ease'}}>
+          <button onClick={loadData} disabled={loading} className="lqRefreshBtn" style={{padding:'6px 14px',borderRadius:8,border:'0.5px solid #E5E7EB',fontSize:12,fontWeight:500,cursor:loading?'wait':'pointer',fontFamily:'inherit',background:'#fff',color:'#374151',display:'flex',alignItems:'center',gap:6,opacity:loading?0.65:1,transition:'opacity .15s ease'}}>
             <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' style={{animation:loading?'spin .8s linear infinite':'none'}}><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/></svg>{loading?'Refreshing':'Refresh'}
           </button>
           <ExportButton data={srcs} filename='mtd-by-source'/>
