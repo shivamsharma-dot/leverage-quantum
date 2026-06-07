@@ -59,3 +59,8 @@ input, select { font-family: inherit; }
   0%,100% { opacity: 1; }
   50%      { opacity: 0.4; }
 }
+
+/* MTD refresh button: visible press + hover feedback */
+.lqRefreshBtn { transition: transform .08s ease, opacity .15s ease, background .15s ease, box-shadow .15s ease; }
+.lqRefreshBtn:hover:not(:disabled) { background:#F8FAFC !important; box-shadow:0 2px 8px rgba(15,23,42,0.08); }
+.lqRefreshBtn:active:not(:disabled) { transform: scale(0.92); }
