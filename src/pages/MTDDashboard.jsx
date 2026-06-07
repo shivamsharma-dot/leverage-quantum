@@ -11,7 +11,7 @@ const isMonthHeader = v => v && MONTH_NAMES.some(m => v.startsWith(m)) && v.leng
 
 const SRC_COLOR = {
   Facebook:'#1F3C84', Google:'#1C9FD4', 'Google MBBS':'#29B9C3', Affiliate:'#4CAE6F',
-  Remarketing:'#F59E0B', Referral:'#7C3AED', Bing:'#F59E0B', Others:'#9CA3AF',
+  Remarketing:'#F59E0B', Referral:'#0D9488', Bing:'#F59E0B', Others:'#9CA3AF',
   Branding:'#6B7280', 'Content+Brand':'#EC4899', 'Lead Source NA':'#14B8A6',
   'Affiliate Partner':'#84CC16', Offline:'#374151'
 }
@@ -83,8 +83,9 @@ const PieLbl = ({cx,cy,midAngle,outerRadius,percent,name})=>{
   </text>
 }
 
-const KPI=({label,value,sub,accent,prev,cur,invert})=>{
-  const d = (prev!=null&&cur!=null)?delta(cur,prev):null
+const KPI=({label,value,sub,accent,prev,cur,invert,prorate})=>{
+  const adjPrev = (prev!=null&&prorate&&prorate!==1)?prev*prorate:prev
+  const d = (adjPrev!=null&&cur!=null)?delta(cur,adjPrev):null
   const good = d==null?null:(invert?d<=0:d>=0)
   return <div style={{background:'#fff',borderTop:'3px solid '+(accent||'#1C9FD4'),borderRadius:10,padding:'14px 16px 12px',border:'0.5px solid #E5E7EB'}}>
     <div style={{fontSize:'9.5px',fontWeight:700,color:'#94A3B8',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:6}}>{label}</div>
@@ -113,11 +114,13 @@ export default function MTDDashboard(){
   const [months,setMonths]=useState([])
   const [sel,setSel]=useState(0)
   const [loading,setLoading]=useState(true)
+  const [showInfo,setShowInfo]=useState(false)
   const [error,setError]=useState(null)
   const [lastSync,setLastSync]=useState(null)
   const hasSetInitial=useRef(false)
 
   const loadData=useCallback(async()=>{
+    setLoading(true)
     try{
       const res=await fetch(SHEET_CSV)
       const csv=await res.text()
@@ -137,6 +140,16 @@ export default function MTDDashboard(){
   const prevMonth=months[sel-1]
   const total=month?.sources.find(s=>s.source==='Total')
   const prevTotal=prevMonth?.sources.find(s=>s.source==='Total')
+  // Running-average proration: for the ongoing month, compare per-day run-rate vs last month's daily average
+  const _now=new Date()
+  const _parseM=nm=>{ if(!nm)return null; const ps=String(nm).trim().split(/\s+/); const mi=MONTH_NAMES.indexOf(ps[0]); const yr=parseInt((ps.find(p=>/^[0-9]{4}$/.test(p))||'')); return (mi>=0&&yr)?{mi,yr}:null }
+  const _selM=_parseM(month?.name)
+  const isCurrentMonth=!!_selM&&_selM.mi===_now.getMonth()&&_selM.yr===_now.getFullYear()
+  const _dim=(mi,yr)=>new Date(yr,mi+1,0).getDate()
+  const daysElapsed=_selM?(isCurrentMonth?_now.getDate():_dim(_selM.mi,_selM.yr)):0
+  const _prevM=_parseM(prevMonth?.name)
+  const _prevDays=_prevM?_dim(_prevM.mi,_prevM.yr):0
+  const prorate=(isCurrentMonth&&_prevDays>0&&daysElapsed>0)?(daysElapsed/_prevDays):1
   const srcs=month?.sources.filter(s=>s.source!=='Total'&&(s.spend>0||s.leads>0))||[]
 
   const spendPie=useMemo(()=>srcs.filter(s=>s.spend>0).map(s=>({name:s.source,value:Math.round(s.spend)})),[srcs])
@@ -175,6 +188,34 @@ export default function MTDDashboard(){
             <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' style={{animation:loading?'spin .8s linear infinite':'none'}}><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/></svg>{loading?'Refreshing':'Refresh'}
           </button>
           <ExportButton data={srcs} filename='mtd-by-source'/>
+          <div style={{position:'relative'}}>
+            <button onClick={()=>setShowInfo(v=>!v)} title='How these metrics are calculated' style={{width:30,height:30,borderRadius:8,border:'0.5px solid #E5E7EB',background:showInfo?'#E8EFF9':'#fff',color:'#1F3C84',fontSize:14,fontWeight:700,fontStyle:'italic',fontFamily:'Georgia,serif',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>i</button>
+            {showInfo&&<div onClick={()=>setShowInfo(false)} style={{position:'fixed',inset:0,zIndex:150}}/>}
+            {showInfo&&<div style={{position:'absolute',right:0,top:'calc(100% + 8px)',zIndex:200,width:384,maxHeight:'74vh',overflowY:'auto',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,boxShadow:'0 14px 40px rgba(15,23,42,0.16)',padding:'16px 18px',textAlign:'left',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#0F172A',marginBottom:3}}>How these metrics are calculated</div>
+              <div style={{fontSize:11,color:'#94A3B8',marginBottom:10}}>Selected month vs previous month. Every figure aggregates all sources.</div>
+              {[
+                ['Total Spend','Sum of ad spend across all sources for the month.'],
+                ['Total Leads','Sum of leads generated across all sources.'],
+                ['CPL','Total spend \u00F7 total leads (cost per lead).'],
+                ['Total Revenue','Sum of SR + AC + VAS revenue across sources.'],
+                ['ROAS','Total revenue \u00F7 total spend.'],
+                ['FW Qualified','Futwork-qualified leads. FW QL% = qualified \u00F7 queued.'],
+                ['SB Qualified','Salesbridge-qualified leads. SB QL% = qualified \u00F7 queued.'],
+                ['Applications','Total applications submitted across sources.'],
+                ['CPQL','Total spend \u00F7 qualified leads (cost per qualified lead).'],
+                ['Est. RAU','Estimated revenue attribution units for the month.'],
+              ].map(([m,d])=>(
+                <div key={m} style={{display:'flex',gap:10,padding:'7px 0',borderTop:'0.5px solid #F3F4F6'}}>
+                  <div style={{fontSize:11.5,fontWeight:700,color:'#1F3C84',width:96,flexShrink:0}}>{m}</div>
+                  <div style={{fontSize:11.5,color:'#475569',lineHeight:1.45}}>{d}</div>
+                </div>
+              ))}
+              <div style={{marginTop:11,padding:'10px 12px',background:'#E8EFF9',borderRadius:8,fontSize:11,color:'#1F3C84',lineHeight:1.5}}>
+                <b>Change vs last month:</b> for the ongoing month{isCurrentMonth?' ('+daysElapsed+' day'+(daysElapsed===1?'':'s')+' so far)':''}, Leads, Revenue, FW Qualified, Applications and Est. RAU compare this month's per-day run-rate against last month's daily average, so a partial month is not shown as falsely down. Cost and ratio metrics (CPL, CPQL, ROAS, Spend) compare full totals.
+              </div>
+            </div>}
+          </div>
         </div>
 
         <div style={{flex:1,overflowY:'auto',padding:22}}>
@@ -182,18 +223,18 @@ export default function MTDDashboard(){
 
             <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:12}}>
               <KPI label='Total Spend' value={fmtINR(total.spend)} accent='#1F3C84' sub={prevTotal?'prev '+fmtINR(prevTotal.spend):undefined} cur={total.spend} prev={prevTotal?.spend} invert/>
-              <KPI label='Total Leads' value={fmtNum(total.leads)} accent='#1C9FD4' sub={prevTotal?'prev '+fmtNum(prevTotal.leads):undefined} cur={total.leads} prev={prevTotal?.leads}/>
+              <KPI label='Total Leads' value={fmtNum(total.leads)} accent='#1C9FD4' sub={prevTotal?'prev '+fmtNum(prevTotal.leads):undefined} cur={total.leads} prev={prevTotal?.leads} prorate={prorate}/>
               <KPI label='CPL' value={fmtINR(total.cpl)} accent='#F59E0B' sub='Cost per lead' cur={total.cpl} prev={prevTotal?.cpl} invert/>
-              <KPI label='Total Revenue' value={fmtINR(total.totalRev)} accent='#059669' sub={prevTotal?'prev '+fmtINR(prevTotal.totalRev):undefined} cur={total.totalRev} prev={prevTotal?.totalRev}/>
+              <KPI label='Total Revenue' value={fmtINR(total.totalRev)} accent='#059669' sub={prevTotal?'prev '+fmtINR(prevTotal.totalRev):undefined} cur={total.totalRev} prev={prevTotal?.totalRev} prorate={prorate}/>
               <KPI label='ROAS' value={total.roas>0?total.roas.toFixed(2)+'x':'\u2014'} accent={roasColor(total.roas)} cur={total.roas} prev={prevTotal?.roas}/>
             </div>
 
             <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12,marginBottom:22}}>
-              <KPI label='FW Qualified' value={fmtNum(total.fwQual)} accent='#1F3C84' sub={'of '+fmtNum(total.fwQ)+' queued'} cur={total.fwQual} prev={prevTotal?.fwQual}/>
+              <KPI label='FW Qualified' value={fmtNum(total.fwQual)} accent='#1F3C84' sub={'of '+fmtNum(total.fwQ)+' queued'} cur={total.fwQual} prev={prevTotal?.fwQual} prorate={prorate}/>
               <KPI label='FW QL%' value={total.fwQL.toFixed(2)+'%'} accent='#1C9FD4' sub='Futwork quality' cur={total.fwQL} prev={prevTotal?.fwQL}/>
               <KPI label='SB Qualified' value={fmtNum(total.sbQual)} accent='#29B9C3' sub={total.sbQL.toFixed(2)+'% QL'} cur={total.sbQual} prev={prevTotal?.sbQual}/>
-              <KPI label='Applications' value={fmtNum(total.apps)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtNum(prevTotal.apps):undefined} cur={total.apps} prev={prevTotal?.apps}/>
-              <KPI label='Est. RAU' value={total.rau>0?total.rau.toFixed(1):'\u2014'} accent='#F59E0B' sub='Revenue attr. units' cur={total.rau} prev={prevTotal?.rau}/>
+              <KPI label='Applications' value={fmtNum(total.apps)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtNum(prevTotal.apps):undefined} cur={total.apps} prev={prevTotal?.apps} prorate={prorate}/>
+              <KPI label='Est. RAU' value={total.rau>0?total.rau.toFixed(1):'\u2014'} accent='#F59E0B' sub='Revenue attr. units' cur={total.rau} prev={prevTotal?.rau} prorate={prorate}/>
               <KPI label='CPQL' value={fmtINR(total.cpql)} accent='#29B9C3' sub='Cost per qual. lead' cur={total.cpql} prev={prevTotal?.cpql} invert/>
             </div>
 
