@@ -51,6 +51,22 @@ const NAV = [
   },
 ]
 
+// SINGLE SOURCE OF TRUTH for pages + access management.
+// Add any new page here and it automatically appears in user-access management
+// (and stays in sync with the sidebar id mapping). id must be stable (used for access enforcement).
+export const PAGE_LIST = [
+  { id:'home',         label:'Summary',      path:'/',                      adminOnly:false },
+  { id:'meta_ads',     label:'Meta Ads',     path:'/dashboard/meta-ads',    adminOnly:false },
+  { id:'google_ads',   label:'Google Ads',   path:'/dashboard/google-ads',  adminOnly:false },
+  { id:'roas',         label:'ROAS',         path:'/dashboard/roas',        adminOnly:false },
+  { id:'mtd',          label:'MTD',          path:'/dashboard/mtd',         adminOnly:false },
+  { id:'lead_quality', label:'Lead Quality', path:'/dashboard/lead-quality',adminOnly:false },
+  { id:'channel_mix',  label:'Channel Mix',  path:'/dashboard/channel-mix', adminOnly:false },
+  { id:'revenue',      label:'Revenue',      path:'/dashboard/revenue',     adminOnly:false },
+  { id:'vasu',         label:'VASU AI',      path:'/vasu',                  adminOnly:true  },
+  { id:'settings',     label:'Settings',     path:'/settings',              adminOnly:true  },
+]
+
 function HomeIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> }
 function ChartIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> }
 function FunnelIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 3H2l8 9.46V19l4 2V12.46L22 3z"/></svg> }
@@ -115,11 +131,7 @@ export default function Sidebar() {
     ? user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
     : user?.email?.[0]?.toUpperCase() || 'LQ'
 
-  const idMap = {
-    'Summary':'home','ROAS':'roas','MTD':'mtd','Lead Quality':'lead_quality',
-    'Channel Mix':'channel_mix','Revenue':'revenue','Meta Ads':'meta_ads',
-    'VASU AI':'vasu','Settings':'settings'
-  }
+  const idMap = Object.fromEntries(PAGE_LIST.map(p => [p.label, p.id]))
 
   const currentTab = new URLSearchParams(location.search).get('tab') || 'campaigns'
 
