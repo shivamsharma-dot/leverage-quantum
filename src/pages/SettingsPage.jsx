@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import Sidebar from '../components/Sidebar'
+import Sidebar, { PAGE_LIST } from '../components/Sidebar'
 import { useAuth, isAdmin, getAccessList, addUserAccess, removeUserAccess } from '../hooks/useAuth'
 import { DATA_CONTEXT } from '../data/aiContext.js'
 import { getActivityLog } from '../components/ActivityLogger.js'
@@ -104,16 +104,9 @@ async function updateUserRole(email, role) {
   return res.ok
 }
 
-const DASHBOARDS = [
-  { id:'home',         label:'Home'         },
-  { id:'roas',         label:'ROAS'         },
-  { id:'mtd',          label:'MTD'          },
-  { id:'lead_quality', label:'Lead Quality' },
-  { id:'channel_mix',  label:'Channel Mix'  },
-  { id:'revenue',      label:'Revenue'      },
-  { id:'meta_ads',     label:'Meta Ads'     },
-  { id:'vasu',         label:'VASU AI'      },
-]
+// Derived from the canonical PAGE_LIST so any newly added page automatically
+// appears here in user-access management (Settings is managed via the admin role).
+const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings').map(p => ({ id: p.id, label: p.label }))
 
 function parsePermissions(role) {
   if (!role || role === 'viewer' || role === 'admin') return DASHBOARDS.map(d => d.id)
