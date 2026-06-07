@@ -115,6 +115,7 @@ export default function MTDDashboard(){
   const [sel,setSel]=useState(0)
   const [loading,setLoading]=useState(true)
   const [showInfo,setShowInfo]=useState(false)
+  const [compare,setCompare]=useState(false)
   const [error,setError]=useState(null)
   const [lastSync,setLastSync]=useState(null)
   const hasSetInitial=useRef(false)
@@ -188,6 +189,10 @@ export default function MTDDashboard(){
             <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' style={{animation:loading?'spin .8s linear infinite':'none'}}><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/></svg>{loading?'Refreshing':'Refresh'}
           </button>
           <ExportButton data={srcs} filename='mtd-by-source'/>
+          <button onClick={()=>setCompare(v=>!v)} title='Split view: Meta vs Google by source' style={{padding:'6px 12px',borderRadius:8,border:'0.5px solid '+(compare?'#1C9FD4':'#E5E7EB'),fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit',background:compare?'#E3F5FD':'#fff',color:compare?'#1C9FD4':'#374151',display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+            <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'><rect x='3' y='3' width='8' height='18' rx='1'/><rect x='13' y='3' width='8' height='18' rx='1'/></svg>
+            Compare
+          </button>
           <div style={{position:'relative'}}>
             <button onClick={()=>setShowInfo(v=>!v)} title='How these metrics are calculated' style={{width:30,height:30,borderRadius:8,border:'0.5px solid #E5E7EB',background:showInfo?'#E8EFF9':'#fff',color:'#1F3C84',fontSize:14,fontWeight:700,fontStyle:'italic',fontFamily:'Georgia,serif',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>i</button>
             {showInfo&&<div onClick={()=>setShowInfo(false)} style={{position:'fixed',inset:0,zIndex:150}}/>}
@@ -238,6 +243,37 @@ export default function MTDDashboard(){
               <KPI label='CPQL' value={fmtINR(total.cpql)} accent='#29B9C3' sub='Cost per qual. lead' cur={total.cpql} prev={prevTotal?.cpql} invert/>
             </div>
 
+            {compare&&(()=>{
+              const meta=srcs.find(s=>s.source==='Facebook')||srcs.find(s=>/meta|facebook/i.test(s.source))
+              const goog=srcs.find(s=>s.source==='Google')||srcs.find(s=>/google/i.test(s.source))
+              const pct=v=>(v||0).toFixed(2)+'%'
+              const xx=v=>v>0?v.toFixed(2)+'x':'\u2014'
+              const rows=[
+                ['Spend',meta?fmtINR(meta.spend):'\u2014',goog?fmtINR(goog.spend):'\u2014'],
+                ['Leads',meta?fmtNum(meta.leads):'\u2014',goog?fmtNum(goog.leads):'\u2014'],
+                ['CPL',meta?fmtINR(meta.cpl):'\u2014',goog?fmtINR(goog.cpl):'\u2014'],
+                ['FW Qualified',meta?fmtNum(meta.fwQual):'\u2014',goog?fmtNum(goog.fwQual):'\u2014'],
+                ['FW QL%',meta?pct(meta.fwQL):'\u2014',goog?pct(goog.fwQL):'\u2014'],
+                ['Applications',meta?fmtNum(meta.apps):'\u2014',goog?fmtNum(goog.apps):'\u2014'],
+                ['CPQL',meta?fmtINR(meta.cpql):'\u2014',goog?fmtINR(goog.cpql):'\u2014'],
+                ['Revenue',meta?fmtINR(meta.totalRev):'\u2014',goog?fmtINR(goog.totalRev):'\u2014'],
+                ['ROAS',meta?xx(meta.roas):'\u2014',goog?xx(goog.roas):'\u2014'],
+              ]
+              return <div style={{marginBottom:14}}><Card title='Meta vs Google \u00B7 source split' sub='Side-by-side comparison for the selected month'>
+                <div style={{padding:'6px 14px 14px'}}>
+                  <div style={{display:'grid',gridTemplateColumns:'1.1fr 1fr 1fr',padding:'9px 12px',borderBottom:'0.5px solid #E5E7EB'}}>
+                    <div style={{fontSize:10.5,fontWeight:700,color:'#94A3B8',letterSpacing:'0.06em',textTransform:'uppercase'}}>Metric</div>
+                    <div style={{fontSize:12,fontWeight:700,color:'#1F3C84',textAlign:'right'}}>Meta (Facebook)</div>
+                    <div style={{fontSize:12,fontWeight:700,color:'#1C9FD4',textAlign:'right'}}>Google</div>
+                  </div>
+                  {rows.map((r,idx)=>(<div key={r[0]} style={{display:'grid',gridTemplateColumns:'1.1fr 1fr 1fr',alignItems:'center',padding:'9px 12px',background:idx%2?'#FAFBFC':'#fff'}}>
+                    <div style={{fontSize:12,color:'#475569',fontWeight:500}}>{r[0]}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:'#0F172A',textAlign:'right'}}>{r[1]}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:'#0F172A',textAlign:'right'}}>{r[2]}</div>
+                  </div>))}
+                </div>
+              </Card></div>
+            })()}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1.2fr',gap:14,marginBottom:14}}>
 
               <Card title='Spend by source' sub='Share of total ad spend'>
