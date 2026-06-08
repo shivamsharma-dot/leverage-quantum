@@ -1,160 +1,81 @@
-import { useState, createContext, useContext } from 'react'
-import { jwtDecode } from 'jwt-decode'
+import { useState, useEffect, createContext, useContext } from 'react'
 
 const AuthContext = createContext(null)
-
-const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 const ALLOWED_DOMAIN = 'leverageedu.com'
 
-async function checkUserAccess(email) {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}&select=email,role`,
-    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
-  )
-  if (!res.ok) return null
-  const data = await res.json()
-  return data.length > 0 ? data[0] : null
-}
-
+// ---- Admin user management (now via the secure server endpoints) ----
 export async function getAccessList() {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/allowed_users?select=email,role,added_by,created_at&order=created_at.asc`,
-    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
-  )
-  if (!res.ok) return []
-  return await res.json()
+  const r = await fetch('/api/users', { credentials: 'include' })
+  if (!r.ok) return []
+  const data = await r.json()
+  return data.users || []
 }
 
-export async function addUserAccess(email, role = 'viewer', addedBy = '') {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/allowed_users`,
-    {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify({ email: email.toLowerCase().trim(), role, added_by: addedBy })
-    }
-  )
-  return res.ok || res.status === 201
+export async function addUserAccess(email, role = 'viewer') {
+  const r = await fetch('/api/users', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, role }),
+  })
+  return r.ok
 }
 
 export async function removeUserAccess(email) {
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}`,
-    {
-      method: 'DELETE',
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-    }
-  )
-  return res.ok
+  const r = await fetch(`/api/users?email=${encodeURIComponent(email)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  return r.ok
 }
 
-const SESSION_TTL = 8 * 60 * 60 * 1000 // 8 hours
+export async function updateUserRole(email, newRole) {
+  const r = await fetch('/api/users', {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, role: newRole }),
+  })
+  return r.ok
+}
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('lq_user')
-      if (!saved) return null
-      const u = JSON.parse(saved)
-      // Enforce 8-hour session expiry
-      if (u.loginTime && Date.now() - u.loginTime > SESSION_TTL) {
-        localStorage.removeItem('lq_user')
-        return null
-      }
-      return u
-    } catch { return null }
-  })
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  // On load, ask the server who we are (reads the secure cookie).
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : { user: null }))
+      .then(d => setUser(d.user || null))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false))
+  }, [])
 
   const loginWithGoogle = async (credentialResponse) => {
     try {
-      const decoded = jwtDecode(credentialResponse.credential)
-      const email = (decoded.email || '').toLowerCase()
-
-      if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
-        throw new Error(`Access denied. Only @${ALLOWED_DOMAIN} accounts are allowed.`)
-      }
-
-      // Check Supabase whitelist
-      const access = await checkUserAccess(email)
-      if (!access) {
-        throw new Error('Access denied. Your account does not have permission to access Leverage Quantum. Contact your admin.')
-      }
-
-      const userData = {
-        name: decoded.name,
-        email: decoded.email,
-        picture: decoded.picture,
-        role: access.role,
-        token: credentialResponse.credential,
-        loginTime: Date.now()
-      }
-
-      setUser(userData)
-      localStorage.setItem('lq_user', JSON.stringify(userData))
+      const r = await fetch('/api/auth/google', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: credentialResponse.credential }),
+      })
+      const data = await r.json()
+      if (!r.ok) return { success: false, error: data.error || 'Sign-in failed.' }
+      setUser(data.user)
       return { success: true }
-    } catch (err) {
-      return { success: false, error: err.message }
+    } catch {
+      return { success: false, error: 'Network error. Please try again.' }
     }
   }
 
-  const loginWithEmail = async (email, password) => {
-    email = email.toLowerCase().trim()
-    if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
-      return { success: false, error: `Only @${ALLOWED_DOMAIN} emails are allowed.` }
-    }
-    if (!password || password.length < 6) {
-      return { success: false, error: 'Password must be at least 6 characters.' }
-    }
-
-    const access = await checkUserAccess(email)
-    if (!access) {
-      return { success: false, error: 'Access denied. Your account does not have permission to access Leverage Quantum.' }
-    }
-
-    const userData = {
-      name: email.split('@')[0].replace('.', ' '),
-      email,
-      picture: null,
-      role: access.role,
-      token: btoa(email + ':' + Date.now()),
-      loginTime: Date.now()
-    }
-
-    setUser(userData)
-    localStorage.setItem('lq_user', JSON.stringify(userData))
-    return { success: true }
-  }
-
-  const loginWithOTP = async (email) => {
-    email = email.toLowerCase().trim()
-    const access = await checkUserAccess(email)
-    if (!access) return { success: false, error: 'Access denied. Contact your admin.' }
-    const userData = {
-      name: email.split('@')[0].split('.').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-      email,
-      picture: null,
-      role: access.role,
-      token: btoa(email + ':' + Date.now()),
-      loginTime: Date.now()
-    }
-    setUser(userData)
-    localStorage.setItem('lq_user', JSON.stringify(userData))
-    return { success: true }
-  }
-
-  const logout = () => {
+  const logout = async () => {
+    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }) } catch {}
     setUser(null)
-    localStorage.removeItem('lq_user')
   }
 
   return (
-    <AuthContext.Provider value={{ user, loginWithGoogle, loginWithEmail, loginWithOTP, logout }}>
+    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout, ALLOWED_DOMAIN }}>
       {children}
     </AuthContext.Provider>
   )
@@ -164,33 +85,10 @@ export function useAuth() {
   return useContext(AuthContext)
 }
 
-export function isAdmin(email) {
-  try {
-    const saved = localStorage.getItem('lq_user')
-    if (saved) { const u = JSON.parse(saved); return u.role === 'admin' }
-  } catch {}
-  return false
+export function isAdmin() {
+  return false // role checks now come from the server session via useAuth().user.role
 }
 
 export function isViewer() {
-  try {
-    const saved = localStorage.getItem('lq_user')
-    if (saved) { const u = JSON.parse(saved); return u.role === 'viewer' }
-  } catch {}
-  return true // default to viewer if unknown
-}
-
-export function updateUserRole(email, newRole) {
-  return fetch(
-    `${SUPABASE_URL}/rest/v1/allowed_users?email=eq.${encodeURIComponent(email)}`,
-    {
-      method: 'PATCH',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ role: newRole })
-    }
-  ).then(r => r.ok)
+  return true
 }

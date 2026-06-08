@@ -29,7 +29,7 @@ function canAccess(role, dashboardId) {
 }
 
 function ProtectedRoute({ children, dashboardId }) {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const location = useLocation()
 
   useEffect(() => {
@@ -38,6 +38,7 @@ function ProtectedRoute({ children, dashboardId }) {
     }
   }, [location.pathname, user?.email])
 
+  if (loading) return null
   if (!user) return <Navigate to="/login" replace />
   if (dashboardId && !canAccess(user.role, dashboardId)) {
     const allowed = getAllowedDashboards(user.role)
