@@ -5,8 +5,6 @@ import { DATA_CONTEXT } from '../data/aiContext.js'
 import { getActivityLog } from '../components/ActivityLogger.js'
 import styles from './SettingsPage.module.css'
 
-const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
@@ -485,10 +483,10 @@ export default function SettingsPage() {
                         <label title="Receive daily Meta Ads report" style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer',flexShrink:0}}>
                           <input type="checkbox" checked={!!u.receive_reports}
                             onChange={async e => {
-                              const checked = e.target.checked
-                              await fetch(`https://tsyekthwthxszmsgqfej.supabase.co/rest/v1/allowed_users?email=eq.${u.email}`, {
-                                method:'PATCH', headers:{'Content-Type':'application/json','apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'},
-                                body: JSON.stringify({ receive_reports: checked })
+                              await fetch('/api/users', {
+                                method:'PATCH', credentials:'include',
+                                headers:{'Content-Type':'application/json'},
+                                body: JSON.stringify({ email: u.email, receive_reports: e.target.checked })
                               })
                               loadUsers()
                             }}
