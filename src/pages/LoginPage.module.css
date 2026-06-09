@@ -1,193 +1,127 @@
-/* Fallback web font (loads instantly). For TRUE brand typography, add your
-   Adobe Fonts (Proxima Nova) kit <link> in index.html — the stack below will
-   pick it up automatically once it's available. */
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-/* ============================================================
-   LEVERAGE QUANTUM — LOGIN  (Google SSO only, brand-aligned)
-   ============================================================ */
-
 .scene {
-  /* Brand book — Primary palette */
-  --navy: #1F3C84;        /* Pantone 286  R31 G60 B132 */
-  --blue: #1C9FD4;        /* Pantone 2925 R28 G159 B212 */
-  --navy-deep: #0E1E3D;   /* deep shade for brand panel */
-  --green: #4CAE6F;       /* secondary green (logo) */
-  --cyan: #29B9C3;        /* secondary teal accent */
-  --ink: #14224A;
-  --muted: #5B6B8C;
-  --line: #E6EBF4;
+  --navy: #1F3C84;
+  --navy-deep: #0E1E3D;
+  --blue: #1C9FD4;
+  --cyan: #29B9C3;
+  --green: #4CAE6F;
+  --line: rgba(20,34,74,0.05);
 
-  /* Brand primary font = Proxima Nova (Adobe). Falls back gracefully. */
-  --font: 'proxima-nova', 'Proxima Nova', 'Plus Jakarta Sans',
-          -apple-system, BlinkMacSystemFont, sans-serif;
-
+  position: relative;
   min-height: 100vh;
-  display: flex;
-  font-family: var(--font);
-  background: #FFFFFF;
-  color: var(--ink);
-}
-
-/* ---------- LEFT: white form panel ---------- */
-.formPanel {
-  flex: 1 1 54%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 56px 48px;
-  /* barely-there cool light from the top — quiet depth instead of flat white */
-  background:
-    radial-gradient(1100px 520px at 50% -8%, #F6F9FF 0%, rgba(246,249,255,0) 62%),
-    #FFFFFF;
-}
-.card, .successCard {
-  width: 100%;
-  max-width: 400px;
-  animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both;
-}
-@keyframes fadeUp { from { opacity:0; transform: translateY(14px);} to {opacity:1; transform:none;} }
-
-/* ---------- LOGO ROW ---------- */
-.logoRow { display:flex; align-items:center; gap:12px; margin-bottom:30px; }
-.logoPill {
-  display:inline-flex; align-items:center; justify-content:center;
-  padding:8px 12px; background:#FFFFFF; border:1px solid var(--line);
-  border-radius:10px; box-shadow:0 2px 8px -4px rgba(20,34,74,0.18);
-}
-.logo { height:22px; width:auto; display:block; }
-.logoDivider { width:1px; height:24px; background:var(--line); }
-.quantumWrap { display:inline-flex; align-items:center; gap:7px; }
-.logoProduct { font-size:18px; font-weight:700; letter-spacing:-0.01em; color:var(--blue); }
-
-/* ---------- ANIMATED GRAPH ICON ---------- */
-.qIcon { display:inline-flex; }
-.qIcon svg { display:block; overflow:visible; }
-.bar1, .bar2, .bar3 {
-  transform-box: fill-box;
-  transform-origin: bottom;
-  animation-fill-mode: both;
-}
-.bar1 { fill: var(--green); animation: barRise .7s cubic-bezier(.2,.8,.2,1) .05s, barPulse 2.8s ease-in-out 1.0s infinite; }
-.bar2 { fill: var(--cyan);  animation: barRise .7s cubic-bezier(.2,.8,.2,1) .18s, barPulse 2.8s ease-in-out 1.25s infinite; }
-.bar3 { fill: var(--blue);  animation: barRise .7s cubic-bezier(.2,.8,.2,1) .31s, barPulse 2.8s ease-in-out 1.5s infinite; }
-@keyframes barRise { from { transform: scaleY(0); opacity:.2; } to { transform: scaleY(1); opacity:1; } }
-@keyframes barPulse {
-  0%,100% { transform: scaleY(1); }
-  35%     { transform: scaleY(0.62); }
-  70%     { transform: scaleY(1.08); }
-}
-
-/* ---------- BADGE ---------- */
-.badge {
-  display:inline-flex; align-items:center; gap:7px;
-  padding:6px 12px; margin-bottom:22px;
-  background:#E8EFF9; border:1px solid #D4E0F4; border-radius:999px;
-  font-size:10.5px; font-weight:700; letter-spacing:0.09em; text-transform:uppercase;
-  color:var(--navy);
-}
-.badgeDot { width:6px; height:6px; border-radius:50%; background:var(--green);
-  box-shadow:0 0 0 3px rgba(76,174,111,0.18); animation:blink 2.2s ease-in-out infinite; }
-@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.4;} }
-
-/* ---------- HEADINGS ---------- */
-.heading { font-size:32px; font-weight:800; letter-spacing:-0.035em; line-height:1.08; color:var(--navy-deep); margin-bottom:11px; }
-.sub { font-size:15px; font-weight:400; line-height:1.6; color:var(--muted); margin-bottom:30px; max-width:340px; }
-
-/* ---------- ERROR ---------- */
-.error { display:flex; align-items:center; gap:9px; padding:11px 14px; margin-bottom:16px;
-  background:#FEF2F2; border:1px solid #FBD5D5; border-radius:11px; font-size:13px; font-weight:500;
-  color:#C0392B; animation:shake .4s ease; }
-.error svg { flex:none; color:#EF4444; }
-@keyframes shake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-4px);} 75%{transform:translateX(4px);} }
-
-/* ---------- GOOGLE SIGN-IN ---------- */
-/* The wrapper hugs the Google button exactly (width:fit-content) and is
-   centered with auto margins. No full-width stretch, no competing shadow —
-   so the hover state and loading overlay sit flush to the button and the
-   stray "ghost pill" is gone. Google's button keeps its own hover. */
-.googleWrap { position:relative; width:fit-content; margin:4px auto 0;
-  display:flex; justify-content:center; border-radius:999px; min-height:40px; }
-
-/* loading overlay while the token is verified */
-.googleLoading > div, .googleLoading iframe { opacity:.4; pointer-events:none; filter:grayscale(.3); }
-.googleOverlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  gap:10px; border-radius:999px; }
-.googleOverlayText { font-size:13.5px; font-weight:600; color:var(--navy); }
-.spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(31,60,132,.25);
-  border-top-color:var(--navy); border-radius:50%; animation:spin .7s linear infinite; }
-@keyframes spin { to { transform:rotate(360deg);} }
-
-/* ---------- FOOTER ---------- */
-.footer { display:flex; align-items:center; justify-content:center; gap:6px; margin-top:24px;
-  padding-top:18px; border-top:1px solid var(--line); font-size:12px; font-weight:500; color:var(--muted); }
-
-/* ---------- SUCCESS ---------- */
-.successCard { text-align:center; }
-.successIcon { width:64px; height:64px; margin:0 auto 22px; display:flex; align-items:center; justify-content:center;
-  border-radius:50%; color:#fff; background:radial-gradient(circle at 35% 30%, #6FD08D, var(--green) 70%);
-  box-shadow:0 0 0 8px rgba(76,174,111,0.14), 0 0 26px rgba(76,174,111,0.45); animation:popIn .55s cubic-bezier(.16,1,.3,1) both; }
-@keyframes popIn { from { opacity:0; transform:scale(.6);} to {opacity:1; transform:scale(1);} }
-
-/* ============================================================
-   RIGHT: navy brand panel
-   ============================================================ */
-.brandPanel {
-  flex: 1 1 46%;
-  position: relative;
+  padding: 40px 24px;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  padding: 64px 56px;
+  background: #FFFFFF;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.grid {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 90% 80% at 50% 45%, #000, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 45%, #000, transparent 78%);
+}
+
+.ribbonWrap { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.ribbonSvg {
+  position: absolute; right: -180px; top: 50%; transform: translateY(-50%);
+  width: 1000px; max-width: 75vw; height: auto; opacity: 0.92;
+  animation: floatRibbon 12s ease-in-out infinite alternate;
+}
+.ribbon {
+  fill: none; stroke-width: 30; stroke-linecap: round;
+  stroke-dasharray: 1500; stroke-dashoffset: 1500;
+  animation: drawRibbon 2.4s cubic-bezier(.4,0,.2,1) forwards;
+}
+.r1 { stroke: var(--green); animation-delay: .10s; }
+.r2 { stroke: var(--cyan);  animation-delay: .28s; }
+.r3 { stroke: var(--blue);  animation-delay: .46s; }
+.r4 { stroke: var(--navy);  animation-delay: .64s; opacity: .85; }
+@keyframes drawRibbon { to { stroke-dashoffset: 0; } }
+@keyframes floatRibbon {
+  0%   { transform: translateY(-50%) translateX(0) scale(1); }
+  100% { transform: translateY(-50%) translateX(-26px) scale(1.03); }
+}
+
+.card {
+  position: relative; z-index: 2;
+  width: 100%; max-width: 440px;
+  padding: 40px 40px 30px;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.06);
   color: #fff;
   background:
-    radial-gradient(900px 700px at 80% 15%, rgba(28,159,212,0.22), transparent 60%),
-    radial-gradient(700px 600px at 10% 90%, rgba(41,185,195,0.16), transparent 58%),
-    linear-gradient(160deg, #16306B 0%, var(--navy-deep) 60%, #0A1733 100%);
+    radial-gradient(700px 480px at 80% 12%, rgba(28,159,212,0.18), transparent 60%),
+    radial-gradient(560px 420px at 12% 92%, rgba(41,185,195,0.13), transparent 58%),
+    linear-gradient(160deg, #16306B 0%, var(--navy-deep) 62%, #0A1733 100%);
+  box-shadow: 0 30px 70px -24px rgba(14,30,61,0.45), 0 2px 8px -2px rgba(14,30,61,0.3);
+  animation: cardIn 0.6s cubic-bezier(0.16,1,0.3,1) both;
 }
-.swooshWrap { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
-.swooshSvg { position:absolute; right:-220px; top:16%; width:118%; max-width:720px; height:auto;
-  opacity:0.9; filter:drop-shadow(0 8px 36px rgba(28,159,212,0.4)); animation:floatSwoosh 11s ease-in-out infinite alternate; }
-.swoosh { fill:none; stroke-dasharray:1400; stroke-dashoffset:1400; stroke-linecap:round;
-  animation:drawLine 2.2s cubic-bezier(.4,0,.2,1) forwards; }
-.s1 { stroke:var(--green); animation-delay:.1s; filter:drop-shadow(0 0 10px rgba(76,174,111,.45)); }
-.s2 { stroke:var(--cyan);  animation-delay:.3s; filter:drop-shadow(0 0 10px rgba(41,185,195,.45)); }
-.s3 { stroke:var(--blue);  animation-delay:.5s; filter:drop-shadow(0 0 12px rgba(28,159,212,.5)); }
-@keyframes drawLine { to { stroke-dashoffset:0; } }
-@keyframes floatSwoosh { 0%{transform:translate(0,0) scale(1);} 100%{transform:translate(-22px,16px) scale(1.04);} }
-.grid { position:absolute; inset:0; pointer-events:none;
-  background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);
-  background-size:54px 54px; mask-image:radial-gradient(ellipse 80% 70% at 30% 40%,#000,transparent 75%);
-  -webkit-mask-image:radial-gradient(ellipse 80% 70% at 30% 40%,#000,transparent 75%); }
+@keyframes cardIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
-.brandContent { position:relative; z-index:2; max-width:420px; animation:fadeUp .7s cubic-bezier(.16,1,.3,1) .1s both; }
-.brandMark { display:flex; align-items:center; gap:10px; margin-bottom:30px; }
-.brandWord { font-size:22px; font-weight:800; letter-spacing:0.04em; color:#fff; }
-.brandTitle { font-size:34px; font-weight:800; letter-spacing:-0.03em; line-height:1.15; margin-bottom:16px; color:#fff; }
-.brandSub { font-size:15px; line-height:1.6; color:rgba(255,255,255,0.66); margin-bottom:30px; }
-.brandList { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:14px; }
-.brandList li { display:flex; align-items:center; gap:11px; font-size:14px; font-weight:500; color:rgba(255,255,255,0.82); }
-.brandTick { flex:none; width:18px; height:18px; border-radius:50%;
-  background:linear-gradient(135deg, var(--cyan), var(--green)); position:relative; box-shadow:0 0 12px rgba(41,185,195,0.5); }
-.brandTick::after { content:""; position:absolute; left:6px; top:4px; width:4px; height:7px;
-  border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg); }
-
-/* ============================================================
-   RESPONSIVE
-   ============================================================ */
-@media (max-width: 900px) {
-  .brandPanel { display:none; }
-  .formPanel { flex:1 1 100%; }
+.logoRow { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
+.logoPill {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 8px 12px; background: #fff; border-radius: 10px;
+  box-shadow: 0 2px 8px -4px rgba(0,0,0,0.3);
 }
-@media (max-width: 520px) {
-  .formPanel { padding:32px 22px; }
-  .heading { font-size:25px; }
-}
+.logo { height: 22px; width: auto; display: block; }
+.logoDivider { width: 1px; height: 24px; background: rgba(255,255,255,0.16); }
+.quantumWrap { display: inline-flex; align-items: center; gap: 7px; }
+.logoProduct { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; color: var(--blue); }
 
-/* respect reduced-motion preference */
+.qIcon { display: inline-flex; }
+.qIcon svg { display: block; overflow: visible; }
+.bar1, .bar2, .bar3 { transform-box: fill-box; transform-origin: bottom; animation-fill-mode: both; }
+.bar1 { fill: var(--green); animation: barRise .7s cubic-bezier(.2,.8,.2,1) .1s, barPulse 2.8s ease-in-out 1s infinite; }
+.bar2 { fill: var(--cyan);  animation: barRise .7s cubic-bezier(.2,.8,.2,1) .22s, barPulse 2.8s ease-in-out 1.25s infinite; }
+.bar3 { fill: var(--blue);  animation: barRise .7s cubic-bezier(.2,.8,.2,1) .34s, barPulse 2.8s ease-in-out 1.5s infinite; }
+@keyframes barRise { from { transform: scaleY(0); opacity: .2; } to { transform: scaleY(1); opacity: 1; } }
+@keyframes barPulse { 0%,100% { transform: scaleY(1); } 35% { transform: scaleY(.62); } 70% { transform: scaleY(1.08); } }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 7px; margin-bottom: 20px;
+  padding: 6px 12px; border-radius: 999px;
+  background: rgba(76,174,111,0.12); border: 1px solid rgba(76,174,111,0.28);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: #7FD3A0;
+}
+.badgeDot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px rgba(76,174,111,0.2); animation: blink 2.2s ease-in-out infinite; }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+.heading { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; color: #fff; margin: 0 0 10px; }
+.sub { font-size: 14.5px; font-weight: 400; line-height: 1.55; color: rgba(255,255,255,0.62); margin: 0 0 26px; }
+
+.error { display: flex; align-items: center; gap: 9px; padding: 11px 14px; margin-bottom: 16px; border-radius: 11px;
+  background: rgba(220,38,38,0.12); border: 1px solid rgba(248,113,113,0.3); font-size: 13px; font-weight: 500; color: #FCA5A5; }
+.error svg { flex: none; color: #F87171; }
+
+.googleWrap { position: relative; width: fit-content; margin: 0 auto; display: flex; justify-content: center; border-radius: 999px; min-height: 40px; }
+.googleLoading > div, .googleLoading iframe { opacity: .4; pointer-events: none; }
+.googleOverlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 9px; }
+.googleOverlayText { font-size: 13px; font-weight: 600; color: #fff; }
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.footer { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 24px; padding-top: 18px;
+  border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.45); }
+
+.successCard { text-align: center; }
+.successIcon { width: 64px; height: 64px; margin: 0 auto 22px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff;
+  background: radial-gradient(circle at 35% 30%, #6FD08D, var(--green) 70%); box-shadow: 0 0 0 8px rgba(76,174,111,0.16), 0 0 26px rgba(76,174,111,0.45); animation: popIn .55s cubic-bezier(.16,1,.3,1) both; }
+@keyframes popIn { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
+
+@media (max-width: 560px) {
+  .card { padding: 32px 24px 26px; }
+  .heading { font-size: 26px; }
+  .ribbonSvg { opacity: 0.5; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .card, .successCard, .brandContent,
-  .bar1, .bar2, .bar3, .badgeDot, .swooshSvg, .swoosh, .successIcon {
-    animation: none !important;
-  }
+  .card, .ribbon, .ribbonSvg, .bar1, .bar2, .bar3, .badgeDot, .successIcon { animation: none !important; stroke-dashoffset: 0 !important; }
 }
