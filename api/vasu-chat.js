@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 
 // Claude is called server-side so the API key never reaches the browser.
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const MODEL = 'claude-opus-4-8'
+const MODEL = 'claude-sonnet-4-6'
 
 // Opus with adaptive thinking can take a while — give the function room.
 export const config = { maxDuration: 60 }

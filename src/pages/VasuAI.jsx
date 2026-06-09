@@ -227,7 +227,7 @@ export default function VasuAI() {
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
             </svg>
-            VASU AI · Claude Opus 4.8
+            VASU AI · Claude Sonnet 4.6
           </div>
           {connected && <div className={styles.connectedPill}>● Meta Ads connected</div>}
           <div style={{flex:1}}/>
