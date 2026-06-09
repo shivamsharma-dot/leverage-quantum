@@ -27,10 +27,6 @@ function buildSystemPrompt() {
     'You have deep access to BigQuery data — monthly breakdowns, channel splits, funnel metrics, and revenue.',
     'IMPORTANT: You are READ-ONLY. Decline any requests to modify dashboards or data.',
     '',
-    '=== SCOPE BOUNDARY ===',
-    'You do NOT handle Meta Ads, pixel tracking, Facebook campaigns, or ad account data.',
-    'If someone asks about Meta Ads, pixel events, Facebook campaigns, CTR, CPM, or anything Meta-specific, respond: "For Meta Ads analysis, use VASU AI in the sidebar — it\'s connected directly to your Meta ad account with full campaign and pixel access."',
-    '',
     '=== 2025 FULL YEAR TOTALS ===',
     'Period: Jan-2025 to Dec-2025',
     'Total OPPs (leads): ' + t.total_opps.toLocaleString(),
@@ -93,9 +89,6 @@ async function askGroq(messages) {
   return data.choices?.[0]?.message?.content || 'No response'
 }
 
-
-// Derived from the canonical PAGE_LIST so any newly added page automatically
-// appears here in user-access management (Settings is managed via the admin role).
 const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings').map(p => ({ id: p.id, label: p.label }))
 
 function parsePermissions(role) {
@@ -110,37 +103,56 @@ function buildRoleString(ids, isAdm, isView) {
   if (ids.length === DASHBOARDS.length) return 'viewer'
   return 'custom:' + ids.join(',')
 }
-function getRoleDisplay(role) {
-  if (role === 'admin') return { label:'Admin', color:'#D97706', bg:'#FFFBEB', border:'#FDE68A' }
-  if (role === 'viewer') return { label:'Viewer', color:'#6B7280', bg:'#F3F4F6', border:'#D1D5DB' }
+function getRoleMeta(role) {
+  if (role === 'admin')  return { label: 'Admin',  cls: styles.roleAdmin }
+  if (role === 'viewer') return { label: 'Viewer', cls: styles.roleViewer }
   const ids = parsePermissions(role)
-  if (ids.length === DASHBOARDS.length) return { label:'Full Access', color:'#059669', bg:'#ECFDF5', border:'#A7F3D0' }
-  if (ids.length === 1 && ids[0] === 'roas') return { label:'ROAS Only', color:'#6366F1', bg:'#EEF2FF', border:'#C7D2FE' }
-  return { label:'Custom (' + ids.length + ')', color:'#0891B2', bg:'#ECFEFF', border:'#A5F3FC' }
+  if (ids.length === DASHBOARDS.length) return { label: 'Full Access', cls: styles.roleFull }
+  if (ids.length === 1 && ids[0] === 'roas') return { label: 'ROAS Only', cls: styles.roleRoas }
+  return { label: 'Custom (' + ids.length + ')', cls: styles.roleCustom }
 }
 
 const QUICK_PROMPTS = [
-  { label:'Overall ROAS',       q:'What is our overall ROAS for 2025? Break it down by month and highlight best/worst.' },
-  { label:'CPL by channel',     q:'Compare CPL across all channels. Which is most and least efficient?' },
-  { label:'AC vs VAS revenue',  q:'Break down AC vs VAS revenue for Aug-Dec 2025. Which vertical is stronger?' },
-  { label:'QL% trend',          q:'Analyse our QL% trend month by month. Which months were worst and why might that be?' },
-  { label:'Funnel analysis',    q:'Give me a complete funnel: OPPs to QLs to Apps with conversion rates for 2025.' },
-  { label:'Spend efficiency',   q:'Which months had the best spend efficiency? Show spend vs revenue vs ROAS.' },
-  { label:'Best month',         q:'Which month performed best overall? Consider ROAS, CPL, and QL% together.' },
-  { label:'Recommendations',    q:'Based on 2025 data, what are your top 3 recommendations for improving performance?' },
+  { label: 'Overall ROAS',      q: 'What is our overall ROAS for 2025? Break it down by month and highlight best/worst.' },
+  { label: 'CPL by channel',    q: 'Compare CPL across all channels. Which is most and least efficient?' },
+  { label: 'AC vs VAS revenue', q: 'Break down AC vs VAS revenue for Aug-Dec 2025. Which vertical is stronger?' },
+  { label: 'QL% trend',         q: 'Analyse our QL% trend month by month. Which months were worst and why might that be?' },
+  { label: 'Funnel analysis',   q: 'Give me a complete funnel: OPPs to QLs to Apps with conversion rates for 2025.' },
+  { label: 'Spend efficiency',  q: 'Which months had the best spend efficiency? Show spend vs revenue vs ROAS.' },
+  { label: 'Best month',        q: 'Which month performed best overall? Consider ROAS, CPL, and QL% together.' },
+  { label: 'Recommendations',   q: 'Based on 2025 data, what are your top 3 recommendations for improving performance?' },
 ]
+
+const DATA_SOURCES = [
+  { name: 'Leads / OPPs',   src: 'BigQuery',               rows: '61,184' },
+  { name: 'Futwork QLs',    src: 'BigQuery',               rows: '4,127'  },
+  { name: 'Apps / STUs',    src: 'BigQuery',               rows: '3,170'  },
+  { name: 'Ad Spend',       src: 'BigQuery',               rows: '3,492'  },
+  { name: 'AC/VAS Revenue', src: 'CIB Data',               rows: '3,828'  },
+  { name: 'MTD Live',       src: 'Overall PM Google Sheet', rows: 'Live'  },
+]
+
+function QIcon({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 22 22" fill="none" aria-hidden="true">
+      <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F" />
+      <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4" />
+      <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84" />
+    </svg>
+  )
+}
 
 export default function SettingsPage() {
   const { user } = useAuth()
-  const [activeTab, setActiveTab] = useState('chat')
   const userIsAdmin = user?.role === 'admin'
+  const [activeTab, setActiveTab] = useState('chat')
+
+  // Activity
   const [activityLog, setActivityLog] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
-
   const loadActivity = async () => {
     setActivityLoading(true)
-    const logs = await getActivityLog(200)
-    setActivityLog(logs)
+    setActivityLog(await getActivityLog(200))
     setActivityLoading(false)
   }
 
@@ -173,10 +185,11 @@ export default function SettingsPage() {
   useEffect(() => { if (userIsAdmin) loadUsers() }, [userIsAdmin])
 
   const setMsg = (m) => { setAccessMsg(m); setTimeout(() => setAccessMsg(''), 4000) }
+  const isOkMsg = accessMsg.startsWith('Added') || accessMsg.startsWith('Access') || accessMsg.startsWith('Removed')
 
   const addUser = async () => {
     const email = newEmail.trim().toLowerCase()
-    if (!email.includes('@leverageedu.com')) { setMsg('No @leverageedu.com email'); return }
+    if (!email.includes('@leverageedu.com')) { setMsg('Only @leverageedu.com emails allowed'); return }
     if (accessList.find(u => u.email === email)) { setMsg('Already has access'); return }
     setUsersLoading(true)
     if (await addUserAccess(email, 'viewer', user?.email)) { setMsg('Added: ' + email); setNewEmail(''); await loadUsers() }
@@ -204,6 +217,14 @@ export default function SettingsPage() {
     setEditingUser(null)
     setUsersLoading(false)
   }
+  const toggleReports = async (u, checked) => {
+    await fetch('/api/users', {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: u.email, receive_reports: checked }),
+    })
+    loadUsers()
+  }
 
   // Chat
   const [messages, setMessages] = useState([{
@@ -225,7 +246,7 @@ export default function SettingsPage() {
     setMessages(updated)
     setChatLoading(true)
     try {
-      const reply = await askGroq(updated.slice(-10), buildSystemPrompt())
+      const reply = await askGroq(updated.slice(-10))
       setMessages(p => [...p, { role: 'assistant', content: reply }])
     } catch (e) {
       setChatError('Error: ' + e.message)
@@ -238,413 +259,286 @@ export default function SettingsPage() {
     return text
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/`([^`]+)`/g, '<code style="background:#F3F4F6;padding:1px 5px;border-radius:3px;font-size:11.5px;font-family:monospace">$1</code>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\n/g, '<br/>')
   }
+
+  const TABS = [
+    { id: 'chat',    label: 'VASU AI' },
+    { id: 'data',    label: 'Data' },
+    ...(userIsAdmin ? [{ id: 'users', label: 'User Access' }, { id: 'activity', label: 'Activity Log' }] : []),
+    { id: 'profile', label: 'Profile' },
+  ]
 
   return (
     <div className={styles.layout}>
       <Sidebar />
       <div className={styles.main}>
         <div className={styles.header}>
-          <div className={styles.headerLeft}>
-            <p className={styles.breadcrumb}>Settings</p>
-            <h1 className={styles.title}>Settings</h1>
-          </div>
+          <p className={styles.breadcrumb}>Settings</p>
+          <h1 className={styles.title}>Settings</h1>
         </div>
 
         <div className={styles.content}>
-        <div className={styles.tabs}>
-          {[
-            { id:'chat',    label:'VASU AI' },
-            { id:'data',    label:'Data'       },
-            ...(userIsAdmin ? [{ id:'users', label:'User Access' }, { id:'activity', label:'Activity Log' }] : []),
-            { id:'profile', label:'Profile'    },
-          ].map(t => (
-            <button key={t.id}
-              className={styles.tab + (activeTab === t.id ? ' ' + styles.tabActive : '')}
-              onClick={() => setActiveTab(t.id)}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* CHAT */}
-        {activeTab === 'chat' && (
-          <div className={styles.chatWrap}>
-            <div className={styles.chatMessages}>
-              {messages.map((m, i) => (
-                <div key={i} className={m.role === 'user' ? styles.userMsg : styles.aiMsg}>
-                  {m.role === 'assistant' && (
-                    <div className={styles.aiAvatar}>
-                      <svg width="14" height="14" viewBox="0 0 22 22" fill="none">
-                        <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4BAE8A"/>
-                        <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
-                        <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84"/>
-                      </svg>
-                    </div>
-                  )}
-                  <div className={styles.msgBubble}
-                    dangerouslySetInnerHTML={{ __html: renderMd(m.content) }}/>
-                </div>
-              ))}
-              {chatLoading && (
-                <div className={styles.aiMsg}>
-                  <div className={styles.aiAvatar}>
-                    <svg width="14" height="14" viewBox="0 0 22 22" fill="none">
-                      <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4BAE8A"/>
-                      <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
-                      <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84"/>
-                    </svg>
-                  </div>
-                  <div className={styles.msgBubble}>
-                    <span className={styles.typing}><span/><span/><span/></span>
-                  </div>
-                </div>
-              )}
-              {chatError && <div className={styles.errorMsg}>{chatError}</div>}
-              <div ref={bottomRef}/>
-            </div>
-
-            <div className={styles.quickWrap}>
-              {QUICK_PROMPTS.map(p => (
-                <button key={p.label} className={styles.quickBtn}
-                  onClick={() => sendChat(p.q)}
-                  disabled={chatLoading}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
-
-            <div className={styles.inputRow}>
-              <textarea className={styles.chatInput}
-                placeholder="Ask anything about your data... (Enter to send)"
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() } }}
-                rows={2}/>
-              <button className={styles.sendBtn}
-                onClick={() => sendChat()}
-                disabled={chatLoading || !chatInput.trim()}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="22" y1="2" x2="11" y2="13"/>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                </svg>
+          <div className={styles.tabBar}>
+            {TABS.map(t => (
+              <button key={t.id}
+                className={`${styles.tab} ${activeTab === t.id ? styles.tabActive : ''}`}
+                onClick={() => setActiveTab(t.id)}>
+                {t.label}
               </button>
-            </div>
+            ))}
           </div>
-        )}
 
-        {/* DATA */}
-        {activeTab === 'data' && (
-          <div className={styles.settingsWrap}>
-            <div className={styles.settingCard}>
-              <h3 className={styles.settingTitle}>SR Revenue Assumptions</h3>
-              <p className={styles.settingDesc}>SR fee per RAU used in projected revenue. Formula: RAUs x SR Fee x 0.9</p>
-              <div className={styles.settingRow}>
-                <label>SR Fee per RAU</label>
-                <div className={styles.inputGroup}>
-                  <span className={styles.prefix}>Rs.</span>
-                  <input type="number" className={styles.settingInput} value={srFeeInput}
-                    onChange={e => setSrFeeInput(e.target.value)}/>
-                  <button className={styles.saveBtn} onClick={saveSrFee}>
-                    {srFeeSaved ? 'Saved' : 'Save'}
-                  </button>
-                </div>
-              </div>
-              <div className={styles.settingNote}>
-                Current: Rs.{parseInt(srFeeInput || 90000).toLocaleString('en-IN')} per RAU
-              </div>
-            </div>
-            <div className={styles.settingCard}>
-              <h3 className={styles.settingTitle}>Data Sources</h3>
-              <div className={styles.dataSourceList}>
-                {[
-                  { name:'Leads / OPPs',   src:'BigQuery',              rows:'61,184' },
-                  { name:'Futwork QLs',    src:'BigQuery',              rows:'4,127'  },
-                  { name:'Apps / STUs',    src:'BigQuery',              rows:'3,170'  },
-                  { name:'Ad Spend',       src:'BigQuery',              rows:'3,492'  },
-                  { name:'AC/VAS Revenue', src:'CIB Data',              rows:'3,828'  },
-                  { name:'MTD Live',       src:'Overall PM Google Sheet', rows:'Live' },
-                ].map(s => (
-                  <div key={s.name} className={styles.dataSourceRow}>
-                    <div>
-                      <div className={styles.dsName}>{s.name}</div>
-                      <div className={styles.dsSrc}>{s.src} — {s.rows} rows</div>
-                    </div>
-                    <span className={styles.dsLive}>Connected</span>
+          {/* ---------------- VASU AI ---------------- */}
+          {activeTab === 'chat' && (
+            <div className={styles.chat}>
+              <div className={styles.chatScroll}>
+                {messages.map((m, i) => (
+                  <div key={i} className={`${styles.msgRow} ${m.role === 'user' ? styles.msgUser : ''}`}>
+                    {m.role === 'assistant' && <div className={styles.avatar}><QIcon /></div>}
+                    <div className={`${styles.bubble} ${m.role === 'user' ? styles.bubbleUser : ''}`}
+                      dangerouslySetInnerHTML={{ __html: renderMd(m.content) }} />
                   </div>
                 ))}
+                {chatLoading && (
+                  <div className={styles.msgRow}>
+                    <div className={styles.avatar}><QIcon /></div>
+                    <div className={styles.bubble}><span className={styles.typing}><span /><span /><span /></span></div>
+                  </div>
+                )}
+                {chatError && <div className={styles.errorMsg}>{chatError}</div>}
+                <div ref={bottomRef} />
+              </div>
+
+              <div className={styles.quickRow}>
+                {QUICK_PROMPTS.map(p => (
+                  <button key={p.label} className={styles.quickChip} onClick={() => sendChat(p.q)} disabled={chatLoading}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className={styles.composer}>
+                <textarea className={styles.composerInput} rows={1}
+                  placeholder="Ask anything about your data…  (Enter to send)"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() } }} />
+                <button className={styles.sendBtn} onClick={() => sendChat()} disabled={chatLoading || !chatInput.trim()}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                </button>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* USER ACCESS */}
-        {activeTab === 'users' && userIsAdmin && (
-          <div className={styles.settingsWrap}>
-            <div className={styles.settingCard}>
-
-              {/* Header row */}
-              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:20}}>
-                <div>
-                  <h3 style={{fontSize:14,fontWeight:700,color:'#111827',margin:'0 0 3px'}}>Team Access</h3>
-                  <p style={{fontSize:12,color:'#9CA3AF',margin:0}}>{usersLoading ? 'Loading...' : accessList.length + ' members · Changes apply instantly'}</p>
+          {/* ---------------- DATA ---------------- */}
+          {activeTab === 'data' && (
+            <>
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>SR Revenue Assumptions</h3>
+                <p className={styles.cardDesc}>SR fee per RAU used in projected revenue. Formula: RAUs × SR Fee × 0.9</p>
+                <label className={styles.fieldLabel}>SR Fee per RAU</label>
+                <div className={styles.inputGroup}>
+                  <span className={styles.prefix}>Rs.</span>
+                  <input type="number" className={styles.input} style={{ maxWidth: 220 }} value={srFeeInput}
+                    onChange={e => setSrFeeInput(e.target.value)} />
+                  <button className={styles.primaryBtn} onClick={saveSrFee}>{srFeeSaved ? 'Saved' : 'Save'}</button>
                 </div>
-                <button onClick={loadUsers}
-                  style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:7,border:'1px solid #E5E7EB',background:'#fff',color:'#6B7280',fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif',transition:'all .15s'}}
-                  onMouseOver={e=>e.currentTarget.style.borderColor='#1C9FD4'}
-                  onMouseOut={e=>e.currentTarget.style.borderColor='#E5E7EB'}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                <p className={styles.note}>Current: Rs.{parseInt(srFeeInput || 90000).toLocaleString('en-IN')} per RAU</p>
+              </div>
+
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Data Sources</h3>
+                <div className={styles.sourceList}>
+                  {DATA_SOURCES.map(s => (
+                    <div key={s.name} className={styles.sourceRow}>
+                      <div>
+                        <div className={styles.sourceName}>{s.name}</div>
+                        <div className={styles.sourceMeta}>{s.src} — {s.rows} rows</div>
+                      </div>
+                      <span className={styles.sourceStatus}>Connected</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ---------------- USER ACCESS ---------------- */}
+          {activeTab === 'users' && userIsAdmin && (
+            <div className={styles.card}>
+              <div className={styles.accessHeader}>
+                <div>
+                  <h3 className={styles.accessTitle}>Team Access</h3>
+                  <p className={styles.accessMeta}>{usersLoading ? 'Loading…' : accessList.length + ' members · Changes apply instantly'}</p>
+                </div>
+                <button className={styles.refreshBtn} onClick={loadUsers}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                  </svg>
                   Refresh
                 </button>
               </div>
 
-              {/* Add user */}
-              <div style={{display:'flex',gap:8,marginBottom:16}}>
-                <input type="email"
-                  style={{flex:1,padding:'9px 14px',border:'1px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'Inter,sans-serif',color:'#111827',outline:'none',background:'#fff',transition:'border-color .15s'}}
-                  placeholder="name@leverageedu.com"
+              <div className={styles.addRow}>
+                <input type="email" className={styles.input} placeholder="name@leverageedu.com"
                   value={newEmail}
                   onChange={e => setNewEmail(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addUser()}
-                  onFocus={e=>e.target.style.borderColor='#1C9FD4'}
-                  onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
-                <button onClick={addUser} disabled={usersLoading}
-                  style={{padding:'9px 18px',borderRadius:8,background:'#0F172A',color:'#fff',border:'none',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif',whiteSpace:'nowrap',opacity:usersLoading?.6:1}}>
+                  onKeyDown={e => e.key === 'Enter' && addUser()} />
+                <button className={styles.primaryBtn} onClick={addUser} disabled={usersLoading}>
                   {usersLoading ? 'Adding…' : '+ Add member'}
                 </button>
               </div>
 
-              {/* Message */}
               {accessMsg && (
-                <div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',borderRadius:8,marginBottom:14,fontSize:12.5,
-                  color: accessMsg.startsWith('Added') || accessMsg.startsWith('Access') ? '#059669' : '#DC2626',
-                  background: accessMsg.startsWith('Added') || accessMsg.startsWith('Access') ? '#F0FDF4' : '#FEF2F2',
-                  border: '1px solid ' + (accessMsg.startsWith('Added') || accessMsg.startsWith('Access') ? '#BBF7D0' : '#FECACA')
-                }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                    {accessMsg.startsWith('Added') || accessMsg.startsWith('Access')
-                      ? <polyline points="20 6 9 17 4 12"/>
-                      : <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>
-                    }
-                  </svg>
+                <div className={`${styles.toast} ${isOkMsg ? styles.toastOk : styles.toastErr}`}>
                   {accessMsg}
                 </div>
               )}
 
-              {/* User list */}
-              <div style={{display:'flex',flexDirection:'column',gap:2}}>
+              <div className={styles.userList}>
                 {accessList.map((u, idx) => {
-                  const rl = getRoleDisplay(u.role)
+                  const rm = getRoleMeta(u.role)
                   const isEditing = editingUser === u.email
                   const isYou = u.email === user?.email
                   return (
                     <div key={u.email}>
-                      <div style={{
-                        display:'flex',alignItems:'center',gap:12,padding:'11px 12px',
-                        borderRadius:10,border:'1px solid transparent',
-                        background: isEditing ? '#F8FAFF' : 'transparent',
-                        transition:'background .15s',
-                      }}
-                        onMouseOver={e=>{ if(!isEditing) e.currentTarget.style.background='#FAFBFC' }}
-                        onMouseOut={e=>{ if(!isEditing) e.currentTarget.style.background='transparent' }}>
-
-                        {/* Avatar */}
-                        <div style={{width:34,height:34,borderRadius:10,background:rl.bg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:rl.color,flexShrink:0,fontFamily:'Inter,sans-serif'}}>
-                          {u.email[0].toUpperCase()}
+                      <div className={`${styles.userRow} ${isEditing ? styles.userRowEdit : ''}`}>
+                        <div className={styles.userAvatar}>{u.email[0].toUpperCase()}</div>
+                        <div className={styles.userInfo}>
+                          <span className={styles.userName}>{u.email.split('@')[0]}</span>
+                          <span className={styles.userHandle}>@leverageedu.com</span>
+                          {isYou && <span className={styles.youTag}>YOU</span>}
                         </div>
-
-                        {/* Email + role */}
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:'flex',alignItems:'center',gap:6}}>
-                            <span style={{fontSize:13,fontWeight:500,color:'#111827',letterSpacing:'-.01em'}}>
-                              {u.email.split('@')[0]}
-                            </span>
-                            <span style={{fontSize:11,color:'#9CA3AF'}}>@leverageedu.com</span>
-                            {isYou && <span style={{fontSize:10,fontWeight:700,background:'#EEF2FF',color:'#6366F1',borderRadius:4,padding:'1px 6px',letterSpacing:'.03em'}}>YOU</span>}
-                          </div>
-                        </div>
-
-                        {/* Role badge */}
-                        <span style={{fontSize:11,fontWeight:600,color:rl.color,background:rl.bg,borderRadius:20,padding:'3px 10px',whiteSpace:'nowrap',flexShrink:0}}>
-                          {rl.label}
-                        </span>
-
-                        {/* Reports toggle */}
-                        <label title="Receive daily Meta Ads report" style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer',flexShrink:0}}>
+                        <span className={`${styles.roleBadge} ${rm.cls}`}>{rm.label}</span>
+                        <label className={styles.reportsToggle} title="Receive daily report">
                           <input type="checkbox" checked={!!u.receive_reports}
-                            onChange={async e => {
-                              await fetch('/api/users', {
-                                method:'PATCH', credentials:'include',
-                                headers:{'Content-Type':'application/json'},
-                                body: JSON.stringify({ email: u.email, receive_reports: e.target.checked })
-                              })
-                              loadUsers()
-                            }}
-                            style={{accentColor:'#1C9FD4'}}/>
-                          <span style={{fontSize:11,color:'#9CA3AF',whiteSpace:'nowrap'}}>Reports</span>
+                            onChange={e => toggleReports(u, e.target.checked)} />
+                          Reports
                         </label>
-
-                        {/* Actions */}
                         {!isYou && (
-                          <div style={{display:'flex',gap:4,flexShrink:0}}>
-                            <button onClick={() => isEditing ? setEditingUser(null) : startEdit(u)}
-                              style={{padding:'5px 12px',borderRadius:7,border:'1px solid '+(isEditing?'#C7D2FE':'#E5E7EB'),background:isEditing?'#EEF2FF':'#fff',color:isEditing?'#4F46E5':'#374151',fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif',transition:'all .15s'}}>
+                          <div className={styles.rowActions}>
+                            <button className={`${styles.iconBtn} ${isEditing ? styles.iconBtnActive : ''}`}
+                              onClick={() => isEditing ? setEditingUser(null) : startEdit(u)}>
                               {isEditing ? 'Cancel' : 'Edit'}
                             </button>
-                            <button onClick={() => removeUser(u.email)}
-                              style={{padding:'5px 10px',borderRadius:7,border:'1px solid transparent',background:'transparent',color:'#9CA3AF',fontSize:12,cursor:'pointer',fontFamily:'Inter,sans-serif',transition:'all .15s'}}
-                              onMouseOver={e=>{e.currentTarget.style.background='#FEF2F2';e.currentTarget.style.color='#DC2626';e.currentTarget.style.borderColor='#FECACA'}}
-                              onMouseOut={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='#9CA3AF';e.currentTarget.style.borderColor='transparent'}}>
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                            <button className={styles.deleteBtn} onClick={() => removeUser(u.email)} title="Remove">
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
+                              </svg>
                             </button>
                           </div>
                         )}
                       </div>
 
-                      {/* Edit panel */}
                       {isEditing && (
-                        <div style={{margin:'0 0 10px',padding:'18px 20px',background:'#F9FAFB',borderRadius:10,border:'1px solid #E5E7EB'}}>
-                          <p style={{fontSize:11,fontWeight:700,color:'#6B7280',marginBottom:14,letterSpacing:'.06em',textTransform:'uppercase'}}>
-                            Edit Permissions
-                          </p>
-
-                          {/* Role radio buttons */}
-                          <div style={{display:'flex',gap:8,marginBottom:16}}>
-                            <label style={{flex:1,display:'flex',alignItems:'center',gap:8,padding:'10px 14px',borderRadius:8,border:'1.5px solid '+(editIsAdmin?'#D97706':'#E5E7EB'),background:editIsAdmin?'#FFFBEB':'#fff',cursor:'pointer',fontSize:13,fontWeight:editIsAdmin?600:500,color:editIsAdmin?'#92400E':'#374151',transition:'all .15s'}}>
-                              <input type="radio" name="role" checked={editIsAdmin} onChange={() => { setEditIsAdmin(true); setEditIsViewer(false) }} style={{accentColor:'#D97706',width:14,height:14}}/>
-                              Admin
-                              <span style={{marginLeft:'auto',fontSize:11,color:'#B45309',fontWeight:400}}>Full access</span>
+                        <div className={styles.editPanel}>
+                          <p className={styles.editLabel}>Edit Permissions</p>
+                          <div className={styles.roleOptions}>
+                            <label className={`${styles.roleOption} ${editIsAdmin ? styles.roleOptionActive : ''}`}>
+                              <input type="radio" name="role" checked={editIsAdmin} onChange={() => { setEditIsAdmin(true); setEditIsViewer(false) }} />
+                              Admin <span className={styles.roleHint}>Full access</span>
                             </label>
-                            <label style={{flex:1,display:'flex',alignItems:'center',gap:8,padding:'10px 14px',borderRadius:8,border:'1.5px solid '+(editIsViewer?'#6366F1':'#E5E7EB'),background:editIsViewer?'#EEF2FF':'#fff',cursor:'pointer',fontSize:13,fontWeight:editIsViewer?600:500,color:editIsViewer?'#4F46E5':'#374151',transition:'all .15s'}}>
-                              <input type="radio" name="role" checked={editIsViewer} onChange={() => { setEditIsViewer(true); setEditIsAdmin(false) }} style={{accentColor:'#6366F1',width:14,height:14}}/>
-                              Viewer
-                              <span style={{marginLeft:'auto',fontSize:11,color:'#6366F1',fontWeight:400}}>Custom access</span>
+                            <label className={`${styles.roleOption} ${editIsViewer ? styles.roleOptionActive : ''}`}>
+                              <input type="radio" name="role" checked={editIsViewer} onChange={() => { setEditIsViewer(true); setEditIsAdmin(false) }} />
+                              Viewer <span className={styles.roleHint}>Custom access</span>
                             </label>
                           </div>
 
-                          {/* Admin — no checkboxes */}
-                          {editIsAdmin && (
-                            <p style={{fontSize:12,color:'#9CA3AF',marginBottom:16}}>Admin has full access to all dashboards and settings.</p>
-                          )}
+                          {editIsAdmin && <p className={styles.cardDesc}>Admin has full access to all dashboards and settings.</p>}
 
-                          {/* Viewer — dashboard checkboxes */}
                           {editIsViewer && (
-                            <div style={{marginBottom:16}}>
-                              <p style={{fontSize:11.5,color:'#6B7280',marginBottom:10,fontWeight:500}}>Select which dashboards this viewer can access:</p>
-                              <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                                {DASHBOARDS.map(d => {
-                                  const checked = editIds.includes(d.id)
-                                  return (
-                                    <label key={d.id} style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:7,border:'1.5px solid '+(checked?'#6366F1':'#E5E7EB'),background:checked?'#EEF2FF':'#fff',cursor:'pointer',fontSize:12,fontWeight:checked?600:400,color:checked?'#4F46E5':'#374151',transition:'all .15s',userSelect:'none'}}>
-                                      <input type="checkbox" checked={checked}
-                                        onChange={() => setEditIds(p => checked ? p.filter(x => x !== d.id) : [...p, d.id])}
-                                        style={{accentColor:'#6366F1',width:12,height:12}}/>
-                                      {d.label}
-                                    </label>
-                                  )
-                                })}
-                              </div>
+                            <div className={styles.dashGrid}>
+                              {DASHBOARDS.map(d => {
+                                const checked = editIds.includes(d.id)
+                                return (
+                                  <label key={d.id} className={`${styles.dashChip} ${checked ? styles.dashChipActive : ''}`}>
+                                    <input type="checkbox" checked={checked}
+                                      onChange={() => setEditIds(p => checked ? p.filter(x => x !== d.id) : [...p, d.id])} />
+                                    {d.label}
+                                  </label>
+                                )
+                              })}
                             </div>
                           )}
 
-                          {/* Action buttons */}
-                          <div style={{display:'flex',gap:8,marginTop:4}}>
-                            <button onClick={() => saveEdit(u.email)} disabled={usersLoading}
-                              style={{flex:1,padding:'10px',borderRadius:8,background:'#0F172A',color:'#fff',border:'none',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif',opacity:usersLoading?.6:1,transition:'opacity .15s'}}>
+                          <div className={styles.editActions}>
+                            <button className={styles.primaryBtn} onClick={() => saveEdit(u.email)} disabled={usersLoading}>
                               {usersLoading ? 'Saving…' : 'Save changes'}
                             </button>
-                            <button onClick={() => setEditingUser(null)}
-                              style={{padding:'10px 16px',borderRadius:8,background:'#fff',color:'#6B7280',border:'1px solid #E5E7EB',fontSize:13,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
-                              Cancel
-                            </button>
+                            <button className={styles.ghostBtn} onClick={() => setEditingUser(null)}>Cancel</button>
                           </div>
                         </div>
                       )}
 
-                      {/* Divider */}
-                      {idx < accessList.length - 1 && !isEditing && (
-                        <div style={{height:1,background:'#F3F4F6',margin:'0 12px'}}/>
-                      )}
+                      {idx < accessList.length - 1 && !isEditing && <div className={styles.divider} />}
                     </div>
                   )
                 })}
               </div>
-
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ACTIVITY LOG */}
-        {activeTab === 'activity' && userIsAdmin && (
-          <div className={styles.settingsWrap}>
-            <div className={styles.settingCard}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+          {/* ---------------- ACTIVITY LOG ---------------- */}
+          {activeTab === 'activity' && userIsAdmin && (
+            <div className={styles.card}>
+              <div className={styles.activityHeader}>
                 <div>
-                  <h3 className={styles.settingTitle}>Activity Log</h3>
-                  <p className={styles.settingDesc}>See who viewed which dashboard and when.</p>
+                  <h3 className={styles.cardTitle}>Activity Log</h3>
+                  <p className={styles.cardDesc} style={{ margin: 0 }}>See who viewed which dashboard and when.</p>
                 </div>
-                <button onClick={loadActivity}
-                  style={{padding:'7px 14px',borderRadius:8,background:'#F3F4F6',border:'none',fontSize:12.5,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif',color:'#374151'}}>
-                  {activityLoading ? 'Loading...' : '↻ Load Log'}
+                <button className={styles.ghostBtn} onClick={loadActivity}>
+                  {activityLoading ? 'Loading…' : '↻ Load log'}
                 </button>
               </div>
 
               {activityLog.length === 0 && !activityLoading && (
-                <div style={{textAlign:'center',padding:'40px 20px',color:'#9CA3AF',fontSize:13}}>
-                  Click "Load Log" to see activity.<br/>
-                  <span style={{fontSize:11,marginTop:4,display:'block'}}>Activity is tracked when users navigate to dashboards.</span>
+                <div className={styles.empty}>
+                  Click “Load log” to see activity.<br />
+                  Activity is tracked when users open dashboards.
                 </div>
               )}
 
               {activityLog.length > 0 && (
-                <div style={{overflowX:'auto'}}>
-                  <table style={{width:'100%',borderCollapse:'collapse',fontSize:12.5}}>
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
                     <thead>
-                      <tr>
-                        {['User','Action','Page','Time'].map(h => (
-                          <th key={h} style={{padding:'9px 14px',textAlign:'left',fontSize:10,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',color:'#9CA3AF',background:'#FAFBFC',borderBottom:'1px solid #F3F4F6',whiteSpace:'nowrap'}}>
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
+                      <tr>{['User', 'Action', 'Page', 'Time'].map(h => <th key={h} className={styles.th}>{h}</th>)}</tr>
                     </thead>
                     <tbody>
-                      {activityLog.map((log, i) => (
-                        <tr key={i} style={{borderBottom:'1px solid #F9FAFB'}}>
-                          <td style={{padding:'9px 14px',color:'#111827',fontWeight:500}}>{log.email?.split('@')[0]}</td>
-                          <td style={{padding:'9px 14px'}}>
-                            <span style={{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4,
-                              background: log.action==='view'?'#EEF2FF':log.action==='login'?'#ECFDF5':'#FEF3C7',
-                              color: log.action==='view'?'#4F46E5':log.action==='login'?'#059669':'#D97706'
-                            }}>{log.action}</span>
-                          </td>
-                          <td style={{padding:'9px 14px',color:'#6B7280'}}>{log.page}</td>
-                          <td style={{padding:'9px 14px',color:'#9CA3AF',whiteSpace:'nowrap'}}>
-                            {new Date(log.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}
-                          </td>
-                        </tr>
-                      ))}
+                      {activityLog.map((log, i) => {
+                        const tagCls = log.action === 'view' ? styles.actView : log.action === 'login' ? styles.actLogin : styles.actOther
+                        return (
+                          <tr key={i}>
+                            <td className={`${styles.td} ${styles.tdUser}`}>{log.email?.split('@')[0]}</td>
+                            <td className={styles.td}><span className={`${styles.actionTag} ${tagCls}`}>{log.action}</span></td>
+                            <td className={styles.td}>{log.page}</td>
+                            <td className={styles.td}>
+                              {new Date(log.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
               )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* PROFILE */}
-        {activeTab === 'profile' && (
-          <div className={styles.settingsWrap}>
-            <div className={styles.settingCard}>
-              <h3 className={styles.settingTitle}>Your Profile</h3>
+          {/* ---------------- PROFILE ---------------- */}
+          {activeTab === 'profile' && (
+            <div className={styles.card}>
+              <h3 className={styles.cardTitle}>Your Profile</h3>
+              <p className={styles.cardDesc}>Signed in with your Leverage Edu Google account.</p>
               <div className={styles.profileRow}>
                 <div className={styles.profileAvatar}>
                   {user?.picture
-                    ? <img src={user.picture} alt={user.name} className={styles.profileImg}/>
-                    : <span>{user?.name?.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase() || 'LE'}</span>
-                  }
+                    ? <img src={user.picture} alt={user.name} className={styles.profileImg} />
+                    : <span>{user?.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'LE'}</span>}
                 </div>
                 <div>
                   <div className={styles.profileName}>{user?.name || 'User'}</div>
@@ -653,10 +547,9 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-          </div>
-        )}
-        </div>{/* end content */}
-      </div>{/* end main */}
+          )}
+        </div>
+      </div>
     </div>
   )
 }
