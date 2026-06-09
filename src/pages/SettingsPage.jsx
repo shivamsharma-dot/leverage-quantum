@@ -184,8 +184,40 @@ export default function SettingsPage() {
   }
   useEffect(() => { if (userIsAdmin) loadUsers() }, [userIsAdmin])
 
+  const [userSearch, setUserSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState('all')
+
   const setMsg = (m) => { setAccessMsg(m); setTimeout(() => setAccessMsg(''), 4000) }
   const isOkMsg = accessMsg.startsWith('Added') || accessMsg.startsWith('Access') || accessMsg.startsWith('Removed')
+
+  const roleGroup = (role) => {
+    if (role === 'admin') return 'admin'
+    if (role === 'viewer') return 'viewer'
+    return 'custom'
+  }
+  const filteredUsers = accessList.filter(u => {
+    const q = userSearch.trim().toLowerCase()
+    const matchesSearch = !q || u.email.toLowerCase().includes(q)
+    const matchesRole = roleFilter === 'all' || roleGroup(u.role) === roleFilter
+    return matchesSearch && matchesRole
+  })
+  const stats = {
+    total: accessList.length,
+    admins: accessList.filter(u => u.role === 'admin').length,
+    members: accessList.filter(u => u.role !== 'admin').length,
+    reports: accessList.filter(u => u.receive_reports).length,
+  }
+  const accessLabel = (role) => {
+    if (role === 'admin' || role === 'viewer') return 'All dashboards'
+    if (role === 'roas_only') return 'ROAS only'
+    const n = parsePermissions(role).length
+    return n + (n === 1 ? ' dashboard' : ' dashboards')
+  }
+  const fmtDate = (d) => {
+    if (!d) return '—'
+    try { return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) }
+    catch { return '—' }
+  }
 
   const addUser = async () => {
     const email = newEmail.trim().toLowerCase()
@@ -369,69 +401,121 @@ export default function SettingsPage() {
 
           {/* ---------------- USER ACCESS ---------------- */}
           {activeTab === 'users' && userIsAdmin && (
-            <div className={styles.card}>
-              <div className={styles.accessHeader}>
+            <>
+              {/* page header */}
+              <div className={styles.uaHeader}>
                 <div>
-                  <h3 className={styles.accessTitle}>Team Access</h3>
-                  <p className={styles.accessMeta}>{usersLoading ? 'Loading…' : accessList.length + ' members · Changes apply instantly'}</p>
+                  <h2 className={styles.uaTitle}>User Access</h2>
+                  <p className={styles.uaSubtitle}>Manage who can access Quantum and which dashboards they see.</p>
                 </div>
-                <button className={styles.refreshBtn} onClick={loadUsers}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-                  </svg>
-                  Refresh
-                </button>
+                <div className={styles.uaHeaderActions}>
+                  <button className={styles.ghostBtn} onClick={loadUsers}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                    </svg>
+                    Refresh
+                  </button>
+                </div>
               </div>
 
-              <div className={styles.addRow}>
-                <input type="email" className={styles.input} placeholder="name@leverageedu.com"
-                  value={newEmail}
-                  onChange={e => setNewEmail(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addUser()} />
+              {/* stat strip */}
+              <div className={styles.statStrip}>
+                <div className={styles.statCard}>
+                  <div><div className={styles.statLabel}>Total members</div><div className={styles.statValue}>{stats.total}</div></div>
+                  <span className={`${styles.statIcon} ${styles.statIconNavy}`}>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+                  </span>
+                </div>
+                <div className={styles.statCard}>
+                  <div><div className={styles.statLabel}>Admins</div><div className={styles.statValue}>{stats.admins}</div></div>
+                  <span className={`${styles.statIcon} ${styles.statIconBlue}`}>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  </span>
+                </div>
+                <div className={styles.statCard}>
+                  <div><div className={styles.statLabel}>Members</div><div className={styles.statValue}>{stats.members}</div></div>
+                  <span className={`${styles.statIcon} ${styles.statIconCyan}`}>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  </span>
+                </div>
+                <div className={styles.statCard}>
+                  <div><div className={styles.statLabel}>Daily reports</div><div className={styles.statValue}>{stats.reports}</div></div>
+                  <span className={`${styles.statIcon} ${styles.statIconGreen}`}>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M8 12l3 3 5-6"/></svg>
+                  </span>
+                </div>
+              </div>
+
+              {/* toolbar: search + role filter + add */}
+              <div className={styles.toolbar}>
+                <div className={styles.searchBox}>
+                  <svg className={styles.searchIcon} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                  <input className={styles.searchInput} placeholder="Search by email…" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+                </div>
+                <select className={styles.filterSelect} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+                  <option value="all">All roles</option>
+                  <option value="admin">Admin</option>
+                  <option value="viewer">Viewer</option>
+                  <option value="custom">Custom</option>
+                </select>
+                <input type="email" className={styles.addInput} placeholder="name@leverageedu.com"
+                  value={newEmail} onChange={e => setNewEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && addUser()} />
                 <button className={styles.primaryBtn} onClick={addUser} disabled={usersLoading}>
-                  {usersLoading ? 'Adding…' : '+ Add member'}
+                  {usersLoading ? 'Adding…' : 'Add member'}
                 </button>
               </div>
 
               {accessMsg && (
-                <div className={`${styles.toast} ${isOkMsg ? styles.toastOk : styles.toastErr}`}>
-                  {accessMsg}
-                </div>
+                <div className={`${styles.toast} ${isOkMsg ? styles.toastOk : styles.toastErr}`}>{accessMsg}</div>
               )}
 
-              <div className={styles.userList}>
-                {accessList.map((u, idx) => {
+              {/* table */}
+              <div className={styles.tableCard}>
+                <div className={styles.tableHead}>
+                  <span>User</span><span>Role</span><span>Access</span><span>Reports</span><span>Added</span><span></span>
+                </div>
+
+                {filteredUsers.length === 0 && (
+                  <div className={styles.empty}>{usersLoading ? 'Loading…' : 'No members match your search.'}</div>
+                )}
+
+                {filteredUsers.map((u) => {
                   const rm = getRoleMeta(u.role)
                   const isEditing = editingUser === u.email
                   const isYou = u.email === user?.email
                   return (
                     <div key={u.email}>
-                      <div className={`${styles.userRow} ${isEditing ? styles.userRowEdit : ''}`}>
-                        <div className={styles.userAvatar}>{u.email[0].toUpperCase()}</div>
-                        <div className={styles.userInfo}>
-                          <span className={styles.userName}>{u.email.split('@')[0]}</span>
-                          <span className={styles.userHandle}>@leverageedu.com</span>
-                          {isYou && <span className={styles.youTag}>YOU</span>}
-                        </div>
-                        <span className={`${styles.roleBadge} ${rm.cls}`}>{rm.label}</span>
-                        <label className={styles.reportsToggle} title="Receive daily report">
-                          <input type="checkbox" checked={!!u.receive_reports}
-                            onChange={e => toggleReports(u, e.target.checked)} />
-                          Reports
-                        </label>
-                        {!isYou && (
-                          <div className={styles.rowActions}>
-                            <button className={`${styles.iconBtn} ${isEditing ? styles.iconBtnActive : ''}`}
-                              onClick={() => isEditing ? setEditingUser(null) : startEdit(u)}>
-                              {isEditing ? 'Cancel' : 'Edit'}
-                            </button>
-                            <button className={styles.deleteBtn} onClick={() => removeUser(u.email)} title="Remove">
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
-                              </svg>
-                            </button>
+                      <div className={`${styles.uRow} ${isEditing ? styles.uRowEdit : ''}`}>
+                        <div className={styles.uUser}>
+                          <div className={styles.userAvatar}>{u.email[0].toUpperCase()}</div>
+                          <div className={styles.uUserText}>
+                            <span className={styles.userName}>{u.email.split('@')[0]}{isYou && <span className={styles.youTag}>YOU</span>}</span>
+                            <span className={styles.uEmail}>{u.email}</span>
                           </div>
-                        )}
+                        </div>
+                        <div><span className={`${styles.roleBadge} ${rm.cls}`}>{rm.label}</span></div>
+                        <div className={styles.uAccess}>{accessLabel(u.role)}</div>
+                        <div>
+                          <label className={styles.reportsToggle} title="Receive daily report">
+                            <input type="checkbox" checked={!!u.receive_reports} onChange={e => toggleReports(u, e.target.checked)} />
+                          </label>
+                        </div>
+                        <div className={styles.uAdded}>{fmtDate(u.created_at)}</div>
+                        <div className={styles.rowActions}>
+                          {!isYou && (
+                            <>
+                              <button className={`${styles.iconBtn} ${isEditing ? styles.iconBtnActive : ''}`}
+                                onClick={() => isEditing ? setEditingUser(null) : startEdit(u)}>
+                                {isEditing ? 'Cancel' : 'Edit'}
+                              </button>
+                              <button className={styles.deleteBtn} onClick={() => removeUser(u.email)} title="Remove" aria-label="Remove member">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /><path d="M10 11v6M14 11v6" /><path d="M9 6V4h6v2" />
+                                </svg>
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
 
                       {isEditing && (
@@ -473,13 +557,13 @@ export default function SettingsPage() {
                           </div>
                         </div>
                       )}
-
-                      {idx < accessList.length - 1 && !isEditing && <div className={styles.divider} />}
                     </div>
                   )
                 })}
+
+                <div className={styles.tableFoot}>Showing {filteredUsers.length} of {accessList.length} members</div>
               </div>
-            </div>
+            </>
           )}
 
           {/* ---------------- ACTIVITY LOG ---------------- */}
