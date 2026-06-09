@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.0",
     "@react-oauth/google": "^0.12.1",
     "google-auth-library": "^10.7.0",
     "jsonwebtoken": "^9.0.3",

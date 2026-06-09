@@ -46,7 +46,9 @@ Guidelines:
 - You are read-only — never claim to modify campaigns.`
 }
 
-async function askGroq(messages, metaData) {
+// Streams Claude's reply from /api/vasu-chat, calling onText(fullSoFar) as each
+// chunk arrives so the UI can render the answer live, like a typing assistant.
+async function askClaude(messages, metaData, onText) {
   const res = await fetch('/api/vasu-chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -56,9 +58,35 @@ async function askGroq(messages, metaData) {
       history: messages.slice(0, -1)
     })
   })
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Claude error') }
-  const d = await res.json()
-  return d.content || '(no response)'
+  if (!res.ok || !res.body) {
+    let msg = 'Claude error'
+    try { const e = await res.json(); msg = e.error || msg } catch {}
+    throw new Error(msg)
+  }
+
+  const reader  = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let full   = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('data:')) continue
+      const data = trimmed.slice(5).trim()
+      if (!data || data === '[DONE]') continue
+      let json
+      try { json = JSON.parse(data) } catch { continue }
+      if (json.error) throw new Error(json.error)
+      if (json.delta) { full += json.delta; onText(full) }
+    }
+  }
+  return full || '(no response)'
 }
 
 const QUICK = [
@@ -154,13 +182,20 @@ export default function VasuAI() {
     setInput('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
     const updated = [...messages, { role: 'user', content: q }]
-    setMessages(updated)
+    // Append an empty assistant turn that we stream Claude's reply into.
+    setMessages([...updated, { role: 'assistant', content: '' }])
     setLoading(true)
+
+    const setLastAssistant = (content) => setMessages(m => {
+      const copy = m.slice()
+      copy[copy.length - 1] = { role: 'assistant', content }
+      return copy
+    })
+
     try {
-      const reply = await askGroq(updated.slice(-14), metaData)
-      setMessages(m => [...m, { role: 'assistant', content: reply }])
+      await askClaude(updated.slice(-14), metaData, setLastAssistant)
     } catch (e) {
-      setMessages(m => [...m, { role: 'assistant', content: `⚠️ ${e.message}` }])
+      setLastAssistant(`⚠️ ${e.message}`)
     } finally { setLoading(false) }
   }
 
@@ -192,7 +227,7 @@ export default function VasuAI() {
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
             </svg>
-            VASU AI · Llama 3.3
+            VASU AI · Claude Opus 4.8
           </div>
           {connected && <div className={styles.connectedPill}>● Meta Ads connected</div>}
           <div style={{flex:1}}/>
@@ -236,25 +271,12 @@ export default function VasuAI() {
                 </div>
                 <div className={styles.turnBody}>
                   <p className={styles.turnName}>{m.role === 'user' ? 'You' : 'VASU AI'}</p>
-                  <div className={styles.turnContent} dangerouslySetInnerHTML={{ __html: renderContent(m.content) }}/>
+                  {m.role === 'assistant' && !m.content && loading
+                    ? <div className={styles.typing}><span/><span/><span/></div>
+                    : <div className={styles.turnContent} dangerouslySetInnerHTML={{ __html: renderContent(m.content) }}/>}
                 </div>
               </div>
             ))
-          )}
-          {loading && (
-            <div className={styles.asstTurn}>
-              <div className={styles.turnAvatar}>
-                <div className={styles.vasuAvatar}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round">
-                    <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
-                  </svg>
-                </div>
-              </div>
-              <div className={styles.turnBody}>
-                <p className={styles.turnName}>VASU AI</p>
-                <div className={styles.typing}><span/><span/><span/></div>
-              </div>
-            </div>
           )}
           <div ref={bottomRef}/>
         </div>
