@@ -75,6 +75,7 @@
 .primaryBtn:disabled { opacity: .55; cursor: not-allowed; }
 .ghostBtn {
   appearance: none; cursor: pointer; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 6px;
   background: #fff; color: var(--text-2); border: 1px solid var(--border-2);
   font-size: 13px; font-weight: 500; padding: 8px 14px; border-radius: 9px; transition: all .15s;
 }
