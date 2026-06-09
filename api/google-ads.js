@@ -22,6 +22,8 @@ const mic=v=>v?Math.round(Number(v)/1e6):0
 const pct=v=>v?+Number(v).toFixed(4):0
 
 export default async function handler(req,res){
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
   res.setHeader('Access-Control-Allow-Origin','*')
   if(req.method==='OPTIONS')return res.status(200).end()
   const miss=['GOOGLE_ADS_DEVELOPER_TOKEN','GOOGLE_ADS_CLIENT_ID','GOOGLE_ADS_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN','GOOGLE_ADS_CUSTOMER_ID'].filter(k=>!process.env[k])
