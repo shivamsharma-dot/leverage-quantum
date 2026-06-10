@@ -270,6 +270,11 @@ function CalMonth({ year, month, from, to, hovered, onSelect, onHover }) {
   )
 }
 
+const fmtShort = d => {
+  if (!d) return ''
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
+}
 function DateRangePicker({ from, to, onChange, onClose }) {
   const today = new Date(); today.setHours(0,0,0,0)
   const [viewYear,  setViewYear]  = React.useState(today.getFullYear())
@@ -279,11 +284,7 @@ function DateRangePicker({ from, to, onChange, onClose }) {
   const [selTo,     setSelTo]     = React.useState(to || null)
   const [step,      setStep]      = React.useState(from ? 'to' : 'from')
 
-  const fmtShort = d => {
-  if (!d) return ''
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
-}
+  
 const fmt = d => { if (!d) return ''; const y=d.getFullYear(),mo=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0'); return `${y}-${mo}-${dy}` }
 
   const handleSelect = date => {
