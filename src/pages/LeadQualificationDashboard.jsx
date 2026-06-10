@@ -382,7 +382,7 @@ export default function LeadQualificationDashboard() {
   const [sortDir, setSortDir]       = useState('desc')
   const [page, setPage]             = useState(0)
   const [showInfo, setShowInfo]       = useState(false)
-  const [datePreset, setDatePreset]   = useState('MTD')   // 'YTD','L7D','MTD','custom','month'
+  const [datePreset, setDatePreset]   = useState('MTD')   // 'LD','L7D','MTD','custom','month'
   const [customFrom, setCustomFrom]   = useState('')
   const [customTo, setCustomTo]       = useState('')
   const [showCustom, setShowCustom]   = useState(false)
@@ -429,7 +429,7 @@ export default function LeadQualificationDashboard() {
   }, [selMonth, monthStartMap])
 
   // Single active filter — what's currently driving the data
-  // 'preset' = YTD/L7D/MTD, 'month' = month picker, 'custom' = calendar range
+  // 'preset' = LD/L7D/MTD, 'month' = month picker, 'custom' = calendar range
   const activeFilter = datePreset === 'custom' ? 'custom'
     : (datePreset === 'month') ? 'month'
     : 'preset'
@@ -439,9 +439,9 @@ export default function LeadQualificationDashboard() {
   // 1. Date window from preset
   const dateWindow = useMemo(() => {
     const today = new Date(); today.setHours(0,0,0,0)
-    if (datePreset === 'YTD') {
-      const from = new Date(today); from.setDate(today.getDate() - 1)
-      return { from, to: today, label: 'Yesterday & Today' }
+    if (datePreset === 'LD') {
+      const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+      return { from: yesterday, to: yesterday, label: 'Last Day' }
     }
     if (datePreset === 'L7D') {
       const from = new Date(today); from.setDate(today.getDate() - 6)
@@ -595,11 +595,11 @@ export default function LeadQualificationDashboard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
 {isCurrentMonth && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F1F5F9', borderRadius: 9, padding: '3px' }}>
-              {[['YTD','YTD'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => {
+              {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => {
                 // compute this key's date range label for tooltip
                 const today2 = new Date(); today2.setHours(0,0,0,0)
                 let tipFrom, tipTo
-                if (key==='YTD') { tipFrom=new Date(today2); tipFrom.setDate(today2.getDate()-1); tipTo=today2 }
+                if (key==='LD') { tipFrom=new Date(today2); tipFrom.setDate(today2.getDate()-1); tipTo=tipFrom }
                 else if (key==='L7D') { tipFrom=new Date(today2); tipFrom.setDate(today2.getDate()-6); tipTo=today2 }
                 else { tipFrom=new Date(today2.getFullYear(),today2.getMonth(),1); tipTo=today2 }
                 const tipLabel = fmtShort(tipFrom) + ' – ' + fmtShort(tipTo)
