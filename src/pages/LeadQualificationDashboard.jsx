@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend, Cell, PieChart, Pie
@@ -130,21 +130,83 @@ const DonutLabel = ({ cx, cy, total, label }) => (
   </text>
 )
 
-const SelBtn = ({ options, value, onChange, label }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-    {label && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT, whiteSpace: 'nowrap' }}>{label}</span>}
-    <select value={value} onChange={e => onChange(e.target.value)}
-      style={{
-        padding: '6px 28px 6px 10px', borderRadius: 8, border: `0.5px solid ${C.border}`,
-        fontSize: 12, fontWeight: 600, fontFamily: FONT, background: '#fff', color: C.text,
-        cursor: 'pointer', outline: 'none', appearance: 'none',
-        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239CA3AF'/%3E%3C/svg%3E")`,
-        backgroundRepeat: 'no-repeat', backgroundPosition: 'right 9px center',
-      }}>
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
-  </div>
-)
+/* Custom production-grade dropdown — replaces all native <select> */
+const Dropdown = ({ options, value, onChange, label, minWidth = 120 }) => {
+  const [open, setOpen] = React.useState(false)
+  const ref = React.useRef(null)
+
+  React.useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} ref={ref}>
+      {label && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT, whiteSpace: 'nowrap' }}>{label}</span>}
+      <div style={{ position: 'relative' }}>
+        {/* Trigger */}
+        <button
+          onClick={() => setOpen(v => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '6px 10px 6px 12px', borderRadius: 8,
+            border: `0.5px solid ${open ? C.navy : C.border}`,
+            background: open ? C.navyBg : '#fff',
+            color: C.text, cursor: 'pointer', fontFamily: FONT,
+            fontSize: 12, fontWeight: 600, minWidth,
+            boxShadow: open ? `0 0 0 3px rgba(31,60,132,0.08)` : 'none',
+            transition: 'all .15s', whiteSpace: 'nowrap',
+          }}>
+          <span style={{ flex: 1, textAlign: 'left' }}>{value}</span>
+          <svg width="10" height="6" viewBox="0 0 10 6" fill="none"
+            style={{ flexShrink: 0, transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+            <path d="M1 1l4 4 4-4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+
+        {/* Panel */}
+        {open && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 500,
+            background: '#fff', border: `0.5px solid ${C.border}`,
+            borderRadius: 12, boxShadow: '0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)',
+            padding: '6px', minWidth: Math.max(minWidth, 150),
+            maxHeight: 280, overflowY: 'auto',
+            scrollbarWidth: 'none',
+          }}>
+            {options.map(opt => {
+              const active = opt === value
+              return (
+                <button key={opt} onClick={() => { onChange(opt); setOpen(false) }}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left',
+                    padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                    fontFamily: FONT, fontSize: 12.5,
+                    fontWeight: active ? 700 : 400,
+                    background: active ? C.navyBg : 'transparent',
+                    color: active ? C.navy : C.text,
+                    transition: 'background .1s, color .1s',
+                  }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#F8FAFC' }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    {opt}
+                    {active && (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2.5" strokeLinecap="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 /* ── Main dashboard ─────────────────────────────────────────────────── */
 export default function LeadQualificationDashboard() {
@@ -362,10 +424,12 @@ export default function LeadQualificationDashboard() {
             )}
             {/* Month picker */}
             {months.length > 0 && (
-              <select value={selMonth} onChange={e => {
-                  const v = e.target.value
+              <Dropdown
+                options={[...months].reverse()}
+                value={selMonth}
+                minWidth={110}
+                onChange={v => {
                   setSelMonth(v)
-                  // if the chosen month is not the current month, clear time presets
                   const ms = monthStartMap[v]
                   const d = ms ? new Date(ms) : null
                   const now = new Date()
@@ -373,15 +437,7 @@ export default function LeadQualificationDashboard() {
                   if (!isCur) setDatePreset('month')
                   setShowCustom(false); setPage(0)
                 }}
-                style={{
-                  padding: '6px 28px 6px 10px', borderRadius: 8, border: `0.5px solid ${datePreset==='month'?C.navy:C.border}`,
-                  fontSize: 12, fontWeight: 600, fontFamily: FONT, background: '#fff',
-                  color: datePreset==='month'?C.navy:C.text, cursor: 'pointer', outline: 'none', appearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239CA3AF'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 9px center',
-                }}>
-                {[...months].reverse().map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
+              />
             )}
             {/* Custom range */}
             <div style={{ position: 'relative' }}>
@@ -429,8 +485,8 @@ export default function LeadQualificationDashboard() {
                 </>
               )}
             </div>
-            <SelBtn label="Provider" options={providers} value={selProvider} onChange={v => { setSelProvider(v); setPage(0) }} />
-            <SelBtn label="Source"   options={sources}   value={selSource}   onChange={v => { setSelSource(v);   setPage(0) }} />
+            <Dropdown label="Provider" options={providers} value={selProvider} minWidth={100} onChange={v => { setSelProvider(v); setPage(0) }} />
+            <Dropdown label="Source" options={sources} value={selSource} minWidth={100} onChange={v => { setSelSource(v); setPage(0) }} />
             {lastSync && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {lastSync.toLocaleTimeString()}</span>}
             <button onClick={() => loadData(true)} disabled={loading} className="lqRefreshBtn"
               style={{
