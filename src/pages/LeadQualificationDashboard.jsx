@@ -279,7 +279,12 @@ function DateRangePicker({ from, to, onChange, onClose }) {
   const [selTo,     setSelTo]     = React.useState(to || null)
   const [step,      setStep]      = React.useState(from ? 'to' : 'from')
 
-  const fmt = d => { if (!d) return ''; const y=d.getFullYear(),mo=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0'); return `${y}-${mo}-${dy}` }
+  const fmtShort = d => {
+  if (!d) return ''
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
+}
+const fmt = d => { if (!d) return ''; const y=d.getFullYear(),mo=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0'); return `${y}-${mo}-${dy}` }
 
   const handleSelect = date => {
     if (step === 'from' || selTo) {
@@ -381,6 +386,7 @@ export default function LeadQualificationDashboard() {
   const [customFrom, setCustomFrom]   = useState('')
   const [customTo, setCustomTo]       = useState('')
   const [showCustom, setShowCustom]   = useState(false)
+  const [hoveredPreset, setHoveredPreset] = useState(null)
   const [monthStartMap, setMonthStartMap] = useState({})
 
   const loadData = useCallback(async (bust = false) => {
@@ -434,8 +440,8 @@ export default function LeadQualificationDashboard() {
   const dateWindow = useMemo(() => {
     const today = new Date(); today.setHours(0,0,0,0)
     if (datePreset === 'YTD') {
-      const from = new Date(today.getFullYear(), 0, 1)
-      return { from, to: today, label: 'YTD ' + today.getFullYear() }
+      const from = new Date(today); from.setDate(today.getDate() - 1)
+      return { from, to: today, label: 'Yesterday & Today' }
     }
     if (datePreset === 'L7D') {
       const from = new Date(today); from.setDate(today.getDate() - 6)
@@ -589,43 +595,53 @@ export default function LeadQualificationDashboard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
 {isCurrentMonth && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F1F5F9', borderRadius: 9, padding: '3px' }}>
-              {[['YTD','YTD'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => (
-                <button key={key} onClick={() => { setDatePreset(key); setCustomFrom(''); setCustomTo(''); setShowCustom(false); setPage(0) }}
-                  style={{
-                    padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                    fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
-                    background: activeFilter==='custom' ? 'transparent' : datePreset === key ? '#fff' : 'transparent',
-                    color: activeFilter==='custom' ? '#CBD5E1' : datePreset === key ? C.navy : C.muted,
-                    boxShadow: activeFilter==='custom' ? 'none' : datePreset === key ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
-                    opacity: activeFilter==='custom' ? 0.5 : 1,
-                    pointerEvents: activeFilter==='custom' ? 'none' : 'auto',
-                    transition: 'all .15s',
-                  }}>{lbl2}</button>
-              ))}
+              {[['YTD','YTD'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => {
+                // compute this key's date range label for tooltip
+                const today2 = new Date(); today2.setHours(0,0,0,0)
+                let tipFrom, tipTo
+                if (key==='YTD') { tipFrom=new Date(today2); tipFrom.setDate(today2.getDate()-1); tipTo=today2 }
+                else if (key==='L7D') { tipFrom=new Date(today2); tipFrom.setDate(today2.getDate()-6); tipTo=today2 }
+                else { tipFrom=new Date(today2.getFullYear(),today2.getMonth(),1); tipTo=today2 }
+                const tipLabel = fmtShort(tipFrom) + ' – ' + fmtShort(tipTo)
+                const isHov = hoveredPreset===key
+                return (
+                  <div key={key} style={{position:'relative'}}>
+                    <button
+                      onClick={() => { setDatePreset(key); setCustomFrom(''); setCustomTo(''); setShowCustom(false); setPage(0) }}
+                      onMouseEnter={() => setHoveredPreset(key)}
+                      onMouseLeave={() => setHoveredPreset(null)}
+                      style={{
+                        padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                        fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
+                        background: activeFilter==='custom' ? 'transparent' : datePreset === key ? '#fff' : 'transparent',
+                        color: activeFilter==='custom' ? '#CBD5E1' : datePreset === key ? C.navy : C.muted,
+                        boxShadow: activeFilter==='custom' ? 'none' : datePreset === key ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
+                        opacity: activeFilter==='custom' ? 0.5 : 1,
+                        pointerEvents: activeFilter==='custom' ? 'none' : 'auto',
+                        transition: 'all .15s',
+                      }}>{lbl2}</button>
+                    {/* Hover tooltip */}
+                    <div style={{
+                      position:'absolute', top:'calc(100% + 7px)', left:'50%', transform:'translateX(-50%)',
+                      background:'#1E293B', color:'#fff', fontSize:11, fontWeight:500, fontFamily:FONT,
+                      padding:'5px 10px', borderRadius:7, whiteSpace:'nowrap', pointerEvents:'none',
+                      boxShadow:'0 4px 14px rgba(15,23,42,0.18)', zIndex:600,
+                      opacity: isHov ? 1 : 0,
+                      transition:'opacity .15s ease',
+                    }}>{tipLabel}
+                      {/* Arrow */}
+                      <div style={{
+                        position:'absolute', top:-4, left:'50%', transform:'translateX(-50%)',
+                        width:8, height:8, background:'#1E293B', borderRadius:2,
+                        clipPath:'polygon(50% 0%, 0% 100%, 100% 100%)',
+                      }}/>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
             )}
-            {/* Active preset date range label */}
-            {activeFilter === 'preset' && dateWindow && (
-              <div style={{
-                display:'flex', alignItems:'center', gap:5,
-                padding:'5px 10px', borderRadius:8,
-                background:'#F8FAFF', border:`0.5px solid ${C.border}`,
-                fontSize:11, fontFamily:FONT,
-              }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={C.blue} strokeWidth="2" strokeLinecap="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-                  <line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-                <span style={{color:C.muted, fontWeight:500}}>
-                  {(() => {
-                    const f=dateWindow.from, t=dateWindow.to
-                    const fmt=d=>`${d.getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getFullYear()}`
-                    return fmt(f) + ' – ' + fmt(t)
-                  })()}
-                </span>
-              </div>
-            )}
+            
             {/* Month picker */}
             {months.length > 0 && (
               <div style={{ opacity: activeFilter!=='month' ? 0.45 : 1, transition: 'opacity .15s' }}
