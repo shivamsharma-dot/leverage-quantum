@@ -188,21 +188,14 @@ export default function LeadQualificationDashboard() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const monthRows = useMemo(() => rows.filter(r => r.month === selMonth), [rows, selMonth])
-  // alias for rest of dashboard: when a date preset is active, use dateFilteredRows
-  const providers = useMemo(() => ['All', ...[...new Set(monthRows.map(r => r.provider))].filter(Boolean).sort()], [monthRows])
-  const sources   = useMemo(() => ['All', ...[...new Set(monthRows.map(r => r.source))].filter(Boolean).sort()], [monthRows])
-  const filtered  = useMemo(() => dateFilteredRows.filter(r =>
-    (selProvider === 'All' || r.provider === selProvider) &&
-    (selSource === 'All' || r.source === selSource)
-  ), [dateFilteredRows, selProvider, selSource])
+  // ── Derived data (correct dependency order) ─────────────────────────────
 
-  /* Effective date window from preset */
+  // 1. Date window from preset
   const dateWindow = useMemo(() => {
     const today = new Date(); today.setHours(0,0,0,0)
     if (datePreset === 'YTD') {
       const from = new Date(today.getFullYear(), 0, 1)
-      return { from, to: today, label: 'YTD (' + today.getFullYear() + ')' }
+      return { from, to: today, label: 'YTD ' + today.getFullYear() }
     }
     if (datePreset === 'L7D') {
       const from = new Date(today); from.setDate(today.getDate() - 6)
@@ -210,16 +203,15 @@ export default function LeadQualificationDashboard() {
     }
     if (datePreset === 'MTD') {
       const from = new Date(today.getFullYear(), today.getMonth(), 1)
-      return { from, to: today, label: 'MTD ' + today.toLocaleString('default',{month:'short',year:'numeric'}) }
+      return { from, to: today, label: 'MTD ' + today.toLocaleString('default', { month: 'short', year: 'numeric' }) }
     }
     if (datePreset === 'custom' && customFrom && customTo) {
       return { from: new Date(customFrom), to: new Date(customTo), label: customFrom + ' → ' + customTo }
     }
-    // 'month' preset — filter by selected month only
-    return null
+    return null // 'month' mode — handled below
   }, [datePreset, customFrom, customTo])
 
-  /* Row filter: either by date window or by selected month */
+  // 2. Row set filtered by date window OR selected month
   const dateFilteredRows = useMemo(() => {
     if (!dateWindow) return rows.filter(r => r.month === selMonth)
     return rows.filter(r => {
@@ -229,10 +221,26 @@ export default function LeadQualificationDashboard() {
     })
   }, [rows, dateWindow, selMonth])
 
-  /* KPIs always from full monthRows (not filtered) */
+  // 3. Derived lists from dateFilteredRows
+  const providers = useMemo(() =>
+    ['All', ...[...new Set(dateFilteredRows.map(r => r.provider))].filter(Boolean).sort()]
+  , [dateFilteredRows])
+
+  const sources = useMemo(() =>
+    ['All', ...[...new Set(dateFilteredRows.map(r => r.source))].filter(Boolean).sort()]
+  , [dateFilteredRows])
+
+  // 4. Apply provider + source dropdowns
+  const filtered = useMemo(() => dateFilteredRows.filter(r =>
+    (selProvider === 'All' || r.provider === selProvider) &&
+    (selSource === 'All' || r.source === selSource)
+  ), [dateFilteredRows, selProvider, selSource])
+
+  // 5. KPI totals (from full dateFilteredRows, not dropdown-filtered)
   const totals = useMemo(() => {
-    const fw  = dateFilteredRows.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
-    const sb  = dateFilteredRows.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
+    const fw = dateFilteredRows.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
+    const sb = dateFilteredRows.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
+    // MoM delta: compare against previous calendar month
     const prevM    = months[months.indexOf(selMonth) - 1]
     const prevRows = prevM ? rows.filter(r => r.month === prevM) : []
     const prevFw   = prevRows.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
@@ -246,7 +254,7 @@ export default function LeadQualificationDashboard() {
     }
   }, [dateFilteredRows, rows, months, selMonth])
 
-  /* Charts — respect filters */
+
   const sourceBar = useMemo(() => {
     const map = {}
     filtered.forEach(r => {
