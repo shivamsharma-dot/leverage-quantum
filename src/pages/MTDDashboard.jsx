@@ -169,7 +169,7 @@ export default function MTDDashboard(){
   if(error)return <div style={{display:'flex',height:'100vh',background:'#F4F5F7'}}><Sidebar/><div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#DC2626',fontSize:14}}>{error}</div></div>
 
   return(
-    <div style={{display:'flex',height:'100vh',background:'#F4F5F7',fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>
+    <div style={{display:'flex',height:'100vh',overflow:'hidden',background:'#F4F6F9',fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>
       <Sidebar/>
       <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
 
@@ -224,7 +224,7 @@ export default function MTDDashboard(){
           </div>
         </div>
 
-        <div style={{flex:1,overflowY:'auto',padding:22}}>
+        <div style={{flex:1,overflowY:'auto',padding:'18px 24px'}}>
           {total&&(<>
 
             <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:12}}>
