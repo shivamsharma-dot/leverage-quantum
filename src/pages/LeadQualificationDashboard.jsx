@@ -159,7 +159,11 @@ export default function LeadQualificationDashboard() {
   const [sortCol, setSortCol]       = useState('count')
   const [sortDir, setSortDir]       = useState('desc')
   const [page, setPage]             = useState(0)
-  const [showInfo, setShowInfo]     = useState(false)
+  const [showInfo, setShowInfo]       = useState(false)
+  const [datePreset, setDatePreset]   = useState('MTD')   // 'YTD','L7D','MTD','custom','month'
+  const [customFrom, setCustomFrom]   = useState('')
+  const [customTo, setCustomTo]       = useState('')
+  const [showCustom, setShowCustom]   = useState(false)
 
   const loadData = useCallback(async (bust = false) => {
     setLoading(true)
@@ -170,7 +174,11 @@ export default function LeadQualificationDashboard() {
       const csv = await res.text()
       const parsed = parseCSV(csv)
       setRows(parsed)
-      const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean).sort()
+      // Build month list sorted by actual date using month_start column
+      const monthMap = {}
+      parsed.forEach(r => { if (r.month && r.month_start) monthMap[r.month] = r.month_start })
+      const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
+        .sort((a, b) => new Date(monthMap[a] || 0) - new Date(monthMap[b] || 0))
       setMonths(ms)
       setSelMonth(prev => prev || ms[ms.length - 1] || '')
       setLastSync(new Date())
@@ -181,17 +189,50 @@ export default function LeadQualificationDashboard() {
   useEffect(() => { loadData() }, [loadData])
 
   const monthRows = useMemo(() => rows.filter(r => r.month === selMonth), [rows, selMonth])
+  // alias for rest of dashboard: when a date preset is active, use dateFilteredRows
   const providers = useMemo(() => ['All', ...[...new Set(monthRows.map(r => r.provider))].filter(Boolean).sort()], [monthRows])
   const sources   = useMemo(() => ['All', ...[...new Set(monthRows.map(r => r.source))].filter(Boolean).sort()], [monthRows])
-  const filtered  = useMemo(() => monthRows.filter(r =>
+  const filtered  = useMemo(() => dateFilteredRows.filter(r =>
     (selProvider === 'All' || r.provider === selProvider) &&
     (selSource === 'All' || r.source === selSource)
-  ), [monthRows, selProvider, selSource])
+  ), [dateFilteredRows, selProvider, selSource])
+
+  /* Effective date window from preset */
+  const dateWindow = useMemo(() => {
+    const today = new Date(); today.setHours(0,0,0,0)
+    if (datePreset === 'YTD') {
+      const from = new Date(today.getFullYear(), 0, 1)
+      return { from, to: today, label: 'YTD (' + today.getFullYear() + ')' }
+    }
+    if (datePreset === 'L7D') {
+      const from = new Date(today); from.setDate(today.getDate() - 6)
+      return { from, to: today, label: 'Last 7 days' }
+    }
+    if (datePreset === 'MTD') {
+      const from = new Date(today.getFullYear(), today.getMonth(), 1)
+      return { from, to: today, label: 'MTD ' + today.toLocaleString('default',{month:'short',year:'numeric'}) }
+    }
+    if (datePreset === 'custom' && customFrom && customTo) {
+      return { from: new Date(customFrom), to: new Date(customTo), label: customFrom + ' → ' + customTo }
+    }
+    // 'month' preset — filter by selected month only
+    return null
+  }, [datePreset, customFrom, customTo])
+
+  /* Row filter: either by date window or by selected month */
+  const dateFilteredRows = useMemo(() => {
+    if (!dateWindow) return rows.filter(r => r.month === selMonth)
+    return rows.filter(r => {
+      if (!r.month_start) return false
+      const d = new Date(r.month_start); d.setHours(0,0,0,0)
+      return d >= dateWindow.from && d <= dateWindow.to
+    })
+  }, [rows, dateWindow, selMonth])
 
   /* KPIs always from full monthRows (not filtered) */
   const totals = useMemo(() => {
-    const fw  = monthRows.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
-    const sb  = monthRows.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
+    const fw  = dateFilteredRows.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
+    const sb  = dateFilteredRows.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
     const prevM    = months[months.indexOf(selMonth) - 1]
     const prevRows = prevM ? rows.filter(r => r.month === prevM) : []
     const prevFw   = prevRows.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
@@ -203,7 +244,7 @@ export default function LeadQualificationDashboard() {
       fwDelta:    prevFw  > 0 ? ((fw - prevFw) / prevFw * 100)       : null,
       sbDelta:    prevSb  > 0 ? ((sb - prevSb) / prevSb * 100)       : null,
     }
-  }, [monthRows, rows, months, selMonth])
+  }, [dateFilteredRows, rows, months, selMonth])
 
   /* Charts — respect filters */
   const sourceBar = useMemo(() => {
@@ -281,22 +322,83 @@ export default function LeadQualificationDashboard() {
           <div>
             <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / QL Ops</p>
             <h1 style={{ fontSize: 17, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px', fontFamily: FONT }}>
-              Lead Qualification · {selMonth || '—'}
+              Lead Qualification · {dateWindow ? dateWindow.label : (selMonth || '—')}
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {/* ── Date presets ──────────────────────────────── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F1F5F9', borderRadius: 9, padding: '3px' }}>
+              {[['YTD','YTD'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => (
+                <button key={key} onClick={() => { setDatePreset(key); setShowCustom(false); setPage(0) }}
+                  style={{
+                    padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                    fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
+                    background: datePreset === key ? '#fff' : 'transparent',
+                    color: datePreset === key ? C.navy : C.muted,
+                    boxShadow: datePreset === key ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
+                    transition: 'all .15s',
+                  }}>{lbl2}</button>
+              ))}
+            </div>
+            {/* Month picker */}
             {months.length > 0 && (
-              <select value={selMonth} onChange={e => setSelMonth(e.target.value)}
+              <select value={selMonth} onChange={e => { setSelMonth(e.target.value); setDatePreset('month'); setShowCustom(false); setPage(0) }}
                 style={{
-                  padding: '6px 28px 6px 10px', borderRadius: 8, border: `0.5px solid ${C.border}`,
-                  fontSize: 12, fontWeight: 700, fontFamily: FONT, background: '#fff', color: C.text,
-                  cursor: 'pointer', outline: 'none', appearance: 'none',
+                  padding: '6px 28px 6px 10px', borderRadius: 8, border: `0.5px solid ${datePreset==='month'?C.navy:C.border}`,
+                  fontSize: 12, fontWeight: 600, fontFamily: FONT, background: '#fff',
+                  color: datePreset==='month'?C.navy:C.text, cursor: 'pointer', outline: 'none', appearance: 'none',
                   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239CA3AF'/%3E%3C/svg%3E")`,
                   backgroundRepeat: 'no-repeat', backgroundPosition: 'right 9px center',
                 }}>
                 {[...months].reverse().map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             )}
+            {/* Custom range */}
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => { setShowCustom(v => !v) }}
+                style={{
+                  padding: '6px 11px', borderRadius: 8, border: `0.5px solid ${datePreset==='custom'?C.navy:C.border}`,
+                  fontSize: 11.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer',
+                  background: datePreset==='custom'?C.navyBg:'#fff', color: datePreset==='custom'?C.navy:C.sub,
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                {datePreset==='custom'&&customFrom?customFrom+' → '+customTo:'Custom'}
+              </button>
+              {showCustom && (
+                <>
+                  <div onClick={() => setShowCustom(false)} style={{ position: 'fixed', inset: 0, zIndex: 149 }} />
+                  <div style={{
+                    position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 200,
+                    background: '#fff', border: `0.5px solid ${C.border}`, borderRadius: 12,
+                    boxShadow: '0 14px 40px rgba(15,23,42,0.14)', padding: '16px 18px',
+                    minWidth: 260, fontFamily: FONT,
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>Custom date range</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {[['From', customFrom, setCustomFrom], ['To', customTo, setCustomTo]].map(([lbl3, val, setter]) => (
+                        <div key={lbl3}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: C.sub, marginBottom: 4 }}>{lbl3}</div>
+                          <input type="date" value={val} onChange={e => setter(e.target.value)}
+                            style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: `0.5px solid ${C.border}`, fontSize: 12, fontFamily: FONT, outline: 'none', color: C.text, boxSizing: 'border-box' }} />
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => { if (customFrom && customTo) { setDatePreset('custom'); setShowCustom(false); setPage(0) } }}
+                        disabled={!customFrom || !customTo}
+                        style={{
+                          marginTop: 4, padding: '8px', borderRadius: 8, border: 'none',
+                          background: customFrom && customTo ? C.navy : '#E5E7EB',
+                          color: customFrom && customTo ? '#fff' : C.muted,
+                          fontSize: 12, fontWeight: 700, fontFamily: FONT, cursor: customFrom && customTo ? 'pointer' : 'not-allowed',
+                        }}>Apply range</button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
             <SelBtn label="Provider" options={providers} value={selProvider} onChange={v => { setSelProvider(v); setPage(0) }} />
             <SelBtn label="Source"   options={sources}   value={selSource}   onChange={v => { setSelSource(v);   setPage(0) }} />
             {lastSync && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {lastSync.toLocaleTimeString()}</span>}
