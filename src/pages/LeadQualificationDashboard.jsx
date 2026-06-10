@@ -108,13 +108,16 @@ export default function LeadQualificationDashboard(){
   const [search,setSearch]     = useState('')
   const [sortCol,setSortCol]   = useState('count')
   const [sortDir,setSortDir]   = useState('desc')
+  const [page,setPage]         = useState(0)
+  const PAGE_SIZE               = 10
   const [showInfo,setShowInfo] = useState(false)
 
-  const loadData = useCallback(async()=>{
+  const loadData = useCallback(async(bust=false)=>{
     setLoading(true)
     const t0=Date.now()
     try{
-      const res=await fetch(SHEET_CSV+'&_='+Date.now())
+      const url=bust?SHEET_CSV+'&_='+Date.now():SHEET_CSV
+      const res=await fetch(url)
       const csv=await res.text()
       const parsed=parseCSV(csv)
       setRows(parsed)
@@ -154,19 +157,19 @@ export default function LeadQualificationDashboard(){
   // source stacked bar
   const sourceBar = useMemo(()=>{
     const map={}
-    monthRows.forEach(r=>{
+    filtered.forEach(r=>{
       const src=r.source||'Others'
       if(!map[src])map[src]={source:src,Futwork:0,Superbot:0}
       map[src][r.provider]=(map[src][r.provider]||0)+r.count
     })
     return Object.values(map).sort((a,b)=>(b.Futwork+b.Superbot)-(a.Futwork+a.Superbot)).slice(0,8)
-  },[monthRows])
+  },[filtered])
 
   // provider pie
   const provPie = useMemo(()=>[
-    {name:'Futwork',value:totals.fw},
-    {name:'Superbot',value:totals.sb},
-  ].filter(d=>d.value>0),[totals])
+    {name:'Futwork',value:filtered.filter(r=>r.provider==='Futwork').reduce((s,r)=>s+r.count,0)},
+    {name:'Superbot',value:filtered.filter(r=>r.provider==='Superbot').reduce((s,r)=>s+r.count,0)},
+  ].filter(d=>d.value>0),[filtered])
 
   // trend
   const trend = useMemo(()=>months.map(m=>{
@@ -199,8 +202,11 @@ export default function LeadQualificationDashboard(){
         return sortDir==='desc'?bv.localeCompare(av):av.localeCompare(bv)
       })
   },[filtered,search,sortCol,sortDir])
+  const totalPages = Math.ceil(tableRows.length/PAGE_SIZE)
+  const pageRows   = tableRows.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE)
 
-  const sortBy=col=>{setSortCol(col);setSortDir(d=>sortCol===col?(d==='desc'?'asc':'desc'):'desc')}
+  const sortBy=col=>{setSortCol(col);setSortDir(d=>sortCol===col?(d==='desc'?'asc':'desc'):'desc');setPage(0)}
+  const onSearch=v=>{setSearch(v);setPage(0)}
   const thS=col=>({fontSize:10,fontWeight:700,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',padding:'9px 10px',cursor:'pointer',userSelect:'none',fontFamily:FONT,background:sortCol===col?'#F8FAFF':'transparent',whiteSpace:'nowrap'})
 
   return(
@@ -221,10 +227,10 @@ export default function LeadQualificationDashboard(){
                 {[...months].reverse().map(m=><option key={m} value={m}>{m}</option>)}
               </select>
             )}
-            <SelBtn label="Provider" options={providers} value={selProvider} onChange={v=>{setSelProvider(v)}} />
-            <SelBtn label="Source" options={sources} value={selSource} onChange={v=>{setSelSource(v)}} />
+            <SelBtn label="Provider" options={providers} value={selProvider} onChange={v=>{setSelProvider(v);setPage(0)}} />
+            <SelBtn label="Source" options={sources} value={selSource} onChange={v=>{setSelSource(v);setPage(0)}} />
             {lastSync&&<span style={{fontSize:11,color:C.muted,fontFamily:FONT}}>Synced {lastSync.toLocaleTimeString()}</span>}
-            <button onClick={loadData} disabled={loading} className="lqRefreshBtn"
+            <button onClick={()=>loadData(true)} disabled={loading} className="lqRefreshBtn"
               style={{padding:'6px 14px',borderRadius:8,border:`0.5px solid ${C.border}`,fontSize:12,fontWeight:500,cursor:loading?'wait':'pointer',fontFamily:FONT,background:'#fff',color:'#374151',display:'flex',alignItems:'center',gap:6,opacity:loading?0.65:1}}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{animation:loading?'spin .8s linear infinite':'none'}}>
                 <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -356,7 +362,7 @@ export default function LeadQualificationDashboard(){
               <Card title="Campaign breakdown"
                 sub={`${tableRows.length.toLocaleString()} rows · ${selMonth}${selProvider!=='All'?' · '+selProvider:''}${selSource!=='All'?' · '+selSource:''}`}
                 action={
-                  <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search campaign, source…"
+                  <input value={search} onChange={e=>onSearch(e.target.value)} placeholder="Search campaign, source…"
                     style={{padding:'5px 10px',borderRadius:8,border:`0.5px solid ${C.border}`,fontSize:12,fontFamily:FONT,outline:'none',width:220}}/>
                 }>
                 <div style={{overflowX:'auto'}}>
@@ -371,7 +377,7 @@ export default function LeadQualificationDashboard(){
                       </tr>
                     </thead>
                     <tbody>
-                      {tableRows.slice(0,200).map((r,i)=>(
+                      {pageRows.map((r,i)=>(
                         <tr key={i} style={{borderBottom:`0.5px solid #F3F4F6`,background:i%2?'#FAFBFC':'#fff'}}>
                           <td style={{padding:'8px 10px',color:C.text,maxWidth:340,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:FONT}} title={r.campaign}>{r.campaign||'—'}</td>
                           <td style={{padding:'8px 10px',fontFamily:FONT}}>
@@ -386,7 +392,22 @@ export default function LeadQualificationDashboard(){
                       ))}
                     </tbody>
                   </table>
-                  {tableRows.length>200&&<div style={{textAlign:'center',padding:'10px 0',fontSize:11,color:C.muted,fontFamily:FONT}}>Showing 200 of {tableRows.length.toLocaleString()} rows — use filters to narrow down</div>}
+                  {totalPages>1&&(
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0 4px',marginTop:4,borderTop:`0.5px solid ${C.border}`}}>
+                      <span style={{fontSize:11,color:C.muted,fontFamily:FONT}}>{page*PAGE_SIZE+1}–{Math.min((page+1)*PAGE_SIZE,tableRows.length)} of {tableRows.length.toLocaleString()} rows</span>
+                      <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                        <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0}
+                          style={{padding:'4px 12px',borderRadius:7,border:`0.5px solid ${C.border}`,background:'#fff',fontSize:12,fontWeight:500,fontFamily:FONT,cursor:page===0?'not-allowed':'pointer',opacity:page===0?0.4:1}}>← Prev</button>
+                        {Array.from({length:Math.min(7,totalPages)},(_,i)=>{
+                          const start=Math.max(0,Math.min(page-3,totalPages-7)); const p=start+i
+                          return <button key={p} onClick={()=>setPage(p)}
+                            style={{width:30,height:28,borderRadius:7,border:`0.5px solid ${p===page?C.navy:C.border}`,background:p===page?C.navy:'#fff',color:p===page?'#fff':C.text,fontSize:12,fontWeight:p===page?700:400,fontFamily:FONT,cursor:'pointer'}}>{p+1}</button>
+                        })}
+                        <button onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={page===totalPages-1}
+                          style={{padding:'4px 12px',borderRadius:7,border:`0.5px solid ${C.border}`,background:'#fff',fontSize:12,fontWeight:500,fontFamily:FONT,cursor:page===totalPages-1?'not-allowed':'pointer',opacity:page===totalPages-1?0.4:1}}>Next →</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </Card>
             </>
