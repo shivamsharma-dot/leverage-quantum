@@ -12,6 +12,7 @@ import MTDDashboard from './pages/MTDDashboard'
 import MetaAdsDashboard from './pages/MetaAdsDashboard'
 import GoogleAdsDashboard from './pages/GoogleAdsDashboard'
 import VasuAI from './pages/VasuAI'
+import AIInsights from './pages/AIInsights'
 import SettingsPage from './pages/SettingsPage'
 
 // Parse which dashboards a user can access based on their role
@@ -62,6 +63,7 @@ export default function App() {
       <Route path="/dashboard/meta-ads"     element={<ProtectedRoute dashboardId="meta_ads">    <MetaAdsDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/google-ads"   element={<ProtectedRoute dashboardId="google_ads">  <GoogleAdsDashboard /></ProtectedRoute>} />
       <Route path="/vasu"                    element={<ProtectedRoute dashboardId="vasu">         <VasuAI /></ProtectedRoute>} />
+      <Route path="/insights"                element={<ProtectedRoute dashboardId="insights">     <AIInsights /></ProtectedRoute>} />
       <Route path="/settings"               element={<ProtectedRoute dashboardId="settings">    <SettingsPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

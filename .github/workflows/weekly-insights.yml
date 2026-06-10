@@ -1,0 +1,21 @@
+name: Weekly AI Insights
+
+on:
+  schedule:
+    # Every Monday at 05:00 UTC (10:30 AM IST)
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger weekly AI analysis
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "https://quantum.leverageedu.com/api/generate-insights?secret=${CRON_SECRET}")
+          echo "HTTP Status: $RESPONSE"
+          if [ "$RESPONSE" != "200" ]; then echo "Failed"; exit 1; fi
+          echo "AI Insights generated successfully!"
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
