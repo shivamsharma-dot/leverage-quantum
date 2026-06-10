@@ -208,6 +208,161 @@ const Dropdown = ({ options, value, onChange, label, minWidth = 120 }) => {
   )
 }
 
+
+/* ── Production date picker ─────────────────────────────────────────── */
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
+
+function CalMonth({ year, month, from, to, hovered, onSelect, onHover }) {
+  const first   = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0).getDate()
+  const startDow = first.getDay()
+  const cells = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= lastDay; d++) cells.push(new Date(year, month, d))
+
+  return (
+    <div style={{ width: 220 }}>
+      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 13, color: C.text, marginBottom: 8, fontFamily: FONT }}>
+        {MONTHS_SHORT[month]} {year}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
+        {DAYS.map(d => (
+          <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: C.muted, padding: '2px 0', fontFamily: FONT }}>{d}</div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+        {cells.map((date, i) => {
+          if (!date) return <div key={`e${i}`} />
+          const ts = date.getTime()
+          const fromTs = from ? from.getTime() : null
+          const toTs   = (to || hovered) ? (to || hovered).getTime() : null
+          const isFrom   = fromTs && ts === fromTs
+          const isTo     = toTs && ts === toTs && from
+          const inRange  = fromTs && toTs && ts > Math.min(fromTs,toTs) && ts < Math.max(fromTs,toTs)
+          const today    = new Date(); today.setHours(0,0,0,0)
+          const isToday  = ts === today.getTime()
+          let bg = 'transparent', color = C.text, radius = 6
+          if (isFrom || isTo) { bg = C.navy; color = '#fff' }
+          else if (inRange)   { bg = C.navyBg; color = C.navy }
+          return (
+            <button key={ts}
+              onClick={() => onSelect(date)}
+              onMouseEnter={() => onHover(date)}
+              onMouseLeave={() => onHover(null)}
+              style={{
+                width: '100%', aspectRatio: '1', border: 'none', cursor: 'pointer',
+                borderRadius: radius, background: bg, color,
+                fontSize: 11.5, fontWeight: isFrom || isTo ? 700 : isToday ? 600 : 400,
+                fontFamily: FONT, position: 'relative', transition: 'background .1s',
+              }}
+              onMouseOver={e => { if (!isFrom && !isTo && !inRange) e.currentTarget.style.background = '#F1F5F9' }}
+              onMouseOut={e => { if (!isFrom && !isTo && !inRange) e.currentTarget.style.background = bg }}>
+              {date.getDate()}
+              {isToday && !isFrom && !isTo && (
+                <span style={{ position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: '50%', background: C.blue, display: 'block' }} />
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function DateRangePicker({ from, to, onChange, onClose }) {
+  const today = new Date(); today.setHours(0,0,0,0)
+  const [viewYear,  setViewYear]  = React.useState(today.getFullYear())
+  const [viewMonth, setViewMonth] = React.useState(today.getMonth())
+  const [hovered,   setHovered]   = React.useState(null)
+  const [selFrom,   setSelFrom]   = React.useState(from || null)
+  const [selTo,     setSelTo]     = React.useState(to || null)
+  const [step,      setStep]      = React.useState(from ? 'to' : 'from')
+
+  const fmt = d => d ? d.toISOString().slice(0,10) : ''
+
+  const handleSelect = date => {
+    if (step === 'from' || selTo) {
+      setSelFrom(date); setSelTo(null); setStep('to')
+    } else {
+      if (date < selFrom) { setSelFrom(date); setSelTo(selFrom) }
+      else { setSelTo(date) }
+      setStep('from')
+    }
+  }
+
+  const right = viewMonth === 11 ? { y: viewYear+1, m: 0 } : { y: viewYear, m: viewMonth+1 }
+  const canApply = selFrom && selTo
+
+  const NavBtn = ({ dir, onClick: oc }) => (
+    <button onClick={oc} style={{
+      width: 28, height: 28, borderRadius: 7, border: `0.5px solid ${C.border}`,
+      background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', color: C.sub, transition: 'background .1s',
+    }}
+    onMouseOver={e=>e.currentTarget.style.background='#F1F5F9'}
+    onMouseOut={e=>e.currentTarget.style.background='#fff'}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        {dir==='left' ? <polyline points="15 18 9 12 15 6"/> : <polyline points="9 18 15 12 9 6"/>}
+      </svg>
+    </button>
+  )
+
+  const goLeft  = () => viewMonth===0 ? (setViewYear(y=>y-1), setViewMonth(11)) : setViewMonth(m=>m-1)
+  const goRight = () => viewMonth===11? (setViewYear(y=>y+1), setViewMonth(0))  : setViewMonth(m=>m+1)
+
+  return (
+    <div style={{ padding: '16px 20px', fontFamily: FONT }}>
+      {/* Status bar */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
+        <div style={{
+          flex: 1, padding: '6px 10px', borderRadius: 8, border: `1.5px solid ${step==='from'?C.navy:C.border}`,
+          background: step==='from'?C.navyBg:'#FAFAFA', fontSize: 12, fontWeight: 600, color: selFrom?C.text:C.muted,
+          fontFamily: FONT, cursor: 'pointer',
+        }} onClick={() => setStep('from')}>
+          {selFrom ? fmt(selFrom) : 'Start date'}
+        </div>
+        <svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M0 5h14M10 1l4 4-4 4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        <div style={{
+          flex: 1, padding: '6px 10px', borderRadius: 8, border: `1.5px solid ${step==='to'&&selFrom?C.navy:C.border}`,
+          background: step==='to'&&selFrom?C.navyBg:'#FAFAFA', fontSize: 12, fontWeight: 600, color: selTo?C.text:C.muted,
+          fontFamily: FONT, cursor: selFrom?'pointer':'default',
+        }} onClick={() => selFrom && setStep('to')}>
+          {selTo ? fmt(selTo) : 'End date'}
+        </div>
+      </div>
+
+      {/* Nav + dual calendars */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12 }}>
+        <NavBtn dir="left"  onClick={goLeft}/>
+        <div style={{ flex: 1 }}/>
+        <NavBtn dir="right" onClick={goRight}/>
+      </div>
+      <div style={{ display: 'flex', gap: 24 }}>
+        <CalMonth year={viewYear} month={viewMonth} from={selFrom} to={selTo} hovered={step==='to'?hovered:null} onSelect={handleSelect} onHover={step==='to'?setHovered:()=>{}}/>
+        <CalMonth year={right.y} month={right.m} from={selFrom} to={selTo} hovered={step==='to'?hovered:null} onSelect={handleSelect} onHover={step==='to'?setHovered:()=>{}}/>
+      </div>
+
+      {/* Footer */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `0.5px solid #F1F5F9` }}>
+        <button onClick={() => { setSelFrom(null); setSelTo(null); setStep('from') }}
+          style={{ padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: '#fff', fontSize: 11.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer', color: C.sub }}>
+          Clear
+        </button>
+        <button onClick={() => canApply && onChange(fmt(selFrom), fmt(selTo))}
+          disabled={!canApply}
+          style={{
+            padding: '7px 18px', borderRadius: 8, border: 'none', cursor: canApply?'pointer':'not-allowed',
+            background: canApply ? C.navy : '#E5E7EB', color: canApply?'#fff':C.muted,
+            fontSize: 12, fontWeight: 700, fontFamily: FONT, transition: 'all .15s',
+          }}>
+          Apply range
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* ── Main dashboard ─────────────────────────────────────────────────── */
 export default function LeadQualificationDashboard() {
   const [rows, setRows]             = useState([])
@@ -439,48 +594,44 @@ export default function LeadQualificationDashboard() {
                 }}
               />
             )}
-            {/* Custom range */}
+            {/* Custom range — production calendar picker */}
             <div style={{ position: 'relative' }}>
-              <button onClick={() => { setShowCustom(v => !v) }}
+              <button onClick={() => setShowCustom(v => !v)}
                 style={{
-                  padding: '6px 11px', borderRadius: 8, border: `0.5px solid ${datePreset==='custom'?C.navy:C.border}`,
+                  padding: '6px 11px', borderRadius: 8,
+                  border: `0.5px solid ${datePreset==='custom'?C.navy:C.border}`,
+                  background: datePreset==='custom'?C.navyBg:'#fff',
+                  color: datePreset==='custom'?C.navy:C.sub,
                   fontSize: 11.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer',
-                  background: datePreset==='custom'?C.navyBg:'#fff', color: datePreset==='custom'?C.navy:C.sub,
                   display: 'flex', alignItems: 'center', gap: 5,
+                  boxShadow: showCustom?`0 0 0 3px rgba(31,60,132,0.08)`:'none',
+                  transition: 'all .15s',
                 }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                  <rect x="3" y="4" width="18" height="18" rx="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                  <line x1="3" y1="10" x2="21" y2="10"/>
                 </svg>
-                {datePreset==='custom'&&customFrom?customFrom+' → '+customTo:'Custom'}
+                {datePreset==='custom'&&customFrom ? customFrom+' → '+customTo : 'Custom'}
               </button>
               {showCustom && (
                 <>
-                  <div onClick={() => setShowCustom(false)} style={{ position: 'fixed', inset: 0, zIndex: 149 }} />
+                  <div onClick={() => setShowCustom(false)} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
                   <div style={{
-                    position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 200,
-                    background: '#fff', border: `0.5px solid ${C.border}`, borderRadius: 12,
-                    boxShadow: '0 14px 40px rgba(15,23,42,0.14)', padding: '16px 18px',
-                    minWidth: 260, fontFamily: FONT,
+                    position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400,
+                    background: '#fff', border: `0.5px solid ${C.border}`, borderRadius: 14,
+                    boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)',
+                    overflow: 'hidden',
                   }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 12 }}>Custom date range</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {[['From', customFrom, setCustomFrom], ['To', customTo, setCustomTo]].map(([lbl3, val, setter]) => (
-                        <div key={lbl3}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: C.sub, marginBottom: 4 }}>{lbl3}</div>
-                          <input type="date" value={val} onChange={e => setter(e.target.value)}
-                            style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: `0.5px solid ${C.border}`, fontSize: 12, fontFamily: FONT, outline: 'none', color: C.text, boxSizing: 'border-box' }} />
-                        </div>
-                      ))}
-                      <button
-                        onClick={() => { if (customFrom && customTo) { setDatePreset('custom'); setShowCustom(false); setPage(0) } }}
-                        disabled={!customFrom || !customTo}
-                        style={{
-                          marginTop: 4, padding: '8px', borderRadius: 8, border: 'none',
-                          background: customFrom && customTo ? C.navy : '#E5E7EB',
-                          color: customFrom && customTo ? '#fff' : C.muted,
-                          fontSize: 12, fontWeight: 700, fontFamily: FONT, cursor: customFrom && customTo ? 'pointer' : 'not-allowed',
-                        }}>Apply range</button>
-                    </div>
+                    <DateRangePicker
+                      from={customFrom ? new Date(customFrom) : null}
+                      to={customTo ? new Date(customTo) : null}
+                      onChange={(f, t) => {
+                        setCustomFrom(f); setCustomTo(t)
+                        setDatePreset('custom'); setShowCustom(false); setPage(0)
+                      }}
+                      onClose={() => setShowCustom(false)}
+                    />
                   </div>
                 </>
               )}
