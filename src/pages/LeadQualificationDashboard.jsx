@@ -279,7 +279,7 @@ function DateRangePicker({ from, to, onChange, onClose }) {
   const [selTo,     setSelTo]     = React.useState(to || null)
   const [step,      setStep]      = React.useState(from ? 'to' : 'from')
 
-  const fmt = d => d ? d.toISOString().slice(0,10) : ''
+  const fmt = d => { if (!d) return ''; const y=d.getFullYear(),mo=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0'); return `${y}-${mo}-${dy}` }
 
   const handleSelect = date => {
     if (step === 'from' || selTo) {
@@ -440,7 +440,9 @@ export default function LeadQualificationDashboard() {
       return { from, to: today, label: 'MTD ' + today.toLocaleString('default', { month: 'short', year: 'numeric' }) }
     }
     if (datePreset === 'custom' && customFrom && customTo) {
-      return { from: new Date(customFrom), to: new Date(customTo), label: customFrom + ' → ' + customTo }
+      const [fy,fm,fd]=customFrom.split('-').map(Number); const cf=new Date(fy,fm-1,fd); cf.setHours(0,0,0,0)
+      const [ty,tm,td]=customTo.split('-').map(Number);   const ct=new Date(ty,tm-1,td); ct.setHours(23,59,59,999)
+      return { from: cf, to: ct, label: customFrom + ' → ' + customTo }
     }
     return null // 'month' mode — handled below
   }, [datePreset, customFrom, customTo])
@@ -450,8 +452,12 @@ export default function LeadQualificationDashboard() {
     if (!dateWindow) return rows.filter(r => r.month === selMonth)
     return rows.filter(r => {
       if (!r.month_start) return false
-      const d = new Date(r.month_start); d.setHours(0,0,0,0)
-      return d >= dateWindow.from && d <= dateWindow.to
+      const ms = r.month_start
+      let dd
+      if (/^\d{4}-\d{2}-\d{2}$/.test(ms)) { const [y,mo,dy]=ms.split('-').map(Number); dd=new Date(y,mo-1,dy) }
+      else { dd=new Date(ms) }
+      dd.setHours(0,0,0,0)
+      return dd >= dateWindow.from && dd <= dateWindow.to
     })
   }, [rows, dateWindow, selMonth])
 
@@ -640,8 +646,8 @@ export default function LeadQualificationDashboard() {
                     overflow: 'hidden',
                   }}>
                     <DateRangePicker
-                      from={customFrom ? new Date(customFrom) : null}
-                      to={customTo ? new Date(customTo) : null}
+                      from={customFrom ? (() => { const [y,m,d]=customFrom.split('-').map(Number); return new Date(y,m-1,d) })() : null}
+                      to={customTo ? (() => { const [y,m,d]=customTo.split('-').map(Number); return new Date(y,m-1,d) })() : null}
                       onChange={(f, t) => {
                         setCustomFrom(f); setCustomTo(t)
                         setDatePreset('custom')
