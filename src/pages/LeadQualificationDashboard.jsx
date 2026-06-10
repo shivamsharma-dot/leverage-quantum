@@ -164,6 +164,7 @@ export default function LeadQualificationDashboard() {
   const [customFrom, setCustomFrom]   = useState('')
   const [customTo, setCustomTo]       = useState('')
   const [showCustom, setShowCustom]   = useState(false)
+  const [monthStartMap, setMonthStartMap] = useState({})
 
   const loadData = useCallback(async (bust = false) => {
     setLoading(true)
@@ -180,6 +181,7 @@ export default function LeadQualificationDashboard() {
       const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
         .sort((a, b) => new Date(monthMap[a] || 0) - new Date(monthMap[b] || 0))
       setMonths(ms)
+      setMonthStartMap(monthMap)
       setSelMonth(prev => prev || ms[ms.length - 1] || '')
       setLastSync(new Date())
     } catch (e) { console.error('QL fetch', e) }
@@ -187,6 +189,15 @@ export default function LeadQualificationDashboard() {
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
+
+  // Is the selected month the current calendar month?
+  const isCurrentMonth = useMemo(() => {
+    const ms = monthStartMap[selMonth]
+    if (!ms) return false
+    const d = new Date(ms)
+    const now = new Date()
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+  }, [selMonth, monthStartMap])
 
   // ── Derived data (correct dependency order) ─────────────────────────────
 
@@ -334,7 +345,7 @@ export default function LeadQualificationDashboard() {
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {/* ── Date presets ──────────────────────────────── */}
+{isCurrentMonth && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F1F5F9', borderRadius: 9, padding: '3px' }}>
               {[['YTD','YTD'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => (
                 <button key={key} onClick={() => { setDatePreset(key); setShowCustom(false); setPage(0) }}
@@ -348,9 +359,20 @@ export default function LeadQualificationDashboard() {
                   }}>{lbl2}</button>
               ))}
             </div>
+            )}
             {/* Month picker */}
             {months.length > 0 && (
-              <select value={selMonth} onChange={e => { setSelMonth(e.target.value); setDatePreset('month'); setShowCustom(false); setPage(0) }}
+              <select value={selMonth} onChange={e => {
+                  const v = e.target.value
+                  setSelMonth(v)
+                  // if the chosen month is not the current month, clear time presets
+                  const ms = monthStartMap[v]
+                  const d = ms ? new Date(ms) : null
+                  const now = new Date()
+                  const isCur = d && d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth()
+                  if (!isCur) setDatePreset('month')
+                  setShowCustom(false); setPage(0)
+                }}
                 style={{
                   padding: '6px 28px 6px 10px', borderRadius: 8, border: `0.5px solid ${datePreset==='month'?C.navy:C.border}`,
                   fontSize: 12, fontWeight: 600, fontFamily: FONT, background: '#fff',
