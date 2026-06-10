@@ -416,6 +416,12 @@ export default function LeadQualificationDashboard() {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
   }, [selMonth, monthStartMap])
 
+  // Single active filter — what's currently driving the data
+  // 'preset' = YTD/L7D/MTD, 'month' = month picker, 'custom' = calendar range
+  const activeFilter = datePreset === 'custom' ? 'custom'
+    : (datePreset === 'month') ? 'month'
+    : 'preset'
+
   // ── Derived data (correct dependency order) ─────────────────────────────
 
   // 1. Date window from preset
@@ -558,20 +564,29 @@ export default function LeadQualificationDashboard() {
           <div>
             <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / QL Ops</p>
             <h1 style={{ fontSize: 17, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px', fontFamily: FONT }}>
-              Lead Qualification · {dateWindow ? dateWindow.label : (selMonth || '—')}
+              Lead Qualification
+              {' · '}
+              {activeFilter === 'custom' && customFrom
+                ? <span style={{fontSize:13,fontWeight:600,color:C.blue}}>{customFrom} → {customTo}</span>
+                : activeFilter === 'preset' && dateWindow
+                  ? <span style={{fontSize:13,fontWeight:600,color:C.blue}}>{dateWindow.label}</span>
+                  : <span>{selMonth || '—'}</span>
+              }
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
 {isCurrentMonth && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F1F5F9', borderRadius: 9, padding: '3px' }}>
               {[['YTD','YTD'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => (
-                <button key={key} onClick={() => { setDatePreset(key); setShowCustom(false); setPage(0) }}
+                <button key={key} onClick={() => { setDatePreset(key); setCustomFrom(''); setCustomTo(''); setShowCustom(false); setPage(0) }}
                   style={{
                     padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer',
                     fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
-                    background: datePreset === key ? '#fff' : 'transparent',
-                    color: datePreset === key ? C.navy : C.muted,
-                    boxShadow: datePreset === key ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
+                    background: activeFilter==='custom' ? 'transparent' : datePreset === key ? '#fff' : 'transparent',
+                    color: activeFilter==='custom' ? '#CBD5E1' : datePreset === key ? C.navy : C.muted,
+                    boxShadow: activeFilter==='custom' ? 'none' : datePreset === key ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
+                    opacity: activeFilter==='custom' ? 0.5 : 1,
+                    pointerEvents: activeFilter==='custom' ? 'none' : 'auto',
                     transition: 'all .15s',
                   }}>{lbl2}</button>
               ))}
@@ -579,24 +594,25 @@ export default function LeadQualificationDashboard() {
             )}
             {/* Month picker */}
             {months.length > 0 && (
+              <div style={{ opacity: activeFilter!=='month' ? 0.45 : 1, transition: 'opacity .15s' }}
+                title={activeFilter!=='month' ? 'Click to switch to month view' : undefined}>
               <Dropdown
                 options={[...months].reverse()}
                 value={selMonth}
                 minWidth={110}
                 onChange={v => {
                   setSelMonth(v)
-                  const ms = monthStartMap[v]
-                  const d = ms ? new Date(ms) : null
-                  const now = new Date()
-                  const isCur = d && d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth()
-                  if (!isCur) setDatePreset('month')
+                  // Month picker always wins — clear any preset or custom range
+                  setDatePreset('month')
+                  setCustomFrom(''); setCustomTo('')
                   setShowCustom(false); setPage(0)
                 }}
               />
+              </div>
             )}
             {/* Custom range — production calendar picker */}
             <div style={{ position: 'relative' }}>
-              <button onClick={() => setShowCustom(v => !v)}
+              <button onClick={() => { setShowCustom(v => !v); if (!showCustom) { setDatePreset('month') } }}
                 style={{
                   padding: '6px 11px', borderRadius: 8,
                   border: `0.5px solid ${datePreset==='custom'?C.navy:C.border}`,
@@ -628,7 +644,8 @@ export default function LeadQualificationDashboard() {
                       to={customTo ? new Date(customTo) : null}
                       onChange={(f, t) => {
                         setCustomFrom(f); setCustomTo(t)
-                        setDatePreset('custom'); setShowCustom(false); setPage(0)
+                        setDatePreset('custom')
+                        setShowCustom(false); setPage(0)
                       }}
                       onClose={() => setShowCustom(false)}
                     />
