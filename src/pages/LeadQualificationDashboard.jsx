@@ -493,23 +493,27 @@ export default function LeadQualificationDashboard() {
     (selSource === 'All' || r.source === selSource)
   ), [dateFilteredRows, selProvider, selSource])
 
-  // 5. KPI totals (from full dateFilteredRows, not dropdown-filtered)
+  // 5. KPI totals — use filtered so provider/source dropdowns affect the cards
   const totals = useMemo(() => {
-    const fw = dateFilteredRows.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
-    const sb = dateFilteredRows.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
-    // MoM delta: compare against previous calendar month
+    const fw = filtered.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
+    const sb = filtered.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
+    const total = fw + sb
+    // MoM delta: compare filtered selection against same provider/source in previous month
     const prevM    = months[months.indexOf(selMonth) - 1]
-    const prevRows = prevM ? rows.filter(r => r.month === prevM) : []
-    const prevFw   = prevRows.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
-    const prevSb   = prevRows.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
-    const prevTot  = prevFw + prevSb; const curTot = fw + sb
+    const prevBase = prevM ? rows.filter(r => r.month === prevM
+      && (selProvider === 'All' || r.provider === selProvider)
+      && (selSource   === 'All' || r.source   === selSource)
+    ) : []
+    const prevFw  = prevBase.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
+    const prevSb  = prevBase.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
+    const prevTot = prevFw + prevSb
     return {
-      fw, sb, total: curTot,
-      totalDelta: prevTot > 0 ? ((curTot - prevTot) / prevTot * 100) : null,
-      fwDelta:    prevFw  > 0 ? ((fw - prevFw) / prevFw * 100)       : null,
-      sbDelta:    prevSb  > 0 ? ((sb - prevSb) / prevSb * 100)       : null,
+      fw, sb, total,
+      totalDelta: prevTot > 0 ? ((total - prevTot)  / prevTot * 100) : null,
+      fwDelta:    prevFw  > 0 ? ((fw    - prevFw)   / prevFw  * 100) : null,
+      sbDelta:    prevSb  > 0 ? ((sb    - prevSb)   / prevSb  * 100) : null,
     }
-  }, [dateFilteredRows, rows, months, selMonth])
+  }, [filtered, rows, months, selMonth, selProvider, selSource])
 
 
   const sourceBar = useMemo(() => {
