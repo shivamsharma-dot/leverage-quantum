@@ -36,7 +36,7 @@ function parseCSV(csv) {
   const h = k => hdr.indexOf(k)
   return data.filter(r => r[h('provider')]).map(r => ({
     provider:    r[h('provider')] || '',
-    qualified_date: r[h('qualified_date')] || '',
+    qualified_date: r[h('qualified_date')] || r[h('month_start')] || '',
     month:       r[h('qualified_month')] || '',
     campaign:    (r[h('opp_first_campaign_name')] || '').trim(),
     source:      (r[h('source')] || 'Others').trim(),
@@ -382,7 +382,7 @@ export default function LeadQualificationDashboard() {
   const [sortDir, setSortDir]       = useState('desc')
   const [page, setPage]             = useState(0)
   const [showInfo, setShowInfo]       = useState(false)
-  const [datePreset, setDatePreset]   = useState('MTD')   // 'LD','L7D','MTD','custom','month'
+  const [datePreset, setDatePreset]   = useState('month') // 'LD','L7D','MTD','custom','month'
   const [customFrom, setCustomFrom]   = useState('')
   const [customTo, setCustomTo]       = useState('')
   const [showCustom, setShowCustom]   = useState(false)
@@ -401,10 +401,11 @@ export default function LeadQualificationDashboard() {
       // Build month list sorted by actual qualified_date (earliest per month)
       const monthMap = {}
       parsed.forEach(r => {
-        if (r.month && r.qualified_date) {
+        const dateVal = r.qualified_date
+        if (r.month && dateVal) {
           // keep the earliest date per month so sort is stable
-          if (!monthMap[r.month] || r.qualified_date < monthMap[r.month])
-            monthMap[r.month] = r.qualified_date
+          if (!monthMap[r.month] || dateVal < monthMap[r.month])
+            monthMap[r.month] = dateVal
         }
       })
       const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
@@ -462,6 +463,9 @@ export default function LeadQualificationDashboard() {
   // 2. Row set filtered by date window OR selected month
   const dateFilteredRows = useMemo(() => {
     if (!dateWindow) return rows.filter(r => r.month === selMonth)
+    // if qualified_date is missing on rows, fall back gracefully to month filter
+    const hasDateCol = rows.some(r => r.qualified_date)
+    if (!hasDateCol) return rows.filter(r => r.month === selMonth)
     return rows.filter(r => {
       if (!r.qualified_date) return false
       const ms = r.qualified_date
