@@ -8,6 +8,7 @@ import ROASDashboard from './pages/ROASDashboard'
 import LeadQualityDashboard from './pages/LeadQualityDashboard'
 import ChannelMixDashboard from './pages/ChannelMixDashboard'
 import RevenueDashboard from './pages/RevenueDashboard'
+import LeadQualificationDashboard from './pages/LeadQualificationDashboard'
 import MTDDashboard from './pages/MTDDashboard'
 import MetaAdsDashboard from './pages/MetaAdsDashboard'
 import GoogleAdsDashboard from './pages/GoogleAdsDashboard'
@@ -59,6 +60,7 @@ export default function App() {
       <Route path="/dashboard/lead-quality" element={<ProtectedRoute dashboardId="lead_quality"><LeadQualityDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/channel-mix"  element={<ProtectedRoute dashboardId="channel_mix"><ChannelMixDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/revenue"      element={<ProtectedRoute dashboardId="revenue">     <RevenueDashboard /></ProtectedRoute>} />
+<Route path="/dashboard/lq-ops"       element={<ProtectedRoute dashboardId="lq_ops">       <LeadQualificationDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/meta-ads"     element={<ProtectedRoute dashboardId="meta_ads">    <MetaAdsDashboard /></ProtectedRoute>} />
       <Route path="/dashboard/google-ads"   element={<ProtectedRoute dashboardId="google_ads">  <GoogleAdsDashboard /></ProtectedRoute>} />
       <Route path="/vasu"                    element={<ProtectedRoute dashboardId="vasu">         <VasuAI /></ProtectedRoute>} />
