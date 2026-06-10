@@ -36,7 +36,7 @@ function parseCSV(csv) {
   const h = k => hdr.indexOf(k)
   return data.filter(r => r[h('provider')]).map(r => ({
     provider:    r[h('provider')] || '',
-    month_start: r[h('month_start')] || '',
+    qualified_date: r[h('qualified_date')] || '',
     month:       r[h('qualified_month')] || '',
     campaign:    (r[h('opp_first_campaign_name')] || '').trim(),
     source:      (r[h('source')] || 'Others').trim(),
@@ -392,9 +392,15 @@ export default function LeadQualificationDashboard() {
       const csv = await res.text()
       const parsed = parseCSV(csv)
       setRows(parsed)
-      // Build month list sorted by actual date using month_start column
+      // Build month list sorted by actual qualified_date (earliest per month)
       const monthMap = {}
-      parsed.forEach(r => { if (r.month && r.month_start) monthMap[r.month] = r.month_start })
+      parsed.forEach(r => {
+        if (r.month && r.qualified_date) {
+          // keep the earliest date per month so sort is stable
+          if (!monthMap[r.month] || r.qualified_date < monthMap[r.month])
+            monthMap[r.month] = r.qualified_date
+        }
+      })
       const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
         .sort((a, b) => new Date(monthMap[a] || 0) - new Date(monthMap[b] || 0))
       setMonths(ms)
@@ -451,8 +457,8 @@ export default function LeadQualificationDashboard() {
   const dateFilteredRows = useMemo(() => {
     if (!dateWindow) return rows.filter(r => r.month === selMonth)
     return rows.filter(r => {
-      if (!r.month_start) return false
-      const ms = r.month_start
+      if (!r.qualified_date) return false
+      const ms = r.qualified_date
       let dd
       if (/^\d{4}-\d{2}-\d{2}$/.test(ms)) { const [y,mo,dy]=ms.split('-').map(Number); dd=new Date(y,mo-1,dy) }
       else { dd=new Date(ms) }
