@@ -4,6 +4,7 @@ import {
   LineChart, Line, Legend, Cell, PieChart, Pie
 } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import ExportButton from '../components/ExportButton'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=0&single=true&output=csv'
 
@@ -388,6 +389,7 @@ export default function LeadQualificationDashboard() {
   const [customTo, setCustomTo]       = useState('')
   const [showCustom, setShowCustom]   = useState(false)
   const [hoveredPreset, setHoveredPreset] = useState(null)
+  const [exportView, setExportView]         = useState('day')
   const [monthStartMap, setMonthStartMap] = useState({})
 
   const loadData = useCallback(async (bust = false) => {
@@ -563,6 +565,54 @@ export default function LeadQualificationDashboard() {
       })
   }, [filtered, search, sortCol, sortDir])
 
+  // Export datasets — all respect active filters (date + provider + source)
+  const exportData = React.useMemo(() => {
+    const label = exportView
+    if (label === 'day') {
+      // Raw day-level rows
+      return filtered.map(r => ({
+        date:           r.qualified_date || r.month,
+        month:          r.month,
+        provider:       r.provider,
+        source:         r.source,
+        sub_source:     r.sub_source,
+        campaign:       r.campaign,
+        qualified_count: r.count,
+      }))
+    }
+    if (label === 'month') {
+      // Aggregate by month + provider
+      const map = {}
+      filtered.forEach(r => {
+        const k = r.month + '||' + r.provider
+        if (!map[k]) map[k] = { month: r.month, provider: r.provider, qualified_count: 0 }
+        map[k].qualified_count += r.count
+      })
+      return Object.values(map).sort((a,b) => a.month.localeCompare(b.month) || a.provider.localeCompare(b.provider))
+    }
+    if (label === 'source') {
+      // Aggregate by source + provider
+      const map = {}
+      filtered.forEach(r => {
+        const k = r.source + '||' + r.provider
+        if (!map[k]) map[k] = { source: r.source, provider: r.provider, qualified_count: 0 }
+        map[k].qualified_count += r.count
+      })
+      return Object.values(map).sort((a,b) => b.qualified_count - a.qualified_count)
+    }
+    if (label === 'campaign') {
+      // Aggregate by campaign + provider
+      const map = {}
+      filtered.forEach(r => {
+        const k = r.campaign + '||' + r.provider
+        if (!map[k]) map[k] = { campaign: r.campaign, provider: r.provider, source: r.source, qualified_count: 0 }
+        map[k].qualified_count += r.count
+      })
+      return Object.values(map).sort((a,b) => b.qualified_count - a.qualified_count)
+    }
+    return filtered.map(r => ({ ...r, qualified_count: r.count }))
+  }, [filtered, exportView])
+
   const totalPages = Math.ceil(tableRows.length / PAGE_SIZE)
   const pageRows   = tableRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
@@ -728,6 +778,143 @@ export default function LeadQualificationDashboard() {
               </svg>
               {loading ? 'Refreshing' : 'Refresh'}
             </button>
+
+            {/* Export button with view selector */}
+            <div style={{position:'relative'}}>
+              {React.createElement((() => {
+                const [open, setOpen] = React.useState(false)
+                const views = [
+                  { key:'day',      label:'Day on day',    desc:'One row per date + provider + campaign' },
+                  { key:'month',    label:'Month on month',desc:'Totals grouped by month + provider' },
+                  { key:'source',   label:'By source',     desc:'Totals grouped by source + provider' },
+                  { key:'campaign', label:'By campaign',   desc:'Top campaigns ranked by qualified count' },
+                ]
+                const downloadCSV = () => {
+                  if (!exportData || exportData.length === 0) return
+                  const cols = Object.keys(exportData[0])
+                  const rows = exportData.map(r => cols.map(c => {
+                    const v = r[c] ?? ''
+                    return typeof v === 'string' && v.includes(',') ? `"${v}"` : v
+                  }).join(','))
+                  const csv = [cols.join(','), ...rows].join('\n')
+                  const blob = new Blob([csv], {type:'text/csv'})
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `ql_ops_${exportView}_${new Date().toISOString().slice(0,10)}.csv`
+                  a.click(); URL.revokeObjectURL(url); setOpen(false)
+                }
+                const downloadJSON = () => {
+                  const blob = new Blob([JSON.stringify(exportData, null, 2)], {type:'application/json'})
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `ql_ops_${exportView}_${new Date().toISOString().slice(0,10)}.json`
+                  a.click(); URL.revokeObjectURL(url); setOpen(false)
+                }
+                return (
+                  <div style={{position:'relative'}}>
+                    <button onClick={() => setOpen(v => !v)}
+                      style={{
+                        display:'flex', alignItems:'center', gap:6,
+                        padding:'6px 13px', borderRadius:8,
+                        background:'#fff', border:`0.5px solid ${open ? C.navy : C.border}`,
+                        color: open ? C.navy : '#374151', fontSize:12, fontWeight:600,
+                        cursor:'pointer', fontFamily:FONT,
+                        boxShadow: open ? `0 0 0 3px rgba(31,60,132,0.08)` : 'none',
+                        transition:'all .15s',
+                      }}
+                      onMouseOver={e=>{if(!open){e.currentTarget.style.borderColor=C.navy;e.currentTarget.style.color=C.navy}}}
+                      onMouseOut={e=>{if(!open){e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color='#374151'}}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                      </svg>
+                      Export
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                        style={{transition:'transform .2s', transform: open?'rotate(180deg)':'rotate(0deg)'}}>
+                        <polyline points="6 9 12 15 18 9"/>
+                      </svg>
+                    </button>
+                    {open && (
+                      <>
+                        <div onClick={() => setOpen(false)} style={{position:'fixed',inset:0,zIndex:399}}/>
+                        <div style={{
+                          position:'absolute', top:'calc(100% + 8px)', right:0, zIndex:400,
+                          background:'#fff', border:`0.5px solid ${C.border}`, borderRadius:14,
+                          boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:10, minWidth:260,
+                          fontFamily:FONT,
+                        }}>
+                          {/* View selector */}
+                          <div style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:'0.07em',textTransform:'uppercase',padding:'4px 6px 8px',fontFamily:FONT}}>
+                            Export view
+                          </div>
+                          {views.map(v => (
+                            <button key={v.key} onClick={() => setExportView(v.key)}
+                              style={{
+                                display:'flex', flexDirection:'column', alignItems:'flex-start', gap:2,
+                                width:'100%', padding:'8px 10px', border:'none', cursor:'pointer',
+                                borderRadius:8, textAlign:'left', fontFamily:FONT,
+                                background: exportView===v.key ? C.navyBg : 'transparent',
+                                transition:'background .1s',
+                              }}
+                              onMouseOver={e=>{if(exportView!==v.key)e.currentTarget.style.background='#F8FAFC'}}
+                              onMouseOut={e=>{if(exportView!==v.key)e.currentTarget.style.background='transparent'}}>
+                              <div style={{display:'flex', alignItems:'center', gap:6}}>
+                                <div style={{
+                                  width:8, height:8, borderRadius:'50%',
+                                  background: exportView===v.key ? C.navy : C.border,
+                                  flexShrink:0, transition:'background .1s',
+                                }}/>
+                                <span style={{fontSize:12.5, fontWeight: exportView===v.key?700:500, color: exportView===v.key?C.navy:C.text}}>{v.label}</span>
+                              </div>
+                              <div style={{fontSize:11,color:C.muted,paddingLeft:14}}>{v.desc}</div>
+                            </button>
+                          ))}
+                          {/* Divider */}
+                          <div style={{height:'0.5px',background:'#F1F5F9',margin:'8px 4px'}}/>
+                          {/* Download buttons */}
+                          <div style={{display:'flex',gap:6,padding:'2px 4px 4px'}}>
+                            <button onClick={downloadCSV}
+                              style={{
+                                flex:1, padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`,
+                                background:'#fff', cursor:'pointer', fontFamily:FONT,
+                                fontSize:12, fontWeight:600, color:C.text,
+                                display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                              }}
+                              onMouseOver={e=>{e.currentTarget.style.borderColor=C.navy;e.currentTarget.style.color=C.navy}}
+                              onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.text}}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                              </svg>
+                              CSV
+                            </button>
+                            <button onClick={downloadJSON}
+                              style={{
+                                flex:1, padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`,
+                                background:'#fff', cursor:'pointer', fontFamily:FONT,
+                                fontSize:12, fontWeight:600, color:C.text,
+                                display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                              }}
+                              onMouseOver={e=>{e.currentTarget.style.borderColor=C.blue;e.currentTarget.style.color=C.blue}}
+                              onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.text}}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                              </svg>
+                              JSON
+                            </button>
+                          </div>
+                          <div style={{fontSize:10,color:C.muted,textAlign:'center',padding:'4px 0 2px',fontFamily:FONT}}>
+                            {exportData.length.toLocaleString()} rows · respects active filters
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })(), {})}
+            </div>
+
             {/* Info popover */}
             <div style={{ position: 'relative' }}>
               <button onClick={() => setShowInfo(v => !v)}
