@@ -6,9 +6,9 @@ import { DashboardSkeleton } from '../components/SkeletonLoader'
 import styles from './ChannelMixDashboard.module.css'
 
 const SRC_COLORS = {
-  Facebook:'#6366F1', Google:'#10B981', Referral:'#F59E0B',
+  Facebook:'#1C9FD4', Google:'#10B981', Referral:'#F59E0B',
   'Content+Brand':'#EC4899', Affiliate:'#F97316', Remarketing:'#06B6D4',
-  Offline:'#8B5CF6', Bing:'#84CC16', Branding:'#3B82F6',
+  Offline:'#1C9FD4', Bing:'#4CAE6F', Branding:'#3B82F6',
   Unidentified:'#9CA3AF'
 }
 
@@ -134,7 +134,7 @@ export default function ChannelMixDashboard(){
         {/* KPI row */}
         <div className={styles.kpiRow}>
           {[
-            {l:'Total OPPs',  v:fn(totals.opps),       s:'All sources',   c:'#6366F1'},
+            {l:'Total OPPs',  v:fn(totals.opps),       s:'All sources',   c:'#1C9FD4'},
             {l:'Total Spend', v:fmtR(totals.spend),     s:'Paid channels', c:'#10B981'},
             {l:'Total Revenue',v:fmtR(totals.total_rev),s:'AC + VAS',      c:'#F59E0B'},
             {l:'Active Sources',v:srcBreakdown.filter(r=>r.opps>0).length+'',s:'Channels tracked',c:'#3B82F6'},
