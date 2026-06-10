@@ -10,10 +10,10 @@ const MONTHS = ["Jan-2025","Feb-2025","Mar-2025","Apr-2025","May-2025","Jun-2025
 const ALL_CHANNELS = ["Affiliate","Bing","Content+Brand","Facebook","Google","Inbound","Leverage App","LinkedIn","Organic","Other","Referral","Remarketing","WhatsApp"]
 
 const CH_COLORS = {
-  Facebook:'#818CF8', Google:'#34D399', Affiliate:'#F59E0B',
+  Facebook:'#1C9FD4', Google:'#34D399', Affiliate:'#F59E0B',
   Inbound:'#EF4444', WhatsApp:'#10B981', 'Leverage App':'#3B82F6',
-  Organic:'#8B5CF6', Referral:'#F97316', 'Content+Brand':'#EC4899',
-  Remarketing:'#06B6D4', LinkedIn:'#0EA5E9', Bing:'#84CC16', Other:'#9CA3AF'
+  Organic:'#1C9FD4', Referral:'#F97316', 'Content+Brand':'#EC4899',
+  Remarketing:'#06B6D4', LinkedIn:'#0EA5E9', Bing:'#4CAE6F', Other:'#9CA3AF'
 }
 
 function fmt(n) {
@@ -181,7 +181,7 @@ export default function LeadQualityDashboard() {
             <div className={styles.funnel}>
               {[
                 {l:'Total OPPs',   v:totals.opps,    c:'#1C9FD4', sub:''},
-                {l:'Futwork Sent', v:totals.futwork, c:'#818CF8', sub: pct(totals.futwork,totals.opps)+' of OPPs'},
+                {l:'Futwork Sent', v:totals.futwork, c:'#1C9FD4', sub: pct(totals.futwork,totals.opps)+' of OPPs'},
                 {l:'Floor Direct', v:totals.floor,   c:'#3B82F6', sub: pct(totals.floor,totals.opps)+' of OPPs'},
                 {l:'QLs',          v:totals.qls,     c:'#F59E0B', sub: pct(totals.qls,totals.futwork)+' of Futwork'},
                 {l:'Apps (STUs)',  v:totals.apps,    c:'#4BAE8A', sub: pct(totals.apps,totals.qls)+' of QLs'},
