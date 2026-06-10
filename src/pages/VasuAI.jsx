@@ -1,10 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import Sidebar from '../components/Sidebar'
-import styles from './VasuAI.module.css'
 
-// Claude API is called server-side via /api/vasu-chat to keep the key secure
-const TOKEN_KEY  = 'lq_meta_token'
+/* ============================ Quantum brand tokens ============================ */
+const C = {
+  navy: '#1F3C84', blue: '#1C9FD4', cyan: '#29B9C3', green: '#4CAE6F',
+  navyTint: '#E8EFF9', blueTint: '#E3F5FD', cyanTint: '#E4F8F9', greenTint: '#E9F8EF',
+  ink: '#16203A', text2: '#5B6678', text3: '#9AA3B2',
+  bg: '#FFFFFF', panel: '#F7F8FA', panel2: '#F1F3F7', line: '#E7EAF0',
+}
+const FONT = "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif"
+
+/* ============================ original VASU logic (unchanged) ============================ */
+const TOKEN_KEY = 'lq_meta_token'
 const AD_ACCOUNT = 'act_641914389215638'
 
 async function graphGet(path, token, params = {}) {
@@ -67,82 +75,208 @@ const QUICK = [
   'Lead drop analysis', 'CPL this month',
 ]
 
+/* ============================ inline icon set ============================ */
+function Ico({ n, s = 17, c = 'currentColor', fill = 'none', sw = 2 }) {
+  const p = {
+    pen: <><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></>,
+    chat: <><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></>,
+    bot: <><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/></>,
+    notebook: <><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></>,
+    brain: <><path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44 2.5 2.5 0 01-2.5-4.34A2.5 2.5 0 014 11a2.5 2.5 0 01.96-4.78A2.5 2.5 0 019.5 2z"/><path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44 2.5 2.5 0 002.5-4.34A2.5 2.5 0 0020 11a2.5 2.5 0 00-.96-4.78A2.5 2.5 0 0014.5 2z"/></>,
+    bookmark: <><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></>,
+    clip: <><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></>,
+    sliders: <><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></>,
+    server: <><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></>,
+    search: <><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></>,
+    plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+    chevron: <><polyline points="6 9 12 15 18 9"/></>,
+    copy: <><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></>,
+    edit: <><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4z"/></>,
+    branch: <><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></>,
+    up: <><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></>,
+    down: <><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></>,
+    refresh: <><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></>,
+    speaker: <><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07M19.07 4.93a10 10 0 010 14.14"/></>,
+    mic: <><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></>,
+    arrowup: <><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></>,
+    check: <><polyline points="20 6 9 17 4 12"/></>,
+  }[n]
+  return <svg width={s} height={s} viewBox="0 0 24 24" fill={fill} stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{p}</svg>
+}
+function QMark({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 22 22" fill="none" aria-hidden="true">
+      <rect x="1" y="12" width="4" height="9" rx="1.5" fill={C.green} />
+      <rect x="7" y="7" width="4" height="14" rx="1.5" fill={C.cyan} />
+      <rect x="13" y="4" width="4" height="17" rx="1.5" fill={C.blue} />
+    </svg>
+  )
+}
+
+/* ============================ markdown renderer (display only) ============================ */
+function CodeBlock({ lang, code }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, overflow: 'hidden', margin: '10px 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', background: C.panel2, borderBottom: `1px solid ${C.line}` }}>
+        <span style={{ fontSize: 11, color: C.text2, fontFamily: 'monospace' }}>{lang || 'code'}</span>
+        <button onClick={() => { navigator.clipboard?.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1200) }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, fontSize: 11, color: C.text2 }}>
+          <Ico n={copied ? 'check' : 'copy'} s={12} c={copied ? C.green : C.text2} />{copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre style={{ margin: 0, padding: 12, fontSize: 12.5, fontFamily: 'monospace', color: C.ink, overflowX: 'auto', background: '#fff' }}><code>{code}</code></pre>
+    </div>
+  )
+}
+function inlineHtml(t) {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, `<code style="background:${C.panel2};padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace">$1</code>`)
+}
+function Markdown({ text }) {
+  const out = []; const lines = (text || '').split('\n'); let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    if (line.startsWith('```')) {
+      const lang = line.slice(3).trim(); const buf = []; i++
+      while (i < lines.length && !lines[i].startsWith('```')) { buf.push(lines[i]); i++ }
+      i++; out.push(<CodeBlock key={out.length} lang={lang} code={buf.join('\n')} />); continue
+    }
+    if (/^\|(.+)\|$/.test(line) && i + 1 < lines.length && /^\|[-:\s|]+\|$/.test(lines[i + 1])) {
+      const head = line.split('|').slice(1, -1).map(s => s.trim()); i += 2; const rows = []
+      while (i < lines.length && /^\|(.+)\|$/.test(lines[i])) { rows.push(lines[i].split('|').slice(1, -1).map(s => s.trim())); i++ }
+      out.push(
+        <div key={out.length} style={{ overflowX: 'auto', margin: '10px 0' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+            <thead><tr>{head.map((h, j) => <th key={j} style={{ border: `1px solid ${C.line}`, padding: '7px 10px', background: C.panel2, textAlign: 'left', fontWeight: 700, color: C.ink }}>{h}</th>)}</tr></thead>
+            <tbody>{rows.map((r, ri) => <tr key={ri} style={{ background: ri % 2 ? C.panel : '#fff' }}>{r.map((cc, ci) => <td key={ci} style={{ border: `1px solid ${C.line}`, padding: '7px 10px', color: C.text2 }} dangerouslySetInnerHTML={{ __html: inlineHtml(cc) }} />)}</tr>)}</tbody>
+          </table>
+        </div>); continue
+    }
+    if (/^#{1,3}\s/.test(line)) {
+      const lvl = line.match(/^#+/)[0].length; const sz = lvl === 1 ? 19 : lvl === 2 ? 16 : 14.5
+      out.push(<div key={out.length} style={{ fontSize: sz, fontWeight: 800, color: C.ink, margin: '14px 0 6px' }} dangerouslySetInnerHTML={{ __html: inlineHtml(line.replace(/^#+\s/, '')) }} />); i++; continue
+    }
+    if (/^>\s/.test(line)) {
+      out.push(<div key={out.length} style={{ borderLeft: `3px solid ${C.blue}`, padding: '4px 12px', margin: '8px 0', color: C.text2, background: C.blueTint, borderRadius: '0 8px 8px 0' }} dangerouslySetInnerHTML={{ __html: inlineHtml(line.replace(/^>\s/, '')) }} />); i++; continue
+    }
+    if (/^[-•*]\s/.test(line)) {
+      const items = []
+      while (i < lines.length && /^[-•*]\s/.test(lines[i])) { items.push(lines[i].replace(/^[-•*]\s/, '')); i++ }
+      out.push(<ul key={out.length} style={{ margin: '8px 0', paddingLeft: 20, color: C.ink, fontSize: 14, lineHeight: 1.65 }}>{items.map((it, j) => <li key={j} style={{ marginBottom: 3 }} dangerouslySetInnerHTML={{ __html: inlineHtml(it) }} />)}</ul>); continue
+    }
+    if (/^\d+\.\s/.test(line)) {
+      const items = []
+      while (i < lines.length && /^\d+\.\s/.test(lines[i])) { items.push(lines[i].replace(/^\d+\.\s/, '')); i++ }
+      out.push(<ol key={out.length} style={{ margin: '8px 0', paddingLeft: 20, color: C.ink, fontSize: 14, lineHeight: 1.65 }}>{items.map((it, j) => <li key={j} style={{ marginBottom: 3 }} dangerouslySetInnerHTML={{ __html: inlineHtml(it) }} />)}</ol>); continue
+    }
+    if (/^(---|___|\*\*\*)\s*$/.test(line)) { out.push(<hr key={out.length} style={{ border: 'none', borderTop: `1px solid ${C.line}`, margin: '14px 0' }} />); i++; continue }
+    if (line.trim() === '') { i++; continue }
+    out.push(<p key={out.length} style={{ margin: '6px 0', color: C.ink, fontSize: 14, lineHeight: 1.65 }} dangerouslySetInnerHTML={{ __html: inlineHtml(line) }} />); i++
+  }
+  return <div>{out}</div>
+}
+
+/* ============================ side panels (UI shells) ============================ */
+function PanelHeader({ title, placeholder }) {
+  return (
+    <div style={{ padding: '14px 14px 10px' }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: C.ink, marginBottom: 12 }}>{title}</div>
+      <div style={{ position: 'relative' }}>
+        <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }}><Ico n="search" s={14} c={C.text3} /></span>
+        <input placeholder={placeholder} style={{ width: '100%', fontFamily: FONT, fontSize: 13, color: C.ink, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 9, padding: '8px 10px 8px 32px', outline: 'none', boxSizing: 'border-box' }} />
+      </div>
+    </div>
+  )
+}
+function ShellPanel({ title, placeholder, empty }) {
+  return <div><PanelHeader title={title} placeholder={placeholder} /><div style={{ padding: '36px 20px', textAlign: 'center', color: C.text3, fontSize: 12.5, lineHeight: 1.6 }}>{empty}</div></div>
+}
+function McpPanel({ connected }) {
+  const servers = [{ name: 'Meta Ads', on: connected }, { name: 'Google Ads', on: true }]
+  return (
+    <div>
+      <PanelHeader title="MCP Servers" placeholder="Filter MCP servers by name" />
+      {servers.map((s, k) => (
+        <div key={k} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', borderTop: `1px solid ${C.line}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: s.on ? C.green : C.text3 }} />
+            <span style={{ fontSize: 13, color: C.ink, fontWeight: 500 }}>{s.name}</span>
+          </div>
+          <span style={{ fontSize: 11, color: s.on ? C.green : C.text3, fontWeight: 600 }}>{s.on ? 'Connected' : 'Off'}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const RAIL = [
+  { id: 'new', label: 'New chat', icon: 'pen' },
+  { id: 'history', label: 'Chat History', icon: 'chat' },
+  { id: 'agent', label: 'Agent Builder', icon: 'bot' },
+  { id: 'prompts', label: 'Prompts', icon: 'notebook' },
+  { id: 'memories', label: 'Memories', icon: 'brain' },
+  { id: 'bookmarks', label: 'Bookmarks', icon: 'bookmark' },
+  { id: 'files', label: 'Attach Files', icon: 'clip' },
+  { id: 'params', label: 'Parameters', icon: 'sliders' },
+  { id: 'mcp', label: 'MCP Settings', icon: 'server' },
+]
+
+/* ============================ component ============================ */
 export default function VasuAI() {
   const { user } = useAuth()
   const HISTORY_KEY = 'lq_vasu_history'
 
-  const [messages, setMessages]     = useState(() => {
-    try {
-      const saved = localStorage.getItem(HISTORY_KEY)
-      return saved ? JSON.parse(saved) : []
-    } catch { return [] }
+  const [messages, setMessages] = useState(() => {
+    try { const saved = localStorage.getItem(HISTORY_KEY); return saved ? JSON.parse(saved) : [] } catch { return [] }
   })
-  const [input, setInput]           = useState('')
-  const [loading, setLoading]       = useState(false)
-  const [metaData, setMetaData]     = useState(null)
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [metaData, setMetaData] = useState(null)
   const [metaLoading, setMetaLoading] = useState(false)
-  const [connected, setConnected]   = useState(false)
+  const [connected, setConnected] = useState(false)
+  const [rail, setRail] = useState('history')
+  const [historyOpen, setHistoryOpen] = useState(true)
+  const [mcpOpen, setMcpOpen] = useState(false)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-50))) } catch {}
-    }
-  }, [messages])
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading])
+  useEffect(() => { if (messages.length > 0) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-50))) } catch {} } }, [messages])
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY)
     if (token) loadMetaContext(token)
-    else if (messages.length === 0) {
-      setMessages([{
-        role: 'assistant',
-        content: `Hi! I'm **VASU AI** — your Meta Ads intelligence layer.\n\nTo get started, go to **Meta Ads** in the sidebar and connect your account. Once connected, I'll have full lifetime access to your campaigns, adsets, creatives and pixel data.`
-      }])
-    }
   }, [])
 
   const loadMetaContext = async (token) => {
     setMetaLoading(true)
     try {
       const getAction = (actions, type) => parseInt(actions?.find(a => a.action_type === type)?.value || 0)
-
       const [insLife, campaigns, adsets, ads, pixels] = await Promise.all([
         graphGet(`${AD_ACCOUNT}/insights`, token, { fields: 'spend,impressions,clicks,ctr,cpm,actions', date_preset: 'maximum', level: 'account' }),
         graphGet(`${AD_ACCOUNT}/campaigns`, token, { fields: 'name,status,objective,insights{spend,impressions,clicks,ctr,actions}', limit: 50, date_preset: 'maximum' }),
-        graphGet(`${AD_ACCOUNT}/adsets`,    token, { fields: 'name,status,optimization_goal,insights{spend,impressions,clicks,ctr,actions}', limit: 50, date_preset: 'maximum' }).catch(() => ({ data: [] })),
-        graphGet(`${AD_ACCOUNT}/ads`,       token, { fields: 'name,status,insights{spend,impressions,clicks,ctr}', limit: 50, date_preset: 'maximum' }).catch(() => ({ data: [] })),
+        graphGet(`${AD_ACCOUNT}/adsets`, token, { fields: 'name,status,optimization_goal,insights{spend,impressions,clicks,ctr,actions}', limit: 50, date_preset: 'maximum' }).catch(() => ({ data: [] })),
+        graphGet(`${AD_ACCOUNT}/ads`, token, { fields: 'name,status,insights{spend,impressions,clicks,ctr}', limit: 50, date_preset: 'maximum' }).catch(() => ({ data: [] })),
         graphGet(`${AD_ACCOUNT}/adspixels`, token, { fields: 'id,name,last_fired_time' }),
       ])
-
-      const acc  = insLife.data?.[0] || {}
-      const na   = acc.actions || []
+      const acc = insLife.data?.[0] || {}
+      const na = acc.actions || []
       const totalLeads = getAction(na, 'lead')
-
       const data = {
-        spend:       `$${parseFloat(acc.spend||0).toFixed(2)} (~₹${(parseFloat(acc.spend||0)/1e7).toFixed(2)} Cr)`,
+        spend: `$${parseFloat(acc.spend||0).toFixed(2)} (~₹${(parseFloat(acc.spend||0)/1e7).toFixed(2)} Cr)`,
         impressions: parseInt(acc.impressions||0).toLocaleString(),
-        clicks:      parseInt(acc.clicks||0).toLocaleString(),
-        ctr:         parseFloat(acc.ctr||0).toFixed(2),
-        cpm:         `$${parseFloat(acc.cpm||0).toFixed(2)}`,
+        clicks: parseInt(acc.clicks||0).toLocaleString(),
+        ctr: parseFloat(acc.ctr||0).toFixed(2),
+        cpm: `$${parseFloat(acc.cpm||0).toFixed(2)}`,
         costPerLead: totalLeads > 0 ? `₹${(parseFloat(acc.spend||0)/totalLeads).toFixed(0)}` : 'N/A',
-        pixelName:   pixels.data?.[0]?.name || 'Unknown',
-        campaigns:   campaigns.data || [],
-        adsets:      adsets.data   || [],
-        ads:         ads.data      || [],
-        totalLeads,
+        pixelName: pixels.data?.[0]?.name || 'Unknown',
+        campaigns: campaigns.data || [], adsets: adsets.data || [], ads: ads.data || [], totalLeads,
       }
       setMetaData(data)
       setConnected(true)
-      // Only set welcome message if no existing history
-      if (messages.length === 0) {
-        setMessages([{
-          role: 'assistant',
-          content: `Connected to your Meta Ads account ✅\n\n**Lifetime snapshot:**\n- Spend: ${data.spend}\n- Impressions: ${data.impressions} · Clicks: ${data.clicks} · CTR: ${data.ctr}%\n- Total Leads: ${totalLeads.toLocaleString()} · Cost per Lead: ${data.costPerLead}\n- Pixel: ${data.pixelName}\n- ${data.campaigns.length} campaigns · ${data.adsets.length} adsets · ${data.ads.length} ads loaded\n\nI have your full lifetime Meta Ads data. Ask me anything.`
-        }])
-      }
     } catch (e) {
       setMessages([{ role: 'assistant', content: `⚠️ Couldn't load Meta Ads data: ${e.message}\n\nPlease go to **Meta Ads** dashboard, disconnect and reconnect your account.` }])
     } finally { setMetaLoading(false) }
@@ -164,139 +298,194 @@ export default function VasuAI() {
     } finally { setLoading(false) }
   }
 
-  // Render markdown-lite: bold, code, newlines, bullet lists
-  const renderContent = (text) => {
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/`([^`]+)`/g, '<code style="background:#F3F4F6;padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace">$1</code>')
-      .split('\n')
-      .map(line => {
-        if (line.match(/^[-•]\s/)) return `<div style="display:flex;gap:8px;margin:2px 0"><span style="color:#9CA3AF;flex-shrink:0">•</span><span>${line.replace(/^[-•]\s/, '')}</span></div>`
-        return line || '<br/>'
-      })
-      .join('\n')
-      .replace(/\n(<br\/>)\n/g, '<br/>')
+  const newChat = () => { setMessages([]); localStorage.removeItem(HISTORY_KEY); setInput('') }
+  const railClick = (id) => {
+    if (id === 'new') { newChat(); return }
+    if (id === 'history') { setHistoryOpen(o => !o); setRail('history'); return }
+    setRail(id); setHistoryOpen(true)
   }
 
-  // Get user initials
-  const initials = 'SS' // Shivam Sharma
+  const initials = (user?.name || 'You').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  const firstName = (user?.name || 'there').split(' ')[0]
+  const greeting = (() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 21 ? 'Good evening' : 'Happy late night' })()
+
+  const railPanel = () => {
+    switch (rail) {
+      case 'mcp': return <McpPanel connected={connected} />
+      case 'agent': return <ShellPanel title="Agent Builder" placeholder="Filter agents…" empty="Agent presets aren't enabled for VASU yet." />
+      case 'prompts': return <ShellPanel title="Prompts" placeholder="Filter prompts by name" empty="No saved prompts yet." />
+      case 'memories': return <ShellPanel title="Memories" placeholder="Filter memories…" empty="No memories yet." />
+      case 'bookmarks': return <ShellPanel title="Bookmarks" placeholder="Filter bookmarks…" empty="No bookmarks yet." />
+      case 'files': return <ShellPanel title="Files" placeholder="Filter files…" empty="No files uploaded yet." />
+      case 'params': return <ShellPanel title="Parameters" placeholder="" empty="VASU runs on managed defaults." />
+      default: return (
+        <div>
+          <div style={{ padding: '14px 14px 8px' }}>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)' }}><Ico n="search" s={14} c={C.text3} /></span>
+              <input placeholder="Search messages" style={{ width: '100%', fontFamily: FONT, fontSize: 13, color: C.ink, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 9, padding: '8px 10px 8px 32px', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 16px' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>Chats</span>
+            <Ico n="chevron" s={15} c={C.text3} />
+          </div>
+          {messages.length > 0 ? (
+            <button onClick={() => {}} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', textAlign: 'left', padding: '10px 14px', border: 'none', cursor: 'pointer', fontFamily: FONT, background: C.blueTint, borderLeft: `2px solid ${C.blue}` }}>
+              <span style={{ width: 20, height: 20, borderRadius: 6, background: C.navy, color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>V</span>
+              <span style={{ fontSize: 13, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{messages.find(m => m.role === 'user')?.content?.slice(0, 30) || 'Current chat'}</span>
+            </button>
+          ) : (
+            <div style={{ padding: '30px 20px', textAlign: 'center', color: C.text3, fontSize: 12.5 }}>No chat yet. Start by asking VASU a question.</div>
+          )}
+        </div>
+      )
+    }
+  }
+
+  const iconBtn = (size = 30) => ({ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', borderRadius: 8, cursor: 'pointer', flex: 'none' })
+  const pill = { display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: FONT, fontSize: 12.5, fontWeight: 500, color: C.text2, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 999, padding: '6px 11px', cursor: 'pointer' }
 
   return (
-    <div className={styles.layout}>
-      <Sidebar/>
-      <div className={styles.main}>
+    <div style={{ display: 'flex', height: '100vh', fontFamily: FONT, background: C.bg, color: C.ink }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap'); .vasu-scroll::-webkit-scrollbar{width:8px;height:8px} .vasu-scroll::-webkit-scrollbar-thumb{background:#D7DCE5;border-radius:8px} .vasu-scroll::-webkit-scrollbar-track{background:transparent} @keyframes vspin{to{transform:rotate(360deg)}} @keyframes vblink{0%,80%,100%{opacity:.25}40%{opacity:1}}`}</style>
 
-        {/* Top bar — minimal, just model badge */}
-        <div className={styles.topBar}>
-          <div className={styles.modelTag}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
-            </svg>
-            VASU AI · Llama 3.3
-          </div>
-          {connected && <div className={styles.connectedPill}>● Meta Ads connected</div>}
-          <div style={{flex:1}}/>
-          {messages.length > 1 && (
-            <button onClick={() => { setMessages([]); localStorage.removeItem(HISTORY_KEY) }}
-              style={{background:'none',border:'none',color:'#9CA3AF',fontSize:12,cursor:'pointer',fontFamily:'Inter,sans-serif',display:'flex',alignItems:'center',gap:4}}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-              Clear history
-            </button>
-          )}
-        </div>
+      <Sidebar />
 
-        {/* Messages area — full height, no box */}
-        <div className={styles.messagesArea}>
-          {metaLoading ? (
-            <div className={styles.loadingCenter}>
-              <div className={styles.loadSpinner}/>
-              <p>Connecting to Meta Ads…</p>
-            </div>
-          ) : messages.length === 0 ? (
-            <div className={styles.emptyState}>
-              <div className={styles.emptyIcon}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round">
-                  <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
-                </svg>
-              </div>
-              <p>Ask me anything about your Meta Ads</p>
-            </div>
-          ) : (
-            messages.map((m, i) => (
-              <div key={i} className={m.role === 'user' ? styles.userTurn : styles.asstTurn}>
-                <div className={styles.turnAvatar}>
-                  {m.role === 'user'
-                    ? <div className={styles.userAvatar}>{initials}</div>
-                    : <div className={styles.vasuAvatar}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round">
-                          <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
-                        </svg>
-                      </div>
-                  }
-                </div>
-                <div className={styles.turnBody}>
-                  <p className={styles.turnName}>{m.role === 'user' ? 'You' : 'VASU AI'}</p>
-                  <div className={styles.turnContent} dangerouslySetInnerHTML={{ __html: renderContent(m.content) }}/>
-                </div>
-              </div>
-            ))
-          )}
-          {loading && (
-            <div className={styles.asstTurn}>
-              <div className={styles.turnAvatar}>
-                <div className={styles.vasuAvatar}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round">
-                    <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
-                  </svg>
-                </div>
-              </div>
-              <div className={styles.turnBody}>
-                <p className={styles.turnName}>VASU AI</p>
-                <div className={styles.typing}><span/><span/><span/></div>
-              </div>
-            </div>
-          )}
-          <div ref={bottomRef}/>
-        </div>
+      {/* console = chat-history panel + icon rail + main chat */}
+      <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
 
-        {/* Quick prompts — only when no messages or first load */}
-        {messages.length <= 1 && !loading && connected && (
-          <div className={styles.quickRow}>
-            {QUICK.map(p => (
-              <button key={p} className={styles.quickBtn} onClick={() => send(p)}>{p}</button>
-            ))}
+        {/* chat history / rail panel */}
+        {historyOpen && (
+          <div className="vasu-scroll" style={{ width: 290, background: '#fff', borderRight: `1px solid ${C.line}`, borderLeft: `1px solid ${C.line}`, overflowY: 'auto', flex: 'none' }}>
+            {railPanel()}
           </div>
         )}
 
-        {/* Input box — large, floating style */}
-        <div className={styles.inputWrap}>
-          <div className={styles.inputBox}>
-            <textarea
-              ref={textareaRef}
-              className={styles.inputField}
-              value={input}
-              onChange={e => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 180) + 'px' }}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-              placeholder="Message VASU AI..."
-              disabled={loading}
-              rows={1}
-              style={{ resize: 'none', overflowY: 'auto' }}
-            />
-            <div className={styles.inputFooter}>
-              <div className={styles.metaBadge}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>
-                Meta Ads
-              </div>
-              <button
-                className={`${styles.sendBtn} ${input.trim() && !loading ? styles.sendActive : ''}`}
-                onClick={() => send()}
-                disabled={!input.trim() || loading}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        {/* icon rail */}
+        <div style={{ width: 48, background: C.panel, borderRight: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', gap: 4, flex: 'none' }}>
+          {RAIL.map(r => {
+            const on = (r.id === 'history' && historyOpen && rail === 'history') || (rail === r.id && r.id !== 'history' && r.id !== 'new')
+            return (
+              <button key={r.id} onClick={() => railClick(r.id)} title={r.label}
+                style={{ width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', borderRadius: 9, cursor: 'pointer', background: on ? C.blueTint : 'transparent' }}>
+                <Ico n={r.icon} s={17} c={on ? C.blue : C.text2} />
               </button>
-            </div>
-          </div>
+            )
+          })}
         </div>
 
+        {/* main chat */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#fff' }}>
+          {/* header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderBottom: `1px solid ${C.line}` }}>
+            <QMark size={16} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>VASU AI · claude-sonnet-4</span>
+            <button style={iconBtn(28)} onClick={newChat} title="New chat"><Ico n="plus" s={16} c={C.text3} /></button>
+            <div style={{ flex: 1 }} />
+            {connected
+              ? <span style={{ fontSize: 12, fontWeight: 600, color: C.green, background: C.greenTint, borderRadius: 999, padding: '4px 11px' }}>● Meta Ads connected</span>
+              : <span style={{ fontSize: 12, fontWeight: 600, color: C.text2, background: C.panel2, borderRadius: 999, padding: '4px 11px' }}>Not connected</span>}
+          </div>
+
+          {/* messages */}
+          <div className="vasu-scroll" style={{ flex: 1, overflowY: 'auto', padding: '20px 22px' }}>
+            {metaLoading ? (
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: C.text2 }}>
+                <span style={{ width: 26, height: 26, border: `2.5px solid ${C.line}`, borderTopColor: C.blue, borderRadius: '50%', animation: 'vspin .7s linear infinite' }} />
+                <span style={{ fontSize: 13 }}>Connecting to Meta Ads…</span>
+              </div>
+            ) : messages.length === 0 ? (
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+                <div style={{ width: 52, height: 52, borderRadius: 16, background: C.navyTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><QMark size={26} /></div>
+                <div style={{ fontSize: 25, fontWeight: 800, color: C.ink, letterSpacing: '-0.02em' }}>{greeting}, {firstName}</div>
+                <div style={{ fontSize: 14, color: C.text2 }}>{connected ? 'Ask anything about your Meta Ads performance.' : 'Connect Meta Ads from the sidebar to begin.'}</div>
+                {connected && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 560, marginTop: 8 }}>
+                    {QUICK.map(s => (
+                      <button key={s} onClick={() => send(s)} style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 500, color: C.text2, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 999, padding: '7px 13px', cursor: 'pointer' }}>{s}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ maxWidth: 760, margin: '0 auto' }}>
+                {messages.map((m, k) => (
+                  <div key={k} style={{ marginBottom: 22 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6 }}>
+                      {m.role === 'user'
+                        ? <span style={{ width: 24, height: 24, borderRadius: '50%', background: C.cyan, color: '#fff', fontSize: 10.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{initials}</span>
+                        : <span style={{ width: 24, height: 24, borderRadius: '50%', background: C.navyTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><QMark size={13} /></span>}
+                      <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{m.role === 'user' ? (user?.name || 'You') : 'VASU AI'}</span>
+                    </div>
+                    <div style={{ paddingLeft: 33 }}>
+                      {m.role === 'user'
+                        ? <div style={{ fontSize: 14, color: C.ink, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{m.content}</div>
+                        : <><Markdown text={m.content} />
+                            <div style={{ display: 'flex', gap: 2, marginTop: 8 }}>
+                              {['speaker', 'copy', 'edit', 'branch', 'up', 'down', 'refresh'].map((ic, j) => (
+                                <button key={j} style={iconBtn(28)}
+                                  onClick={() => { if (ic === 'copy') navigator.clipboard?.writeText(m.content); if (ic === 'refresh') {} }}>
+                                  <Ico n={ic} s={14} c={C.text3} />
+                                </button>
+                              ))}
+                            </div>
+                          </>}
+                    </div>
+                  </div>
+                ))}
+                {loading && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 22 }}>
+                    <span style={{ width: 24, height: 24, borderRadius: '50%', background: C.navyTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><QMark size={13} /></span>
+                    <span style={{ display: 'inline-flex', gap: 4 }}>
+                      {[0, 1, 2].map(d => <span key={d} style={{ width: 6, height: 6, borderRadius: '50%', background: C.text3, animation: `vblink 1.2s infinite ${d * 0.2}s` }} />)}
+                    </span>
+                  </div>
+                )}
+                <div ref={bottomRef} />
+              </div>
+            )}
+          </div>
+
+          {/* input */}
+          <div style={{ padding: '0 22px 18px' }}>
+            <div style={{ maxWidth: 760, margin: '0 auto', background: '#fff', border: `1px solid ${C.line}`, borderRadius: 14, padding: 10, boxShadow: '0 1px 3px rgba(16,24,40,.05)' }}>
+              <textarea ref={textareaRef} value={input} disabled={loading} rows={1}
+                onChange={e => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px' }}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+                placeholder="Message VASU AI…"
+                style={{ width: '100%', border: 'none', outline: 'none', resize: 'none', fontFamily: FONT, fontSize: 14, color: C.ink, background: 'transparent', padding: '6px 8px', maxHeight: 160, boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button style={iconBtn(30)} title="Attach"><Ico n="clip" s={16} c={C.text3} /></button>
+                  <button style={pill} onClick={() => railClick('prompts')}><Ico n="notebook" s={13} c={C.text2} />Prompts</button>
+                  <button style={iconBtn(30)} title="Parameters" onClick={() => railClick('params')}><Ico n="sliders" s={16} c={C.text3} /></button>
+                  <div style={{ position: 'relative' }}>
+                    <button onClick={() => setMcpOpen(o => !o)} style={pill}><Ico n="server" s={13} c={C.text2} />MCP Servers<span style={{ fontSize: 10.5, color: C.text3 }}>{connected ? '2 selected' : '1 selected'}</span><Ico n="chevron" s={13} c={C.text3} /></button>
+                    {mcpOpen && (
+                      <div style={{ position: 'absolute', bottom: 38, left: 0, width: 200, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 10, boxShadow: '0 8px 24px -8px rgba(16,24,40,.18)', padding: 6, zIndex: 10 }}>
+                        {[{ n: 'Meta Ads', on: connected }, { n: 'Google Ads', on: true }].map(s => (
+                          <div key={s.n} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 9px' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: s.on ? C.green : C.text3 }} /><span style={{ fontSize: 13, color: C.ink }}>{s.n}</span></span>
+                            {s.on && <Ico n="check" s={14} c={C.blue} />}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button style={iconBtn(30)} title="Voice"><Ico n="mic" s={16} c={C.text3} /></button>
+                  <button onClick={() => send()} disabled={!input.trim() || loading}
+                    style={{ width: 34, height: 34, borderRadius: 10, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: input.trim() && !loading ? 'pointer' : 'not-allowed', background: input.trim() && !loading ? C.navy : '#D7DCE5' }}>
+                    <Ico n="arrowup" s={17} c="#fff" sw={2.5} />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div style={{ textAlign: 'center', fontSize: 11, color: C.text3, marginTop: 8 }}>VASU can make mistakes. Verify important numbers.</div>
+          </div>
+        </div>
       </div>
     </div>
   )
