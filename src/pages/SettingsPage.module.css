@@ -34,7 +34,7 @@
   -webkit-font-smoothing: antialiased;
 }
 
-.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-y: auto; }
 
 /* ---------- header ---------- */
 .header { padding: 36px 40px 0; }
