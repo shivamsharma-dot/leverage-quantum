@@ -54,25 +54,30 @@ Guidelines:
 - You are read-only — never claim to modify campaigns.`
 }
 
-async function askGroq(messages, metaData) {
+async function askClaude(messages, metaToken) {
   const res = await fetch('/api/vasu-chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      messages: [{ role: 'user', content: messages[messages.length-1]?.content || '' }],
-      systemPrompt: buildSystemPrompt(metaData),
-      history: messages.slice(0, -1)
+      messages: messages.slice(-1).map(m => ({ role: m.role||'user', content: m.content })),
+      history:  messages.slice(0, -1).map(m => ({ role: m.role, content: m.content })),
+      metaToken,
     })
   })
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Claude error') }
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'API error') }
   const d = await res.json()
   return d.content || '(no response)'
 }
 
 const QUICK = [
-  'Analyse campaigns', 'Why is CTR low?', 'Best performing campaign',
-  'Where to cut spend?', 'High fatigue creatives', 'Scale recommendations',
-  'Lead drop analysis', 'CPL this month',
+  '📊 Generate weekly performance report',
+  '📋 Generate monthly executive summary',
+  '🎯 QL Ops digest — Futwork vs Superbot this month',
+  'Why did CPL change vs last month?',
+  'Which campaigns should I scale or pause?',
+  'Compare Meta Ads CPL vs CRM CPL',
+  'High fatigue creatives — what to refresh?',
+  'Where are leads dropping in the funnel?',
 ]
 
 /* ============================ inline icon set ============================ */
@@ -237,6 +242,7 @@ export default function VasuAI() {
   const [metaData, setMetaData] = useState(null)
   const [metaLoading, setMetaLoading] = useState(false)
   const [connected, setConnected] = useState(false)
+  const [metaToken, setMetaToken]   = useState(() => { try { return localStorage.getItem('lq_meta_token') || '' } catch { return '' } })
   const [rail, setRail] = useState('history')
   const [historyOpen, setHistoryOpen] = useState(true)
   const [mcpOpen, setMcpOpen] = useState(false)
@@ -248,7 +254,7 @@ export default function VasuAI() {
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY)
-    if (token) loadMetaContext(token)
+    if (token) { setMetaToken(token); loadMetaContext(token) }
   }, [])
 
   const loadMetaContext = async (token) => {
@@ -291,7 +297,7 @@ export default function VasuAI() {
     setMessages(updated)
     setLoading(true)
     try {
-      const reply = await askGroq(updated.slice(-14), metaData)
+      const reply = await askClaude(updated, metaToken)
       setMessages(m => [...m, { role: 'assistant', content: reply }])
     } catch (e) {
       setMessages(m => [...m, { role: 'assistant', content: `⚠️ ${e.message}` }])
@@ -380,7 +386,7 @@ export default function VasuAI() {
           {/* header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderBottom: `1px solid ${C.line}` }}>
             <QMark size={16} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>VASU AI · claude-sonnet-4</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>VASU AI · Claude Sonnet 4.5</span>
             <button style={iconBtn(28)} onClick={newChat} title="New chat"><Ico n="plus" s={16} c={C.text3} /></button>
             <div style={{ flex: 1 }} />
             {connected
