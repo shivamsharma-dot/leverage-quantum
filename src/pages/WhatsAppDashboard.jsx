@@ -7,7 +7,7 @@ import Sidebar from '../components/Sidebar'
 
 // ── UPDATE THIS URL once the sheet is published ──────────────────────────────
 // File → Share → Publish to web → "whatsapp" tab → CSV → copy URL here
-const SHEET_CSV = 'WHATSAPP_SHEET_CSV_URL'
+const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=1222628502&single=true&output=csv'
 
 const C = {
   navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F',
