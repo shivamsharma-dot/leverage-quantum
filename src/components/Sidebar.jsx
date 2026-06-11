@@ -151,8 +151,22 @@ export default function Sidebar() {
   if (collapsed) {
     return (
       <aside className={styles.sidebarCollapsed}>
-        {/* Top spacer to clear the fixed toggle button */}
-        <div style={{height: '54px', flexShrink: 0}}/>
+        {/* Quantum logo mark — visible when collapsed */}
+        <div style={{
+          height: 52, display:'flex', alignItems:'center', justifyContent:'center',
+          flexShrink: 0, borderBottom: '0.5px solid #F3F4F6', width:'100%'
+        }}>
+          <div style={{
+            width:34, height:34, borderRadius:9, background:'#F0F4FF',
+            border:'0.5px solid #E0E7FF', display:'flex', alignItems:'center', justifyContent:'center'
+          }}>
+            <svg width="16" height="16" viewBox="0 0 22 22" fill="none">
+              <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/>
+              <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
+              <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84"/>
+            </svg>
+          </div>
+        </div>
         <button className={styles.collapseBtn} onClick={toggle} title="Expand sidebar">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
