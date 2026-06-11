@@ -218,9 +218,9 @@
 .logoutBtn:hover { color: #EF4444; background: #FEF2F2; }
 
 .collapseBtn {
-  position: absolute;
-  right: -12px;
-  top: 22px;
+  position: fixed;
+  left: 40px;
+  top: 24px;
   width: 24px; height: 24px;
   background: #fff;
   border: 0.5px solid #E5E7EB;
@@ -228,7 +228,7 @@
   box-shadow: 0 2px 8px rgba(15,23,42,0.10);
   color: #6B7280;
   cursor: pointer;
-  z-index: 10;
+  z-index: 200;
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   transition: all .15s;
@@ -237,9 +237,9 @@
 .collapseBtn:hover { background: #E8EFF9; color: #1F3C84; }
 
 .collapseBtnExpanded {
-  position: absolute;
-  right: -12px;
-  top: 22px;
+  position: fixed;
+  left: 220px;
+  top: 24px;
   width: 24px; height: 24px;
   background: #fff;
   border: 0.5px solid #E5E7EB;
@@ -247,8 +247,8 @@
   box-shadow: 0 2px 8px rgba(15,23,42,0.10);
   color: #6B7280;
   cursor: pointer;
-  z-index: 10;
-  transition: all .15s;
+  z-index: 200;
+  transition: left .2s ease, all .15s;
   display: flex; align-items: center; justify-content: center;
   border-radius: 6px; transition: all .15s; flex-shrink: 0;
 }
