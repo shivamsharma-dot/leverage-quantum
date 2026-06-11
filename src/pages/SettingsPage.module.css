@@ -27,7 +27,8 @@
   --radius:      12px;
 
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: var(--bg);
   font-family: var(--font);
   color: var(--text);
