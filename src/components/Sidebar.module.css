@@ -273,10 +273,11 @@
 .collapsedItem {
   width: 36px; height: 36px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 8px; color: #9CA3AF;
+  border-radius: 8px; color: #6B7280;
   text-decoration: none; transition: all .15s;
   border: 1px solid transparent; position: relative;
 }
+.collapsedItem:hover { background: #F3F4F6; color: #1F3C84; }
 .collapsedItem:hover { background: #F3F4F6; color: #374151; }
 .collapsedActive {
   background: #E8EFF9 !important;
