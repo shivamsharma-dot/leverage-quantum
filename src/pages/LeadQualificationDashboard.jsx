@@ -556,8 +556,9 @@ export default function LeadQualificationDashboard() {
       return { from: yesterday, to: yesterday, label: 'Last Day' }
     }
     if (datePreset === 'L7D') {
-      const from = new Date(today); from.setDate(today.getDate() - 6)
-      return { from, to: today, label: 'Last 7 days' }
+      const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+      const from = new Date(yesterday); from.setDate(yesterday.getDate() - 6)
+      return { from, to: yesterday, label: 'Last 7 days' }
     }
     if (datePreset === 'MTD') {
       const from = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -767,7 +768,7 @@ export default function LeadQualificationDashboard() {
                 const today2 = new Date(); today2.setHours(0,0,0,0)
                 let tipFrom, tipTo
                 if (key==='LD') { tipFrom=new Date(today2); tipFrom.setDate(today2.getDate()-1); tipTo=tipFrom }
-                else if (key==='L7D') { tipFrom=new Date(today2); tipFrom.setDate(today2.getDate()-6); tipTo=today2 }
+                else if (key==='L7D') { tipTo=new Date(today2); tipTo.setDate(today2.getDate()-1); tipFrom=new Date(tipTo); tipFrom.setDate(tipTo.getDate()-6) }
                 else { tipFrom=new Date(today2.getFullYear(),today2.getMonth(),1); tipTo=today2 }
                 const tipLabel = fmtShort(tipFrom) + ' – ' + fmtShort(tipTo)
                 const isHov = hoveredPreset===key
