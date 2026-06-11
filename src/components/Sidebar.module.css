@@ -218,14 +218,22 @@
 .logoutBtn:hover { color: #EF4444; background: #FEF2F2; }
 
 .collapseBtn {
-  width: 34px; height: 34px;
-  background: #F3F4F6;
+  position: absolute;
+  right: -12px;
+  top: 22px;
+  width: 24px; height: 24px;
+  background: #fff;
   border: 0.5px solid #E5E7EB;
-  border-radius: 8px; color: #6B7280;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.10);
+  color: #6B7280;
   cursor: pointer;
+  z-index: 10;
+  flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  transition: all .15s; margin-bottom: 8px; flex-shrink: 0;
+  transition: all .15s;
 }
+.collapseBtn:hover { color: #1F3C84; border-color: #1F3C84; }
 .collapseBtn:hover { background: #E8EFF9; color: #1F3C84; }
 
 .collapseBtnExpanded {
@@ -240,19 +248,20 @@
   color: #6B7280;
   cursor: pointer;
   z-index: 10;
+  transition: all .15s;
   display: flex; align-items: center; justify-content: center;
   border-radius: 6px; transition: all .15s; flex-shrink: 0;
 }
 .collapseBtnExpanded:hover { background: #F3F4F6; color: #6B7280; }
 
 .sidebarCollapsed {
+  position: relative;
   width: 52px; height: 100vh;
   background: #FFFFFF;
   border-right: 0.5px solid #E5E7EB;
   display: flex; flex-direction: column;
   align-items: center; flex-shrink: 0;
-  position: sticky; top: 0;
-  overflow: hidden; padding: 8px 0; gap: 4px;
+  overflow: visible; padding: 8px 0; gap: 4px;
 }
 
 .collapsedNav {
@@ -289,4 +298,15 @@
 }
 .settingsArea .navItem:hover .navIcon svg {
   transform: rotate(180deg);
+}
+
+/* collapsed logo mark */
+.collapsedLogoMark {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  background: #F8F9FB;
+  border: 0.5px solid #E5E7EB;
+  border-radius: 10px;
+  margin-bottom: 4px;
+  flex-shrink: 0;
 }
