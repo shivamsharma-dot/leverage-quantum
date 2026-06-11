@@ -43,14 +43,14 @@ function parseCSV(csv) {
     const promo     = gn('promotional_spends')
     const total_spend = utility + promo
 
-    // derive month from date — parse as local time (not UTC) to avoid timezone shift
+    // derive month directly from date string — no Date/toLocaleString to avoid locale bugs
+    const MONTH_NAMES_WA = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
     let month = ''
     if (date) {
       const parts = date.split('-')
       if (parts.length === 3) {
-        const [y, mo, dy] = parts.map(Number)
-        const d = new Date(y, mo - 1, dy)
-        month = d.toLocaleString('default', { month: 'short', year: 'numeric' })
+        const y = parseInt(parts[0]), mo = parseInt(parts[1])
+        if (mo >= 1 && mo <= 12) month = MONTH_NAMES_WA[mo - 1] + ' ' + y
       }
     }
 
@@ -191,7 +191,7 @@ export default function WhatsAppDashboard() {
       parsed.forEach(r => { if (r.month && r.date && (!mm[r.month] || r.date < mm[r.month])) mm[r.month] = r.date })
       const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
         .sort((a, b) => {
-          const pd = s => { if (!s) return 0; const [y,mo,dy]=s.split('-').map(Number); return new Date(y,mo-1,dy).getTime() }
+          const pd = s => { if (!s) return 0; const p=s.split('-'); return parseInt(p[0])*100+parseInt(p[1]) }
           return pd(mm[a]) - pd(mm[b])
         })
       setMonths(ms)
