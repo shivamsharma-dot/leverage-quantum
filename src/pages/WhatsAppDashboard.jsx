@@ -43,11 +43,15 @@ function parseCSV(csv) {
     const promo     = gn('promotional_spends')
     const total_spend = utility + promo
 
-    // derive month from date
+    // derive month from date — parse as local time (not UTC) to avoid timezone shift
     let month = ''
     if (date) {
-      const d = new Date(date)
-      if (!isNaN(d)) month = d.toLocaleString('default', { month: 'short', year: 'numeric' })
+      const parts = date.split('-')
+      if (parts.length === 3) {
+        const [y, mo, dy] = parts.map(Number)
+        const d = new Date(y, mo - 1, dy)
+        month = d.toLocaleString('default', { month: 'short', year: 'numeric' })
+      }
     }
 
     return {
@@ -186,7 +190,10 @@ export default function WhatsAppDashboard() {
       const mm = {}
       parsed.forEach(r => { if (r.month && r.date && (!mm[r.month] || r.date < mm[r.month])) mm[r.month] = r.date })
       const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
-        .sort((a, b) => new Date(mm[a]||0) - new Date(mm[b]||0))
+        .sort((a, b) => {
+          const pd = s => { if (!s) return 0; const [y,mo,dy]=s.split('-').map(Number); return new Date(y,mo-1,dy).getTime() }
+          return pd(mm[a]) - pd(mm[b])
+        })
       setMonths(ms)
       setSelMonth(prev => prev || ms[ms.length-1] || '')
       setError('')
