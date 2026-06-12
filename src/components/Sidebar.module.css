@@ -2,8 +2,8 @@
   position: relative;
   width: 232px;
   height: 100vh;
-  background: #FFFFFF;
-  border-right: 0.5px solid #E5E7EB;
+  background: var(--sidebar-bg);
+  border-right: 0.5px solid var(--card-border);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -222,8 +222,8 @@
   left: 40px;
   top: 24px;
   width: 24px; height: 24px;
-  background: #fff;
-  border: 0.5px solid #E5E7EB;
+  background: var(--sidebar-bg);
+  border: 0.5px solid var(--card-border);
   border-radius: 50%;
   box-shadow: 0 2px 8px rgba(15,23,42,0.10);
   color: #6B7280;
@@ -241,8 +241,8 @@
   left: 220px;
   top: 24px;
   width: 24px; height: 24px;
-  background: #fff;
-  border: 0.5px solid #E5E7EB;
+  background: var(--sidebar-bg);
+  border: 0.5px solid var(--card-border);
   border-radius: 50%;
   box-shadow: 0 2px 8px rgba(15,23,42,0.10);
   color: #6B7280;
@@ -252,13 +252,13 @@
   display: flex; align-items: center; justify-content: center;
   border-radius: 6px; transition: all .15s; flex-shrink: 0;
 }
-.collapseBtnExpanded:hover { background: #F3F4F6; color: #6B7280; }
+.collapseBtnExpanded:hover { background: var(--bg3); color: #6B7280; }
 
 .sidebarCollapsed {
   position: relative;
   width: 52px; height: 100vh;
-  background: #FFFFFF;
-  border-right: 0.5px solid #E5E7EB;
+  background: var(--sidebar-bg);
+  border-right: 0.5px solid var(--card-border);
   display: flex; flex-direction: column;
   align-items: center; flex-shrink: 0;
   overflow: visible; padding: 8px 0; gap: 4px;
@@ -277,8 +277,8 @@
   text-decoration: none; transition: all .15s;
   border: 1px solid transparent; position: relative;
 }
-.collapsedItem:hover { background: #F3F4F6; color: #1F3C84; }
-.collapsedItem:hover { background: #F3F4F6; color: #374151; }
+.collapsedItem:hover { background: var(--bg3); color: #1F3C84; }
+.collapsedItem:hover { background: var(--bg3); color: #374151; }
 .collapsedActive {
   background: #E8EFF9 !important;
   color: #1F3C84 !important;
@@ -305,8 +305,8 @@
 .collapsedLogoMark {
   width: 36px; height: 36px;
   display: flex; align-items: center; justify-content: center;
-  background: #F8F9FB;
-  border: 0.5px solid #E5E7EB;
+  background: var(--bg3);
+  border: 0.5px solid var(--card-border);
   border-radius: 10px;
   margin-top: 42px;
   margin-bottom: 4px;
