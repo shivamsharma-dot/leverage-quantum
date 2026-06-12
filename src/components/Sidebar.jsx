@@ -5,6 +5,12 @@ import styles from './Sidebar.module.css'
 
 const NAV = [
   {
+    label: 'Intelligence',
+    items: [
+      { to: '/vasu', icon: <VasuIcon />, label: 'Chat', end: false },
+    ]
+  },
+  {
     label: 'Overview',
     items: [
       { to: '/', icon: <HomeIcon />, label: 'Summary', end: true },
@@ -21,7 +27,6 @@ const NAV = [
         subItems: [
           { to: '/dashboard/meta-ads?tab=creatives', label: 'Creatives', matchType: 'query', tabKey: 'creatives' },
           { to: '/dashboard/meta-ads?tab=campaigns', label: 'Campaigns', matchType: 'query', tabKey: 'campaigns' },
-
         ]
       },
       {
@@ -33,22 +38,16 @@ const NAV = [
           { to: '/dashboard/google-ads?tab=campaigns',   label: 'Campaigns',    matchType: 'query', tabKey: 'campaigns' },
           { to: '/dashboard/google-ads?tab=keywords',    label: 'Keywords',     matchType: 'query', tabKey: 'keywords' },
           { to: '/dashboard/google-ads?tab=search_terms',label: 'Search Terms', matchType: 'query', tabKey: 'search_terms' },
-          { to: '/dashboard/google-ads?tab=ad_groups',  label: 'Ad Groups',    matchType: 'query', tabKey: 'ad_groups' },
+          { to: '/dashboard/google-ads?tab=ad_groups',   label: 'Ad Groups',    matchType: 'query', tabKey: 'ad_groups' },
         ]
       },
-      { to: '/dashboard/roas', icon: <ChartIcon />, label: 'ROAS', end: false },
-      { to: '/dashboard/mtd', icon: <MTDIcon />, label: 'MTD', end: false },
-      { to: '/dashboard/lead-quality', icon: <FunnelIcon />, label: 'Lead Quality', end: false },
-      { to: '/dashboard/channel-mix', icon: <MixIcon />, label: 'Channel Mix', end: false },
-      { to: '/dashboard/revenue', icon: <RevenueIcon />, label: 'Revenue', end: false },
-      { to: '/dashboard/lq-ops', icon: <PeopleIcon />, label: 'QL Ops', end: false },
-      { to: '/dashboard/whatsapp', icon: <WhatsAppIcon />, label: 'WhatsApp', end: false },
-    ]
-  },
-  {
-    label: 'Intelligence',
-    items: [
-      { to: '/vasu', icon: <VasuIcon />, label: 'Chat', end: false },
+      { to: '/dashboard/roas',         icon: <ChartIcon />,    label: 'ROAS',         end: false },
+      { to: '/dashboard/mtd',          icon: <MTDIcon />,      label: 'MTD',          end: false },
+      { to: '/dashboard/lead-quality', icon: <FunnelIcon />,   label: 'Lead Quality', end: false },
+      { to: '/dashboard/channel-mix',  icon: <MixIcon />,      label: 'Channel Mix',  end: false },
+      { to: '/dashboard/revenue',      icon: <RevenueIcon />,  label: 'Revenue',      end: false },
+      { to: '/dashboard/lq-ops',       icon: <PeopleIcon />,   label: 'QL Ops',       end: false },
+      { to: '/dashboard/whatsapp',     icon: <WhatsAppIcon />, label: 'WhatsApp',     end: false },
     ]
   },
 ]
@@ -196,10 +195,10 @@ export default function Sidebar() {
         </div>
         <div className={styles.dividerLine}/>
         <div className={styles.quantumLabel}>
-          <svg width="14" height="14" viewBox="0 0 22 22" fill="none">
-            <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F" className={styles.sbar1}/>
-            <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4" className={styles.sbar2}/>
-            <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84" className={styles.sbar3}/>
+          <svg width="14" height="14" viewBox="0 0 22 22" fill="none" style={{overflow:'visible'}}>
+            <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F" style={{transformOrigin:'1px 21px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.1s both'}}/>
+            <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4" style={{transformOrigin:'7px 21px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.2s both'}}/>
+            <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84" style={{transformOrigin:'13px 21px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.3s both'}}/>
           </svg>
           <span>QUANTUM</span>
         </div>
