@@ -147,7 +147,7 @@ export default function SettingsPage() {
             ))}
           </div>
 
-          {/* ---------------- VASU AI ---------------- */}
+          {/* ---------------- CHAT ---------------- */}
           {activeTab === 'chat' && (
             <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'60px 20px', gap:20 }}>
               <div style={{ width:64, height:64, borderRadius:18, background:'var(--navy-tint)', display:'flex', alignItems:'center', justifyContent:'center' }}>
