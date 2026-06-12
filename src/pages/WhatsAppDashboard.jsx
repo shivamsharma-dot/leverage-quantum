@@ -11,7 +11,7 @@ const C = {
   navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', amber:'#F59E0B',
   red:'#EF4444', navyBg:'#E8EFF9', blueBg:'#E3F5FD', cyanBg:'#E4F8F9',
   greenBg:'#E9F8EF', amberBg:'#FEF9C3', redBg:'#FEF2F2',
-  border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8', sub:'#475569', bg:'#F4F6F9',
+  border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8', sub:'#475569', bg:'var(--bg)',
 }
 const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 const PAGE_SIZE = 10
@@ -99,25 +99,25 @@ function fmtPct(a,b) { return b > 0 ? (a/b*100).toFixed(1)+'%' : '—' }
 // ── shared UI components ──────────────────────────────────────────────────────
 
 const KPICard = ({ label, value, sub, accent=C.navy, accentBg=C.navyBg, delta, icon }) => (
-  <div style={{ background:'#fff', border:`0.5px solid ${C.border}`, borderRadius:14, padding:'18px 20px', borderTop:`3px solid ${accent}`, boxShadow:'0 1px 6px rgba(15,23,42,0.06)', display:'flex', flexDirection:'column', gap:8 }}>
+  <div style={{ background:'var(--card)', border:`0.5px solid ${'var(--card-border)'}`, borderRadius:14, padding:'18px 20px', borderTop:`3px solid ${accent}`, boxShadow:'0 1px 6px rgba(15,23,42,0.06)', display:'flex', flexDirection:'column', gap:8 }}>
     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-      <div style={{ fontSize:9.5, fontWeight:700, color:C.muted, letterSpacing:'0.09em', textTransform:'uppercase', fontFamily:FONT }}>{label}</div>
+      <div style={{ fontSize:9.5, fontWeight:700, color:'var(--text3)', letterSpacing:'0.09em', textTransform:'uppercase', fontFamily:FONT }}>{label}</div>
       {icon && <div style={{ width:28, height:28, borderRadius:8, background:accentBg, display:'flex', alignItems:'center', justifyContent:'center', color:accent, flexShrink:0 }}>{icon}</div>}
     </div>
-    <div style={{ fontSize:28, fontWeight:800, color:C.text, letterSpacing:'-1px', lineHeight:1, fontFamily:FONT }}>{value}</div>
+    <div style={{ fontSize:28, fontWeight:800, color:'var(--text)', letterSpacing:'-1px', lineHeight:1, fontFamily:FONT }}>{value}</div>
     <div style={{ display:'flex', alignItems:'center', gap:6, minHeight:18 }}>
-      {sub && <div style={{ fontSize:11.5, color:C.muted, fontFamily:FONT }}>{sub}</div>}
+      {sub && <div style={{ fontSize:11.5, color:'var(--text3)', fontFamily:FONT }}>{sub}</div>}
       {delta != null && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 7px', borderRadius:20, background:delta>=0?C.greenBg:'#FEF2F2', color:delta>=0?'#059669':'#DC2626', fontFamily:FONT, marginLeft:'auto' }}>{delta>=0?'▲':'▼'}{Math.abs(delta).toFixed(1)}%</span>}
     </div>
   </div>
 )
 
 const Card = ({ title, sub, children, action, noPad }) => (
-  <div style={{ background:'#fff', border:`0.5px solid ${C.border}`, borderRadius:14, overflow:'hidden', boxShadow:'0 1px 6px rgba(15,23,42,0.06)' }}>
+  <div style={{ background:'var(--card)', border:`0.5px solid ${'var(--card-border)'}`, borderRadius:14, overflow:'hidden', boxShadow:'0 1px 6px rgba(15,23,42,0.06)' }}>
     <div style={{ padding:'14px 20px 12px', borderBottom:'0.5px solid #F1F5F9', display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
       <div>
-        <div style={{ fontSize:13.5, fontWeight:700, color:C.text, fontFamily:FONT }}>{title}</div>
-        {sub && <div style={{ fontSize:11, color:C.muted, marginTop:2, fontFamily:FONT }}>{sub}</div>}
+        <div style={{ fontSize:13.5, fontWeight:700, color:'var(--text)', fontFamily:FONT }}>{title}</div>
+        {sub && <div style={{ fontSize:11, color:'var(--text3)', marginTop:2, fontFamily:FONT }}>{sub}</div>}
       </div>
       {action && <div style={{ flexShrink:0 }}>{action}</div>}
     </div>
@@ -128,13 +128,13 @@ const Card = ({ title, sub, children, action, noPad }) => (
 const ChartTip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
-    <div style={{ background:'#fff', border:`0.5px solid ${C.border}`, borderRadius:10, padding:'10px 14px', fontSize:12, fontFamily:FONT, boxShadow:'0 8px 28px rgba(15,23,42,0.13)', minWidth:160 }}>
-      {label && <div style={{ fontWeight:700, color:C.text, marginBottom:8, fontSize:12.5 }}>{label}</div>}
+    <div style={{ background:'var(--card)', border:`0.5px solid ${'var(--card-border)'}`, borderRadius:10, padding:'10px 14px', fontSize:12, fontFamily:FONT, boxShadow:'0 8px 28px rgba(15,23,42,0.13)', minWidth:160 }}>
+      {label && <div style={{ fontWeight:700, color:'var(--text)', marginBottom:8, fontSize:12.5 }}>{label}</div>}
       {payload.map(p => (
         <div key={p.name} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
           <div style={{ width:8, height:8, borderRadius:2, background:p.fill||p.color, flexShrink:0 }}/>
-          <span style={{ color:C.sub, flex:1 }}>{p.name}</span>
-          <span style={{ fontWeight:700, color:C.text }}>{typeof p.value==='number' ? fmtN(p.value) : p.value}</span>
+          <span style={{ color:'var(--text2)', flex:1 }}>{p.name}</span>
+          <span style={{ fontWeight:700, color:'var(--text)' }}>{typeof p.value==='number' ? fmtN(p.value) : p.value}</span>
         </div>
       ))}
     </div>
@@ -146,7 +146,7 @@ const ChartLegend = ({ items }) => (
     {items.map(({ name, color }) => (
       <div key={name} style={{ display:'flex', alignItems:'center', gap:6 }}>
         <div style={{ width:10, height:10, borderRadius:3, background:color }}/>
-        <span style={{ fontSize:11.5, fontWeight:500, color:C.sub, fontFamily:FONT }}>{name}</span>
+        <span style={{ fontSize:11.5, fontWeight:500, color:'var(--text2)', fontFamily:FONT }}>{name}</span>
       </div>
     ))}
   </div>
@@ -161,26 +161,26 @@ const Dropdown = ({ options, value, onChange, label, minWidth=130 }) => {
   }, [])
   return (
     <div style={{ display:'flex', alignItems:'center', gap:7 }} ref={ref}>
-      {label && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT, whiteSpace:'nowrap', fontWeight:500 }}>{label}</span>}
+      {label && <span style={{ fontSize:11, color:'var(--text3)', fontFamily:FONT, whiteSpace:'nowrap', fontWeight:500 }}>{label}</span>}
       <div style={{ position:'relative' }}>
         <button onClick={() => setOpen(v => !v)} style={{
           display:'flex', alignItems:'center', gap:8, padding:'7px 11px 7px 13px', borderRadius:9,
-          border:`0.5px solid ${open ? C.navy : C.border}`, background: open ? C.navyBg : '#fff',
-          color:C.text, cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight:600, minWidth,
+          border:`0.5px solid ${open ? C.navy : 'var(--card-border)'}`, background: open ? C.navyBg : 'var(--card)',
+          color:'var(--text)', cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight:600, minWidth,
           boxShadow: open ? `0 0 0 3px rgba(31,60,132,0.09)` : '0 1px 3px rgba(15,23,42,0.06)',
           transition:'all .15s', whiteSpace:'nowrap',
         }}>
           <span style={{ flex:1, textAlign:'left' }}>{value}</span>
           <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ flexShrink:0, transition:'transform .2s', transform:open?'rotate(180deg)':'rotate(0deg)' }}>
-            <path d="M1 1l4 4 4-4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M1 1l4 4 4-4" stroke={'var(--text3)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </button>
         {open && (
-          <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:500, background:'#fff', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 48px rgba(15,23,42,0.14)', padding:'6px', minWidth:Math.max(minWidth,160), maxHeight:300, overflowY:'auto', scrollbarWidth:'none' }}>
+          <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:500, background:'var(--card)', border:`0.5px solid ${'var(--card-border)'}`, borderRadius:12, boxShadow:'0 16px 48px rgba(15,23,42,0.14)', padding:'6px', minWidth:Math.max(minWidth,160), maxHeight:300, overflowY:'auto', scrollbarWidth:'none' }}>
             {options.map(opt => (
               <button key={opt} onClick={() => { onChange(opt); setOpen(false) }}
-                style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12.5, fontWeight:opt===value?700:400, background:opt===value?C.navyBg:'transparent', color:opt===value?C.navy:C.text, transition:'background .1s' }}
-                onMouseEnter={e => { if (opt!==value) e.currentTarget.style.background='#F8FAFC' }}
+                style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12.5, fontWeight:opt===value?700:400, background:opt===value?C.navyBg:'transparent', color:opt===value?C.navy:'var(--text)', transition:'background .1s' }}
+                onMouseEnter={e => { if (opt!==value) e.currentTarget.style.background='var(--bg3)' }}
                 onMouseLeave={e => { if (opt!==value) e.currentTarget.style.background='transparent' }}>
                 <span style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
                   {opt}
@@ -204,7 +204,7 @@ const StatusPill = ({ status }) => {
     'Replied':   { bg:C.cyanBg,  color:C.cyan    },
     'Clicked':   { bg:C.amberBg, color:C.amber   },
     'Failed':    { bg:C.redBg,   color:C.red     },
-  }[status] || { bg:'#F3F4F6', color:C.muted }
+  }[status] || { bg:'var(--bg3)', color:'var(--text3)' }
   return <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 8px', borderRadius:20, background:cfg.bg, color:cfg.color, fontFamily:FONT }}>{status}</span>
 }
 
@@ -393,7 +393,7 @@ export default function WhatsAppDashboard() {
   const pageRows   = tableRows.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE)
   const sortBy     = col => { setSortCol(col); setSortDir(d=>sortCol===col?(d==='desc'?'asc':'desc'):'desc'); setPage(0) }
   const onSearch   = v => { setSearch(v); setPage(0) }
-  const thS        = col => ({ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.07em', textTransform:'uppercase', padding:'10px 12px', cursor:'pointer', userSelect:'none', fontFamily:FONT, whiteSpace:'nowrap', background:sortCol===col?'#F8FAFF':'transparent', borderBottom:`0.5px solid ${C.border}` })
+  const thS        = col => ({ fontSize:10, fontWeight:700, color:'var(--text3)', letterSpacing:'0.07em', textTransform:'uppercase', padding:'10px 12px', cursor:'pointer', userSelect:'none', fontFamily:FONT, whiteSpace:'nowrap', background:sortCol===col?'var(--navy-tint)':'transparent', borderBottom:`0.5px solid ${'var(--card-border)'}` })
 
   const TABS = [
     { id:'overview',   label:'Overview'   },
@@ -403,22 +403,22 @@ export default function WhatsAppDashboard() {
   ]
 
   return (
-    <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
+    <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:'var(--bg)', fontFamily:FONT }}>
       <Sidebar/>
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
 
         {/* ── HEADER ── */}
-        <div style={{ background:'#fff', borderBottom:`0.5px solid ${C.border}`, padding:'10px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, boxShadow:'0 1px 4px rgba(15,23,42,0.04)' }}>
+        <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${'var(--card-border)'}`, padding:'10px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, boxShadow:'0 1px 4px rgba(15,23,42,0.04)' }}>
           <div>
-            <p style={{ fontSize:10.5, color:C.muted, margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / WhatsApp</p>
-            <h1 style={{ fontSize:18, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.5px', fontFamily:FONT }}>WhatsApp{selMonth ? ' · '+selMonth : ''}</h1>
+            <p style={{ fontSize:10.5, color:'var(--text3)', margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / WhatsApp</p>
+            <h1 style={{ fontSize:18, fontWeight:800, color:'var(--text)', margin:'2px 0 0', letterSpacing:'-0.5px', fontFamily:FONT }}>WhatsApp{selMonth ? ' · '+selMonth : ''}</h1>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
             {isCurrentMonth&&(
-              <div style={{display:'flex',alignItems:'center',gap:3,background:'#F1F5F9',borderRadius:9,padding:'3px'}}>
+              <div style={{display:'flex',alignItems:'center',gap:3,background:'var(--bg3)',borderRadius:9,padding:'3px'}}>
                 {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl])=>(
                   <button key={key} onClick={()=>{setDatePreset(key);setCustomFrom('');setCustomTo('');setPage(0)}}
-                    style={{padding:'5px 11px',borderRadius:7,border:'none',cursor:'pointer',fontSize:11.5,fontWeight:700,fontFamily:FONT,background:datePreset===key?'#fff':'transparent',color:datePreset===key?C.navy:C.muted,boxShadow:datePreset===key?'0 1px 4px rgba(15,23,42,0.10)':'none',transition:'all .15s'}}>
+                    style={{padding:'5px 11px',borderRadius:7,border:'none',cursor:'pointer',fontSize:11.5,fontWeight:700,fontFamily:FONT,background:datePreset===key?'var(--card)':'transparent',color:datePreset===key?C.navy:'var(--text3)',boxShadow:datePreset===key?'0 1px 4px rgba(15,23,42,0.10)':'none',transition:'all .15s'}}>
                     {lbl}
                   </button>
                 ))}
@@ -432,23 +432,23 @@ export default function WhatsAppDashboard() {
             )}
             <div style={{position:'relative'}}>
               <button onClick={()=>setShowCustom(v=>!v)}
-                style={{padding:'6px 11px',borderRadius:8,border:`0.5px solid ${datePreset==='custom'?C.navy:C.border}`,background:datePreset==='custom'?C.navyBg:'#fff',color:datePreset==='custom'?C.navy:C.sub,fontSize:11.5,fontWeight:600,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',gap:5,transition:'all .15s'}}>
+                style={{padding:'6px 11px',borderRadius:8,border:`0.5px solid ${datePreset==='custom'?C.navy:'var(--card-border)'}`,background:datePreset==='custom'?C.navyBg:'var(--card)',color:datePreset==='custom'?C.navy:'var(--text2)',fontSize:11.5,fontWeight:600,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',gap:5,transition:'all .15s'}}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                 {datePreset==='custom'&&customFrom?customFrom+' → '+customTo:'Custom'}
               </button>
               {showCustom&&(
                 <>
                   <div onClick={()=>setShowCustom(false)} style={{position:'fixed',inset:0,zIndex:399}}/>
-                  <div style={{position:'absolute',top:'calc(100% + 8px)',right:0,zIndex:400,background:'#fff',border:`0.5px solid ${C.border}`,borderRadius:12,boxShadow:'0 14px 40px rgba(15,23,42,0.14)',padding:'16px 18px',minWidth:240,fontFamily:FONT}}>
-                    <div style={{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:10}}>Custom date range</div>
+                  <div style={{position:'absolute',top:'calc(100% + 8px)',right:0,zIndex:400,background:'var(--card)',border:`0.5px solid ${'var(--card-border)'}`,borderRadius:12,boxShadow:'0 14px 40px rgba(15,23,42,0.14)',padding:'16px 18px',minWidth:240,fontFamily:FONT}}>
+                    <div style={{fontSize:11,fontWeight:700,color:'var(--text3)',letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:10}}>Custom date range</div>
                     {[['From',customFrom,setCustomFrom],['To',customTo,setCustomTo]].map(([lbl,val,setter])=>(
                       <div key={lbl} style={{marginBottom:10}}>
-                        <div style={{fontSize:11,fontWeight:600,color:C.sub,marginBottom:4}}>{lbl}</div>
-                        <input type="date" value={val} onChange={e=>setter(e.target.value)} style={{width:'100%',padding:'7px 10px',borderRadius:8,border:`0.5px solid ${C.border}`,fontSize:12,fontFamily:FONT,outline:'none',color:C.text,boxSizing:'border-box'}}/>
+                        <div style={{fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:4}}>{lbl}</div>
+                        <input type="date" value={val} onChange={e=>setter(e.target.value)} style={{width:'100%',padding:'7px 10px',borderRadius:8,border:`0.5px solid ${'var(--card-border)'}`,fontSize:12,fontFamily:FONT,outline:'none',color:'var(--text)',boxSizing:'border-box'}}/>
                       </div>
                     ))}
                     <button onClick={()=>{if(customFrom&&customTo){setDatePreset('custom');setShowCustom(false);setPage(0)}}} disabled={!customFrom||!customTo}
-                      style={{width:'100%',padding:'8px',borderRadius:8,border:'none',background:customFrom&&customTo?C.navy:'#E5E7EB',color:customFrom&&customTo?'#fff':C.muted,fontSize:12,fontWeight:700,fontFamily:FONT,cursor:customFrom&&customTo?'pointer':'not-allowed'}}>
+                      style={{width:'100%',padding:'8px',borderRadius:8,border:'none',background:customFrom&&customTo?C.navy:'#E5E7EB',color:customFrom&&customTo?'var(--card)':'var(--text3)',fontSize:12,fontWeight:700,fontFamily:FONT,cursor:customFrom&&customTo?'pointer':'not-allowed'}}>
                       Apply range
                     </button>
                   </div>
@@ -458,20 +458,20 @@ export default function WhatsAppDashboard() {
             <Dropdown label="Source"   options={sources}    value={selSource}   minWidth={120} onChange={v=>{setSelSource(v);setPage(0)}}/>
             <Dropdown label="Category" options={categories} value={selCategory} minWidth={120} onChange={v=>{setSelCategory(v);setPage(0)}}/>
             <Dropdown label="Campaign" options={campaigns}  value={selCampaign} minWidth={140} onChange={v=>{setSelCampaign(v);setPage(0)}}/>
-            {lastSync && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT }}>Synced {lastSync.toLocaleTimeString()}</span>}
+            {lastSync && <span style={{ fontSize:11, color:'var(--text3)', fontFamily:FONT }}>Synced {lastSync.toLocaleTimeString()}</span>}
             <button onClick={()=>loadData(true)} disabled={loading} className="lqRefreshBtn"
-              style={{ padding:'7px 14px', borderRadius:9, border:`0.5px solid ${C.border}`, fontSize:12, fontWeight:600, cursor:loading?'wait':'pointer', fontFamily:FONT, background:'#fff', color:'#374151', display:'flex', alignItems:'center', gap:6, opacity:loading?0.65:1, boxShadow:'0 1px 3px rgba(15,23,42,0.06)' }}>
+              style={{ padding:'7px 14px', borderRadius:9, border:`0.5px solid ${'var(--card-border)'}`, fontSize:12, fontWeight:600, cursor:loading?'wait':'pointer', fontFamily:FONT, background:'var(--card)', color:'#374151', display:'flex', alignItems:'center', gap:6, opacity:loading?0.65:1, boxShadow:'0 1px 3px rgba(15,23,42,0.06)' }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{animation:loading?'spin .8s linear infinite':'none'}}>
                 <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
               </svg>
               {loading?'Refreshing':'Refresh'}
             </button>
             <div style={{ position:'relative' }}>
-              <button onClick={()=>setShowInfo(v=>!v)} style={{ width:32, height:32, borderRadius:9, border:`0.5px solid ${C.border}`, background:showInfo?C.navyBg:'#fff', color:C.navy, fontSize:15, fontWeight:700, fontStyle:'italic', fontFamily:'Georgia,serif', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 3px rgba(15,23,42,0.06)' }}>i</button>
+              <button onClick={()=>setShowInfo(v=>!v)} style={{ width:32, height:32, borderRadius:9, border:`0.5px solid ${'var(--card-border)'}`, background:showInfo?C.navyBg:'var(--card)', color:C.navy, fontSize:15, fontWeight:700, fontStyle:'italic', fontFamily:'Georgia,serif', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 3px rgba(15,23,42,0.06)' }}>i</button>
               {showInfo&&<div onClick={()=>setShowInfo(false)} style={{position:'fixed',inset:0,zIndex:150}}/>}
               {showInfo&&(
-                <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:380, background:'#fff', border:`0.5px solid ${C.border}`, borderRadius:14, boxShadow:'0 16px 48px rgba(15,23,42,0.16)', padding:'18px 20px', fontFamily:FONT }}>
-                  <div style={{ fontSize:13.5, fontWeight:700, color:C.text, marginBottom:10 }}>How metrics are calculated</div>
+                <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:380, background:'var(--card)', border:`0.5px solid ${'var(--card-border)'}`, borderRadius:14, boxShadow:'0 16px 48px rgba(15,23,42,0.16)', padding:'18px 20px', fontFamily:FONT }}>
+                  <div style={{ fontSize:13.5, fontWeight:700, color:'var(--text)', marginBottom:10 }}>How metrics are calculated</div>
                   {[
                     ['Sent',          'Messages entered the sending pipeline (sent_count). Excludes failed.'],
                     ['Delivered',     'Messages confirmed received on recipient device.'],
@@ -489,7 +489,7 @@ export default function WhatsAppDashboard() {
                   ].map(([m,d])=>(
                     <div key={m} style={{ display:'flex', gap:10, padding:'6px 0', borderTop:'0.5px solid #F3F4F6' }}>
                       <div style={{ fontSize:11.5, fontWeight:700, color:C.navy, width:110, flexShrink:0 }}>{m}</div>
-                      <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.5 }}>{d}</div>
+                      <div style={{ fontSize:11.5, color:'var(--text2)', lineHeight:1.5 }}>{d}</div>
                     </div>
                   ))}
                 </div>
@@ -499,10 +499,10 @@ export default function WhatsAppDashboard() {
         </div>
 
         {/* ── TAB BAR ── */}
-        <div style={{ background:'#fff', borderBottom:`0.5px solid ${C.border}`, padding:'0 28px', display:'flex', gap:0, flexShrink:0 }}>
+        <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${'var(--card-border)'}`, padding:'0 28px', display:'flex', gap:0, flexShrink:0 }}>
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>setActiveTab(t.id)}
-              style={{ padding:'12px 18px', border:'none', background:'none', cursor:'pointer', fontFamily:FONT, fontSize:13, fontWeight:activeTab===t.id?700:500, color:activeTab===t.id?C.navy:C.muted, borderBottom:activeTab===t.id?`2px solid ${C.navy}`:'2px solid transparent', marginBottom:-1, transition:'all .15s' }}>
+              style={{ padding:'12px 18px', border:'none', background:'none', cursor:'pointer', fontFamily:FONT, fontSize:13, fontWeight:activeTab===t.id?700:500, color:activeTab===t.id?C.navy:'var(--text3)', borderBottom:activeTab===t.id?`2px solid ${C.navy}`:'2px solid transparent', marginBottom:-1, transition:'all .15s' }}>
               {t.label}
             </button>
           ))}
@@ -511,11 +511,25 @@ export default function WhatsAppDashboard() {
         {/* ── BODY ── */}
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
           {loading&&rows.length===0 ? (
-            <div style={{ textAlign:'center', paddingTop:100, color:C.muted }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{animation:'spin .8s linear infinite'}}>
-                <circle cx="12" cy="12" r="10" strokeOpacity=".15"/><path d="M12 2a10 10 0 0 1 10 10" stroke={C.green}/>
-              </svg>
-              <p style={{ marginTop:14, fontSize:14, fontFamily:FONT }}>Loading WhatsApp data…</p>
+            <div style={{ padding:'0 0 20px' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:14, marginBottom:20 }}>
+                {[1,2,3,4,5,6].map(i=>(
+                  <div key={i} style={{ background:'var(--card)', border:'0.5px solid var(--card-border)', borderRadius:14, padding:'18px 20px', borderTop:'3px solid var(--card-border)' }}>
+                    <div className="skeleton" style={{ height:10, width:'70%', marginBottom:10 }}/>
+                    <div className="skeleton" style={{ height:26, width:'60%', marginBottom:8 }}/>
+                    <div className="skeleton" style={{ height:10, width:'50%' }}/>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, marginBottom:16 }}>
+                {[180,180,180].map((h,i)=>(
+                  <div key={i} style={{ background:'var(--card)', border:'0.5px solid var(--card-border)', borderRadius:14, padding:20 }}>
+                    <div className="skeleton" style={{ height:13, width:'40%', marginBottom:8 }}/>
+                    <div className="skeleton" style={{ height:11, width:'25%', marginBottom:20 }}/>
+                    <div className="skeleton" style={{ height:h, borderRadius:8 }}/>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : error ? (
             <div style={{ textAlign:'center', paddingTop:80, color:'#DC2626', fontSize:13, fontFamily:FONT }}>⚠️ {error}</div>
@@ -549,14 +563,14 @@ export default function WhatsAppDashboard() {
                             <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
                               <div style={{ display:'flex', alignItems:'center', gap:7 }}>
                                 <div style={{ width:8, height:8, borderRadius:2, background:item.fill }}/>
-                                <span style={{ fontSize:12, fontWeight:600, color:C.text, fontFamily:FONT }}>{item.name}</span>
+                                <span style={{ fontSize:12, fontWeight:600, color:'var(--text)', fontFamily:FONT }}>{item.name}</span>
                               </div>
                               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                                <span style={{ fontSize:11, color:C.muted, fontFamily:FONT }}>{fmtPct(item.pct,100)}</span>
-                                <span style={{ fontSize:13, fontWeight:700, color:C.text, fontFamily:FONT }}>{fmtN(item.value)}</span>
+                                <span style={{ fontSize:11, color:'var(--text3)', fontFamily:FONT }}>{fmtPct(item.pct,100)}</span>
+                                <span style={{ fontSize:13, fontWeight:700, color:'var(--text)', fontFamily:FONT }}>{fmtN(item.value)}</span>
                               </div>
                             </div>
-                            <div style={{ height:7, background:'#F1F5F9', borderRadius:4, overflow:'hidden' }}>
+                            <div style={{ height:7, background:'var(--bg3)', borderRadius:4, overflow:'hidden' }}>
                               <div style={{ height:'100%', width:`${Math.min(100,item.pct||0)}%`, background:item.fill, borderRadius:4, transition:'width .5s ease' }}/>
                             </div>
                           </div>
@@ -568,19 +582,19 @@ export default function WhatsAppDashboard() {
                     <Card title="By source" sub="Messages sent per sending channel">
                       <ResponsiveContainer width="100%" height={220}>
                         <BarChart data={sourceBar} margin={{top:4,right:8,left:-8,bottom:0}} barCategoryGap="30%">
-                          <XAxis dataKey="source" tick={{fontSize:11,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false}/>
-                          <YAxis tick={{fontSize:10,fill:C.muted,fontFamily:FONT}} tickFormatter={v=>fmtN(v)} axisLine={false} tickLine={false}/>
-                          <ReTooltip content={<ChartTip/>} cursor={{fill:'#F1F5F9'}}/>
+                          <XAxis dataKey="source" tick={{fontSize:11,fill:'var(--text3)',fontFamily:FONT}} axisLine={false} tickLine={false}/>
+                          <YAxis tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtN(v)} axisLine={false} tickLine={false}/>
+                          <ReTooltip content={<ChartTip/>} cursor={{fill:'var(--bg3)'}}/>
                           <Bar dataKey="sent" name="Sent" radius={[5,5,0,0]} maxBarSize={48}>
-                            {sourceBar.map((e,i)=><Cell key={i} fill={SOURCE_COLORS[e.source]||C.muted}/>)}
+                            {sourceBar.map((e,i)=><Cell key={i} fill={SOURCE_COLORS[e.source]||'var(--text3)'}/>)}
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                       <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginTop:8, justifyContent:'center' }}>
                         {sourceBar.map(s=>(
                           <div key={s.source} style={{ display:'flex', alignItems:'center', gap:5 }}>
-                            <div style={{ width:8, height:8, borderRadius:2, background:SOURCE_COLORS[s.source]||C.muted }}/>
-                            <span style={{ fontSize:11, color:C.sub, fontFamily:FONT }}>{s.source}</span>
+                            <div style={{ width:8, height:8, borderRadius:2, background:SOURCE_COLORS[s.source]||'var(--text3)' }}/>
+                            <span style={{ fontSize:11, color:'var(--text2)', fontFamily:FONT }}>{s.source}</span>
                           </div>
                         ))}
                       </div>
@@ -594,14 +608,14 @@ export default function WhatsAppDashboard() {
                             <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
                               <div style={{ display:'flex', alignItems:'center', gap:7 }}>
                                 <div style={{ width:8, height:8, borderRadius:2, background:s.fill }}/>
-                                <span style={{ fontSize:12, fontWeight:600, color:C.text, fontFamily:FONT }}>{s.name}</span>
+                                <span style={{ fontSize:12, fontWeight:600, color:'var(--text)', fontFamily:FONT }}>{s.name}</span>
                               </div>
                               <div style={{ textAlign:'right' }}>
-                                <div style={{ fontSize:14, fontWeight:800, color:C.text, fontFamily:FONT }}>{fmtC(s.value)}</div>
-                                <div style={{ fontSize:10.5, color:C.muted, fontFamily:FONT }}>{totals.total>0?((s.value/totals.total)*100).toFixed(1):'0'}%</div>
+                                <div style={{ fontSize:14, fontWeight:800, color:'var(--text)', fontFamily:FONT }}>{fmtC(s.value)}</div>
+                                <div style={{ fontSize:10.5, color:'var(--text3)', fontFamily:FONT }}>{totals.total>0?((s.value/totals.total)*100).toFixed(1):'0'}%</div>
                               </div>
                             </div>
-                            <div style={{ height:8, background:'#F1F5F9', borderRadius:4, overflow:'hidden' }}>
+                            <div style={{ height:8, background:'var(--bg3)', borderRadius:4, overflow:'hidden' }}>
                               <div style={{ height:'100%', width:`${totals.total>0?s.value/totals.total*100:0}%`, background:s.fill, borderRadius:4, transition:'width .5s ease' }}/>
                             </div>
                           </div>
@@ -619,10 +633,10 @@ export default function WhatsAppDashboard() {
                     <Card title="Daily trend" sub={`Messages sent and spend by day · ${selMonth}`}>
                       <ResponsiveContainer width="100%" height={220}>
                         <BarChart data={dailyTrend} margin={{top:8,right:16,left:-8,bottom:0}} barCategoryGap="25%">
-                          <XAxis dataKey="date" tick={{fontSize:9.5,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false} tickFormatter={v=>v.slice(5)}/>
-                          <YAxis yAxisId="l" tick={{fontSize:10,fill:C.muted,fontFamily:FONT}} tickFormatter={v=>fmtN(v)} axisLine={false} tickLine={false}/>
-                          <YAxis yAxisId="r" orientation="right" tick={{fontSize:10,fill:C.muted,fontFamily:FONT}} tickFormatter={v=>fmtC(v)} axisLine={false} tickLine={false}/>
-                          <ReTooltip content={<ChartTip/>} cursor={{fill:'#F1F5F9'}}/>
+                          <XAxis dataKey="date" tick={{fontSize:9.5,fill:'var(--text3)',fontFamily:FONT}} axisLine={false} tickLine={false} tickFormatter={v=>v.slice(5)}/>
+                          <YAxis yAxisId="l" tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtN(v)} axisLine={false} tickLine={false}/>
+                          <YAxis yAxisId="r" orientation="right" tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtC(v)} axisLine={false} tickLine={false}/>
+                          <ReTooltip content={<ChartTip/>} cursor={{fill:'var(--bg3)'}}/>
                           <Bar yAxisId="l" dataKey="Sent"     fill={C.navy} radius={[4,4,0,0]} maxBarSize={28} name="Sent"/>
                           <Bar yAxisId="l" dataKey="Delivered" fill={C.blue} radius={[4,4,0,0]} maxBarSize={28} name="Delivered" opacity={0.8}/>
                           <Bar yAxisId="r" dataKey="Spend"    fill={C.amber} radius={[4,4,0,0]} maxBarSize={16} name="Spend ₹" opacity={0.7}/>
@@ -638,9 +652,9 @@ export default function WhatsAppDashboard() {
                       <Card title="Month-on-month trend" sub="Messages sent and spend across all months">
                         <ResponsiveContainer width="100%" height={200}>
                           <LineChart data={monthTrend} margin={{top:8,right:16,left:-8,bottom:0}}>
-                            <XAxis dataKey="month" tick={{fontSize:10.5,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false}/>
-                            <YAxis yAxisId="l" tick={{fontSize:10,fill:C.muted,fontFamily:FONT}} tickFormatter={v=>fmtN(v)} axisLine={false} tickLine={false}/>
-                            <YAxis yAxisId="r" orientation="right" tick={{fontSize:10,fill:C.muted,fontFamily:FONT}} tickFormatter={v=>fmtC(v)} axisLine={false} tickLine={false}/>
+                            <XAxis dataKey="month" tick={{fontSize:10.5,fill:'var(--text3)',fontFamily:FONT}} axisLine={false} tickLine={false}/>
+                            <YAxis yAxisId="l" tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtN(v)} axisLine={false} tickLine={false}/>
+                            <YAxis yAxisId="r" orientation="right" tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtC(v)} axisLine={false} tickLine={false}/>
                             <ReTooltip content={<ChartTip/>}/>
                             <Line yAxisId="l" type="monotone" dataKey="Sent"  stroke={C.navy}  strokeWidth={2.5} dot={{r:3.5,fill:C.navy, strokeWidth:0}} activeDot={{r:5}}/>
                             <Line yAxisId="r" type="monotone" dataKey="Spend" stroke={C.amber} strokeWidth={2.5} dot={{r:3.5,fill:C.amber,strokeWidth:0}} activeDot={{r:5}}/>
@@ -659,13 +673,13 @@ export default function WhatsAppDashboard() {
                   <div style={{ marginBottom:16 }}>
                     <Card title="Top 10 campaigns by spend" sub="Filtered by active selections">
                       {topCampaigns.length===0
-                        ?<div style={{textAlign:'center',padding:'40px 0',color:C.muted,fontSize:13,fontFamily:FONT}}>No campaign data for selected filters</div>
+                        ?<div style={{textAlign:'center',padding:'40px 0',color:'var(--text3)',fontSize:13,fontFamily:FONT}}>No campaign data for selected filters</div>
                         :<>
                           <ResponsiveContainer width="100%" height={Math.max(240,topCampaigns.length*36)}>
                             <BarChart data={topCampaigns} layout="vertical" margin={{top:4,right:80,left:8,bottom:4}} barCategoryGap="20%">
-                              <XAxis type="number" tick={{fontSize:10,fill:C.muted,fontFamily:FONT}} tickFormatter={v=>fmtC(v)} axisLine={false} tickLine={false}/>
-                              <YAxis type="category" dataKey="campaign" tick={{fontSize:10.5,fill:C.sub,fontFamily:FONT}} width={220} axisLine={false} tickLine={false} tickFormatter={v=>v.length>30?v.slice(0,28)+'…':v}/>
-                              <ReTooltip content={<ChartTip/>} cursor={{fill:'#F1F5F9'}}/>
+                              <XAxis type="number" tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtC(v)} axisLine={false} tickLine={false}/>
+                              <YAxis type="category" dataKey="campaign" tick={{fontSize:10.5,fill:'var(--text2)',fontFamily:FONT}} width={220} axisLine={false} tickLine={false} tickFormatter={v=>v.length>30?v.slice(0,28)+'…':v}/>
+                              <ReTooltip content={<ChartTip/>} cursor={{fill:'var(--bg3)'}}/>
                               <Bar dataKey="spend" fill={C.navy} radius={[0,5,5,0]} maxBarSize={22} name="Spend ₹"/>
                             </BarChart>
                           </ResponsiveContainer>
@@ -684,14 +698,14 @@ export default function WhatsAppDashboard() {
                         </tr></thead>
                         <tbody>
                           {topCampaigns.map((r,i)=>(
-                            <tr key={i} style={{borderBottom:`0.5px solid #F3F4F6`,background:i%2?'#FAFBFC':'#fff',transition:'background .1s'}}
+                            <tr key={i} style={{borderBottom:`0.5px solid #F3F4F6`,background:i%2?'var(--bg3)':'var(--card)',transition:'background .1s'}}
                               onMouseEnter={e=>e.currentTarget.style.background='#F0F7FF'}
-                              onMouseLeave={e=>e.currentTarget.style.background=i%2?'#FAFBFC':'#fff'}>
-                              <td style={{padding:'10px 12px',color:C.text,maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:FONT}} title={r.campaign}>{r.campaign||'—'}</td>
-                              <td style={{padding:'10px 12px',fontWeight:600,color:C.text,textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.sent)}</td>
-                              <td style={{padding:'10px 12px',color:C.sub,textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.delivered)}</td>
-                              <td style={{padding:'10px 12px',color:C.sub,textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.read)}</td>
-                              <td style={{padding:'10px 12px',fontWeight:700,color:C.text,textAlign:'right',fontFamily:FONT,paddingRight:20}}>{fmtC(r.spend)}</td>
+                              onMouseLeave={e=>e.currentTarget.style.background=i%2?'var(--bg3)':'var(--card)'}>
+                              <td style={{padding:'10px 12px',color:'var(--text)',maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:FONT}} title={r.campaign}>{r.campaign||'—'}</td>
+                              <td style={{padding:'10px 12px',fontWeight:600,color:'var(--text)',textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.sent)}</td>
+                              <td style={{padding:'10px 12px',color:'var(--text2)',textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.delivered)}</td>
+                              <td style={{padding:'10px 12px',color:'var(--text2)',textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.read)}</td>
+                              <td style={{padding:'10px 12px',fontWeight:700,color:'var(--text)',textAlign:'right',fontFamily:FONT,paddingRight:20}}>{fmtC(r.spend)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -707,15 +721,15 @@ export default function WhatsAppDashboard() {
                   <div style={{ marginBottom:16 }}>
                     <Card title="Top 10 templates by spend" sub="Stacked by category (Utility / Marketing)">
                       {topTemplates.length===0
-                        ?<div style={{textAlign:'center',padding:'40px 0',color:C.muted,fontSize:13,fontFamily:FONT}}>No template data</div>
+                        ?<div style={{textAlign:'center',padding:'40px 0',color:'var(--text3)',fontSize:13,fontFamily:FONT}}>No template data</div>
                         :<>
                           <ResponsiveContainer width="100%" height={Math.max(240,topTemplates.length*36)}>
                             <BarChart data={topTemplates} layout="vertical" margin={{top:4,right:80,left:8,bottom:4}} barCategoryGap="20%">
-                              <XAxis type="number" tick={{fontSize:10,fill:C.muted,fontFamily:FONT}} tickFormatter={v=>fmtC(v)} axisLine={false} tickLine={false}/>
-                              <YAxis type="category" dataKey="template" tick={{fontSize:10.5,fill:C.sub,fontFamily:FONT}} width={200} axisLine={false} tickLine={false} tickFormatter={v=>v.length>28?v.slice(0,26)+'…':v}/>
-                              <ReTooltip content={<ChartTip/>} cursor={{fill:'#F1F5F9'}}/>
+                              <XAxis type="number" tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtC(v)} axisLine={false} tickLine={false}/>
+                              <YAxis type="category" dataKey="template" tick={{fontSize:10.5,fill:'var(--text2)',fontFamily:FONT}} width={200} axisLine={false} tickLine={false} tickFormatter={v=>v.length>28?v.slice(0,26)+'…':v}/>
+                              <ReTooltip content={<ChartTip/>} cursor={{fill:'var(--bg3)'}}/>
                               <Bar dataKey="spend" radius={[0,5,5,0]} maxBarSize={22} name="Spend ₹">
-                                {topTemplates.map((e,i)=><Cell key={i} fill={CAT_COLORS[e.category]||C.muted}/>)}
+                                {topTemplates.map((e,i)=><Cell key={i} fill={CAT_COLORS[e.category]||'var(--text3)'}/>)}
                               </Bar>
                             </BarChart>
                           </ResponsiveContainer>
@@ -734,17 +748,17 @@ export default function WhatsAppDashboard() {
                         </tr></thead>
                         <tbody>
                           {topTemplates.map((r,i)=>(
-                            <tr key={i} style={{borderBottom:`0.5px solid #F3F4F6`,background:i%2?'#FAFBFC':'#fff',transition:'background .1s'}}
+                            <tr key={i} style={{borderBottom:`0.5px solid #F3F4F6`,background:i%2?'var(--bg3)':'var(--card)',transition:'background .1s'}}
                               onMouseEnter={e=>e.currentTarget.style.background='#F0F7FF'}
-                              onMouseLeave={e=>e.currentTarget.style.background=i%2?'#FAFBFC':'#fff'}>
-                              <td style={{padding:'10px 12px',color:C.text,maxWidth:240,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:FONT}} title={r.template}>{r.template||'—'}</td>
+                              onMouseLeave={e=>e.currentTarget.style.background=i%2?'var(--bg3)':'var(--card)'}>
+                              <td style={{padding:'10px 12px',color:'var(--text)',maxWidth:240,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:FONT}} title={r.template}>{r.template||'—'}</td>
                               <td style={{padding:'10px 12px',fontFamily:FONT}}>
                                 <span style={{fontSize:10.5,fontWeight:700,padding:'2px 8px',borderRadius:20,background:r.category==='UTILITY'?C.navyBg:C.blueBg,color:r.category==='UTILITY'?C.navy:C.blue}}>{r.category||'—'}</span>
                               </td>
-                              <td style={{padding:'10px 12px',fontWeight:600,color:C.text,textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.sent)}</td>
-                              <td style={{padding:'10px 12px',color:C.sub,textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.delivered)}</td>
-                              <td style={{padding:'10px 12px',color:C.sub,textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.read)}</td>
-                              <td style={{padding:'10px 12px',fontWeight:700,color:C.text,textAlign:'right',fontFamily:FONT,paddingRight:20}}>{fmtC(r.spend)}</td>
+                              <td style={{padding:'10px 12px',fontWeight:600,color:'var(--text)',textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.sent)}</td>
+                              <td style={{padding:'10px 12px',color:'var(--text2)',textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.delivered)}</td>
+                              <td style={{padding:'10px 12px',color:'var(--text2)',textAlign:'right',fontFamily:FONT,paddingRight:16}}>{fmtN(r.read)}</td>
+                              <td style={{padding:'10px 12px',fontWeight:700,color:'var(--text)',textAlign:'right',fontFamily:FONT,paddingRight:20}}>{fmtC(r.spend)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -760,9 +774,9 @@ export default function WhatsAppDashboard() {
                   sub={`${tableRows.length.toLocaleString()} rows · ${selMonth}${selSource!=='All'?' · '+selSource:''}${selCategory!=='All'?' · '+selCategory:''}`}
                   action={
                     <div style={{position:'relative'}}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" style={{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={'var(--text3)'} strokeWidth="2" style={{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
                       <input value={search} onChange={e=>onSearch(e.target.value)} placeholder="Search template, campaign…"
-                        style={{paddingLeft:30,paddingRight:10,paddingTop:7,paddingBottom:7,borderRadius:9,border:`0.5px solid ${C.border}`,fontSize:12,fontFamily:FONT,outline:'none',width:240,color:C.text,boxShadow:'0 1px 3px rgba(15,23,42,0.06)'}}/>
+                        style={{paddingLeft:30,paddingRight:10,paddingTop:7,paddingBottom:7,borderRadius:9,border:`0.5px solid ${'var(--card-border)'}`,fontSize:12,fontFamily:FONT,outline:'none',width:240,color:'var(--text)',boxShadow:'0 1px 3px rgba(15,23,42,0.06)'}}/>
                     </div>
                   }>
                   <div style={{overflowX:'auto'}}>
@@ -774,33 +788,33 @@ export default function WhatsAppDashboard() {
                       </tr></thead>
                       <tbody>
                         {pageRows.map((r,i)=>(
-                          <tr key={i} style={{borderBottom:`0.5px solid #F3F4F6`,background:i%2?'#FAFBFC':'#fff',transition:'background .1s'}}
+                          <tr key={i} style={{borderBottom:`0.5px solid #F3F4F6`,background:i%2?'var(--bg3)':'var(--card)',transition:'background .1s'}}
                             onMouseEnter={e=>e.currentTarget.style.background='#F0F7FF'}
-                            onMouseLeave={e=>e.currentTarget.style.background=i%2?'#FAFBFC':'#fff'}>
-                            <td style={{padding:'9px 12px',color:C.muted,fontFamily:FONT,whiteSpace:'nowrap'}}>{r.dateStr}</td>
+                            onMouseLeave={e=>e.currentTarget.style.background=i%2?'var(--bg3)':'var(--card)'}>
+                            <td style={{padding:'9px 12px',color:'var(--text3)',fontFamily:FONT,whiteSpace:'nowrap'}}>{r.dateStr}</td>
                             <td style={{padding:'9px 12px',fontFamily:FONT}}>
-                              <span style={{fontSize:10.5,fontWeight:700,padding:'2px 8px',borderRadius:20,background:(SOURCE_COLORS[r.source]||C.muted)+'22',color:SOURCE_COLORS[r.source]||C.muted}}>{r.source}</span>
+                              <span style={{fontSize:10.5,fontWeight:700,padding:'2px 8px',borderRadius:20,background:(SOURCE_COLORS[r.source]||'var(--text3)')+'22',color:SOURCE_COLORS[r.source]||'var(--text3)'}}>{r.source}</span>
                             </td>
-                            <td style={{padding:'9px 12px',color:C.sub,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:FONT}} title={r.campaign}>{r.campaign||'—'}</td>
-                            <td style={{padding:'9px 12px',color:C.text,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:FONT}} title={r.template}>{r.template||'—'}</td>
+                            <td style={{padding:'9px 12px',color:'var(--text2)',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:FONT}} title={r.campaign}>{r.campaign||'—'}</td>
+                            <td style={{padding:'9px 12px',color:'var(--text)',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:FONT}} title={r.template}>{r.template||'—'}</td>
                             <td style={{padding:'9px 12px',fontFamily:FONT}}><StatusPill status={r.status}/></td>
-                            <td style={{padding:'9px 12px',textAlign:'right',color:C.text,fontWeight:600,fontFamily:FONT,paddingRight:12}}>{r.sent||'—'}</td>
-                            <td style={{padding:'9px 12px',textAlign:'right',color:C.sub,fontFamily:FONT,paddingRight:12}}>{r.delivered||'—'}</td>
-                            <td style={{padding:'9px 12px',textAlign:'right',color:C.sub,fontFamily:FONT,paddingRight:12}}>{r.read||'—'}</td>
-                            <td style={{padding:'9px 12px',textAlign:'right',color:r.failed>0?C.red:C.muted,fontFamily:FONT,paddingRight:12}}>{r.failed||'—'}</td>
-                            <td style={{padding:'9px 12px',textAlign:'right',color:C.sub,fontFamily:FONT,paddingRight:12}}>{r.replied||'—'}</td>
-                            <td style={{padding:'9px 12px',textAlign:'right',fontWeight:700,color:C.text,fontFamily:FONT,paddingRight:20}}>{r.total_spend>0?fmtC(r.total_spend):'—'}</td>
+                            <td style={{padding:'9px 12px',textAlign:'right',color:'var(--text)',fontWeight:600,fontFamily:FONT,paddingRight:12}}>{r.sent||'—'}</td>
+                            <td style={{padding:'9px 12px',textAlign:'right',color:'var(--text2)',fontFamily:FONT,paddingRight:12}}>{r.delivered||'—'}</td>
+                            <td style={{padding:'9px 12px',textAlign:'right',color:'var(--text2)',fontFamily:FONT,paddingRight:12}}>{r.read||'—'}</td>
+                            <td style={{padding:'9px 12px',textAlign:'right',color:r.failed>0?C.red:'var(--text3)',fontFamily:FONT,paddingRight:12}}>{r.failed||'—'}</td>
+                            <td style={{padding:'9px 12px',textAlign:'right',color:'var(--text2)',fontFamily:FONT,paddingRight:12}}>{r.replied||'—'}</td>
+                            <td style={{padding:'9px 12px',textAlign:'right',fontWeight:700,color:'var(--text)',fontFamily:FONT,paddingRight:20}}>{r.total_spend>0?fmtC(r.total_spend):'—'}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                     {totalPages>1&&(
-                      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 12px 12px',borderTop:`0.5px solid ${C.border}`}}>
-                        <span style={{fontSize:11.5,color:C.muted,fontFamily:FONT}}>{page*PAGE_SIZE+1}–{Math.min((page+1)*PAGE_SIZE,tableRows.length)} of {tableRows.length.toLocaleString()} rows</span>
+                      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 12px 12px',borderTop:`0.5px solid ${'var(--card-border)'}`}}>
+                        <span style={{fontSize:11.5,color:'var(--text3)',fontFamily:FONT}}>{page*PAGE_SIZE+1}–{Math.min((page+1)*PAGE_SIZE,tableRows.length)} of {tableRows.length.toLocaleString()} rows</span>
                         <div style={{display:'flex',gap:5,alignItems:'center'}}>
-                          <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0} style={{padding:'5px 13px',borderRadius:8,border:`0.5px solid ${C.border}`,background:'#fff',fontSize:12,fontWeight:600,fontFamily:FONT,cursor:page===0?'not-allowed':'pointer',opacity:page===0?0.35:1,color:C.text}}>← Prev</button>
-                          {Array.from({length:Math.min(7,totalPages)},(_,i)=>{const start=Math.max(0,Math.min(page-3,totalPages-7));const p=start+i;return<button key={p} onClick={()=>setPage(p)} style={{width:32,height:32,borderRadius:8,border:`0.5px solid ${p===page?C.navy:C.border}`,background:p===page?C.navy:'#fff',color:p===page?'#fff':C.text,fontSize:12,fontWeight:p===page?700:400,fontFamily:FONT,cursor:'pointer'}}>{p+1}</button>})}
-                          <button onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={page===totalPages-1} style={{padding:'5px 13px',borderRadius:8,border:`0.5px solid ${C.border}`,background:'#fff',fontSize:12,fontWeight:600,fontFamily:FONT,cursor:page===totalPages-1?'not-allowed':'pointer',opacity:page===totalPages-1?0.35:1,color:C.text}}>Next →</button>
+                          <button onClick={()=>setPage(p=>Math.max(0,p-1))} disabled={page===0} style={{padding:'5px 13px',borderRadius:8,border:`0.5px solid ${'var(--card-border)'}`,background:'var(--card)',fontSize:12,fontWeight:600,fontFamily:FONT,cursor:page===0?'not-allowed':'pointer',opacity:page===0?0.35:1,color:'var(--text)'}}>← Prev</button>
+                          {Array.from({length:Math.min(7,totalPages)},(_,i)=>{const start=Math.max(0,Math.min(page-3,totalPages-7));const p=start+i;return<button key={p} onClick={()=>setPage(p)} style={{width:32,height:32,borderRadius:8,border:`0.5px solid ${p===page?C.navy:'var(--card-border)'}`,background:p===page?C.navy:'var(--card)',color:p===page?'var(--card)':'var(--text)',fontSize:12,fontWeight:p===page?700:400,fontFamily:FONT,cursor:'pointer'}}>{p+1}</button>})}
+                          <button onClick={()=>setPage(p=>Math.min(totalPages-1,p+1))} disabled={page===totalPages-1} style={{padding:'5px 13px',borderRadius:8,border:`0.5px solid ${'var(--card-border)'}`,background:'var(--card)',fontSize:12,fontWeight:600,fontFamily:FONT,cursor:page===totalPages-1?'not-allowed':'pointer',opacity:page===totalPages-1?0.35:1,color:'var(--text)'}}>Next →</button>
                         </div>
                       </div>
                     )}
