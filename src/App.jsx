@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { ThemeProvider } from './context/ThemeContext'
 import { useAuth } from './hooks/useAuth'
 import { logActivity } from './components/ActivityLogger'
 import LoginPage from './pages/LoginPage'
@@ -54,7 +53,6 @@ function ProtectedRoute({ children, dashboardId }) {
 
 export default function App() {
   return (
-    <ThemeProvider>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/"                       element={<ProtectedRoute dashboardId="home">        <DashboardHome /></ProtectedRoute>} />
@@ -71,6 +69,5 @@ export default function App() {
       <Route path="/settings"               element={<ProtectedRoute dashboardId="settings">    <SettingsPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-    </ThemeProvider>
   )
 }
