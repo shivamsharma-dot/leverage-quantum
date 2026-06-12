@@ -54,7 +54,8 @@ Guidelines:
 - You are read-only — never claim to modify campaigns.`
 }
 
-async function askClaude(messages, metaToken) {
+// askClaude — SSE streaming, calls onChunk for each delta, returns full text
+async function askClaude(messages, metaToken, onChunk) {
   const res = await fetch('/api/vasu-chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -64,9 +65,32 @@ async function askClaude(messages, metaToken) {
       metaToken,
     })
   })
-  if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'API error') }
-  const d = await res.json()
-  return d.content || '(no response)'
+  if (!res.ok) {
+    const e = await res.json().catch(()=>({error:'Server error'}))
+    throw new Error(e.error || `HTTP ${res.status}`)
+  }
+  // Handle SSE stream
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = '', fullText = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop()
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6).trim()
+      try {
+        const parsed = JSON.parse(data)
+        if (parsed.error) throw new Error(parsed.error)
+        if (parsed.delta) { fullText += parsed.delta; onChunk?.(fullText) }
+        if (parsed.done) return parsed.content || fullText
+      } catch(e) { if (e.message && !e.message.includes('JSON')) throw e }
+    }
+  }
+  return fullText
 }
 
 const QUICK = [
@@ -294,13 +318,28 @@ export default function VasuAI() {
     setInput('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
     const updated = [...messages, { role: 'user', content: q }]
-    setMessages(updated)
+    // Add placeholder assistant message that streams in
+    setMessages([...updated, { role: 'assistant', content: '', streaming: true }])
     setLoading(true)
     try {
-      const reply = await askClaude(updated, metaToken)
-      setMessages(m => [...m, { role: 'assistant', content: reply }])
+      const reply = await askClaude(updated, metaToken, (partial) => {
+        setMessages(m => {
+          const copy = [...m]
+          copy[copy.length-1] = { role: 'assistant', content: partial, streaming: true }
+          return copy
+        })
+      })
+      setMessages(m => {
+        const copy = [...m]
+        copy[copy.length-1] = { role: 'assistant', content: reply }
+        return copy
+      })
     } catch (e) {
-      setMessages(m => [...m, { role: 'assistant', content: `⚠️ ${e.message}` }])
+      setMessages(m => {
+        const copy = [...m]
+        copy[copy.length-1] = { role: 'assistant', content: '⚠️ ' + e.message }
+        return copy
+      })
     } finally { setLoading(false) }
   }
 
@@ -405,14 +444,17 @@ export default function VasuAI() {
               <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
                 <div style={{ width: 52, height: 52, borderRadius: 16, background: C.navyTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><QMark size={26} /></div>
                 <div style={{ fontSize: 25, fontWeight: 800, color: C.ink, letterSpacing: '-0.02em' }}>{greeting}, {firstName}</div>
-                <div style={{ fontSize: 14, color: C.text2 }}>{connected ? 'Ask anything about your Meta Ads performance.' : 'Connect Meta Ads from the sidebar to begin.'}</div>
-                {connected && (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 560, marginTop: 8 }}>
+                <div style={{ fontSize: 14, color: C.text2, textAlign: 'center' }}>Ask anything about Meta Ads, QL Ops, or WhatsApp performance.<br/>Or generate a report — weekly digest, monthly summary, campaign analysis.</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 620, marginTop: 8 }}>
                     {QUICK.map(s => (
-                      <button key={s} onClick={() => send(s)} style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 500, color: C.text2, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 999, padding: '7px 13px', cursor: 'pointer' }}>{s}</button>
+                      <button key={s} onClick={() => send(s)}
+                        style={{ fontFamily: FONT, fontSize: 12.5, fontWeight: 500, color: C.text2, background: '#fff', border: `1px solid ${C.line}`, borderRadius: 999, padding: '7px 13px', cursor: 'pointer', transition: 'all .15s' }}
+                        onMouseOver={e=>{e.currentTarget.style.borderColor='#1F3C84';e.currentTarget.style.color='#1F3C84'}}
+                        onMouseOut={e=>{e.currentTarget.style.borderColor=C.line;e.currentTarget.style.color=C.text2}}>
+                        {s}
+                      </button>
                     ))}
                   </div>
-                )}
               </div>
             ) : (
               <div style={{ maxWidth: 760, margin: '0 auto' }}>
@@ -427,7 +469,7 @@ export default function VasuAI() {
                     <div style={{ paddingLeft: 33 }}>
                       {m.role === 'user'
                         ? <div style={{ fontSize: 14, color: C.ink, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{m.content}</div>
-                        : <><Markdown text={m.content} />
+                        : <><Markdown text={m.content + (m.streaming && m.content ? '▍' : '')} />
                             <div style={{ display: 'flex', gap: 2, marginTop: 8 }}>
                               {['speaker', 'copy', 'edit', 'branch', 'up', 'down', 'refresh'].map((ic, j) => (
                                 <button key={j} style={iconBtn(28)}
@@ -440,14 +482,7 @@ export default function VasuAI() {
                     </div>
                   </div>
                 ))}
-                {loading && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 22 }}>
-                    <span style={{ width: 24, height: 24, borderRadius: '50%', background: C.navyTint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><QMark size={13} /></span>
-                    <span style={{ display: 'inline-flex', gap: 4 }}>
-                      {[0, 1, 2].map(d => <span key={d} style={{ width: 6, height: 6, borderRadius: '50%', background: C.text3, animation: `vblink 1.2s infinite ${d * 0.2}s` }} />)}
-                    </span>
-                  </div>
-                )}
+{/* streaming indicator shown inline in the message — no separate loader needed */}
                 <div ref={bottomRef} />
               </div>
             )}
