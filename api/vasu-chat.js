@@ -366,12 +366,13 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'x-api-key': ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 8192,
         stream: true,
-        system,
+        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
         messages: merged,
       }),
     })
