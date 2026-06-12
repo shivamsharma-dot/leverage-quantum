@@ -7,8 +7,8 @@ import styles from './ChannelMixDashboard.module.css'
 
 const SRC_COLORS = {
   Facebook:'#1C9FD4', Google:'#10B981', Referral:'#F59E0B',
-  'Content+Brand':'#EC4899', Affiliate:'#F97316', Remarketing:'#06B6D4',
-  Offline:'#1C9FD4', Bing:'#4CAE6F', Branding:'#3B82F6',
+  'Content+Brand':'#29B9C3', Affiliate:'#F59E0B', Remarketing:'#29B9C3',
+  Offline:'#1C9FD4', Bing:'#4CAE6F', Branding:'#1C9FD4',
   Unidentified:'#9CA3AF'
 }
 
@@ -137,7 +137,7 @@ export default function ChannelMixDashboard(){
             {l:'Total OPPs',  v:fn(totals.opps),       s:'All sources',   c:'#1C9FD4'},
             {l:'Total Spend', v:fmtR(totals.spend),     s:'Paid channels', c:'#10B981'},
             {l:'Total Revenue',v:fmtR(totals.total_rev),s:'AC + VAS',      c:'#F59E0B'},
-            {l:'Active Sources',v:srcBreakdown.filter(r=>r.opps>0).length+'',s:'Channels tracked',c:'#3B82F6'},
+            {l:'Active Sources',v:srcBreakdown.filter(r=>r.opps>0).length+'',s:'Channels tracked',c:'#1C9FD4'},
           ].map(k=>(
             <div key={k.l} className={styles.kpi}>
               <div className={styles.kpiVal}>{k.v}</div>
