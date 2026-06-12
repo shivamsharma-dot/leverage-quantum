@@ -745,7 +745,7 @@ export default function LeadQualificationDashboard() {
         {/* ── HEADER ───────────────────────────────────────────────── */}
         <div style={{
           background: 'var(--card)', borderBottom: `0.5px solid ${C.border}`,
-          padding: '11px 28px', display: 'flex', alignItems: 'center',
+          padding: '0 28px', height: 56, display: 'flex', alignItems: 'center',
           justifyContent: 'space-between', gap: 12, flexShrink: 0,
         }}>
           <div>
