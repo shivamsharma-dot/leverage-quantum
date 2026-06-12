@@ -10,10 +10,10 @@ const MONTHS = ["Jan-2025","Feb-2025","Mar-2025","Apr-2025","May-2025","Jun-2025
 const ALL_CHANNELS = ["Affiliate","Bing","Content+Brand","Facebook","Google","Inbound","Leverage App","LinkedIn","Organic","Other","Referral","Remarketing","WhatsApp"]
 
 const CH_COLORS = {
-  Facebook:'#1C9FD4', Google:'#34D399', Affiliate:'#F59E0B',
-  Inbound:'#EF4444', WhatsApp:'#10B981', 'Leverage App':'#3B82F6',
-  Organic:'#1C9FD4', Referral:'#F97316', 'Content+Brand':'#EC4899',
-  Remarketing:'#06B6D4', LinkedIn:'#0EA5E9', Bing:'#4CAE6F', Other:'#9CA3AF'
+  Facebook:'#1C9FD4', Google:'#4CAE6F', Affiliate:'#F59E0B',
+  Inbound:'#EF4444', WhatsApp:'#10B981', 'Leverage App':'#1C9FD4',
+  Organic:'#1C9FD4', Referral:'#F59E0B', 'Content+Brand':'#29B9C3',
+  Remarketing:'#29B9C3', LinkedIn:'#0EA5E9', Bing:'#4CAE6F', Other:'#9CA3AF'
 }
 
 function fmt(n) {
@@ -26,7 +26,7 @@ function fmt(n) {
 function pct(a, b) { return b > 0 ? (a/b*100).toFixed(1) + '%' : '–' }
 
 const TOOLTIP = {
-  contentStyle: { background:'#fff', border:'1px solid #E5E7EB', borderRadius:8, fontSize:12 },
+  contentStyle: { background:'#fff', border:'1px solid #E5E7EB', borderRadius: 12, fontSize:12 },
   labelStyle: { color:'#111827', fontWeight:600 }
 }
 
@@ -157,7 +157,7 @@ export default function LeadQualityDashboard() {
                 <Tooltip {...TOOLTIP} formatter={v => fmt(v)} />
                 <Legend wrapperStyle={{fontSize:11}} />
                 <Bar dataKey="opps"    name="OPPs"    fill="#1C9FD4" radius={[3,3,0,0]} fillOpacity={0.85} />
-                <Bar dataKey="futwork" name="Futwork" fill="#818CF8" radius={[3,3,0,0]} fillOpacity={0.85} />
+                <Bar dataKey="futwork" name="Futwork" fill="#1C9FD4" radius={[3,3,0,0]} fillOpacity={0.85} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -168,7 +168,7 @@ export default function LeadQualityDashboard() {
                 <XAxis dataKey="month" tick={{fontSize:10,fill:'#9CA3AF'}} />
                 <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} />
                 <Tooltip {...TOOLTIP} />
-                <Line type="monotone" dataKey="apps" name="Apps" stroke="#4BAE8A" strokeWidth={2.5} dot={{r:4,fill:'#4BAE8A'}} />
+                <Line type="monotone" dataKey="apps" name="Apps" stroke="#4CAE6F" strokeWidth={2.5} dot={{r:4,fill:'#4CAE6F'}} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -182,9 +182,9 @@ export default function LeadQualityDashboard() {
               {[
                 {l:'Total OPPs',   v:totals.opps,    c:'#1C9FD4', sub:''},
                 {l:'Futwork Sent', v:totals.futwork, c:'#1C9FD4', sub: pct(totals.futwork,totals.opps)+' of OPPs'},
-                {l:'Floor Direct', v:totals.floor,   c:'#3B82F6', sub: pct(totals.floor,totals.opps)+' of OPPs'},
+                {l:'Floor Direct', v:totals.floor,   c:'#1C9FD4', sub: pct(totals.floor,totals.opps)+' of OPPs'},
                 {l:'QLs',          v:totals.qls,     c:'#F59E0B', sub: pct(totals.qls,totals.futwork)+' of Futwork'},
-                {l:'Apps (STUs)',  v:totals.apps,    c:'#4BAE8A', sub: pct(totals.apps,totals.qls)+' of QLs'},
+                {l:'Apps (STUs)',  v:totals.apps,    c:'#4CAE6F', sub: pct(totals.apps,totals.qls)+' of QLs'},
               ].map(s => (
                 <div key={s.l} className={styles.fStep}>
                   <span className={styles.fLabel} style={{color:s.c}}>{s.l}</span>
