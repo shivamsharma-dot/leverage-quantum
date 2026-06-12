@@ -224,6 +224,10 @@ export default function WhatsAppDashboard() {
   const [sortDir, setSortDir]         = useState('desc')
   const [page, setPage]               = useState(0)
   const [showInfo, setShowInfo]       = useState(false)
+  const [datePreset, setDatePreset]   = useState('month')
+  const [customFrom, setCustomFrom]   = useState('')
+  const [customTo, setCustomTo]       = useState('')
+  const [showCustom, setShowCustom]   = useState(false)
   const [activeTab, setActiveTab]     = useState('overview') // overview | campaigns | templates
 
   const loadData = useCallback(async (bust=false) => {
@@ -246,6 +250,30 @@ export default function WhatsAppDashboard() {
 
   useEffect(()=>{ loadData() },[loadData])
 
+  const isCurrentMonth = useMemo(()=>{
+    if(!selMonth) return false
+    const now=new Date()
+    return selMonth===MONTHS_SHORT[now.getMonth()]+' '+now.getFullYear()
+  },[selMonth])
+
+  const dateWindow = useMemo(()=>{
+    const today=new Date(); today.setHours(0,0,0,0)
+    if(datePreset==='LD'){const y=new Date(today);y.setDate(today.getDate()-1);return{from:y,to:y}}
+    if(datePreset==='L7D'){const to=new Date(today);to.setDate(today.getDate()-1);const from=new Date(to);from.setDate(to.getDate()-6);return{from,to}}
+    if(datePreset==='MTD'){return{from:new Date(today.getFullYear(),today.getMonth(),1),to:today}}
+    if(datePreset==='custom'&&customFrom&&customTo){
+      const[fy,fm,fd]=customFrom.split('-').map(Number);const cf=new Date(fy,fm-1,fd)
+      const[ty,tm,td]=customTo.split('-').map(Number);const ct=new Date(ty,tm-1,td);ct.setHours(23,59,59,999)
+      return{from:cf,to:ct}
+    }
+    return null
+  },[datePreset,customFrom,customTo])
+
+  const baseRows = useMemo(()=>{
+    if(!dateWindow) return rows.filter(r=>r.month===selMonth)
+    return rows.filter(r=>{if(!r.date)return false;const d=new Date(r.date);d.setHours(0,0,0,0);return d>=dateWindow.from&&d<=dateWindow.to})
+  },[rows,dateWindow,selMonth])
+
   // derived filter options from selected month
   const monthRows   = useMemo(()=>rows.filter(r=>r.month===selMonth),[rows,selMonth])
   const sources     = useMemo(()=>['All',...[...new Set(monthRows.map(r=>r.source))].filter(Boolean).sort()],[monthRows])
@@ -253,11 +281,11 @@ export default function WhatsAppDashboard() {
   const campaigns   = useMemo(()=>['All',...[...new Set(monthRows.map(r=>r.campaign))].filter(r=>r).sort()],[monthRows])
 
   // apply all filters
-  const filtered = useMemo(()=>monthRows.filter(r=>
+  const filtered = useMemo(()=>baseRows.filter(r=>
     (selSource==='All'||r.source===selSource) &&
     (selCategory==='All'||r.category===selCategory) &&
     (selCampaign==='All'||r.campaign===selCampaign)
-  ),[monthRows,selSource,selCategory,selCampaign])
+  ),[baseRows,selSource,selCategory,selCampaign])
 
   // aggregate totals from filtered rows
   const totals = useMemo(()=>{
@@ -386,7 +414,47 @@ export default function WhatsAppDashboard() {
             <h1 style={{ fontSize:18, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.5px', fontFamily:FONT }}>WhatsApp{selMonth ? ' · '+selMonth : ''}</h1>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-            {months.length>0 && <Dropdown options={[...months].reverse()} value={selMonth} minWidth={110} onChange={v=>{setSelMonth(v);setPage(0)}}/>}
+            {isCurrentMonth&&(
+              <div style={{display:'flex',alignItems:'center',gap:3,background:'#F1F5F9',borderRadius:9,padding:'3px'}}>
+                {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl])=>(
+                  <button key={key} onClick={()=>{setDatePreset(key);setCustomFrom('');setCustomTo('');setPage(0)}}
+                    style={{padding:'5px 11px',borderRadius:7,border:'none',cursor:'pointer',fontSize:11.5,fontWeight:700,fontFamily:FONT,background:datePreset===key?'#fff':'transparent',color:datePreset===key?C.navy:C.muted,boxShadow:datePreset===key?'0 1px 4px rgba(15,23,42,0.10)':'none',transition:'all .15s'}}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            )}
+            {months.length>0&&(
+              <div style={{opacity:datePreset!=='month'?0.5:1,transition:'opacity .15s'}}>
+                <Dropdown options={[...months].reverse()} value={selMonth} minWidth={110}
+                  onChange={v=>{setSelMonth(v);setDatePreset('month');setCustomFrom('');setCustomTo('');setPage(0)}}/>
+              </div>
+            )}
+            <div style={{position:'relative'}}>
+              <button onClick={()=>setShowCustom(v=>!v)}
+                style={{padding:'6px 11px',borderRadius:8,border:`0.5px solid ${datePreset==='custom'?C.navy:C.border}`,background:datePreset==='custom'?C.navyBg:'#fff',color:datePreset==='custom'?C.navy:C.sub,fontSize:11.5,fontWeight:600,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',gap:5,transition:'all .15s'}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                {datePreset==='custom'&&customFrom?customFrom+' → '+customTo:'Custom'}
+              </button>
+              {showCustom&&(
+                <>
+                  <div onClick={()=>setShowCustom(false)} style={{position:'fixed',inset:0,zIndex:399}}/>
+                  <div style={{position:'absolute',top:'calc(100% + 8px)',right:0,zIndex:400,background:'#fff',border:`0.5px solid ${C.border}`,borderRadius:12,boxShadow:'0 14px 40px rgba(15,23,42,0.14)',padding:'16px 18px',minWidth:240,fontFamily:FONT}}>
+                    <div style={{fontSize:11,fontWeight:700,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:10}}>Custom date range</div>
+                    {[['From',customFrom,setCustomFrom],['To',customTo,setCustomTo]].map(([lbl,val,setter])=>(
+                      <div key={lbl} style={{marginBottom:10}}>
+                        <div style={{fontSize:11,fontWeight:600,color:C.sub,marginBottom:4}}>{lbl}</div>
+                        <input type="date" value={val} onChange={e=>setter(e.target.value)} style={{width:'100%',padding:'7px 10px',borderRadius:8,border:`0.5px solid ${C.border}`,fontSize:12,fontFamily:FONT,outline:'none',color:C.text,boxSizing:'border-box'}}/>
+                      </div>
+                    ))}
+                    <button onClick={()=>{if(customFrom&&customTo){setDatePreset('custom');setShowCustom(false);setPage(0)}}} disabled={!customFrom||!customTo}
+                      style={{width:'100%',padding:'8px',borderRadius:8,border:'none',background:customFrom&&customTo?C.navy:'#E5E7EB',color:customFrom&&customTo?'#fff':C.muted,fontSize:12,fontWeight:700,fontFamily:FONT,cursor:customFrom&&customTo?'pointer':'not-allowed'}}>
+                      Apply range
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <Dropdown label="Source"   options={sources}    value={selSource}   minWidth={120} onChange={v=>{setSelSource(v);setPage(0)}}/>
             <Dropdown label="Category" options={categories} value={selCategory} minWidth={120} onChange={v=>{setSelCategory(v);setPage(0)}}/>
             <Dropdown label="Campaign" options={campaigns}  value={selCampaign} minWidth={140} onChange={v=>{setSelCampaign(v);setPage(0)}}/>
