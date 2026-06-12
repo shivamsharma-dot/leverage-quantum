@@ -408,7 +408,7 @@ export default function WhatsAppDashboard() {
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
 
         {/* ── HEADER ── */}
-        <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${'var(--card-border)'}`, padding:'10px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, boxShadow:'0 1px 4px rgba(15,23,42,0.04)' }}>
+        <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${'var(--card-border)'}`, padding:'0 28px', height:56, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0 }}>
           <div>
             <p style={{ fontSize:10.5, color:'var(--text3)', margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / WhatsApp</p>
             <h1 style={{ fontSize:18, fontWeight:800, color:'var(--text)', margin:'2px 0 0', letterSpacing:'-0.5px', fontFamily:FONT }}>WhatsApp{selMonth ? ' · '+selMonth : ''}</h1>
