@@ -46,6 +46,31 @@ const CustomTooltip=({active,payload,label})=>{
   )
 }
 
+
+function InfoTooltip({ items }) {
+  const [show, setShow] = React.useState(false)
+  return (
+    <div style={{ position:'relative', flexShrink:0 }}>
+      <button onClick={() => setShow(v => !v)}
+        style={{ width:30, height:30, borderRadius:8, border:'0.5px solid #E5E7EB', background:show?'#E8EFF9':'#fff', color:'#1F3C84', fontSize:14, fontWeight:700, fontStyle:'italic', fontFamily:'Georgia,serif', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        i
+      </button>
+      {show && <div onClick={() => setShow(false)} style={{ position:'fixed', inset:0, zIndex:150 }}/>}
+      {show && (
+        <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:360, background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, boxShadow:'0 14px 40px rgba(15,23,42,0.16)', padding:'16px 18px', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#0F172A', marginBottom:8 }}>How metrics are calculated</div>
+          {items.map(([label, desc]) => (
+            <div key={label} style={{ display:'flex', gap:10, padding:'6px 0', borderTop:'0.5px solid #F3F4F6' }}>
+              <div style={{ fontSize:11.5, fontWeight:700, color:'#1F3C84', width:120, flexShrink:0 }}>{label}</div>
+              <div style={{ fontSize:11.5, color:'#475569', lineHeight:1.5 }}>{desc}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ChannelMixDashboard(){
   const [pageLoading, setPageLoading] = React.useState(true)
   React.useEffect(() => { const t = setTimeout(() => setPageLoading(false), 600); return () => clearTimeout(t) }, [])
@@ -115,6 +140,7 @@ export default function ChannelMixDashboard(){
               {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
             </select>
             <ExportButton data={srcBreakdown} filename="channel_mix_sources"/>
+            <InfoTooltip items={[['Total OPPs','Total raw leads across all channels.'],['Total Spend','All paid ad spend.'],['Total Revenue','AC + VAS collected.'],['Active Sources','Distinct lead sources with volume.'],['OPP Share','% of leads per channel.'],['ROAS by Channel','Revenue ÷ Spend per channel.'],['Unidentified','Leads missing UTM source — attribution gap.']]}/>
             <div className={styles.liveBadge}><span className={styles.liveDot}/>Live</div>
           </div>
         </div>
