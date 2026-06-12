@@ -1,197 +1,316 @@
-// api/vasu-chat.js — Claude-powered VASU AI backend
-// Replaces Groq. Uses claude-sonnet-4-20250514 via Anthropic API.
-// Fetches MTD sheet + QL Ops sheet + Meta Ads insights server-side for a rich system prompt.
+// api/vasu-chat.js — VASU AI · Claude-powered · streaming SSE · no external SDK
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
+const MODEL         = 'claude-sonnet-4-5'
 
-const MTD_SHEET  = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT58jwL_E0MSciEW_nyrHQMA-0DiFqUN3wstB9yTpfM3gdhK-ctxaODRuqtdxurFRJwmhvbzqS_9EuM/pub?output=csv'
 const QLOPS_SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=0&single=true&output=csv'
-const AD_ACCOUNT = 'act_641914389215638'
+const WA_SHEET    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=1222628502&single=true&output=csv'
+const AD_ACCOUNT  = 'act_641914389215638'
+const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-// ── helpers ─────────────────────────────────────────────────────────────────
-function parseCSV(csv) {
-  const rows = csv.trim().split('\n').map(r => {
-    const cols=[],buf=[];let inQ=false
-    for(const ch of r){if(ch==='"'){inQ=!inQ}else if(ch===','&&!inQ){cols.push(buf.join('').trim());buf.length=0}else buf.push(ch)}
-    cols.push(buf.join('').trim()); return cols
-  })
-  const [hdr,...data]=rows; const h=k=>hdr.indexOf(k)
-  return {headers:hdr, rows:data, h}
-}
-
-function fmt(n){ const x=parseFloat(n)||0; if(x>=1e7)return '₹'+(x/1e7).toFixed(2)+' Cr'; if(x>=1e5)return '₹'+(x/1e5).toFixed(1)+'L'; if(x>=1000)return '₹'+(x/1000).toFixed(0)+'K'; return '₹'+Math.round(x).toLocaleString('en-IN') }
-
-async function safeFetch(url, opts={}) {
-  try { const r=await fetch(url,opts); if(!r.ok)return null; return r } catch { return null }
-}
-
-// ── data fetchers ────────────────────────────────────────────────────────────
-async function getMTDData() {
+// ── helpers ───────────────────────────────────────────────────────────────────
+async function safeFetch(url, opts = {}) {
   try {
-    const r = await safeFetch(MTD_SHEET)
-    if (!r) return 'MTD Sheet: unavailable'
-    const {rows,h} = parseCSV(await r.text())
-    // Group by month — latest 3 months
-    const byMonth = {}
-    rows.forEach(row => {
-      const month = row[h('Month')] || row[0]
-      if (!month || month.toLowerCase()==='month') return
-      if (!byMonth[month]) byMonth[month]={month,spend:0,leads:0,ql:0,apps:0,rev:0}
-      byMonth[month].spend += parseFloat(row[h('Total Spend')]||row[h('spend')]||0)
-      byMonth[month].leads += parseInt(row[h('Total Leads')]||row[h('leads')]||0)
-      byMonth[month].ql    += parseInt(row[h('FW Qualified')]||row[h('fwQual')]||0)
-      byMonth[month].apps  += parseInt(row[h('Applications')]||row[h('apps')]||0)
-      byMonth[month].rev   += parseFloat(row[h('Total Revenue')]||row[h('totalRev')]||0)
-    })
-    const months = Object.values(byMonth).slice(-3)
-    return months.map(m => {
-      const cpl = m.leads>0 ? Math.round(m.spend/m.leads) : 0
-      const roas = m.spend>0 ? (m.rev/m.spend).toFixed(2) : '0'
-      return `${m.month}: Spend ${fmt(m.spend)} | Leads ${m.leads.toLocaleString()} | CPL ₹${cpl} | FW Qualified ${m.ql.toLocaleString()} | Apps ${m.apps.toLocaleString()} | Revenue ${fmt(m.rev)} | ROAS ${roas}x`
-    }).join('\n')
-  } catch(e) { return `MTD Sheet error: ${e.message}` }
+    const r = await fetch(url, { ...opts, signal: AbortSignal.timeout(9000) })
+    return r.ok ? r : null
+  } catch { return null }
 }
 
+function parseCSV(csv) {
+  if (!csv?.trim()) return { h: () => -1, rows: [] }
+  const lines = csv.trim().split('\n').map(line => {
+    const cols = []; let buf = '', inQ = false
+    for (const ch of line) {
+      if (ch === '"') { inQ = !inQ }
+      else if (ch === ',' && !inQ) { cols.push(buf.trim()); buf = '' }
+      else buf += ch
+    }
+    cols.push(buf.trim()); return cols
+  })
+  const [hdr, ...rows] = lines
+  return { h: k => hdr.map(x => x.toLowerCase().trim()).indexOf(k.toLowerCase()), rows }
+}
+
+function fmtINR(n) {
+  const x = parseFloat(n) || 0
+  if (x >= 1e7) return '₹' + (x/1e7).toFixed(2) + ' Cr'
+  if (x >= 1e5) return '₹' + (x/1e5).toFixed(1) + 'L'
+  if (x >= 1000) return '₹' + (x/1e3).toFixed(0) + 'K'
+  return '₹' + Math.round(x).toLocaleString('en-IN')
+}
+
+function monthFromISO(dateStr) {
+  const clean = (dateStr || '').replace(/"/g,'').trim()
+  const p = clean.split('-')
+  if (p.length === 3 && p[0].length === 4) {
+    const mo = parseInt(p[1]) - 1
+    return mo >= 0 && mo < 12 ? MONTHS[mo] + ' ' + p[0] : ''
+  }
+  return ''
+}
+
+// ── data fetchers ─────────────────────────────────────────────────────────────
 async function getQLOpsData() {
   try {
     const r = await safeFetch(QLOPS_SHEET)
-    if (!r) return 'QL Ops Sheet: unavailable'
-    const {rows,h} = parseCSV(await r.text())
-    // Aggregate by month + provider — latest 2 months
-    const byMP = {}
+    if (!r) return '⚠ QL Ops: sheet unavailable'
+    const { h, rows } = parseCSV(await r.text())
+    const map = {}
     rows.forEach(row => {
       const prov  = row[h('provider')]
       const month = row[h('qualified_month')]
-      if (!prov || !month) return
+      const count = parseInt(row[h('qualified_count')]) || 0
+      if (!prov || !month || !count) return
       const k = `${month}||${prov}`
-      if (!byMP[k]) byMP[k]={month,provider:prov,count:0}
-      byMP[k].count += parseInt(row[h('qualified_count')]||0)
+      if (!map[k]) map[k] = { month, provider: prov, count: 0 }
+      map[k].count += count
     })
-    const entries = Object.values(byMP).sort((a,b)=>a.month.localeCompare(b.month)||(a.provider.localeCompare(b.provider)))
-    const months = [...new Set(entries.map(e=>e.month))].slice(-2)
-    return months.flatMap(m => {
-      const mEntries = entries.filter(e=>e.month===m)
-      const total = mEntries.reduce((s,e)=>s+e.count,0)
-      return mEntries.map(e=>`${m} | ${e.provider}: ${e.count.toLocaleString()} qualified (${((e.count/total)*100).toFixed(1)}% of ${total.toLocaleString()} total)`)
-    }).join('\n')
-  } catch(e) { return `QL Ops Sheet error: ${e.message}` }
+    const allMonths = [...new Set(Object.values(map).map(e => e.month))].sort().slice(-3)
+    const lines = ['QL Ops (last 3 months):']
+    allMonths.forEach(m => {
+      const entries = Object.values(map).filter(e => e.month === m)
+      const total   = entries.reduce((s,e) => s + e.count, 0)
+      entries.sort((a,b) => b.count - a.count).forEach(e => {
+        lines.push(`  ${m} | ${e.provider}: ${e.count.toLocaleString()} qualified | ${total > 0 ? (e.count/total*100).toFixed(1) : 0}% share | Total: ${total.toLocaleString()}`)
+      })
+    })
+    return lines.join('\n')
+  } catch(e) { return `⚠ QL Ops error: ${e.message}` }
+}
+
+async function getWhatsAppData() {
+  try {
+    const r = await safeFetch(WA_SHEET)
+    if (!r) return '⚠ WhatsApp: sheet unavailable'
+    const { h, rows } = parseCSV(await r.text())
+    const map = {}
+    rows.forEach(row => {
+      const month = monthFromISO(row[h('created_at')])
+      if (!month) return
+      if (!map[month]) map[month] = { month, sent:0, delivered:0, read:0, failed:0, replied:0, clicked:0, util:0, mkt:0 }
+      map[month].sent      += parseFloat(row[h('sent_count')])      || 0
+      map[month].delivered += parseFloat(row[h('delivered_count')]) || 0
+      map[month].read      += parseFloat(row[h('read_count')])      || 0
+      map[month].failed    += parseFloat(row[h('failed_count')])    || 0
+      map[month].replied   += parseFloat(row[h('replied_count')])   || 0
+      map[month].clicked   += parseFloat(row[h('clicked_count')])   || 0
+      map[month].util      += parseFloat(row[h('utility_spends')])  || 0
+      map[month].mkt       += parseFloat(row[h('marketing_spends')])|| 0
+    })
+    const months = Object.values(map).slice(-2)
+    if (!months.length) return '⚠ WhatsApp: no data found'
+    const lines = ['WhatsApp Marketing (last 2 months):']
+    months.forEach(m => {
+      const delR  = m.sent > 0 ? (m.delivered/m.sent*100).toFixed(1) : '0'
+      const readR = m.delivered > 0 ? (m.read/m.delivered*100).toFixed(1) : '0'
+      const total = m.util + m.mkt
+      lines.push(`  ${m.month}:`)
+      lines.push(`    Sent: ${m.sent.toLocaleString()} | Delivered: ${m.delivered.toLocaleString()} (${delR}%) | Read: ${m.read.toLocaleString()} (${readR}%)`)
+      lines.push(`    Replied: ${m.replied.toLocaleString()} | Clicked: ${m.clicked.toLocaleString()} | Failed: ${m.failed.toLocaleString()}`)
+      lines.push(`    Spend: ${fmtINR(total)} (Utility: ${fmtINR(m.util)}, Marketing: ${fmtINR(m.mkt)})`)
+    })
+    return lines.join('\n')
+  } catch(e) { return `⚠ WhatsApp error: ${e.message}` }
 }
 
 async function getMetaData(token) {
-  if (!token) return 'Meta Ads: no token provided'
+  if (!token) return '⚠ Meta Ads: not connected. User needs to connect from the Meta Ads dashboard.'
   try {
-    const qs = p => new URLSearchParams({access_token:token,...p}).toString()
-    const [insR, campR] = await Promise.all([
-      safeFetch(`https://graph.facebook.com/v19.0/${AD_ACCOUNT}/insights?${qs({fields:'spend,impressions,clicks,ctr,cpm,actions',date_preset:'last_30d',level:'account'})}`),
-      safeFetch(`https://graph.facebook.com/v19.0/${AD_ACCOUNT}/campaigns?${qs({fields:'name,status,insights{spend,impressions,clicks,ctr,actions}',date_preset:'last_30d',limit:10})}`)
+    const qs = p => new URLSearchParams({ access_token: token, ...p }).toString()
+    const [accRes, campRes] = await Promise.all([
+      safeFetch(`https://graph.facebook.com/v19.0/${AD_ACCOUNT}/insights?${qs({ fields:'spend,impressions,clicks,ctr,cpm,actions', date_preset:'last_30d', level:'account' })}`),
+      safeFetch(`https://graph.facebook.com/v19.0/${AD_ACCOUNT}/campaigns?${qs({ fields:'name,status,insights{spend,impressions,clicks,ctr,actions}', date_preset:'last_30d', limit:15 })}`),
     ])
-    if (!insR) return 'Meta Ads: API unavailable'
-    const ins = await insR.json()
-    const acc = ins.data?.[0] || {}
-    const getAct = (type) => parseInt(acc.actions?.find(a=>a.action_type===type)?.value||0)
-    const leads = getAct('lead')
-    const spend = parseFloat(acc.spend||0)
-    const cpl = leads>0 ? fmt(spend/leads) : 'N/A'
-
-    let campLines = ''
-    if (campR) {
-      const camps = (await campR.json()).data || []
-      campLines = '\nTop campaigns (last 30d):\n' + camps.slice(0,8).map(c => {
-        const ci = c.insights?.data?.[0]||{}
-        const cLeads = parseInt(ci.actions?.find(a=>a.action_type==='lead')?.value||0)
-        return `  ${c.name} | ${c.status} | Spend ${fmt(parseFloat(ci.spend||0))} | CTR ${parseFloat(ci.ctr||0).toFixed(2)}% | Leads ${cLeads}`
-      }).join('\n')
+    if (!accRes) return '⚠ Meta Ads: API unreachable — token may be expired'
+    const accData  = await accRes.json()
+    const campData = campRes ? await campRes.json() : { data: [] }
+    if (accData.error) return `⚠ Meta Ads API error: ${accData.error.message}`
+    const acc    = accData.data?.[0] || {}
+    const getAct = t => parseInt(acc.actions?.find(a => a.action_type === t)?.value || 0)
+    const leads  = getAct('onsite_conversion.lead_grouped') || getAct('lead')
+    const spend  = parseFloat(acc.spend || 0)
+    const lines  = [
+      'Meta Ads (last 30 days):',
+      `  Spend: ${fmtINR(spend)} | Impressions: ${parseInt(acc.impressions||0).toLocaleString()} | Clicks: ${parseInt(acc.clicks||0).toLocaleString()}`,
+      `  CTR: ${parseFloat(acc.ctr||0).toFixed(2)}% | CPM: ${fmtINR(parseFloat(acc.cpm||0))} | Leads: ${leads.toLocaleString()} | CPL: ${leads > 0 ? fmtINR(spend/leads) : 'N/A'}`,
+    ]
+    const camps = campData.data || []
+    if (camps.length) {
+      lines.push('  Top campaigns:')
+      camps.slice(0, 12).forEach(c => {
+        const ci     = c.insights?.data?.[0] || {}
+        const cSpend = parseFloat(ci.spend || 0)
+        const cLeads = parseInt(ci.actions?.find(a => a.action_type==='onsite_conversion.lead_grouped'||a.action_type==='lead')?.value || 0)
+        lines.push(`    • ${c.name} [${c.status}] | Spend: ${fmtINR(cSpend)} | CTR: ${parseFloat(ci.ctr||0).toFixed(2)}% | Leads: ${cLeads} | CPL: ${cLeads>0?fmtINR(cSpend/cLeads):'N/A'}`)
+      })
     }
-    return `Last 30 days: Spend ${fmt(spend)} | Impressions ${parseInt(acc.impressions||0).toLocaleString()} | Clicks ${parseInt(acc.clicks||0).toLocaleString()} | CTR ${parseFloat(acc.ctr||0).toFixed(2)}% | CPM ${fmt(parseFloat(acc.cpm||0))} | Leads ${leads.toLocaleString()} | CPL ${cpl}${campLines}`
-  } catch(e) { return `Meta Ads error: ${e.message}` }
+    return lines.join('\n')
+  } catch(e) { return `⚠ Meta Ads error: ${e.message}` }
 }
 
 // ── system prompt ─────────────────────────────────────────────────────────────
 async function buildSystemPrompt(metaToken) {
-  const [mtd, qlops, meta] = await Promise.all([
-    getMTDData(),
+  const [qlops, whatsapp, meta] = await Promise.all([
     getQLOpsData(),
-    getMetaData(metaToken)
+    getWhatsAppData(),
+    getMetaData(metaToken),
   ])
+  const today = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
 
-  return `You are VASU AI — the intelligence layer inside Leverage Quantum, Leverage Edu's internal marketing analytics platform for the study-abroad vertical.
+  return `You are VASU AI — the intelligence layer inside Leverage Quantum, Leverage Edu's internal marketing analytics dashboard for the study-abroad vertical (UK, Canada, Australia, USA universities).
 
-You have real-time access to three data sources. Always cite which source you're drawing from.
+Today: ${today}
 
-━━━ 1. MTD PERFORMANCE (from CRM/Google Sheets) ━━━
-${mtd}
+You have real-time live data from three sources:
 
-━━━ 2. LEAD QUALIFICATION — FUTWORK & SUPERBOT (from QL Ops sheet) ━━━
+━━━ 1. LEAD QUALIFICATION (QL Ops) ━━━
 ${qlops}
 
-━━━ 3. META ADS (from Meta Marketing API) ━━━
+━━━ 2. WHATSAPP MARKETING ━━━
+${whatsapp}
+
+━━━ 3. META ADS ━━━
 ${meta}
 
-━━━ YOUR CAPABILITIES ━━━
-You can:
-- Answer questions about any of these three data sources
-- Identify trends, anomalies, and correlations across sources
-- Generate structured reports in markdown (weekly summary, monthly performance, QL ops digest, campaign analysis)
-- Compare Meta Ads CPL vs CRM CPL and explain attribution gaps
-- Flag risks: rising CPL, falling QL%, high fatigue, spend without leads
-- Give prioritised recommendations with specific numbers
+━━━ BUSINESS CONTEXT ━━━
+Conversion funnel: Meta Ad Impression → Click → Lead Form → QL (qualified lead) → Application → Enrolment
+• Futwork = human calling agents who qualify raw leads
+• Superbot = automated IVR/bot that qualifies leads
+• QL Rate = Qualified / Total Leads (higher is better)
+• WhatsApp is used for lead nurturing and re-engagement
+• Meta spend is in INR (Indian accounts return INR directly — do NOT apply FX conversion)
+• CRM leads typically lag Meta leads by 24–72h due to attribution
 
-When asked to generate a report, produce a clean markdown document with:
-- Executive summary (3–5 bullet key takeaways)
-- Data tables where relevant
-- Specific numbers with ₹ formatting (K/L/Cr)
-- Actionable next steps
+━━━ CAPABILITIES ━━━
+1. Answer any question about the data — metrics, trends, anomalies, comparisons
+2. Generate structured reports (ask for: weekly digest, monthly summary, QL ops report, WhatsApp report, Meta campaign report)
+3. Cross-channel analysis — e.g. Meta CPL vs QL rate correlation, WhatsApp vs Meta lead quality
+4. Risk flags — rising CPL, falling QL rate, high fail rate, campaign fatigue, spend without leads
+5. Recommendations — specific, prioritised, with numbers
+
+━━━ REPORT FORMAT ━━━
+## Report Title
+**Executive Summary**
+- Key takeaway 1
+- Key takeaway 2
+
+**Data**
+| Metric | Value | vs Last Month |
+| ... | ... | ... |
+
+**Recommended Actions**
+1. Specific action with numbers
 
 ━━━ GROUND RULES ━━━
-- Never make up numbers. If data is unavailable, say so explicitly.
-- Note that Meta Ads spend is in USD, CRM data is in INR — always convert Meta spend to INR (×85) when comparing.
-- CRM leads lag Meta leads by 24–72h due to attribution. Flag this when comparing the two.
-- You are read-only — never claim to modify campaigns, budgets, or settings.
-- Be concise by default. Expand only when asked.
-- Today's date context: ${new Date().toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'})}`
+- Never fabricate data. If something is unavailable, say so clearly
+- Always mention which source you're citing
+- Be concise by default — expand only when asked or when generating a report
+- You are read-only — never claim ability to modify campaigns, budgets, or settings
+- Use ₹, K, L, Cr for all Indian Rupee formatting`
 }
 
 // ── handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end()
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    return res.status(200).end()
+  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not set in Vercel environment variables' })
 
-  const { messages, history=[], metaToken } = req.body || {}
-  if (!messages?.length) return res.status(400).json({error:'No messages'})
-  if (!ANTHROPIC_KEY) return res.status(500).json({error:'ANTHROPIC_API_KEY not configured'})
+  const { messages = [], history = [], metaToken = '' } = req.body || {}
+  if (!messages.length) return res.status(400).json({ error: 'No messages' })
 
   try {
-    const systemPrompt = await buildSystemPrompt(metaToken)
+    // Build live system prompt
+    const system = await buildSystemPrompt(metaToken)
 
-    // Build conversation — Anthropic requires alternating user/assistant
-    const allMsgs = [
-      ...history.map(m => ({role: m.role, content: m.content})),
-      ...messages.map(m => ({role: m.role||'user', content: m.content}))
-    ]
-    // Ensure starts with user
-    const cleanMsgs = allMsgs.filter(m => m.role==='user'||m.role==='assistant')
+    // Build clean alternating message array
+    const raw = [
+      ...history.map(m => ({ role: m.role, content: String(m.content || '').trim() })),
+      ...messages.map(m => ({ role: m.role || 'user', content: String(m.content || '').trim() })),
+    ].filter(m => (m.role === 'user' || m.role === 'assistant') && m.content)
 
-    const r = await fetch(ANTHROPIC_URL, {
+    // Merge consecutive same-role messages
+    const merged = []
+    for (const msg of raw) {
+      if (merged.length && merged[merged.length-1].role === msg.role) {
+        merged[merged.length-1].content += '\n\n' + msg.content
+      } else {
+        merged.push({ ...msg })
+      }
+    }
+    // Must start with user
+    while (merged.length && merged[0].role === 'assistant') merged.shift()
+    if (!merged.length) return res.status(400).json({ error: 'No valid user message found' })
+
+    // Call Anthropic with streaming
+    const anthropicRes = await fetch(ANTHROPIC_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01'
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'messages-2023-12-15',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: MODEL,
         max_tokens: 4096,
-        system: systemPrompt,
-        messages: cleanMsgs
-      })
+        stream: true,
+        system,
+        messages: merged,
+      }),
     })
 
-    const d = await r.json()
-    if (!r.ok) return res.status(500).json({error: d.error?.message || 'Anthropic API error'})
+    if (!anthropicRes.ok) {
+      const err = await anthropicRes.json()
+      return res.status(500).json({ error: err.error?.message || 'Anthropic API error' })
+    }
 
-    const content = d.content?.[0]?.text || ''
-    return res.status(200).json({content})
+    // Stream SSE back to client
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+    res.setHeader('Cache-Control', 'no-cache, no-transform')
+    res.setHeader('X-Accel-Buffering', 'no')
+
+    const reader = anthropicRes.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let fullText = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() // keep incomplete line
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = line.slice(6).trim()
+        if (data === '[DONE]') continue
+        try {
+          const parsed = JSON.parse(data)
+          if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
+            const text = parsed.delta.text
+            fullText += text
+            res.write(`data: ${JSON.stringify({ delta: text })}\n\n`)
+          }
+        } catch {}
+      }
+    }
+
+    res.write(`data: ${JSON.stringify({ done: true, content: fullText })}\n\n`)
+    res.end()
+
   } catch(e) {
-    return res.status(500).json({error: e.message})
+    const msg = e?.message || 'Internal server error'
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ error: msg })}\n\n`)
+      res.end()
+    } else {
+      res.status(500).json({ error: msg })
+    }
   }
 }
