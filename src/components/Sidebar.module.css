@@ -1,3 +1,18 @@
+
+/* Chat item — top of nav, more prominent */
+.group:first-child {
+  padding-bottom: 6px;
+  border-bottom: 1px solid #F1F3F7;
+  margin-bottom: 4px;
+}
+.group:first-child .navItem {
+  font-weight: 700;
+  color: #1F3C84;
+}
+.group:first-child .navItem:not(.active) {
+  color: #374151;
+}
+
 @keyframes navFadeIn {
   from { opacity: 0; transform: translateX(-6px); }
   to   { opacity: 1; transform: translateX(0); }
@@ -177,17 +192,16 @@
   border-color: transparent !important;
 }
 
-.settingsArea {
-  padding: 4px 10px;
-  border-top: 0.5px solid #F3F4F6;
-}
+
 
 .userArea {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 12px 14px;
-  border-top: 0.5px solid #F3F4F6;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid #F1F3F7;
+  background: #FAFBFC;
+  flex-shrink: 0;
 }
 
 .avatar {
@@ -218,6 +232,7 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+.logoutBtnActive { color: #1F3C84 !important; background: #E8EFF9; }
 .logoutBtn {
   background: none; border: none;
   color: #D1D5DB;
