@@ -167,7 +167,7 @@ export default function DashboardHome() {
         .dhtag:hover{background:#E8EFF9!important;color:#1F3C84!important}
       `}</style>
       <Sidebar/>
-      <main style={{ flex:1, overflowY:'auto', padding:'32px 36px' }}>
+      <main style={{ flex:1, overflowY:'auto', padding:'28px 28px' }}>
 
         {/* Header */}
         <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:28, animation:'fadeUp .4s ease' }}>
