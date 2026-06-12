@@ -23,12 +23,22 @@ const CAT_COLORS    = { MARKETING: C.blue, UTILITY: C.navy }
 // ── parse ────────────────────────────────────────────────────────────────────
 function parseDate(s) {
   if (!s || s === 'NULL') return null
-  // strip any residual quotes
   const clean = s.replace(/"/g,'').trim()
-  const p = clean.split('-')
+  if (!clean) return null
+  const p = clean.split(/[-\/.]/)
   if (p.length !== 3) return null
-  const y = +p[0], mo = +p[1], dy = +p[2]
-  // sanity check — reject obviously wrong years
+  let y, mo, dy
+  // detect format: if first part is 4 digits => YYYY-MM-DD
+  if (p[0].length === 4) {
+    y = +p[0]; mo = +p[1]; dy = +p[2]
+  } else if (p[2].length === 4) {
+    // DD-MM-YYYY or MM-DD-YYYY — assume DD-MM-YYYY for Indian locale
+    dy = +p[0]; mo = +p[1]; y = +p[2]
+  } else if (p[2].length === 2) {
+    // DD-MM-YY
+    dy = +p[0]; mo = +p[1]; y = 2000 + +p[2]
+  } else { return null }
+  if (isNaN(y)||isNaN(mo)||isNaN(dy)) return null
   if (y < 2020 || y > 2035 || mo < 1 || mo > 12 || dy < 1 || dy > 31) return null
   return new Date(y, mo-1, dy)
 }
@@ -55,7 +65,11 @@ function parseCSV(csv) {
     const date = parseDate(g('created_at'))
     return {
       date,
-      dateStr:    g('created_at').slice(0,10),
+      dateStr:    (() => {
+        if (!date) return g('created_at').slice(0,10)
+        const y=date.getFullYear(),mo=String(date.getMonth()+1).padStart(2,'0'),dy=String(date.getDate()).padStart(2,'0')
+        return y+'-'+mo+'-'+dy
+      })(),
       month:      monthLabel(date),
       monthSort:  date ? date.getFullYear()*100 + (date.getMonth()+1) : 0,
       source:     g('source') || 'OTHER',
@@ -369,7 +383,7 @@ export default function WhatsAppDashboard() {
         <div style={{ background:'#fff', borderBottom:`0.5px solid ${C.border}`, padding:'10px 28px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, boxShadow:'0 1px 4px rgba(15,23,42,0.04)' }}>
           <div>
             <p style={{ fontSize:10.5, color:C.muted, margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / WhatsApp</p>
-            <h1 style={{ fontSize:18, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.5px', fontFamily:FONT }}>WhatsApp · {selMonth||'—'}</h1>
+            <h1 style={{ fontSize:18, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.5px', fontFamily:FONT }}>WhatsApp{selMonth ? ' · '+selMonth : ''}</h1>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
             {months.length>0 && <Dropdown options={[...months].reverse()} value={selMonth} minWidth={110} onChange={v=>{setSelMonth(v);setPage(0)}}/>}
