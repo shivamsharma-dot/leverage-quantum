@@ -4,63 +4,242 @@
   padding: 0;
 }
 
-:root {
-  --q-black:       #0A0A0F;
-  --q-surface:     #111118;
-  --q-card:        #16161F;
-  --q-card2:       #1C1C28;
-  --q-border:      rgba(255,255,255,0.08);
-  --q-border-h:    rgba(255,255,255,0.15);
-  --q-text:        #F0EFF8;
-  --q-muted:       rgba(240,239,248,0.45);
-  --q-hint:        rgba(240,239,248,0.25);
-  --q-accent:      #7C6CF8;
-  --q-accent-dim:  rgba(124,108,248,0.12);
-  --q-accent-glow: rgba(124,108,248,0.25);
-  --q-green:       #22D3A5;
-  --q-green-dim:   rgba(34,211,165,0.12);
-  --q-red:         #FF5B5B;
-  --q-red-dim:     rgba(255,91,91,0.10);
-  --q-amber:       #F5A623;
-  --q-amber-dim:   rgba(245,166,35,0.12);
-  --q-blue:        #4A90E2;
-  --q-blue-dim:    rgba(74,144,226,0.12);
+/* ── LIGHT THEME (default) ────────────────────────────────────── */
+:root,
+[data-theme="light"] {
+  --bg:            #F4F6F9;
+  --bg2:           #FFFFFF;
+  --bg3:           #F8FAFC;
+  --sidebar-bg:    #FFFFFF;
+  --card:          #FFFFFF;
+  --card-border:   #E5E7EB;
+  --header-bg:     #FFFFFF;
+  --header-border: #E5E7EB;
+
+  --text:          #0F172A;
+  --text2:         #475569;
+  --text3:         #94A3B8;
+
+  --navy:          #1F3C84;
+  --blue:          #1C9FD4;
+  --cyan:          #29B9C3;
+  --green:         #4CAE6F;
+  --amber:         #F59E0B;
+  --red:           #EF4444;
+
+  --navy-tint:     #E8EFF9;
+  --blue-tint:     #E3F5FD;
+  --cyan-tint:     #E4F8F9;
+  --green-tint:    #E9F8EF;
+  --amber-tint:    #FEF9C3;
+  --red-tint:      #FEF2F2;
+
+  --input-bg:      #F8FAFC;
+  --input-border:  #E2E8F0;
+  --shadow:        0 1px 6px rgba(15,23,42,0.06);
+  --shadow-md:     0 4px 16px rgba(15,23,42,0.10);
+  --shadow-lg:     0 8px 32px rgba(15,23,42,0.14);
+
+  /* chart grid */
+  --chart-grid:    #F1F5F9;
+  --chart-tick:    #94A3B8;
+
+  /* scrollbar */
+  --sb-thumb:      rgba(15,23,42,0.15);
+
+  /* transition for theme switch */
+  color-scheme: light;
+}
+
+/* ── DARK THEME ───────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg:            #0D1117;
+  --bg2:           #161B22;
+  --bg3:           #21262D;
+  --sidebar-bg:    #161B22;
+  --card:          #1C2128;
+  --card-border:   rgba(255,255,255,0.08);
+  --header-bg:     #161B22;
+  --header-border: rgba(255,255,255,0.08);
+
+  --text:          #E6EDF3;
+  --text2:         #8B949E;
+  --text3:         #484F58;
+
+  --navy:          #4D78D4;
+  --blue:          #38BDF8;
+  --cyan:          #22D3EE;
+  --green:         #3FB950;
+  --amber:         #D29922;
+  --red:           #F85149;
+
+  --navy-tint:     rgba(77,120,212,0.15);
+  --blue-tint:     rgba(56,189,248,0.12);
+  --cyan-tint:     rgba(34,211,238,0.12);
+  --green-tint:    rgba(63,185,80,0.12);
+  --amber-tint:    rgba(210,153,34,0.12);
+  --red-tint:      rgba(248,81,73,0.12);
+
+  --input-bg:      #21262D;
+  --input-border:  rgba(255,255,255,0.10);
+  --shadow:        0 1px 6px rgba(0,0,0,0.3);
+  --shadow-md:     0 4px 16px rgba(0,0,0,0.4);
+  --shadow-lg:     0 8px 32px rgba(0,0,0,0.5);
+
+  --chart-grid:    rgba(255,255,255,0.06);
+  --chart-tick:    #484F58;
+
+  --sb-thumb:      rgba(255,255,255,0.12);
+
+  color-scheme: dark;
+}
+
+/* ── SMOOTH THEME TRANSITION ──────────────────────────────────── */
+html {
+  transition: background-color .3s ease, color .3s ease;
+}
+
+*, *::before, *::after {
+  transition:
+    background-color .25s ease,
+    border-color .25s ease,
+    color .2s ease,
+    box-shadow .2s ease;
+}
+
+/* Exceptions — no transition on these (would cause flicker) */
+svg, img, canvas,
+[class*="recharts"],
+input[type="range"] {
+  transition: none !important;
 }
 
 html, body, #root {
   height: 100%;
-  background: #0E1E3D;
-  color: #FFFFFF;
-  font-family: 'Inter', sans-serif;
-  font-size: 15px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
 button { cursor: pointer; font-family: inherit; }
 a { text-decoration: none; color: inherit; }
-input, select { font-family: inherit; }
+input, select, textarea { font-family: inherit; }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb { background: var(--sb-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
+/* ── ANIMATIONS ───────────────────────────────────────────────── */
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
-
 @keyframes pulse {
   0%,100% { opacity: 1; }
   50%      { opacity: 0.4; }
 }
+@keyframes blink {
+  0%,80%,100% { opacity: .2; }
+  40%          { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
-/* MTD refresh button: visible press + hover feedback */
-.lqRefreshBtn { transition: transform .08s ease, opacity .15s ease, background .15s ease, box-shadow .15s ease; }
-.lqRefreshBtn:hover:not(:disabled) { background:#F8FAFC !important; box-shadow:0 2px 8px rgba(15,23,42,0.08); }
-.lqRefreshBtn:active:not(:disabled) { transform: scale(0.92); }
+/* ── SKELETON LOADER ──────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, var(--card-border) 25%, var(--bg3) 50%, var(--card-border) 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* ── GLOBAL CARD STYLE ────────────────────────────────────────── */
+.q-card {
+  background: var(--card);
+  border: 0.5px solid var(--card-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+/* ── REFRESH BUTTON ───────────────────────────────────────────── */
+.lqRefreshBtn {
+  transition: transform .08s ease, opacity .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.lqRefreshBtn:hover:not(:disabled) {
+  background: var(--bg3) !important;
+  box-shadow: var(--shadow);
+}
+.lqRefreshBtn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+/* ── PAGE TRANSITION ──────────────────────────────────────────── */
+.page-enter {
+  animation: fadeUp .2s ease both;
+}
+
+/* ── THEME TOGGLE BUTTON ──────────────────────────────────────── */
+.theme-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background .15s;
+}
+.theme-toggle:hover {
+  background: var(--navy-tint);
+}
+.theme-toggle-track {
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--card-border);
+  border: 1px solid var(--card-border);
+  position: relative;
+  transition: background .25s;
+  flex-shrink: 0;
+}
+.theme-toggle-track.on {
+  background: var(--navy);
+  border-color: var(--navy);
+}
+.theme-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  transition: transform .2s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.theme-toggle-track.on .theme-toggle-thumb {
+  transform: translateX(16px);
+}
