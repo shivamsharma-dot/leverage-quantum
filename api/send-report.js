@@ -1,5 +1,4 @@
 const RESEND_KEY   = process.env.RESEND_API_KEY
-const GROQ_KEY     = process.env.VITE_GROQ_API_KEY
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY
 const AD_ACCOUNT   = 'act_641914389215638'
@@ -50,6 +49,10 @@ async function getRecipients() {
 
 async function fetchMeta(token, since, until) {
   const range = JSON.stringify({ since, until })
+  // Note: time_range cannot be used with nested insights{} on campaigns endpoint
+  // For account-level insights use time_range; for campaigns use date_preset
+  const daysDiff = Math.round((new Date(until) - new Date(since)) / 86400000)
+  const preset   = daysDiff <= 7 ? 'last_7d' : daysDiff <= 30 ? 'last_30d' : 'last_90d'
   const [accIns, campaigns] = await Promise.all([
     graphGet(`${AD_ACCOUNT}/insights`, token, {
       fields: 'spend,impressions,clicks,ctr,cpm,reach,frequency,actions',
@@ -58,7 +61,8 @@ async function fetchMeta(token, since, until) {
     graphGet(`${AD_ACCOUNT}/campaigns`, token, {
       fields: 'name,status,objective,insights{spend,impressions,clicks,ctr,reach,frequency,actions}',
       limit: 50,
-      time_range: range
+      date_preset: preset,
+      effective_status: '["ACTIVE","PAUSED"]',
     })
   ])
 
@@ -77,20 +81,25 @@ const SHEET_CONTEXT = {"totals":{"total_opps":1869388,"total_qls":98607,"total_a
 
 // ── Groq analysis ─────────────────────────────────────────────────────────────
 
-async function askGroq(prompt) {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+async function askClaude(prompt) {
+  const key = process.env.ANTHROPIC_API_KEY
+  if (!key) throw new Error('ANTHROPIC_API_KEY not set')
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+    },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'claude-sonnet-4-5',
+      max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.2,
-      max_tokens: 2500
     })
   })
   const d = await res.json()
-  if (!res.ok) throw new Error(d.error?.message || 'Groq error')
-  return d.choices?.[0]?.message?.content || ''
+  if (!res.ok) throw new Error(d.error?.message || 'Claude API error')
+  return d.content?.[0]?.text || ''
 }
 
 // ── Campaign table HTML ───────────────────────────────────────────────────────
@@ -260,7 +269,7 @@ HTML style rules (inline only):
 
 Output only the HTML. No preamble, no code fences.`
 
-  const aiHTML = await askGroq(groqPrompt)
+  const aiHTML = await askClaude(groqPrompt)
 
   const todayLabel = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
@@ -308,7 +317,7 @@ Output only the HTML. No preamble, no code fences.`
 
   <!-- AI ANALYSIS -->
   <div style="background:#fff;padding:24px 36px 32px;border:1px solid #E2E8F0;border-top:none">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94A3B8;margin-bottom:20px;padding-bottom:8px;border-bottom:2px solid #F1F5F9">🤖 AI Analysis — Powered by Llama 3.3</div>
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94A3B8;margin-bottom:20px;padding-bottom:8px;border-bottom:2px solid #F1F5F9">🤖 AI Analysis — Powered by Claude Sonnet</div>
     ${aiHTML}
   </div>
 
