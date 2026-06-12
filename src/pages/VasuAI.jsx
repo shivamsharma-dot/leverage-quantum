@@ -13,7 +13,7 @@ const FONT = "'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif"
 
 /* ── constants ────────────────────────────────────────────────── */
 const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDc5MTI3NDMsImV4cCI6MjAyMzQ4ODc0M30.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 const TOKEN_KEY    = 'lq_meta_token'
 const CONV_KEY     = 'lq_vasu_conversations'
 
