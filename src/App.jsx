@@ -101,9 +101,39 @@ function ProtectedRoute({ children, dashboardId }) {
   )
 }
 
+
+// Error boundary — catches React render crashes, shows clean fallback
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null } }
+  static getDerivedStateFromError(error) { return { hasError: true, error } }
+  componentDidCatch(error, info) { console.error('Quantum error:', error, info) }
+  render() {
+    if (!this.state.hasError) return this.props.children
+    return (
+      <div style={{ display:'flex', height:'100vh', alignItems:'center', justifyContent:'center', background:'#F4F6F9', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+        <div style={{ textAlign:'center', maxWidth:420, padding:40 }}>
+          <div style={{ width:56, height:56, borderRadius:16, background:'#FEF2F2', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <div style={{ fontSize:18, fontWeight:800, color:'#0F172A', marginBottom:8 }}>Something went wrong</div>
+          <div style={{ fontSize:13.5, color:'#94A3B8', lineHeight:1.6, marginBottom:24 }}>
+            {this.state.error?.message || 'An unexpected error occurred. This has been logged.'}
+          </div>
+          <button onClick={() => window.location.reload()}
+            style={{ padding:'10px 24px', borderRadius:10, border:'none', background:'#1F3C84', color:'#fff', fontSize:13.5, fontWeight:700, cursor:'pointer', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+            Reload page
+          </button>
+        </div>
+      </div>
+    )
+  }
+}
+
 export default function App() {
   return (
-    <>
+    <ErrorBoundary>
       <style>{FADE_STYLE}</style>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
@@ -121,6 +151,6 @@ export default function App() {
         <Route path="/settings"               element={<ProtectedRoute dashboardId="settings">    <SettingsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </>
+    </ErrorBoundary>
   )
 }
