@@ -159,7 +159,7 @@ export default function DashboardHome() {
   return (
     <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
         .dhcard:hover{transform:translateY(-2px)!important;box-shadow:0 8px 24px rgba(15,23,42,0.10)!important;border-color:#D1D9E8!important}
