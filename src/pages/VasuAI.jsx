@@ -85,29 +85,29 @@ function Markdown({text}){
     const l=lines[i]
     if(l.startsWith('```')){const lang=l.slice(3).trim();const buf=[];i++;while(i<lines.length&&!lines[i].startsWith('```')){buf.push(lines[i]);i++};i++
       out.push(<div key={out.length} style={{borderRadius:10,overflow:'hidden',margin:'10px 0',border:'1px solid rgba(255,255,255,0.1)'}}>
-        <div style={{padding:'6px 12px',background:'rgba(255,255,255,0.05)',borderBottom:'1px solid rgba(255,255,255,0.1)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <span style={{fontSize:11,color:'rgba(255,255,255,0.4)',fontFamily:'monospace'}}>{lang||'code'}</span>
-          <button onClick={()=>navigator.clipboard?.writeText(buf.join('\n'))} style={{background:'transparent',border:'none',color:'rgba(255,255,255,0.4)',fontSize:11,cursor:'pointer',fontFamily:FONT}}>Copy</button>
+        <div style={{padding:'6px 12px',background:'#F8FAFC',borderBottom:'0.5px solid #E5E7EB',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span style={{fontSize:11,color:'#9CA3AF',fontFamily:'monospace'}}>{lang||'code'}</span>
+          <button onClick={()=>navigator.clipboard?.writeText(buf.join('\n'))} style={{background:'transparent',border:'none',color:'#9CA3AF',fontSize:11,cursor:'pointer',fontFamily:FONT}}>Copy</button>
         </div>
-        <pre style={{margin:0,padding:12,fontSize:12.5,fontFamily:'monospace',color:'rgba(255,255,255,0.9)',overflowX:'auto',background:'rgba(0,0,0,0.3)'}}><code>{buf.join('\n')}</code></pre>
+        <pre style={{margin:0,padding:12,fontSize:12.5,fontFamily:'monospace',color:'rgba(255,255,255,0.9)',overflowX:'auto',background:'#F1F5F9'}}><code>{buf.join('\n')}</code></pre>
       </div>);continue}
     if(/^\|(.+)\|$/.test(l)&&i+1<lines.length&&/^\|[-:\s|]+\|$/.test(lines[i+1])){
       const head=l.split('|').slice(1,-1).map(s=>s.trim());i+=2;const rows=[]
       while(i<lines.length&&/^\|(.+)\|$/.test(lines[i])){rows.push(lines[i].split('|').slice(1,-1).map(s=>s.trim()));i++}
       out.push(<div key={out.length} style={{overflowX:'auto',margin:'12px 0'}}>
         <table style={{borderCollapse:'collapse',width:'100%',fontSize:13}}>
-          <thead><tr>{head.map((h,j)=><th key={j} style={{border:'1px solid rgba(255,255,255,0.15)',padding:'8px 12px',background:'rgba(255,255,255,0.08)',textAlign:'left',fontWeight:700,color:'rgba(255,255,255,0.9)'}}>{h}</th>)}</tr></thead>
-          <tbody>{rows.map((r,ri)=><tr key={ri}>{r.map((cc,ci)=><td key={ci} style={{border:'1px solid rgba(255,255,255,0.1)',padding:'8px 12px',color:'rgba(255,255,255,0.75)'}} dangerouslySetInnerHTML={{__html:ih(cc)}}/>)}</tr>)}</tbody>
+          <thead><tr>{head.map((h,j)=><th key={j} style={{border:'1px solid #E5E7EB',padding:'8px 12px',background:'#F3F4F6',textAlign:'left',fontWeight:700,color:'rgba(255,255,255,0.9)'}}>{h}</th>)}</tr></thead>
+          <tbody>{rows.map((r,ri)=><tr key={ri}>{r.map((cc,ci)=><td key={ci} style={{border:'1px solid #E5E7EB',padding:'8px 12px',color:'#374151'}} dangerouslySetInnerHTML={{__html:ih(cc)}}/>)}</tr>)}</tbody>
         </table></div>);continue}
     if(/^#{1,3}\s/.test(l)){const lv=l.match(/^#+/)[0].length;const sz=lv===1?18:lv===2?15.5:14
       out.push(<div key={out.length} style={{fontSize:sz,fontWeight:800,color:'#fff',margin:'16px 0 6px',letterSpacing:'-0.02em'}} dangerouslySetInnerHTML={{__html:ih(l.replace(/^#+\s/,''))}}/>);i++;continue}
     if(/^[-•*]\s/.test(l)){const items=[];while(i<lines.length&&/^[-•*]\s/.test(lines[i])){items.push(lines[i].replace(/^[-•*]\s/,''));i++}
-      out.push(<ul key={out.length} style={{margin:'8px 0',paddingLeft:18,color:'rgba(255,255,255,0.8)',fontSize:14,lineHeight:1.7}}>{items.map((it,j)=><li key={j} style={{marginBottom:4}} dangerouslySetInnerHTML={{__html:ih(it)}}/>)}</ul>);continue}
+      out.push(<ul key={out.length} style={{margin:'8px 0',paddingLeft:18,color:'#374151',fontSize:14,lineHeight:1.7}}>{items.map((it,j)=><li key={j} style={{marginBottom:4}} dangerouslySetInnerHTML={{__html:ih(it)}}/>)}</ul>);continue}
     if(/^\d+\.\s/.test(l)){const items=[];while(i<lines.length&&/^\d+\.\s/.test(lines[i])){items.push(lines[i].replace(/^\d+\.\s/,''));i++}
-      out.push(<ol key={out.length} style={{margin:'8px 0',paddingLeft:18,color:'rgba(255,255,255,0.8)',fontSize:14,lineHeight:1.7}}>{items.map((it,j)=><li key={j} style={{marginBottom:4}} dangerouslySetInnerHTML={{__html:ih(it)}}/>)}</ol>);continue}
+      out.push(<ol key={out.length} style={{margin:'8px 0',paddingLeft:18,color:'#374151',fontSize:14,lineHeight:1.7}}>{items.map((it,j)=><li key={j} style={{marginBottom:4}} dangerouslySetInnerHTML={{__html:ih(it)}}/>)}</ol>);continue}
     if(/^(---|\*\*\*)/.test(l.trim())){out.push(<hr key={out.length} style={{border:'none',borderTop:'1px solid rgba(255,255,255,0.15)',margin:'14px 0'}}/>);i++;continue}
     if(l.trim()===''){i++;continue}
-    out.push(<p key={out.length} style={{margin:'5px 0',color:'rgba(255,255,255,0.85)',fontSize:14,lineHeight:1.7}} dangerouslySetInnerHTML={{__html:ih(l)}}/>);i++
+    out.push(<p key={out.length} style={{margin:'5px 0',color:'#1E293B',fontSize:14,lineHeight:1.7}} dangerouslySetInnerHTML={{__html:ih(l)}}/>);i++
   }
   return <div>{out}</div>
 }
@@ -277,18 +277,18 @@ export default function VasuAI() {
   const RAIL_W = 300
 
   /* styles */
-  const chatBg='linear-gradient(160deg,#0D1B2A 0%,#0F1C35 40%,#111827 100%)'
-  const panelBg='rgba(13,27,42,0.98)'
-  const railBg='rgba(15,23,42,1)'
-  const inputBg='rgba(255,255,255,0.06)'
-  const borderColor='rgba(255,255,255,0.08)'
+  const chatBg='#F4F6F9'
+  const panelBg='#fff'
+  const railBg='#F7F8FA'
+  const inputBg='#fff'
+  const borderColor='#E5E7EB'
 
   return (
     <div style={{display:'flex',height:'100vh',fontFamily:FONT,overflow:'hidden'}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; }
-        .cs::-webkit-scrollbar{width:4px} .cs::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:4px}
+        .cs::-webkit-scrollbar{width:4px} .cs::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px}
         @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
@@ -296,14 +296,14 @@ export default function VasuAI() {
         @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
         @keyframes scaleIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
-        .rb:hover{background:rgba(255,255,255,0.08)!important;transition:background .15s}
+        .rb:hover{background:#F3F4F6!important;transition:background .15s}
         .qp:hover{background:rgba(28,159,212,0.15)!important;border-color:rgba(28,159,212,0.4)!important;color:#fff!important;transform:translateY(-1px)!important;transition:all .2s!important}
         .cv:hover .delbtn{opacity:1!important}
-        .ibtn:hover{background:rgba(255,255,255,0.1)!important}
-        .mabtn:hover{background:rgba(255,255,255,0.08)!important}
+        .ibtn:hover{background:#F3F4F6!important}
+        .mabtn:hover{background:#F3F4F6!important}
         .sendbtn:hover:not(:disabled){transform:scale(1.05);background:${BLUE}!important}
-        input::placeholder,textarea::placeholder{color:rgba(255,255,255,0.25)!important}
-        input,textarea{caret-color:${BLUE};}
+        input::placeholder,textarea::placeholder{color:#CBD5E1!important}
+        input,textarea{caret-color:#1C9FD4;}
       `}</style>
 
       {/* Quantum sidebar */}
@@ -322,7 +322,7 @@ export default function VasuAI() {
             <div style={{width:RAIL_W,height:'100%',display:'flex',flexDirection:'column'}}>
               {/* panel header */}
               <div style={{padding:'16px 16px 12px',borderBottom:`1px solid ${borderColor}`,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
-                <span style={{fontSize:13,fontWeight:700,color:'rgba(255,255,255,0.9)',letterSpacing:'-0.01em'}}>
+                <span style={{fontSize:13,fontWeight:700,color:'#0F172A',letterSpacing:'-0.01em'}}>
                   {rail==='history'?'Conversations':rail==='prompts'?'Prompt Library':'Memories'}
                 </span>
                 <button onClick={()=>setRail(null)} className="ibtn" style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:'none',background:'transparent',borderRadius:6,cursor:'pointer'}}>
@@ -337,19 +337,19 @@ export default function VasuAI() {
                     <div style={{position:'relative'}}>
                       <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={12} c="rgba(255,255,255,0.25)"/></span>
                       <input value={convSearch} onChange={e=>setConvSearch(e.target.value)} placeholder="Search conversations…"
-                        style={{width:'100%',background:'rgba(255,255,255,0.06)',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px 7px 30px',fontSize:12.5,color:'rgba(255,255,255,0.8)',outline:'none',fontFamily:FONT}}/>
+                        style={{width:'100%',background:'#F8FAFC',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px 7px 30px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
                     </div>
                   </div>
                   <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 6px 6px'}}>
                     {Object.entries(grouped).map(([label,items])=>items.length>0&&(
                       <div key={label}>
-                        <div style={{padding:'8px 10px 4px',fontSize:10,fontWeight:700,color:'rgba(255,255,255,0.25)',letterSpacing:'0.07em',textTransform:'uppercase'}}>{label}</div>
+                        <div style={{padding:'8px 10px 4px',fontSize:10,fontWeight:700,color:'#CBD5E1',letterSpacing:'0.07em',textTransform:'uppercase'}}>{label}</div>
                         {items.map(c=>(
                           <div key={c.id} className="cv" onClick={()=>selectConv(c)}
                             style={{display:'flex',alignItems:'center',gap:0,borderRadius:8,margin:'1px 0',cursor:'pointer',background:c.id===activeId?'rgba(28,159,212,0.12)':'transparent',borderLeft:c.id===activeId?`2px solid ${BLUE}`:'2px solid transparent',transition:'all .15s'}}>
                             <div style={{flex:1,padding:'8px 10px 8px 8px',minWidth:0}}>
                               <div style={{fontSize:12.5,color:c.id===activeId?'#fff':'rgba(255,255,255,0.7)',fontWeight:c.id===activeId?600:400,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.title}</div>
-                              <div style={{fontSize:10.5,color:'rgba(255,255,255,0.25)',marginTop:1}}>{c.message_count||0} messages</div>
+                              <div style={{fontSize:10.5,color:'#CBD5E1',marginTop:1}}>{c.message_count||0} messages</div>
                             </div>
                             <button className="delbtn" onClick={e=>{e.stopPropagation();deleteConv(c.id)}}
                               style={{padding:'0 8px',background:'transparent',border:'none',cursor:'pointer',opacity:0,transition:'opacity .15s',flexShrink:0}}>
@@ -359,7 +359,7 @@ export default function VasuAI() {
                         ))}
                       </div>
                     ))}
-                    {convs.length===0&&<div style={{padding:'30px 20px',textAlign:'center',color:'rgba(255,255,255,0.2)',fontSize:12.5}}>No conversations yet</div>}
+                    {convs.length===0&&<div style={{padding:'30px 20px',textAlign:'center',color:'#CBD5E1',fontSize:12.5}}>No conversations yet</div>}
                   </div>
                 </div>
               )}
@@ -371,7 +371,7 @@ export default function VasuAI() {
                     <div style={{position:'relative',marginBottom:8}}>
                       <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={12} c="rgba(255,255,255,0.25)"/></span>
                       <input value={promptSearch} onChange={e=>setPromptSearch(e.target.value)} placeholder="Search prompts…"
-                        style={{width:'100%',background:'rgba(255,255,255,0.06)',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px 7px 30px',fontSize:12.5,color:'rgba(255,255,255,0.8)',outline:'none',fontFamily:FONT}}/>
+                        style={{width:'100%',background:'#F8FAFC',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px 7px 30px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
                     </div>
                     <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                       {CATS.map(c=><button key={c} onClick={()=>setPromptCat(c)}
@@ -381,17 +381,17 @@ export default function VasuAI() {
                     </div>
                   </div>
                   <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 8px 8px'}}>
-                    {filteredPrompts.length===0&&<div style={{padding:'30px 0',textAlign:'center',color:'rgba(255,255,255,0.2)',fontSize:12.5}}>No prompts found</div>}
+                    {filteredPrompts.length===0&&<div style={{padding:'30px 0',textAlign:'center',color:'#CBD5E1',fontSize:12.5}}>No prompts found</div>}
                     {filteredPrompts.map(p=>(
                       <div key={p.id} style={{marginBottom:4,borderRadius:10,border:`1px solid ${expandedPrompt===p.id?'rgba(28,159,212,0.4)':borderColor}`,background:expandedPrompt===p.id?'rgba(28,159,212,0.06)':'rgba(255,255,255,0.02)',overflow:'hidden',transition:'all .2s'}}>
                         <div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 12px',cursor:'pointer'}} onClick={()=>setExpandedPrompt(v=>v===p.id?null:p.id)}>
-                          <span style={{fontSize:9.5,fontWeight:700,padding:'2px 6px',borderRadius:20,background:'rgba(28,159,212,0.15)',color:BLUE,flexShrink:0,fontFamily:FONT}}>{p.cat}</span>
-                          <span style={{flex:1,fontSize:12.5,fontWeight:600,color:'rgba(255,255,255,0.85)',fontFamily:FONT,lineHeight:1.35}}>{p.title}</span>
+                          <span style={{fontSize:9.5,fontWeight:700,padding:'2px 6px',borderRadius:20,background:'#EFF6FF',color:BLUE,flexShrink:0,fontFamily:FONT}}>{p.cat}</span>
+                          <span style={{flex:1,fontSize:12.5,fontWeight:600,color:'#1E293B',fontFamily:FONT,lineHeight:1.35}}>{p.title}</span>
                           <Ico n="chevR" s={12} c="rgba(255,255,255,0.3)"/>
                         </div>
                         {expandedPrompt===p.id&&(
                           <div style={{padding:'0 12px 12px',animation:'fadeIn .2s ease'}}>
-                            <div style={{fontSize:11.5,color:'rgba(255,255,255,0.4)',lineHeight:1.6,marginBottom:10,maxHeight:100,overflowY:'auto',background:'rgba(0,0,0,0.2)',padding:8,borderRadius:6}}>{p.text.slice(0,200)}{p.text.length>200?'…':''}</div>
+                            <div style={{fontSize:11.5,color:'#9CA3AF',lineHeight:1.6,marginBottom:10,maxHeight:100,overflowY:'auto',background:'#F8FAFC',padding:8,borderRadius:6}}>{p.text.slice(0,200)}{p.text.length>200?'…':''}</div>
                             <button onClick={()=>{setInput(p.text);setRail(null);textRef.current?.focus()}}
                               style={{width:'100%',padding:'8px',borderRadius:8,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:12.5,fontWeight:700,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
                               <Ico n="spark" s={12} c="#fff"/> Use this prompt
@@ -408,10 +408,10 @@ export default function VasuAI() {
               {rail==='memories'&&(
                 <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                   <div style={{padding:'10px 12px 8px',flexShrink:0}}>
-                    <div style={{fontSize:11.5,color:'rgba(255,255,255,0.3)',marginBottom:10,lineHeight:1.5}}>Facts Claude remembers across all conversations</div>
+                    <div style={{fontSize:11.5,color:'#CBD5E1',marginBottom:10,lineHeight:1.5}}>Facts Claude remembers across all conversations</div>
                     <div style={{display:'flex',gap:6}}>
                       <input value={newMem} onChange={e=>setNewMem(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addMem()}}} placeholder="Add a memory…"
-                        style={{flex:1,background:'rgba(255,255,255,0.06)',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px',fontSize:12.5,color:'rgba(255,255,255,0.8)',outline:'none',fontFamily:FONT}}/>
+                        style={{flex:1,background:'#F8FAFC',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
                       <button onClick={addMem} disabled={!newMem.trim()||savingMem}
                         style={{width:34,height:34,borderRadius:8,border:'none',background:BLUE,color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',opacity:!newMem.trim()||savingMem?0.4:1,transition:'opacity .15s'}}>
                         <Ico n="plus" s={14} c="#fff"/>
@@ -419,12 +419,12 @@ export default function VasuAI() {
                     </div>
                   </div>
                   <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 12px 8px'}}>
-                    {memLoading&&<div style={{padding:20,textAlign:'center',color:'rgba(255,255,255,0.2)',fontSize:12}}>Loading…</div>}
-                    {!memLoading&&memories.length===0&&<div style={{padding:'30px 0',textAlign:'center',color:'rgba(255,255,255,0.2)',fontSize:12.5}}>No memories yet</div>}
+                    {memLoading&&<div style={{padding:20,textAlign:'center',color:'#CBD5E1',fontSize:12}}>Loading…</div>}
+                    {!memLoading&&memories.length===0&&<div style={{padding:'30px 0',textAlign:'center',color:'#CBD5E1',fontSize:12.5}}>No memories yet</div>}
                     {memories.map((m,i)=>(
-                      <div key={m.id||i} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'9px 10px',borderRadius:8,marginBottom:4,background:'rgba(255,255,255,0.03)',border:`1px solid ${borderColor}`}}>
+                      <div key={m.id||i} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'9px 10px',borderRadius:8,marginBottom:4,background:'#FAFAFA',border:'0.5px solid #E5E7EB'}}>
                         <div style={{width:5,height:5,borderRadius:'50%',background:BLUE,flexShrink:0,marginTop:6}}/>
-                        <span style={{flex:1,fontSize:12.5,color:'rgba(255,255,255,0.7)',lineHeight:1.5}}>{m.content}</span>
+                        <span style={{flex:1,fontSize:12.5,color:'#374151',lineHeight:1.5}}>{m.content}</span>
                         <button onClick={()=>delMem(m.id)} style={{background:'transparent',border:'none',cursor:'pointer',padding:2,borderRadius:4,color:'rgba(255,80,80,0.5)',flexShrink:0}}>
                           <Ico n="trash" s={12} c="rgba(255,80,80,0.5)"/>
                         </button>
@@ -446,8 +446,8 @@ export default function VasuAI() {
           ].map(r=>{
             const on=rail===r.id
             return <button key={r.id} onClick={()=>toggleRail(r.id)} title={r.label} className="rb"
-              style={{width:36,height:36,display:'flex',alignItems:'center',justifyContent:'center',border:'none',borderRadius:9,cursor:'pointer',background:on?'rgba(28,159,212,0.2)':'transparent',transition:'background .15s',position:'relative'}}>
-              <Ico n={r.icon} s={16} c={on?BLUE:'rgba(255,255,255,0.35)'}/>
+              style={{width:36,height:36,display:'flex',alignItems:'center',justifyContent:'center',border:'none',borderRadius:9,cursor:'pointer',background:on?'#E3F5FD':'transparent',transition:'background .15s',position:'relative'}}>
+              <Ico n={r.icon} s={16} c={on?BLUE:'#9CA3AF'}/>
               {on&&<div style={{position:'absolute',right:-1,top:'50%',transform:'translateY(-50%)',width:2,height:20,background:BLUE,borderRadius:2}}/>}
             </button>
           })}
@@ -457,12 +457,12 @@ export default function VasuAI() {
         <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0,position:'relative'}}>
 
           {/* Chat header */}
-          <div style={{padding:'12px 20px',borderBottom:`1px solid ${borderColor}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,background:'rgba(0,0,0,0.15)',backdropFilter:'blur(10px)'}}>
+          <div style={{padding:'12px 20px',borderBottom:`1px solid ${borderColor}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,background:'#fff',borderBottom:'0.5px solid #E5E7EB'}}>
             <Logo size={16}/>
             <span style={{fontSize:14,fontWeight:700,color:'rgba(255,255,255,0.9)',letterSpacing:'-0.01em'}}>Chat</span>
-            <span style={{fontSize:11,color:'rgba(255,255,255,0.2)',background:'rgba(255,255,255,0.06)',padding:'2px 8px',borderRadius:20,fontWeight:500}}>Claude Sonnet 4.5</span>
+            <span style={{fontSize:11,color:'#94A3B8',background:'#F1F5F9',padding:'2px 8px',borderRadius:20,fontWeight:500}}>Claude Sonnet 4.5</span>
             <button onClick={newConv} title="New chat" className="ibtn"
-              style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:`1px solid ${borderColor}`,background:'transparent',borderRadius:7,cursor:'pointer',marginLeft:2}}>
+              style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:`0.5px solid #E5E7EB`,background:'#fff',borderRadius:7,cursor:'pointer',marginLeft:2}}>
               <Ico n="new" s={13} c="rgba(255,255,255,0.4)"/>
             </button>
             <div style={{flex:1}}/>
@@ -477,20 +477,20 @@ export default function VasuAI() {
             {messages.length===0?(
               <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'20px',animation:'fadeUp .5s ease'}}>
                 {/* Logo orb */}
-                <div style={{width:72,height:72,borderRadius:22,background:'linear-gradient(135deg,rgba(31,60,132,0.6),rgba(28,159,212,0.6))',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:20,boxShadow:'0 0 40px rgba(28,159,212,0.2)',animation:'scaleIn .4s ease'}}>
+                <div style={{width:72,height:72,borderRadius:22,background:'#E8EFF9',border:'0.5px solid #D1DCF0',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:20,boxShadow:'0 4px 16px rgba(31,60,132,0.12)',animation:'scaleIn .4s ease'}}>
                   <Logo size={32}/>
                 </div>
-                <div style={{fontSize:26,fontWeight:800,color:'#fff',marginBottom:6,letterSpacing:'-0.03em',textAlign:'center',animation:'fadeUp .5s ease .1s both'}}>
+                <div style={{fontSize:26,fontWeight:800,color:'#0F172A',marginBottom:6,letterSpacing:'-0.03em',textAlign:'center',animation:'fadeUp .5s ease .1s both'}}>
                   {greeting()}, {firstName}
                 </div>
-                <div style={{fontSize:14,color:'rgba(255,255,255,0.4)',textAlign:'center',maxWidth:440,lineHeight:1.6,marginBottom:28,animation:'fadeUp .5s ease .15s both'}}>
+                <div style={{fontSize:14,color:'#94A3B8',textAlign:'center',maxWidth:440,lineHeight:1.6,marginBottom:28,animation:'fadeUp .5s ease .15s both'}}>
                   Your marketing intelligence layer. Ask anything about Meta Ads, QL Ops, or WhatsApp — or generate a full report.
                 </div>
                 {/* quick prompts */}
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',maxWidth:620,animation:'fadeUp .5s ease .2s both'}}>
                   {QUICK.map((q,i)=>(
                     <button key={i} onClick={()=>send(q.text)} className="qp"
-                      style={{padding:'8px 14px',borderRadius:20,border:`1px solid rgba(255,255,255,0.12)`,background:'rgba(255,255,255,0.04)',color:'rgba(255,255,255,0.6)',fontSize:12.5,fontWeight:500,cursor:'pointer',fontFamily:FONT,transition:'all .2s',whiteSpace:'nowrap'}}>
+                      style={{padding:'8px 14px',borderRadius:20,border:`0.5px solid #E5E7EB`,background:'#fff',color:'#475569',fontSize:12.5,fontWeight:500,cursor:'pointer',fontFamily:FONT,transition:'all .2s',whiteSpace:'nowrap'}}>
                       {q.label}
                     </button>
                   ))}
@@ -502,13 +502,13 @@ export default function VasuAI() {
                   <div key={k} style={{marginBottom:24,animation:k===messages.length-1||k===messages.length-2?'fadeUp .3s ease':'none'}}>
                     {m.role==='user'?(
                       <div style={{display:'flex',justifyContent:'flex-end'}}>
-                        <div style={{maxWidth:'75%',background:'linear-gradient(135deg,rgba(31,60,132,0.7),rgba(28,159,212,0.5))',border:`1px solid rgba(28,159,212,0.3)`,borderRadius:'16px 16px 4px 16px',padding:'12px 16px',backdropFilter:'blur(10px)'}}>
-                          <div style={{fontSize:14,color:'rgba(255,255,255,0.95)',lineHeight:1.65,whiteSpace:'pre-wrap'}}>{m.content}</div>
+                        <div style={{maxWidth:'75%',background:'#1F3C84',border:'none',borderRadius:'16px 16px 4px 16px',padding:'12px 16px'}}>
+                          <div style={{fontSize:14,color:'#fff',lineHeight:1.65,whiteSpace:'pre-wrap'}}>{m.content}</div>
                         </div>
                       </div>
                     ):(
                       <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
-                        <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,rgba(31,60,132,0.8),rgba(28,159,212,0.5))',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2,border:`1px solid rgba(28,159,212,0.2)`}}>
+                        <div style={{width:28,height:28,borderRadius:8,background:'#E8EFF9',border:'0.5px solid #D1DCF0',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>
                           <Logo size={14}/>
                         </div>
                         <div style={{flex:1,minWidth:0}}>
@@ -519,7 +519,7 @@ export default function VasuAI() {
                                 <div style={{display:'flex',gap:4,marginTop:8}}>
                                   {[['copy','Copy'],['refresh','Retry']].map(([ic,lbl])=>(
                                     <button key={ic} title={lbl} className="mabtn"
-                                      style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',border:`1px solid ${borderColor}`,background:'transparent',borderRadius:6,cursor:'pointer',color:'rgba(255,255,255,0.3)',fontSize:11,fontFamily:FONT,transition:'all .15s'}}
+                                      style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',border:`1px solid ${borderColor}`,background:'transparent',borderRadius:6,cursor:'pointer',color:'#CBD5E1',fontSize:11,fontFamily:FONT,transition:'all .15s'}}
                                       onClick={()=>{if(ic==='copy'){navigator.clipboard?.writeText(m.content);setCopied(k);setTimeout(()=>setCopied(null),1500)}}}>
                                       <Ico n={copied===k&&ic==='copy'?'check':'copy'} s={11} c={copied===k&&ic==='copy'?GREEN:'rgba(255,255,255,0.3)'}/>{lbl}
                                     </button>
@@ -530,7 +530,7 @@ export default function VasuAI() {
                           ):(
                             /* typing dots */
                             <div style={{display:'flex',alignItems:'center',gap:5,padding:'12px 0'}}>
-                              {[0,1,2].map(d=><div key={d} style={{width:7,height:7,borderRadius:'50%',background:BLUE,animation:`blink 1.2s infinite ${d*0.15}s`}}/>)}
+                              {[0,1,2].map(d=><div key={d} style={{width:7,height:7,borderRadius:'50%',background:'#94A3B8',animation:`blink 1.2s infinite ${d*0.15}s`}}/>)}
                             </div>
                           )}
                         </div>
@@ -546,27 +546,27 @@ export default function VasuAI() {
           {/* Input */}
           <div style={{padding:'12px 20px 16px',flexShrink:0}}>
             <div style={{maxWidth:820,margin:'0 auto'}}>
-              <div style={{background:'rgba(255,255,255,0.05)',border:`1px solid ${input?'rgba(28,159,212,0.4)':borderColor}`,borderRadius:16,padding:'12px 14px',backdropFilter:'blur(20px)',transition:'border-color .2s',boxShadow:'0 8px 32px rgba(0,0,0,0.3)'}}>
+              <div style={{background:'#fff',border:`0.5px solid ${input?BLUE:borderColor}`,borderRadius:14,padding:'12px 14px',transition:'border-color .2s',boxShadow:'0 2px 12px rgba(15,23,42,0.06)'}}>
                 <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Chat…"
                   onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
                   onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
-                  style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'rgba(255,255,255,0.9)',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
+                  style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:10}}>
                   <div style={{display:'flex',alignItems:'center',gap:6}}>
                     {[['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
                       <button key={id} onClick={()=>toggleRail(id)} className="mabtn"
-                        style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`1px solid ${rail===id?'rgba(28,159,212,0.4)':borderColor}`,background:rail===id?'rgba(28,159,212,0.1)':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id?BLUE:'rgba(255,255,255,0.35)',fontFamily:FONT,transition:'all .15s'}}>
+                        style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${rail===id?BLUE:borderColor}`,background:rail===id?'#E3F5FD':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id?BLUE:'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
                         <Ico n={ic} s={12} c={rail===id?BLUE:'rgba(255,255,255,0.35)'}/>{lbl}
                       </button>
                     ))}
                   </div>
                   <button onClick={()=>send()} disabled={!input.trim()||loading} className="sendbtn"
-                    style={{width:36,height:36,borderRadius:10,border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:input.trim()&&!loading?'pointer':'not-allowed',background:input.trim()&&!loading?`linear-gradient(135deg,${NAVY},${BLUE})`:'rgba(255,255,255,0.08)',transition:'all .2s'}}>
+                    style={{width:36,height:36,borderRadius:10,border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:input.trim()&&!loading?'pointer':'not-allowed',background:input.trim()&&!loading?NAVY:'#E5E7EB',transition:'all .2s'}}>
                     <Ico n={loading?'refresh':'send'} s={15} c="#fff" sw={2}/>
                   </button>
                 </div>
               </div>
-              <div style={{textAlign:'center',fontSize:11,color:'rgba(255,255,255,0.15)',marginTop:8}}>Chat can make mistakes. Always verify important numbers.</div>
+              <div style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Chat can make mistakes. Always verify important numbers.</div>
             </div>
           </div>
         </div>
