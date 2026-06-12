@@ -146,7 +146,7 @@ const QUICK = [
 ]
 
 /* ─── main ────────────────────────────────────────────────────── */
-export default function VasuAI() {
+export default function ChatPage() {
   const { user } = useAuth()
   const uid = user?.email||'default'
   const firstName = (user?.name||'there').split(' ')[0]
