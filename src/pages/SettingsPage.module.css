@@ -38,12 +38,12 @@
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-y: auto; }
 
 /* ---------- header ---------- */
-.header { padding: 36px 40px 0; }
+.header { padding: 24px 28px 0; }
 .breadcrumb { font-size: 11px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--text-3); margin: 0 0 6px; }
 .title { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; margin: 0; color: var(--text); }
 
 /* ---------- tab bar ---------- */
-.content { padding: 24px 40px 48px; }
+.content { padding: 20px 28px 48px; }
 .tabBar { display: flex; gap: 2px; border-bottom: 1px solid var(--card-border); margin-bottom: 28px; }
 .tab {
   appearance: none; background: none; border: none; cursor: pointer;
