@@ -48,7 +48,7 @@ const NAV = [
   {
     label: 'Intelligence',
     items: [
-      { to: '/vasu', icon: <VasuIcon />, label: 'VASU AI', end: false },
+      { to: '/vasu', icon: <VasuIcon />, label: 'Chat', end: false },
     ]
   },
 ]
@@ -67,7 +67,7 @@ export const PAGE_LIST = [
   { id:'revenue',      label:'Revenue',      path:'/dashboard/revenue',     adminOnly:false },
   { id:'lq_ops',       label:'QL Ops',       path:'/dashboard/lq-ops',      adminOnly:false },
   { id:'whatsapp',     label:'WhatsApp',     path:'/dashboard/whatsapp',    adminOnly:false },
-  { id:'vasu',         label:'VASU AI',      path:'/vasu',                  adminOnly:true  },
+  { id:'vasu',         label:'Chat',      path:'/vasu',                  adminOnly:true  },
   { id:'settings',     label:'Settings',     path:'/settings',              adminOnly:true  },
 ]
 
@@ -89,7 +89,7 @@ const ICON_MAP = {
   'Revenue': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>,
   'Google Ads': <GoogleAdsIcon/>, 'QL Ops': <PeopleIcon/>,
   'WhatsApp': <WhatsAppIcon/>,
-  'VASU AI': <VasuIcon/>, 'Settings': <SettingsIcon/>
+  'Chat': <VasuIcon/>, 'Settings': <SettingsIcon/>
 }
 function GoogleAdsIcon(){
   return <svg width='16' height='16' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M21.35 11.1H12.18V13.83H18.69C18.36 17.64 15.19 19.27 12.19 19.27C8.36 19.27 5 16.25 5 12C5 7.9 8.2 4.73 12.2 4.73C15.29 4.73 17.1 6.7 17.1 6.7L19 4.72C19 4.72 16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12C2.03 17.05 6.16 22 12.25 22C17.6 22 21.5 18.33 21.5 12.91C21.5 11.76 21.35 11.1 21.35 11.1Z' fill='currentColor'/></svg>
