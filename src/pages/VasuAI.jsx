@@ -12,8 +12,19 @@ const C = {
 const FONT = "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif"
 
 /* ============================ original VASU logic (unchanged) ============================ */
-const TOKEN_KEY = 'lq_meta_token'
-const AD_ACCOUNT = 'act_641914389215638'
+const TOKEN_KEY    = 'lq_meta_token'
+const AD_ACCOUNT   = 'act_641914389215638'
+const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDc5MTI3NDMsImV4cCI6MjAyMzQ4ODc0M30.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
+
+async function fetchTokenFromSupabase() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/meta_tokens?select=token,created_at&order=created_at.desc&limit=1`,
+      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
+    const data = await res.json()
+    return data?.[0]?.token || null
+  } catch { return null }
+}
 
 async function graphGet(path, token, params = {}) {
   const qs = new URLSearchParams({ access_token: token, ...params }).toString()
@@ -277,8 +288,16 @@ export default function VasuAI() {
   useEffect(() => { if (messages.length > 0) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(messages.slice(-50))) } catch {} } }, [messages])
 
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY)
-    if (token) { setMetaToken(token); loadMetaContext(token) }
+    const init = async () => {
+      // Try localStorage first, then Supabase
+      let token = localStorage.getItem(TOKEN_KEY)
+      if (!token) {
+        token = await fetchTokenFromSupabase()
+        if (token) localStorage.setItem(TOKEN_KEY, token)
+      }
+      if (token) { setMetaToken(token); loadMetaContext(token) }
+    }
+    init()
   }, [])
 
   const loadMetaContext = async (token) => {
