@@ -296,7 +296,7 @@ export default function SettingsPage() {
   }
 
   const TABS = [
-    { id: 'chat',    label: 'VASU AI' },
+    { id: 'chat',    label: 'Chat' },
     { id: 'data',    label: 'Data' },
     ...(userIsAdmin ? [{ id: 'users', label: 'User Access' }, { id: 'activity', label: 'Activity Log' }] : []),
     { id: 'profile', label: 'Profile' },
@@ -324,45 +324,23 @@ export default function SettingsPage() {
 
           {/* ---------------- VASU AI ---------------- */}
           {activeTab === 'chat' && (
-            <div className={styles.chat}>
-              <div className={styles.chatScroll}>
-                {messages.map((m, i) => (
-                  <div key={i} className={`${styles.msgRow} ${m.role === 'user' ? styles.msgUser : ''}`}>
-                    {m.role === 'assistant' && <div className={styles.avatar}><QIcon /></div>}
-                    <div className={`${styles.bubble} ${m.role === 'user' ? styles.bubbleUser : ''}`}
-                      dangerouslySetInnerHTML={{ __html: renderMd(m.content) }} />
-                  </div>
-                ))}
-                {chatLoading && (
-                  <div className={styles.msgRow}>
-                    <div className={styles.avatar}><QIcon /></div>
-                    <div className={styles.bubble}><span className={styles.typing}><span /><span /><span /></span></div>
-                  </div>
-                )}
-                {chatError && <div className={styles.errorMsg}>{chatError}</div>}
-                <div ref={bottomRef} />
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'60px 20px', gap:20 }}>
+              <div style={{ width:64, height:64, borderRadius:18, background:'var(--navy-tint)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <svg width="28" height="28" viewBox="0 0 22 22" fill="none">
+                  <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/>
+                  <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
+                  <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84"/>
+                </svg>
               </div>
-
-              <div className={styles.quickRow}>
-                {QUICK_PROMPTS.map(p => (
-                  <button key={p.label} className={styles.quickChip} onClick={() => sendChat(p.q)} disabled={chatLoading}>
-                    {p.label}
-                  </button>
-                ))}
+              <div style={{ textAlign:'center' }}>
+                <div style={{ fontSize:18, fontWeight:800, color:'var(--text)', marginBottom:8, fontFamily:"'Plus Jakarta Sans',sans-serif" }}>Chat has moved</div>
+                <div style={{ fontSize:13.5, color:'var(--text2)', maxWidth:380, lineHeight:1.6, fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+                  The AI marketing analyst is now a dedicated page with conversation history, prompt library, and memories.
+                </div>
               </div>
-
-              <div className={styles.composer}>
-                <textarea className={styles.composerInput} rows={1}
-                  placeholder="Ask anything about your data…  (Enter to send)"
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() } }} />
-                <button className={styles.sendBtn} onClick={() => sendChat()} disabled={chatLoading || !chatInput.trim()}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-                  </svg>
-                </button>
-              </div>
+              <a href="/vasu" style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'10px 22px', borderRadius:10, background:'#1F3C84', color:'#fff', fontSize:13.5, fontWeight:700, fontFamily:"'Plus Jakarta Sans',sans-serif", textDecoration:'none', boxShadow:'0 2px 8px rgba(31,60,132,0.3)' }}>
+                Open Chat →
+              </a>
             </div>
           )}
 
