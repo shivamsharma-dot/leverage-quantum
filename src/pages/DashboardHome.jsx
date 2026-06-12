@@ -15,18 +15,19 @@ const QLOPS_SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4Q
 function fmtN(n){ if(!n&&n!==0)return '—'; if(n>=1e7)return(n/1e7).toFixed(1)+'Cr'; if(n>=1e5)return(n/1e5).toFixed(1)+'L'; if(n>=1e3)return Math.round(n/1e3)+'K'; return Math.round(n).toLocaleString('en-IN') }
 function fmtC(n){ if(!n&&n!==0)return '—'; if(n>=1e7)return'₹'+(n/1e7).toFixed(2)+' Cr'; if(n>=1e5)return'₹'+(n/1e5).toFixed(1)+'L'; if(n>=1e3)return'₹'+Math.round(n/1e3)+'K'; return'₹'+Math.round(n) }
 
-// Countup hook
-function useCountUp(target, duration=800) {
-  const [val, setVal] = useState(0)
+// Countup hook — only animates when real data arrives, shows — until then
+function useCountUp(target, duration=900) {
+  const [val, setVal] = useState(null)
   useEffect(()=>{
-    if(!target) return
-    let start=null, from=0
+    if(target === null || target === undefined || target === 0) return
+    let start=null
     const step = ts => {
       if(!start) start=ts
       const progress=Math.min((ts-start)/duration,1)
       const ease=1-Math.pow(1-progress,3)
-      setVal(Math.round(from+(target-from)*ease))
+      setVal(Math.round(target*ease))
       if(progress<1) requestAnimationFrame(step)
+      else setVal(target)
     }
     requestAnimationFrame(step)
   },[target,duration])
@@ -72,8 +73,8 @@ function Skeleton({ w='100%', h=20, r=6 }) {
 // Live stat card
 function StatCard({ label, value, sub, accent, loading, icon }) {
   const numVal = parseFloat((value||'').toString().replace(/[^0-9.]/g,''))||0
-  const display = useCountUp(loading ? 0 : numVal, 1000)
-  const formatted = loading ? null : (value||'—').toString().replace(/[\d.]+/, display.toString())
+  const display = useCountUp(loading ? null : numVal, 900)
+  const formatted = loading ? null : display === null ? '—' : (value||'—').toString().replace(/[\d.]+/, display.toString())
 
   return (
     <div style={{ background:'#fff', border:`0.5px solid ${C.border}`, borderRadius:12, padding:'16px 18px', borderTop:`3px solid ${accent}`, boxShadow:'0 1px 4px rgba(15,23,42,0.05)', fontFamily:FONT }}>
