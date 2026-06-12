@@ -1,4 +1,4 @@
-// api/vasu-chat.js — VASU AI · Production · Claude-powered · SSE streaming
+// api/vasu-chat.js — Chat AI · Production · Claude-powered · SSE streaming
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
@@ -230,7 +230,7 @@ async function buildSystemPrompt(metaToken, memories) {
     ? `\n━━━ REMEMBERED CONTEXT (from previous sessions) ━━━\n${memories.map(m=>`• ${m}`).join('\n')}`
     : ''
 
-  return `You are VASU — the Chief Marketing Intelligence Officer of Leverage Edu, built into Leverage Quantum, their internal analytics platform.
+  return `You are the Chief Marketing Intelligence Officer of Leverage Edu, built into Leverage Quantum, their internal analytics platform.
 
 You have 40 years of combined expertise across:
 - Performance marketing (Meta, Google, WhatsApp) for Indian EdTech and D2C
