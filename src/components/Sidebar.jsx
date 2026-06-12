@@ -1,6 +1,7 @@
 import React from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useTheme } from '../context/ThemeContext'
 import styles from './Sidebar.module.css'
 
 const NAV = [
@@ -97,6 +98,8 @@ function GoogleAdsIcon(){
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
+  const { theme, toggle: toggleTheme, auto, autoDark } = useTheme()
+  const isDark = theme === 'dark'
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -264,6 +267,21 @@ export default function Sidebar() {
           </NavLink>
         </div>
       )}
+
+      {/* Theme toggle */}
+      <div style={{ padding:'0 10px 8px', borderTop:`1px solid var(--card-border)`, paddingTop:10 }}>
+        <button className="theme-toggle" onClick={toggleTheme} title={auto ? `Auto (${autoDark?'dark':'light'} now — IST)` : `Switch to ${isDark?'light':'dark'} mode`}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ fontSize:14, lineHeight:1 }}>{isDark ? '🌙' : '☀️'}</span>
+            <span style={{ fontSize:11.5, fontWeight:600, color:'var(--text2)', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+              {auto ? `Auto · ${isDark?'Dark':'Light'}` : isDark ? 'Dark mode' : 'Light mode'}
+            </span>
+          </div>
+          <div className={`theme-toggle-track ${isDark?'on':''}`}>
+            <div className="theme-toggle-thumb"/>
+          </div>
+        </button>
+      </div>
 
       <div className={styles.userArea}>
         <div className={styles.avatar}>
