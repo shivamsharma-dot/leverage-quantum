@@ -11,7 +11,7 @@ const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPV
 const C = {
   navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F',
   amber:'#F59E0B', navyBg:'#E8EFF9', blueBg:'#E3F5FD', cyanBg:'#E4F8F9', greenBg:'#E9F8EF',
-  border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8', sub:'#475569', bg:'#F4F6F9',
+  border:'var(--card-border)', text:'var(--text)', muted:'var(--text3)', sub:'var(--text2)', bg:'var(--bg)',
 }
 const PROVIDER_COLORS = { Futwork: C.navy, Superbot: C.blue }
 const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
@@ -50,7 +50,7 @@ function parseCSV(csv) {
 
 const KPICard = ({ label, value, sub, accent = C.navy, delta }) => (
   <div style={{
-    background: '#fff', border: `0.5px solid ${C.border}`, borderRadius: 12,
+    background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 12,
     padding: '18px 20px', borderTop: `3px solid ${accent}`,
     boxShadow: '0 1px 4px rgba(15,23,42,0.04)',
   }}>
@@ -73,7 +73,7 @@ const KPICard = ({ label, value, sub, accent = C.navy, delta }) => (
 
 const Card = ({ title, sub, children, action, noPad }) => (
   <div style={{
-    background: '#fff', border: `0.5px solid ${C.border}`, borderRadius: 14,
+    background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 14,
     overflow: 'hidden', boxShadow: '0 1px 4px rgba(15,23,42,0.04)',
   }}>
     <div style={{
@@ -95,7 +95,7 @@ const ChartTip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      background: '#fff', border: `0.5px solid ${C.border}`, borderRadius: 10,
+      background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 10,
       padding: '10px 14px', fontSize: 12, fontFamily: FONT,
       boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
     }}>
@@ -153,7 +153,7 @@ const Dropdown = ({ options, value, onChange, label, minWidth = 120 }) => {
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '6px 10px 6px 12px', borderRadius: 8,
             border: `0.5px solid ${open ? C.navy : C.border}`,
-            background: open ? C.navyBg : '#fff',
+            background: open ? C.navyBg : 'var(--card)',
             color: C.text, cursor: 'pointer', fontFamily: FONT,
             fontSize: 12, fontWeight: 600, minWidth,
             boxShadow: open ? `0 0 0 3px rgba(31,60,132,0.08)` : 'none',
@@ -170,7 +170,7 @@ const Dropdown = ({ options, value, onChange, label, minWidth = 120 }) => {
         {open && (
           <div style={{
             position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 500,
-            background: '#fff', border: `0.5px solid ${C.border}`,
+            background: 'var(--card)', border: `0.5px solid ${C.border}`,
             borderRadius: 12, boxShadow: '0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)',
             padding: '6px', minWidth: Math.max(minWidth, 150),
             maxHeight: 280, overflowY: 'auto',
@@ -189,7 +189,7 @@ const Dropdown = ({ options, value, onChange, label, minWidth = 120 }) => {
                     color: active ? C.navy : C.text,
                     transition: 'background .1s, color .1s',
                   }}
-                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#F8FAFC' }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg3)' }}
                   onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
                   <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                     {opt}
@@ -244,7 +244,7 @@ function CalMonth({ year, month, from, to, hovered, onSelect, onHover }) {
           const today    = new Date(); today.setHours(0,0,0,0)
           const isToday  = ts === today.getTime()
           let bg = 'transparent', color = C.text, radius = 6
-          if (isFrom || isTo) { bg = C.navy; color = '#fff' }
+          if (isFrom || isTo) { bg = C.navy; color = 'var(--card)' }
           else if (inRange)   { bg = C.navyBg; color = C.navy }
           return (
             <button key={ts}
@@ -257,7 +257,7 @@ function CalMonth({ year, month, from, to, hovered, onSelect, onHover }) {
                 fontSize: 11.5, fontWeight: isFrom || isTo ? 700 : isToday ? 600 : 400,
                 fontFamily: FONT, position: 'relative', transition: 'background .1s',
               }}
-              onMouseOver={e => { if (!isFrom && !isTo && !inRange) e.currentTarget.style.background = '#F1F5F9' }}
+              onMouseOver={e => { if (!isFrom && !isTo && !inRange) e.currentTarget.style.background = 'var(--bg3)' }}
               onMouseOut={e => { if (!isFrom && !isTo && !inRange) e.currentTarget.style.background = bg }}>
               {date.getDate()}
               {isToday && !isFrom && !isTo && (
@@ -304,11 +304,11 @@ function DateRangePicker({ from, to, onChange, onClose }) {
   const NavBtn = ({ dir, onClick: oc }) => (
     <button onClick={oc} style={{
       width: 28, height: 28, borderRadius: 7, border: `0.5px solid ${C.border}`,
-      background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center',
+      background: 'var(--card)', cursor: 'pointer', display: 'flex', alignItems: 'center',
       justifyContent: 'center', color: C.sub, transition: 'background .1s',
     }}
-    onMouseOver={e=>e.currentTarget.style.background='#F1F5F9'}
-    onMouseOut={e=>e.currentTarget.style.background='#fff'}>
+    onMouseOver={e=>e.currentTarget.style.background='var(--bg3)'}
+    onMouseOut={e=>e.currentTarget.style.background='var(--card)'}>
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         {dir==='left' ? <polyline points="15 18 9 12 15 6"/> : <polyline points="9 18 15 12 9 6"/>}
       </svg>
@@ -353,14 +353,14 @@ function DateRangePicker({ from, to, onChange, onClose }) {
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `0.5px solid #F1F5F9` }}>
         <button onClick={() => { setSelFrom(null); setSelTo(null); setStep('from') }}
-          style={{ padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: '#fff', fontSize: 11.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer', color: C.sub }}>
+          style={{ padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', fontSize: 11.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer', color: C.sub }}>
           Clear
         </button>
         <button onClick={() => canApply && onChange(fmt(selFrom), fmt(selTo))}
           disabled={!canApply}
           style={{
             padding: '7px 18px', borderRadius: 8, border: 'none', cursor: canApply?'pointer':'not-allowed',
-            background: canApply ? C.navy : '#E5E7EB', color: canApply?'#fff':C.muted,
+            background: canApply ? C.navy : 'var(--card-border)', color: canApply?'var(--card)':C.muted,
             fontSize: 12, fontWeight: 700, fontFamily: FONT, transition: 'all .15s',
           }}>
           Apply range
@@ -400,7 +400,7 @@ const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
       <button onClick={() => setOpen(v => !v)}
         style={{
           display:'flex', alignItems:'center', gap:6, padding:'6px 13px',
-          borderRadius:8, background:'#fff',
+          borderRadius:8, background:'var(--card)',
           border:`0.5px solid ${open ? C.navy : C.border}`,
           color: open ? C.navy : '#374151', fontSize:12, fontWeight:600,
           cursor:'pointer', fontFamily:FONT,
@@ -423,7 +423,7 @@ const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
           <div onClick={() => setOpen(false)} style={{position:'fixed',inset:0,zIndex:399}}/>
           <div style={{
             position:'absolute', top:'calc(100% + 8px)', right:0, zIndex:400,
-            background:'#fff', border:`0.5px solid ${C.border}`, borderRadius:14,
+            background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:14,
             boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:10, minWidth:264,
             fontFamily:FONT,
           }}>
@@ -437,7 +437,7 @@ const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
                   background: exportView===v.key ? C.navyBg : 'transparent',
                   transition:'background .1s',
                 }}
-                onMouseOver={e=>{if(exportView!==v.key)e.currentTarget.style.background='#F8FAFC'}}
+                onMouseOver={e=>{if(exportView!==v.key)e.currentTarget.style.background='var(--bg3)'}}
                 onMouseOut={e=>{if(exportView!==v.key)e.currentTarget.style.background='transparent'}}>
                 <div style={{display:'flex',alignItems:'center',gap:6}}>
                   <div style={{width:8,height:8,borderRadius:'50%',flexShrink:0,background:exportView===v.key?C.navy:C.border}}/>
@@ -446,13 +446,13 @@ const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
                 <div style={{fontSize:11,color:C.muted,paddingLeft:14}}>{v.desc}</div>
               </button>
             ))}
-            <div style={{height:'0.5px',background:'#F1F5F9',margin:'8px 4px'}}/>
+            <div style={{height:'0.5px',background:'var(--bg3)',margin:'8px 4px'}}/>
             <div style={{display:'flex',gap:6,padding:'2px 4px 4px'}}>
               {[['CSV','csv',C.navy],['JSON','json',C.blue]].map(([lbl,type,hc])=>(
                 <button key={type} onClick={()=>download(type)}
                   style={{
                     flex:1, padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`,
-                    background:'#fff', cursor:'pointer', fontFamily:FONT,
+                    background:'var(--card)', cursor:'pointer', fontFamily:FONT,
                     fontSize:12, fontWeight:600, color:C.text,
                     display:'flex', alignItems:'center', justifyContent:'center', gap:5,
                     transition:'all .12s',
@@ -732,7 +732,7 @@ export default function LeadQualificationDashboard() {
     fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.07em',
     textTransform: 'uppercase', padding: '10px 12px', cursor: 'pointer',
     userSelect: 'none', fontFamily: FONT, whiteSpace: 'nowrap',
-    background: sortCol === col ? '#F8FAFF' : 'transparent',
+    background: sortCol === col ? 'var(--navy-tint)' : 'transparent',
     borderBottom: `0.5px solid ${C.border}`,
   })
 
@@ -743,7 +743,7 @@ export default function LeadQualificationDashboard() {
 
         {/* ── HEADER ───────────────────────────────────────────────── */}
         <div style={{
-          background: '#fff', borderBottom: `0.5px solid ${C.border}`,
+          background: 'var(--card)', borderBottom: `0.5px solid ${C.border}`,
           padding: '11px 28px', display: 'flex', alignItems: 'center',
           justifyContent: 'space-between', gap: 12, flexShrink: 0,
         }}>
@@ -762,7 +762,7 @@ export default function LeadQualificationDashboard() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
 {isCurrentMonth && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F1F5F9', borderRadius: 9, padding: '3px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: '3px' }}>
               {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => {
                 // compute this key's date range label for tooltip
                 const today2 = new Date(); today2.setHours(0,0,0,0)
@@ -781,7 +781,7 @@ export default function LeadQualificationDashboard() {
                       style={{
                         padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer',
                         fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
-                        background: activeFilter==='custom' ? 'transparent' : datePreset === key ? '#fff' : 'transparent',
+                        background: activeFilter==='custom' ? 'transparent' : datePreset === key ? 'var(--card)' : 'transparent',
                         color: activeFilter==='custom' ? '#CBD5E1' : datePreset === key ? C.navy : C.muted,
                         boxShadow: activeFilter==='custom' ? 'none' : datePreset === key ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
                         opacity: activeFilter==='custom' ? 0.5 : 1,
@@ -791,7 +791,7 @@ export default function LeadQualificationDashboard() {
                     {/* Hover tooltip */}
                     <div style={{
                       position:'absolute', top:'calc(100% + 7px)', left:'50%', transform:'translateX(-50%)',
-                      background:'#1E293B', color:'#fff', fontSize:11, fontWeight:500, fontFamily:FONT,
+                      background:'#1E293B', color:'var(--card)', fontSize:11, fontWeight:500, fontFamily:FONT,
                       padding:'5px 10px', borderRadius:7, whiteSpace:'nowrap', pointerEvents:'none',
                       boxShadow:'0 4px 14px rgba(15,23,42,0.18)', zIndex:600,
                       opacity: isHov ? 1 : 0,
@@ -834,7 +834,7 @@ export default function LeadQualificationDashboard() {
                 style={{
                   padding: '6px 11px', borderRadius: 8,
                   border: `0.5px solid ${datePreset==='custom'?C.navy:C.border}`,
-                  background: datePreset==='custom'?C.navyBg:'#fff',
+                  background: datePreset==='custom'?C.navyBg:'var(--card)',
                   color: datePreset==='custom'?C.navy:C.sub,
                   fontSize: 11.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: 5,
@@ -853,7 +853,7 @@ export default function LeadQualificationDashboard() {
                   <div onClick={() => setShowCustom(false)} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
                   <div style={{
                     position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400,
-                    background: '#fff', border: `0.5px solid ${C.border}`, borderRadius: 14,
+                    background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 14,
                     boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)',
                     overflow: 'hidden',
                   }}>
@@ -878,7 +878,7 @@ export default function LeadQualificationDashboard() {
               style={{
                 padding: '6px 14px', borderRadius: 8, border: `0.5px solid ${C.border}`,
                 fontSize: 12, fontWeight: 500, cursor: loading ? 'wait' : 'pointer',
-                fontFamily: FONT, background: '#fff', color: '#374151',
+                fontFamily: FONT, background: 'var(--card)', color: '#374151',
                 display: 'flex', alignItems: 'center', gap: 6, opacity: loading ? 0.65 : 1,
               }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
@@ -898,7 +898,7 @@ export default function LeadQualificationDashboard() {
               <button onClick={() => setShowInfo(v => !v)}
                 style={{
                   width: 30, height: 30, borderRadius: 8, border: `0.5px solid ${C.border}`,
-                  background: showInfo ? C.navyBg : '#fff', color: C.navy,
+                  background: showInfo ? C.navyBg : 'var(--card)', color: C.navy,
                   fontSize: 14, fontWeight: 700, fontStyle: 'italic', fontFamily: 'Georgia,serif',
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>i</button>
@@ -906,7 +906,7 @@ export default function LeadQualificationDashboard() {
               {showInfo && (
                 <div style={{
                   position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 200,
-                  width: 340, background: '#fff', border: `0.5px solid ${C.border}`,
+                  width: 340, background: 'var(--card)', border: `0.5px solid ${C.border}`,
                   borderRadius: 12, boxShadow: '0 14px 40px rgba(15,23,42,0.16)',
                   padding: '16px 18px', fontFamily: FONT,
                 }}>
@@ -979,7 +979,7 @@ export default function LeadQualificationDashboard() {
                         tickFormatter={v => fmtN(v)}
                         axisLine={false} tickLine={false}
                       />
-                      <Tooltip content={<ChartTip />} cursor={{ fill: '#F1F5F9' }} />
+                      <Tooltip content={<ChartTip />} cursor={{ fill: 'var(--bg3)' }} />
                       <Bar dataKey="Futwork"  stackId="a" fill={C.navy} radius={[0, 0, 0, 0]} maxBarSize={52} />
                       <Bar dataKey="Superbot" stackId="a" fill={C.blue} radius={[5, 5, 0, 0]} maxBarSize={52} />
                     </BarChart>
@@ -1059,7 +1059,7 @@ export default function LeadQualificationDashboard() {
                             <XAxis type="number" tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
                             <YAxis type="category" dataKey="campaign" tick={{ fontSize: 10.5, fill: C.sub, fontFamily: FONT }} width={248} axisLine={false} tickLine={false}
                               tickFormatter={v => v.length > 36 ? v.slice(0, 34) + '…' : v} />
-                            <Tooltip content={<ChartTip />} cursor={{ fill: '#F1F5F9' }} />
+                            <Tooltip content={<ChartTip />} cursor={{ fill: 'var(--bg3)' }} />
                             <Bar dataKey="count" radius={[0, 5, 5, 0]} maxBarSize={22}>
                               {topCampaigns.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.provider] || C.muted} />)}
                             </Bar>
@@ -1100,9 +1100,9 @@ export default function LeadQualificationDashboard() {
                     </thead>
                     <tbody>
                       {pageRows.map((r, i) => (
-                        <tr key={i} style={{ borderBottom: `0.5px solid #F3F4F6`, background: i % 2 ? '#FAFBFC' : '#fff', transition: 'background .1s' }}
+                        <tr key={i} style={{ borderBottom: `0.5px solid #F3F4F6`, background: i % 2 ? '#FAFBFC' : 'var(--card)', transition: 'background .1s' }}
                           onMouseEnter={e => e.currentTarget.style.background = '#F0F7FF'}
-                          onMouseLeave={e => e.currentTarget.style.background = i % 2 ? '#FAFBFC' : '#fff'}>
+                          onMouseLeave={e => e.currentTarget.style.background = i % 2 ? '#FAFBFC' : 'var(--card)'}>
                           <td style={{ padding: '10px 12px', color: C.text, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }} title={r.campaign}>{r.campaign || '—'}</td>
                           <td style={{ padding: '10px 12px', fontFamily: FONT }}>
                             <span style={{
@@ -1130,7 +1130,7 @@ export default function LeadQualificationDashboard() {
                       </span>
                       <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
                         <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-                          style={{ padding: '5px 13px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: '#fff', fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: page === 0 ? 'not-allowed' : 'pointer', opacity: page === 0 ? 0.35 : 1, color: C.text }}>
+                          style={{ padding: '5px 13px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: page === 0 ? 'not-allowed' : 'pointer', opacity: page === 0 ? 0.35 : 1, color: C.text }}>
                           ← Prev
                         </button>
                         {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
@@ -1140,15 +1140,15 @@ export default function LeadQualificationDashboard() {
                               style={{
                                 width: 32, height: 32, borderRadius: 8,
                                 border: `0.5px solid ${p === page ? C.navy : C.border}`,
-                                background: p === page ? C.navy : '#fff',
-                                color: p === page ? '#fff' : C.text,
+                                background: p === page ? C.navy : 'var(--card)',
+                                color: p === page ? 'var(--card)' : C.text,
                                 fontSize: 12, fontWeight: p === page ? 700 : 400,
                                 fontFamily: FONT, cursor: 'pointer',
                               }}>{p + 1}</button>
                           )
                         })}
                         <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
-                          style={{ padding: '5px 13px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: '#fff', fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: page === totalPages - 1 ? 'not-allowed' : 'pointer', opacity: page === totalPages - 1 ? 0.35 : 1, color: C.text }}>
+                          style={{ padding: '5px 13px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: page === totalPages - 1 ? 'not-allowed' : 'pointer', opacity: page === totalPages - 1 ? 0.35 : 1, color: C.text }}>
                           Next →
                         </button>
                       </div>
