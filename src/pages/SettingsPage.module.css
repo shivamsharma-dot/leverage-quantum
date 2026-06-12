@@ -5,16 +5,16 @@
    ============================================================ */
 
 .layout {
-  --bg:          #F7F8FA;
-  --card:        #FFFFFF;
-  --border:      #ECEDF0;
-  --border-2:    #E2E4E8;
-  --text:        #16181D;
-  --text-2:      #5B6470;
-  --text-3:      #9AA1AC;
+  --bg:          var(--bg);
+  --card:        var(--card);
+  --border:      var(--card-border);
+  --border-2:    var(--card-border);
+  --text:        var(--text);
+  --text-2:      var(--text2);
+  --text-3:      var(--text3);
   --accent:      #1C9FD4;
   --navy:        #1F3C84;
-  --primary:     #16181D;
+  --primary:     var(--text);
   --primary-h:   #2A2D34;
   --ok:          #0F9D58;
   --ok-bg:       #ECFAF1;
@@ -44,7 +44,7 @@
 
 /* ---------- tab bar ---------- */
 .content { padding: 24px 40px 48px; }
-.tabBar { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+.tabBar { display: flex; gap: 2px; border-bottom: 1px solid var(--card-border); margin-bottom: 28px; }
 .tab {
   appearance: none; background: none; border: none; cursor: pointer;
   font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--text-3);
@@ -148,7 +148,7 @@
 .note { font-size: 12px; color: var(--text-3); margin-top: 12px; }
 
 .sourceList { display: flex; flex-direction: column; }
-.sourceRow { display: flex; align-items: center; justify-content: space-between; padding: 13px 0; border-bottom: 1px solid var(--border); }
+.sourceRow { display: flex; align-items: center; justify-content: space-between; padding: 13px 0; border-bottom: 1px solid var(--card-border); }
 .sourceRow:last-child { border-bottom: none; }
 .sourceName { font-size: 13.5px; font-weight: 600; color: var(--text); }
 .sourceMeta { font-size: 12px; color: var(--text-3); margin-top: 2px; }
@@ -193,7 +193,7 @@
 
 .roleBadge { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
 .roleAdmin  { color: #1F3C84; background: #E8EFF9; }
-.roleViewer { color: #5B6470; background: #F1F3F5; }
+.roleViewer { color: var(--text2); background: #F1F3F5; }
 .roleFull   { color: #2E7D4F; background: #E9F8EF; }
 .roleRoas   { color: #1577A0; background: #E3F5FD; }
 .roleCustom { color: #16868F; background: #E4F8F9; }
@@ -247,7 +247,7 @@
 .empty { text-align: center; padding: 44px 20px; color: var(--text-3); font-size: 13px; line-height: 1.6; }
 .tableWrap { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.th { text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.th { text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-3); padding: 10px 14px; border-bottom: 1px solid var(--card-border); white-space: nowrap; }
 .td { padding: 11px 14px; border-bottom: 1px solid #F4F5F7; color: var(--text-2); white-space: nowrap; }
 .tdUser { color: var(--text); font-weight: 600; }
 .actionTag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px; }
