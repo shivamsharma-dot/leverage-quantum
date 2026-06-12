@@ -243,3 +243,146 @@ input, select, textarea { font-family: inherit; }
 .theme-toggle-track.on .theme-toggle-thumb {
   transform: translateX(16px);
 }
+
+/* ── MICRO-INTERACTIONS ───────────────────────────────────────── */
+
+/* Button press feedback */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Card hover lift */
+.q-card-hover {
+  transition: transform .18s ease, box-shadow .18s ease !important;
+}
+.q-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md) !important;
+}
+
+/* Interactive row hover */
+.q-row-hover {
+  transition: background .1s ease;
+}
+.q-row-hover:hover {
+  background: var(--navy-tint) !important;
+}
+
+/* Nav item active indicator */
+.q-nav-active {
+  position: relative;
+}
+.q-nav-active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 4px; bottom: 4px;
+  width: 3px;
+  background: var(--blue);
+  border-radius: 0 3px 3px 0;
+}
+
+/* ── PAGE TRANSITION ──────────────────────────────────────────── */
+.page-enter {
+  animation: fadeUp .2s ease both;
+}
+
+/* ── KPI NUMBER COUNT-UP ──────────────────────────────────────── */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.kpi-value {
+  animation: countUp .4s cubic-bezier(0.4,0,0.2,1) both;
+}
+.kpi-value:nth-child(1) { animation-delay: .05s; }
+.kpi-value:nth-child(2) { animation-delay: .1s; }
+.kpi-value:nth-child(3) { animation-delay: .15s; }
+.kpi-value:nth-child(4) { animation-delay: .2s; }
+.kpi-value:nth-child(5) { animation-delay: .25s; }
+.kpi-value:nth-child(6) { animation-delay: .3s; }
+
+/* ── CHART ENTRY ANIMATION ────────────────────────────────────── */
+@keyframes chartEntry {
+  from { opacity: 0; clip-path: inset(0 100% 0 0); }
+  to   { opacity: 1; clip-path: inset(0 0% 0 0); }
+}
+.chart-enter {
+  animation: chartEntry .6s cubic-bezier(0.4,0,0.2,1) both;
+}
+
+/* ── TOOLTIP POLISH ───────────────────────────────────────────── */
+.q-tooltip {
+  background: var(--card) !important;
+  border: 0.5px solid var(--card-border) !important;
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-lg) !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
+}
+
+/* ── DROPDOWN POLISH ──────────────────────────────────────────── */
+.q-dropdown {
+  background: var(--card);
+  border: 0.5px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+}
+
+/* ── INPUT FOCUS GLOW ─────────────────────────────────────────── */
+input:focus, textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(28,159,212,0.12) !important;
+  border-color: var(--blue) !important;
+}
+
+/* ── LOADING BAR (top of page) ────────────────────────────────── */
+@keyframes loadBar {
+  0%   { width: 0%; opacity: 1; }
+  70%  { width: 85%; }
+  100% { width: 100%; opacity: 0; }
+}
+.q-load-bar {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--navy), var(--blue), var(--cyan));
+  animation: loadBar 1.2s ease forwards;
+  z-index: 9999;
+}
+
+/* ── BADGE / PILL ─────────────────────────────────────────────── */
+.q-pill-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: var(--green-tint);
+  color: var(--green);
+}
+.q-pill-live::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 2s infinite;
+}
+
+/* ── SCROLLBAR TRACK HOVER ────────────────────────────────────── */
+::-webkit-scrollbar-track:hover {
+  background: var(--bg3);
+}
+
+/* ── RECHARTS DARK MODE OVERRIDE ─────────────────────────────── */
+[data-theme="dark"] .recharts-cartesian-grid-horizontal line,
+[data-theme="dark"] .recharts-cartesian-grid-vertical line {
+  stroke: var(--chart-grid) !important;
+}
+[data-theme="dark"] .recharts-text {
+  fill: var(--chart-tick) !important;
+}
+[data-theme="dark"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--card) !important;
+  border-color: var(--card-border) !important;
+}
