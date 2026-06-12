@@ -23,12 +23,17 @@ const CAT_COLORS    = { MARKETING: C.blue, UTILITY: C.navy }
 // ── parse ────────────────────────────────────────────────────────────────────
 function parseDate(s) {
   if (!s || s === 'NULL') return null
-  const p = s.split('-')
-  if (p.length === 3) return new Date(+p[0], +p[1]-1, +p[2])
-  return null
+  // strip any residual quotes
+  const clean = s.replace(/"/g,'').trim()
+  const p = clean.split('-')
+  if (p.length !== 3) return null
+  const y = +p[0], mo = +p[1], dy = +p[2]
+  // sanity check — reject obviously wrong years
+  if (y < 2020 || y > 2035 || mo < 1 || mo > 12 || dy < 1 || dy > 31) return null
+  return new Date(y, mo-1, dy)
 }
 function monthLabel(d) {
-  if (!d) return ''
+  if (!d || isNaN(d.getTime())) return ''
   return MONTHS_SHORT[d.getMonth()] + ' ' + d.getFullYear()
 }
 function parseCSV(csv) {
@@ -52,7 +57,7 @@ function parseCSV(csv) {
       date,
       dateStr:    g('created_at').slice(0,10),
       month:      monthLabel(date),
-      monthSort:  date ? date.getFullYear()*100 + date.getMonth() : 0,
+      monthSort:  date ? date.getFullYear()*100 + (date.getMonth()+1) : 0,
       source:     g('source') || 'OTHER',
       campaign:   g('campaign_name') || '',
       template:   g('template_name') || '',
