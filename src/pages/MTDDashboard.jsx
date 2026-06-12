@@ -110,6 +110,37 @@ const Card=({title,sub,children,action})=>(
   </div>
 )
 
+
+function Dropdown({options,value,onChange,minWidth=120}){
+  const [open,setOpen]=React.useState(false)
+  const ref=React.useRef(null)
+  React.useEffect(()=>{
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)}
+    document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h)
+  },[])
+  const C2={navy:'#1F3C84',border:'#E5E7EB',navyBg:'#E8EFF9',text:'#0F172A',muted:'#94A3B8'}
+  const FONT2="'Plus Jakarta Sans',sans-serif"
+  return(
+    <div style={{position:'relative'}} ref={ref}>
+      <button onClick={()=>setOpen(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 11px 7px 13px',borderRadius:9,border:`0.5px solid ${open?C2.navy:C2.border}`,background:open?C2.navyBg:'#fff',color:C2.text,cursor:'pointer',fontFamily:FONT2,fontSize:12,fontWeight:600,minWidth,boxShadow:open?`0 0 0 3px rgba(31,60,132,0.09)`:'0 1px 3px rgba(15,23,42,0.06)',transition:'all .15s',whiteSpace:'nowrap'}}>
+        <span style={{flex:1,textAlign:'left'}}>{value}</span>
+        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{flexShrink:0,transition:'transform .2s',transform:open?'rotate(180deg)':'rotate(0deg)'}}>
+          <path d="M1 1l4 4 4-4" stroke={C2.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      {open&&<div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:500,background:'#fff',border:`0.5px solid ${C2.border}`,borderRadius:12,boxShadow:'0 16px 48px rgba(15,23,42,0.14)',padding:'6px',minWidth:Math.max(minWidth,160),maxHeight:300,overflowY:'auto',scrollbarWidth:'none'}}>
+        {options.map(opt=>(
+          <button key={opt.value??opt} onClick={()=>{onChange(opt.value??opt);setOpen(false)}} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 12px',borderRadius:8,border:'none',cursor:'pointer',fontFamily:FONT2,fontSize:12.5,fontWeight:(opt.value??opt)===value?700:400,background:(opt.value??opt)===value?C2.navyBg:'transparent',color:(opt.value??opt)===value?C2.navy:C2.text,transition:'background .1s'}}
+            onMouseEnter={e=>{if((opt.value??opt)!==value)e.currentTarget.style.background='#F8FAFC'}}
+            onMouseLeave={e=>{if((opt.value??opt)!==value)e.currentTarget.style.background='transparent'}}>
+            {opt.label??opt}
+          </button>
+        ))}
+      </div>}
+    </div>
+  )
+}
+
 export default function MTDDashboard(){
   const [months,setMonths]=useState([])
   const [sel,setSel]=useState(0)
@@ -165,26 +196,28 @@ export default function MTDDashboard(){
   const qlColor=v=>v>15?'#059669':v>5?'#F59E0B':'#DC2626'
   const maxSpend=srcs.length?Math.max(...srcs.map(s=>s.spend)):1
 
-  if(loading)return <div style={{display:'flex',height:'100vh',background:'#F4F5F7'}}><Sidebar/><div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:14,fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>Loading from Google Sheets...</div></div>
-  if(error)return <div style={{display:'flex',height:'100vh',background:'#F4F5F7'}}><Sidebar/><div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#DC2626',fontSize:14}}>{error}</div></div>
+  if(loading)return <div style={{display:'flex',height:'100vh',background:'#F4F6F9'}}><Sidebar/><div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:14,fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>Loading from Google Sheets...</div></div>
+  if(error)return <div style={{display:'flex',height:'100vh',background:'#F4F6F9'}}><Sidebar/><div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#DC2626',fontSize:14}}>{error}</div></div>
 
   return(
     <div style={{display:'flex',height:'100vh',overflow:'hidden',background:'#F4F6F9',fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>
       <Sidebar/>
       <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
 
-        <div style={{background:'#fff',borderBottom:'0.5px solid #E5E7EB',padding:'0 24px',height:60,display:'flex',alignItems:'center',gap:16,flexShrink:0}}>
+        <div style={{background:'#fff',borderBottom:'0.5px solid #E5E7EB',padding:'0 28px',height:56,display:'flex',alignItems:'center',gap:12,flexShrink:0}}>
           <div style={{flex:1}}>
-            <div style={{fontSize:11,color:'#94A3B8',letterSpacing:'0.04em',textTransform:'uppercase',marginBottom:2}}>Dashboards / MTD</div>
-            <div style={{fontSize:18,fontWeight:700,color:'#0F172A',letterSpacing:'-0.3px',lineHeight:1}}>MTD Performance {month?.name||''}</div>
+            <div style={{fontSize:10.5,color:'#94A3B8',letterSpacing:'0.05em',textTransform:'uppercase',margin:'0 0 2px',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>Dashboards / MTD</div>
+            <div style={{fontSize:17,fontWeight:800,color:'#0F172A',letterSpacing:'-0.4px',lineHeight:1.1,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>MTD Performance {month?.name||''}</div>
           </div>
           {months.length>1&&<div style={{fontSize:11,color:'#94A3B8',background:'#F1F5F9',padding:'3px 10px',borderRadius:6}}>
             {prevMonth?'vs '+prevMonth.name:'First month'}
           </div>}
-          {months.length>0&&<select value={sel} onChange={e=>setSel(Number(e.target.value))}
-            style={{padding:'7px 12px',border:'0.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontWeight:500,fontFamily:'inherit',background:'#fff',color:'#111827',cursor:'pointer',outline:'none'}}>
-            {months.map((m,i)=><option key={m.name} value={i}>{m.name}</option>)}
-          </select>}
+          {months.length>0&&<Dropdown
+            options={months.map((m,i)=>({label:m.name,value:i}))}
+            value={month?.name||''}
+            onChange={v=>setSel(months.findIndex(m=>m.name===v))}
+            minWidth={130}
+          />}
           <div style={{fontSize:11,color:'#94A3B8',borderLeft:'0.5px solid #E5E7EB',paddingLeft:14}}>{lastSync?'Synced '+fmt.format(lastSync):''}</div>
           <button onClick={loadData} disabled={loading} className="lqRefreshBtn" style={{padding:'6px 14px',borderRadius:8,border:'0.5px solid #E5E7EB',fontSize:12,fontWeight:500,cursor:loading?'wait':'pointer',fontFamily:'inherit',background:'#fff',color:'#374151',display:'flex',alignItems:'center',gap:6,opacity:loading?0.65:1,transition:'opacity .15s ease'}}>
             <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' style={{animation:loading?'spin .8s linear infinite':'none'}}><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/></svg>{loading?'Refreshing':'Refresh'}
