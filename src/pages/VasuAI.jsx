@@ -286,7 +286,7 @@ export default function VasuAI() {
   return (
     <div style={{display:'flex',height:'100vh',fontFamily:FONT,overflow:'hidden'}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        
         * { box-sizing: border-box; }
         .cs::-webkit-scrollbar{width:4px} .cs::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px}
         @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
