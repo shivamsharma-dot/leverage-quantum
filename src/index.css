@@ -4,9 +4,8 @@
   padding: 0;
 }
 
-/* ── LIGHT THEME (default) ────────────────────────────────────── */
-:root,
-[data-theme="light"] {
+/* ── LIGHT TOKENS (single theme) ─────────────────────────────── */
+:root {
   --bg:            #F4F6F9;
   --bg2:           #FFFFFF;
   --bg3:           #F8FAFC;
@@ -40,78 +39,9 @@
   --shadow-md:     0 4px 16px rgba(15,23,42,0.10);
   --shadow-lg:     0 8px 32px rgba(15,23,42,0.14);
 
-  /* chart grid */
   --chart-grid:    #F1F5F9;
   --chart-tick:    #94A3B8;
-
-  /* scrollbar */
   --sb-thumb:      rgba(15,23,42,0.15);
-
-  /* transition for theme switch */
-  color-scheme: light;
-}
-
-/* ── DARK THEME ───────────────────────────────────────────────── */
-[data-theme="dark"] {
-  --bg:            #0D1117;
-  --bg2:           #161B22;
-  --bg3:           #21262D;
-  --sidebar-bg:    #161B22;
-  --card:          #1C2128;
-  --card-border:   rgba(255,255,255,0.08);
-  --header-bg:     #161B22;
-  --header-border: rgba(255,255,255,0.08);
-
-  --text:          #E6EDF3;
-  --text2:         #8B949E;
-  --text3:         #484F58;
-
-  --navy:          #4D78D4;
-  --blue:          #38BDF8;
-  --cyan:          #22D3EE;
-  --green:         #3FB950;
-  --amber:         #D29922;
-  --red:           #F85149;
-
-  --navy-tint:     rgba(77,120,212,0.15);
-  --blue-tint:     rgba(56,189,248,0.12);
-  --cyan-tint:     rgba(34,211,238,0.12);
-  --green-tint:    rgba(63,185,80,0.12);
-  --amber-tint:    rgba(210,153,34,0.12);
-  --red-tint:      rgba(248,81,73,0.12);
-
-  --input-bg:      #21262D;
-  --input-border:  rgba(255,255,255,0.10);
-  --shadow:        0 1px 6px rgba(0,0,0,0.3);
-  --shadow-md:     0 4px 16px rgba(0,0,0,0.4);
-  --shadow-lg:     0 8px 32px rgba(0,0,0,0.5);
-
-  --chart-grid:    rgba(255,255,255,0.06);
-  --chart-tick:    #484F58;
-
-  --sb-thumb:      rgba(255,255,255,0.12);
-
-  color-scheme: dark;
-}
-
-/* ── SMOOTH THEME TRANSITION ──────────────────────────────────── */
-html {
-  transition: background-color .3s ease, color .3s ease;
-}
-
-*, *::before, *::after {
-  transition:
-    background-color .25s ease,
-    border-color .25s ease,
-    color .2s ease,
-    box-shadow .2s ease;
-}
-
-/* Exceptions — no transition on these (would cause flicker) */
-svg, img, canvas,
-[class*="recharts"],
-input[type="range"] {
-  transition: none !important;
 }
 
 html, body, #root {
@@ -159,27 +89,19 @@ input, select, textarea { font-family: inherit; }
 }
 @keyframes shimmer {
   0%   { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
+  100% { background-position:  400px 0; }
 }
 @keyframes countUp {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── SKELETON LOADER ──────────────────────────────────────────── */
+/* ── SKELETON ─────────────────────────────────────────────────── */
 .skeleton {
-  background: linear-gradient(90deg, var(--card-border) 25%, var(--bg3) 50%, var(--card-border) 75%);
+  background: linear-gradient(90deg, #E5E7EB 25%, #F1F5F9 50%, #E5E7EB 75%);
   background-size: 400px 100%;
   animation: shimmer 1.4s ease-in-out infinite;
   border-radius: 8px;
-}
-
-/* ── GLOBAL CARD STYLE ────────────────────────────────────────── */
-.q-card {
-  background: var(--card);
-  border: 0.5px solid var(--card-border);
-  border-radius: 14px;
-  box-shadow: var(--shadow);
 }
 
 /* ── REFRESH BUTTON ───────────────────────────────────────────── */
@@ -194,64 +116,10 @@ input, select, textarea { font-family: inherit; }
   transform: scale(0.92);
 }
 
-/* ── PAGE TRANSITION ──────────────────────────────────────────── */
-.page-enter {
-  animation: fadeUp .2s ease both;
-}
-
-/* ── THEME TOGGLE BUTTON ──────────────────────────────────────── */
-.theme-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  border-radius: 8px;
-  transition: background .15s;
-}
-.theme-toggle:hover {
-  background: var(--navy-tint);
-}
-.theme-toggle-track {
-  width: 34px;
-  height: 18px;
-  border-radius: 9px;
-  background: var(--card-border);
-  border: 1px solid var(--card-border);
-  position: relative;
-  transition: background .25s;
-  flex-shrink: 0;
-}
-.theme-toggle-track.on {
-  background: var(--navy);
-  border-color: var(--navy);
-}
-.theme-toggle-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: white;
-  transition: transform .2s cubic-bezier(0.4,0,0.2,1);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-.theme-toggle-track.on .theme-toggle-thumb {
-  transform: translateX(16px);
-}
-
 /* ── MICRO-INTERACTIONS ───────────────────────────────────────── */
-
-/* Button press feedback */
 button:active:not(:disabled) {
   transform: scale(0.97);
 }
-
-/* Card hover lift */
 .q-card-hover {
   transition: transform .18s ease, box-shadow .18s ease !important;
 }
@@ -259,130 +127,14 @@ button:active:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md) !important;
 }
-
-/* Interactive row hover */
-.q-row-hover {
-  transition: background .1s ease;
-}
-.q-row-hover:hover {
-  background: var(--navy-tint) !important;
-}
-
-/* Nav item active indicator */
-.q-nav-active {
-  position: relative;
-}
-.q-nav-active::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 4px; bottom: 4px;
-  width: 3px;
-  background: var(--blue);
-  border-radius: 0 3px 3px 0;
-}
-
-/* ── PAGE TRANSITION ──────────────────────────────────────────── */
-.page-enter {
-  animation: fadeUp .2s ease both;
-}
-
-/* ── KPI NUMBER COUNT-UP ──────────────────────────────────────── */
-@keyframes countUp {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 .kpi-value {
   animation: countUp .4s cubic-bezier(0.4,0,0.2,1) both;
 }
-.kpi-value:nth-child(1) { animation-delay: .05s; }
-.kpi-value:nth-child(2) { animation-delay: .1s; }
-.kpi-value:nth-child(3) { animation-delay: .15s; }
-.kpi-value:nth-child(4) { animation-delay: .2s; }
-.kpi-value:nth-child(5) { animation-delay: .25s; }
-.kpi-value:nth-child(6) { animation-delay: .3s; }
-
-/* ── CHART ENTRY ANIMATION ────────────────────────────────────── */
-@keyframes chartEntry {
-  from { opacity: 0; clip-path: inset(0 100% 0 0); }
-  to   { opacity: 1; clip-path: inset(0 0% 0 0); }
-}
-.chart-enter {
-  animation: chartEntry .6s cubic-bezier(0.4,0,0.2,1) both;
-}
-
-/* ── TOOLTIP POLISH ───────────────────────────────────────────── */
-.q-tooltip {
-  background: var(--card) !important;
-  border: 0.5px solid var(--card-border) !important;
-  border-radius: 10px !important;
-  box-shadow: var(--shadow-lg) !important;
-  font-family: 'Plus Jakarta Sans', sans-serif !important;
-}
-
-/* ── DROPDOWN POLISH ──────────────────────────────────────────── */
-.q-dropdown {
-  background: var(--card);
-  border: 0.5px solid var(--card-border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-lg);
-}
-
-/* ── INPUT FOCUS GLOW ─────────────────────────────────────────── */
 input:focus, textarea:focus {
   outline: none;
   box-shadow: 0 0 0 3px rgba(28,159,212,0.12) !important;
   border-color: var(--blue) !important;
 }
-
-/* ── LOADING BAR (top of page) ────────────────────────────────── */
-@keyframes loadBar {
-  0%   { width: 0%; opacity: 1; }
-  70%  { width: 85%; }
-  100% { width: 100%; opacity: 0; }
-}
-.q-load-bar {
-  position: fixed;
-  top: 0; left: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--navy), var(--blue), var(--cyan));
-  animation: loadBar 1.2s ease forwards;
-  z-index: 9999;
-}
-
-/* ── BADGE / PILL ─────────────────────────────────────────────── */
-.q-pill-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-size: 10.5px;
-  font-weight: 700;
-  background: var(--green-tint);
-  color: var(--green);
-}
-.q-pill-live::before {
-  content: '';
-  width: 5px; height: 5px;
-  border-radius: 50%;
-  background: var(--green);
-  animation: pulse 2s infinite;
-}
-
-/* ── SCROLLBAR TRACK HOVER ────────────────────────────────────── */
-::-webkit-scrollbar-track:hover {
-  background: var(--bg3);
-}
-
-/* ── RECHARTS DARK MODE OVERRIDE ─────────────────────────────── */
-[data-theme="dark"] .recharts-cartesian-grid-horizontal line,
-[data-theme="dark"] .recharts-cartesian-grid-vertical line {
-  stroke: var(--chart-grid) !important;
-}
-[data-theme="dark"] .recharts-text {
-  fill: var(--chart-tick) !important;
-}
-[data-theme="dark"] .recharts-tooltip-wrapper .recharts-default-tooltip {
-  background: var(--card) !important;
-  border-color: var(--card-border) !important;
+.page-enter {
+  animation: fadeUp .2s ease both;
 }
