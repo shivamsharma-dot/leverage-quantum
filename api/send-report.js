@@ -1,4 +1,3 @@
-const RESEND_KEY   = process.env.RESEND_API_KEY
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY
 const AD_ACCOUNT   = 'act_641914389215638'
@@ -336,6 +335,10 @@ Output only the HTML. No preamble, no code fences.`
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
+  
+  const RESEND_KEY = process.env.RESEND_API_KEY
+  if (!RESEND_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not configured in Vercel' })
+  
   try {
     let token = req.body?.token || null
     if (!token) token = await getStoredToken()
@@ -353,7 +356,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${RESEND_KEY}` },
       body: JSON.stringify({
-        from: 'Leverage Quantum <onboarding@resend.dev>',
+        from: process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <onboarding@resend.dev>',
         to: recipients,
         subject: `Meta Ads Report — ${month} MTD + Last 30 Days · ${today}`,
         html,
