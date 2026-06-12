@@ -51,6 +51,31 @@ const CustomTooltip=({active,payload,label})=>{
   )
 }
 
+
+function InfoTooltip({ items }) {
+  const [show, setShow] = React.useState(false)
+  return (
+    <div style={{ position:'relative', flexShrink:0 }}>
+      <button onClick={() => setShow(v => !v)}
+        style={{ width:30, height:30, borderRadius:8, border:'0.5px solid #E5E7EB', background:show?'#E8EFF9':'#fff', color:'#1F3C84', fontSize:14, fontWeight:700, fontStyle:'italic', fontFamily:'Georgia,serif', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        i
+      </button>
+      {show && <div onClick={() => setShow(false)} style={{ position:'fixed', inset:0, zIndex:150 }}/>}
+      {show && (
+        <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:360, background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, boxShadow:'0 14px 40px rgba(15,23,42,0.16)', padding:'16px 18px', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#0F172A', marginBottom:8 }}>How metrics are calculated</div>
+          {items.map(([label, desc]) => (
+            <div key={label} style={{ display:'flex', gap:10, padding:'6px 0', borderTop:'0.5px solid #F3F4F6' }}>
+              <div style={{ fontSize:11.5, fontWeight:700, color:'#1F3C84', width:120, flexShrink:0 }}>{label}</div>
+              <div style={{ fontSize:11.5, color:'#475569', lineHeight:1.5 }}>{desc}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ROASDashboard(){
   const [pageLoading, setPageLoading] = React.useState(true)
   React.useEffect(() => { const t = setTimeout(() => setPageLoading(false), 600); return () => clearTimeout(t) }, [])
@@ -137,6 +162,7 @@ export default function ROASDashboard(){
             </select>
             {prevMonth&&<div className={styles.momBadge}>↕ vs {prevMonth.replace('-2025','')}</div>}
             <ExportButton data={filtered} filename="roas_data"/>
+            <InfoTooltip items={[['Total Spend','Sum of all ad spend Jan–Dec 2025.'],['AC Revenue','Admission Counselling collected revenue.'],['VAS Revenue','Value Added Services revenue.'],['Total Revenue','AC + VAS collected.'],['ROAS','Revenue ÷ Spend.'],['Proj Revenue','SR Fee × RAUs × 0.9.'],['OPPs','Total raw leads.'],['QLs','Qualified leads.'],['L→Q%','QLs ÷ Total Leads.'],['CPL','Spend ÷ Total Leads.']]}/>
             <button onClick={() => setShowCompare(true)}
               style={{display:'flex',alignItems:'center',gap:6,padding:'7px 13px',borderRadius: 12,background:'#E8EFF9',border:'1px solid #E8EFF9',color:'#1F3C84',fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
