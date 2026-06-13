@@ -364,7 +364,7 @@ export default function ROASDashboard(){
                     const proas=r.spend>0&&r.proj_rev>0?(r.proj_rev/r.spend).toFixed(2):0
                     const roasColor=parseFloat(roas)>=2?'#10B981':parseFloat(roas)>=1?'#F59E0B':'#9CA3AF'
                     return(
-                      <tr key={r.channel}>
+                      <tr className={styles.dataRow} key={r.channel}>
                         <td>
                           <div style={{display:'flex',alignItems:'center',gap:7}}>
                             <span style={{width:8,height:8,borderRadius:'50%',background:CH_COLORS[r.channel]||'#9CA3AF'}}/>
