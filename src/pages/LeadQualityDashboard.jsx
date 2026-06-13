@@ -181,13 +181,7 @@ export default function LeadQualityDashboard() {
         </div>
 
         <div className={styles.content}>
-        {loading && filtered.length===0 && <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
-          {[0,1,2,3].map(i=><div key={i} style={{height:88,borderRadius:14,background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)',backgroundSize:'200% 100%',animation:`shimmer 1.4s ease ${i*0.07}s infinite`}}/>)}
-        </div>}
-        {loading && filtered.length===0 && <div style={{display:'grid',gridTemplateColumns:'1.5fr 1fr',gap:14}}>
-          {[0,1].map(i=><div key={i} style={{height:280,borderRadius:14,background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)',backgroundSize:'200% 100%',animation:`shimmer 1.4s ease ${i*0.12}s infinite`}}/>)}
-        </div>}
-        <div style={{display:loading&&filtered.length===0?'none':'block',animation:'fadeUp .3s ease'}}>
+        <div style={{animation:'fadeUp .3s ease'}}>
         {/* KPIs */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 }}>
           {kpis.slice(0,4).map(k => {
