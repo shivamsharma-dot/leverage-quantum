@@ -13,5 +13,5 @@ jobs:
         run: |
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://quantum.leverageedu.com/api/send-report" -H "Content-Type: application/json" -d '{}')
           echo "HTTP Status: $RESPONSE"
-          if [ "$RESPONSE" != "200" ]; then echo "Failed"; exit 1; fi
+          if [ "$RESPONSE" != "200" ]; then echo "Failed with status $RESPONSE"; exit 1; fi
           echo "Meta Campaign Report sent successfully!"
