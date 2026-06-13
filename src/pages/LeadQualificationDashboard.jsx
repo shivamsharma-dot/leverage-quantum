@@ -5,6 +5,8 @@ import {
 import Sidebar from '../components/Sidebar'
 import ExportButton from '../components/ExportButton'
 import { fetchCSV } from '../lib/sheetCache'
+import { usePresence } from '../hooks/usePresence'
+import { useAuth } from '../hooks/useAuth'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=0&single=true&output=csv'
 
@@ -527,6 +529,8 @@ export default function LeadQualificationDashboard() {
   const [selMonth, setSelMonth]     = useState('')
   const [selProvider, setSelProvider] = useState('All')
   const [selSource, setSelSource]   = useState('All')
+  const { user } = useAuth()
+  const activeUsers = usePresence(user)
   const [loading, setLoading]       = useState(true)
   const [lastSync, setLastSync]     = useState(null)
   const [search, setSearch]         = useState('')
@@ -534,6 +538,8 @@ export default function LeadQualificationDashboard() {
   const [sortDir, setSortDir]       = useState('desc')
   const [page, setPage]             = useState(0)
   const [showInfo, setShowInfo]       = useState(false)
+  const [sending, setSending]         = useState(false)
+  const [sendMsg, setSendMsg]         = useState('')
   const [datePreset, setDatePreset]   = useState('month') // 'LD','L7D','MTD','custom','month'
   const [customFrom, setCustomFrom]   = useState('')
   const [customTo, setCustomTo]       = useState('')
@@ -778,6 +784,16 @@ export default function LeadQualificationDashboard() {
     borderBottom: `0.5px solid ${C.border}`,
   })
 
+  const sendReport = async () => {
+    setSending(true); setSendMsg('')
+    try {
+      const res = await fetch('/api/send-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      const d = await res.json()
+      setSendMsg(d.ok ? '✓ Sent' : '✕ Failed')
+    } catch (e) { setSendMsg('✕ ' + e.message) }
+    finally { setSending(false); setTimeout(() => setSendMsg(''), 4000) }
+  }
+
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}.lqTr:nth-child(even){background:#FAFBFC!important}.lqTr:hover{background:#F0F4FF!important;cursor:pointer}`}</style>
@@ -803,7 +819,36 @@ export default function LeadQualificationDashboard() {
               }
             </h1>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background:'#F8FAFC', padding:'6px 10px', borderRadius:12, border:'0.5px solid #E5E7EB' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Presence avatars */}
+            {activeUsers && activeUsers.length > 0 && (
+              <div style={{display:'flex',alignItems:'center',gap:6,marginRight:2}}>
+                <div style={{display:'flex',alignItems:'center'}}>
+                  {activeUsers.slice(0, 5).map((u, idx) => (
+                    <div key={u.email} title={`${u.name || u.email} (active)`}
+                      style={{width:28,height:28,borderRadius:'50%',border:'2px solid #fff',marginLeft:idx===0?0:-8,zIndex:10-idx,position:'relative',overflow:'hidden',background:'#E0E7FF',flexShrink:0,boxShadow:'0 1px 3px rgba(0,0,0,0.15)'}}>
+                      {u.picture
+                        ? <img src={u.picture} alt={u.name} style={{width:'100%',height:'100%',objectFit:'cover'}} referrerPolicy="no-referrer"/>
+                        : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#4F46E5'}}>
+                            {(u.name || u.email).charAt(0).toUpperCase()}
+                          </div>}
+                      <div style={{position:'absolute',bottom:1,right:1,width:7,height:7,borderRadius:'50%',background:'#22C55E',border:'1.5px solid #fff'}}/>
+                    </div>
+                  ))}
+                </div>
+                {activeUsers.length > 1 && (
+                  <span style={{fontSize:11,color:'#6B7280',fontWeight:500,whiteSpace:'nowrap'}}>{activeUsers.length} online</span>
+                )}
+              </div>
+            )}
+            {/* Send report */}
+            {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#059669':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
+            <button onClick={sendReport} disabled={sending}
+              style={{padding:'6px 13px',borderRadius:8,border:`0.5px solid ${C.border}`,background:'var(--card)',color:C.navy,fontSize:12,fontWeight:600,fontFamily:FONT,cursor:sending?'wait':'pointer',display:'flex',alignItems:'center',gap:6,opacity:sending?0.65:1,transition:'all .15s'}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              {sending ? 'Sending…' : 'Send Report'}
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background:'#F8FAFC', padding:'6px 10px', borderRadius:12, border:'0.5px solid #E5E7EB' }}>
           {isCurrentMonth && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: '3px' }}>
               {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => {
@@ -975,6 +1020,7 @@ export default function LeadQualificationDashboard() {
                 </div>
               )}
             </div>
+          </div>
           </div>
         </div>
 
