@@ -78,25 +78,25 @@ async function askClaude(messages, metaToken, memories, onChunk) {
 }
 
 /* ─── markdown ────────────────────────────────────────────────── */
-function ih(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/`([^`]+)`/g,`<code style="background:rgba(255,255,255,0.12);padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace">$1</code>`)}
+function ih(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/`([^`]+)`/g,`<code style="background:#F1F5F9;padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace">$1</code>`)}
 function Markdown({text}){
   const out=[]; const lines=(text||'').split('\n'); let i=0
   while(i<lines.length){
     const l=lines[i]
     if(l.startsWith('```')){const lang=l.slice(3).trim();const buf=[];i++;while(i<lines.length&&!lines[i].startsWith('```')){buf.push(lines[i]);i++};i++
-      out.push(<div key={out.length} style={{borderRadius:10,overflow:'hidden',margin:'10px 0',border:'1px solid rgba(255,255,255,0.1)'}}>
+      out.push(<div key={out.length} style={{borderRadius:10,overflow:'hidden',margin:'10px 0',border:'0.5px solid #E5E7EB'}}>
         <div style={{padding:'6px 12px',background:'#F8FAFC',borderBottom:'0.5px solid #E5E7EB',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span style={{fontSize:11,color:'#9CA3AF',fontFamily:'monospace'}}>{lang||'code'}</span>
           <button onClick={()=>navigator.clipboard?.writeText(buf.join('\n'))} style={{background:'transparent',border:'none',color:'#9CA3AF',fontSize:11,cursor:'pointer',fontFamily:FONT}}>Copy</button>
         </div>
-        <pre style={{margin:0,padding:12,fontSize:12.5,fontFamily:'monospace',color:'rgba(255,255,255,0.9)',overflowX:'auto',background:'#F1F5F9'}}><code>{buf.join('\n')}</code></pre>
+        <pre style={{margin:0,padding:12,fontSize:12.5,fontFamily:'monospace',color:'#1E293B',overflowX:'auto',background:'#F1F5F9'}}><code>{buf.join('\n')}</code></pre>
       </div>);continue}
     if(/^\|(.+)\|$/.test(l)&&i+1<lines.length&&/^\|[-:\s|]+\|$/.test(lines[i+1])){
       const head=l.split('|').slice(1,-1).map(s=>s.trim());i+=2;const rows=[]
       while(i<lines.length&&/^\|(.+)\|$/.test(lines[i])){rows.push(lines[i].split('|').slice(1,-1).map(s=>s.trim()));i++}
       out.push(<div key={out.length} style={{overflowX:'auto',margin:'12px 0'}}>
         <table style={{borderCollapse:'collapse',width:'100%',fontSize:13}}>
-          <thead><tr>{head.map((h,j)=><th key={j} style={{border:'1px solid #E5E7EB',padding:'8px 12px',background:'#F3F4F6',textAlign:'left',fontWeight:700,color:'rgba(255,255,255,0.9)'}}>{h}</th>)}</tr></thead>
+          <thead><tr>{head.map((h,j)=><th key={j} style={{border:'1px solid #E5E7EB',padding:'8px 12px',background:'#F3F4F6',textAlign:'left',fontWeight:700,color:'#0F172A'}}>{h}</th>)}</tr></thead>
           <tbody>{rows.map((r,ri)=><tr key={ri}>{r.map((cc,ci)=><td key={ci} style={{border:'1px solid #E5E7EB',padding:'8px 12px',color:'#374151'}} dangerouslySetInnerHTML={{__html:ih(cc)}}/>)}</tr>)}</tbody>
         </table></div>);continue}
     if(/^#{1,3}\s/.test(l)){const lv=l.match(/^#+/)[0].length;const sz=lv===1?18:lv===2?15.5:14
@@ -105,7 +105,7 @@ function Markdown({text}){
       out.push(<ul key={out.length} style={{margin:'8px 0',paddingLeft:18,color:'#374151',fontSize:14,lineHeight:1.7}}>{items.map((it,j)=><li key={j} style={{marginBottom:4}} dangerouslySetInnerHTML={{__html:ih(it)}}/>)}</ul>);continue}
     if(/^\d+\.\s/.test(l)){const items=[];while(i<lines.length&&/^\d+\.\s/.test(lines[i])){items.push(lines[i].replace(/^\d+\.\s/,''));i++}
       out.push(<ol key={out.length} style={{margin:'8px 0',paddingLeft:18,color:'#374151',fontSize:14,lineHeight:1.7}}>{items.map((it,j)=><li key={j} style={{marginBottom:4}} dangerouslySetInnerHTML={{__html:ih(it)}}/>)}</ol>);continue}
-    if(/^(---|\*\*\*)/.test(l.trim())){out.push(<hr key={out.length} style={{border:'none',borderTop:'1px solid rgba(255,255,255,0.15)',margin:'14px 0'}}/>);i++;continue}
+    if(/^(---|\*\*\*)/.test(l.trim())){out.push(<hr key={out.length} style={{border:'none',borderTop:'1px solid #E5E7EB',margin:'14px 0'}}/>);i++;continue}
     if(l.trim()===''){i++;continue}
     out.push(<p key={out.length} style={{margin:'5px 0',color:'#1E293B',fontSize:14,lineHeight:1.7}} dangerouslySetInnerHTML={{__html:ih(l)}}/>);i++
   }
@@ -326,7 +326,7 @@ export default function ChatPage() {
                   {rail==='history'?'Conversations':rail==='prompts'?'Prompt Library':'Memories'}
                 </span>
                 <button onClick={()=>setRail(null)} className="ibtn" style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:'none',background:'transparent',borderRadius:6,cursor:'pointer'}}>
-                  <Ico n="close" s={14} c="rgba(255,255,255,0.4)"/>
+                  <Ico n="close" s={14} c="#9CA3AF"/>
                 </button>
               </div>
 
@@ -335,7 +335,7 @@ export default function ChatPage() {
                 <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                   <div style={{padding:'10px 12px',flexShrink:0}}>
                     <div style={{position:'relative'}}>
-                      <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={12} c="rgba(255,255,255,0.25)"/></span>
+                      <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={12} c="#CBD5E1"/></span>
                       <input value={convSearch} onChange={e=>setConvSearch(e.target.value)} placeholder="Search conversations…"
                         style={{width:'100%',background:'#F8FAFC',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px 7px 30px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
                     </div>
@@ -348,7 +348,7 @@ export default function ChatPage() {
                           <div key={c.id} className="cv" onClick={()=>selectConv(c)}
                             style={{display:'flex',alignItems:'center',gap:0,borderRadius:8,margin:'1px 0',cursor:'pointer',background:c.id===activeId?'rgba(28,159,212,0.12)':'transparent',borderLeft:c.id===activeId?`2px solid ${BLUE}`:'2px solid transparent',transition:'all .15s'}}>
                             <div style={{flex:1,padding:'8px 10px 8px 8px',minWidth:0}}>
-                              <div style={{fontSize:12.5,color:c.id===activeId?'#fff':'rgba(255,255,255,0.7)',fontWeight:c.id===activeId?600:400,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.title}</div>
+                              <div style={{fontSize:12.5,color:c.id===activeId?'#fff':'#374151',fontWeight:c.id===activeId?600:400,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.title}</div>
                               <div style={{fontSize:10.5,color:'#CBD5E1',marginTop:1}}>{c.message_count||0} messages</div>
                             </div>
                             <button className="delbtn" onClick={e=>{e.stopPropagation();deleteConv(c.id)}}
@@ -369,7 +369,7 @@ export default function ChatPage() {
                 <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                   <div style={{padding:'10px 12px 8px',flexShrink:0}}>
                     <div style={{position:'relative',marginBottom:8}}>
-                      <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={12} c="rgba(255,255,255,0.25)"/></span>
+                      <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={12} c="#CBD5E1"/></span>
                       <input value={promptSearch} onChange={e=>setPromptSearch(e.target.value)} placeholder="Search prompts…"
                         style={{width:'100%',background:'#F8FAFC',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px 7px 30px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
                     </div>
@@ -463,7 +463,7 @@ export default function ChatPage() {
             <span style={{fontSize:11,color:'#94A3B8',background:'#F1F5F9',padding:'2px 8px',borderRadius:20,fontWeight:500}}>Claude Sonnet 4.5</span>
             <button onClick={newConv} title="New chat" className="ibtn"
               style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:`0.5px solid #E5E7EB`,background:'#fff',borderRadius:7,cursor:'pointer',marginLeft:2}}>
-              <Ico n="new" s={13} c="rgba(255,255,255,0.4)"/>
+              <Ico n="new" s={13} c="#9CA3AF"/>
             </button>
             <div style={{flex:1}}/>
             <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 10px',borderRadius:20,background:connected?'rgba(74,174,111,0.12)':'rgba(255,255,255,0.06)',border:`1px solid ${connected?'rgba(74,174,111,0.3)':borderColor}`}}>
