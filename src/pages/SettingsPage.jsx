@@ -14,6 +14,8 @@ const getRoleMeta = (role) => {
   return map[role] || map.default
 }
 
+const DASHBOARDS = PAGE_LIST.filter(p => !p.adminOnly)
+
 export default function SettingsPage() {
   const { user } = useAuth()
   const userIsAdmin = user?.role === 'admin'
