@@ -89,13 +89,16 @@ export default function SettingsPage() {
     reports: accessList.filter(u => u.receive_reports).length,
   }
   const parsePermissions = (role) => {
-    if (!role || role === 'admin' || role === 'viewer') return DASHBOARDS.map(d => d.id)
+    if (role === 'admin') return DASHBOARDS.map(d => d.id)
+    // plain viewer = all dashboards except chat/vasu
+    if (!role || role === 'viewer') return DASHBOARDS.filter(d => d.id !== 'vasu').map(d => d.id)
     if (role.startsWith('viewer:')) return role.replace('viewer:', '').split(',').filter(Boolean)
-    return DASHBOARDS.map(d => d.id)
+    if (role.startsWith('custom:')) return role.replace('custom:', '').split(',').filter(Boolean)
+    return DASHBOARDS.filter(d => d.id !== 'vasu').map(d => d.id)
   }
-  const buildRoleString = (ids, isAdmin, isViewer) => {
+  const buildRoleString = (ids, isAdmin) => {
     if (isAdmin) return 'admin'
-    if (isViewer && ids.length === DASHBOARDS.length) return 'viewer'
+    // always store explicit list so access is unambiguous
     return 'viewer:' + ids.join(',')
   }
 
@@ -129,15 +132,16 @@ export default function SettingsPage() {
   }
   const startEdit = (u) => {
     setEditingUser(u.email)
-    setEditIsAdmin(u.role === 'admin')
-    setEditIsViewer(u.role === 'viewer')
+    const isAdmin = u.role === 'admin'
+    setEditIsAdmin(isAdmin)
+    setEditIsViewer(!isAdmin)
     setEditIds(parsePermissions(u.role))
     setEditJobTitle(u.job_title || '')
     setEditDepartment(u.department || '')
   }
   const saveEdit = async (email) => {
     setUsersLoading(true)
-    const role = buildRoleString(editIds, editIsAdmin, editIsViewer)
+    const role = buildRoleString(editIds, editIsAdmin)
     const ok = await updateUserRole(email, role)
     await fetch('/api/users', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, job_title: editJobTitle, department: editDepartment }) })
     if (ok) { setMsg('Access updated'); await loadUsers() } else setMsg('Failed')
