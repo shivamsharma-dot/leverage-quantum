@@ -19,7 +19,7 @@ const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings')
 export default function SettingsPage() {
   const { user } = useAuth()
   const userIsAdmin = user?.role === 'admin'
-  const [activeTab, setActiveTab] = useState('chat')
+  const [activeTab, setActiveTab] = useState('data')
 
   const _actRef = useRef(false)
   useEffect(() => {
@@ -178,28 +178,6 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
-
-          {/* ---------------- CHAT ---------------- */}
-          {activeTab === 'chat' && (
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'60px 20px', gap:20 }}>
-              <div style={{ width:64, height:64, borderRadius:18, background:'var(--navy-tint)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <svg width="28" height="28" viewBox="0 0 22 22" fill="none">
-                  <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/>
-                  <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
-                  <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84"/>
-                </svg>
-              </div>
-              <div style={{ textAlign:'center' }}>
-                <div style={{ fontSize:18, fontWeight:800, color:'var(--text)', marginBottom:8, fontFamily:"'Plus Jakarta Sans',sans-serif" }}>Chat has moved</div>
-                <div style={{ fontSize:13.5, color:'var(--text2)', maxWidth:380, lineHeight:1.6, fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
-                  The AI marketing analyst is now a dedicated page with conversation history, prompt library, and memories.
-                </div>
-              </div>
-              <a href="/vasu" style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'10px 22px', borderRadius:10, background:'#1F3C84', color:'#fff', fontSize:13.5, fontWeight:700, fontFamily:"'Plus Jakarta Sans',sans-serif", textDecoration:'none', boxShadow:'0 2px 8px rgba(31,60,132,0.3)' }}>
-                Open Chat →
-              </a>
-            </div>
-          )}
 
           {/* ---------------- DATA ---------------- */}
           {activeTab === 'data' && (
