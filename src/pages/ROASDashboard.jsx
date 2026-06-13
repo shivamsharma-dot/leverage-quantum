@@ -194,6 +194,13 @@ export default function ROASDashboard(){
 
         {/* SCROLLABLE CONTENT */}
         <div className={styles.content}>
+        {pageLoading && <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12,marginBottom:20}}>
+          {[0,1,2,3,4,5].map(i=><div key={i} style={{height:88,borderRadius:14,background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)',backgroundSize:'200% 100%',animation:`shimmer 1.4s ease ${i*0.07}s infinite`}}/>)}
+        </div>}
+        {pageLoading && <div style={{display:'grid',gridTemplateColumns:'1.5fr 1fr',gap:14,marginBottom:14}}>
+          {[0,1].map(i=><div key={i} style={{height:280,borderRadius:14,background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)',backgroundSize:'200% 100%',animation:`shimmer 1.4s ease ${i*0.12}s infinite`}}/>)}
+        </div>}
+        <div style={{display:pageLoading?'none':'block',animation:'fadeUp .3s ease'}}>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:12, marginBottom:20 }}>
           {kpis.map(k=>{
             const curr=k.raw!=null?k.raw:parseFloat(String(k.v||k.value).replace(/[₹,LKCrx ]/g,''))
@@ -368,7 +375,7 @@ export default function ROASDashboard(){
           </div>
         </div>
 
-        </div>{/* end content */}
+        </div></div>{/* end content */}
       </div>{/* end main */}
       {showCompare && <CompareMode monthlyData={monthlyChart} onClose={() => setShowCompare(false)}/>}
     </div>
