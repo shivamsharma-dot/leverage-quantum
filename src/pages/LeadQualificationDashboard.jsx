@@ -848,117 +848,53 @@ export default function LeadQualificationDashboard() {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               {sending ? 'Sending…' : 'Send Report'}
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background:'#F8FAFC', padding:'6px 10px', borderRadius:12, border:'0.5px solid #E5E7EB' }}>
-          {isCurrentMonth && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: '3px' }}>
-              {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => {
-                // compute this key's date range label for tooltip
-                const today2 = new Date(); today2.setHours(0,0,0,0)
-                let tipFrom, tipTo
-                if (key==='LD') { tipFrom=new Date(today2); tipFrom.setDate(today2.getDate()-1); tipTo=tipFrom }
-                else if (key==='L7D') { tipTo=new Date(today2); tipTo.setDate(today2.getDate()-1); tipFrom=new Date(tipTo); tipFrom.setDate(tipTo.getDate()-6) }
-                else { tipFrom=new Date(today2.getFullYear(),today2.getMonth(),1); tipTo=today2 }
-                const tipLabel = fmtShort(tipFrom) + ' – ' + fmtShort(tipTo)
-                const isHov = hoveredPreset===key
-                return (
-                  <div key={key} style={{position:'relative'}}>
-                    <button
-                      onClick={() => { setDatePreset(key); setCustomFrom(''); setCustomTo(''); setShowCustom(false); setPage(0) }}
-                      onMouseEnter={() => setHoveredPreset(key)}
-                      onMouseLeave={() => setHoveredPreset(null)}
-                      style={{
-                        padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                        fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
-                        background: activeFilter==='custom' ? 'transparent' : datePreset === key ? 'var(--card)' : 'transparent',
-                        color: activeFilter==='custom' ? '#CBD5E1' : datePreset === key ? C.navy : C.muted,
-                        boxShadow: activeFilter==='custom' ? 'none' : datePreset === key ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
-                        opacity: activeFilter==='custom' ? 0.5 : 1,
-                        pointerEvents: activeFilter==='custom' ? 'none' : 'auto',
-                        transition: 'all .15s',
-                      }}>{lbl2}</button>
-                    {/* Hover tooltip */}
-                    <div style={{
-                      position:'absolute', top:'calc(100% + 7px)', left:'50%', transform:'translateX(-50%)',
-                      background:'#1E293B', color:'var(--card)', fontSize:11, fontWeight:500, fontFamily:FONT,
-                      padding:'5px 10px', borderRadius:7, whiteSpace:'nowrap', pointerEvents:'none',
-                      boxShadow:'0 4px 14px rgba(15,23,42,0.18)', zIndex:600,
-                      opacity: isHov ? 1 : 0,
-                      transition:'opacity .15s ease',
-                    }}>{tipLabel}
-                      {/* Arrow */}
-                      <div style={{
-                        position:'absolute', top:-4, left:'50%', transform:'translateX(-50%)',
-                        width:8, height:8, background:'#1E293B', borderRadius:2,
-                        clipPath:'polygon(50% 0%, 0% 100%, 100% 100%)',
-                      }}/>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            )}
-            
-            {/* Month picker */}
-            {months.length > 0 && (
-              <div style={{ opacity: activeFilter!=='month' ? 0.45 : 1, transition: 'opacity .15s' }}
-                title={activeFilter!=='month' ? 'Click to switch to month view' : undefined}>
-              <Dropdown
-                options={[...months].reverse()}
-                value={selMonth}
-                minWidth={110}
-                onChange={v => {
-                  setSelMonth(v)
-                  // Month picker always wins — clear any preset or custom range
-                  setDatePreset('month')
-                  setCustomFrom(''); setCustomTo('')
-                  setShowCustom(false); setPage(0)
-                }}
-              />
-              </div>
-            )}
-            {/* Custom range — production calendar picker */}
-            <div style={{ position: 'relative' }}>
-              <button onClick={() => { setShowCustom(v => !v); if (!showCustom) { setDatePreset('month') } }}
-                style={{
-                  padding: '6px 11px', borderRadius: 8,
-                  border: `0.5px solid ${datePreset==='custom'?C.navy:C.border}`,
-                  background: datePreset==='custom'?C.navyBg:'var(--card)',
-                  color: datePreset==='custom'?C.navy:C.sub,
-                  fontSize: 11.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  boxShadow: showCustom?`0 0 0 3px rgba(31,60,132,0.08)`:'none',
-                  transition: 'all .15s',
-                }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/>
-                  <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-                  <line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-                {datePreset==='custom'&&customFrom ? customFrom+' → '+customTo : 'Custom'}
+            {/* Date preset unified dropdown */}
+            <div style={{position:'relative'}}>
+              <button onClick={()=>setShowCustom(v=>!v)}
+                style={{padding:'6px 12px',borderRadius:8,border:`0.5px solid ${datePreset==='custom'?C.navy:C.border}`,background:datePreset==='custom'?C.navyBg:'var(--card)',color:datePreset==='custom'?C.navy:C.sub,fontSize:12,fontWeight:600,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',gap:6,minWidth:140,justifyContent:'space-between',boxShadow:'0 1px 3px rgba(15,23,42,0.06)',transition:'all .15s'}}>
+                <span>
+                  {datePreset==='custom'&&customFrom ? customFrom+' → '+customTo : datePreset==='LD'?'Last Day':datePreset==='L7D'?'Last 7D':datePreset==='MTD'?'MTD':'Select period'}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
-              {showCustom && (
+              {showCustom&&(
                 <>
-                  <div onClick={() => setShowCustom(false)} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
-                  <div style={{
-                    position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400,
-                    background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 14,
-                    boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)',
-                    overflow: 'hidden',
-                  }}>
-                    <DateRangePicker
-                      from={customFrom ? (() => { const [y,m,d]=customFrom.split('-').map(Number); return new Date(y,m-1,d) })() : null}
-                      to={customTo ? (() => { const [y,m,d]=customTo.split('-').map(Number); return new Date(y,m-1,d) })() : null}
-                      onChange={(f, t) => {
-                        setCustomFrom(f); setCustomTo(t)
-                        setDatePreset('custom')
-                        setShowCustom(false); setPage(0)
-                      }}
-                      onClose={() => setShowCustom(false)}
-                    />
+                  <div onClick={()=>setShowCustom(false)} style={{position:'fixed',inset:0,zIndex:399}}/>
+                  <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:400,background:'var(--card)',border:`0.5px solid ${C.border}`,borderRadius:10,boxShadow:'0 8px 24px rgba(15,23,42,0.12)',overflow:'hidden',minWidth:160,fontFamily:FONT}}>
+                    {isCurrentMonth && [['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2])=>(
+                      <button key={key} onClick={()=>{setDatePreset(key);setCustomFrom('');setCustomTo('');setShowCustom(false);setPage(0)}}
+                        style={{width:'100%',padding:'9px 14px',border:'none',background:datePreset!=='custom'&&datePreset===key?'#E3F5FD':'var(--card)',color:datePreset!=='custom'&&datePreset===key?C.navy:C.text,fontSize:12.5,fontWeight:datePreset!=='custom'&&datePreset===key?700:500,textAlign:'left',cursor:'pointer',borderBottom:`0.5px solid ${C.border}`,display:'block',fontFamily:FONT}}>
+                        {lbl2}
+                      </button>
+                    ))}
+                    <div style={{padding:'10px 14px 4px',borderTop:`0.5px solid ${C.border}`}}>
+                      <div style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:8}}>Custom range</div>
+                      {[['From',customFrom,setCustomFrom],['To',customTo,setCustomTo]].map(([lbl,val,setter])=>(
+                        <div key={lbl} style={{marginBottom:8}}>
+                          <div style={{fontSize:11,fontWeight:600,color:C.sub,marginBottom:3}}>{lbl}</div>
+                          <input type="date" value={val} onChange={e=>setter(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:7,border:`0.5px solid ${C.border}`,fontSize:11.5,fontFamily:FONT,outline:'none',color:C.text,boxSizing:'border-box'}}/>
+                        </div>
+                      ))}
+                      <button onClick={()=>{if(customFrom&&customTo){setDatePreset('custom');setShowCustom(false);setPage(0)}}} disabled={!customFrom||!customTo}
+                        style={{width:'100%',padding:'7px',borderRadius:7,border:'none',background:customFrom&&customTo?C.navy:'#E5E7EB',color:customFrom&&customTo?'#fff':C.muted,fontSize:11.5,fontWeight:700,fontFamily:FONT,cursor:customFrom&&customTo?'pointer':'not-allowed',marginBottom:10}}>
+                        Apply
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
             </div>
+            {/* Month picker — separate */}
+            {months.length > 0 && (
+              <div style={{ opacity: datePreset!=='month' ? 0.45 : 1, transition: 'opacity .15s' }}>
+                <Dropdown
+                  options={[...months].reverse()}
+                  value={selMonth}
+                  minWidth={110}
+                  onChange={v => { setSelMonth(v); setDatePreset('month'); setCustomFrom(''); setCustomTo(''); setShowCustom(false); setPage(0) }}
+                />
+              </div>
+            )}
             <Dropdown label="Provider" options={providers} value={selProvider} minWidth={100} onChange={v => { setSelProvider(v); setPage(0) }} />
             <Dropdown label="Source" options={sources} value={selSource} minWidth={100} onChange={v => { setSelSource(v); setPage(0) }} />
             {lastSync && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {lastSync.toLocaleTimeString()}</span>}
