@@ -480,6 +480,23 @@ const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
 
 
 /* ── Main dashboard ─────────────────────────────────────────────────── */
+
+const BrandTooltip = ({ active, payload, label, fmt }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, padding:'10px 14px', fontFamily:"'Plus Jakarta Sans','Inter',sans-serif", boxShadow:'0 8px 32px rgba(15,23,42,0.13)', minWidth:140 }}>
+      {label && <div style={{ fontSize:11, fontWeight:700, color:'#0F172A', marginBottom:7, paddingBottom:6, borderBottom:'0.5px solid #F1F5F9' }}>{label}</div>}
+      {payload.map((p, i) => (
+        <div key={i} style={{ display:'flex', alignItems:'center', gap:7, marginTop:i>0?4:0 }}>
+          <div style={{ width:8, height:8, borderRadius:'50%', background:p.color||p.fill||'#1C9FD4', flexShrink:0 }}/>
+          <span style={{ fontSize:11.5, color:'#475569', flex:1 }}>{p.name||p.dataKey}</span>
+          <span style={{ fontSize:12, fontWeight:700, color:'#0F172A' }}>{fmt ? fmt(p.value) : (typeof p.value==='number'&&p.value>999?p.value.toLocaleString('en-IN'):p.value)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function LeadQualificationDashboard() {
   const [rows, setRows]             = useState([])
   const [months, setMonths]         = useState([])
@@ -993,15 +1010,16 @@ export default function LeadQualificationDashboard() {
                         tick={{ fontSize: 11, fill: C.muted, fontFamily: FONT }}
                         axisLine={false} tickLine={false}
                         interval={0}
-                      />
+                       tick={{fontSize:10.5,fill:"#94A3B8",fontFamily:"'Plus Jakarta Sans',sans-serif"}} axisLine={false} tickLine={false}/>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                       <YAxis
                         tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }}
                         tickFormatter={v => fmtN(v)}
                         axisLine={false} tickLine={false}
                       />
-                      <Tooltip content={<ChartTip />} cursor={{ fill: 'var(--bg3)' }} />
-                      <Bar dataKey="Futwork"  stackId="a" fill={C.navy} radius={[0, 0, 0, 0]} maxBarSize={52} />
-                      <Bar dataKey="Superbot" stackId="a" fill={C.blue} radius={[5, 5, 0, 0]} maxBarSize={52} />
+                      <Tooltip content={<BrandTooltip/>} cursor={{ fill: 'var(--bg3)' }} />
+                      <Bar dataKey="Futwork"  stackId="a" fill={C.navy} radius={[6,6,0,0]} maxBarSize={52} />
+                      <Bar dataKey="Superbot" stackId="a" fill={C.blue} radius={[6,6,0,0]} maxBarSize={52} />
                     </BarChart>
                   </ResponsiveContainer>
                   <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Superbot', color: C.blue }]} />
@@ -1022,7 +1040,7 @@ export default function LeadQualificationDashboard() {
                             >
                               {provPie.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.name] || C.muted} />)}
                             </Pie>
-                            <Tooltip content={<ChartTip />} />
+                            <Tooltip content={<BrandTooltip/>} />
                           </PieChart>
                         </ResponsiveContainer>
                         {/* Provider breakdown pills */}
@@ -1051,9 +1069,10 @@ export default function LeadQualificationDashboard() {
                 <Card title="Month-on-month trend" sub="Total qualified per provider across all months">
                   <ResponsiveContainer width="100%" height={200}>
                     <LineChart data={trend} margin={{ top: 8, right: 24, left: -8, bottom: 0 }}>
-                      <XAxis dataKey="month" tick={{ fontSize: 10.5, fill: C.muted, fontFamily: FONT }} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 10.5, fill: C.muted, fontFamily: FONT }} axisLine={false} tickLine={false}  tick={{fontSize:10.5,fill:"#94A3B8",fontFamily:"'Plus Jakarta Sans',sans-serif"}} axisLine={false} tickLine={false}/>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                       <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
-                      <Tooltip content={<ChartTip />} />
+                      <Tooltip content={<BrandTooltip/>} />
                       <Line type="monotone" dataKey="Futwork"  stroke={C.navy} strokeWidth={2.5} dot={{ r: 3.5, fill: C.navy, strokeWidth: 0 }} activeDot={{ r: 5 }} />
                       <Line type="monotone" dataKey="Superbot" stroke={C.blue} strokeWidth={2.5} dot={{ r: 3.5, fill: C.blue, strokeWidth: 0 }} activeDot={{ r: 5 }} />
                     </LineChart>
@@ -1079,7 +1098,7 @@ export default function LeadQualificationDashboard() {
                             <XAxis type="number" tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
                             <YAxis type="category" dataKey="campaign" tick={{ fontSize: 10.5, fill: C.sub, fontFamily: FONT }} width={248} axisLine={false} tickLine={false}
                               tickFormatter={v => v.length > 36 ? v.slice(0, 34) + '…' : v} />
-                            <Tooltip content={<ChartTip />} cursor={{ fill: 'var(--bg3)' }} />
+                            <Tooltip content={<BrandTooltip/>} cursor={{ fill: 'var(--bg3)' }} />
                             <Bar dataKey="count" radius={[0, 5, 5, 0]} maxBarSize={22}>
                               {topCampaigns.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.provider] || C.muted} />)}
                             </Bar>
