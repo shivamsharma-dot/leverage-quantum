@@ -590,34 +590,7 @@ export default function ChatPage() {
             <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 10px',borderRadius:20,background:connected?'rgba(74,174,111,0.12)':'rgba(255,255,255,0.06)',border:`1px solid ${connected?'rgba(74,174,111,0.3)':borderColor}`}}>
               <div style={{width:6,height:6,borderRadius:'50%',background:connected?GREEN:'rgba(255,255,255,0.2)',animation:connected?'pulse 2s infinite':''}}/>              <span style={{fontSize:11,fontWeight:600,color:connected?GREEN:'rgba(255,255,255,0.3)'}}>{connected?'Meta Ads connected':'Meta not connected'}</span>
             </div>
-            {sendMsg&&<span style={{fontSize:11.5,fontWeight:600,color:sendMsg.startsWith('✓')?'#059669':'#DC2626'}}>{sendMsg}</span>}
-            <div style={{position:'relative',display:'flex',alignItems:'center',gap:0,border:'0.5px solid #E5E7EB',borderRadius:8,overflow:'hidden',background:'#fff'}}>
-              <div style={{position:'relative'}}>
-                <button onClick={()=>setSendDropOpen(v=>!v)}
-                  style={{padding:'5px 10px',border:'none',borderRight:'0.5px solid #E5E7EB',background:'#fff',cursor:'pointer',fontSize:11.5,fontWeight:600,color:'#374151',fontFamily:FONT,display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
-                  {sendReportType==='daily'?'Daily':sendReportType==='weekly'?'Weekly':'Monthly'}
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
-                </button>
-                {sendDropOpen&&(
-                  <>
-                    <div onClick={()=>setSendDropOpen(false)} style={{position:'fixed',inset:0,zIndex:100}}/>
-                    <div style={{position:'absolute',top:'calc(100% + 4px)',right:0,zIndex:101,background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:8,boxShadow:'0 8px 24px rgba(15,23,42,0.12)',minWidth:140,overflow:'hidden'}}>
-                      {[['daily','📊 Daily Report'],['weekly','📈 Weekly WoW'],['monthly','📅 30-Day Report']].map(([val,label])=>(
-                        <button key={val} onClick={()=>{setSendReportType(val);setSendDropOpen(false)}}
-                          style={{width:'100%',padding:'9px 14px',border:'none',background:sendReportType===val?'#E3F5FD':'#fff',color:sendReportType===val?BLUE:'#374151',fontSize:12,fontWeight:sendReportType===val?700:500,textAlign:'left',cursor:'pointer',fontFamily:FONT,borderBottom:'0.5px solid #F3F4F6',display:'block'}}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-              <button onClick={sendReport} disabled={sendingReport}
-                style={{padding:'5px 13px',border:'none',background:sendingReport?'#94A3B8':NAVY,color:'#fff',cursor:sendingReport?'wait':'pointer',fontSize:11.5,fontWeight:700,fontFamily:FONT,display:'flex',alignItems:'center',gap:5,transition:'all .15s'}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                {sendingReport?'Sending…':'Send'}
-              </button>
-            </div>
+
           </div>
 
           {/* Messages */}
@@ -694,6 +667,36 @@ export default function ChatPage() {
           {/* Input */}
           <div style={{padding:'12px 20px 16px',flexShrink:0}}>
             <div style={{maxWidth:820,margin:'0 auto'}}>
+            {/* Send Report Bar */}
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,padding:'8px 12px',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,boxShadow:'0 1px 4px rgba(15,23,42,0.04)'}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              <span style={{fontSize:12,fontWeight:600,color:'#64748B',fontFamily:FONT,flex:1}}>Send Report</span>
+              {sendMsg&&<span style={{fontSize:11.5,fontWeight:600,color:sendMsg.startsWith('✓')?'#059669':'#DC2626'}}>{sendMsg}</span>}
+              <div style={{position:'relative'}}>
+                <button onClick={()=>setSendDropOpen(v=>!v)}
+                  style={{padding:'5px 12px',border:'0.5px solid #E2E8F0',borderRadius:7,background:'#F8FAFC',cursor:'pointer',fontSize:12,fontWeight:600,color:'#374151',fontFamily:FONT,display:'flex',alignItems:'center',gap:5}}>
+                  {sendReportType==='daily'?'📊 Daily':sendReportType==='weekly'?'📈 Weekly':'📅 30-Day'}
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                {sendDropOpen&&(
+                  <>
+                    <div onClick={()=>setSendDropOpen(false)} style={{position:'fixed',inset:0,zIndex:200}}/>
+                    <div style={{position:'absolute',bottom:'calc(100% + 4px)',right:0,zIndex:201,background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,boxShadow:'0 8px 24px rgba(15,23,42,0.12)',minWidth:150,overflow:'hidden'}}>
+                      {[['daily','📊 Daily Report'],['weekly','📈 Weekly WoW'],['monthly','📅 30-Day Report']].map(([val,label])=>(
+                        <button key={val} onClick={()=>{setSendReportType(val);setSendDropOpen(false)}}
+                          style={{width:'100%',padding:'9px 14px',border:'none',background:sendReportType===val?'#E3F5FD':'#fff',color:sendReportType===val?BLUE:'#374151',fontSize:12.5,fontWeight:sendReportType===val?700:500,textAlign:'left',cursor:'pointer',fontFamily:FONT,borderBottom:'0.5px solid #F3F4F6',display:'block'}}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <button onClick={sendReport} disabled={sendingReport}
+                style={{padding:'5px 16px',border:'none',background:sendingReport?'#94A3B8':NAVY,color:'#fff',borderRadius:7,cursor:sendingReport?'wait':'pointer',fontSize:12,fontWeight:700,fontFamily:FONT,display:'flex',alignItems:'center',gap:6,transition:'all .15s'}}>
+                {sendingReport?'Sending…':'Send'}
+              </button>
+            </div>
               <div style={{background:'#fff',border:`0.5px solid ${input?BLUE:borderColor}`,borderRadius:14,padding:'12px 14px',transition:'border-color .2s',boxShadow:'0 2px 12px rgba(15,23,42,0.06)'}}>
                 <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Chat…"
                   onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
