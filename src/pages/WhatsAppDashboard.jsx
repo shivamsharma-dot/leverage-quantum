@@ -4,6 +4,7 @@ import {
   LineChart, Line, Cell, PieChart, Pie, FunnelChart, Funnel, LabelList
 } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import { fetchCSV } from '../lib/sheetCache'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=1222628502&single=true&output=csv'
 
