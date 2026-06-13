@@ -169,7 +169,7 @@ export default function ChannelMixDashboard(){
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / Channel Mix</p>
-            <h1 className={styles.pageTitle}>Channel Mix 2025</h1>
+            <h1 className={styles.pageTitle}>Channel Mix</h1>
           </div>
           <div className={styles.headerRight}>
             <select className={styles.fsel} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>
