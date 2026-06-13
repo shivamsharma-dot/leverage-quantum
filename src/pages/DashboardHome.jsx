@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import Sidebar from '../components/Sidebar'
 import styles from './DashboardHome.module.css'
+import { fetchCSV } from '../lib/sheetCache'
 
 const FONT = "'Plus Jakarta Sans',-apple-system,sans-serif"
 const C = { navy:'#1F3C84', blue:'#1C9FD4', green:'#4CAE6F', cyan:'#29B9C3', amber:'#F59E0B', border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8', bg:'#F4F6F9' }
