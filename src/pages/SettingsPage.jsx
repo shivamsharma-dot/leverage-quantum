@@ -16,6 +16,13 @@ const getRoleMeta = (role) => {
 
 const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings')
 
+const DATA_SOURCES = [
+  { name: 'Meta Graph API',       src: 'act_641914389215638', rows: 'live' },
+  { name: 'QL Ops Sheet',         src: 'Google Sheets CSV',   rows: 'live' },
+  { name: 'WhatsApp Sheet',       src: 'Google Sheets CSV',   rows: 'live' },
+  { name: 'Cross-Channel Sheet',  src: 'aiContext.js',        rows: 'live' },
+]
+
 export default function SettingsPage() {
   const { user } = useAuth()
   const userIsAdmin = user?.role === 'admin'
