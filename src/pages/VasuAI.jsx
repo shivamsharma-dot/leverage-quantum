@@ -667,6 +667,22 @@ export default function ChatPage() {
           {/* Input */}
           <div style={{padding:'12px 20px 16px',flexShrink:0}}>
             <div style={{maxWidth:820,margin:'0 auto'}}>
+            {/* Schedule Strip */}
+            <div style={{display:'flex',alignItems:'center',gap:0,marginBottom:8,padding:'7px 12px',background:'rgba(255,255,255,0.04)',border:'0.5px solid rgba(255,255,255,0.08)',borderRadius:8,overflow:'hidden'}}>
+              <span style={{fontSize:10,fontWeight:700,letterSpacing:'.06em',color:'rgba(255,255,255,0.3)',textTransform:'uppercase',marginRight:10,flexShrink:0}}>Auto-sends</span>
+              {[
+                {color:BLUE,  bg:'rgba(28,159,212,0.12)', label:'Daily',   desc:'Every day · 9:30 AM IST'},
+                {color:GREEN, bg:'rgba(76,174,111,0.12)', label:'Weekly',  desc:'Every Monday · 9:30 AM IST'},
+                {color:NAVY,  bg:'rgba(31,60,132,0.2)',   label:'Monthly', desc:'1st of month · 9:30 AM IST'},
+              ].map(({color,bg,label,desc}) => (
+                <div key={label} style={{display:'flex',alignItems:'center',gap:5,marginRight:16,flexShrink:0}}>
+                  <div style={{width:6,height:6,borderRadius:'50%',background:color,flexShrink:0}}/>
+                  <span style={{fontSize:11,fontWeight:700,color,fontFamily:FONT}}>{label}</span>
+                  <span style={{fontSize:11,color:'rgba(255,255,255,0.35)',fontFamily:FONT}}>{desc}</span>
+                </div>
+              ))}
+            </div>
+
             {/* Send Report Bar */}
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,padding:'8px 12px',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,boxShadow:'0 1px 4px rgba(15,23,42,0.04)'}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
