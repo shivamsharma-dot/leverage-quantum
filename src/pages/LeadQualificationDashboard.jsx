@@ -808,7 +808,7 @@ export default function LeadQualificationDashboard() {
         }}>
           <div>
             <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / QL Ops</p>
-            <h1 style={{ fontSize: 17, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px', fontFamily: FONT }}>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.5px', fontFamily: FONT }}>
               Lead Qualification
               {' · '}
               {activeFilter === 'custom' && customFrom
