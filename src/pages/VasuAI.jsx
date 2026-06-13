@@ -522,32 +522,76 @@ export default function ChatPage() {
 
           {/* Report Logs */}
           {rail==='logs'&&(
-            <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-              <div style={{padding:'10px 12px 8px',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                <div style={{fontSize:11.5,color:'#64748B'}}>Automated + manual sends</div>
-                <button onClick={loadLogs} style={{background:'none',border:'0.5px solid #E5E7EB',borderRadius:6,padding:'3px 8px',fontSize:11,color:'#64748B',cursor:'pointer',fontFamily:FONT}}>↻</button>
+            <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:'#F8FAFC'}}>
+              <div style={{padding:'10px 14px 8px',flexShrink:0,borderBottom:'0.5px solid #E5E7EB',background:'#fff',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div>
+                  <div style={{fontSize:10.5,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'#94A3B8'}}>Send History</div>
+                  <div style={{fontSize:12,color:'#64748B',marginTop:1,fontWeight:500}}>{reportLogs.length} record{reportLogs.length!==1?'s':''}</div>
+                </div>
+                <button onClick={loadLogs} title="Refresh"
+                  style={{width:30,height:30,borderRadius:8,border:'0.5px solid #E5E7EB',background:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s'}}
+                  onMouseEnter={e=>e.currentTarget.style.background='#F1F5F9'}
+                  onMouseLeave={e=>e.currentTarget.style.background='#fff'}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                </button>
               </div>
-              <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 12px 8px'}}>
-                {logsLoading&&<div style={{padding:20,textAlign:'center',color:'#94A3B8',fontSize:12}}>Loading…</div>}
-                {!logsLoading&&reportLogs.length===0&&<div style={{padding:'30px 0',textAlign:'center',color:'#CBD5E1',fontSize:12.5}}>No reports sent yet</div>}
+              <div className="cs" style={{flex:1,overflowY:'auto',padding:'10px 10px 12px'}}>
+                {logsLoading&&[1,2,3].map(i=>(
+                  <div key={i} style={{height:84,borderRadius:12,background:'#F1F5F9',marginBottom:8}}/>
+                ))}
+                {!logsLoading&&reportLogs.length===0&&(
+                  <div style={{padding:'40px 16px',textAlign:'center'}}>
+                    <div style={{width:40,height:40,borderRadius:12,background:'#F1F5F9',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <div style={{fontSize:13,fontWeight:600,color:'#94A3B8',marginBottom:4}}>No reports sent yet</div>
+                    <div style={{fontSize:11.5,color:'#CBD5E1'}}>Use Send Report to trigger one</div>
+                  </div>
+                )}
                 {reportLogs.map((log,idx)=>{
                   const dt=new Date(log.sent_at)
-                  const dateStr=dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})
+                  const dateStr=dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
                   const timeStr=dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})
                   const isOk=log.status==='sent'
                   const typeLabel=log.report_type==='daily'?'Daily':log.report_type==='weekly'?'Weekly':'Monthly'
                   const typeColor=log.report_type==='daily'?BLUE:log.report_type==='weekly'?GREEN:NAVY
-                  const typeBg=log.report_type==='daily'?'#E3F5FD':log.report_type==='weekly'?'#E9F8EF':'#E8EFF9'
+                  const typeBg=log.report_type==='daily'?'#EFF8FF':log.report_type==='weekly'?'#F0FDF4':'#EFF2FF'
+                  const triggeredShort=(log.triggered_by||'cron')==='cron'?'Cron':(log.triggered_by||'').split('@')[0]
+                  const rcptCount=log.recipients?.length||0
                   return (
-                    <div key={log.id||idx} style={{marginBottom:6,padding:'10px 11px',borderRadius:10,border:`0.5px solid ${isOk?'#D1FAE5':'#FEE2E2'}`,background:isOk?'#F0FDF4':'#FFF5F5'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
-                        <span style={{fontSize:9.5,fontWeight:700,padding:'2px 7px',borderRadius:20,background:typeBg,color:typeColor,flexShrink:0,fontFamily:FONT}}>{typeLabel}</span>
-                        <span style={{fontSize:10.5,fontWeight:700,color:isOk?'#059669':'#DC2626',marginLeft:'auto'}}>{isOk?'✓ Sent':'✕ Failed'}</span>
+                    <div key={log.id||idx} style={{
+                      marginBottom:8,borderRadius:12,border:`0.5px solid ${isOk?'#DCFCE7':'#FEE2E2'}`,
+                      background:'#fff',overflow:'hidden',boxShadow:'0 1px 4px rgba(15,23,42,0.05)',
+                      borderLeft:`3px solid ${isOk?'#22C55E':'#EF4444'}`
+                    }}>
+                      <div style={{padding:'9px 12px 7px',display:'flex',alignItems:'center',gap:6,borderBottom:'0.5px solid #F8FAFC'}}>
+                        <span style={{fontSize:10,fontWeight:800,padding:'2px 8px',borderRadius:20,background:typeBg,color:typeColor,letterSpacing:'.04em',textTransform:'uppercase'}}>{typeLabel}</span>
+                        <div style={{flex:1}}/>
+                        <div style={{display:'flex',alignItems:'center',gap:4}}>
+                          <div style={{width:6,height:6,borderRadius:'50%',background:isOk?'#22C55E':'#EF4444'}}/>
+                          <span style={{fontSize:11,fontWeight:700,color:isOk?'#16A34A':'#DC2626'}}>{isOk?'Sent':'Failed'}</span>
+                        </div>
                       </div>
-                      <div style={{fontSize:11,color:'#374151',marginBottom:2}}><span style={{fontWeight:600}}>{dateStr}</span> · {timeStr}</div>
-                      {log.triggered_by&&<div style={{fontSize:10.5,color:'#94A3B8',marginBottom:2}}>By: {log.triggered_by}</div>}
-                      {log.recipients?.length>0&&<div style={{fontSize:10.5,color:'#64748B'}}>→ {log.recipients.slice(0,3).join(', ')}{log.recipients.length>3?` +${log.recipients.length-3} more`:''}</div>}
-                      {log.error&&<div style={{fontSize:10.5,color:'#DC2626',marginTop:3,wordBreak:'break-word'}}>{log.error}</div>}
+                      <div style={{padding:'8px 12px 10px'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:5}}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                          <span style={{fontSize:12,fontWeight:600,color:'#0F172A'}}>{dateStr}</span>
+                          <span style={{fontSize:11,color:'#CBD5E1'}}>·</span>
+                          <span style={{fontSize:11.5,color:'#64748B'}}>{timeStr}</span>
+                        </div>
+                        <div style={{display:'flex',alignItems:'center',gap:5}}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                          <span style={{fontSize:11.5,color:'#64748B'}}>{triggeredShort}</span>
+                          {rcptCount>0&&<><span style={{fontSize:11,color:'#CBD5E1'}}>·</span>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                          <span style={{fontSize:11.5,color:'#64748B'}}>{rcptCount} rcpt</span></>}
+                        </div>
+                        {!isOk&&log.error&&(
+                          <div style={{marginTop:6,padding:'6px 8px',borderRadius:6,background:'#FFF5F5',border:'0.5px solid #FEE2E2'}}>
+                            <div style={{fontSize:10.5,color:'#DC2626',lineHeight:1.5,wordBreak:'break-word'}}>{log.error.length>90?log.error.slice(0,90)+'…':log.error}</div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
