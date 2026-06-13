@@ -853,7 +853,7 @@ export default function LeadQualificationDashboard() {
               <button onClick={()=>setShowCustom(v=>!v)}
                 style={{padding:'6px 12px',borderRadius:8,border:`0.5px solid ${datePreset==='custom'?C.navy:C.border}`,background:datePreset==='custom'?C.navyBg:'var(--card)',color:datePreset==='custom'?C.navy:C.sub,fontSize:12,fontWeight:600,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',gap:6,minWidth:140,justifyContent:'space-between',boxShadow:'0 1px 3px rgba(15,23,42,0.06)',transition:'all .15s'}}>
                 <span>
-                  {datePreset==='custom'&&customFrom ? customFrom+' → '+customTo : datePreset==='LD'?'Last Day':datePreset==='L7D'?'Last 7D':datePreset==='MTD'?'MTD':'Select period'}
+                  {datePreset==='custom'&&customFrom ? customFrom+' → '+customTo : datePreset==='LD'?'Last Day':datePreset==='L7D'?'Last 7D':datePreset==='MTD'?'MTD':datePreset==='month'?'Month view':'Select period'}
                 </span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
@@ -867,18 +867,13 @@ export default function LeadQualificationDashboard() {
                         {lbl2}
                       </button>
                     ))}
-                    <div style={{padding:'10px 14px 4px',borderTop:`0.5px solid ${C.border}`}}>
-                      <div style={{fontSize:10,fontWeight:700,color:C.muted,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:8}}>Custom range</div>
-                      {[['From',customFrom,setCustomFrom],['To',customTo,setCustomTo]].map(([lbl,val,setter])=>(
-                        <div key={lbl} style={{marginBottom:8}}>
-                          <div style={{fontSize:11,fontWeight:600,color:C.sub,marginBottom:3}}>{lbl}</div>
-                          <input type="date" value={val} onChange={e=>setter(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:7,border:`0.5px solid ${C.border}`,fontSize:11.5,fontFamily:FONT,outline:'none',color:C.text,boxSizing:'border-box'}}/>
-                        </div>
-                      ))}
-                      <button onClick={()=>{if(customFrom&&customTo){setDatePreset('custom');setShowCustom(false);setPage(0)}}} disabled={!customFrom||!customTo}
-                        style={{width:'100%',padding:'7px',borderRadius:7,border:'none',background:customFrom&&customTo?C.navy:'#E5E7EB',color:customFrom&&customTo?'#fff':C.muted,fontSize:11.5,fontWeight:700,fontFamily:FONT,cursor:customFrom&&customTo?'pointer':'not-allowed',marginBottom:10}}>
-                        Apply
-                      </button>
+                    <div style={{borderTop:`0.5px solid ${C.border}`}}>
+                      <DateRangePicker
+                        from={customFrom ? (()=>{ const [y,m,d]=customFrom.split('-').map(Number); return new Date(y,m-1,d) })() : null}
+                        to={customTo ? (()=>{ const [y,m,d]=customTo.split('-').map(Number); return new Date(y,m-1,d) })() : null}
+                        onChange={(f,t)=>{ setCustomFrom(f); setCustomTo(t); setDatePreset('custom'); setShowCustom(false); setPage(0) }}
+                        onClose={()=>setShowCustom(false)}
+                      />
                     </div>
                   </div>
                 </>
