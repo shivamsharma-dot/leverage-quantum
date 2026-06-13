@@ -1,0 +1,17 @@
+name: Monthly Meta Ads Report
+
+on:
+  schedule:
+    - cron: '0 4 1 * *'
+  workflow_dispatch:
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger monthly report
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://quantum.leverageedu.com/api/send-report" -H "Content-Type: application/json" -d '{"type":"monthly","triggered_by":"cron"}')
+          echo "HTTP Status: $RESPONSE"
+          if [ "$RESPONSE" != "200" ]; then echo "Failed with status $RESPONSE"; exit 1; fi
+          echo "Monthly Meta Report sent!"
