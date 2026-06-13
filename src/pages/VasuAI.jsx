@@ -416,7 +416,7 @@ export default function ChatPage() {
 
               {/* History */}
               {rail==='history'&&(
-                <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                   <div style={{padding:'10px 12px',flexShrink:0}}>
                     <div style={{position:'relative'}}>
                       <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={12} c="#CBD5E1"/></span>
@@ -450,7 +450,7 @@ export default function ChatPage() {
 
               {/* Prompts */}
               {rail==='prompts'&&(
-                <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                   <div style={{padding:'10px 12px 8px',flexShrink:0}}>
                     <div style={{position:'relative',marginBottom:8}}>
                       <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={12} c="#CBD5E1"/></span>
@@ -490,7 +490,7 @@ export default function ChatPage() {
 
               {/* Memories */}
               {rail==='memories'&&(
-                <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden'}}>
                   <div style={{padding:'10px 12px 8px',flexShrink:0}}>
                     <div style={{fontSize:11.5,color:'#CBD5E1',marginBottom:10,lineHeight:1.5}}>Facts Claude remembers across all conversations</div>
                     <div style={{display:'flex',gap:6}}>
@@ -522,7 +522,7 @@ export default function ChatPage() {
 
           {/* Report Logs */}
           {rail==='logs'&&(
-            <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:'#F8FAFC'}}>
+            <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',background:'#F8FAFC'}}>
               <div style={{padding:'10px 14px 8px',flexShrink:0,borderBottom:'0.5px solid #E5E7EB',background:'#fff',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <div>
                   <div style={{fontSize:10.5,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'#94A3B8'}}>Send History</div>
@@ -535,7 +535,7 @@ export default function ChatPage() {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                 </button>
               </div>
-              <div className="cs" style={{flex:1,overflowY:'auto',padding:'10px 10px 12px'}}>
+              <div className="cs" style={{flex:1,minHeight:0,overflowY:'auto',padding:'10px 10px 12px'}}>
                 {logsLoading&&[1,2,3].map(i=>(
                   <div key={i} style={{height:84,borderRadius:12,background:'#F1F5F9',marginBottom:8}}/>
                 ))}
