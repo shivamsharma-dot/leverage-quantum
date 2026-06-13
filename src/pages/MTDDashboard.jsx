@@ -141,6 +141,23 @@ function Dropdown({options,value,onChange,minWidth=120}){
   )
 }
 
+
+const BrandTooltip = ({ active, payload, label, fmt }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, padding:'10px 14px', fontFamily:"'Plus Jakarta Sans','Inter',sans-serif", boxShadow:'0 8px 32px rgba(15,23,42,0.13)', minWidth:140 }}>
+      {label && <div style={{ fontSize:11, fontWeight:700, color:'#0F172A', marginBottom:7, paddingBottom:6, borderBottom:'0.5px solid #F1F5F9' }}>{label}</div>}
+      {payload.map((p, i) => (
+        <div key={i} style={{ display:'flex', alignItems:'center', gap:7, marginTop:i>0?4:0 }}>
+          <div style={{ width:8, height:8, borderRadius:'50%', background:p.color||p.fill||'#1C9FD4', flexShrink:0 }}/>
+          <span style={{ fontSize:11.5, color:'#475569', flex:1 }}>{p.name||p.dataKey}</span>
+          <span style={{ fontSize:12, fontWeight:700, color:'#0F172A' }}>{fmt ? fmt(p.value) : (typeof p.value==='number'&&p.value>999?p.value.toLocaleString('en-IN'):p.value)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function MTDDashboard(){
   const [months,setMonths]=useState([])
   const [sel,setSel]=useState(0)
@@ -317,7 +334,7 @@ export default function MTDDashboard(){
                       dataKey='value' labelLine={false} label={PieLbl}>
                       {spendPie.map((e,i)=><Cell key={i} fill={sc(e.name)}/>)}
                     </Pie>
-                    <Tooltip content={<ChartTip fmt={v=>fmtINR(v)}/>}/>
+                    <Tooltip content={<BrandTooltip fmt={v=>fmtINR(v)}/>}/>
                   </PieChart>
                 </ResponsiveContainer>
                 <div style={{display:'flex',flexWrap:'wrap',gap:'6px 14px',marginTop:8}}>
@@ -328,10 +345,10 @@ export default function MTDDashboard(){
               <Card title='CPL by source' sub={'Avg \u20B9'+avgCPL+' across channels'}>
                 <ResponsiveContainer width='100%' height={280}>
                   <ComposedChart data={cplBar} margin={{top:20,right:16,left:0,bottom:40}}>
-                    <CartesianGrid strokeDasharray='3 3' stroke='#F3F4F6' vertical={false}/>
+                    <CartesianGrid strokeDasharray='3 3' stroke='#F1F5F9' vertical={false}/>
                     <XAxis dataKey='name' tick={{fontSize:10,fill:'#6B7280'}} angle={-35} textAnchor='end' interval={0} axisLine={false} tickLine={false}/>
                     <YAxis tick={{fontSize:10,fill:'#6B7280'}} axisLine={false} tickLine={false} tickFormatter={v=>('\u20B9'+(v>=1000?(v/1000).toFixed(0)+'K':v))}/>
-                    <Tooltip content={<ChartTip fmt={v=>fmtINR(v)}/>}/>
+                    <Tooltip content={<BrandTooltip fmt={v=>fmtINR(v)}/>}/>
                     <ReferenceLine y={avgCPL} stroke='#94A3B8' strokeDasharray='4 4' label={{value:'Avg',position:'right',fill:'#94A3B8',fontSize:10}}/>
                     <Bar dataKey='cpl' name='CPL' radius={[5,5,0,0]} maxBarSize={36}>
                       <LabelList dataKey='cpl' position='top' formatter={v=>fmtINR(v)} style={{fontSize:9,fontWeight:600,fill:'#374151'}}/>
@@ -349,13 +366,13 @@ export default function MTDDashboard(){
               <Card title='Revenue breakdown' sub='SR vs AC vs VAS by channel - in Lakhs'>
                 <ResponsiveContainer width='100%' height={280}>
                   <BarChart data={revStack} margin={{top:16,right:16,left:0,bottom:40}}>
-                    <CartesianGrid strokeDasharray='3 3' stroke='#F3F4F6' vertical={false}/>
+                    <CartesianGrid strokeDasharray='3 3' stroke='#F1F5F9' vertical={false}/>
                     <XAxis dataKey='name' tick={{fontSize:10,fill:'#6B7280'}} angle={-35} textAnchor='end' interval={0} axisLine={false} tickLine={false}/>
                     <YAxis tick={{fontSize:10,fill:'#6B7280'}} axisLine={false} tickLine={false} tickFormatter={v=>v===0?'\u20B9'+'0':v>=100?'\u20B9'+(v/100).toFixed(1)+'Cr':'\u20B9'+v+'L'}/>
-                    <Tooltip content={<ChartTip fmt={v=>v>=100?'\u20B9'+(v/100).toFixed(2)+' Cr':'\u20B9'+v+'L'}/>}/>
+                    <Tooltip content={<BrandTooltip fmt={v=>v>=100?'\u20B9'+(v/100).toFixed(2)+' Cr':'\u20B9'+v+'L'}/>}/>
                     
-                    <Bar dataKey='SR' name='SR Revenue' stackId='r' fill='#1F3C84' radius={[0,0,0,0]}/>
-                    <Bar dataKey='AC' name='AC Revenue' stackId='r' fill='#1C9FD4' radius={[0,0,0,0]}/>
+                    <Bar dataKey='SR' name='SR Revenue' stackId='r' fill='#1F3C84' radius={[6,6,0,0]}/>
+                    <Bar dataKey='AC' name='AC Revenue' stackId='r' fill='#1C9FD4' radius={[6,6,0,0]}/>
                     <Bar dataKey='VAS' name='VAS Revenue' stackId='r' fill='#4CAE6F' radius={[4,4,0,0]}/>
                   </BarChart>
                 </ResponsiveContainer>
