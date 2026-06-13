@@ -1,10 +1,20 @@
-export const maxDuration = 60 // Vercel max timeout in seconds
+export const maxDuration = 60
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 const AD_ACCOUNT   = 'act_641914389215638'
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Brand constants ───────────────────────────────────────────────────────────
+const NAVY  = '#1F3C84'
+const BLUE  = '#1C9FD4'
+const CYAN  = '#29B9C3'
+const GREEN = '#4CAE6F'
+const FONT  = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"
+
+// SVG logo icon (3 bars: green, cyan, blue) — inline for email
+const LOGO_ICON_SVG = `<svg width="28" height="28" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="12" width="4" height="9" rx="1.5" fill="${GREEN}"/><rect x="7" y="7" width="4" height="14" rx="1.5" fill="${CYAN}"/><rect x="13" y="4" width="4" height="17" rx="1.5" fill="${BLUE}"/></svg>`
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function graphGet(path, token, params = {}) {
   const qs = new URLSearchParams({ access_token: token, ...params }).toString()
@@ -28,6 +38,16 @@ function fmtINR(n) {
 
 function fmt(d) { return d.toISOString().slice(0, 10) }
 
+function fmtPct(n) { return (parseFloat(n) || 0).toFixed(2) + '%' }
+
+function delta(cur, prev, higherIsBetter = true) {
+  if (!prev || prev === 0) return ''
+  const pct = ((cur - prev) / prev) * 100
+  const isGood = higherIsBetter ? pct >= 0 : pct <= 0
+  const sign = pct >= 0 ? '+' : ''
+  return `<span style="font-size:11px;font-weight:700;color:${isGood ? '#059669' : '#DC2626'};margin-left:4px">${sign}${pct.toFixed(1)}%</span>`
+}
+
 async function getStoredToken() {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/meta_tokens?select=token&order=created_at.desc&limit=1`, {
@@ -46,304 +66,333 @@ async function getRecipients() {
   } catch { return [] }
 }
 
-// ── Report logger ────────────────────────────────────────────────────────────
-
 async function logReport({ report_type, recipients, status, error = null, triggered_by = 'cron' }) {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/report_logs`, {
       method: 'POST',
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal'
-      },
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
       body: JSON.stringify({ report_type, recipients, status, error, triggered_by, sent_at: new Date().toISOString() })
     })
   } catch {}
 }
 
-// ── Meta data fetcher for a given date range ─────────────────────────────────
+// ── Meta fetcher ──────────────────────────────────────────────────────────────
 
 async function fetchMeta(token, since, until) {
   const range = JSON.stringify({ since, until })
-  // Note: time_range cannot be used with nested insights{} on campaigns endpoint
-  // For account-level insights use time_range; for campaigns use date_preset
-  const daysDiff = Math.round((new Date(until) - new Date(since)) / 86400000)
-  const preset   = daysDiff <= 7 ? 'last_7d' : daysDiff <= 30 ? 'last_30d' : 'last_90d'
   const [accIns, campaigns] = await Promise.all([
     graphGet(`${AD_ACCOUNT}/insights`, token, {
       fields: 'spend,impressions,clicks,ctr,cpm,reach,frequency,actions',
       time_range: range, level: 'account'
     }),
     graphGet(`${AD_ACCOUNT}/campaigns`, token, {
-      fields: 'name,status,objective,insights{spend,impressions,clicks,ctr,reach,frequency,actions}',
-      limit: 50,
-      date_preset: preset,
+      fields: 'name,status,insights{spend,impressions,clicks,ctr,reach,frequency,actions}',
+      limit: 30,
+      date_preset: 'last_30d',
       effective_status: '["ACTIVE","PAUSED"]',
     })
   ])
-
   const acc   = accIns.data?.[0] || {}
   const camps = (campaigns.data || [])
     .map(c => ({ ...c, ins: c.insights?.data?.[0] || {} }))
     .filter(c => parseFloat(c.ins.spend || 0) > 0)
-    .sort((a, b) => parseFloat(b.ins.spend || 0) - parseFloat(a.ins.spend || 0))
-
+    .sort((a, b) => parseFloat(b.ins.spend) - parseFloat(a.ins.spend))
   return { acc, camps }
 }
 
-// ── Sheet context (hardcoded snapshot — update periodically) ─────────────────
-// This is the cross-channel business data from Google Sheets / Vasu AI context
-const SHEET_CONTEXT = {"totals":{"total_opps":1869388,"total_qls":98607,"total_apps":18345,"total_spend":294506772,"total_ac_rev":154372047,"total_vas_rev":291519433,"total_rev":445891480,"avg_roas":1.51,"avg_cpl":2987,"avg_ql_pct":5.3,"data_period":"Jan-2025 to Dec-2025"},"monthly":[{"month":"Jan-2025","opps":187351,"qls":9650,"apps":2713,"spend":34861286,"cpl":3613,"ql_pct":5.2},{"month":"Feb-2025","opps":160123,"qls":8706,"apps":2408,"spend":31755969,"cpl":3648,"ql_pct":5.4},{"month":"Mar-2025","opps":188520,"qls":9902,"apps":2353,"spend":36198990,"cpl":3656,"ql_pct":5.3},{"month":"Apr-2025","opps":177450,"qls":9761,"apps":2363,"spend":28870684,"cpl":2958,"ql_pct":5.5},{"month":"May-2025","opps":274409,"qls":10009,"apps":1843,"spend":25079897,"cpl":2506,"ql_pct":3.6},{"month":"Jun-2025","opps":151862,"qls":7731,"apps":1031,"spend":16952827,"cpl":2193,"ql_pct":5.1},{"month":"Jul-2025","opps":123682,"qls":6093,"apps":638,"spend":13518770,"cpl":2219,"ql_pct":4.9},{"month":"Aug-2025","opps":118330,"qls":5435,"apps":447,"spend":13459560,"cpl":2476,"ql_pct":4.6},{"month":"Sep-2025","opps":125593,"qls":7365,"apps":1067,"spend":22956582,"cpl":3117,"ql_pct":5.9},{"month":"Oct-2025","opps":115599,"qls":7298,"apps":1438,"spend":24376429,"cpl":3340,"ql_pct":6.3},{"month":"Nov-2025","opps":121033,"qls":8220,"apps":1287,"spend":23749776,"cpl":2889,"ql_pct":6.8},{"month":"Dec-2025","opps":125436,"qls":8437,"apps":757,"spend":22726002,"cpl":2694,"ql_pct":6.7}],"channels":[{"channel":"Google","opps":328681,"qls":14309,"apps":5551,"spend":152195112,"cpl":10636,"roas":1.51,"ql_pct":4.4},{"channel":"Facebook","opps":324210,"qls":24488,"apps":4298,"spend":142311660,"cpl":5811,"roas":1.28,"ql_pct":7.6}]}
+// ── AI analysis (token-efficient) ────────────────────────────────────────────
 
-// ── Groq analysis ─────────────────────────────────────────────────────────────
-
-async function askClaude(prompt) {
+async function getAIAnalysis(summary, camps, reportType) {
   const key = process.env.ANTHROPIC_API_KEY
-  if (!key) throw new Error('ANTHROPIC_API_KEY not set')
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }],
+  if (!key) return '<p style="color:#94A3B8;font-size:13px">AI analysis unavailable — API key not configured.</p>'
+
+  // Compact camp data — top 10 only, minimal fields
+  const campText = camps.slice(0, 10).map(c => {
+    const s   = parseFloat(c.ins.spend || 0)
+    const ctr = parseFloat(c.ins.ctr || 0)
+    const fr  = parseFloat(c.ins.frequency || 1)
+    const l   = getAction(c.ins.actions, 'onsite_conversion.lead_grouped') || getAction(c.ins.actions, 'lead')
+    const eps = l > 0 ? (l / (reportType === 'daily' ? 1 : reportType === 'weekly' ? 7 : 30)).toFixed(1) : '0'
+    return `${c.name.slice(0,45)} | Spend:${fmtINR(s)} | CTR:${ctr.toFixed(2)}% | Freq:${fr.toFixed(1)}x | Leads:${l} | EPS:${eps}`
+  }).join('\n')
+
+  const typeLabel = reportType === 'daily' ? 'Yesterday' : reportType === 'weekly' ? 'Last 7 Days' : 'Last 30 Days'
+  const prompt = `You are a senior Meta Ads analyst for Leverage Edu (Indian edtech, study abroad). Be sharp, specific, data-driven. No fluff.
+
+PERIOD: ${typeLabel}
+Spend: ${fmtINR(summary.spend)} | Leads: ${summary.leads} | CPL: ${fmtINR(summary.cpl)} | CTR: ${fmtPct(summary.ctr)} | Freq: ${summary.freq.toFixed(2)}x | Campaigns: ${camps.length}
+
+TOP CAMPAIGNS (spend, CTR, freq, leads, EPS=leads/day):
+${campText}
+
+Write exactly 3 HTML sections using ONLY these inline styles:
+- Alert box (red): <div style="padding:10px 14px;border-radius:8px;background:#FFF5F5;border-left:3px solid #EF4444;color:#7F1D1D;margin-bottom:8px;font-size:13px;line-height:1.6">
+- Win box (green): <div style="padding:10px 14px;border-radius:8px;background:#F0FDF4;border-left:3px solid #22C55E;color:#14532D;margin-bottom:8px;font-size:13px;line-height:1.6">
+- Note box (blue): <div style="padding:10px 14px;border-radius:8px;background:#EFF6FF;border-left:3px solid #3B82F6;color:#1E3A8A;margin-bottom:8px;font-size:13px;line-height:1.6">
+- Section title: <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #F1F5F9">TITLE</div>
+- Highlight: <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">VALUE</strong>
+
+SECTION 1 — KEY SIGNALS (2-3 boxes: biggest win, biggest risk, one anomaly. Each box = 1 sentence with a real ₹ or % figure)
+SECTION 2 — CAMPAIGN FLAGS (flag only campaigns with freq >3.5 OR EPS <20 OR CTR <0.5%. One line each. Name the campaign.)
+SECTION 3 — TOP 3 ACTIONS (numbered divs. Specific. Each must name a campaign or metric. What to do THIS WEEK.)
+
+Output only HTML. No preamble. No code fences. Max 600 words.`
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2000, messages: [{ role: 'user', content: prompt }] })
     })
-  })
-  const d = await res.json()
-  if (!res.ok) throw new Error(d.error?.message || 'Claude API error')
-  return d.content?.[0]?.text || ''
+    const d = await res.json()
+    if (!res.ok) throw new Error(d.error?.message || 'API error')
+    return d.content?.[0]?.text || ''
+  } catch(e) {
+    return `<p style="color:#DC2626;font-size:13px">AI analysis error: ${e.message}</p>`
+  }
 }
 
-// ── Campaign table HTML ───────────────────────────────────────────────────────
+// ── HTML email builder ────────────────────────────────────────────────────────
 
-function campTableHTML(camps, avgCTR) {
-  if (!camps.length) return '<p style="color:#94A3B8;font-size:13px">No campaigns with spend in this period.</p>'
+function kpiCard(label, value, sub, accent) {
   return `
-  <div style="overflow-x:auto;border:1px solid #E2E8F0;border-radius:10px">
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead>
-        <tr style="background:#F8FAFC">
-          ${['Campaign','Status','Spend','Impr','Clicks','CTR','CPC','Freq','Leads'].map(h =>
-            `<th style="padding:9px 11px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748B;border-bottom:2px solid #E2E8F0;white-space:nowrap">${h}</th>`
-          ).join('')}
-        </tr>
-      </thead>
-      <tbody>
-        ${camps.slice(0, 15).map(c => {
-          const s   = parseFloat(c.ins.spend || 0)
-          const clk = parseInt(c.ins.clicks || 0)
-          const ctr = parseFloat(c.ins.ctr || 0)
-          const fr  = parseFloat(c.ins.frequency || 1)
-          const l   = getAction(c.ins.actions, 'lead')
-          const cpc = clk > 0 ? s / clk : 0
-          const warn = fr > 3.5 || (ctr < avgCTR * 0.5 && s > 100000)
-          return `<tr style="border-bottom:1px solid #F8FAFC;background:${warn ? '#FFFBF0' : '#fff'}">
-            <td style="padding:9px 11px;font-weight:600;color:#0F172A;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.name}">${c.name.length > 38 ? c.name.slice(0, 35) + '...' : c.name}</td>
-            <td style="padding:9px 11px"><span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:${c.status === 'ACTIVE' ? '#DCFCE7' : '#F1F5F9'};color:${c.status === 'ACTIVE' ? '#166534' : '#94A3B8'}">${c.status}</span></td>
-            <td style="padding:9px 11px;font-weight:700;color:#0F172A">${fmtINR(s)}</td>
-            <td style="padding:9px 11px;color:#475569">${parseInt(c.ins.impressions || 0).toLocaleString('en-IN')}</td>
-            <td style="padding:9px 11px;color:#475569">${clk.toLocaleString('en-IN')}</td>
-            <td style="padding:9px 11px;font-weight:700;color:${ctr >= 0.8 ? '#166534' : ctr >= avgCTR ? '#1E3A8A' : '#991B1B'}">${ctr.toFixed(2)}%</td>
-            <td style="padding:9px 11px;color:#475569">${cpc > 0 ? fmtINR(cpc) : '—'}</td>
-            <td style="padding:9px 11px;font-weight:600;color:${fr > 3.5 ? '#C2410C' : '#475569'}">${fr.toFixed(1)}x${fr > 3.5 ? ' ⚠' : fr > 3.0 ? ' ⚡' : ''}</td>
-            <td style="padding:9px 11px;font-weight:600;color:#0F172A">${l.toLocaleString()}</td>
-          </tr>`
-        }).join('')}
-      </tbody>
-    </table>
-  </div>
-  ${camps.length > 15 ? `<p style="font-size:11px;color:#94A3B8;margin-top:6px;text-align:center">Showing top 15 of ${camps.length} active campaigns by spend</p>` : ''}`
+    <td style="padding:6px">
+      <div style="background:#fff;border-radius:12px;border:0.5px solid #E2E8F0;border-top:3px solid ${accent};padding:14px 16px;min-width:100px">
+        <div style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-0.03em;line-height:1">${value}</div>
+        <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94A3B8;margin-top:5px">${label}</div>
+        ${sub ? `<div style="font-size:11px;color:#CBD5E1;margin-top:3px">${sub}</div>` : ''}
+      </div>
+    </td>`
 }
 
-// ── KPI card row HTML ─────────────────────────────────────────────────────────
+function campTable(camps, avgCTR) {
+  if (!camps.length) return '<p style="color:#94A3B8;font-size:13px;padding:12px 0">No campaigns with spend in this period.</p>'
+  const rows = camps.slice(0, 12).map((c, i) => {
+    const s   = parseFloat(c.ins.spend || 0)
+    const clk = parseInt(c.ins.clicks || 0)
+    const ctr = parseFloat(c.ins.ctr || 0)
+    const fr  = parseFloat(c.ins.frequency || 1)
+    const l   = getAction(c.ins.actions, 'onsite_conversion.lead_grouped') || getAction(c.ins.actions, 'lead')
+    const cpl = l > 0 ? s / l : 0
+    const fatigue = fr > 3.5 || ctr < avgCTR * 0.5
+    const rowBg = i % 2 === 0 ? '#fff' : '#FAFBFC'
+    return `<tr style="background:${fatigue ? '#FFFBF0' : rowBg}">
+      <td style="padding:9px 12px;font-size:12px;font-weight:600;color:#0F172A;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.name}">${c.name.length > 40 ? c.name.slice(0,38)+'…' : c.name}</td>
+      <td style="padding:9px 8px;text-align:center"><span style="display:inline-block;padding:2px 7px;border-radius:12px;font-size:10px;font-weight:700;background:${c.status === 'ACTIVE' ? '#DCFCE7' : '#F1F5F9'};color:${c.status === 'ACTIVE' ? '#166534' : '#94A3B8'}">${c.status}</span></td>
+      <td style="padding:9px 8px;font-size:12px;font-weight:700;color:#0F172A;text-align:right">${fmtINR(s)}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;font-weight:600;color:${ctr >= 1 ? '#166534' : ctr >= avgCTR ? '#1E3A8A' : '#991B1B'}">${ctr.toFixed(2)}%</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;font-weight:600;color:${fr > 3.5 ? '#C2410C' : '#475569'}">${fr.toFixed(1)}x${fr > 3.5 ? ' ⚠' : ''}</td>
+      <td style="padding:9px 8px;font-size:12px;font-weight:700;text-align:right;color:#0F172A">${l.toLocaleString('en-IN')}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;color:#475569">${cpl > 0 ? fmtINR(cpl) : '—'}</td>
+    </tr>`
+  }).join('')
 
-function kpiRow(items) {
-  return `<div style="display:grid;grid-template-columns:repeat(${items.length},1fr);gap:10px;margin-bottom:20px">
-    ${items.map(([label, value, color, sub]) => `
-      <div style="padding:14px;border-radius:10px;border:1px solid #F1F5F9;background:#FAFBFF;border-top:3px solid ${color}">
-        <div style="font-size:18px;font-weight:800;color:#0F172A;letter-spacing:-.02em">${value}</div>
-        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#94A3B8;margin-top:3px">${label}</div>
-        ${sub ? `<div style="font-size:10px;color:#CBD5E1;margin-top:2px">${sub}</div>` : ''}
-      </div>`).join('')}
-  </div>`
+  return `
+    <div style="overflow-x:auto;margin-top:4px">
+      <table style="width:100%;border-collapse:collapse;font-family:${FONT}">
+        <thead>
+          <tr style="background:#F8FAFC;border-bottom:2px solid #E2E8F0">
+            ${['Campaign','Status','Spend','CTR','Freq','Leads','CPL'].map(h =>
+              `<th style="padding:9px ${h==='Campaign'?'12px':'8px'};font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748B;text-align:${h==='Campaign'?'left':'right'};white-space:nowrap">${h}</th>`
+            ).join('')}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    ${camps.length > 12 ? `<p style="font-size:11px;color:#94A3B8;margin:8px 0 0;text-align:center">Top 12 of ${camps.length} campaigns by spend</p>` : ''}`
 }
 
-function sectionHeader(emoji, title) {
-  return `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94A3B8;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #F1F5F9">${emoji} ${title}</div>`
+function sectionTitle(emoji, title) {
+  return `<div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#94A3B8;padding:16px 0 10px;border-bottom:1px solid #F1F5F9;margin-bottom:14px">${emoji}&nbsp; ${title}</div>`
 }
 
 // ── Main report builder ───────────────────────────────────────────────────────
 
-async function buildReport(token) {
+async function buildReport(token, reportType) {
   const now   = new Date()
   const today = fmt(now)
 
-  // --- Period 1: Last 30 days ---
-  const p30Start = new Date(now); p30Start.setDate(p30Start.getDate() - 30)
-  const s30 = fmt(p30Start), e30 = today
-
-  // --- Period 2: Current month MTD ---
-  const mtdStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const sMTD = fmt(mtdStart), eMTD = today
-  const monthName = now.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
-
-  // Fetch both periods in parallel
-  const [d30, dMTD] = await Promise.all([
-    fetchMeta(token, s30, e30),
-    fetchMeta(token, sMTD, eMTD)
-  ])
-
-  // Helper to extract summary from fetched data
-  function summary(d) {
-    const acc      = d.acc
-    const spend    = parseFloat(acc.spend || 0)
-    const impr     = parseInt(acc.impressions || 0)
-    const clicks   = parseInt(acc.clicks || 0)
-    const ctr      = parseFloat(acc.ctr || 0)
-    const cpm      = parseFloat(acc.cpm || 0)
-    const freq     = parseFloat(acc.frequency || 0)
-    const reach    = parseInt(acc.reach || 0)
-    const leads    = getAction(acc.actions, 'lead')
-    const cpl      = leads > 0 ? spend / leads : 0
-    const avgCTR   = ctr
-    return { spend, impr, clicks, ctr, cpm, freq, reach, leads, cpl, avgCTR, camps: d.camps }
+  let since, until, periodLabel
+  if (reportType === 'daily') {
+    const yest = new Date(now); yest.setDate(yest.getDate() - 1)
+    since = fmt(yest); until = fmt(yest)
+    periodLabel = 'Yesterday — ' + yest.toLocaleDateString('en-IN', { weekday:'short', day:'2-digit', month:'short', year:'numeric' })
+  } else if (reportType === 'weekly') {
+    const end = new Date(now); end.setDate(end.getDate() - 1)
+    const start = new Date(end); start.setDate(end.getDate() - 6)
+    since = fmt(start); until = fmt(end)
+    periodLabel = `Last 7 Days — ${start.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} to ${end.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`
+  } else {
+    const start = new Date(now); start.setDate(start.getDate() - 30)
+    since = fmt(start); until = today
+    periodLabel = `Last 30 Days — ${start.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})} to ${new Date(today).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}`
   }
 
-  const s30m = summary(d30)
-  const sMTDm = summary(dMTD)
+  const { acc, camps } = await fetchMeta(token, since, until)
 
-  // Build camp table text for Groq
-  function campText(camps) {
-    return camps.slice(0, 20).map(c => {
-      const s   = parseFloat(c.ins.spend || 0)
-      const ctr = parseFloat(c.ins.ctr || 0)
-      const fr  = parseFloat(c.ins.frequency || 1)
-      const l   = getAction(c.ins.actions, 'lead')
-      const clk = parseInt(c.ins.clicks || 0)
-      const cpc = clk > 0 ? s / clk : 0
-      return `${c.name} | ${c.status} | Spend:${fmtINR(s)} | CTR:${ctr.toFixed(2)}% | CPC:${cpc > 0 ? fmtINR(cpc) : '—'} | Freq:${fr.toFixed(1)}x | Leads:${l}`
-    }).join('\n')
-  }
+  const spend  = parseFloat(acc.spend || 0)
+  const impr   = parseInt(acc.impressions || 0)
+  const clicks = parseInt(acc.clicks || 0)
+  const ctr    = parseFloat(acc.ctr || 0)
+  const cpm    = parseFloat(acc.cpm || 0)
+  const freq   = parseFloat(acc.frequency || 0)
+  const reach  = parseInt(acc.reach || 0)
+  const leads  = getAction(acc.actions, 'onsite_conversion.lead_grouped') || getAction(acc.actions, 'lead')
+  const cpl    = leads > 0 ? spend / leads : 0
+  const days   = reportType === 'daily' ? 1 : reportType === 'weekly' ? 7 : 30
+  const eps    = leads > 0 ? (leads / days).toFixed(1) : '0'
 
-  // Find current month in sheet context
-  const curMonthKey = now.toLocaleString('en-US', { month: 'short' }) + '-' + now.getFullYear()
-  const sheetMonth  = SHEET_CONTEXT.monthly.find(m => m.month.toLowerCase().includes(curMonthKey.toLowerCase().split('-')[0].toLowerCase()))
-  const sheetTotals = SHEET_CONTEXT.totals
-  const fbChannel   = SHEET_CONTEXT.channels.find(c => c.channel === 'Facebook') || {}
+  const summary = { spend, impr, clicks, ctr, cpm, freq, reach, leads, cpl, eps }
+  const aiHTML  = await getAIAnalysis(summary, camps, reportType)
 
-  const groqPrompt = `You are the performance marketing analyst for Leverage Edu (Indian edtech, study abroad). Write a sharp, data-driven email report. No fluff. Every claim must use a real number from the data below.
-
-==== META ADS DATA ====
-
-LAST 30 DAYS (${s30} to ${e30}):
-Spend: ${fmtINR(s30m.spend)} | Impressions: ${s30m.impr.toLocaleString()} | Clicks: ${s30m.clicks.toLocaleString()}
-CTR: ${s30m.ctr.toFixed(2)}% | CPM: ${fmtINR(s30m.cpm)} | Frequency: ${s30m.freq.toFixed(2)}x | Reach: ${s30m.reach.toLocaleString()}
-Leads: ${s30m.leads} | CPL: ${fmtINR(s30m.cpl)} | Active Campaigns: ${s30m.camps.length}
-Top campaigns by spend:
-${campText(s30m.camps)}
-
-CURRENT MONTH MTD (${sMTD} to ${eMTD} — ${monthName}):
-Spend: ${fmtINR(sMTDm.spend)} | Impressions: ${sMTDm.impr.toLocaleString()} | Clicks: ${sMTDm.clicks.toLocaleString()}
-CTR: ${sMTDm.ctr.toFixed(2)}% | CPM: ${fmtINR(sMTDm.cpm)} | Frequency: ${sMTDm.freq.toFixed(2)}x | Reach: ${sMTDm.reach.toLocaleString()}
-Leads: ${sMTDm.leads} | CPL: ${fmtINR(sMTDm.cpl)} | Active Campaigns: ${sMTDm.camps.length}
-Top campaigns by spend:
-${campText(sMTDm.camps)}
-
-==== CROSS-CHANNEL SHEET DATA (Jan–Dec 2025) ====
-Overall: Total Spend ₹${(sheetTotals.total_spend/1e7).toFixed(1)}Cr | Total Opps: ${sheetTotals.total_opps.toLocaleString()} | Total QLs: ${sheetTotals.total_qls.toLocaleString()} | Total Apps: ${sheetTotals.total_apps.toLocaleString()} | Avg ROAS: ${sheetTotals.avg_roas} | Avg CPL: ₹${sheetTotals.avg_cpl} | Avg QL%: ${sheetTotals.avg_ql_pct}%
-Facebook channel (sheet): Spend ₹${(fbChannel.spend/1e7||0).toFixed(1)}Cr | CPL ₹${fbChannel.cpl||0} | ROAS ${fbChannel.roas||0} | QL%: ${fbChannel.ql_pct||0}%
-
-IMPORTANT — DATA RECONCILIATION NOTE: The Meta Ads API gives raw ad spend/impressions/clicks/leads. The sheet data (opps, QLs, apps, ROAS) comes from CRM/internal tracking — these WILL differ from Meta numbers because: (1) sheet counts all-channel opps not just Meta, (2) lead attribution lag, (3) QL/app conversion happens downstream. Do NOT treat these as the same number. Analyse them separately and call out any meaningful gap.
-
-==== YOUR OUTPUT ====
-Write exactly 4 HTML sections using the inline styles below. Use actual ₹ figures and campaign names throughout.
-
-SECTION 1 — Last 30 Days: Meta Performance Summary
-Key wins and concerns. Which campaigns drove the most value? CTR/CPL trends. Frequency risks. 3–4 sharp bullet observations.
-
-SECTION 2 — ${monthName} MTD: Current Month Pulse  
-How is this month tracking so far? Spend pace vs last 30 days. Lead volume. Any early signals (good or bad)?
-
-SECTION 3 — Cross-Channel Context (Sheet Data)
-Compare Meta CPL vs overall avg CPL. Facebook QL% vs account avg. Is Meta punching its weight? Call out any data gaps between Meta API and sheet numbers and explain why they differ.
-
-SECTION 4 — Top 3 Actions for This Week
-Numbered. Specific. Each must reference a real campaign or metric. What to do right now.
-
-HTML style rules (inline only):
-- Section title: <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6B7280;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #F3F4F6">TITLE</div>
-- Red alert box: <div style="padding:12px 14px;border-radius:8px;background:#FFF5F5;border-left:4px solid #EF4444;color:#7F1D1D;margin-bottom:8px;font-size:13px;line-height:1.6">
-- Green box: <div style="padding:12px 14px;border-radius:8px;background:#F0FDF4;border-left:4px solid #22C55E;color:#14532D;margin-bottom:8px;font-size:13px;line-height:1.6">
-- Yellow box: <div style="padding:12px 14px;border-radius:8px;background:#FFFBEB;border-left:4px solid #F59E0B;color:#78350F;margin-bottom:8px;font-size:13px;line-height:1.6">
-- Blue box: <div style="padding:12px 14px;border-radius:8px;background:#EFF6FF;border-left:4px solid #3B82F6;color:#1E3A8A;margin-bottom:8px;font-size:13px;line-height:1.6">
-- Highlight: <span style="font-weight:700;background:#FEF9C3;padding:1px 4px;border-radius:3px">VALUE</span>
-- Action item: <div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid #E5E7EB;border-radius:8px;margin-bottom:8px"><div style="width:24px;height:24px;border-radius:50%;background:#0F172A;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">N</div><div style="font-size:13px;color:#374151;line-height:1.6"><strong>TITLE</strong><br>Detail</div></div>
-
-Output only the HTML. No preamble, no code fences.`
-
-  const aiHTML = await askClaude(groqPrompt)
-
-  const todayLabel = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  const todayLabel = now.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
+  const typeLabel  = reportType === 'daily' ? 'Daily' : reportType === 'weekly' ? 'Weekly' : 'Monthly'
+  const accentColor = reportType === 'daily' ? BLUE : reportType === 'weekly' ? GREEN : NAVY
 
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Leverage Quantum Report · ${todayLabel}</title></head>
-<body style="margin:0;padding:24px;background:#F1F5F9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0F172A;line-height:1.65">
-<div style="max-width:860px;margin:0 auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>Leverage Quantum — ${typeLabel} Report · ${todayLabel}</title>
+</head>
+<body style="margin:0;padding:0;background:#F0F4F8;font-family:${FONT};color:#0F172A;-webkit-font-smoothing:antialiased">
+<div style="max-width:680px;margin:0 auto;padding:24px 12px">
 
   <!-- HEADER -->
-  <div style="background:linear-gradient(135deg,#0A1628 0%,#1E3A8A 60%,#1C9FD4 100%);border-radius:16px 16px 0 0;padding:28px 36px;color:#fff;position:relative;overflow:hidden">
-    <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.5;margin-bottom:8px">Leverage Quantum · Automated Report · ${todayLabel}</div>
-    <div style="font-size:24px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px">Meta Ads Performance Report</div>
-    <div style="font-size:13px;opacity:.65">Last 30 Days + ${monthName} MTD · act_641914389215638</div>
-  </div>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,${NAVY} 0%,#0F2560 60%,#0D3D6B 100%);border-radius:16px 16px 0 0;overflow:hidden">
+    <tr>
+      <td style="padding:28px 32px 24px">
+        <!-- Logo row -->
+        <table cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+          <tr>
+            <td style="vertical-align:middle;padding-right:10px">
+              <!-- Quantum icon (3 bars) -->
+              <table cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px">
+                <tr>
+                  <td>
+                    <svg width="24" height="24" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="1" y="12" width="4" height="9" rx="1.5" fill="${GREEN}"/>
+                      <rect x="7" y="7" width="4" height="14" rx="1.5" fill="${CYAN}"/>
+                      <rect x="13" y="4" width="4" height="17" rx="1.5" fill="${BLUE}"/>
+                    </svg>
+                  </td>
+                </tr>
+              </table>
+            </td>
+            <td style="vertical-align:middle">
+              <div style="font-size:11px;font-weight:700;letter-spacing:.15em;color:rgba(255,255,255,0.45);text-transform:uppercase;line-height:1">LEVERAGE</div>
+              <div style="font-size:16px;font-weight:800;color:${BLUE};letter-spacing:.08em;text-transform:uppercase;line-height:1.2">QUANTUM</div>
+            </td>
+            <td style="vertical-align:middle;padding-left:16px">
+              <div style="width:1px;height:32px;background:rgba(255,255,255,0.12)"></div>
+            </td>
+            <td style="vertical-align:middle;padding-left:16px">
+              <span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${accentColor};font-size:10px;font-weight:700;color:#fff;letter-spacing:.06em;text-transform:uppercase">${typeLabel} Report</span>
+            </td>
+          </tr>
+        </table>
+        <!-- Title -->
+        <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em;margin-bottom:4px">Meta Ads Performance</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.5);letter-spacing:.01em">${periodLabel}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px">${AD_ACCOUNT} · Generated ${todayLabel}</div>
+      </td>
+    </tr>
+  </table>
 
-  <!-- SECTION: LAST 30 DAYS -->
-  <div style="background:#fff;padding:24px 36px;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;border-top:1px solid #F1F5F9">
-    ${sectionHeader('📊', `Last 30 Days — ${s30} to ${e30}`)}
-    ${kpiRow([
-      ['Spend', fmtINR(s30m.spend), '#6366F1'],
-      ['Leads', s30m.leads.toLocaleString(), '#F59E0B'],
-      ['CPL', fmtINR(s30m.cpl), s30m.cpl < 3000 ? '#10B981' : '#EF4444'],
-      ['CTR', s30m.ctr.toFixed(2) + '%', s30m.ctr >= 0.8 ? '#10B981' : '#EF4444'],
-      ['Frequency', s30m.freq.toFixed(2) + 'x', s30m.freq > 3 ? '#EF4444' : '#10B981'],
-      ['Campaigns', s30m.camps.length.toString(), '#8B5CF6'],
-    ])}
-    ${campTableHTML(s30m.camps, s30m.avgCTR)}
-  </div>
+  <!-- KPI STRIP -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:none">
+    <tr>
+      <td style="padding:20px 26px 4px">
+        <table cellpadding="0" cellspacing="0" width="100%">
+          <tr>
+            ${kpiCard('Spend', fmtINR(spend), `${camps.length} campaigns`, accentColor)}
+            ${kpiCard('Leads', leads.toLocaleString('en-IN'), `EPS: ${eps}/day`, BLUE)}
+            ${kpiCard('CPL', fmtINR(cpl), cpl > 3000 ? '⚠ Above target' : '✓ On track', cpl > 3000 ? '#EF4444' : '#22C55E')}
+            ${kpiCard('CTR', fmtPct(ctr), ctr >= 1 ? '✓ Healthy' : '⚠ Below 1%', ctr >= 1 ? '#22C55E' : '#F59E0B')}
+            ${kpiCard('Frequency', freq.toFixed(2) + 'x', freq > 3.5 ? '⚠ Fatigue risk' : '✓ OK', freq > 3.5 ? '#EF4444' : '#22C55E')}
+          </tr>
+        </table>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:4px 26px 8px">
+        <table cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding-right:20px">
+              <span style="font-size:11.5px;color:#64748B">Impressions</span>
+              <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${impr.toLocaleString('en-IN')}</span>
+            </td>
+            <td style="padding-right:20px">
+              <span style="font-size:11.5px;color:#64748B">Reach</span>
+              <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${reach.toLocaleString('en-IN')}</span>
+            </td>
+            <td style="padding-right:20px">
+              <span style="font-size:11.5px;color:#64748B">CPM</span>
+              <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${fmtINR(cpm)}</span>
+            </td>
+            <td>
+              <span style="font-size:11.5px;color:#64748B">Clicks</span>
+              <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${clicks.toLocaleString('en-IN')}</span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 
-  <!-- SECTION: MTD -->
-  <div style="background:#fff;padding:24px 36px;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;border-top:2px solid #F1F5F9">
-    ${sectionHeader('📅', `${monthName} MTD — ${sMTD} to ${eMTD}`)}
-    ${kpiRow([
-      ['Spend', fmtINR(sMTDm.spend), '#6366F1'],
-      ['Leads', sMTDm.leads.toLocaleString(), '#F59E0B'],
-      ['CPL', fmtINR(sMTDm.cpl), sMTDm.cpl < 3000 ? '#10B981' : '#EF4444'],
-      ['CTR', sMTDm.ctr.toFixed(2) + '%', sMTDm.ctr >= 0.8 ? '#10B981' : '#EF4444'],
-      ['Frequency', sMTDm.freq.toFixed(2) + 'x', sMTDm.freq > 3 ? '#EF4444' : '#10B981'],
-      ['Campaigns', sMTDm.camps.length.toString(), '#8B5CF6'],
-    ])}
-    ${campTableHTML(sMTDm.camps, sMTDm.avgCTR)}
-  </div>
+  <!-- CAMPAIGN TABLE -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:1px solid #F1F5F9">
+    <tr>
+      <td style="padding:0 26px 20px">
+        ${sectionTitle('📊', 'Campaign Breakdown')}
+        ${campTable(camps, ctr)}
+      </td>
+    </tr>
+  </table>
 
   <!-- AI ANALYSIS -->
-  <div style="background:#fff;padding:24px 36px 32px;border:1px solid #E2E8F0;border-top:none">
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94A3B8;margin-bottom:20px;padding-bottom:8px;border-bottom:2px solid #F1F5F9">🤖 AI Analysis — Powered by Claude Sonnet</div>
-    ${aiHTML}
-  </div>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:1px solid #F1F5F9">
+    <tr>
+      <td style="padding:0 26px 24px">
+        ${sectionTitle('🤖', 'AI Analysis — Claude Sonnet')}
+        ${aiHTML}
+      </td>
+    </tr>
+  </table>
 
   <!-- FOOTER -->
-  <div style="background:#0F172A;border-radius:0 0 16px 16px;padding:16px 36px;display:flex;align-items:center;justify-content:space-between">
-    <div style="color:#fff;font-size:12px;font-weight:600">Leverage Quantum</div>
-    <div style="color:#64748B;font-size:11px">Generated ${todayLabel} · Do not reply</div>
-  </div>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:${NAVY};border-radius:0 0 16px 16px;overflow:hidden">
+    <tr>
+      <td style="padding:16px 32px">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="vertical-align:middle">
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:8px">
+                    <svg width="16" height="16" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="1" y="12" width="4" height="9" rx="1.5" fill="${GREEN}"/>
+                      <rect x="7" y="7" width="4" height="14" rx="1.5" fill="${CYAN}"/>
+                      <rect x="13" y="4" width="4" height="17" rx="1.5" fill="${BLUE}"/>
+                    </svg>
+                  </td>
+                  <td style="vertical-align:middle">
+                    <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.9)">Leverage <span style="color:${BLUE}">Quantum</span></span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+            <td style="text-align:right;vertical-align:middle">
+              <span style="font-size:10.5px;color:rgba(255,255,255,0.3)">Auto-generated · ${todayLabel} · Do not reply</span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 
 </div>
 </body>
@@ -358,9 +407,9 @@ export default async function handler(req, res) {
   const RESEND_KEY = process.env.RESEND_API_KEY
   if (!RESEND_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not configured' })
 
-  const report_type   = req.body?.type || req.query?.type || 'daily'
-  const triggered_by  = req.body?.triggered_by || 'cron'
-  const validTypes    = ['daily', 'weekly', 'monthly']
+  const report_type  = req.body?.type || req.query?.type || 'daily'
+  const triggered_by = req.body?.triggered_by || 'cron'
+  const validTypes   = ['daily', 'weekly', 'monthly']
   if (!validTypes.includes(report_type)) return res.status(400).json({ error: `Invalid type. Use: ${validTypes.join(', ')}` })
 
   let recipients = []
@@ -375,15 +424,12 @@ export default async function handler(req, res) {
     recipients = await getRecipients()
     if (!recipients.length) recipients = ['shivam.sharma@leverageedu.com']
 
-    const html  = await buildReport(token)
-    const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    const now   = new Date()
-    const month = now.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
-
+    const html = await buildReport(token, report_type)
+    const todayLabel = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
     const SUBJECTS = {
-      daily:   `Meta Ads Daily Report — Yesterday · ${today}`,
-      weekly:  `Meta Ads Weekly Report — WoW · ${today}`,
-      monthly: `Meta Ads Report — ${month} MTD + Last 30 Days · ${today}`,
+      daily:   `Meta Ads Daily Report — Yesterday · ${todayLabel}`,
+      weekly:  `Meta Ads Weekly Report — Last 7 Days · ${todayLabel}`,
+      monthly: `Meta Ads Monthly Report — Last 30 Days · ${todayLabel}`,
     }
 
     const sendRes = await fetch('https://api.resend.com/emails', {
