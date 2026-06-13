@@ -71,6 +71,26 @@ function InfoTooltip({ items }) {
   )
 }
 
+
+const FONT_KPI = "'Plus Jakarta Sans','Inter',sans-serif"
+const C_KPI = { navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', amber:'#F59E0B', red:'#EF4444',
+  navyBg:'#E8EFF9', blueBg:'#E3F5FD', cyanBg:'#E4F8F9', greenBg:'#E9F8EF', amberBg:'#FEF9C3', redBg:'#FEF2F2',
+  border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8' }
+
+const KPICard = ({ label, value, sub, accent=C_KPI.navy, accentBg=C_KPI.navyBg, delta, icon }) => (
+  <div style={{ background:'#fff', border:`0.5px solid ${C_KPI.border}`, borderRadius:14, padding:'18px 20px', borderTop:`3px solid ${accent}`, boxShadow:'0 1px 6px rgba(15,23,42,0.06)', display:'flex', flexDirection:'column', gap:8, fontFamily:FONT_KPI }}>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+      <div style={{ fontSize:9.5, fontWeight:700, color:C_KPI.muted, letterSpacing:'0.09em', textTransform:'uppercase' }}>{label}</div>
+      {icon && <div style={{ width:28, height:28, borderRadius:8, background:accentBg, display:'flex', alignItems:'center', justifyContent:'center', color:accent, flexShrink:0 }}>{icon}</div>}
+    </div>
+    <div style={{ fontSize:28, fontWeight:800, color:C_KPI.text, letterSpacing:'-1px', lineHeight:1 }}>{value}</div>
+    <div style={{ display:'flex', alignItems:'center', gap:6, minHeight:18 }}>
+      {sub && <div style={{ fontSize:11.5, color:C_KPI.muted }}>{sub}</div>}
+      {delta != null && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 7px', borderRadius:20, background:delta>=0?C_KPI.greenBg:'#FEF2F2', color:delta>=0?'#059669':'#DC2626', marginLeft:'auto' }}>{delta>=0?'▲':'▼'}{Math.abs(delta).toFixed(1)}%</span>}
+    </div>
+  </div>
+)
+
 export default function ChannelMixDashboard(){
   const [pageLoading, setPageLoading] = React.useState(true)
   React.useEffect(() => { const t = setTimeout(() => setPageLoading(false), 600); return () => clearTimeout(t) }, [])
@@ -158,20 +178,15 @@ export default function ChannelMixDashboard(){
         )}
 
         {/* KPI row */}
-        <div className={styles.kpiRow}>
-          {[
-            {l:'Total OPPs',  v:fn(totals.opps),       s:'All sources',   c:'#1C9FD4'},
-            {l:'Total Spend', v:fmtR(totals.spend),     s:'Paid channels', c:'#10B981'},
-            {l:'Total Revenue',v:fmtR(totals.total_rev),s:'AC + VAS',      c:'#F59E0B'},
-            {l:'Active Sources',v:srcBreakdown.filter(r=>r.opps>0).length+'',s:'Channels tracked',c:'#1C9FD4'},
-          ].map(k=>(
-            <div key={k.l} className={styles.kpi}>
-              <div className={styles.kpiVal}>{k.v}</div>
-              <div className={styles.kpiLbl}>{k.l}</div>
-              <div className={styles.kpiSub}>{k.s}</div>
-              <div className={styles.kpiBar} style={{background:k.c+'22',borderTop:`2px solid ${k.c}`}}/>
-            </div>
-          ))}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:20 }}>
+          <KPICard label="Total OPPs"      value={fn(totals.opps)}       sub="All sources"     accent={C_KPI.navy}  accentBg={C_KPI.navyBg}
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>}/>
+          <KPICard label="Total Spend"     value={fmtR(totals.spend)}     sub="Paid channels"   accent={C_KPI.blue}  accentBg={C_KPI.blueBg}
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>}/>
+          <KPICard label="Total Revenue"   value={fmtR(totals.total_rev)} sub="AC + VAS collected" accent={C_KPI.green} accentBg={C_KPI.greenBg}
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}/>
+          <KPICard label="Active Sources"  value={String(srcBreakdown.filter(r=>r.opps>0).length)} sub="Channels tracked" accent={C_KPI.cyan} accentBg={C_KPI.cyanBg}
+            icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>}/>
         </div>
 
         {/* Charts Row 1 */}
