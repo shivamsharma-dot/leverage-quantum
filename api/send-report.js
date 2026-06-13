@@ -44,6 +44,23 @@ async function getRecipients() {
   } catch { return [] }
 }
 
+// ── Report logger ────────────────────────────────────────────────────────────
+
+async function logReport({ report_type, recipients, status, error = null, triggered_by = 'cron' }) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/report_logs`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify({ report_type, recipients, status, error, triggered_by, sent_at: new Date().toISOString() })
+    })
+  } catch {}
+}
+
 // ── Meta data fetcher for a given date range ─────────────────────────────────
 
 async function fetchMeta(token, since, until) {
@@ -335,22 +352,37 @@ Output only the HTML. No preamble, no code fences.`
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
-  
+
   const RESEND_KEY = process.env.RESEND_API_KEY
-  if (!RESEND_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not configured in Vercel' })
-  
+  if (!RESEND_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not configured' })
+
+  const report_type   = req.body?.type || req.query?.type || 'daily'
+  const triggered_by  = req.body?.triggered_by || 'cron'
+  const validTypes    = ['daily', 'weekly', 'monthly']
+  if (!validTypes.includes(report_type)) return res.status(400).json({ error: `Invalid type. Use: ${validTypes.join(', ')}` })
+
+  let recipients = []
   try {
     let token = req.body?.token || null
     if (!token) token = await getStoredToken()
-    if (!token) return res.status(400).json({ error: 'No Meta token. Connect Meta Ads first.' })
+    if (!token) {
+      await logReport({ report_type, recipients: [], status: 'failed', error: 'No Meta token', triggered_by })
+      return res.status(400).json({ error: 'No Meta token. Connect Meta Ads first.' })
+    }
 
-    let recipients = await getRecipients()
+    recipients = await getRecipients()
     if (!recipients.length) recipients = ['shivam.sharma@leverageedu.com']
 
-    const html    = await buildReport(token)
-    const today   = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    const now     = new Date()
-    const month   = now.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+    const html  = await buildReport(token)
+    const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    const now   = new Date()
+    const month = now.toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+
+    const SUBJECTS = {
+      daily:   `Meta Ads Daily Report — Yesterday · ${today}`,
+      weekly:  `Meta Ads Weekly Report — WoW · ${today}`,
+      monthly: `Meta Ads Report — ${month} MTD + Last 30 Days · ${today}`,
+    }
 
     const sendRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -358,15 +390,19 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         from: process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <onboarding@resend.dev>',
         to: recipients,
-        subject: `Meta Ads Report — ${month} MTD + Last 30 Days · ${today}`,
+        subject: SUBJECTS[report_type],
         html,
       })
     })
     const sendData = await sendRes.json()
     if (!sendRes.ok) throw new Error(sendData.message || JSON.stringify(sendData))
-    return res.status(200).json({ success: true, recipients, id: sendData.id })
+
+    await logReport({ report_type, recipients, status: 'sent', triggered_by })
+    return res.status(200).json({ ok: true, success: true, recipients, id: sendData.id, report_type })
+
   } catch (e) {
     console.error('[send-report]', e.message)
+    await logReport({ report_type, recipients, status: 'failed', error: e.message, triggered_by })
     return res.status(500).json({ error: e.message })
   }
 }
