@@ -4,6 +4,16 @@ import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole
 import { getActivityLog } from '../components/ActivityLogger.js'
 import styles from './SettingsPage.module.css'
 
+
+const getRoleMeta = (role) => {
+  const map = {
+    admin:   { label: 'Admin',   color: '#1F3C84', bg: '#E8EFF9' },
+    viewer:  { label: 'Viewer',  color: '#1C9FD4', bg: '#E3F5FD' },
+    default: { label: role || 'Viewer', color: '#94A3B8', bg: '#F3F4F6' },
+  }
+  return map[role] || map.default
+}
+
 export default function SettingsPage() {
   const { user } = useAuth()
   const userIsAdmin = user?.role === 'admin'
