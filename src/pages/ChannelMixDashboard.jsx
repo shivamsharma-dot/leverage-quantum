@@ -86,7 +86,7 @@ const KPICard = ({ label, value, sub, accent=C_KPI.navy, accentBg=C_KPI.navyBg, 
     <div style={{ fontSize:28, fontWeight:800, color:C_KPI.text, letterSpacing:'-1px', lineHeight:1 }}>{value}</div>
     <div style={{ display:'flex', alignItems:'center', gap:6, minHeight:18 }}>
       {sub && <div style={{ fontSize:11.5, color:C_KPI.muted }}>{sub}</div>}
-      {delta != null && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 7px', borderRadius:20, background:delta>=0?C_KPI.greenBg:'#FEF2F2', color:delta>=0?'#059669':'#DC2626', marginLeft:'auto' }}>{delta>=0?'▲':'▼'}{Math.abs(delta).toFixed(1)}%</span>}
+      {delta != null && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 7px', borderRadius:20, background:delta>=0?C_KPI.greenBg:'#FEF2F2', color:delta>=0?'#4CAE6F':'#DC2626', marginLeft:'auto' }}>{delta>=0?'▲':'▼'}{Math.abs(delta).toFixed(1)}%</span>}
     </div>
   </div>
 )
