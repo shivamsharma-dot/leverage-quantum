@@ -135,7 +135,7 @@ const KPICard = ({ label, value, sub, accent=C.navy, accentBg=C.navyBg, delta, i
     </div>
     <div style={{ display:'flex', alignItems:'center', gap:6, minHeight:18 }}>
       {sub && <div style={{ fontSize:11.5, color:'var(--text3)', fontFamily:FONT }}>{sub}</div>}
-      {delta != null && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 7px', borderRadius:20, background:delta>=0?C.greenBg:'#FEF2F2', color:delta>=0?'#059669':'#DC2626', fontFamily:FONT, marginLeft:'auto' }}>{delta>=0?'▲':'▼'}{Math.abs(delta).toFixed(1)}%</span>}
+      {delta != null && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 7px', borderRadius:20, background:delta>=0?C.greenBg:'#FEF2F2', color:delta>=0?'#4CAE6F':'#DC2626', fontFamily:FONT, marginLeft:'auto' }}>{delta>=0?'▲':'▼'}{Math.abs(delta).toFixed(1)}%</span>}
     </div>
   </div>
 )
@@ -226,7 +226,7 @@ const Dropdown = ({ options, value, onChange, label, minWidth=130 }) => {
 // Status pill
 const StatusPill = ({ status }) => {
   const cfg = {
-    'Read':      { bg:'#E9F8EF', color:'#059669' },
+    'Read':      { bg:'#E9F8EF', color:'#4CAE6F' },
     'Delivered': { bg:C.blueBg,  color:C.blue    },
     'Sent':      { bg:C.navyBg,  color:C.navy    },
     'Replied':   { bg:C.cyanBg,  color:C.cyan    },
