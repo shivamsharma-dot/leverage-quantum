@@ -76,6 +76,26 @@ function InfoTooltip({ items }) {
   )
 }
 
+
+const C_KPI = { navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', amber:'#F59E0B',
+  navyBg:'#E8EFF9', blueBg:'#E3F5FD', cyanBg:'#E4F8F9', greenBg:'#E9F8EF', amberBg:'#FEF9C3',
+  border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8' }
+const KPICard = ({ label, value, sub, accent=C_KPI.navy, accentBg=C_KPI.navyBg, delta, icon }) => (
+  <div style={{ background:'#fff', border:`0.5px solid ${C_KPI.border}`, borderRadius:14, padding:'18px 20px', borderTop:`3px solid ${accent}`, boxShadow:'0 1px 6px rgba(15,23,42,0.06)', display:'flex', flexDirection:'column', gap:8, transition:'transform .2s,box-shadow .2s' }}
+    onMouseOver={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 8px 20px rgba(15,23,42,0.09)'}}
+    onMouseOut={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='0 1px 6px rgba(15,23,42,0.06)'}}>
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+      <div style={{ fontSize:9.5, fontWeight:700, color:C_KPI.muted, letterSpacing:'0.09em', textTransform:'uppercase', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>{label}</div>
+      {icon && <div style={{ width:28, height:28, borderRadius:8, background:accentBg, display:'flex', alignItems:'center', justifyContent:'center', color:accent, flexShrink:0 }}>{icon}</div>}
+    </div>
+    <div style={{ fontSize:28, fontWeight:800, color:C_KPI.text, letterSpacing:'-1px', lineHeight:1, fontFamily:"'Plus Jakarta Sans',sans-serif" }}>{value}</div>
+    <div style={{ display:'flex', alignItems:'center', gap:6, minHeight:18 }}>
+      {sub && <div style={{ fontSize:11.5, color:C_KPI.muted, fontFamily:"'Plus Jakarta Sans',sans-serif" }}>{sub}</div>}
+      {delta != null && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 7px', borderRadius:20, background:delta>=0?C_KPI.greenBg:"#FEF2F2", color:delta>=0?"#059669":"#DC2626", marginLeft:"auto" }}>{delta>=0?"▲":"▼"}{Math.abs(delta).toFixed(1)}%</span>}
+    </div>
+  </div>
+)
+
 export default function ROASDashboard(){
   const [pageLoading, setPageLoading] = React.useState(true)
   React.useEffect(() => { const t = setTimeout(() => setPageLoading(false), 600); return () => clearTimeout(t) }, [])
@@ -174,20 +194,15 @@ export default function ROASDashboard(){
 
         {/* SCROLLABLE CONTENT */}
         <div className={styles.content}>
-        <div className={styles.kpiGrid}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:12, marginBottom:20 }}>
           {kpis.map(k=>{
             const curr=k.raw!=null?k.raw:parseFloat(String(k.v||k.value).replace(/[₹,LKCrx ]/g,''))
             const prevVal=k.prevRaw!=null?k.prevRaw:k.prev
-            const delta=prevVal!=null?pctDiff(curr,prevVal):null
+            const rawDelta=prevVal!=null?pctDiff(curr,prevVal):null
+            const deltaNum=rawDelta!=null?(rawDelta.up?parseFloat(rawDelta.val):-parseFloat(rawDelta.val)):null
             return(
-              <div key={k.label} className={styles.kpiCard} style={{borderLeft:`3px solid ${k.color}`}}>
-                <div className={styles.kpiLabel}>{k.label}</div>
-                <div className={styles.kpiValue}>{k.value}</div>
-                <div className={styles.kpiBottom}>
-                  <span className={styles.kpiSub}>{k.sub}</span>
-                  {delta&&<span className={delta.up?styles.up:styles.down}>{delta.up?'▲':'▼'}{delta.val}%</span>}
-                </div>
-              </div>
+              <KPICard key={k.label} label={k.label} value={k.value} sub={k.sub}
+                accent={k.color} accentBg={k.color+'18'} delta={deltaNum}/>
             )
           })}
         </div>
