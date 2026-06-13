@@ -96,6 +96,23 @@ const KPICard = ({ label, value, sub, accent=C_KPI.navy, accentBg=C_KPI.navyBg, 
   </div>
 )
 
+
+const BrandTooltip = ({ active, payload, label, fmt }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, padding:'10px 14px', fontFamily:"'Plus Jakarta Sans','Inter',sans-serif", boxShadow:'0 8px 32px rgba(15,23,42,0.13)', minWidth:140 }}>
+      {label && <div style={{ fontSize:11, fontWeight:700, color:'#0F172A', marginBottom:7, paddingBottom:6, borderBottom:'0.5px solid #F1F5F9' }}>{label}</div>}
+      {payload.map((p, i) => (
+        <div key={i} style={{ display:'flex', alignItems:'center', gap:7, marginTop:i>0?4:0 }}>
+          <div style={{ width:8, height:8, borderRadius:'50%', background:p.color||p.fill||'#1C9FD4', flexShrink:0 }}/>
+          <span style={{ fontSize:11.5, color:'#475569', flex:1 }}>{p.name||p.dataKey}</span>
+          <span style={{ fontSize:12, fontWeight:700, color:'#0F172A' }}>{fmt ? fmt(p.value) : (typeof p.value==='number'&&p.value>999?p.value.toLocaleString('en-IN'):p.value)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function ROASDashboard(){
   const [pageLoading, setPageLoading] = React.useState(true)
   React.useEffect(() => { const t = setTimeout(() => setPageLoading(false), 600); return () => clearTimeout(t) }, [])
@@ -224,17 +241,17 @@ export default function ROASDashboard(){
               <span className={styles.chartSub}>All 12 months · 2025</span>
             </div>
             <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={monthlyChart} margin={{top:8,right:8,left:0,bottom:0}}>
+              <AreaChart data={monthlyChart} margin={{top:8,right:8,left:0,bottom:0}}><defs><linearGradient id="gradA" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#1C9FD4" stopOpacity={0.18}/><stop offset="95%" stopColor="#1C9FD4" stopOpacity={0}/></linearGradient><linearGradient id="gradB" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#4CAE6F" stopOpacity={0.18}/><stop offset="95%" stopColor="#4CAE6F" stopOpacity={0}/></linearGradient></defs>
                 <defs>
                   <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor="#1C9FD4" stopOpacity={0.15}/>
                     <stop offset="95%" stopColor="#1C9FD4" stopOpacity={0.01}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false}/>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                 <XAxis dataKey="month_short" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmt(v)} width={65}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<BrandTooltip/>}/>
                 <Area type="monotone" dataKey="spend" name="Spend" stroke="#1C9FD4" strokeWidth={2.5} fill="url(#spendGrad)" dot={false} activeDot={{r:5,fill:'#1C9FD4'}}/>
               </AreaChart>
             </ResponsiveContainer>
@@ -248,10 +265,10 @@ export default function ROASDashboard(){
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={monthlyChart.filter(m=>m.total_rev>0||m.proj_rev>0)} margin={{top:8,right:8,left:0,bottom:0}} barCategoryGap="25%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false}/>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                 <XAxis dataKey="month_short" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmt(v)} width={70}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<BrandTooltip/>}/>
                 <Legend wrapperStyle={{fontSize:11,paddingTop:8}}/>
                 <Bar dataKey="total_rev" name="Actual Rev"   fill="#10B981" radius={[5,5,0,0]} fillOpacity={0.9}/>
                 <Bar dataKey="proj_rev"  name="Proj Rev"     fill="#1C9FD4" radius={[5,5,0,0]} fillOpacity={0.6}/>
@@ -267,10 +284,10 @@ export default function ROASDashboard(){
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={monthlyChart.filter(m=>m.roas>0||m.proj_roas>0)} margin={{top:8,right:16,left:0,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false}/>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                 <XAxis dataKey="month_short" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>v+'x'} width={42}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<BrandTooltip/>}/>
                 <Legend wrapperStyle={{fontSize:11,paddingTop:8}}/>
                 <Line type="monotone" dataKey="roas"      name="ROAS"      stroke="#10B981" strokeWidth={2.5} dot={{r:5,strokeWidth:2,fill:'#fff',stroke:'#10B981'}} activeDot={{r:6}}/>
                 <Line type="monotone" dataKey="proj_roas" name="Proj ROAS" stroke="#1C9FD4" strokeWidth={2} strokeDasharray="6 3" dot={{r:4,strokeWidth:2,fill:'#fff',stroke:'#1C9FD4'}} activeDot={{r:5}}/>
@@ -290,7 +307,7 @@ export default function ROASDashboard(){
                   <Pie data={pieData} cx="50%" cy="50%" innerRadius={52} outerRadius={78} paddingAngle={4} dataKey="value" strokeWidth={0}>
                     {pieData.map((e,i)=><Cell key={i} fill={CH_COLORS[e.name]||'#9CA3AF'}/>)}
                   </Pie>
-                  <Tooltip content={<CustomTooltip/>}/>
+                  <Tooltip content={<BrandTooltip/>}/>
                 </PieChart>
               </ResponsiveContainer>
               <div style={{flex:1,display:'flex',flexDirection:'column',gap:10}}>
