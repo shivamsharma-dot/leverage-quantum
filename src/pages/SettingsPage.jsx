@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Sidebar, { PAGE_LIST } from '../components/Sidebar'
 import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole } from '../hooks/useAuth'
 import { getActivityLog } from '../components/ActivityLogger.js'
@@ -19,8 +19,8 @@ export default function SettingsPage() {
   const userIsAdmin = user?.role === 'admin'
   const [activeTab, setActiveTab] = useState('chat')
 
-  const _actRef = React.useRef(false)
-  React.useEffect(() => {
+  const _actRef = useRef(false)
+  useEffect(() => {
     if (activeTab === 'activity' && userIsAdmin && !_actRef.current) { _actRef.current=true; loadActivity() }
   }, [activeTab, userIsAdmin])
 
