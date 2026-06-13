@@ -152,6 +152,28 @@ export default function ChatPage() {
   const firstName = (user?.name||'there').split(' ')[0]
 
   const [convs, setConvs]         = useState(()=>{try{return JSON.parse(localStorage.getItem(CV_KEY)||'[]')}catch{return[]}})
+
+  // Load conversations from Supabase on mount and merge
+  useEffect(()=>{
+    sbGet('chat_conversations',`?user_id=eq.${uid}&order=updated_at.desc&limit=60`)
+      .then(d=>{
+        if(!Array.isArray(d)||!d.length) return
+        setConvs(prev=>{
+          const ids = new Set(prev.map(c=>c.id))
+          const merged = [...prev]
+          d.forEach(c=>{ if(!ids.has(c.id)) merged.push(c) })
+          merged.sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at))
+          // Also load messages from SB for convs missing in localStorage
+          d.forEach(async c=>{
+            if(!localStorage.getItem(`ch_${c.id}`)){
+              const msgs = await sbGet('chat_messages',`?conv_id=eq.${c.id}&order=updated_at.desc&limit=1`)
+              if(msgs?.[0]?.messages){ try{localStorage.setItem(`ch_${c.id}`,msgs[0].messages)}catch{} }
+            }
+          })
+          return merged.slice(0,60)
+        })
+      }).catch(()=>{})
+  },[uid])
   const [activeId, setActiveId]   = useState(null)
   const [messages, setMessages]   = useState([])
   const [input, setInput]         = useState('')
@@ -194,16 +216,31 @@ export default function ChatPage() {
   useEffect(()=>{ const t=setTimeout(()=>setShowWelcomeAnim(false),2000); return ()=>clearTimeout(t) },[activeId])
 
   /* conversation helpers */
-  const saveMessages = useCallback((id,msgs)=>{
+  const saveMessages = useCallback(async(id,msgs)=>{
+    const title = msgs.find(m=>m.role==='user')?.content?.slice(0,45)||'New chat'
+    const now = new Date().toISOString()
+    // Keep localStorage as fast cache
     try{localStorage.setItem(`ch_${id}`,JSON.stringify(msgs.slice(-120)))}catch{}
-    setConvs(cs=>cs.map(c=>c.id===id?{...c,updated_at:new Date().toISOString(),message_count:msgs.length,title:msgs.find(m=>m.role==='user')?.content?.slice(0,45)||'New chat'}:c))
-  },[])
+    setConvs(cs=>cs.map(c=>c.id===id?{...c,updated_at:now,message_count:msgs.length,title}:c))
+    // Persist to Supabase
+    try {
+      await sbPost('chat_messages', { conv_id:id, user_id:uid, messages:JSON.stringify(msgs.slice(-120)), updated_at:now })
+      await fetch(`${SB_URL}/rest/v1/chat_conversations?id=eq.${id}`, {
+        method:'PATCH', headers:{...SBH,Prefer:'return=minimal'},
+        body:JSON.stringify({title,updated_at:now,message_count:msgs.length})
+      })
+    } catch(e){ console.warn('SB save failed',e) }
+  },[uid])
 
-  const newConv = useCallback(()=>{
+  const newConv = useCallback(async()=>{
     const id='cv_'+Date.now()
-    setConvs(cs=>[{id,title:'New chat',created_at:new Date().toISOString(),updated_at:new Date().toISOString(),message_count:0},...cs])
+    const now = new Date().toISOString()
+    const conv = {id,title:'New chat',created_at:now,updated_at:now,message_count:0}
+    setConvs(cs=>[conv,...cs])
     setActiveId(id); setMessages([]); setShowWelcomeAnim(true); setRail(null)
-  },[])
+    // Create in Supabase
+    try { await sbPost('chat_conversations',{...conv,user_id:uid}) } catch(e){ console.warn('SB conv create failed',e) }
+  },[uid])
 
   const selectConv = useCallback(c=>{
     setActiveId(c.id)
@@ -211,10 +248,14 @@ export default function ChatPage() {
     setRail(null); setShowWelcomeAnim(false)
   },[])
 
-  const deleteConv = useCallback(id=>{
+  const deleteConv = useCallback(async id=>{
     setConvs(cs=>cs.filter(c=>c.id!==id)); localStorage.removeItem(`ch_${id}`)
     if(activeId===id){setActiveId(null);setMessages([])}
-  },[activeId])
+    try {
+      await sbDel('chat_messages',`?conv_id=eq.${id}`)
+      await sbDel('chat_conversations',`?id=eq.${id}`)
+    } catch(e){ console.warn('SB delete failed',e) }
+  },[activeId, uid])
 
   /* send */
   const send = useCallback(async(text)=>{
@@ -438,7 +479,7 @@ export default function ChatPage() {
         </div>
 
         {/* Icon rail */}
-        <div style={{width:48,background:railBg,borderRight:`1px solid ${borderColor}`,display:'flex',flexDirection:'column',alignItems:'center',padding:'10px 0',gap:2,flexShrink:0}}>
+        <div style={{width:52,background:railBg,borderRight:`1px solid ${borderColor}`,display:'flex',flexDirection:'column',alignItems:'center',padding:'10px 0',gap:2,flexShrink:0}}>
           {[
             {id:'history', icon:'history', label:'History'},
             {id:'prompts', icon:'prompts', label:'Prompts'},
@@ -446,8 +487,9 @@ export default function ChatPage() {
           ].map(r=>{
             const on=rail===r.id
             return <button key={r.id} onClick={()=>toggleRail(r.id)} title={r.label} className="rb"
-              style={{width:36,height:36,display:'flex',alignItems:'center',justifyContent:'center',border:'none',borderRadius:9,cursor:'pointer',background:on?'#E3F5FD':'transparent',transition:'background .15s',position:'relative'}}>
-              <Ico n={r.icon} s={16} c={on?BLUE:'#9CA3AF'}/>
+              style={{width:44,height:44,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,border:'none',borderRadius:10,cursor:'pointer',background:on?'#E3F5FD':'transparent',transition:'background .15s',position:'relative',padding:'4px 2px'}}>
+              <Ico n={r.icon} s={15} c={on?BLUE:'#9CA3AF'}/>
+              <span style={{fontSize:8.5,fontWeight:on?700:500,color:on?BLUE:'#9CA3AF',letterSpacing:'0.03em',fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1}}>{r.label}</span>
               {on&&<div style={{position:'absolute',right:-1,top:'50%',transform:'translateY(-50%)',width:2,height:20,background:BLUE,borderRadius:2}}/>}
             </button>
           })}
