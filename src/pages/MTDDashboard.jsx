@@ -93,7 +93,7 @@ const KPI=({label,value,sub,accent,prev,cur,invert,prorate})=>{
     <div style={{display:'flex',alignItems:'center',gap:6,marginTop:5}}>
       {sub&&<div style={{fontSize:11,color:'#94A3B8'}}>{sub}</div>}
       {d!=null&&<span style={{fontSize:10,fontWeight:700,padding:'1px 6px',borderRadius:10,
-        background:good?'#E9F8EF':'#FEF2F2',color:good?'#059669':'#DC2626'}}>
+        background:good?'#E9F8EF':'#FEF2F2',color:good?'#4CAE6F':'#DC2626'}}>
         {d>=0?'\u25B2':'\u25BC'}{Math.abs(d).toFixed(1)}%
       </span>}
     </div>
@@ -208,9 +208,9 @@ export default function MTDDashboard(){
   const avgCPL=useMemo(()=>{ const a=srcs.filter(s=>s.cpl>0); return a.length?Math.round(a.reduce((t,s)=>t+s.cpl,0)/a.length):0 },[srcs])
 
   const fmt=new Intl.DateTimeFormat('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
-  const cplColor=v=>v>500?'#DC2626':v>250?'#F59E0B':'#059669'
-  const roasColor=v=>v>=3?'#059669':v>=1.5?'#F59E0B':'#DC2626'
-  const qlColor=v=>v>15?'#059669':v>5?'#F59E0B':'#DC2626'
+  const cplColor=v=>v>500?'#DC2626':v>250?'#F59E0B':'#4CAE6F'
+  const roasColor=v=>v>=3?'#4CAE6F':v>=1.5?'#F59E0B':'#DC2626'
+  const qlColor=v=>v>15?'#4CAE6F':v>5?'#F59E0B':'#DC2626'
   const maxSpend=srcs.length?Math.max(...srcs.map(s=>s.spend)):1
 
   if(loading)return <div style={{display:'flex',height:'100vh',background:'#F4F6F9'}}><Sidebar/><div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:14,fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>Loading from Google Sheets...</div></div>
@@ -281,7 +281,7 @@ export default function MTDDashboard(){
               <KPI label='Total Spend' value={fmtINR(total.spend)} accent='#1F3C84' sub={prevTotal?'prev '+fmtINR(prevTotal.spend):undefined} cur={total.spend} prev={prevTotal?.spend} invert/>
               <KPI label='Total Leads' value={fmtNum(total.leads)} accent='#1C9FD4' sub={prevTotal?'prev '+fmtNum(prevTotal.leads):undefined} cur={total.leads} prev={prevTotal?.leads} prorate={prorate}/>
               <KPI label='CPL' value={fmtINR(total.cpl)} accent='#F59E0B' sub='Cost per lead' cur={total.cpl} prev={prevTotal?.cpl} invert/>
-              <KPI label='Total Revenue' value={fmtINR(total.totalRev)} accent='#059669' sub={prevTotal?'prev '+fmtINR(prevTotal.totalRev):undefined} cur={total.totalRev} prev={prevTotal?.totalRev} prorate={prorate}/>
+              <KPI label='Total Revenue' value={fmtINR(total.totalRev)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtINR(prevTotal.totalRev):undefined} cur={total.totalRev} prev={prevTotal?.totalRev} prorate={prorate}/>
               <KPI label='ROAS' value={total.roas>0?total.roas.toFixed(2)+'x':'\u2014'} accent={roasColor(total.roas)} cur={total.roas} prev={prevTotal?.roas}/>
             </div>
 
@@ -393,7 +393,7 @@ export default function MTDDashboard(){
                     {label:'Total Leads (OPPs)',value:total.leads,color:'#1F3C84'},
                     {label:'Futwork Queued',value:total.fwQ,color:'#1C9FD4'},
                     {label:'FW Qualified',value:total.fwQual,color:'#29B9C3'},
-                    {label:'Applications (STUs)',value:total.apps,color:'#059669'},
+                    {label:'Applications (STUs)',value:total.apps,color:'#4CAE6F'},
                   ].map((step,i,arr)=>{
                     const pct=arr[0].value>0?(step.value/arr[0].value*100):0
                     const prev=i>0?arr[i-1].value:step.value
@@ -467,7 +467,7 @@ export default function MTDDashboard(){
                         <td style={{padding:'9px 10px',textAlign:'right',color:'#374151',fontSize:12.5}}>{fmtNum(s.sbQual)}</td>
                         <td style={{padding:'9px 10px',textAlign:'right',color:'#374151',fontSize:12.5}}>{fmtNum(s.apps)}</td>
                         <td style={{padding:'9px 10px',textAlign:'right',color:'#374151',fontSize:12.5,whiteSpace:'nowrap'}}>{fmtINR(s.cpql)}</td>
-                        <td style={{padding:'9px 10px',textAlign:'right',fontWeight:700,color:'#059669',fontSize:12.5,whiteSpace:'nowrap'}}>{fmtINR(s.totalRev)}</td>
+                        <td style={{padding:'9px 10px',textAlign:'right',fontWeight:700,color:'#4CAE6F',fontSize:12.5,whiteSpace:'nowrap'}}>{fmtINR(s.totalRev)}</td>
                         <td style={{padding:'9px 10px',textAlign:'right',fontWeight:700,color:roasColor(s.roas),fontSize:12.5}}>{s.roas>0?s.roas.toFixed(2)+'x':'—'}</td>
                       </tr>
                     })}
