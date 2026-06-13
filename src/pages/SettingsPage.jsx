@@ -88,6 +88,17 @@ export default function SettingsPage() {
     members: accessList.filter(u => u.role !== 'admin').length,
     reports: accessList.filter(u => u.receive_reports).length,
   }
+  const parsePermissions = (role) => {
+    if (!role || role === 'admin' || role === 'viewer') return DASHBOARDS.map(d => d.id)
+    if (role.startsWith('viewer:')) return role.replace('viewer:', '').split(',').filter(Boolean)
+    return DASHBOARDS.map(d => d.id)
+  }
+  const buildRoleString = (ids, isAdmin, isViewer) => {
+    if (isAdmin) return 'admin'
+    if (isViewer && ids.length === DASHBOARDS.length) return 'viewer'
+    return 'viewer:' + ids.join(',')
+  }
+
   const accessLabel = (role) => {
     if (role === 'admin' || role === 'viewer') return 'All dashboards'
     if (role === 'roas_only') return 'ROAS only'
