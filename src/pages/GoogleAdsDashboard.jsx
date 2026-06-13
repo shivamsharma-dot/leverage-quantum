@@ -12,13 +12,13 @@ const pct=n=>n==null?'—':(n*100).toFixed(2)+'%'
 const fmtCpc=n=>n==null?'—':'\u20B9'+n.toFixed(2)
 
 const StatusBadge=({s})=>{
-  const map={ENABLED:{bg:'#E9F8EF',color:'#059669',dot:'#059669',label:'Active'},PAUSED:{bg:'#FEF9C3',color:'#D97706',dot:'#D97706',label:'Paused'},REMOVED:{bg:'#FEF2F2',color:'#DC2626',dot:'#DC2626',label:'Removed'}}
+  const map={ENABLED:{bg:'#E9F8EF',color:'#4CAE6F',dot:'#4CAE6F',label:'Active'},PAUSED:{bg:'#FEF9C3',color:'#D97706',dot:'#D97706',label:'Paused'},REMOVED:{bg:'#FEF2F2',color:'#DC2626',dot:'#DC2626',label:'Removed'}}
   const v=map[s]||{bg:'#F3F4F6',color:'#6B7280',dot:'#9CA3AF',label:s||'Unknown'}
   return <span style={{background:v.bg,color:v.color,fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:10,display:'inline-flex',alignItems:'center',gap:4}}><span style={{width:6,height:6,borderRadius:'50%',background:v.dot,display:'inline-block'}}/>{v.label}</span>
 }
 
 const TypeTag=({t})=>{
-  const map={SEARCH:{bg:'#E3F5FD',color:'#1C9FD4',label:'Search'},DISPLAY:{bg:'#E9F8EF',color:'#059669',label:'Display'},SHOPPING:{bg:'#FEF9C3',color:'#D97706',label:'Shopping'},VIDEO:{bg:'#FEF2F2',color:'#DC2626',label:'Video'},PERFORMANCE_MAX:{bg:'#F5F3FF',color:'#7C3AED',label:'PMax'}}
+  const map={SEARCH:{bg:'#E3F5FD',color:'#1C9FD4',label:'Search'},DISPLAY:{bg:'#E9F8EF',color:'#4CAE6F',label:'Display'},SHOPPING:{bg:'#FEF9C3',color:'#D97706',label:'Shopping'},VIDEO:{bg:'#FEF2F2',color:'#DC2626',label:'Video'},PERFORMANCE_MAX:{bg:'#F5F3FF',color:'#7C3AED',label:'PMax'}}
   const v=map[t]||{bg:'#F3F4F6',color:'#6B7280',label:t||'Other'}
   return <span style={{background:v.bg,color:v.color,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8}}>{v.label}</span>
 }
@@ -117,7 +117,7 @@ function CampaignsTab({data,loading}){
                 <td style={{padding:'9px 12px',textAlign:'right',color:'#374151',fontSize:12.5,whiteSpace:'nowrap'}}>{fmtCpc(c.avgCpc)}</td>
                 <td style={{padding:'9px 12px',textAlign:'right',color:'#7C3AED',fontWeight:600,fontSize:12.5}}>{c.conversions?.toFixed(1)||'—'}</td>
                 <td style={{padding:'9px 12px',textAlign:'right',color:'#374151',fontSize:12.5,whiteSpace:'nowrap'}}>{fmt(c.costPerConv)}</td>
-                <td style={{padding:'9px 12px',textAlign:'right',fontSize:12.5,color:c.impressionShare>0.8?'#059669':c.impressionShare>0.5?'#D97706':'#DC2626'}}>{pct(c.impressionShare)}</td>
+                <td style={{padding:'9px 12px',textAlign:'right',fontSize:12.5,color:c.impressionShare>0.8?'#4CAE6F':c.impressionShare>0.5?'#D97706':'#DC2626'}}>{pct(c.impressionShare)}</td>
               </tr>
               {exp===c.id&&<tr style={{borderBottom:'0.5px solid #F3F4F6',background:'#F8FAFF'}}><td colSpan={11} style={{padding:'12px 24px'}}>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,fontSize:12}}>
@@ -145,7 +145,7 @@ function KeywordsTab({data,loading}){
   const filtered=keywords.filter(k=>!search||k.text.toLowerCase().includes(search.toLowerCase()))
   const sorted=sort(filtered)
   const avgQS=keywords.filter(k=>k.qualityScore>0).reduce((s,k,_,a)=>s+k.qualityScore/a.filter(x=>x.qualityScore>0).length,0)
-  const qsColor=q=>q>=7?'#059669':q>=5?'#D97706':'#DC2626'
+  const qsColor=q=>q>=7?'#4CAE6F':q>=5?'#D97706':'#DC2626'
   const matchColor=m=>({EXACT:'#1F3C84',PHRASE:'#1C9FD4',BROAD:'#6B7280'}[m]||'#9CA3AF')
   return <>
     <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:11,marginBottom:16}}>
