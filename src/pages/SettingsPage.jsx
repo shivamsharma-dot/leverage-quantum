@@ -296,7 +296,7 @@ export default function SettingsPage() {
               {/* table */}
               <div className={styles.tableCard}>
                 <div className={styles.tableHead}>
-                  <span>User</span><span>Role</span><span>Access</span><span>Reports</span><span>Added</span><span></span>
+                  <span>User</span><span>Role</span><span>Access</span><span>Reports</span><span>Added</span><span>Actions</span>
                 </div>
 
                 {filteredUsers.length === 0 && (
