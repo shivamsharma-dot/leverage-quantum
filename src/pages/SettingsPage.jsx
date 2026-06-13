@@ -6,12 +6,13 @@ import styles from './SettingsPage.module.css'
 
 
 const getRoleMeta = (role) => {
-  const map = {
-    admin:   { label: 'Admin',   color: '#1F3C84', bg: '#E8EFF9' },
-    viewer:  { label: 'Viewer',  color: '#1C9FD4', bg: '#E3F5FD' },
-    default: { label: role || 'Viewer', color: '#94A3B8', bg: '#F3F4F6', cls: '' },
+  if (role === 'admin') return { label: 'Admin', color: '#1F3C84', bg: '#E8EFF9' }
+  if (role === 'viewer') return { label: 'Viewer', color: '#1C9FD4', bg: '#E3F5FD' }
+  // viewer:home,meta_ads,... or custom:... => Custom badge
+  if (typeof role === 'string' && (role.startsWith('viewer:') || role.startsWith('custom:'))) {
+    return { label: 'Custom', color: '#29B9C3', bg: '#E4F8F9' }
   }
-  return map[role] || map.default
+  return { label: 'Viewer', color: '#1C9FD4', bg: '#E3F5FD' }
 }
 
 const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings')
