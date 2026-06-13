@@ -141,6 +141,7 @@ function Ico({n,s=16,c='currentColor',sw=2}){
     check:    <><polyline points="20 6 9 17 4 12"/></>,
     spark:    <><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></>,
     refresh:  <><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></>,
+    logs:     <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></>,
   }
   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d[n]}</svg>
 }
@@ -295,6 +296,36 @@ export default function ChatPage() {
     }finally{setLoading(false)}
   },[input,loading,messages,activeId,metaToken,memories,saveMessages])
 
+  /* report logs */
+  const [reportLogs, setReportLogs]       = useState([])
+  const [logsLoading, setLogsLoading]     = useState(false)
+  const [sendingReport, setSendingReport] = useState(false)
+  const [sendReportType, setSendReportType] = useState('daily')
+  const [sendDropOpen, setSendDropOpen]   = useState(false)
+  const [sendMsg, setSendMsg]             = useState('')
+
+  const loadLogs = async () => {
+    setLogsLoading(true)
+    const d = await sbGet('report_logs','?order=sent_at.desc&limit=50')
+    setReportLogs(Array.isArray(d) ? d : [])
+    setLogsLoading(false)
+  }
+
+  const sendReport = async () => {
+    setSendingReport(true); setSendMsg('')
+    try {
+      const res = await fetch('/api/send-report', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ type: sendReportType, triggered_by: user?.email || 'manual' })
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Failed')
+      setSendMsg(`✓ Sent to ${d.recipients?.length || 0}`)
+      await loadLogs()
+    } catch(e) { setSendMsg('✕ ' + e.message) }
+    finally { setSendingReport(false); setTimeout(()=>setSendMsg(''), 5000) }
+  }
+
   /* memories */
   const addMem = async()=>{
     if(!newMem.trim()||savingMem) return; setSavingMem(true)
@@ -376,7 +407,7 @@ export default function ChatPage() {
               {/* panel header */}
               <div style={{padding:'16px 16px 12px',borderBottom:`1px solid ${borderColor}`,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
                 <span style={{fontSize:13,fontWeight:700,color:'#0F172A',letterSpacing:'-0.01em'}}>
-                  {rail==='history'?'Conversations':rail==='prompts'?'Prompt Library':'Memories'}
+                  {rail==='history'?'Conversations':rail==='prompts'?'Prompt Library':rail==='logs'?'Report Logs':'Memories'}
                 </span>
                 <button onClick={()=>setRail(null)} className="ibtn" style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:'none',background:'transparent',borderRadius:6,cursor:'pointer'}}>
                   <Ico n="close" s={14} c="#9CA3AF"/>
@@ -488,6 +519,41 @@ export default function ChatPage() {
               )}
             </div>
           )}
+
+          {/* Report Logs */}
+          {rail==='logs'&&(
+            <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+              <div style={{padding:'10px 12px 8px',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div style={{fontSize:11.5,color:'#64748B'}}>Automated + manual sends</div>
+                <button onClick={loadLogs} style={{background:'none',border:'0.5px solid #E5E7EB',borderRadius:6,padding:'3px 8px',fontSize:11,color:'#64748B',cursor:'pointer',fontFamily:FONT}}>↻</button>
+              </div>
+              <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 12px 8px'}}>
+                {logsLoading&&<div style={{padding:20,textAlign:'center',color:'#94A3B8',fontSize:12}}>Loading…</div>}
+                {!logsLoading&&reportLogs.length===0&&<div style={{padding:'30px 0',textAlign:'center',color:'#CBD5E1',fontSize:12.5}}>No reports sent yet</div>}
+                {reportLogs.map((log,idx)=>{
+                  const dt=new Date(log.sent_at)
+                  const dateStr=dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})
+                  const timeStr=dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})
+                  const isOk=log.status==='sent'
+                  const typeLabel=log.report_type==='daily'?'Daily':log.report_type==='weekly'?'Weekly':'Monthly'
+                  const typeColor=log.report_type==='daily'?BLUE:log.report_type==='weekly'?GREEN:NAVY
+                  const typeBg=log.report_type==='daily'?'#E3F5FD':log.report_type==='weekly'?'#E9F8EF':'#E8EFF9'
+                  return (
+                    <div key={log.id||idx} style={{marginBottom:6,padding:'10px 11px',borderRadius:10,border:`0.5px solid ${isOk?'#D1FAE5':'#FEE2E2'}`,background:isOk?'#F0FDF4':'#FFF5F5'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+                        <span style={{fontSize:9.5,fontWeight:700,padding:'2px 7px',borderRadius:20,background:typeBg,color:typeColor,flexShrink:0,fontFamily:FONT}}>{typeLabel}</span>
+                        <span style={{fontSize:10.5,fontWeight:700,color:isOk?'#059669':'#DC2626',marginLeft:'auto'}}>{isOk?'✓ Sent':'✕ Failed'}</span>
+                      </div>
+                      <div style={{fontSize:11,color:'#374151',marginBottom:2}}><span style={{fontWeight:600}}>{dateStr}</span> · {timeStr}</div>
+                      {log.triggered_by&&<div style={{fontSize:10.5,color:'#94A3B8',marginBottom:2}}>By: {log.triggered_by}</div>}
+                      {log.recipients?.length>0&&<div style={{fontSize:10.5,color:'#64748B'}}>→ {log.recipients.slice(0,3).join(', ')}{log.recipients.length>3?` +${log.recipients.length-3} more`:''}</div>}
+                      {log.error&&<div style={{fontSize:10.5,color:'#DC2626',marginTop:3,wordBreak:'break-word'}}>{log.error}</div>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Icon rail */}
@@ -496,9 +562,10 @@ export default function ChatPage() {
             {id:'history', icon:'history', label:'History'},
             {id:'prompts', icon:'prompts', label:'Prompts'},
             {id:'memories',icon:'brain',   label:'Memories'},
+            {id:'logs',    icon:'logs',    label:'Logs'},
           ].map(r=>{
             const on=rail===r.id
-            return <button key={r.id} onClick={()=>toggleRail(r.id)} title={r.label} className="rb"
+            return <button key={r.id} onClick={()=>{toggleRail(r.id);if(r.id==='logs')loadLogs()}} title={r.label} className="rb"
               style={{width:44,height:44,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,border:'none',borderRadius:10,cursor:'pointer',background:on?'#E3F5FD':'transparent',transition:'background .15s',position:'relative',padding:'4px 2px'}}>
               <Ico n={r.icon} s={15} c={on?BLUE:'#9CA3AF'}/>
               <span style={{fontSize:8.5,fontWeight:on?700:500,color:on?BLUE:'#9CA3AF',letterSpacing:'0.03em',fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1}}>{r.label}</span>
@@ -521,8 +588,35 @@ export default function ChatPage() {
             </button>
             <div style={{flex:1}}/>
             <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 10px',borderRadius:20,background:connected?'rgba(74,174,111,0.12)':'rgba(255,255,255,0.06)',border:`1px solid ${connected?'rgba(74,174,111,0.3)':borderColor}`}}>
-              <div style={{width:6,height:6,borderRadius:'50%',background:connected?GREEN:'rgba(255,255,255,0.2)',animation:connected?'pulse 2s infinite':''}}/>
-              <span style={{fontSize:11,fontWeight:600,color:connected?GREEN:'rgba(255,255,255,0.3)'}}>{connected?'Meta Ads connected':'Meta not connected'}</span>
+              <div style={{width:6,height:6,borderRadius:'50%',background:connected?GREEN:'rgba(255,255,255,0.2)',animation:connected?'pulse 2s infinite':''}}/>              <span style={{fontSize:11,fontWeight:600,color:connected?GREEN:'rgba(255,255,255,0.3)'}}>{connected?'Meta Ads connected':'Meta not connected'}</span>
+            </div>
+            {sendMsg&&<span style={{fontSize:11.5,fontWeight:600,color:sendMsg.startsWith('✓')?'#059669':'#DC2626'}}>{sendMsg}</span>}
+            <div style={{position:'relative',display:'flex',alignItems:'center',gap:0,border:'0.5px solid #E5E7EB',borderRadius:8,overflow:'hidden',background:'#fff'}}>
+              <div style={{position:'relative'}}>
+                <button onClick={()=>setSendDropOpen(v=>!v)}
+                  style={{padding:'5px 10px',border:'none',borderRight:'0.5px solid #E5E7EB',background:'#fff',cursor:'pointer',fontSize:11.5,fontWeight:600,color:'#374151',fontFamily:FONT,display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
+                  {sendReportType==='daily'?'Daily':sendReportType==='weekly'?'Weekly':'Monthly'}
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                {sendDropOpen&&(
+                  <>
+                    <div onClick={()=>setSendDropOpen(false)} style={{position:'fixed',inset:0,zIndex:100}}/>
+                    <div style={{position:'absolute',top:'calc(100% + 4px)',right:0,zIndex:101,background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:8,boxShadow:'0 8px 24px rgba(15,23,42,0.12)',minWidth:140,overflow:'hidden'}}>
+                      {[['daily','📊 Daily Report'],['weekly','📈 Weekly WoW'],['monthly','📅 30-Day Report']].map(([val,label])=>(
+                        <button key={val} onClick={()=>{setSendReportType(val);setSendDropOpen(false)}}
+                          style={{width:'100%',padding:'9px 14px',border:'none',background:sendReportType===val?'#E3F5FD':'#fff',color:sendReportType===val?BLUE:'#374151',fontSize:12,fontWeight:sendReportType===val?700:500,textAlign:'left',cursor:'pointer',fontFamily:FONT,borderBottom:'0.5px solid #F3F4F6',display:'block'}}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <button onClick={sendReport} disabled={sendingReport}
+                style={{padding:'5px 13px',border:'none',background:sendingReport?'#94A3B8':NAVY,color:'#fff',cursor:sendingReport?'wait':'pointer',fontSize:11.5,fontWeight:700,fontFamily:FONT,display:'flex',alignItems:'center',gap:5,transition:'all .15s'}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                {sendingReport?'Sending…':'Send'}
+              </button>
             </div>
           </div>
 
