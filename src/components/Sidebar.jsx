@@ -7,7 +7,7 @@ const NAV = [
   {
     label: 'Intelligence',
     items: [
-      { to: '/vasu', icon: <VasuIcon />, label: 'Chat', end: false },
+      { to: '/vasu', icon: <VasuIcon />, label: 'Chat', end: true },
     ]
   },
   {
