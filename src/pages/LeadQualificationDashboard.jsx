@@ -803,8 +803,8 @@ export default function LeadQualificationDashboard() {
         {/* ── HEADER ───────────────────────────────────────────────── */}
         <div style={{
           background: 'var(--card)', borderBottom: `0.5px solid ${C.border}`,
-          padding: '0 28px', height: 56, display: 'flex', alignItems: 'center',
-          justifyContent: 'space-between', gap: 12, flexShrink: 0,
+          padding: '0 28px', minHeight: 56, height: 'auto', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', gap: 12, flexShrink: 0, flexWrap: 'wrap',
         }}>
           <div>
             <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / QL Ops</p>
@@ -819,7 +819,7 @@ export default function LeadQualificationDashboard() {
               }
             </h1>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', overflowX: 'auto', flexShrink: 1, minWidth: 0 }}>
             {/* Presence avatars */}
             {activeUsers && activeUsers.length > 0 && (
               <div style={{display:'flex',alignItems:'center',gap:6,marginRight:2}}>
