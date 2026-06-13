@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as ReTooltip, ResponsiveContainer,
-  LineChart, Line, Cell, PieChart, Pie, FunnelChart, Funnel, LabelList
-} from 'recharts'
+  LineChart, Line, Cell, PieChart, Pie, FunnelChart, Funnel, LabelList, CartesianGrid} from 'recharts'
 import Sidebar from '../components/Sidebar'
 import { fetchCSV } from '../lib/sheetCache'
 
