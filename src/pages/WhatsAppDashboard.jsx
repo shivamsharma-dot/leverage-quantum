@@ -99,13 +99,41 @@ function fmtPct(a,b) { return b > 0 ? (a/b*100).toFixed(1)+'%' : '—' }
 
 // ── shared UI components ──────────────────────────────────────────────────────
 
-const KPICard = ({ label, value, sub, accent=C.navy, accentBg=C.navyBg, delta, icon }) => (
+
+const Sparkline = ({ data, color='#1C9FD4', height=28, width=72 }) => {
+  if (!data || data.length < 2) return null
+  const min = Math.min(...data), max = Math.max(...data)
+  const range = max - min || 1
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * (width - 4) + 2
+    const y = height - 4 - ((v - min) / range) * (height - 8)
+    return `${x},${y}`
+  }).join(' ')
+  const lastY = height - 4 - ((data[data.length-1] - min) / range) * (height - 8)
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display:'block', flexShrink:0 }}>
+      <defs>
+        <linearGradient id={`spk_${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.15}/>
+          <stop offset="100%" stopColor={color} stopOpacity={0}/>
+        </linearGradient>
+      </defs>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx={parseFloat(pts.split(' ').pop().split(',')[0])} cy={lastY} r="2.5" fill={color}/>
+    </svg>
+  )
+}
+
+const KPICard = ({ label, value, sub, accent=C.navy, accentBg=C.navyBg, delta, icon, sparkData }) => (
   <div style={{ background:'var(--card)', border:`0.5px solid ${'var(--card-border)'}`, borderRadius:14, padding:'18px 20px', borderTop:`3px solid ${accent}`, boxShadow:'0 1px 6px rgba(15,23,42,0.06)', display:'flex', flexDirection:'column', gap:8 }}>
     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
       <div style={{ fontSize:9.5, fontWeight:700, color:'var(--text3)', letterSpacing:'0.09em', textTransform:'uppercase', fontFamily:FONT }}>{label}</div>
       {icon && <div style={{ width:28, height:28, borderRadius:8, background:accentBg, display:'flex', alignItems:'center', justifyContent:'center', color:accent, flexShrink:0 }}>{icon}</div>}
     </div>
-    <div style={{ fontSize:28, fontWeight:800, color:'var(--text)', letterSpacing:'-1px', lineHeight:1, fontFamily:FONT }}>{value}</div>
+    <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', gap:8 }}>
+      <div style={{ fontSize:28, fontWeight:800, color:'var(--text)', letterSpacing:'-1px', lineHeight:1, fontFamily:FONT }}>{value}</div>
+      {sparkData && <Sparkline data={sparkData} color={accent} height={28} width={64}/>}
+    </div>
     <div style={{ display:'flex', alignItems:'center', gap:6, minHeight:18 }}>
       {sub && <div style={{ fontSize:11.5, color:'var(--text3)', fontFamily:FONT }}>{sub}</div>}
       {delta != null && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 7px', borderRadius:20, background:delta>=0?C.greenBg:'#FEF2F2', color:delta>=0?'#059669':'#DC2626', fontFamily:FONT, marginLeft:'auto' }}>{delta>=0?'▲':'▼'}{Math.abs(delta).toFixed(1)}%</span>}
