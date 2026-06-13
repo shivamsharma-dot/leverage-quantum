@@ -156,11 +156,11 @@ Output only HTML. No preamble. No code fences. Max 600 words.`
 
 function kpiCard(label, value, sub, accent) {
   return `
-    <td style="padding:6px">
-      <div style="background:#fff;border-radius:12px;border:0.5px solid #E2E8F0;border-top:3px solid ${accent};padding:14px 16px;min-width:100px">
-        <div style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-0.03em;line-height:1">${value}</div>
-        <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94A3B8;margin-top:5px">${label}</div>
-        ${sub ? `<div style="font-size:11px;color:#CBD5E1;margin-top:3px">${sub}</div>` : ''}
+    <td width="20%" style="padding:4px">
+      <div style="background:#F8FAFC;border-radius:10px;border:0.5px solid #E2E8F0;border-top:3px solid ${accent};padding:12px 14px">
+        <div style="font-size:20px;font-weight:800;color:#0F172A;letter-spacing:-0.03em;line-height:1">${value}</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94A3B8;margin-top:5px">${label}</div>
+        ${sub ? `<div style="font-size:10.5px;color:#94A3B8;margin-top:3px">${sub}</div>` : ''}
       </div>
     </td>`
 }
@@ -270,15 +270,11 @@ async function buildReport(token, reportType) {
           <tr>
             <td style="vertical-align:middle;padding-right:10px">
               <!-- Quantum icon (3 bars) -->
-              <table cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px">
+              <table cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px">
                 <tr>
-                  <td>
-                    <svg width="24" height="24" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="1" y="12" width="4" height="9" rx="1.5" fill="${GREEN}"/>
-                      <rect x="7" y="7" width="4" height="14" rx="1.5" fill="${CYAN}"/>
-                      <rect x="13" y="4" width="4" height="17" rx="1.5" fill="${BLUE}"/>
-                    </svg>
-                  </td>
+                  <td valign="bottom" style="padding-right:2px"><div style="width:5px;height:10px;background:${GREEN};border-radius:2px"></div></td>
+                  <td valign="bottom" style="padding-right:2px"><div style="width:5px;height:15px;background:${CYAN};border-radius:2px"></div></td>
+                  <td valign="bottom"><div style="width:5px;height:19px;background:${BLUE};border-radius:2px"></div></td>
                 </tr>
               </table>
             </td>
@@ -305,14 +301,14 @@ async function buildReport(token, reportType) {
   <!-- KPI STRIP -->
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:none">
     <tr>
-      <td style="padding:20px 26px 4px">
-        <table cellpadding="0" cellspacing="0" width="100%">
+      <td style="padding:16px 20px 4px">
+        <table cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed">
           <tr>
             ${kpiCard('Spend', fmtINR(spend), `${camps.length} campaigns`, accentColor)}
             ${kpiCard('Leads', leads.toLocaleString('en-IN'), `EPS: ${eps}/day`, BLUE)}
             ${kpiCard('CPL', fmtINR(cpl), cpl > 3000 ? '⚠ Above target' : '✓ On track', cpl > 3000 ? '#EF4444' : '#22C55E')}
             ${kpiCard('CTR', fmtPct(ctr), ctr >= 1 ? '✓ Healthy' : '⚠ Below 1%', ctr >= 1 ? '#22C55E' : '#F59E0B')}
-            ${kpiCard('Frequency', freq.toFixed(2) + 'x', freq > 3.5 ? '⚠ Fatigue risk' : '✓ OK', freq > 3.5 ? '#EF4444' : '#22C55E')}
+            ${kpiCard('Freq', freq.toFixed(2) + 'x', freq > 3.5 ? '⚠ Fatigue risk' : '✓ OK', freq > 3.5 ? '#EF4444' : '#22C55E')}
           </tr>
         </table>
       </td>
@@ -373,11 +369,11 @@ async function buildReport(token, reportType) {
               <table cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="vertical-align:middle;padding-right:8px">
-                    <svg width="16" height="16" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="1" y="12" width="4" height="9" rx="1.5" fill="${GREEN}"/>
-                      <rect x="7" y="7" width="4" height="14" rx="1.5" fill="${CYAN}"/>
-                      <rect x="13" y="4" width="4" height="17" rx="1.5" fill="${BLUE}"/>
-                    </svg>
+                    <table cellpadding="0" cellspacing="0"><tr>
+                      <td valign="bottom" style="padding-right:1px"><div style="width:3px;height:7px;background:${GREEN};border-radius:1px"></div></td>
+                      <td valign="bottom" style="padding-right:1px"><div style="width:3px;height:10px;background:${CYAN};border-radius:1px"></div></td>
+                      <td valign="bottom"><div style="width:3px;height:13px;background:${BLUE};border-radius:1px"></div></td>
+                    </tr></table>
                   </td>
                   <td style="vertical-align:middle">
                     <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.9)">Leverage <span style="color:${BLUE}">Quantum</span></span>
