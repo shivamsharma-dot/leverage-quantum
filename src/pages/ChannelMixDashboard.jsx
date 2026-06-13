@@ -91,6 +91,23 @@ const KPICard = ({ label, value, sub, accent=C_KPI.navy, accentBg=C_KPI.navyBg, 
   </div>
 )
 
+
+const BrandTooltip = ({ active, payload, label, fmt }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, padding:'10px 14px', fontFamily:"'Plus Jakarta Sans','Inter',sans-serif", boxShadow:'0 8px 32px rgba(15,23,42,0.13)', minWidth:140 }}>
+      {label && <div style={{ fontSize:11, fontWeight:700, color:'#0F172A', marginBottom:7, paddingBottom:6, borderBottom:'0.5px solid #F1F5F9' }}>{label}</div>}
+      {payload.map((p, i) => (
+        <div key={i} style={{ display:'flex', alignItems:'center', gap:7, marginTop:i>0?4:0 }}>
+          <div style={{ width:8, height:8, borderRadius:'50%', background:p.color||p.fill||'#1C9FD4', flexShrink:0 }}/>
+          <span style={{ fontSize:11.5, color:'#475569', flex:1 }}>{p.name||p.dataKey}</span>
+          <span style={{ fontSize:12, fontWeight:700, color:'#0F172A' }}>{fmt ? fmt(p.value) : (typeof p.value==='number'&&p.value>999?p.value.toLocaleString('en-IN'):p.value)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function ChannelMixDashboard(){
   const [pageLoading, setPageLoading] = React.useState(true)
   React.useEffect(() => { const t = setTimeout(() => setPageLoading(false), 600); return () => clearTimeout(t) }, [])
@@ -198,10 +215,10 @@ export default function ChannelMixDashboard(){
             </div>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={monthlyOPPs} margin={{top:4,right:8,left:0,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false}/>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                 <XAxis dataKey="month" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmt(v)} width={55}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<BrandTooltip/>}/>
                 <Legend wrapperStyle={{fontSize:10}}/>
                 {SOURCES.filter(s=>s!=='Unidentified').map(s=>(
                   <Bar key={s} dataKey={s} stackId="a" fill={SRC_COLORS[s]||'#9CA3AF'} fillOpacity={0.85}/>
@@ -251,10 +268,10 @@ export default function ChannelMixDashboard(){
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={monthlySpend} margin={{top:4,right:8,left:0,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false}/>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                 <XAxis dataKey="month" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmtR(v)} width={65}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<BrandTooltip/>}/>
                 <Legend wrapperStyle={{fontSize:10}}/>
                 {['Facebook','Google','Bing','Remarketing'].map(s=>(
                   <Bar key={s} dataKey={s} stackId="b" fill={SRC_COLORS[s]} fillOpacity={0.85}/>
