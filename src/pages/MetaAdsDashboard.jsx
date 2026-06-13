@@ -1057,7 +1057,7 @@ export default function MetaAdsDashboard() {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / Meta Ads</p>
-            <h1 className={styles.pageTitle}>{activeTab === 'creatives' ? 'Meta Creatives Dashboard' : 'Meta Campaigns Dashboard'}</h1>
+            <h1 className={styles.pageTitle}>{activeTab === 'creatives' ? 'Meta Creatives' : 'Meta Ads'}</h1>
           </div>
           <div className={styles.headerRight}>
             {/* Active users */}
@@ -1072,7 +1072,7 @@ export default function MetaAdsDashboard() {
                         : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#4F46E5'}}>
                             {(u.name || u.email).charAt(0).toUpperCase()}
                           </div>}
-                      <div style={{position:'absolute',bottom:1,right:1,width:7,height:7,borderRadius:'50%',background:'#22C55E',border:'1.5px solid #fff'}}/>
+                      <div style={{position:'absolute',bottom:1,right:1,width:7,height:7,borderRadius:'50%',background:'#4CAE6F',border:'1.5px solid #fff'}}/>
                     </div>
                   ))}
                 </div>
@@ -1137,7 +1137,7 @@ export default function MetaAdsDashboard() {
               </div>
             )}
             {lastSync && <span className={styles.syncTag}>Synced {lastSync.toLocaleTimeString()}</span>}
-            {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#059669':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
+            {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#4CAE6F':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
             <button className={styles.sendReportBtn} onClick={sendReport} disabled={sending||loading||!data}>
               {sending ? '⏳ Sending…' : '✉ Send Report'}
             </button>
