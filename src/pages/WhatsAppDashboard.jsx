@@ -453,12 +453,12 @@ export default function WhatsAppDashboard() {
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
 
         {/* ── HEADER ── */}
-        <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${'var(--card-border)'}`, padding:'0 28px', height:56, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0 }}>
+        <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${'var(--card-border)'}`, padding:'0 28px', minHeight:56, height:'auto', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0 }}>
           <div>
             <p style={{ fontSize:10.5, color:'var(--text3)', margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / WhatsApp</p>
             <h1 style={{ fontSize:18, fontWeight:800, color:'var(--text)', margin:'2px 0 0', letterSpacing:'-0.5px', fontFamily:FONT }}>WhatsApp{selMonth ? ' · '+selMonth : ''}</h1>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflowX:'auto', flexShrink:1, minWidth:0 }}>
             {isCurrentMonth&&(
               <div style={{display:'flex',alignItems:'center',gap:3,background:'var(--bg3)',borderRadius:9,padding:'3px'}}>
                 {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl])=>(
