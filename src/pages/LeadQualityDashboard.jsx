@@ -160,7 +160,7 @@ export default function LeadQualityDashboard() {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / Lead Quality</p>
-            <h1 className={styles.title}>Lead Quality 2025</h1>
+            <h1 className={styles.title}>Lead Quality</h1>
           </div>
           <div className={styles.headerRight}>
           <select className={styles.fsel} value={selMonth} onChange={e => setSelMonth(e.target.value)}>
