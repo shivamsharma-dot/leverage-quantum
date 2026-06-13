@@ -86,6 +86,23 @@ const KPICard = ({ label, value, sub, accent=C_KPI.navy, accentBg=C_KPI.navyBg, 
   </div>
 )
 
+
+const BrandTooltip = ({ active, payload, label, fmt }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, padding:'10px 14px', fontFamily:"'Plus Jakarta Sans','Inter',sans-serif", boxShadow:'0 8px 32px rgba(15,23,42,0.13)', minWidth:140 }}>
+      {label && <div style={{ fontSize:11, fontWeight:700, color:'#0F172A', marginBottom:7, paddingBottom:6, borderBottom:'0.5px solid #F1F5F9' }}>{label}</div>}
+      {payload.map((p, i) => (
+        <div key={i} style={{ display:'flex', alignItems:'center', gap:7, marginTop:i>0?4:0 }}>
+          <div style={{ width:8, height:8, borderRadius:'50%', background:p.color||p.fill||'#1C9FD4', flexShrink:0 }}/>
+          <span style={{ fontSize:11.5, color:'#475569', flex:1 }}>{p.name||p.dataKey}</span>
+          <span style={{ fontSize:12, fontWeight:700, color:'#0F172A' }}>{fmt ? fmt(p.value) : (typeof p.value==='number'&&p.value>999?p.value.toLocaleString('en-IN'):p.value)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function RevenueDashboard(){
   const [pageLoading, setPageLoading] = React.useState(true)
   React.useEffect(() => { const t = setTimeout(() => setPageLoading(false), 600); return () => clearTimeout(t) }, [])
@@ -203,11 +220,11 @@ export default function RevenueDashboard(){
               <span className={styles.cardSub}>Collected · Aug–Dec</span>
             </div>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={acVasMonthly} margin={{top:4,right:8,left:0,bottom:0}} barCategoryGap="25%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false}/>
+              <BarChart data={acVasMonthly} margin={{top:4,right:8,left:0,bottom:0}} barCategoryGap="25%"><defs><linearGradient id="gradRev" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#1C9FD4" stopOpacity={0.15}/><stop offset="95%" stopColor="#1C9FD4" stopOpacity={0}/></linearGradient></defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                 <XAxis dataKey="month" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmtR(v)} width={70}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<BrandTooltip/>}/>
                 <Legend wrapperStyle={{fontSize:11}}/>
                 <Bar dataKey="AC"  name="AC Revenue"  fill="#10B981" radius={[4,4,0,0]}/>
                 <Bar dataKey="VAS" name="VAS Revenue" fill="#1C9FD4" radius={[4,4,0,0]}/>
@@ -222,10 +239,10 @@ export default function RevenueDashboard(){
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={collectionMonthly} margin={{top:4,right:8,left:0,bottom:0}} barCategoryGap="25%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false}/>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                 <XAxis dataKey="month" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmtR(v)} width={75}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<BrandTooltip/>}/>
                 <Legend wrapperStyle={{fontSize:11}}/>
                 <Bar dataKey="Collected"  fill="#F59E0B" radius={[4,4,0,0]}/>
                 <Bar dataKey="Projected"  fill="#E5E7EB" radius={[4,4,0,0]}/>
@@ -269,10 +286,10 @@ export default function RevenueDashboard(){
             </div>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={unidMonthly} margin={{top:4,right:8,left:0,bottom:0}} barCategoryGap="25%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false}/>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                 <XAxis dataKey="month" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmtR(v)} width={70}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<BrandTooltip/>}/>
                 <Legend wrapperStyle={{fontSize:11}}/>
                 <Bar dataKey="Identified"   fill="#10B981" radius={[4,4,0,0]} stackId="u"/>
                 <Bar dataKey="Unidentified" fill="#E5E7EB" radius={[4,4,0,0]} stackId="u"/>
