@@ -400,10 +400,10 @@ export default function ChatPage() {
         <div style={{
           width:panelOpen?RAIL_W:0, minWidth:0, transition:'width .25s cubic-bezier(0.4,0,0.2,1)',
           overflow:'hidden', background:panelBg, borderRight:`1px solid ${borderColor}`,
-          display:'flex', flexDirection:'column', flexShrink:0,
+          display:'flex', flexDirection:'column', flexShrink:0, alignSelf:'stretch',
         }}>
           {panelOpen&&(
-            <div style={{width:RAIL_W,height:'100%',display:'flex',flexDirection:'column'}}>
+            <div style={{width:RAIL_W,flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
               {/* panel header */}
               <div style={{padding:'16px 16px 12px',borderBottom:`1px solid ${borderColor}`,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
                 <span style={{fontSize:13,fontWeight:700,color:'#0F172A',letterSpacing:'-0.01em'}}>
