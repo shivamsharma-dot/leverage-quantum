@@ -89,7 +89,7 @@ const KPICard = ({ label, value, sub, accent = C.navy, delta }) => (
         <span style={{
           fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
           background: delta >= 0 ? C.greenBg : '#FEF2F2',
-          color: delta >= 0 ? '#059669' : '#DC2626', fontFamily: FONT,
+          color: delta >= 0 ? '#4CAE6F' : '#DC2626', fontFamily: FONT,
         }}>
           {delta >= 0 ? '▲' : '▼'}{Math.abs(delta).toFixed(1)}%
         </span>
@@ -832,7 +832,7 @@ export default function LeadQualificationDashboard() {
                         : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#4F46E5'}}>
                             {(u.name || u.email).charAt(0).toUpperCase()}
                           </div>}
-                      <div style={{position:'absolute',bottom:1,right:1,width:7,height:7,borderRadius:'50%',background:'#22C55E',border:'1.5px solid #fff'}}/>
+                      <div style={{position:'absolute',bottom:1,right:1,width:7,height:7,borderRadius:'50%',background:'#4CAE6F',border:'1.5px solid #fff'}}/>
                     </div>
                   ))}
                 </div>
@@ -842,7 +842,7 @@ export default function LeadQualificationDashboard() {
               </div>
             )}
             {/* Send report */}
-            {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#059669':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
+            {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#4CAE6F':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
             <button onClick={sendReport} disabled={sending}
               style={{padding:'6px 13px',borderRadius:8,border:`0.5px solid ${C.border}`,background:'var(--card)',color:C.navy,fontSize:12,fontWeight:600,fontFamily:FONT,cursor:sending?'wait':'pointer',display:'flex',alignItems:'center',gap:6,opacity:sending?0.65:1,transition:'all .15s'}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
