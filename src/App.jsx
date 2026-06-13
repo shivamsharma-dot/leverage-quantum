@@ -3,42 +3,20 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { logActivity } from './components/ActivityLogger'
 import LoginPage from './pages/LoginPage'
-
-// Route-based code splitting — each dashboard loads only when navigated to
-// Cuts initial JS bundle parse time by ~60%
-const DashboardHome            = React.lazy(() => import('./pages/DashboardHome'))
-const ROASDashboard            = React.lazy(() => import('./pages/ROASDashboard'))
-const LeadQualityDashboard     = React.lazy(() => import('./pages/LeadQualityDashboard'))
-const ChannelMixDashboard      = React.lazy(() => import('./pages/ChannelMixDashboard'))
-const RevenueDashboard         = React.lazy(() => import('./pages/RevenueDashboard'))
-const LeadQualificationDashboard = React.lazy(() => import('./pages/LeadQualificationDashboard'))
-const WhatsAppDashboard        = React.lazy(() => import('./pages/WhatsAppDashboard'))
-const MTDDashboard             = React.lazy(() => import('./pages/MTDDashboard'))
-const MetaAdsDashboard         = React.lazy(() => import('./pages/MetaAdsDashboard'))
-const GoogleAdsDashboard       = React.lazy(() => import('./pages/GoogleAdsDashboard'))
-const VasuAI                   = React.lazy(() => import('./pages/VasuAI'))
-const SettingsPage             = React.lazy(() => import('./pages/SettingsPage'))
+import DashboardHome from './pages/DashboardHome'
+import ROASDashboard from './pages/ROASDashboard'
+import LeadQualityDashboard from './pages/LeadQualityDashboard'
+import ChannelMixDashboard from './pages/ChannelMixDashboard'
+import RevenueDashboard from './pages/RevenueDashboard'
+import LeadQualificationDashboard from './pages/LeadQualificationDashboard'
+import WhatsAppDashboard from './pages/WhatsAppDashboard'
+import MTDDashboard from './pages/MTDDashboard'
+import MetaAdsDashboard from './pages/MetaAdsDashboard'
+import GoogleAdsDashboard from './pages/GoogleAdsDashboard'
+import VasuAI from './pages/VasuAI'
+import SettingsPage from './pages/SettingsPage'
 
 // Suspense fallback — slim skeleton shown while lazy chunk loads
-const PageSkeleton = () => (
-  <div style={{ display:'flex', height:'100vh', background:'#F4F6F9', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
-    <div style={{ width:232, background:'#fff', borderRight:'0.5px solid #E5E7EB', flexShrink:0 }}/>
-    <div style={{ flex:1, padding:'28px' }}>
-      <div style={{ height:20, width:200, borderRadius:6, marginBottom:24, background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)', backgroundSize:'200% 100%', animation:'shimmer 1.4s ease infinite' }}/>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:14, marginBottom:20 }}>
-        {[...Array(5)].map((_,i) => (
-          <div key={i} style={{ height:90, borderRadius:14, background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)', backgroundSize:'200% 100%', animation:`shimmer 1.4s ease ${i*0.08}s infinite` }}/>
-        ))}
-      </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1.5fr 1fr', gap:14 }}>
-        {[260,260].map((h,i) => (
-          <div key={i} style={{ height:h, borderRadius:14, background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)', backgroundSize:'200% 100%', animation:`shimmer 1.4s ease ${i*0.1}s infinite` }}/>
-        ))}
-      </div>
-    </div>
-    <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
-  </div>
-)
 
 // Page title map — dynamic titles per route
 const PAGE_TITLES = {
@@ -159,7 +137,6 @@ export default function App() {
   return (
     <ErrorBoundary>
       <style>{FADE_STYLE}</style>
-      <React.Suspense fallback={<PageSkeleton/>}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/"                       element={<ProtectedRoute dashboardId="home">        <DashboardHome /></ProtectedRoute>} />
@@ -176,7 +153,6 @@ export default function App() {
         <Route path="/settings"               element={<ProtectedRoute dashboardId="settings">    <SettingsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      </React.Suspense>
     </ErrorBoundary>
   )
 }
