@@ -124,14 +124,25 @@ export default function Sidebar() {
   const handleLogout = () => { logout(); navigate('/login') }
 
   const userRole = user?.role || 'viewer'
-  const isViewerRole = userRole === 'viewer'
+  const isViewerRole = userRole !== 'admin'
 
   function canSee(id) {
-    if (isViewerRole && (id === 'settings' || id === 'vasu')) return false
-    if (!userRole || userRole === 'admin' || userRole === 'viewer') return true
+    // Settings is always admin-only
+    if (id === 'settings') return userRole === 'admin'
+    // Admin sees everything
+    if (userRole === 'admin') return true
+    // Plain viewer = all dashboards EXCEPT chat/vasu (must be explicitly granted)
+    if (userRole === 'viewer') return id !== 'vasu'
+    // Custom viewer access: "viewer:home,meta_ads,..." — only granted ids are visible
+    if (userRole?.startsWith('viewer:')) {
+      const granted = userRole.replace('viewer:', '').split(',').filter(Boolean)
+      return granted.includes(id)
+    }
+    // Legacy support
     if (userRole === 'roas_only') return id === 'roas'
-    if (userRole?.startsWith('custom:')) return userRole.replace('custom:','').split(',').includes(id)
-    return true
+    if (userRole?.startsWith('custom:')) return userRole.replace('custom:', '').split(',').filter(Boolean).includes(id)
+    // Fallback: treat unknown as viewer (no chat)
+    return id !== 'vasu'
   }
 
   const initials = user?.name
