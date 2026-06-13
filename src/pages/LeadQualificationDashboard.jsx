@@ -49,6 +49,31 @@ function parseCSV(csv) {
 
 /* ── Shared UI components ────────────────────────────────────────────── */
 
+
+const Sparkline = ({ data, color='#1C9FD4', height=28, width=72 }) => {
+  if (!data || data.length < 2) return null
+  const min = Math.min(...data), max = Math.max(...data)
+  const range = max - min || 1
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * (width - 4) + 2
+    const y = height - 4 - ((v - min) / range) * (height - 8)
+    return `${x},${y}`
+  }).join(' ')
+  const lastY = height - 4 - ((data[data.length-1] - min) / range) * (height - 8)
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display:'block', flexShrink:0 }}>
+      <defs>
+        <linearGradient id={`spk_${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.15}/>
+          <stop offset="100%" stopColor={color} stopOpacity={0}/>
+        </linearGradient>
+      </defs>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx={parseFloat(pts.split(' ').pop().split(',')[0])} cy={lastY} r="2.5" fill={color}/>
+    </svg>
+  )
+}
+
 const KPICard = ({ label, value, sub, accent = C.navy, delta }) => (
   <div style={{
     background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 12,
