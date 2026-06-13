@@ -459,47 +459,51 @@ export default function WhatsAppDashboard() {
             <h1 style={{ fontSize:18, fontWeight:800, color:'var(--text)', margin:'2px 0 0', letterSpacing:'-0.5px', fontFamily:FONT }}>WhatsApp{selMonth ? ' · '+selMonth : ''}</h1>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflowX:'auto', flexShrink:1, minWidth:0 }}>
+            {/* Date preset dropdown */}
             {isCurrentMonth&&(
-              <div style={{display:'flex',alignItems:'center',gap:3,background:'var(--bg3)',borderRadius:9,padding:'3px'}}>
-                {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl])=>(
-                  <button key={key} onClick={()=>{setDatePreset(key);setCustomFrom('');setCustomTo('');setPage(0)}}
-                    style={{padding:'5px 11px',borderRadius:7,border:'none',cursor:'pointer',fontSize:11.5,fontWeight:700,fontFamily:FONT,background:datePreset===key?'var(--card)':'transparent',color:datePreset===key?C.navy:'var(--text3)',boxShadow:datePreset===key?'0 1px 4px rgba(15,23,42,0.10)':'none',transition:'all .15s'}}>
-                    {lbl}
-                  </button>
-                ))}
+              <div style={{position:'relative'}}>
+                <button onClick={()=>setShowCustom(v=>!v)}
+                  style={{padding:'6px 12px',borderRadius:8,border:`0.5px solid ${datePreset==='custom'?C.navy:'var(--card-border)'}`,background:datePreset==='custom'?C.navyBg:'var(--card)',color:datePreset==='custom'?C.navy:'var(--text2)',fontSize:12,fontWeight:600,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',gap:6,minWidth:140,justifyContent:'space-between',boxShadow:'0 1px 3px rgba(15,23,42,0.06)',transition:'all .15s'}}>
+                  <span>
+                    {datePreset==='LD'?'Last Day':datePreset==='L7D'?'Last 7D':datePreset==='MTD'?'MTD':datePreset==='custom'&&customFrom?customFrom+' → '+customTo:'Select period'}
+                  </span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                {showCustom&&(
+                  <>
+                    <div onClick={()=>setShowCustom(false)} style={{position:'fixed',inset:0,zIndex:399}}/>
+                    <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:400,background:'var(--card)',border:`0.5px solid ${'var(--card-border)'}`,borderRadius:10,boxShadow:'0 8px 24px rgba(15,23,42,0.12)',overflow:'hidden',minWidth:160,fontFamily:FONT}}>
+                      {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl])=>(
+                        <button key={key} onClick={()=>{setDatePreset(key);setCustomFrom('');setCustomTo('');setShowCustom(false);setPage(0)}}
+                          style={{width:'100%',padding:'9px 14px',border:'none',background:datePreset===key&&datePreset!=='custom'?'#E3F5FD':'var(--card)',color:datePreset===key&&datePreset!=='custom'?C.navy:'var(--text)',fontSize:12.5,fontWeight:datePreset===key&&datePreset!=='custom'?700:500,textAlign:'left',cursor:'pointer',borderBottom:`0.5px solid ${'var(--card-border)'}`,display:'block',fontFamily:FONT}}>
+                          {lbl}
+                        </button>
+                      ))}
+                      <div style={{padding:'10px 14px 4px',borderTop:`0.5px solid ${'var(--card-border)'}`}}>
+                        <div style={{fontSize:10,fontWeight:700,color:'var(--text3)',letterSpacing:'.06em',textTransform:'uppercase',marginBottom:8}}>Custom range</div>
+                        {[['From',customFrom,setCustomFrom],['To',customTo,setCustomTo]].map(([lbl,val,setter])=>(
+                          <div key={lbl} style={{marginBottom:8}}>
+                            <div style={{fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:3}}>{lbl}</div>
+                            <input type="date" value={val} onChange={e=>setter(e.target.value)} style={{width:'100%',padding:'6px 8px',borderRadius:7,border:`0.5px solid ${'var(--card-border)'}`,fontSize:11.5,fontFamily:FONT,outline:'none',color:'var(--text)',boxSizing:'border-box'}}/>
+                          </div>
+                        ))}
+                        <button onClick={()=>{if(customFrom&&customTo){setDatePreset('custom');setShowCustom(false);setPage(0)}}} disabled={!customFrom||!customTo}
+                          style={{width:'100%',padding:'7px',borderRadius:7,border:'none',background:customFrom&&customTo?C.navy:'#E5E7EB',color:customFrom&&customTo?'var(--card)':'var(--text3)',fontSize:11.5,fontWeight:700,fontFamily:FONT,cursor:customFrom&&customTo?'pointer':'not-allowed',marginBottom:10}}>
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
+            {/* Month picker — separate */}
             {months.length>0&&(
               <div style={{opacity:datePreset!=='month'?0.5:1,transition:'opacity .15s'}}>
                 <Dropdown options={[...months].reverse()} value={selMonth} minWidth={110}
                   onChange={v=>{setSelMonth(v);setDatePreset('month');setCustomFrom('');setCustomTo('');setPage(0)}}/>
               </div>
             )}
-            <div style={{position:'relative'}}>
-              <button onClick={()=>setShowCustom(v=>!v)}
-                style={{padding:'6px 11px',borderRadius:8,border:`0.5px solid ${datePreset==='custom'?C.navy:'var(--card-border)'}`,background:datePreset==='custom'?C.navyBg:'var(--card)',color:datePreset==='custom'?C.navy:'var(--text2)',fontSize:11.5,fontWeight:600,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',gap:5,transition:'all .15s'}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                {datePreset==='custom'&&customFrom?customFrom+' → '+customTo:'Custom'}
-              </button>
-              {showCustom&&(
-                <>
-                  <div onClick={()=>setShowCustom(false)} style={{position:'fixed',inset:0,zIndex:399}}/>
-                  <div style={{position:'absolute',top:'calc(100% + 8px)',right:0,zIndex:400,background:'var(--card)',border:`0.5px solid ${'var(--card-border)'}`,borderRadius:12,boxShadow:'0 14px 40px rgba(15,23,42,0.14)',padding:'16px 18px',minWidth:240,fontFamily:FONT}}>
-                    <div style={{fontSize:11,fontWeight:700,color:'var(--text3)',letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:10}}>Custom date range</div>
-                    {[['From',customFrom,setCustomFrom],['To',customTo,setCustomTo]].map(([lbl,val,setter])=>(
-                      <div key={lbl} style={{marginBottom:10}}>
-                        <div style={{fontSize:11,fontWeight:600,color:'var(--text2)',marginBottom:4}}>{lbl}</div>
-                        <input type="date" value={val} onChange={e=>setter(e.target.value)} style={{width:'100%',padding:'7px 10px',borderRadius:8,border:`0.5px solid ${'var(--card-border)'}`,fontSize:12,fontFamily:FONT,outline:'none',color:'var(--text)',boxSizing:'border-box'}}/>
-                      </div>
-                    ))}
-                    <button onClick={()=>{if(customFrom&&customTo){setDatePreset('custom');setShowCustom(false);setPage(0)}}} disabled={!customFrom||!customTo}
-                      style={{width:'100%',padding:'8px',borderRadius:8,border:'none',background:customFrom&&customTo?C.navy:'#E5E7EB',color:customFrom&&customTo?'var(--card)':'var(--text3)',fontSize:12,fontWeight:700,fontFamily:FONT,cursor:customFrom&&customTo?'pointer':'not-allowed'}}>
-                      Apply range
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
             <Dropdown label="Source"   options={sources}    value={selSource}   minWidth={120} onChange={v=>{setSelSource(v);setPage(0)}}/>
             <Dropdown label="Category" options={categories} value={selCategory} minWidth={120} onChange={v=>{setSelCategory(v);setPage(0)}}/>
             <Dropdown label="Campaign" options={campaigns}  value={selCampaign} minWidth={140} onChange={v=>{setSelCampaign(v);setPage(0)}}/>
