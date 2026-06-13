@@ -73,3 +73,6 @@
 
 
 
+
+.dataRow:nth-child(even) { background: #FAFBFC; }
+.dataRow:hover { background: #F0F4FF; transition: background 0.1s; cursor: pointer; }
