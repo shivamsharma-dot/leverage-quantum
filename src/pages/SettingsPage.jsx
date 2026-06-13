@@ -55,6 +55,8 @@ export default function SettingsPage() {
   const [editIds, setEditIds] = useState([])
   const [editIsAdmin, setEditIsAdmin] = useState(false)
   const [editIsViewer, setEditIsViewer] = useState(false)
+  const [editJobTitle, setEditJobTitle] = useState('')
+  const [editDepartment, setEditDepartment] = useState('')
 
   const loadUsers = async () => {
     setUsersLoading(true)
@@ -119,12 +121,15 @@ export default function SettingsPage() {
     setEditIsAdmin(u.role === 'admin')
     setEditIsViewer(u.role === 'viewer')
     setEditIds(parsePermissions(u.role))
+    setEditJobTitle(u.job_title || '')
+    setEditDepartment(u.department || '')
   }
   const saveEdit = async (email) => {
     setUsersLoading(true)
     const role = buildRoleString(editIds, editIsAdmin, editIsViewer)
-    if (await updateUserRole(email, role)) { setMsg('Access updated'); await loadUsers() }
-    else setMsg('Failed')
+    const ok = await updateUserRole(email, role)
+    await fetch('/api/users', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, job_title: editJobTitle, department: editDepartment }) })
+    if (ok) { setMsg('Access updated'); await loadUsers() } else setMsg('Failed')
     setEditingUser(null)
     setUsersLoading(false)
   }
@@ -138,7 +143,6 @@ export default function SettingsPage() {
   }
 
   const TABS = [
-    { id: 'chat',    label: 'Chat' },
     { id: 'data',    label: 'Data' },
     ...(userIsAdmin ? [{ id: 'users', label: 'User Access' }, { id: 'activity', label: 'Activity Log' }] : []),
     { id: 'profile', label: 'Profile' },
@@ -307,10 +311,17 @@ export default function SettingsPage() {
                     <div key={u.email}>
                       <div className={`${styles.uRow} ${isEditing ? styles.uRowEdit : ''}`}>
                         <div className={styles.uUser}>
-                          <div className={styles.userAvatar} style={{background:['#1F3C84','#1C9FD4','#4CAE6F','#29B9C3','#F59E0B'][((u.email||'').charCodeAt(0)||65)%5]}}>{u.email[0].toUpperCase()}</div>
+                          <div className={styles.userAvatar} style={{
+                            background:`linear-gradient(135deg,${['#1F3C84','#1C9FD4','#4CAE6F','#29B9C3','#8B5CF6'][((u.email||'').charCodeAt(0)||65)%5]},${['#1C9FD4','#29B9C3','#4CAE6F','#1F3C84','#29B9C3'][((u.email||'').charCodeAt(1)||66)%5]})`,
+                            width:36,height:36,borderRadius:10,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
+                            color:'#fff',fontSize:12,fontWeight:700,letterSpacing:'0.5px',boxShadow:'0 2px 8px rgba(15,23,42,0.18)',
+                          }}>
+                            {u.email.split('@')[0].slice(0,2).toUpperCase()}
+                          </div>
                           <div className={styles.uUserText}>
                             <span className={styles.userName}>{u.email.split('@')[0]}{isYou && <span className={styles.youTag}>YOU</span>}</span>
                             <span className={styles.uEmail}>{u.email}</span>
+                            {(u.job_title||u.department)&&<span style={{fontSize:10.5,color:'#94A3B8',fontWeight:500,marginTop:1}}>{[u.job_title,u.department].filter(Boolean).join(' · ')}</span>}
                           </div>
                         </div>
                         <div><span className={styles.roleBadge} style={{background:rm.bg||'#E8EFF9',color:rm.color||'#1F3C84',borderRadius:20,padding:'3px 10px',fontSize:11,fontWeight:700}}>{rm.label}</span></div>
@@ -369,6 +380,19 @@ export default function SettingsPage() {
                             </div>
                           )}
 
+                          <div style={{marginTop:14,display:'flex',gap:10}}>
+                            <div style={{flex:1}}>
+                              <label style={{fontSize:11,fontWeight:600,color:'#64748B',display:'block',marginBottom:4,letterSpacing:'0.05em'}}>JOB TITLE</label>
+                              <input value={editJobTitle} onChange={e=>setEditJobTitle(e.target.value)} placeholder="e.g. Data Analyst"
+                                style={{width:'100%',padding:'7px 10px',borderRadius:8,border:'0.5px solid #E2E8F0',fontSize:12.5,fontFamily:"'Plus Jakarta Sans',sans-serif",outline:'none',boxSizing:'border-box'}}/>
+                            </div>
+                            <div style={{flex:1}}>
+                              <label style={{fontSize:11,fontWeight:600,color:'#64748B',display:'block',marginBottom:4,letterSpacing:'0.05em'}}>DEPARTMENT</label>
+                              <input value={editDepartment} onChange={e=>setEditDepartment(e.target.value)} placeholder="e.g. Performance Marketing"
+                                style={{width:'100%',padding:'7px 10px',borderRadius:8,border:'0.5px solid #E2E8F0',fontSize:12.5,fontFamily:"'Plus Jakarta Sans',sans-serif",outline:'none',boxSizing:'border-box'}}/>
+                            </div>
+                          </div>
+
                           <div className={styles.editActions}>
                             <button className={styles.primaryBtn} onClick={() => saveEdit(u.email)} disabled={usersLoading}>
                               {usersLoading ? 'Saving…' : 'Save changes'}
@@ -407,30 +431,53 @@ export default function SettingsPage() {
               )}
 
               {activityLog.length > 0 && (
-                <div style={{padding:'4px 0'}}>
-                  {activityLog.map((log,idx) => {
-                    const diff = Date.now() - new Date(log.created_at)
-                    const rel = diff<60000?'just now':diff<3600000?Math.round(diff/60000)+'m ago':diff<86400000?Math.round(diff/3600000)+'h ago':Math.round(diff/86400000)+'d ago'
-                    const dot = log.action==='view'?'#1C9FD4':log.action==='login'?'#4CAE6F':'#94A3B8'
-                    const avColor = ['#1F3C84','#1C9FD4','#4CAE6F','#29B9C3','#F59E0B'][((log.email||'').charCodeAt(0)||65)%5]
-                    const pg = (log.page||'App').replace('/dashboard/','').split('/').filter(Boolean).pop()||'App'
-                    return (
-                      <div key={idx} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:idx<activityLog.length-1?'0.5px solid #F1F5F9':'none'}}>
-                        <div style={{width:30,height:30,borderRadius:'50%',background:avColor,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                          <span style={{fontSize:10.5,fontWeight:700,color:'#fff',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{(log.email||'?').split('@')[0].slice(0,2).toUpperCase()}</span>
-                        </div>
-                        <div style={{flex:1,minWidth:0,fontSize:13,color:'#0F172A',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                          <strong style={{fontWeight:600}}>{(log.email||'').split('@')[0]}</strong>
-                          <span style={{color:'#94A3B8',margin:'0 5px'}}>opened</span>
-                          <span style={{fontWeight:600,color:'#1F3C84'}}>{pg}</span>
-                        </div>
-                        <div style={{display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
-                          <div style={{width:7,height:7,borderRadius:'50%',background:dot}}/>
-                          <span style={{fontSize:11.5,color:'#94A3B8',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{rel}</span>
-                        </div>
-                      </div>
-                    )
-                  })}
+                <div style={{overflowX:'auto',marginTop:8}}>
+                  <table style={{width:'100%',borderCollapse:'collapse',fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12.5}}>
+                    <thead>
+                      <tr style={{borderBottom:'1.5px solid #F1F5F9'}}>
+                        {['USER','EMAIL','ACTION','PAGE','DATE','TIME','AGO'].map(h=>(
+                          <th key={h} style={{padding:'9px 12px',textAlign:'left',fontSize:10.5,fontWeight:700,color:'#94A3B8',letterSpacing:'0.06em',whiteSpace:'nowrap'}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activityLog.map((log,idx)=>{
+                        const diff = Date.now()-new Date(log.created_at)
+                        const rel = diff<60000?'just now':diff<3600000?Math.round(diff/60000)+'m ago':diff<86400000?Math.round(diff/3600000)+'h ago':Math.round(diff/86400000)+'d ago'
+                        const avColor = ['#1F3C84','#1C9FD4','#4CAE6F','#29B9C3','#8B5CF6'][((log.email||'').charCodeAt(0)||65)%5]
+                        const avColor2 = ['#1C9FD4','#29B9C3','#4CAE6F','#1F3C84','#29B9C3'][((log.email||'').charCodeAt(1)||66)%5]
+                        const pg = (log.page||'app').replace('/dashboard/','').replace('/','').split('?')[0]||'app'
+                        const pgLabel = pg.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ')
+                        const actionColor = log.action==='view'?'#1C9FD4':log.action==='login'?'#4CAE6F':'#94A3B8'
+                        const actionBg = log.action==='view'?'#E3F5FD':log.action==='login'?'#E9F8EF':'#F3F4F6'
+                        const dt = new Date(log.created_at)
+                        const dateStr = dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
+                        const timeStr = dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})
+                        return (
+                          <tr key={idx} style={{borderBottom:'0.5px solid #F8FAFC',background:idx%2===0?'#fff':'#FAFBFC',transition:'background .1s'}}
+                            onMouseEnter={e=>e.currentTarget.style.background='#F0F4FF'}
+                            onMouseLeave={e=>e.currentTarget.style.background=idx%2===0?'#fff':'#FAFBFC'}>
+                            <td style={{padding:'10px 12px',whiteSpace:'nowrap'}}>
+                              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                                <div style={{width:28,height:28,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:10,fontWeight:700,background:`linear-gradient(135deg,${avColor},${avColor2})`,boxShadow:'0 1px 4px rgba(15,23,42,0.15)'}}>
+                                  {(log.email||'?').split('@')[0].slice(0,2).toUpperCase()}
+                                </div>
+                                <span style={{fontWeight:600,color:'#0F172A'}}>{(log.email||'').split('@')[0]}</span>
+                              </div>
+                            </td>
+                            <td style={{padding:'10px 12px',color:'#64748B',fontSize:11.5}}>{log.email}</td>
+                            <td style={{padding:'10px 12px'}}>
+                              <span style={{padding:'3px 9px',borderRadius:20,fontSize:10.5,fontWeight:700,background:actionBg,color:actionColor,textTransform:'uppercase',letterSpacing:'0.04em'}}>{log.action||'view'}</span>
+                            </td>
+                            <td style={{padding:'10px 12px',color:'#0F172A',fontWeight:600}}>{pgLabel}</td>
+                            <td style={{padding:'10px 12px',whiteSpace:'nowrap',color:'#374151'}}>{dateStr}</td>
+                            <td style={{padding:'10px 12px',whiteSpace:'nowrap',color:'#374151'}}>{timeStr}</td>
+                            <td style={{padding:'10px 12px',color:'#94A3B8',whiteSpace:'nowrap',fontSize:11.5}}>{rel}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
