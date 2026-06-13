@@ -210,6 +210,23 @@ const StatusPill = ({ status }) => {
 }
 
 // ── main dashboard ────────────────────────────────────────────────────────────
+
+const BrandTooltip = ({ active, payload, label, fmt }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, padding:'10px 14px', fontFamily:"'Plus Jakarta Sans','Inter',sans-serif", boxShadow:'0 8px 32px rgba(15,23,42,0.13)', minWidth:140 }}>
+      {label && <div style={{ fontSize:11, fontWeight:700, color:'#0F172A', marginBottom:7, paddingBottom:6, borderBottom:'0.5px solid #F1F5F9' }}>{label}</div>}
+      {payload.map((p, i) => (
+        <div key={i} style={{ display:'flex', alignItems:'center', gap:7, marginTop:i>0?4:0 }}>
+          <div style={{ width:8, height:8, borderRadius:'50%', background:p.color||p.fill||'#1C9FD4', flexShrink:0 }}/>
+          <span style={{ fontSize:11.5, color:'#475569', flex:1 }}>{p.name||p.dataKey}</span>
+          <span style={{ fontSize:12, fontWeight:700, color:'#0F172A' }}>{fmt ? fmt(p.value) : (typeof p.value==='number'&&p.value>999?p.value.toLocaleString('en-IN'):p.value)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function WhatsAppDashboard() {
   const [rows, setRows]               = useState([])
   const [months, setMonths]           = useState([])
@@ -583,10 +600,11 @@ export default function WhatsAppDashboard() {
                     <Card title="By source" sub="Messages sent per sending channel">
                       <ResponsiveContainer width="100%" height={220}>
                         <BarChart data={sourceBar} margin={{top:4,right:8,left:-8,bottom:0}} barCategoryGap="30%">
-                          <XAxis dataKey="source" tick={{fontSize:11,fill:'var(--text3)',fontFamily:FONT}} axisLine={false} tickLine={false}/>
+                          <XAxis dataKey="source" tick={{fontSize:11,fill:'var(--text3)',fontFamily:FONT}} axisLine={false} tickLine={false} tick={{fontSize:10.5,fill:"#94A3B8",fontFamily:"'Plus Jakarta Sans',sans-serif"}} axisLine={false} tickLine={false}/>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                           <YAxis tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtN(v)} axisLine={false} tickLine={false}/>
                           <ReTooltip content={<ChartTip/>} cursor={{fill:'var(--bg3)'}}/>
-                          <Bar dataKey="sent" name="Sent" radius={[5,5,0,0]} maxBarSize={48}>
+                          <Bar dataKey="sent" name="Sent" radius={[6,6,0,0]} maxBarSize={48}>
                             {sourceBar.map((e,i)=><Cell key={i} fill={SOURCE_COLORS[e.source]||'var(--text3)'}/>)}
                           </Bar>
                         </BarChart>
@@ -635,12 +653,13 @@ export default function WhatsAppDashboard() {
                       <ResponsiveContainer width="100%" height={220}>
                         <BarChart data={dailyTrend} margin={{top:8,right:16,left:-8,bottom:0}} barCategoryGap="25%">
                           <XAxis dataKey="date" tick={{fontSize:9.5,fill:'var(--text3)',fontFamily:FONT}} axisLine={false} tickLine={false} tickFormatter={v=>v.slice(5)}/>
+              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                           <YAxis yAxisId="l" tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtN(v)} axisLine={false} tickLine={false}/>
                           <YAxis yAxisId="r" orientation="right" tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtC(v)} axisLine={false} tickLine={false}/>
                           <ReTooltip content={<ChartTip/>} cursor={{fill:'var(--bg3)'}}/>
-                          <Bar yAxisId="l" dataKey="Sent"     fill={C.navy} radius={[4,4,0,0]} maxBarSize={28} name="Sent"/>
-                          <Bar yAxisId="l" dataKey="Delivered" fill={C.blue} radius={[4,4,0,0]} maxBarSize={28} name="Delivered" opacity={0.8}/>
-                          <Bar yAxisId="r" dataKey="Spend"    fill={C.amber} radius={[4,4,0,0]} maxBarSize={16} name="Spend ₹" opacity={0.7}/>
+                          <Bar yAxisId="l" dataKey="Sent"     fill={C.navy} radius={[6,6,0,0]} maxBarSize={28} name="Sent"/>
+                          <Bar yAxisId="l" dataKey="Delivered" fill={C.blue} radius={[6,6,0,0]} maxBarSize={28} name="Delivered" opacity={0.8}/>
+                          <Bar yAxisId="r" dataKey="Spend"    fill={C.amber} radius={[6,6,0,0]} maxBarSize={16} name="Spend ₹" opacity={0.7}/>
                         </BarChart>
                       </ResponsiveContainer>
                       <ChartLegend items={[{name:'Sent',color:C.navy},{name:'Delivered',color:C.blue},{name:'Spend ₹',color:C.amber}]}/>
@@ -653,7 +672,7 @@ export default function WhatsAppDashboard() {
                       <Card title="Month-on-month trend" sub="Messages sent and spend across all months">
                         <ResponsiveContainer width="100%" height={200}>
                           <LineChart data={monthTrend} margin={{top:8,right:16,left:-8,bottom:0}}>
-                            <XAxis dataKey="month" tick={{fontSize:10.5,fill:'var(--text3)',fontFamily:FONT}} axisLine={false} tickLine={false}/>
+                            <XAxis dataKey="month" tick={{fontSize:10.5,fill:'var(--text3)',fontFamily:FONT}} axisLine={false} tickLine={false} tick={{fontSize:10.5,fill:"#94A3B8",fontFamily:"'Plus Jakarta Sans',sans-serif"}} axisLine={false} tickLine={false}/>
                             <YAxis yAxisId="l" tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtN(v)} axisLine={false} tickLine={false}/>
                             <YAxis yAxisId="r" orientation="right" tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtC(v)} axisLine={false} tickLine={false}/>
                             <ReTooltip content={<ChartTip/>}/>
