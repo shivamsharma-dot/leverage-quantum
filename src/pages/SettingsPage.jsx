@@ -9,7 +9,7 @@ const getRoleMeta = (role) => {
   const map = {
     admin:   { label: 'Admin',   color: '#1F3C84', bg: '#E8EFF9' },
     viewer:  { label: 'Viewer',  color: '#1C9FD4', bg: '#E3F5FD' },
-    default: { label: role || 'Viewer', color: '#94A3B8', bg: '#F3F4F6' },
+    default: { label: role || 'Viewer', color: '#94A3B8', bg: '#F3F4F6', cls: '' },
   }
   return map[role] || map.default
 }
@@ -18,6 +18,11 @@ export default function SettingsPage() {
   const { user } = useAuth()
   const userIsAdmin = user?.role === 'admin'
   const [activeTab, setActiveTab] = useState('chat')
+
+  const _actRef = React.useRef(false)
+  React.useEffect(() => {
+    if (activeTab === 'activity' && userIsAdmin && !_actRef.current) { _actRef.current=true; loadActivity() }
+  }, [activeTab, userIsAdmin])
 
   // Activity
   const [activityLog, setActivityLog] = useState([])
@@ -300,13 +305,13 @@ export default function SettingsPage() {
                     <div key={u.email}>
                       <div className={`${styles.uRow} ${isEditing ? styles.uRowEdit : ''}`}>
                         <div className={styles.uUser}>
-                          <div className={styles.userAvatar}>{u.email[0].toUpperCase()}</div>
+                          <div className={styles.userAvatar} style={{background:['#1F3C84','#1C9FD4','#4CAE6F','#29B9C3','#F59E0B'][((u.email||'').charCodeAt(0)||65)%5]}}>{u.email[0].toUpperCase()}</div>
                           <div className={styles.uUserText}>
                             <span className={styles.userName}>{u.email.split('@')[0]}{isYou && <span className={styles.youTag}>YOU</span>}</span>
                             <span className={styles.uEmail}>{u.email}</span>
                           </div>
                         </div>
-                        <div><span className={`${styles.roleBadge} ${rm.cls}`}>{rm.label}</span></div>
+                        <div><span className={styles.roleBadge} style={{background:rm.bg||'#E8EFF9',color:rm.color||'#1F3C84',borderRadius:20,padding:'3px 10px',fontSize:11,fontWeight:700}}>{rm.label}</span></div>
                         <div className={styles.uAccess}>{accessLabel(u.role)}</div>
                         <div>
                           <label className={styles.reportsToggle} title="Receive daily report">
@@ -388,7 +393,7 @@ export default function SettingsPage() {
                   <p className={styles.cardDesc} style={{ margin: 0 }}>See who viewed which dashboard and when.</p>
                 </div>
                 <button className={styles.ghostBtn} onClick={loadActivity}>
-                  {activityLoading ? 'Loading…' : '↻ Load log'}
+                  {activityLoading ? 'Loading…' : '↻ Refresh'}
                 </button>
               </div>
 
@@ -400,27 +405,30 @@ export default function SettingsPage() {
               )}
 
               {activityLog.length > 0 && (
-                <div className={styles.tableWrap}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>{['User', 'Action', 'Page', 'Time'].map(h => <th key={h} className={styles.th}>{h}</th>)}</tr>
-                    </thead>
-                    <tbody>
-                      {activityLog.map((log, i) => {
-                        const tagCls = log.action === 'view' ? styles.actView : log.action === 'login' ? styles.actLogin : styles.actOther
-                        return (
-                          <tr key={i}>
-                            <td className={`${styles.td} ${styles.tdUser}`}>{log.email?.split('@')[0]}</td>
-                            <td className={styles.td}><span className={`${styles.actionTag} ${tagCls}`}>{log.action}</span></td>
-                            <td className={styles.td}>{log.page}</td>
-                            <td className={styles.td}>
-                              {new Date(log.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                <div style={{padding:'4px 0'}}>
+                  {activityLog.map((log,idx) => {
+                    const diff = Date.now() - new Date(log.created_at)
+                    const rel = diff<60000?'just now':diff<3600000?Math.round(diff/60000)+'m ago':diff<86400000?Math.round(diff/3600000)+'h ago':Math.round(diff/86400000)+'d ago'
+                    const dot = log.action==='view'?'#1C9FD4':log.action==='login'?'#4CAE6F':'#94A3B8'
+                    const avColor = ['#1F3C84','#1C9FD4','#4CAE6F','#29B9C3','#F59E0B'][((log.email||'').charCodeAt(0)||65)%5]
+                    const pg = (log.page||'App').replace('/dashboard/','').split('/').filter(Boolean).pop()||'App'
+                    return (
+                      <div key={idx} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:idx<activityLog.length-1?'0.5px solid #F1F5F9':'none'}}>
+                        <div style={{width:30,height:30,borderRadius:'50%',background:avColor,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                          <span style={{fontSize:10.5,fontWeight:700,color:'#fff',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{(log.email||'?').split('@')[0].slice(0,2).toUpperCase()}</span>
+                        </div>
+                        <div style={{flex:1,minWidth:0,fontSize:13,color:'#0F172A',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                          <strong style={{fontWeight:600}}>{(log.email||'').split('@')[0]}</strong>
+                          <span style={{color:'#94A3B8',margin:'0 5px'}}>opened</span>
+                          <span style={{fontWeight:600,color:'#1F3C84'}}>{pg}</span>
+                        </div>
+                        <div style={{display:'flex',alignItems:'center',gap:7,flexShrink:0}}>
+                          <div style={{width:7,height:7,borderRadius:'50%',background:dot}}/>
+                          <span style={{fontSize:11.5,color:'#94A3B8',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>{rel}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
