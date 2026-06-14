@@ -3,13 +3,14 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip as ReTooltip, ResponsiveContainer,
   LineChart, Line, Cell, PieChart, Pie, FunnelChart, Funnel, LabelList, CartesianGrid} from 'recharts'
 import Sidebar from '../components/Sidebar'
+import KPICard from '../components/KPICard'
 import { fetchCSV } from '../lib/sheetCache'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=1222628502&single=true&output=csv'
 
 const C = {
   navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', amber:'#F59E0B',
-  red:'#EF4444', navyBg:'#E8EFF9', blueBg:'#E3F5FD', cyanBg:'#E4F8F9',
+  red:'#DC2626', navyBg:'#E8EFF9', blueBg:'#E3F5FD', cyanBg:'#E4F8F9',
   greenBg:'#E9F8EF', amberBg:'#FEF9C3', redBg:'#FEF2F2',
   border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8', sub:'#475569', bg:'var(--bg)',
 }
@@ -123,22 +124,6 @@ const Sparkline = ({ data, color='#1C9FD4', height=28, width=72 }) => {
   )
 }
 
-const KPICard = ({ label, value, sub, accent=C.navy, accentBg=C.navyBg, delta, icon, sparkData }) => (
-  <div style={{ background:'var(--card)', border:`0.5px solid ${'var(--card-border)'}`, borderRadius:14, padding:'18px 20px', borderTop:`3px solid ${accent}`, boxShadow:'0 1px 6px rgba(15,23,42,0.06)', display:'flex', flexDirection:'column', gap:8 }}>
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-      <div style={{ fontSize:9.5, fontWeight:700, color:'var(--text3)', letterSpacing:'0.09em', textTransform:'uppercase', fontFamily:FONT }}>{label}</div>
-      {icon && <div style={{ width:28, height:28, borderRadius:8, background:accentBg, display:'flex', alignItems:'center', justifyContent:'center', color:accent, flexShrink:0 }}>{icon}</div>}
-    </div>
-    <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', gap:8 }}>
-      <div style={{ fontSize:28, fontWeight:800, color:'var(--text)', letterSpacing:'-1px', lineHeight:1, fontFamily:FONT }}>{value}</div>
-      {sparkData && <Sparkline data={sparkData} color={accent} height={28} width={64}/>}
-    </div>
-    <div style={{ display:'flex', alignItems:'center', gap:6, minHeight:18 }}>
-      {sub && <div style={{ fontSize:11.5, color:'var(--text3)', fontFamily:FONT }}>{sub}</div>}
-      {delta != null && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 7px', borderRadius:20, background:delta>=0?C.greenBg:'#FEF2F2', color:delta>=0?'#4CAE6F':'#DC2626', fontFamily:FONT, marginLeft:'auto' }}>{delta>=0?'▲':'▼'}{Math.abs(delta).toFixed(1)}%</span>}
-    </div>
-  </div>
-)
 
 const Card = ({ title, sub, children, action, noPad }) => (
   <div style={{ background:'var(--card)', border:`0.5px solid ${'var(--card-border)'}`, borderRadius:14, overflow:'hidden', boxShadow:'0 1px 6px rgba(15,23,42,0.06)' }}>
