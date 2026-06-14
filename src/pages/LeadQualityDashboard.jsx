@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import styles from './LeadQualityDashboard.module.css'
@@ -11,7 +12,7 @@ const ALL_CHANNELS = ["Affiliate","Bing","Content+Brand","Facebook","Google","In
 
 const CH_COLORS = {
   Facebook:'#1C9FD4', Google:'#4CAE6F', Affiliate:'#F59E0B',
-  Inbound:'#EF4444', WhatsApp:'#10B981', 'Leverage App':'#1C9FD4',
+  Inbound:'#DC2626', WhatsApp:'#4CAE6F', 'Leverage App':'#1C9FD4',
   Organic:'#1C9FD4', Referral:'#F59E0B', 'Content+Brand':'#29B9C3',
   Remarketing:'#29B9C3', LinkedIn:'#0EA5E9', Bing:'#4CAE6F', Other:'#9CA3AF'
 }
@@ -59,21 +60,6 @@ function InfoTooltip({ items }) {
 const C_KPI = { navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', amber:'#F59E0B',
   navyBg:'#E8EFF9', blueBg:'#E3F5FD', cyanBg:'#E4F8F9', greenBg:'#E9F8EF', amberBg:'#FEF9C3',
   border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8' }
-const KPICard = ({ label, value, sub, accent=C_KPI.navy, accentBg=C_KPI.navyBg, delta, icon }) => (
-  <div style={{ background:'#fff', border:`0.5px solid ${C_KPI.border}`, borderRadius:14, padding:'18px 20px', borderTop:`3px solid ${accent}`, boxShadow:'0 1px 6px rgba(15,23,42,0.06)', display:'flex', flexDirection:'column', gap:8, transition:'transform .2s,box-shadow .2s' }}
-    onMouseOver={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 8px 20px rgba(15,23,42,0.09)'}}
-    onMouseOut={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='0 1px 6px rgba(15,23,42,0.06)'}}>
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-      <div style={{ fontSize:9.5, fontWeight:700, color:C_KPI.muted, letterSpacing:'0.09em', textTransform:'uppercase', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>{label}</div>
-      {icon && <div style={{ width:28, height:28, borderRadius:8, background:accentBg, display:'flex', alignItems:'center', justifyContent:'center', color:accent, flexShrink:0 }}>{icon}</div>}
-    </div>
-    <div style={{ fontSize:28, fontWeight:800, color:C_KPI.text, letterSpacing:'-1px', lineHeight:1, fontFamily:"'Plus Jakarta Sans',sans-serif" }}>{value}</div>
-    <div style={{ display:'flex', alignItems:'center', gap:6, minHeight:18 }}>
-      {sub && <div style={{ fontSize:11.5, color:C_KPI.muted, fontFamily:"'Plus Jakarta Sans',sans-serif" }}>{sub}</div>}
-      {delta != null && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 7px', borderRadius:20, background:delta>=0?C_KPI.greenBg:"#FEF2F2", color:delta>=0?"#059669":"#DC2626", marginLeft:"auto" }}>{delta>=0?"▲":"▼"}{Math.abs(delta).toFixed(1)}%</span>}
-    </div>
-  </div>
-)
 
 export default function LeadQualityDashboard() {
   const [pageLoading, setPageLoading] = React.useState(true)
@@ -185,7 +171,7 @@ export default function LeadQualityDashboard() {
         {/* KPIs */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 }}>
           {kpis.slice(0,4).map(k => {
-            const accentMap = { kbl:C_KPI.navy, kam:C_KPI.amber, kgn:C_KPI.green, krd:'#EF4444' }
+            const accentMap = { kbl:C_KPI.navy, kam:C_KPI.amber, kgn:C_KPI.green, krd:'#DC2626' }
             const bgMap     = { kbl:C_KPI.navyBg, kam:C_KPI.amberBg, kgn:C_KPI.greenBg, krd:'#FEF2F2' }
             return <KPICard key={k.label} label={k.label} value={k.value} sub={k.sub}
               accent={accentMap[k.cls]||C_KPI.navy} accentBg={bgMap[k.cls]||C_KPI.navyBg}/>
@@ -193,7 +179,7 @@ export default function LeadQualityDashboard() {
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 }}>
           {kpis.slice(4).map(k => {
-            const accentMap = { kbl:C_KPI.blue, kam:C_KPI.amber, kgn:C_KPI.green, krd:'#EF4444' }
+            const accentMap = { kbl:C_KPI.blue, kam:C_KPI.amber, kgn:C_KPI.green, krd:'#DC2626' }
             const bgMap     = { kbl:C_KPI.blueBg, kam:C_KPI.amberBg, kgn:C_KPI.greenBg, krd:'#FEF2F2' }
             return <KPICard key={k.label} label={k.label} value={k.value} sub={k.sub}
               accent={accentMap[k.cls]||C_KPI.blue} accentBg={bgMap[k.cls]||C_KPI.blueBg}/>
