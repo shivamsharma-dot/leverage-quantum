@@ -86,3 +86,10 @@ td{padding:8px 12px;color:#6B7280;vertical-align:middle;white-space:nowrap;}
 
 
 
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .layout {
+    padding-top: 52px !important;
+  }
+}
