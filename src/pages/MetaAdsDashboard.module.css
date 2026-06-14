@@ -167,3 +167,10 @@ td { padding:10px 14px; color:#6B7280; vertical-align:middle; white-space:nowrap
 @media(max-width:1200px) { .kpiRowLifetime{grid-template-columns:repeat(5,1fr)} .kpiRowPeriod{grid-template-columns:repeat(5,1fr)} .creativeGrid{grid-template-columns:repeat(2,1fr)} }
 @media(max-width:1100px) { .kpiRowLifetime{grid-template-columns:repeat(3,1fr)} .kpiRowPeriod{grid-template-columns:repeat(3,1fr)} }
 @media(max-width:900px)  { .kpiRowLifetime,.kpiRowPeriod{grid-template-columns:repeat(2,1fr)} .creativeGrid{grid-template-columns:1fr} }
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .layout {
+    padding-top: 52px !important;
+  }
+}
