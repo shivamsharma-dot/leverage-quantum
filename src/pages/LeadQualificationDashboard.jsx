@@ -3,6 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend, Cell, PieChart, Pie, CartesianGrid} from 'recharts'
 import Sidebar from '../components/Sidebar'
+import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { fetchCSV } from '../lib/sheetCache'
 import { usePresence } from '../hooks/usePresence'
@@ -75,28 +76,6 @@ const Sparkline = ({ data, color='#1C9FD4', height=28, width=72 }) => {
   )
 }
 
-const KPICard = ({ label, value, sub, accent = C.navy, delta }) => (
-  <div style={{
-    background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 12,
-    padding: '18px 20px', borderTop: `3px solid ${accent}`,
-    boxShadow: '0 1px 4px rgba(15,23,42,0.04)',
-  }}>
-    <div style={{ fontSize: 9.5, fontWeight: 700, color: C.muted, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, fontFamily: FONT }}>{label}</div>
-    <div style={{ fontSize: 26, fontWeight: 800, color: C.text, letterSpacing: '-0.8px', lineHeight: 1, fontFamily: FONT }}>{value}</div>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 7, minHeight: 20 }}>
-      {sub && <div style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT }}>{sub}</div>}
-      {delta != null && (
-        <span style={{
-          fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
-          background: delta >= 0 ? C.greenBg : '#FEF2F2',
-          color: delta >= 0 ? '#4CAE6F' : '#DC2626', fontFamily: FONT,
-        }}>
-          {delta >= 0 ? '▲' : '▼'}{Math.abs(delta).toFixed(1)}%
-        </span>
-      )}
-    </div>
-  </div>
-)
 
 const Card = ({ title, sub, children, action, noPad }) => (
   <div style={{
@@ -1028,12 +1007,12 @@ export default function LeadQualificationDashboard() {
             <>
               {/* KPI ROW */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 20 }}>
-                <KPICard label="Total Qualified" value={fmtN(totals.total)} sub={selMonth} delta={totals.totalDelta} accent={C.navy} />
-                <KPICard label="Futwork"  value={fmtN(totals.fw)}  sub={pct(totals.fw, totals.total) + ' of total'} delta={totals.fwDelta}  accent={C.navy} />
-                <KPICard label="Superbot" value={fmtN(totals.sb)}  sub={pct(totals.sb, totals.total) + ' of total'} delta={totals.sbDelta}  accent={C.blue} />
+                <KPICard label="Total Qualified" value={fmtN(totals.total)} sub={selMonth} delta={totals.totalDelta} />
+                <KPICard label="Futwork"  value={fmtN(totals.fw)}  sub={pct(totals.fw, totals.total) + ' of total'} delta={totals.fwDelta} />
+                <KPICard label="Superbot" value={fmtN(totals.sb)}  sub={pct(totals.sb, totals.total) + ' of total'} delta={totals.sbDelta} />
                 <KPICard label="FW : SB Split"
                   value={totals.total > 0 ? pct(totals.fw, totals.total) + ' / ' + pct(totals.sb, totals.total) : '—'}
-                  sub="Futwork share / Superbot share" accent={C.cyan} />
+                  sub="Futwork share / Superbot share" />
               </div>
 
               {/* SOURCE BAR + DONUT ROW */}
