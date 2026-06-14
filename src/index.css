@@ -138,3 +138,45 @@ input:focus, textarea:focus {
 .page-enter {
   animation: fadeUp .2s ease both;
 }
+
+
+/* ── Responsive / Mobile ─────────────────────────────────────────────────── */
+
+/* Tables: always horizontally scrollable on small screens */
+@media (max-width: 1024px) {
+  table { font-size: 12px; }
+}
+
+/* Show mobile top bar on ≤768px */
+@media (max-width: 768px) {
+  .lq-mobile-topbar {
+    display: flex !important;
+  }
+  /* Page shells: push content below fixed 52px top bar */
+  .lq-page-shell {
+    padding-top: 52px !important;
+    height: calc(100vh - 0px) !important;
+  }
+  /* KPI cards: 2-column grid instead of horizontal scroll */
+  .lq-kpi-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+  /* Header filters: allow wrapping */
+  .lq-header-controls {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  /* Charts: full width */
+  .lq-chart-grid {
+    flex-direction: column !important;
+  }
+}
+
+/* Smallest screens ≤480px: single column KPI */
+@media (max-width: 480px) {
+  .lq-kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
