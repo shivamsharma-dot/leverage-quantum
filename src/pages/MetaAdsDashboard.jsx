@@ -4,6 +4,7 @@ import { usePresence } from '../hooks/usePresence'
 import { TrendingUp, Users, MousePointer, Eye, Target, BarChart2, Zap, Activity, Award, Globe, Layers } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import KPICard from '../components/KPICard'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import styles from './MetaAdsDashboard.module.css'
 
@@ -234,13 +235,13 @@ function KPIBar({ kpis }) {
 
 // ─── HEALTH BADGE ─────────────────────────────────────────
 function HealthBadge({ label }) {
-  const map = { healthy:'#059669', moderate:'#D97706', high:'#DC2626' }
+  const map = { healthy:'#4CAE6F', moderate:'#D97706', high:'#DC2626' }
   const bg  = { healthy:'#DCFCE7', moderate:'#FEF3C7', high:'#FEE2E2' }
   return <span style={{fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:20,background:bg[label]||'#F3F4F6',color:map[label]||'#6B7280',textTransform:'capitalize'}}>{label}</span>
 }
 
 function ScoreBadge({ score, label }) {
-  const colors = { healthy:'#059669', moderate:'#D97706', high:'#DC2626' }
+  const colors = { healthy:'#4CAE6F', moderate:'#D97706', high:'#DC2626' }
   return <span style={{fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:20,background:'#fff',border:'1.5px solid '+(colors[label]||'#E5E7EB'),color:colors[label]||'#6B7280'}}>Score {score}</span>
 }
 
@@ -288,10 +289,10 @@ function CampaignsTab({ data }) {
   const totActive = useMemo(() => processed.filter(c => c.status === 'ACTIVE').length, [processed])
   const handleSort = col => { if (sortBy === col) setSortDir(d => d==='desc'?'asc':'desc'); else { setSortBy(col); setSortDir('desc') } }
   const fmtN = n => n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':String(Math.round(n||0))
-  const sBadge = s => { const a=s==='ACTIVE'; return <span style={{ display:'inline-flex',alignItems:'center',gap:4,background:a?'#E9F8EF':'#F3F4F6',color:a?'#166534':'#6B7280',fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap' }}><span style={{ width:5,height:5,borderRadius:'50%',background:a?'#22C55E':'#9CA3AF',display:'inline-block' }}/>{a?'Active':'Paused'}</span> }
+  const sBadge = s => { const a=s==='ACTIVE'; return <span style={{ display:'inline-flex',alignItems:'center',gap:4,background:a?'#E9F8EF':'#F3F4F6',color:a?'#166534':'#6B7280',fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap' }}><span style={{ width:5,height:5,borderRadius:'50%',background:a?'#4CAE6F':'#9CA3AF',display:'inline-block' }}/>{a?'Active':'Paused'}</span> }
   const sigBadge = sig => { const m={top:{bg:'#E9F8EF',c:'#166534',t:'▲ Top'},average:{bg:'#F3F4F6',c:'#6B7280',t:'→ Avg'},low:{bg:'#FEF2F2',c:'#991B1B',t:'▼ Low'}}[sig]||{bg:'#F3F4F6',c:'#6B7280',t:'→ Avg'}; return <span style={{ background:m.bg,color:m.c,fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap' }}>{m.t}</span> }
   const fBadge = lv => { const m={healthy:{bg:'#E9F8EF',c:'#166534'},watch:{bg:'#FEF9C3',c:'#854D0E'},fatigue:{bg:'#FEF2F2',c:'#991B1B'}}[lv]||{bg:'#E9F8EF',c:'#166534'}; return <span style={{ background:m.bg,color:m.c,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:10,textTransform:'capitalize',whiteSpace:'nowrap' }}>{lv}</span> }
-  const cplCol = v => v>300?'#DC2626':v>150?'#D97706':v>0?'#059669':'#6B7280'
+  const cplCol = v => v>300?'#DC2626':v>150?'#D97706':v>0?'#4CAE6F':'#6B7280'
   const SH = ({ col, lbl }) => <div onClick={()=>handleSort(col)} style={{ fontSize:11,fontWeight:600,color:sortBy===col?'#1F3C84':'#6B7280',cursor:'pointer',userSelect:'none',display:'flex',alignItems:'center',gap:2 }}>{lbl}<span style={{ opacity:sortBy===col?1:0.3,fontSize:9 }}>{sortBy===col?(sortDir==='desc'?'↓':'↑'):'↕'}</span></div>
   const cols = '2.4fr 90px 80px 110px 110px 90px 80px 90px 90px 80px'
   return (
@@ -300,10 +301,10 @@ function CampaignsTab({ data }) {
         {[
           { label:'IMPRESSIONS',value:accImpr.toLocaleString('en-IN'),sub:accClicks.toLocaleString('en-IN')+' clicks',accent:'#1F3C84',accentBg:'#E8EFF9' },
           { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:totActive+' active · '+pausedCampaignCount+' paused',accent:'#1C9FD4',accentBg:'#E3F5FD' },
-          { label:'TOTAL LEADS',value:accLeads.toLocaleString('en-IN'),sub:'Current period',accent:'#059669',accentBg:'#E9F8EF' },
+          { label:'TOTAL LEADS',value:accLeads.toLocaleString('en-IN'),sub:'Current period',accent:'#4CAE6F',accentBg:'#E9F8EF' },
           { label:'AVG CPL',value:accCPL>0?'₹'+accCPL.toLocaleString('en-IN'):'—',sub:'CTR '+accCTRpct.toFixed(2)+'% · CPM ₹'+accCPM,accent:'#D97706',accentBg:'#FEF9C3' },
-          { label:'FATIGUED',value:totFatigue,sub:'Campaigns freq >4.5',accent:totFatigue>0?'#DC2626':'#059669',accentBg:totFatigue>0?'#FEF2F2':'#E9F8EF' },
-        ].map(k => <div key={k.label} style={{ background:k.accentBg,borderLeft:'3px solid '+k.accent,border:'0.5px solid #E5E7EB',borderRadius:12,padding:'16px 18px' }}><div style={{ fontSize:10,fontWeight:600,color:k.accent,letterSpacing:'0.06em',marginBottom:6 }}>{k.label}</div><div style={{ fontSize:18,fontWeight:700,color:k.accent,letterSpacing:'-0.5px' }}>{k.value}</div><div style={{ fontSize:11,color:k.accent,opacity:0.7,marginTop:4 }}>{k.sub}</div></div>)}
+          { label:'FATIGUED',value:totFatigue,sub:'Campaigns freq >4.5',accent:totFatigue>0?'#DC2626':'#4CAE6F',accentBg:totFatigue>0?'#FEF2F2':'#E9F8EF' },
+        ].map(k => <KPICard key={k.label} label={k.label} value={k.value} sub={k.sub} />)}
       </div>
       <div style={{ display:'flex',gap:8,marginBottom:14,alignItems:'center',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 14px',flexWrap:'wrap' }}>
         <input type="text" placeholder="Search campaigns..." value={search} onChange={e=>setSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:220,background:'#FAFAFA' }}/>
@@ -415,9 +416,9 @@ function CreativesTab({ data }) {
   const hBg={'Healthy':'#E9F8EF','Moderate':'#FEF9C3','High Fatigue':'#FEF2F2'}
   const tColor={video:'#1D4ED8',image:'#374151',carousel:'#7C3AED'}
   const tBg={video:'#EFF6FF',image:'#F3F4F6',carousel:'#F5F3FF'}
-  const cplCol=v=>v>300?'#DC2626':v>150?'#D97706':v>0?'#059669':'#9CA3AF'
+  const cplCol=v=>v>300?'#DC2626':v>150?'#D97706':v>0?'#4CAE6F':'#9CA3AF'
   const fmtN=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':String(Math.round(n||0))
-  const SB=({score})=>(<div style={{ display:'flex',alignItems:'center',gap:5 }}><div style={{ flex:1,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:score+'%',background:score>65?'#22C55E':score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,fontWeight:700,color:'#6B7280',minWidth:22 }}>{score}</span></div>)
+  const SB=({score})=>(<div style={{ display:'flex',alignItems:'center',gap:5 }}><div style={{ flex:1,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:score+'%',background:score>65?'#4CAE6F':score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,fontWeight:700,color:'#6B7280',minWidth:22 }}>{score}</span></div>)
   return (
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
       <div style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10,marginBottom:16 }}>
@@ -461,7 +462,7 @@ function CreativesTab({ data }) {
                 <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8 }}>
                   {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'—',w:ad.cpl>300},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:ad.leads>0?ad.leads.toLocaleString('en-IN'):'\u2014'},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'—',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'—'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#DC2626':'#111827' }}>{m.v}</div></div>)}
                 </div>
-                {ad.ctrDelta!==null&&<div style={{ fontSize:11,color:ad.ctrDelta>=0?'#059669':'#DC2626',marginBottom:6,fontWeight:500 }}>{ad.ctrDelta>=0?'▲':'▼'} CTR {Math.abs(ad.ctrDelta).toFixed(1)}% vs last week</div>}
+                {ad.ctrDelta!==null&&<div style={{ fontSize:11,color:ad.ctrDelta>=0?'#4CAE6F':'#DC2626',marginBottom:6,fontWeight:500 }}>{ad.ctrDelta>=0?'▲':'▼'} CTR {Math.abs(ad.ctrDelta).toFixed(1)}% vs last week</div>}
                 <div style={{ padding:'7px 10px',background:'#EFF6FF',borderRadius:7,marginBottom:6 }}><div style={{ fontSize:9,color:'#1D4ED8',fontWeight:600,textTransform:'uppercase',marginBottom:2,letterSpacing:'0.05em' }}>Hook Rate</div><div style={{ fontSize:14,fontWeight:700,color:'#1D4ED8' }}>{ad.hookRate>0?ad.hookRate.toFixed(1)+'%':'\u2014'}</div></div>
                 {ad.fatigueLabel!=='Healthy'&&<div style={{ padding:'6px 8px',background:hBg[ad.fatigueLabel],borderRadius:6,fontSize:10,color:hColor[ad.fatigueLabel],lineHeight:1.4 }}>{ad.fatigueLabel==='High Fatigue'?'⚠ Freq '+ad.frequency.toFixed(1)+' — needs refresh':'⚡ Freq '+ad.frequency.toFixed(1)+' — watch closely'}</div>}
               </div>
@@ -484,8 +485,8 @@ function CreativesTab({ data }) {
               <div style={{ fontSize:12,color:ad.ctr<accCTRpct*0.6&&ad.ctr>0?'#DC2626':'#374151',fontWeight:ad.ctr<accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div>
               <div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div>
               <div style={{ fontSize:12,color:ad.frequency>4.5?'#DC2626':ad.frequency>3?'#D97706':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div>
-              <div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#22C55E':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div>
-              <div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#059669':'#DC2626',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div>
+              <div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div>
+              <div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#4CAE6F':'#DC2626',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div>
             </div>
           ))}
         </div>
