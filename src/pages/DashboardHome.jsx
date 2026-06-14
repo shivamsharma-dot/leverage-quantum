@@ -158,7 +158,7 @@ export default function DashboardHome() {
   const cpl = liveStats?.meta?.spend && liveStats?.meta?.leads ? liveStats.meta.spend / liveStats.meta.leads : 0
 
   return (
-    <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
+    <div className="lq-page-shell" style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
       <style>{`
         
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
