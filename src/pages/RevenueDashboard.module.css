@@ -73,3 +73,10 @@
 
 
 
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .layout {
+    padding-top: 52px !important;
+  }
+}
