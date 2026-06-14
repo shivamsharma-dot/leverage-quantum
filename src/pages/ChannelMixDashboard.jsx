@@ -329,7 +329,7 @@ export default function ChannelMixDashboard(){
                 {srcBreakdown.map(r=>{
                   const roas=r.spend>0&&r.total_rev>0?(r.total_rev/r.spend).toFixed(2):null
                   return(
-                    <tr className={styles.dataRow} key={r.source} className={r.is_unidentified?styles.unidRow:''}>
+                    <tr className={`${styles.dataRow}${r.is_unidentified?' '+styles.unidRow:''}`} key={r.source}>
                       <td>
                         <div style={{display:'flex',alignItems:'center',gap:7}}>
                           <span style={{width:8,height:8,borderRadius:'50%',background:r.is_unidentified?'#E5E7EB':SRC_COLORS[r.source]||'#9CA3AF',border:r.is_unidentified?'1px dashed #9CA3AF':'none'}}/>
