@@ -331,3 +331,26 @@
   margin-bottom: 4px;
   flex-shrink: 0;
 }
+
+
+/* ── Responsive breakpoints ─────────────────────────────────────────────── */
+
+/* Mobile ≤768px: hide collapsed sidebar, show top bar via JS className */
+@media (max-width: 768px) {
+  .sidebarCollapsed { display: none !important; }
+  .sidebar { display: none !important; }
+}
+
+/* Show the mobile top bar on ≤768px (uses global class set inline) */
+@media (max-width: 768px) {
+  :global(.lq-mobile-topbar) {
+    display: flex !important;
+  }
+}
+
+/* Push page content down on mobile to clear fixed top bar */
+@media (max-width: 768px) {
+  :global(.lq-page-shell) {
+    padding-top: 52px !important;
+  }
+}
