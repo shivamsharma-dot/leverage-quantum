@@ -458,7 +458,7 @@ export default function WhatsAppDashboard() {
             <p style={{ fontSize:10.5, color:'var(--text3)', margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / WhatsApp</p>
             <h1 style={{ fontSize:18, fontWeight:800, color:'var(--text)', margin:'2px 0 0', letterSpacing:'-0.5px', fontFamily:FONT }}>WhatsApp{selMonth ? ' · '+selMonth : ''}</h1>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflowX:'auto', flexShrink:1, minWidth:0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflow:'visible', flexShrink:1, minWidth:0 }}>
             {/* Date preset dropdown */}
             {isCurrentMonth&&(
               <div style={{position:'relative'}}>
