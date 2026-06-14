@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, AreaChart, Area } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import styles from './ChannelMixDashboard.module.css'
 
 const SRC_COLORS = {
-  Facebook:'#1C9FD4', Google:'#10B981', Referral:'#F59E0B',
+  Facebook:'#1C9FD4', Google:'#4CAE6F', Referral:'#F59E0B',
   'Content+Brand':'#29B9C3', Affiliate:'#F59E0B', Remarketing:'#29B9C3',
   Offline:'#1C9FD4', Bing:'#4CAE6F', Branding:'#1C9FD4',
   Unidentified:'#9CA3AF'
@@ -73,23 +74,10 @@ function InfoTooltip({ items }) {
 
 
 const FONT_KPI = "'Plus Jakarta Sans','Inter',sans-serif"
-const C_KPI = { navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', amber:'#F59E0B', red:'#EF4444',
+const C_KPI = { navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', amber:'#F59E0B', red:'#DC2626',
   navyBg:'#E8EFF9', blueBg:'#E3F5FD', cyanBg:'#E4F8F9', greenBg:'#E9F8EF', amberBg:'#FEF9C3', redBg:'#FEF2F2',
   border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8' }
 
-const KPICard = ({ label, value, sub, accent=C_KPI.navy, accentBg=C_KPI.navyBg, delta, icon }) => (
-  <div style={{ background:'#fff', border:`0.5px solid ${C_KPI.border}`, borderRadius:14, padding:'18px 20px', borderTop:`3px solid ${accent}`, boxShadow:'0 1px 6px rgba(15,23,42,0.06)', display:'flex', flexDirection:'column', gap:8, fontFamily:FONT_KPI }}>
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-      <div style={{ fontSize:9.5, fontWeight:700, color:C_KPI.muted, letterSpacing:'0.09em', textTransform:'uppercase' }}>{label}</div>
-      {icon && <div style={{ width:28, height:28, borderRadius:8, background:accentBg, display:'flex', alignItems:'center', justifyContent:'center', color:accent, flexShrink:0 }}>{icon}</div>}
-    </div>
-    <div style={{ fontSize:28, fontWeight:800, color:C_KPI.text, letterSpacing:'-1px', lineHeight:1 }}>{value}</div>
-    <div style={{ display:'flex', alignItems:'center', gap:6, minHeight:18 }}>
-      {sub && <div style={{ fontSize:11.5, color:C_KPI.muted }}>{sub}</div>}
-      {delta != null && <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 7px', borderRadius:20, background:delta>=0?C_KPI.greenBg:'#FEF2F2', color:delta>=0?'#4CAE6F':'#DC2626', marginLeft:'auto' }}>{delta>=0?'▲':'▼'}{Math.abs(delta).toFixed(1)}%</span>}
-    </div>
-  </div>
-)
 
 
 const BrandTooltip = ({ active, payload, label, fmt }) => {
@@ -344,7 +332,7 @@ export default function ChannelMixDashboard(){
                       <td>{r.ac_rev>0?fmtR(r.ac_rev):'–'}</td>
                       <td>{r.vas_rev>0?fmtR(r.vas_rev):'–'}</td>
                       <td><strong>{r.total_rev>0?fmtR(r.total_rev):'–'}</strong></td>
-                      <td>{roas?<span style={{fontWeight:700,color:parseFloat(roas)>=1?'#10B981':'#9CA3AF'}}>{roas}x</span>:'–'}</td>
+                      <td>{roas?<span style={{fontWeight:700,color:parseFloat(roas)>=1?'#4CAE6F':'#9CA3AF'}}>{roas}x</span>:'–'}</td>
                     </tr>
                   )
                 })}
