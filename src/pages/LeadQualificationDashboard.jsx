@@ -89,7 +89,7 @@ const KPICard = ({ label, value, sub, accent = C.navy, delta }) => (
         <span style={{
           fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
           background: delta >= 0 ? C.greenBg : '#FEF2F2',
-          color: delta >= 0 ? '#059669' : '#DC2626', fontFamily: FONT,
+          color: delta >= 0 ? '#4CAE6F' : '#DC2626', fontFamily: FONT,
         }}>
           {delta >= 0 ? '▲' : '▼'}{Math.abs(delta).toFixed(1)}%
         </span>
@@ -808,7 +808,7 @@ export default function LeadQualificationDashboard() {
         }}>
           <div>
             <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / QL Ops</p>
-            <h1 style={{ fontSize: 17, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px', fontFamily: FONT }}>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px', fontFamily: FONT }}>
               Lead Qualification
               {' · '}
               {activeFilter === 'custom' && customFrom
@@ -832,7 +832,7 @@ export default function LeadQualificationDashboard() {
                         : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#4F46E5'}}>
                             {(u.name || u.email).charAt(0).toUpperCase()}
                           </div>}
-                      <div style={{position:'absolute',bottom:1,right:1,width:7,height:7,borderRadius:'50%',background:'#22C55E',border:'1.5px solid #fff'}}/>
+                      <div style={{position:'absolute',bottom:1,right:1,width:7,height:7,borderRadius:'50%',background:'#4CAE6F',border:'1.5px solid #fff'}}/>
                     </div>
                   ))}
                 </div>
@@ -842,23 +842,13 @@ export default function LeadQualificationDashboard() {
               </div>
             )}
             {/* Send report */}
-            {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#059669':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
+            {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#4CAE6F':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
             <button onClick={sendReport} disabled={sending}
               style={{padding:'6px 13px',borderRadius:8,border:`0.5px solid ${C.border}`,background:'var(--card)',color:C.navy,fontSize:12,fontWeight:600,fontFamily:FONT,cursor:sending?'wait':'pointer',display:'flex',alignItems:'center',gap:6,opacity:sending?0.65:1,transition:'all .15s'}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               {sending ? 'Sending…' : 'Send Report'}
             </button>
-            {/* Unified date dropdown */}
-            {isCurrentMonth && (
-              <div style={{ position: 'relative', marginRight: 4 }}>
-                <button onClick={() => setShowCustom(prev => !prev)}
-                  style={{ padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: FONT, border: '0.5px solid ' + (datePreset === 'custom' ? C.navy : C.border), background: datePreset === 'custom' ? C.navyBg : 'var(--card)', color: datePreset === 'custom' ? C.navy : C.sub, fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, minWidth: 130, justifyContent: 'space-between' }}>
-                  <span>{datePreset === 'LD' ? 'Last Day' : datePreset === 'L7D' ? 'Last 7D' : datePreset === 'MTD' ? 'MTD' : customFrom ? (customFrom + ' - ' + customTo) : 'Select'}</span>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-                </button>
-              </div>
-            )}
-            <div style={{ display: 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background:'#F8FAFC', padding:'6px 10px', borderRadius:12, border:'0.5px solid #E5E7EB' }}>
           {isCurrentMonth && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: '3px' }}>
               {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => {
