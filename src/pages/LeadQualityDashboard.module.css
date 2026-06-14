@@ -75,3 +75,9 @@ td { padding:8px 13px; color:#6B7280; vertical-align:middle; font-family:'Plus J
 
 @media(max-width:900px) { .chartsRow { grid-template-columns:1fr; } }
 @media(max-width:640px) { .main { padding:16px; } .kpiGrid { grid-template-columns:repeat(2,1fr); } }
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .layout {
+    padding-top: 52px !important;
+  }
+}
