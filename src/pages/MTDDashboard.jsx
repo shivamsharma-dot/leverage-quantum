@@ -87,7 +87,7 @@ const KPI=({label,value,sub,accent,prev,cur,invert,prorate})=>{
   const adjPrev = (prev!=null&&prorate&&prorate!==1)?prev*prorate:prev
   const d = (adjPrev!=null&&cur!=null)?delta(cur,adjPrev):null
   const good = d==null?null:(invert?d<=0:d>=0)
-  return <div style={{background:'#fff',borderTop:'3px solid '+(accent||'#1C9FD4'),borderRadius:10,padding:'14px 16px 12px',border:'0.5px solid #E5E7EB'}}>
+  return <div style={{background:'#fff',border:'0.5px solid #E2E8F0',borderRadius:12,padding:'16px 20px 14px',border:'0.5px solid #E5E7EB'}}>
     <div style={{fontSize:'9.5px',fontWeight:700,color:'#94A3B8',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:6}}>{label}</div>
     <div style={{fontSize:20,fontWeight:700,color:'#0F172A',letterSpacing:'-0.5px',lineHeight:1}}>{value}</div>
     <div style={{display:'flex',alignItems:'center',gap:6,marginTop:5}}>
