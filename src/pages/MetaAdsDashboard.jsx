@@ -377,6 +377,8 @@ function CampaignsTab({ data }) {
 function CreativesTab({ data }) {
   const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, prevInsightsMap = {} } = data
   const [viewMode, setViewMode] = useState('grid')
+  const PER_PAGE = 12
+  const [page, setPage] = useState(1)
   const [adTypeFilter, setAdTypeFilter] = useState('all')
   const [healthFilter, setHealthFilter] = useState('all')
   const [sortBy, setSortBy] = useState('spend')
@@ -427,6 +429,10 @@ function CreativesTab({ data }) {
     if (adNameSearch) out=out.filter(a=>a.name?.toLowerCase().includes(adNameSearch.toLowerCase()))
     return [...out].sort((a,b)=>sortBy==='score'?b.score-a.score:(b[sortBy]||0)-(a[sortBy]||0))
   }, [processed,adTypeFilter,healthFilter,adNameSearch,sortBy])
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
+  useEffect(() => { setPage(1) }, [adTypeFilter,healthFilter,adNameSearch,sortBy,viewMode,filtered.length])
+  const safePage = Math.min(page, pageCount)
+  const pageItems = filtered.slice((safePage-1)*PER_PAGE, safePage*PER_PAGE)
   const summary = useMemo(() => ({
     healthy:processed.filter(a=>a.fatigueLabel==='Healthy').length,
     moderate:processed.filter(a=>a.fatigueLabel==='Moderate').length,
@@ -469,10 +475,10 @@ function CreativesTab({ data }) {
           {[{m:'grid',l:'⊞ Grid'},{m:'list',l:'☰ List'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} style={{ padding:'5px 10px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,cursor:'pointer',fontFamily:'inherit',background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
         </div>
       </div>
-      <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · account avg CTR {accCTRpct.toFixed(2)}%</div>
+      <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · showing {filtered.length===0?0:((safePage-1)*PER_PAGE+1)}–{Math.min(safePage*PER_PAGE, filtered.length)} · account avg CTR {accCTRpct.toFixed(2)}%</div>
       {viewMode==='grid'?(
-        <div style={{ display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:12 }}>
-          {filtered.map((ad,i)=>(
+        <div className="lq-stagger" style={{ display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:12 }}>
+          {pageItems.map((ad,i)=>(
             <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden',cursor:'pointer',transition:'border-color .15s,box-shadow .15s',display:'flex',flexDirection:'column' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#1F3C84';e.currentTarget.style.boxShadow='0 2px 12px rgba(31,60,132,0.1)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#E5E7EB';e.currentTarget.style.boxShadow='none'}}>
               <div style={{ position:'relative',height:130,background:'#F3F4F6',overflow:'hidden' }}>
                 {ad.creative?._thumbUrl?<img src={proxyImg(ad.creative._thumbUrl)} alt={ad.name} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>:<div style={{ width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4 }}><span style={{ fontSize:28,opacity:0.25 }}>{ad.type==='video'?'▶':ad.type==='carousel'?'▧':'□'}</span><span style={{ fontSize:10,color:'#9CA3AF' }}>{ad.type}</span></div>}
@@ -497,7 +503,7 @@ function CreativesTab({ data }) {
           <div style={{ display:'grid',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 80px 90px 90px 80px 80px',padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
             {['','Creative','Type','Health','Spend','Leads','CTR','CPL','Freq','Score','WoW CTR'].map(h=><div key={h} style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>{h}</div>)}
           </div>
-          {filtered.map((ad,i)=>(
+          {pageItems.map((ad,i)=>(
             <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 80px 90px 90px 80px 80px',padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
               <div style={{ width:32,height:32,borderRadius:6,background:'#F3F4F6',overflow:'hidden',flexShrink:0 }}>{ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div>
               <div style={{ overflow:'hidden' }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }} title={ad.name}>{ad.name}</div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
@@ -514,6 +520,24 @@ function CreativesTab({ data }) {
           ))}
         </div>
       )}
+      {pageCount > 1 && (() => {
+        const win = 5
+        let start = Math.max(1, safePage - Math.floor(win/2))
+        let end = Math.min(pageCount, start + win - 1)
+        start = Math.max(1, end - win + 1)
+        const nums = []
+        for (let n = start; n <= end; n++) nums.push(n)
+        const pBtn = (active) => ({ minWidth:32, height:32, padding:'0 10px', borderRadius:8, border: active?'1px solid #1C9FD4':'1px solid #E5E7EB', background: active?'#1C9FD4':'#fff', color: active?'#fff':'#475569', fontFamily:FONT, fontSize:13, fontWeight: active?700:600, cursor:'pointer', transition:'all .15s' })
+        return (
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, marginTop:18, flexWrap:'wrap' }}>
+            <button onClick={() => setPage(Math.max(1, safePage-1))} disabled={safePage===1} style={{ ...pBtn(false), opacity: safePage===1?0.45:1, cursor: safePage===1?'not-allowed':'pointer' }}>‹ Prev</button>
+            {start > 1 && (<><button onClick={() => setPage(1)} style={pBtn(false)}>1</button>{start > 2 && <span style={{ color:'#94A3B8', padding:'0 2px' }}>…</span>}</>)}
+            {nums.map(n => (<button key={n} onClick={() => setPage(n)} style={pBtn(n===safePage)}>{n}</button>))}
+            {end < pageCount && (<>{end < pageCount-1 && <span style={{ color:'#94A3B8', padding:'0 2px' }}>…</span>}<button onClick={() => setPage(pageCount)} style={pBtn(false)}>{pageCount}</button></>)}
+            <button onClick={() => setPage(Math.min(pageCount, safePage+1))} disabled={safePage===pageCount} style={{ ...pBtn(false), opacity: safePage===pageCount?0.45:1, cursor: safePage===pageCount?'not-allowed':'pointer' }}>Next ›</button>
+          </div>
+        )
+      })()}
     </div>
   )
 }
