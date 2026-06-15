@@ -923,8 +923,6 @@ export default function SettingsPage() {
                   <span style={{fontSize:12,color:'#94A3B8'}}>Icon preferences are saved locally. Assign icons to each metric category to match your team's mental model.</span>
                 </div>
               </div>
-            </>
-          )}
 
               {/* SIDEBAR LAYOUT */}
               <div className={styles.card}>
@@ -1013,6 +1011,8 @@ export default function SettingsPage() {
                   })}
                 </div>
               </div>
+          </>
+        )}
 
                     {activeTab === 'profile' && (
             <div className={styles.card}>
