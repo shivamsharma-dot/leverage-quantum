@@ -37,11 +37,12 @@ const PAGE_TITLES = {
 // ── Route fade transition ──────────────────────────────────────────────────────
 const FADE_STYLE = `
   @keyframes qFadeIn {
-    from { opacity: 0; transform: translateY(4px); }
+    from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
   }
   .q-page-enter {
-    animation: qFadeIn 0.18s ease-out both;
+    animation: qFadeIn 0.42s cubic-bezier(0.22,0.61,0.36,1) both;
+    will-change: opacity, transform;
   }
 `
 
@@ -97,7 +98,7 @@ function ProtectedRoute({ children, dashboardId }) {
 
   // Wrap in fade div
   return (
-    <div key={location.pathname} className="q-page-enter" style={{ display: 'contents' }}>
+    <div key={location.pathname} className="q-page-enter">
       {children}
     </div>
   )
