@@ -399,6 +399,7 @@ function CreativesTab({ data }) {
   const [page, setPage] = useState(1)
   const [adTypeFilter, setAdTypeFilter] = useState('all')
   const [healthFilter, setHealthFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [sortBy, setSortBy] = useState('spend')
   const [adNameSearch, setAdNameSearch] = useState('')
   const [showBackToTop, setShowBackToTop] = useState(false)
@@ -437,16 +438,18 @@ function CreativesTab({ data }) {
     if (cpl>0&&accCPL>0) score+=Math.min(15,Math.max(-15,(accCPL-cpl)/accCPL*15))
     score=Math.round(Math.min(100,Math.max(0,score)))
     return { ...ad, spend, impressions, clicks, reach, ctr, cpm, cpc, frequency, leads, cpl, convRate, spendShare, ctrDelta, videoViews, hookRate, fatigueLabel, type, score }
-  }).filter(a=>a.spend>0||a.impressions>0), [ads,insightsMap,prevInsightsMap,accSpend,accCTRpct,accCPL])
+  }), [ads,insightsMap,prevInsightsMap,accSpend,accCTRpct,accCPL])
   const filtered = useMemo(() => {
     let out=processed
     if (adTypeFilter!=='all') out=out.filter(a=>a.type===adTypeFilter)
+    if (statusFilter==='active') out=out.filter(a=>(a.effective_status||a.status)==='ACTIVE')
+    else if (statusFilter==='inactive') out=out.filter(a=>(a.effective_status||a.status)!=='ACTIVE')
     if (healthFilter==='healthy') out=out.filter(a=>a.fatigueLabel==='Healthy')
     else if (healthFilter==='moderate') out=out.filter(a=>a.fatigueLabel==='Moderate')
     else if (healthFilter==='fatigue') out=out.filter(a=>a.fatigueLabel==='High Fatigue')
     if (adNameSearch) out=out.filter(a=>a.name?.toLowerCase().includes(adNameSearch.toLowerCase()))
     return [...out].sort((a,b)=>sortBy==='score'?b.score-a.score:(b[sortBy]||0)-(a[sortBy]||0))
-  }, [processed,adTypeFilter,healthFilter,adNameSearch,sortBy])
+  }, [processed,adTypeFilter,statusFilter,healthFilter,adNameSearch,sortBy])
   const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   useEffect(() => { setPage(1) }, [adTypeFilter,healthFilter,adNameSearch,sortBy,viewMode,filtered.length])
   const safePage = Math.min(page, pageCount)
@@ -486,6 +489,9 @@ function CreativesTab({ data }) {
         <div style={{ display:'flex',alignItems:'center',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:10 }}><span style={{ fontSize:10,fontWeight:600,color:'#9CA3AF',marginRight:4,whiteSpace:'nowrap' }}>Health</span>
           {[{v:'all',l:'All'},{v:'healthy',l:'Healthy'},{v:'moderate',l:'Moderate'},{v:'fatigue',l:'Fatigue'}].map(h=><button key={h.v} onClick={()=>setHealthFilter(h.v)} style={{ padding:'5px 11px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:healthFilter===h.v?(h.v==='all'?'#1F3C84':h.v==='healthy'?'#166534':h.v==='moderate'?'#854D0E':'#991B1B'):'#fff',color:healthFilter===h.v?'#fff':'#6B7280' }}>{h.l}</button>)}
         </div>
+        <div style={{ display:'flex',alignItems:'center',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:10 }}><span style={{ fontSize:10,fontWeight:600,color:'#9CA3AF',marginRight:4,whiteSpace:'nowrap' }}>Status</span>
+          {[{v:'all',l:'All'},{v:'active',l:'Active'},{v:'inactive',l:'Inactive'}].map(st=><button key={st.v} onClick={()=>setStatusFilter(st.v)} style={{ padding:'5px 11px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:statusFilter===st.v?(st.v==='active'?'#166534':st.v==='inactive'?'#6B7280':'#1F3C84'):'#fff',color:statusFilter===st.v?'#fff':'#6B7280' }}>{st.l}</button>)}
+        </div>
         <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ padding:'5px 10px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:11,fontFamily:'inherit',cursor:'pointer',background:'#fff',color:'#374151',marginLeft:2 }}>
           <option value="spend">Sort: Spend</option><option value="leads">Sort: Leads</option><option value="cpl">Sort: CPL</option><option value="ctr">Sort: CTR</option><option value="frequency">Sort: Frequency</option><option value="score">Sort: Score</option><option value="impressions">Sort: Impressions</option>
         </select>
@@ -500,7 +506,7 @@ function CreativesTab({ data }) {
             <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden',cursor:'pointer',transition:'border-color .15s,box-shadow .15s',display:'flex',flexDirection:'column' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#1F3C84';e.currentTarget.style.boxShadow='0 2px 12px rgba(31,60,132,0.1)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#E5E7EB';e.currentTarget.style.boxShadow='none'}}>
               <div style={{ position:'relative',height:130,background:'#F3F4F6',overflow:'hidden' }}>
                 {ad.creative?._thumbUrl?<img src={proxyImg(ad.creative._thumbUrl)} alt={ad.name} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>:<div style={{ width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4 }}><span style={{ fontSize:28,opacity:0.25 }}>{ad.type==='video'?'▶':ad.type==='carousel'?'▧':'□'}</span><span style={{ fontSize:10,color:'#9CA3AF' }}>{ad.type}</span></div>}
-                {ad.previewPlatform && <span style={{position:'absolute',bottom:8,right:8,padding:'2px 7px',borderRadius:5,background:'rgba(255,255,255,0.92)',fontSize:9,fontWeight:700,color:ad.previewPlatform==='instagram'?'#E1306C':ad.previewPlatform==='facebook'?'#1877F2':'#6B7280',letterSpacing:'0.03em',boxShadow:'0 1px 4px rgba(0,0,0,0.12)',backdropFilter:'blur(4px)',lineHeight:1.6}}>{ad.previewPlatform==='instagram'?'IG':ad.previewPlatform==='facebook'?'FB':'AD LIB'}</span>}
+                {ad.previewPlatform && <span style={{position:'absolute',top:8,right:8,padding:'2px 7px',borderRadius:5,background:'rgba(255,255,255,0.92)',fontSize:9,fontWeight:700,color:ad.previewPlatform==='instagram'?'#E1306C':ad.previewPlatform==='facebook'?'#1877F2':'#6B7280',letterSpacing:'0.03em',boxShadow:'0 1px 4px rgba(0,0,0,0.12)',backdropFilter:'blur(4px)',lineHeight:1.6}}>{ad.previewPlatform==='instagram'?'IG':ad.previewPlatform==='facebook'?'FB':'AD LIB'}</span>}
                 <span style={{ position:'absolute',top:8,left:8,background:tBg[ad.type]||'#F3F4F6',color:tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span>
                 <div style={{ position:'absolute',bottom:8,left:8,right:8 }}><SB score={ad.score}/></div>
               </div>
@@ -1087,6 +1093,22 @@ export default function MetaAdsDashboard() {
             }))
             setData(prev => prev ? { ...prev, ads: moreWithThumbs } : prev)
           }
+        // Fetch insights for ads loaded in background so their spend/metrics appear
+        const moreIds = allAds.map(a=>a.id).filter(id=>!(id in insightsMap))
+        if (moreIds.length) {
+          const moreChunks = []
+          for (let i=0;i<moreIds.length;i+=25) moreChunks.push(moreIds.slice(i,i+25))
+          const mInsights = { ...insightsMap }, mPrev = { ...prevInsightsMap }
+          await mapLimit(moreChunks, 3, async chunk => {
+            const [c, p] = await Promise.all([
+              graphGet(`${AD_ACCOUNT_ID}/insights`, t, { fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions', level: 'ad', ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }), filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]), limit: 50 }).catch(()=>({})),
+              graphGet(`${AD_ACCOUNT_ID}/insights`, t, { fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency', level: 'ad', time_range: prevTimeRange, filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]), limit: 50 }).catch(()=>({}))
+            ])
+            ;(c.data || []).forEach(ins => { mInsights[ins.ad_id] = ins })
+            ;(p.data || []).forEach(ins => { mPrev[ins.ad_id] = ins })
+          })
+          setData(prev => prev ? { ...prev, insightsMap: mInsights, prevInsightsMap: mPrev } : prev)
+        }
         } catch(e) { console.warn('BG ad page fetch stopped:', e.message) }
       })()
       setDatePreset(preset)
