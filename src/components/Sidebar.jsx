@@ -105,9 +105,24 @@ export default function Sidebar() {
   })
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [hiddenPages, setHiddenPages] = React.useState(() => {
+    // Start with localStorage (instant, no flicker) — server will override shortly
     try { return JSON.parse(localStorage.getItem('lq_hidden_pages') || '[]') } catch { return [] }
   })
-  // Sync hidden pages — storage fires cross-tab, CustomEvent fires same-tab
+
+  // On mount: fetch from server (source of truth), then keep in sync via events
+  React.useEffect(() => {
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { prefs: {} })
+      .then(data => {
+        const hp = data.prefs?.hidden_pages || []
+        setHiddenPages(hp)
+        // Keep localStorage in sync so next page load is instant
+        localStorage.setItem('lq_hidden_pages', JSON.stringify(hp))
+      })
+      .catch(() => {}) // fail silently — localStorage fallback stays
+  }, [])
+
+  // Real-time sync within session (from Settings page Save button)
   React.useEffect(() => {
     const onStorage = (e) => {
       if (e.key === 'lq_hidden_pages') {
