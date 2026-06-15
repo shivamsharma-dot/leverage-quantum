@@ -1029,10 +1029,9 @@ export default function LeadQualificationDashboard() {
                     <BarChart data={sourceBar} margin={{ top: 8, right: 12, left: -8, bottom: 0 }} barCategoryGap="28%">
                       <XAxis
                         dataKey="source"
-                        tick={{ fontSize: 11, fill: C.muted, fontFamily: FONT }}
                         axisLine={false} tickLine={false}
                         interval={0}
-                       tick={{fontSize:10.5,fill:"#94A3B8",fontFamily:"'Plus Jakarta Sans',sans-serif"}} axisLine={false} tickLine={false}/>
+                       tick={{fontSize:10.5,fill:"#94A3B8",fontFamily:"'Plus Jakarta Sans',sans-serif"}}/>
               <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                       <YAxis
                         tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }}
@@ -1091,7 +1090,7 @@ export default function LeadQualificationDashboard() {
                 <Card title="Month-on-month trend" sub="Total qualified per provider across all months">
                   <ResponsiveContainer width="100%" height={200}>
                     <LineChart data={trend} margin={{ top: 8, right: 24, left: -8, bottom: 0 }}>
-                      <XAxis dataKey="month" tick={{ fontSize: 10.5, fill: C.muted, fontFamily: FONT }} axisLine={false} tickLine={false}  tick={{fontSize:10.5,fill:"#94A3B8",fontFamily:"'Plus Jakarta Sans',sans-serif"}} axisLine={false} tickLine={false}/>
+                      <XAxis dataKey="month"  tick={{fontSize:10.5,fill:"#94A3B8",fontFamily:"'Plus Jakarta Sans',sans-serif"}} axisLine={false} tickLine={false}/>
               <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                       <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
                       <Tooltip content={<BrandTooltip/>} />
