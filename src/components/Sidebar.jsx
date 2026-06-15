@@ -104,6 +104,23 @@ export default function Sidebar() {
     try { return localStorage.getItem('lq_sidebar_collapsed') === 'true' } catch { return false }
   })
   const [mobileOpen, setMobileOpen] = React.useState(false)
+  const [hiddenPages, setHiddenPages] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('lq_hidden_pages') || '[]') } catch { return [] }
+  })
+  // Sync hidden pages when storage changes (e.g. settings tab changes them)
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'lq_hidden_pages') {
+        try { setHiddenPages(JSON.parse(e.newValue || '[]')) } catch { setHiddenPages([]) }
+      }
+    }
+    window.addEventListener('storage', handler)
+    return () => window.removeEventListener('storage', handler)
+  }, [])
+  const isPageVisible = (label) => {
+    const pageId = idMap[label]
+    return !pageId || !hiddenPages.includes(pageId)
+  }
   React.useEffect(() => {
     const mq = window.matchMedia('(max-width: 1024px)')
     const handler = (e) => { if (e.matches) setCollapsed(true) }
@@ -217,7 +234,7 @@ export default function Sidebar() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
         <div className={styles.collapsedNav}>
-          {NAV.map(group => group.items.filter(item => canSee(idMap[item.label])).map(item => (
+          {NAV.map(group => group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item => (
             <NavLink key={item.label} to={item.to} end={item.end}
               className={({ isActive }) => `${styles.collapsedItem} ${isActive || (item.label === 'Meta Ads' && isMetaParentActive) ? styles.collapsedActive : ''}`}
               title={item.label}>
