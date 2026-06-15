@@ -59,6 +59,31 @@ async function graphGet(path, token, params = {}, retries = 2) {
   return d
 }
 
+// ─── Paginated fetch — follows cursor until all pages collected ─
+async function graphGetAll(path, token, params = {}, maxPages = 20) {
+  let allData = []
+  let nextUrl = null
+  let page = 0
+
+  // First page via graphGet
+  const first = await graphGet(path, token, { ...params, limit: 200 })
+  allData = allData.concat(first.data || [])
+  nextUrl = first.paging?.next || null
+
+  // Follow cursors
+  while (nextUrl && page < maxPages) {
+    page++
+    try {
+      const res = await fetch(nextUrl)
+      const d = await res.json()
+      if (d.error) break
+      allData = allData.concat(d.data || [])
+      nextUrl = d.paging?.next || null
+    } catch { break }
+  }
+  return { data: allData }
+}
+
 // ─── Fatigue score (reverse-engineered from NeoLook pattern) ─
 function computeFatigue(impressions, clicks, ctr, frequency, accountAvgCTR, prev) {
   // Not enough data yet
@@ -860,11 +885,9 @@ export default function MetaAdsDashboard() {
           fields: `name,status,objective,created_time,insights${useTimeRange ? `.time_range(${timeRange})` : `.date_preset(${metaPreset})`}{spend,impressions,clicks,ctr,frequency,actions}`,
           limit: 300
         }),
-        // Ads + creatives - fetch ALL active ads without insights (so no date filter excludes them)
-        graphGet(`${AD_ACCOUNT_ID}/ads`, t, {
+        // Ads + creatives - fetch ALL ads (paginated, no status filter so every ad shows)
+        graphGetAll(`${AD_ACCOUNT_ID}/ads`, t, {
           fields: 'name,status,effective_status,creative{id,name,video_id}',
-          filtering: JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE','PAUSED']}]),
-          limit: 100
         }),
         graphGet(`${AD_ACCOUNT_ID}/adspixels`, t, { fields: 'id,name,last_fired_time' })
       ])
