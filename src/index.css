@@ -180,3 +180,61 @@ input:focus, textarea:focus {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ── THEMES — applied via data-theme on <html> ─────────────────────────────── */
+
+[data-theme="dark"] {
+  --bg:            #0F172A;
+  --bg2:           #1E293B;
+  --bg3:           #1E293B;
+  --sidebar-bg:    #0D1424;
+  --card:          #1E293B;
+  --card-border:   #2D3748;
+  --header-bg:     #1E293B;
+  --header-border: #2D3748;
+  --text:          #F1F5F9;
+  --text2:         #94A3B8;
+  --text3:         #64748B;
+}
+
+[data-theme="navy"] {
+  --bg:            #0D1B40;
+  --bg2:           #162155;
+  --bg3:           #162155;
+  --sidebar-bg:    #091430;
+  --card:          #162155;
+  --card-border:   #1E2D6B;
+  --header-bg:     #162155;
+  --header-border: #1E2D6B;
+  --text:          #E8EFF9;
+  --text2:         #93A3C8;
+  --text3:         #5B6FA8;
+}
+
+[data-theme="stone"] {
+  --bg:            #F5F5F0;
+  --bg2:           #FAFAF8;
+  --bg3:           #F0F0EB;
+  --sidebar-bg:    #FAFAF8;
+  --card:          #FAFAF8;
+  --card-border:   #E0DDD8;
+  --header-bg:     #FAFAF8;
+  --header-border: #E0DDD8;
+  --text:          #1C1917;
+  --text2:         #57534E;
+  --text3:         #A8A29E;
+}
+
+[data-theme="light"] {
+  --bg:            #F4F6F9;
+  --bg2:           #FFFFFF;
+  --bg3:           #F8FAFC;
+  --sidebar-bg:    #FFFFFF;
+  --card:          #FFFFFF;
+  --card-border:   #E5E7EB;
+  --header-bg:     #FFFFFF;
+  --header-border: #E5E7EB;
+  --text:          #0F172A;
+  --text2:         #475569;
+  --text3:         #94A3B8;
+}
