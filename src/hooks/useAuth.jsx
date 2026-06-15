@@ -70,8 +70,26 @@ export function AuthProvider({ children }) {
   }
 
   const logout = async () => {
+    // Immediately cover the screen — no flicker while React unmounts
+    const overlay = document.createElement('div')
+    overlay.style.cssText = [
+      'position:fixed','inset:0','z-index:99999',
+      'background:#fff','display:flex',
+      'align-items:center','justify-content:center',
+      'flex-direction:column','gap:12px',
+    ].join(';')
+    overlay.innerHTML = \`
+      <svg width="28" height="28" viewBox="0 0 22 22" fill="none">
+        <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/>
+        <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#29B9C3"/>
+        <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1C9FD4"/>
+      </svg>
+      <span style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:600;color:#94A3B8;letter-spacing:-0.01em">Signing out…</span>
+    \`
+    document.body.appendChild(overlay)
     try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }) } catch {}
-    setUser(null)
+    // Hard redirect — bypasses React's render cycle entirely, no flicker
+    window.location.replace('/login')
   }
 
   return (
