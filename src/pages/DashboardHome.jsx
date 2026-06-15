@@ -78,13 +78,13 @@ function StatCard({ label, value, sub, accent, loading, icon }) {
   const formatted = loading ? null : display === null ? '—' : (value||'—').toString().replace(/[\d.]+/, display.toString())
 
   return (
-    <div style={{ background:'#fff', border:'0.5px solid #E2E8F0', borderRadius:12, padding:'16px 18px', boxShadow:'0 1px 4px rgba(15,23,42,0.04)', fontFamily:FONT }}>
+    <div style={{ background:'#fff', border:'0.5px solid #E2E8F0', borderRadius:12, padding:'16px 20px 14px', boxShadow:'0 1px 4px rgba(15,23,42,0.04)', fontFamily:FONT }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-        <div style={{ fontSize:9.5, fontWeight:700, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase' }}>{label}</div>
-        <div style={{ width:24, height:24, display:'flex', alignItems:'center', justifyContent:'center', color:'#CBD5E1' }}>{icon}</div>
+        <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase' }}>{label}</div>
+        <div style={{ width:20, height:20, display:'flex', alignItems:'center', justifyContent:'center', color:'#CBD5E1', opacity:0.7 }}>{icon}</div>
       </div>
-      {loading ? <Skeleton h={28} r={6}/> : <div style={{ fontSize:24, fontWeight:800, color:C.text, letterSpacing:'-0.8px', lineHeight:1 }}>{formatted}</div>}
-      {loading ? <div style={{ marginTop:6 }}><Skeleton w="60%" h={14} r={4}/></div> : sub && <div style={{ fontSize:11, color:C.muted, marginTop:5 }}>{sub}</div>}
+      {loading ? <Skeleton h={28} r={6}/> : <div style={{ fontSize:26, fontWeight:800, color:C.text, letterSpacing:'-1px', lineHeight:1, marginBottom:6 }}>{formatted}</div>}
+      {loading ? <div style={{ marginTop:6 }}><Skeleton w="60%" h={14} r={4}/></div> : sub && <div style={{ fontSize:11.5, color:C.muted, marginTop:0 }}>{sub}</div>}
     </div>
   )
 }
