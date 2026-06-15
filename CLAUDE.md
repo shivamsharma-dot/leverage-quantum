@@ -42,7 +42,7 @@ Aggregates Meta Ads performance, cross-channel metrics, lead qualification data,
 | Auth | Server-side Google OAuth + HttpOnly JWT cookies |
 | Database | Supabase (`tsyekthwthxszmsgqfej`) |
 | Email | Resend (`re_[REDACTED — check Resend dashboard]`), domain `leverageedu.com` — verification pending |
-| AI (chat) | Anthropic Claude Sonnet (`claude-sonnet-4-5`) via `ANTHROPIC_API_KEY` — VASU AI chat |
+| AI (chat) | Anthropic Claude Sonnet (`claude-sonnet-4-5`) via `ANTHROPIC_API_KEY` — Ask AI chat |
 | AI (reports) | Groq (`llama-3.3-70b-versatile`) via `VITE_GROQ_API_KEY` — email reports |
 | Meta Ads | Meta Graph API v19, account `act_641914389215638` |
 | Sheets | Google Sheets CSV (published) |
@@ -62,7 +62,7 @@ Aggregates Meta Ads performance, cross-channel metrics, lead qualification data,
 │   ├── users.mjs               # User CRUD (allowed_users table)
 │   ├── preferences.mjs         # GET/POST app_preferences (hidden_pages etc)
 │   ├── send-report.js          # Email report trigger
-│   ├── vasu-chat.js            # VASU AI chat — Claude Sonnet + Meta tool use (SSE streaming)
+│   ├── ask-ai.js            # Ask AI chat — Claude Sonnet + Meta tool use (SSE streaming)
 │   ├── img-proxy.js            # Image proxy for Meta creative thumbnails
 │   ├── refresh-meta.mjs        # Meta token refresh
 │   └── google-ads.mjs          # Google Ads data
@@ -84,7 +84,7 @@ Aggregates Meta Ads performance, cross-channel metrics, lead qualification data,
 │   │   ├── RevenueDashboard.jsx
 │   │   ├── LeadQualificationDashboard.jsx  # QL Ops (Futwork + Superbot)
 │   │   ├── WhatsAppDashboard.jsx
-│   │   ├── VasuAI.jsx          # Chat page — SSE streaming, conv history in Supabase
+│   │   ├── AskAIAI.jsx          # Chat page — SSE streaming, conv history in Supabase
 │   │   └── SettingsPage.jsx
 │   ├── hooks/
 │   │   ├── useAuth.jsx         # Auth context + logout (overlay + hard redirect)
@@ -110,8 +110,8 @@ Aggregates Meta Ads performance, cross-channel metrics, lead qualification data,
 | `app_preferences` | Global settings — `key: 'hidden_pages', value: []` (JSON array of page IDs) |
 | `meta_tokens` | Shared Meta access token so scheduled reports + viewers work without user being online |
 | `presence` | Live presence heartbeats — shown as stacked avatar circles with green dots in header |
-| `vasu_memories` | VASU AI persistent memory |
-| `chat_conversations` | VASU AI chat history |
+| `ask_ai_memories` | Ask AI persistent memory |
+| `chat_conversations` | Ask AI chat history |
 | `report_logs` | Email report send history |
 
 ### SQL to create app_preferences (if missing):
@@ -135,7 +135,7 @@ ON CONFLICT (key) DO NOTHING;
 - **Auth:** Server-side Google OAuth, HttpOnly JWT cookie, restricted to `@leverageedu.com`
 - **Roles:**
   - `admin` — full access to all pages + Settings
-  - `viewer` — read-only, no Settings, no VASU AI sidebar, no Disconnect
+  - `viewer` — read-only, no Settings, no Ask AI sidebar, no Disconnect
   - `viewer:page1,page2` — viewer with explicit page list (stored in `allowed_users.role`)
 - **Session expiry:** 8 hours
 - **Env vars required:** `SESSION_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_CLIENT_ID`, `ANTHROPIC_API_KEY`, `VITE_GROQ_API_KEY`
@@ -160,7 +160,7 @@ ON CONFLICT (key) DO NOTHING;
 | `revenue` | Revenue | `/dashboard/revenue` |
 | `lq-ops` | QL Ops | `/dashboard/lq-ops` |
 | `whatsapp` | WhatsApp | `/dashboard/whatsapp` |
-| `chat` | Chat (VASU AI) | `/dashboard/chat` |
+| `chat` | Chat (Ask AI) | `/dashboard/chat` |
 | `settings` | Settings | `/settings` |
 
 ---
@@ -183,9 +183,9 @@ ON CONFLICT (key) DO NOTHING;
 
 ---
 
-## VASU AI Chat Architecture
+## Ask AI Chat Architecture
 
-`api/vasu-chat.js` — upgraded June 2026 with full Meta tool use:
+`api/ask-ai.js` — upgraded June 2026 with full Meta tool use:
 
 - **AI Model:** Claude Sonnet (`claude-sonnet-4-5`) via `ANTHROPIC_API_KEY`
 - **Streaming:** SSE (`text/event-stream`) — frontend reads `data: {delta:"..."}` chunks
@@ -197,7 +197,7 @@ ON CONFLICT (key) DO NOTHING;
   - Up to 5 tool calls per message (agentic loop)
 - **Initial context (pre-loaded each session):** Last 30d account + campaigns + adsets + QL Ops sheet + WhatsApp sheet
 - **Chat history:** Persisted to Supabase `chat_conversations` + `localStorage`
-- **Memories:** Persisted to Supabase `vasu_memories`
+- **Memories:** Persisted to Supabase `ask_ai_memories`
 
 ---
 
@@ -268,7 +268,7 @@ NO colored top border. NO colored icon squares. NO tinted backgrounds.
 | `lq_table_density` | compact/comfortable/spacious |
 | `lq_sr_fee` | SR fee per RAU for revenue calc |
 | `lq_meta_token` | Cached Meta access token |
-| `lq_chat_convs` | VASU AI conversation list |
+| `lq_ask_ai_convs` | Ask AI conversation list |
 
 ---
 
@@ -403,7 +403,7 @@ with urllib.request.urlopen(req2) as r:
 | WhatsApp header missing grey border | Added `background:#F8FAFC, border:0.5px solid #E5E7EB, borderRadius:12, padding:6px 10px` to filter controls wrapper |
 | Meta spend wrong (FX multiply) | Meta returns INR directly — never multiply by 83 or any FX rate |
 | Meta API 400 on nested insights | Use `insights.date_preset(last_7d)` syntax, not `time_range` in nested insights |
-| VASU AI no live queries | Upgraded `vasu-chat.js` with `query_meta_ads` tool — Claude fetches live Meta data mid-chat |
+| Ask AI no live queries | Upgraded `ask-ai.js` with `query_meta_ads` tool — Claude fetches live Meta data mid-chat |
 | QL Ops header missing bell/send/presence | Header must include all standard header elements |
 
 ---
@@ -432,7 +432,7 @@ with urllib.request.urlopen(req2) as r:
 - BigQuery integration (requirements drafted)
 - `app_preferences` Supabase table — needs manual SQL creation if not done
 - Google Ads dashboard — connected but data source is live
-- VASU AI memories / chat persistence improvements
+- Ask AI memories / chat persistence improvements
 - Meta Ads numbers investigation vs Business Manager discrepancy
 
 ---
