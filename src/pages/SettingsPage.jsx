@@ -84,18 +84,63 @@ export default function SettingsPage() {
   // SR Fee
   const [srFeeInput, setSrFeeInput] = useState(() => localStorage.getItem('lq_sr_fee') || '90000')
 
-  // ── Appearance ────────────────────────────────────────────────────────────
-  const [hiddenPages, setHiddenPages] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('lq_hidden_pages') || '[]') } catch { return [] }
-  })
+  // ── Appearance (admin only, server-backed) ────────────────────────────────
+  // Server state (what's actually saved)
+  const [savedHiddenPages, setSavedHiddenPages] = useState([])
+  // Pending state (local changes not yet saved)
+  const [hiddenPages, setHiddenPages] = useState([])
+  const [prefSaving, setPrefSaving] = useState(false)
+  const [prefSaveMsg, setPrefSaveMsg] = useState(null) // { type: 'ok'|'err', text }
+  const [prefLoading, setPrefLoading] = useState(true)
+
+  // Load from server on mount (admin only)
+  React.useEffect(() => {
+    if (!userIsAdmin) { setPrefLoading(false); return }
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { prefs: {} })
+      .then(data => {
+        const hp = data.prefs?.hidden_pages || []
+        setSavedHiddenPages(hp)
+        setHiddenPages(hp)
+        // Also sync to localStorage so Sidebar gets it immediately
+        localStorage.setItem('lq_hidden_pages', JSON.stringify(hp))
+        window.dispatchEvent(new CustomEvent('lq:hidden-pages-changed', { detail: hp }))
+      })
+      .catch(() => {})
+      .finally(() => setPrefLoading(false))
+  }, [userIsAdmin])
+
   const togglePageVisibility = (pageId) => {
-    setHiddenPages(prev => {
-      const next = prev.includes(pageId) ? prev.filter(id => id !== pageId) : [...prev, pageId]
-      localStorage.setItem('lq_hidden_pages', JSON.stringify(next))
-      // Broadcast to same-tab listeners (storage event only fires cross-tab)
-      window.dispatchEvent(new CustomEvent('lq:hidden-pages-changed', { detail: next }))
-      return next
-    })
+    setHiddenPages(prev =>
+      prev.includes(pageId) ? prev.filter(id => id !== pageId) : [...prev, pageId]
+    )
+    setPrefSaveMsg(null) // Clear previous save message
+  }
+
+  const hasPendingChanges = JSON.stringify([...hiddenPages].sort()) !== JSON.stringify([...savedHiddenPages].sort())
+
+  const saveHiddenPages = async () => {
+    setPrefSaving(true)
+    setPrefSaveMsg(null)
+    try {
+      const r = await fetch('/api/preferences', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'hidden_pages', value: hiddenPages }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Failed')
+      setSavedHiddenPages(hiddenPages)
+      // Sync to localStorage + broadcast to Sidebar immediately
+      localStorage.setItem('lq_hidden_pages', JSON.stringify(hiddenPages))
+      window.dispatchEvent(new CustomEvent('lq:hidden-pages-changed', { detail: hiddenPages }))
+      setPrefSaveMsg({ type: 'ok', text: 'Saved — sidebar updated for all users' })
+    } catch (e) {
+      setPrefSaveMsg({ type: 'err', text: e.message })
+    } finally {
+      setPrefSaving(false)
+    }
   }
 
   const [activeTheme, setActiveTheme] = useState(() => localStorage.getItem('lq_theme') || 'light')
@@ -339,7 +384,7 @@ export default function SettingsPage() {
   const TABS = [
     { id: 'data',       label: 'Data' },
     ...(userIsAdmin ? [{ id: 'users', label: 'User Access' }, { id: 'activity', label: 'Activity Log' }] : []),
-    { id: 'appearance', label: 'Appearance' },
+    ...(userIsAdmin ? [{ id: 'appearance', label: 'Appearance' }] : []),
     { id: 'profile',    label: 'Profile' },
   ]
 
@@ -777,18 +822,41 @@ export default function SettingsPage() {
 
           {/* ---------------- PROFILE ---------------- */}
           {/* ---------------- APPEARANCE ---------------- */}
-          {activeTab === 'appearance' && (
+          {activeTab === 'appearance' && userIsAdmin && (
             <>
               {/* PAGE VISIBILITY */}
               <div className={styles.card}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:18}}>
                   <div>
                     <h3 className={styles.cardTitle}>Page Visibility</h3>
-                    <p className={styles.cardDesc} style={{margin:0}}>Hide pages from the sidebar navigation. Hidden pages remain accessible via direct URL.</p>
+                    <p className={styles.cardDesc} style={{margin:0}}>Hide pages from the sidebar navigation. Hidden pages are <strong>saved globally</strong> — they apply to all users via Supabase.</p>
                   </div>
-                  <span style={{fontSize:11,fontWeight:600,color:'#94A3B8',background:'#F8FAFC',border:'0.5px solid #E2E8F0',borderRadius:6,padding:'3px 10px',whiteSpace:'nowrap',marginTop:2}}>
-                    {hiddenPages.length > 0 ? `${hiddenPages.length} hidden` : 'All visible'}
-                  </span>
+                  <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0,marginTop:2}}>
+                    {prefSaveMsg && (
+                      <span style={{fontSize:11,fontWeight:600,color:prefSaveMsg.type==='ok'?'#16A34A':'#DC2626',background:prefSaveMsg.type==='ok'?'#F0FDF4':'#FEF2F2',border:`0.5px solid ${prefSaveMsg.type==='ok'?'#BBF7D0':'#FECACA'}`,borderRadius:6,padding:'3px 10px'}}>
+                        {prefSaveMsg.text}
+                      </span>
+                    )}
+                    {!prefSaveMsg && (
+                      <span style={{fontSize:11,fontWeight:600,color:'#94A3B8',background:'#F8FAFC',border:'0.5px solid #E2E8F0',borderRadius:6,padding:'3px 10px'}}>
+                        {prefLoading ? 'Loading…' : hiddenPages.length > 0 ? `${hiddenPages.length} hidden` : 'All visible'}
+                      </span>
+                    )}
+                    <button onClick={saveHiddenPages} disabled={prefSaving || !hasPendingChanges || prefLoading}
+                      style={{
+                        padding:'6px 16px',borderRadius:8,border:'none',cursor: hasPendingChanges&&!prefSaving?'pointer':'not-allowed',
+                        background: hasPendingChanges&&!prefSaving?'#1F3C84':'#E2E8F0',
+                        color: hasPendingChanges&&!prefSaving?'#fff':'#94A3B8',
+                        fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",
+                        transition:'all .15s',display:'flex',alignItems:'center',gap:6,whiteSpace:'nowrap',
+                        opacity: prefSaving?0.65:1,
+                      }}>
+                      {prefSaving
+                        ? <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{animation:'spin .8s linear infinite'}}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Saving…</>
+                        : <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>Save</>
+                      }
+                    </button>
+                  </div>
                 </div>
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:10}}>
                   {DASHBOARDS.map(page => {
@@ -834,7 +902,7 @@ export default function SettingsPage() {
                   })}
                 </div>
                 {hiddenPages.length > 0 && (
-                  <button onClick={() => { setHiddenPages([]); localStorage.removeItem('lq_hidden_pages'); window.dispatchEvent(new CustomEvent('lq:hidden-pages-changed', { detail: [] })) }}
+                  <button onClick={() => { setHiddenPages([]); setPrefSaveMsg(null) }}
                     style={{marginTop:16,fontSize:12,fontWeight:600,color:'#DC2626',background:'none',border:'none',cursor:'pointer',padding:'4px 0',display:'flex',alignItems:'center',gap:5}}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
                     Reset all — show all pages
