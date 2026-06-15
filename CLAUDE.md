@@ -84,7 +84,7 @@ Aggregates Meta Ads performance, cross-channel metrics, lead qualification data,
 │   │   ├── RevenueDashboard.jsx
 │   │   ├── LeadQualificationDashboard.jsx  # QL Ops (Futwork + Superbot)
 │   │   ├── WhatsAppDashboard.jsx
-│   │   ├── AskAIAI.jsx          # Chat page — SSE streaming, conv history in Supabase
+│   │   ├── AskAI.jsx          # Chat page — SSE streaming, conv history in Supabase
 │   │   └── SettingsPage.jsx
 │   ├── hooks/
 │   │   ├── useAuth.jsx         # Auth context + logout (overlay + hard redirect)
