@@ -107,15 +107,20 @@ export default function Sidebar() {
   const [hiddenPages, setHiddenPages] = React.useState(() => {
     try { return JSON.parse(localStorage.getItem('lq_hidden_pages') || '[]') } catch { return [] }
   })
-  // Sync hidden pages when storage changes (e.g. settings tab changes them)
+  // Sync hidden pages — storage fires cross-tab, CustomEvent fires same-tab
   React.useEffect(() => {
-    const handler = (e) => {
+    const onStorage = (e) => {
       if (e.key === 'lq_hidden_pages') {
         try { setHiddenPages(JSON.parse(e.newValue || '[]')) } catch { setHiddenPages([]) }
       }
     }
-    window.addEventListener('storage', handler)
-    return () => window.removeEventListener('storage', handler)
+    const onCustom = (e) => { setHiddenPages(e.detail || []) }
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('lq:hidden-pages-changed', onCustom)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('lq:hidden-pages-changed', onCustom)
+    }
   }, [])
   const isPageVisible = (label) => {
     const pageId = idMap[label]
