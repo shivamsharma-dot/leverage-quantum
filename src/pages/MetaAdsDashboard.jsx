@@ -545,7 +545,7 @@ function CreativesTab({ data }) {
         start = Math.max(1, end - win + 1)
         const nums = []
         for (let n = start; n <= end; n++) nums.push(n)
-        const pBtn = (active) => ({ minWidth:32, height:32, padding:'0 10px', borderRadius:8, border: active?'1px solid #1C9FD4':'1px solid #E5E7EB', background: active?'#1C9FD4':'#fff', color: active?'#fff':'#475569', fontFamily:FONT, fontSize:13, fontWeight: active?700:600, cursor:'pointer', transition:'all .15s' })
+        const pBtn = (active) => ({ minWidth:32, height:32, padding:'0 10px', borderRadius:8, border: active?'1px solid #1C9FD4':'1px solid #E5E7EB', background: active?'#1C9FD4':'#fff', color: active?'#fff':'#475569', fontFamily:"'Plus Jakarta Sans','Inter',sans-serif", fontSize:13, fontWeight: active?700:600, cursor:'pointer', transition:'all .15s' })
         return (
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, marginTop:18, flexWrap:'wrap' }}>
             <button onClick={() => setPage(Math.max(1, safePage-1))} disabled={safePage===1} style={{ ...pBtn(false), opacity: safePage===1?0.45:1, cursor: safePage===1?'not-allowed':'pointer' }}>‹ Prev</button>
