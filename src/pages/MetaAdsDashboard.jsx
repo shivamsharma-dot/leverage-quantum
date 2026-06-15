@@ -44,14 +44,32 @@ async function loadTokenFromSupabase() {
 }
 const TOKEN_EXPIRED_EVENT = 'lq:meta_token_expired'
 
-async function graphGet(path, token, params = {}, retries = 2) {
+// Run async mapper over items with bounded concurrency (paces Meta API calls to avoid rate limits)
+async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length)
+  let idx = 0
+  async function worker() {
+    while (idx < items.length) {
+      const i = idx++
+      results[i] = await fn(items[i], i)
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker())
+  await Promise.all(workers)
+  return results
+}
+async function graphGet(path, token, params = {}, retries = 4) {
   const qs = new URLSearchParams({ access_token: token, ...params }).toString()
   const res = await fetch(`https://graph.facebook.com/v19.0/${path}?${qs}`)
   const d = await res.json()
   if (d.error) {
     const msg = d.error.message || ''
-    if (retries > 0 && (msg.includes('reduce') || msg.includes('too large') || d.error.code === 1 || d.error.code === 4 || d.error.code === 17)) {
-      await new Promise(r => setTimeout(r, 1500))
+    const RATE_CODES = [1, 4, 17, 32, 613]
+    const rateLimited = RATE_CODES.includes(d.error.code) || msg.includes('reduce') || msg.includes('too large') || msg.includes('too many')
+    if (retries > 0 && rateLimited) {
+      const attempt = 4 - retries
+      const wait = Math.min(1500 * Math.pow(2, attempt), 20000)
+      await new Promise(r => setTimeout(r, wait))
       return graphGet(path, token, params, retries - 1)
     }
     throw new Error(msg)
@@ -942,7 +960,7 @@ export default function MetaAdsDashboard() {
           for (let i = 0; i < adIds.length; i += 25) insChunks.push(adIds.slice(i, i + 25))
 
           // Fetch current + previous period in parallel
-          await Promise.all(insChunks.map(async chunk => {
+          await mapLimit(insChunks, 3, async chunk => {
             const [currRes, prevRes] = await Promise.all([
               graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
                 fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
@@ -961,7 +979,7 @@ export default function MetaAdsDashboard() {
             ])
             ;(currRes.data || []).forEach(ins => { insightsMap[ins.ad_id] = ins })
             ;(prevRes.data || []).forEach(ins => { prevInsightsMap[ins.ad_id] = ins })
-          }))
+          })
         } catch(e) { console.error('Insights fetch failed:', e.message) }
       }
       const creativeIds = [...new Set(adsRawData.map(a => a.creative?.id).filter(Boolean))]
@@ -970,7 +988,7 @@ export default function MetaAdsDashboard() {
         try {
           const chunks = []
           for (let i = 0; i < creativeIds.length; i += 25) chunks.push(creativeIds.slice(i, i + 25))
-          await Promise.all(chunks.map(async chunk => {
+          await mapLimit(chunks, 3, async chunk => {
             const qs = new URLSearchParams({
               access_token: t,
               ids: chunk.join(','),
@@ -988,7 +1006,7 @@ export default function MetaAdsDashboard() {
               const specImage = linkData.picture || videoData.image_url || spec.photo_data?.url || carouselFirst || null
               creativeThumbs[id] = c.image_url || specImage || c.thumbnail_url || null
             })
-          }))
+          })
         } catch(e) { console.error('Thumb fetch failed:', e.message) }
       }
 
