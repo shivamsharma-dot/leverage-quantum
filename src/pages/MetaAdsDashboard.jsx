@@ -1098,10 +1098,22 @@ export default function MetaAdsDashboard() {
           return osId.split('_').length === 2 ? 'facebook' : 'library'
         }
         try {
+          const fetchWithTimeout = async (url, ms = 15000) => {
+            const ctrl = new AbortController()
+            const tid = setTimeout(() => ctrl.abort(), ms)
+            try { return await fetch(url, { signal: ctrl.signal }) } finally { clearTimeout(tid) }
+          }
+          let bgPages = 0
           let nextUrl = adsRaw.paging.next
           let allAds = adsRaw.data ? [...adsRaw.data] : []
           while (nextUrl) {
-            const res = await fetch(nextUrl)
+            if (++bgPages > 60) break
+            let res, lastErr
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try { res = await fetchWithTimeout(nextUrl, 15000); break }
+              catch (err) { lastErr = err; await new Promise(r => setTimeout(r, 1200 * (attempt + 1))) }
+            }
+            if (!res) { console.warn("BG ad page timed out, stopping", lastErr && lastErr.message); break }
             const pg = await res.json()
             if (pg.error) break
             allAds = allAds.concat(pg.data || [])
