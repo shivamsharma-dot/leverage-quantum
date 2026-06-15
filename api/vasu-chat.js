@@ -1,8 +1,10 @@
-// api/vasu-chat.js — Chat AI · Production · Claude-powered · SSE streaming
+// api/vasu-chat.js — Chat AI · Production · Claude-powered · SSE streaming · Meta Tool Use
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const MODEL         = 'claude-sonnet-4-5'
+const SB_URL        = process.env.SUPABASE_URL        || 'https://tsyekthwthxszmsgqfej.supabase.co'
+const SB_KEY        = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 const QLOPS_SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=0&single=true&output=csv'
 const WA_SHEET    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=1222628502&single=true&output=csv'
@@ -50,7 +52,148 @@ function monthFromISO(s) {
   return ''
 }
 
-// ── data fetchers ─────────────────────────────────────────────────────────────
+// ── get Meta token from Supabase if not provided ─────────────────────────────
+async function getTokenFromSupabase() {
+  if (!SB_KEY) return null
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/meta_tokens?select=token&order=created_at.desc&limit=1`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+      signal: AbortSignal.timeout(5000)
+    })
+    if (!r.ok) return null
+    const d = await r.json()
+    return d?.[0]?.token || null
+  } catch { return null }
+}
+
+// ── Meta Graph API query tool ─────────────────────────────────────────────────
+// This is the tool Claude calls to fetch any Meta data it needs
+async function executeMetaQuery(token, { endpoint, fields, date_preset, time_range, level, limit, filters, breakdowns }) {
+  if (!token) return { error: 'No Meta token available. Ask user to connect Meta Ads from the Meta Ads dashboard.' }
+
+  try {
+    // Build endpoint path
+    // endpoint can be: 'account/insights', 'campaigns', 'adsets', 'ads', 'account/campaigns', etc.
+    let path = endpoint || `${AD_ACCOUNT}/insights`
+
+    // If endpoint doesn't include account prefix, add it
+    if (!path.includes('/') || path.startsWith('campaigns') || path.startsWith('adsets') || path.startsWith('ads')) {
+      path = `${AD_ACCOUNT}/${path}`
+    }
+
+    const params = { access_token: token }
+    if (fields) params.fields = fields
+    if (limit)  params.limit = String(Math.min(parseInt(limit)||50, 200))
+
+    // Date range
+    if (time_range && typeof time_range === 'object') {
+      params.time_range = JSON.stringify(time_range)
+    } else if (date_preset) {
+      params.date_preset = date_preset
+    } else {
+      params.date_preset = 'last_30d'
+    }
+
+    if (level) params.level = level
+    if (breakdowns) params.breakdowns = Array.isArray(breakdowns) ? breakdowns.join(',') : breakdowns
+    if (filters) params.filtering = JSON.stringify(Array.isArray(filters) ? filters : [filters])
+
+    const qs  = new URLSearchParams(params).toString()
+    const url = `https://graph.facebook.com/v19.0/${path}?${qs}`
+
+    const res = await fetch(url, { signal: AbortSignal.timeout(15000) })
+    const data = await res.json()
+
+    if (data.error) {
+      return {
+        error: `Meta API error: ${data.error.message} (code ${data.error.code})`,
+        hint: data.error.code === 190 ? 'Token expired — user must reconnect from Meta Ads dashboard.' : undefined
+      }
+    }
+
+    // Return structured result with summary
+    const items = data.data || []
+    const paging = data.paging || {}
+    return {
+      count: items.length,
+      has_more: !!paging.next,
+      data: items,
+      summary: `Fetched ${items.length} records from ${path}${paging.next ? ' (more available)' : ''}`
+    }
+  } catch (e) {
+    return { error: `Fetch failed: ${e.message}` }
+  }
+}
+
+// ── tool definition for Claude ────────────────────────────────────────────────
+const META_TOOL = {
+  name: 'query_meta_ads',
+  description: `Query Meta Ads Graph API for any data needed to answer the user's question.
+The ad account is act_641914389215638 (Leverage Edu).
+Use this tool whenever you need:
+- Data for specific date ranges (last 7 days, last month, specific month, year-to-date, etc.)
+- Ad-level data (creative performance, individual ad metrics)
+- Campaign or adset breakdowns by placement, age, gender, device, region
+- Custom time ranges (e.g. May 2025, Jan–Mar 2026)
+- Metrics not in the initial context (video views, landing page clicks, conversion rates, etc.)
+- Comparative data (this week vs last week, this month vs last month)
+You can call this tool multiple times to gather all data needed. Always prefer live data over estimates.`,
+  input_schema: {
+    type: 'object',
+    properties: {
+      endpoint: {
+        type: 'string',
+        description: `API endpoint path relative to account. Examples:
+- "insights" → account-level insights
+- "campaigns" → list campaigns
+- "campaigns?fields=name,status,insights{spend,leads}" → campaigns with nested insights
+- "adsets" → list ad sets
+- "ads" → list ads with metrics
+- "ads?fields=name,status,creative{thumbnail_url,body},insights{spend,clicks,ctr,actions}" → ad creatives
+Nested insights fields: use "insights{field1,field2}" syntax within campaigns/adsets/ads endpoints.`
+      },
+      fields: {
+        type: 'string',
+        description: `Fields to fetch. For insights endpoints: spend,impressions,reach,clicks,ctr,cpm,cpp,frequency,actions,action_values,cost_per_action_type,unique_clicks,cost_per_unique_click,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p100_watched_actions,outbound_clicks,landing_page_views. For campaign/adset/ad list endpoints: name,status,objective,daily_budget,lifetime_budget,effective_status,created_time,updated_time,insights{spend,impressions,clicks,ctr,cpm,frequency,reach,actions}`
+      },
+      date_preset: {
+        type: 'string',
+        enum: ['today', 'yesterday', 'this_week_mon_today', 'last_week_mon_sun', 'last_7d', 'last_14d', 'last_30d', 'last_90d', 'this_month', 'last_month', 'last_3d', 'maximum'],
+        description: 'Predefined date range. Use time_range for specific dates.'
+      },
+      time_range: {
+        type: 'object',
+        properties: {
+          since: { type: 'string', description: 'Start date YYYY-MM-DD' },
+          until: { type: 'string', description: 'End date YYYY-MM-DD' }
+        },
+        description: 'Custom date range. Use this for specific months like May 2025: {"since":"2025-05-01","until":"2025-05-31"}'
+      },
+      level: {
+        type: 'string',
+        enum: ['account', 'campaign', 'adset', 'ad'],
+        description: 'Aggregation level for insights endpoint. Omit for campaign/adset/ad list endpoints.'
+      },
+      limit: {
+        type: 'integer',
+        description: 'Number of records to return (max 200). Default 50.'
+      },
+      breakdowns: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Break down insights by: age, gender, country, region, device_platform, publisher_platform, platform_position, impression_device, hourly_stats_aggregated_by_advertiser_time_zone'
+      },
+      filters: {
+        type: 'array',
+        items: { type: 'object' },
+        description: 'Filter records. Example: [{"field":"effective_status","operator":"IN","value":["ACTIVE"]}]'
+      }
+    },
+    required: ['endpoint']
+  }
+}
+
+// ── data fetchers (for initial context) ─────────────────────────────────────
 async function getQLOpsData() {
   try {
     const r = await safeFetch(QLOPS_SHEET)
@@ -125,7 +268,6 @@ async function getMetaData(token) {
   try {
     const qs = p => new URLSearchParams({ access_token: token, ...p }).toString()
 
-    // Fetch account insights + campaigns + ad sets in parallel
     const [accRes, campRes, adsetRes] = await Promise.all([
       safeFetch(`https://graph.facebook.com/v19.0/${AD_ACCOUNT}/insights?${qs({
         fields: 'spend,impressions,reach,clicks,ctr,cpm,cpp,actions,action_values,frequency,unique_clicks,cost_per_unique_click',
@@ -156,17 +298,16 @@ async function getMetaData(token) {
       const types = Array.isArray(type) ? type : [type]
       return types.reduce((s,t) => s + parseInt(actions?.find(a=>a.action_type===t)?.value||0), 0)
     }
-    const getActVal = (actions, type) => parseFloat(actions?.find(a=>a.action_type===type)?.value||0)
 
-    const leads      = getAct(acc.actions, ['onsite_conversion.lead_grouped','lead','complete_registration'])
-    const spend      = parseFloat(acc.spend||0)
-    const impr       = parseInt(acc.impressions||0)
-    const clicks     = parseInt(acc.clicks||0)
-    const reach      = parseInt(acc.reach||0)
-    const freq       = parseFloat(acc.frequency||0)
-    const ctr        = parseFloat(acc.ctr||0)
-    const cpm        = parseFloat(acc.cpm||0)
-    const cpl        = leads>0 ? spend/leads : 0
+    const leads  = getAct(acc.actions, ['onsite_conversion.lead_grouped','lead','complete_registration'])
+    const spend  = parseFloat(acc.spend||0)
+    const impr   = parseInt(acc.impressions||0)
+    const clicks = parseInt(acc.clicks||0)
+    const reach  = parseInt(acc.reach||0)
+    const freq   = parseFloat(acc.frequency||0)
+    const ctr    = parseFloat(acc.ctr||0)
+    const cpm    = parseFloat(acc.cpm||0)
+    const cpl    = leads>0 ? spend/leads : 0
 
     const lines = [
       'META ADS DATA (last 30 days):',
@@ -176,33 +317,26 @@ async function getMetaData(token) {
       `    Leads: ${leads.toLocaleString()} | CPL: ${cpl>0?fmtINR(cpl):'N/A'}`,
     ]
 
-    // Campaign breakdown
     const camps = campData.data || []
     if (camps.length) {
       lines.push(`  CAMPAIGN BREAKDOWN (${camps.length} campaigns):`)
       camps.forEach(c => {
         const ci      = c.insights?.data?.[0] || {}
         const cSpend  = parseFloat(ci.spend||0)
-        const cImpr   = parseInt(ci.impressions||0)
-        const cClicks = parseInt(ci.clicks||0)
         const cCTR    = parseFloat(ci.ctr||0)
-        const cCPM    = parseFloat(ci.cpm||0)
         const cFreq   = parseFloat(ci.frequency||0)
         const cReach  = parseInt(ci.reach||0)
         const cLeads  = getAct(ci.actions, ['onsite_conversion.lead_grouped','lead','complete_registration'])
         const cCPL    = cLeads>0 ? cSpend/cLeads : 0
-        const cpa     = ci.cost_per_action_type?.find(a=>a.action_type==='lead')?.value
         lines.push(`    ▸ ${c.name}`)
         lines.push(`      Status: ${c.status} | Objective: ${c.objective||'N/A'} | Spend: ${fmtINR(cSpend)}`)
-        lines.push(`      Reach: ${cReach.toLocaleString()} | Freq: ${cFreq.toFixed(2)} | CTR: ${cCTR.toFixed(2)}% | CPM: ${fmtINR(cCPM)}`)
-        lines.push(`      Leads: ${cLeads} | CPL: ${cCPL>0?fmtINR(cCPL):'N/A'} | Clicks: ${cClicks.toLocaleString()}`)
-        // Flag fatigue
+        lines.push(`      Reach: ${cReach.toLocaleString()} | Freq: ${cFreq.toFixed(2)} | CTR: ${cCTR.toFixed(2)}% | CPM: ${fmtINR(parseFloat(ci.cpm||0))}`)
+        lines.push(`      Leads: ${cLeads} | CPL: ${cCPL>0?fmtINR(cCPL):'N/A'} | Clicks: ${parseInt(ci.clicks||0).toLocaleString()}`)
         if (cFreq > 3.5) lines.push(`      ⚠ FATIGUE: Frequency ${cFreq.toFixed(1)} > 3.5 threshold`)
         if (cCTR < 0.5 && cSpend > 5000) lines.push(`      ⚠ LOW CTR: ${cCTR.toFixed(2)}% with significant spend`)
       })
     }
 
-    // Ad set level insights
     const adsets = adsetData.data || []
     if (adsets.length) {
       lines.push(`  TOP AD SETS BY SPEND:`)
@@ -218,7 +352,7 @@ async function getMetaData(token) {
   } catch(e) { return `META ADS ERROR: ${e.message}` }
 }
 
-// ── SYSTEM PROMPT — 40 years experience level ────────────────────────────────
+// ── SYSTEM PROMPT ─────────────────────────────────────────────────────────────
 async function buildSystemPrompt(metaToken, memories) {
   const [qlops, whatsapp, meta] = await Promise.all([
     getQLOpsData(),
@@ -244,6 +378,7 @@ ${memoriesSection}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 LIVE DATA — LEVERAGE EDU MARKETING
+(Updated at session start — use query_meta_ads tool for different date ranges or deeper data)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${meta}
@@ -251,6 +386,20 @@ ${meta}
 ${qlops}
 
 ${whatsapp}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+META ADS TOOL ACCESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You have the query_meta_ads tool for LIVE Meta Graph API access. Use it proactively when:
+• The user asks about a specific date range not covered above (last 7 days, specific month, YTD, etc.)
+• The user asks about individual ads or creatives
+• The user asks about breakdowns (by age, gender, placement, device, country)
+• The user asks for week-over-week or month-over-month comparisons
+• You need more campaigns (above 20 shown), adsets, or ad-level data
+• Any question where the initial context may not have the answer
+
+Always call the tool rather than saying "I don't have that data." If the tool returns an error, report it clearly.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BUSINESS & FUNNEL CONTEXT
@@ -292,32 +441,10 @@ YOUR OPERATING PRINCIPLES
 4. BE SPECIFIC — "pause campaign X" not "consider pausing some campaigns"
 5. SHOW YOUR WORKING — especially for calculations; don't just give answers
 6. LABEL YOUR CONFIDENCE — data-backed vs industry benchmark vs inference
-7. NEVER FABRICATE — if data is missing, say exactly what you need and why
+7. NEVER FABRICATE — if data is missing, use the tool to fetch it. Never make up numbers.
 8. CROSS-CHANNEL THINKING — always look for Meta→QL→WhatsApp connections
 9. SEASONAL AWARENESS — India study abroad peaks: Jan–Mar (UK/Canada intake), Jul–Sep (Jan intake)
 10. ALWAYS GIVE NEXT STEPS — end every analysis with ranked actions
-
-REPORT STRUCTURE (use when generating reports):
-## [Report Title]
-**Period:** [dates]
-**Executive Summary** (3–5 bullets — what matters most)
-
-### Performance Data
-| Metric | Current | Benchmark | Status |
-| ------ | ------- | --------- | ------ |
-
-### Key Findings
-(numbered, specific, with data citations)
-
-### Risk Flags ⚠
-(anything needing immediate attention)
-
-### Recommended Actions
-| Priority | Action | Expected Impact | Timeline |
-| -------- | ------ | --------------- | -------- |
-
----
-*Data sources: [list which sources used]*
 
 FORMAT RULES:
 • Use ₹, K, L, Cr for all money
@@ -336,8 +463,11 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' })
 
-  const { messages=[], history=[], metaToken='', memories=[] } = req.body||{}
+  const { messages=[], history=[], metaToken: clientToken='', memories=[] } = req.body||{}
   if (!messages.length) return res.status(400).json({ error: 'No messages' })
+
+  // Resolve Meta token: use client-provided token first, fall back to Supabase
+  const metaToken = clientToken || await getTokenFromSupabase() || ''
 
   try {
     const system = await buildSystemPrompt(metaToken, memories)
@@ -359,35 +489,124 @@ export default async function handler(req, res) {
     while (merged.length && merged[0].role==='assistant') merged.shift()
     if (!merged.length) return res.status(400).json({ error: 'No valid user message' })
 
-    // Call Anthropic API with streaming
-    const anthropicRes = await fetch(ANTHROPIC_URL, {
+    // ── Agentic tool-use loop (up to 5 tool calls) ────────────────────────────
+    // We run non-streaming first to handle tool calls, then stream the final response
+    let currentMessages = [...merged]
+    const MAX_TOOL_ROUNDS = 5
+
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const anthropicRes = await fetch(ANTHROPIC_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'prompt-caching-2024-07-31',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 8192,
+          // On last round, stream. Otherwise collect tool calls.
+          stream: false,
+          tools: [META_TOOL],
+          tool_choice: { type: 'auto' },
+          system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+          messages: currentMessages,
+        }),
+      })
+
+      if (!anthropicRes.ok) {
+        const err = await anthropicRes.json().catch(()=>({}))
+        const msg = err?.error?.message || `Anthropic API error ${anthropicRes.status}`
+        return res.status(anthropicRes.status).json({ error: msg })
+      }
+
+      const response = await anthropicRes.json()
+
+      // Check if Claude wants to use tools
+      const toolUseBlocks = (response.content || []).filter(b => b.type === 'tool_use')
+
+      if (toolUseBlocks.length === 0 || response.stop_reason === 'end_turn') {
+        // No more tool calls — stream the final text response
+        const textContent = (response.content || []).filter(b => b.type === 'text').map(b => b.text).join('')
+
+        // If we already have text, stream it directly
+        if (textContent) {
+          res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+          res.setHeader('Cache-Control', 'no-cache, no-transform')
+          res.setHeader('X-Accel-Buffering', 'no')
+
+          // Stream word by word for smooth UX
+          const words = textContent.split('')
+          let accumulated = ''
+          const CHUNK_SIZE = 20 // characters per chunk
+
+          for (let i = 0; i < words.length; i += CHUNK_SIZE) {
+            const chunk = words.slice(i, i + CHUNK_SIZE).join('')
+            accumulated += chunk
+            res.write(`data: ${JSON.stringify({delta: chunk})}\n\n`)
+            // Small yield to allow backpressure
+            await new Promise(r => setTimeout(r, 0))
+          }
+          res.write(`data: ${JSON.stringify({done: true, content: textContent})}\n\n`)
+          res.end()
+          return
+        }
+
+        // Fallback: stream via fresh Anthropic call
+        break
+      }
+
+      // Execute all tool calls in this round
+      const assistantMessage = { role: 'assistant', content: response.content }
+      const toolResults = []
+
+      for (const toolUse of toolUseBlocks) {
+        if (toolUse.name === 'query_meta_ads') {
+          const result = await executeMetaQuery(metaToken, toolUse.input || {})
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: toolUse.id,
+            content: JSON.stringify(result)
+          })
+        }
+      }
+
+      // Add assistant message + tool results to conversation
+      currentMessages = [
+        ...currentMessages,
+        assistantMessage,
+        { role: 'user', content: toolResults }
+      ]
+    }
+
+    // Final streaming call (fallback path or after tool rounds exhausted)
+    const finalRes = await fetch(ANTHROPIC_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 8192,
         stream: true,
-        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-        messages: merged,
+        system: [{ type: 'text', text: system }],
+        messages: currentMessages,
       }),
     })
 
-    if (!anthropicRes.ok) {
-      const err = await anthropicRes.json().catch(()=>({}))
-      const msg = err?.error?.message || `Anthropic API error ${anthropicRes.status}`
-      return res.status(anthropicRes.status).json({ error: msg })
+    if (!finalRes.ok) {
+      const err = await finalRes.json().catch(()=>({}))
+      return res.status(finalRes.status).json({ error: err?.error?.message || 'Final stream error' })
     }
 
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
     res.setHeader('Cache-Control', 'no-cache, no-transform')
     res.setHeader('X-Accel-Buffering', 'no')
 
-    const reader  = anthropicRes.body.getReader()
+    const reader  = finalRes.body.getReader()
     const decoder = new TextDecoder()
     let buffer = '', fullText = ''
 
