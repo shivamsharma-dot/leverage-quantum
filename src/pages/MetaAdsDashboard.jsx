@@ -462,6 +462,17 @@ function CreativesTab({ data }) {
     totalLeads:processed.reduce((s,a)=>s+a.leads,0),
   }),[processed])
   const avgCPL=summary.totalLeads>0?Math.round(accSpend/summary.totalLeads):0
+  const kpiStats = useMemo(() => {
+    const list = processed || []
+    const spendSum = list.reduce((s,a)=>s+(a.spend||0),0)
+    const leadsSum = list.reduce((s,a)=>s+(a.leads||0),0)
+    const imprSum = list.reduce((s,a)=>s+(a.impressions||0),0)
+    const clicksSum = list.reduce((s,a)=>s+(a.clicks||0),0)
+    const activeCount = list.filter(a=>(a.spend||0)>0||(a.impressions||0)>0).length
+    const cpl = leadsSum>0?Math.round(spendSum/leadsSum):0
+    const ctr = imprSum>0?(clicksSum/imprSum*100):0
+    return { spendSum, leadsSum, imprSum, clicksSum, activeCount, cpl, ctr, total:list.length }
+  }, [processed])
   const hColor={'Healthy':'#166534','Moderate':'#854D0E','High Fatigue':'#991B1B'}
   const hBg={'Healthy':'#E9F8EF','Moderate':'#FEF9C3','High Fatigue':'#FEF2F2'}
   const tColor={video:'#1D4ED8',image:'#374151',carousel:'#7C3AED'}
@@ -471,16 +482,26 @@ function CreativesTab({ data }) {
   const SB=({score})=>(<div style={{ display:'flex',alignItems:'center',gap:5 }}><div style={{ flex:1,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:score+'%',background:score>65?'#4CAE6F':score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,fontWeight:700,color:'#6B7280',minWidth:22 }}>{score}</span></div>)
   return (
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
-      <div style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10,marginBottom:16 }}>
-        {[
-          { label:'TOTAL CREATIVES',value:summary.total,sub:'With spend this period',accent:'#1F3C84',accentBg:'#E8EFF9' },
-          { label:'HEALTHY',value:summary.healthy,sub:'Freq <3, CTR stable',accent:'#166534',accentBg:'#E9F8EF' },
-          { label:'MODERATE',value:summary.moderate,sub:'Freq 3-4.5 or CTR dipping',accent:'#854D0E',accentBg:'#FEF9C3' },
-          { label:'HIGH FATIGUE',value:summary.fatigue,sub:'Freq >4.5 — refresh now',accent:'#991B1B',accentBg:'#FEF2F2' },
-          { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:accImpr.toLocaleString('en-IN')+' impressions',accent:'#1C9FD4',accentBg:'#E3F5FD' },
-          { label:'AVG CPL',value:avgCPL>0?'₹'+avgCPL.toLocaleString('en-IN'):'—',sub:'Acct avg CTR '+accCTRpct.toFixed(2)+'%',accent:'#D97706',accentBg:'#FEF9C3' },
-        ].map(k=><div key={k.label} style={{ background:k.accentBg,borderLeft:'3px solid '+k.accent,border:'0.5px solid #E5E7EB',borderRadius:12,padding:'14px 16px',minWidth:0 }}><div style={{ fontSize:10,fontWeight:600,color:k.accent,letterSpacing:'0.06em',marginBottom:6 }}>{k.label}</div><div style={{ fontSize:18,fontWeight:700,color:k.accent,letterSpacing:'-0.5px' }}>{k.value}</div><div style={{ fontSize:11,color:k.accent,opacity:0.7,marginTop:4 }}>{k.sub}</div></div>)}
-      </div>
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:14,marginBottom:18 }}>
+          {[
+            { key:'spend', label:'PERIOD SPEND', value:fmtINR(kpiStats.spendSum), sub:((n=>n>=1e7?(n/1e7).toFixed(2)+' Cr':n>=1e5?(n/1e5).toFixed(2)+' L':n>=1e3?(n/1e3).toFixed(1)+'K':String(Math.round(n||0))))(kpiStats.imprSum)+' impressions', c1:'#1C9FD4', c2:'#29B9C3', icon:'₹' },
+            { key:'leads', label:'LEADS', value:kpiStats.leadsSum.toLocaleString('en-IN'), sub:'in selected range', c1:'#4CAE6F', c2:'#34D399', icon:'◉' },
+            { key:'cpl', label:'CPL', value:kpiStats.cpl>0?'₹'+kpiStats.cpl.toLocaleString('en-IN'):'—', sub:'cost per lead', c1:'#1F3C84', c2:'#3D5BB8', icon:'▲' },
+            { key:'creatives', label:'CREATIVES', value:kpiStats.activeCount.toLocaleString('en-IN'), sub:'active of '+kpiStats.total.toLocaleString('en-IN')+' total', c1:'#0E7490', c2:'#22A7BC', icon:'▦' },
+            { key:'ctr', label:'AVG CTR', value:kpiStats.ctr.toFixed(2)+'%', sub:kpiStats.clicksSum.toLocaleString('en-IN')+' clicks', c1:'#2563A8', c2:'#1C9FD4', icon:'↗' },
+          ].map(k => (
+            <div key={k.key} style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'16px 18px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)' }}>
+              <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:'linear-gradient(90deg,'+k.c1+','+k.c2+')' }} />
+              <div style={{ position:'absolute', top:-28, right:-28, width:96, height:96, borderRadius:'50%', background:'linear-gradient(135deg,'+k.c1+'14,'+k.c2+'05)' }} />
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12, position:'relative' }}>
+                <div style={{ width:30, height:30, borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, color:'#fff', background:'linear-gradient(135deg,'+k.c1+','+k.c2+')', boxShadow:'0 4px 10px -2px '+k.c1+'66' }}>{k.icon}</div>
+                <span style={{ fontSize:10.5, fontWeight:700, letterSpacing:'0.07em', color:'#64748B', textTransform:'uppercase' }}>{k.label}</span>
+              </div>
+              <div style={{ fontSize:26, fontWeight:800, letterSpacing:'-0.6px', color:'#0F1B33', lineHeight:1.05, position:'relative' }}>{k.value}</div>
+              <div style={{ fontSize:11.5, color:'#8A94A6', marginTop:5, position:'relative' }}>{k.sub}</div>
+            </div>
+          ))}
+        </div>
       <div style={{ display:'flex',gap:8,marginBottom:14,alignItems:'center',flexWrap:'wrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 14px' }}>
         <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:200,background:'#FAFAFA' }}/>
         <div style={{ display:'flex',alignItems:'center',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:10 }}><span style={{ fontSize:10,fontWeight:600,color:'#9CA3AF',marginRight:4,whiteSpace:'nowrap' }}>Format</span>
