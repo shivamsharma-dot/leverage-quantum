@@ -1,18 +1,35 @@
 # LEVERAGE QUANTUM — Claude Context File
 
-> This file is auto-read by Claude at the start of every session. Keep it updated after every significant change.
-> Last updated: June 2026
+> Auto-read by Claude at every session start. Last updated: June 15, 2026.
 
 ---
 
 ## What is Quantum?
 
 **Leverage Quantum** is an internal analytics dashboard for Leverage Edu (Indian edtech, study abroad vertical).
-It aggregates Meta Ads performance, cross-channel metrics, lead qualification data, and AI-driven reporting into one internal tool.
+Aggregates Meta Ads performance, cross-channel metrics, lead qualification data, and AI-driven reporting into one internal tool.
 
 - **Live URL:** `quantum.leverageedu.com`
 - **Repo:** `shivamsharma-dot/leverage-quantum` (public, default branch `main`)
 - **Owner/Admin:** Shivam Sharma (`shivam.sharma@leverageedu.com`)
+
+---
+
+## Credentials & Keys
+
+| What | Value |
+|---|---|
+| **GitHub PAT** | `ghp_[REDACTED — check Claude chat history or GitHub settings]` |
+| **GitHub Repo** | `shivamsharma-dot/leverage-quantum` |
+| **Supabase Project ID** | `tsyekthwthxszmsgqfej` |
+| **Supabase URL** | `https://tsyekthwthxszmsgqfej.supabase.co` |
+| **Supabase Anon Key** | `[SUPABASE_ANON_KEY — check Vercel env or Supabase dashboard]` |
+| **Meta Ad Account** | `act_641914389215638` |
+| **Resend API Key** | `re_[REDACTED — check Resend dashboard]` |
+| **Google Sheets (QL Ops gid=0)** | `https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=0&single=true&output=csv` |
+| **Google Sheets (WhatsApp gid=1222628502)** | Same spreadsheet, `gid=1222628502` |
+
+**Note:** GitHub token lacks `workflow` scope — cannot push `.github/workflows/` via API. Use GitHub web UI for workflow files.
 
 ---
 
@@ -24,13 +41,14 @@ It aggregates Meta Ads performance, cross-channel metrics, lead qualification da
 | Serverless API | Vercel `/api` functions (`.mjs` / `.js`) |
 | Auth | Server-side Google OAuth + HttpOnly JWT cookies |
 | Database | Supabase (`tsyekthwthxszmsgqfej`) |
-| Email | Resend (domain `leverageedu.com` — verification pending) |
-| AI | Groq (`llama-3.3-70b-versatile`) — VASU AI chat + reports |
+| Email | Resend (`re_[REDACTED — check Resend dashboard]`), domain `leverageedu.com` — verification pending |
+| AI (chat) | Anthropic Claude Sonnet (`claude-sonnet-4-5`) via `ANTHROPIC_API_KEY` — VASU AI chat |
+| AI (reports) | Groq (`llama-3.3-70b-versatile`) via `VITE_GROQ_API_KEY` — email reports |
 | Meta Ads | Meta Graph API v19, account `act_641914389215638` |
 | Sheets | Google Sheets CSV (published) |
 
-**Font:** Plus Jakarta Sans everywhere  
-**Brand colors:** Navy `#1F3C84`, Blue `#1C9FD4`, Cyan `#29B9C3`, Green `#4CAE6F`  
+**Font:** Plus Jakarta Sans everywhere
+**Brand colors:** Navy `#1F3C84`, Blue `#1C9FD4`, Cyan `#29B9C3`, Green `#4CAE6F`
 **No violet/purple anywhere**
 
 ---
@@ -44,37 +62,38 @@ It aggregates Meta Ads performance, cross-channel metrics, lead qualification da
 │   ├── users.mjs               # User CRUD (allowed_users table)
 │   ├── preferences.mjs         # GET/POST app_preferences (hidden_pages etc)
 │   ├── send-report.js          # Email report trigger
-│   ├── vasu-chat.js            # VASU AI chat endpoint
+│   ├── vasu-chat.js            # VASU AI chat — Claude Sonnet + Meta tool use (SSE streaming)
 │   ├── img-proxy.js            # Image proxy for Meta creative thumbnails
 │   ├── refresh-meta.mjs        # Meta token refresh
 │   └── google-ads.mjs          # Google Ads data
 ├── src/
 │   ├── components/
 │   │   ├── Sidebar.jsx         # Nav sidebar (PAGE_LIST is source of truth)
-│   │   ├── Sidebar.module.css  # Sidebar styles + responsive breakpoints
-│   │   ├── KPICard.jsx         # SHARED KPI card component (all pages use this)
+│   │   ├── Sidebar.module.css
+│   │   ├── KPICard.jsx         # SHARED KPI card component — all pages must use this
 │   │   ├── ExportButton.jsx
 │   │   ├── CompareMode.jsx
 │   │   └── SkeletonLoader.jsx
 │   ├── pages/
-│   │   ├── DashboardHome.jsx   # Summary / home page
-│   │   ├── MetaAdsDashboard.jsx # Meta Ads (Campaigns + Creatives tabs)
+│   │   ├── DashboardHome.jsx
+│   │   ├── MetaAdsDashboard.jsx
 │   │   ├── ROASDashboard.jsx
-│   │   ├── MTDDashboard.jsx    # Month-to-date CPL/CPQL with AI insights
+│   │   ├── MTDDashboard.jsx
 │   │   ├── LeadQualityDashboard.jsx
 │   │   ├── ChannelMixDashboard.jsx
 │   │   ├── RevenueDashboard.jsx
 │   │   ├── LeadQualificationDashboard.jsx  # QL Ops (Futwork + Superbot)
 │   │   ├── WhatsAppDashboard.jsx
-│   │   └── SettingsPage.jsx    # Settings (Data / User Access / Activity / Appearance / Profile)
+│   │   ├── VasuAI.jsx          # Chat page — SSE streaming, conv history in Supabase
+│   │   └── SettingsPage.jsx
 │   ├── hooks/
 │   │   ├── useAuth.jsx         # Auth context + logout (overlay + hard redirect)
-│   │   └── usePresence.jsx     # Live presence (heartbeat → Supabase)
+│   │   └── usePresence.jsx     # Live presence (heartbeat every 45s → Supabase)
 │   ├── data/
 │   │   └── aiContext.js        # Cross-channel sheet data for AI reports
 │   ├── App.jsx
 │   ├── main.jsx
-│   └── index.css               # Global CSS vars (themes + density + responsive)
+│   └── index.css
 └── .github/
     └── workflows/
         ├── claude.yml           # Claude Code GitHub Action (@claude mentions)
@@ -89,8 +108,8 @@ It aggregates Meta Ads performance, cross-channel metrics, lead qualification da
 |---|---|
 | `allowed_users` | Who can log in, role (`admin`/`viewer:page1,page2`), job_title, department, receive_reports |
 | `app_preferences` | Global settings — `key: 'hidden_pages', value: []` (JSON array of page IDs) |
-| `meta_tokens` | Shared Meta access token so scheduled reports work without user being online |
-| `presence` | Live presence heartbeats (shown as avatar circles in header) |
+| `meta_tokens` | Shared Meta access token so scheduled reports + viewers work without user being online |
+| `presence` | Live presence heartbeats — shown as stacked avatar circles with green dots in header |
 | `vasu_memories` | VASU AI persistent memory |
 | `chat_conversations` | VASU AI chat history |
 | `report_logs` | Email report send history |
@@ -118,14 +137,16 @@ ON CONFLICT (key) DO NOTHING;
   - `admin` — full access to all pages + Settings
   - `viewer` — read-only, no Settings, no VASU AI sidebar, no Disconnect
   - `viewer:page1,page2` — viewer with explicit page list (stored in `allowed_users.role`)
-- **Env vars required:** `SESSION_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_CLIENT_ID`
+- **Session expiry:** 8 hours
+- **Env vars required:** `SESSION_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_CLIENT_ID`, `ANTHROPIC_API_KEY`, `VITE_GROQ_API_KEY`
 - **Logout:** Instant white overlay → fetch `/api/auth/logout` → `window.location.replace('/login')` (no React flicker)
+- **Meta token:** Shared via Supabase `meta_tokens` table — viewers auto-load it on mount without connecting themselves
 
 ---
 
 ## Page List (PAGE_LIST in Sidebar.jsx)
 
-`Sidebar.jsx` exports `PAGE_LIST` — the **single source of truth** for all pages. Adding a page here auto-propagates to nav, `idMap`, and Settings access checkboxes.
+`Sidebar.jsx` exports `PAGE_LIST` — **single source of truth** for all pages. Adding a page here auto-propagates to nav, `idMap`, and Settings access checkboxes.
 
 | ID | Label | Route |
 |---|---|---|
@@ -139,7 +160,7 @@ ON CONFLICT (key) DO NOTHING;
 | `revenue` | Revenue | `/dashboard/revenue` |
 | `lq-ops` | QL Ops | `/dashboard/lq-ops` |
 | `whatsapp` | WhatsApp | `/dashboard/whatsapp` |
-| `chat` | Chat | `/dashboard/chat` |
+| `chat` | Chat (VASU AI) | `/dashboard/chat` |
 | `settings` | Settings | `/settings` |
 
 ---
@@ -155,10 +176,28 @@ ON CONFLICT (key) DO NOTHING;
 
 **Meta API rules:**
 - Use `onsite_conversion.lead_grouped` (not `action_type: lead`) to match Ads Manager "Results"
-- Indian accounts return spend in INR directly
+- Indian accounts return spend in INR directly — **never multiply by FX rate**
 - Use `insights.date_preset(last_7d)` syntax for nested insights on campaign/ad endpoints
 - Passing `time_range` to nested insights causes 400 errors
 - Ads fetch uses `graphGetAll()` — cursor-paginated, follows `paging.next` until all ads fetched
+
+---
+
+## VASU AI Chat Architecture
+
+`api/vasu-chat.js` — upgraded June 2026 with full Meta tool use:
+
+- **AI Model:** Claude Sonnet (`claude-sonnet-4-5`) via `ANTHROPIC_API_KEY`
+- **Streaming:** SSE (`text/event-stream`) — frontend reads `data: {delta:"..."}` chunks
+- **Meta token:** Uses client-provided token first, falls back to Supabase `meta_tokens` table
+- **`query_meta_ads` tool:** Claude calls this live during chat to fetch any Meta data:
+  - Any date range (`last_7d`, `this_month`, `{"since":"2025-05-01","until":"2025-05-31"}`, etc.)
+  - Any level (account / campaign / adset / **ad**)
+  - Any breakdown (age, gender, placement, device, country, region)
+  - Up to 5 tool calls per message (agentic loop)
+- **Initial context (pre-loaded each session):** Last 30d account + campaigns + adsets + QL Ops sheet + WhatsApp sheet
+- **Chat history:** Persisted to Supabase `chat_conversations` + `localStorage`
+- **Memories:** Persisted to Supabase `vasu_memories`
 
 ---
 
@@ -191,6 +230,9 @@ NO colored top border. NO colored icon squares. NO tinted backgrounds.
 5. **Colors** — `#22C55E` → `#4CAE6F`, `#059669` → `#4CAE6F`, `#38BDF8` → `#1C9FD4`, no violet/purple
 6. **Charts** — use brand palette: navy `#1F3C84`, blue `#1C9FD4`, cyan `#29B9C3`, green `#4CAE6F`
 7. **Font** — Plus Jakarta Sans everywhere, no Inter, no system fonts
+8. **Dropdowns** — always custom-styled, never native `<select>`
+9. **"i" tooltip rule** — every dashboard page must include an information tooltip explaining metric calculations. Keep in sync when metrics change.
+10. **Design quality** — production-grade on every element: custom dropdowns, styled tooltips, proper spacing, hover states on all interactive elements. Nothing default or plain.
 
 ---
 
@@ -199,10 +241,11 @@ NO colored top border. NO colored icon squares. NO tinted backgrounds.
 **Tabs:** Data / User Access / Activity Log / Appearance / Profile
 
 ### User Access tab
-- Shows **Global Page Visibility** card at top (saves to `app_preferences.hidden_pages` in Supabase)
-- Shows per-user table with role/page chips below
+- **Global Page Visibility** card at top → saves to `app_preferences.hidden_pages` in Supabase
+- Per-user table with role/page chips below
 - Globally-hidden pages shown as greyed/locked in per-user edit panel
 - Per-user pages stored in `allowed_users.role` as `viewer:page1,page2`
+- `receive_reports` boolean toggle per user for email report opt-in
 
 ### Appearance tab (admin only)
 - Theme (Light/Dark/Navy Depth/Stone) — via `data-theme` on `<html>`
@@ -211,7 +254,6 @@ NO colored top border. NO colored icon squares. NO tinted backgrounds.
 - Number Format (Indian/International/Compact)
 - Default Date Range
 - Table Density — via `data-density` on `<html>`
-- Page Visibility section redirects to User Access tab
 
 ### localStorage keys
 | Key | What |
@@ -225,6 +267,8 @@ NO colored top border. NO colored icon squares. NO tinted backgrounds.
 | `lq_default_date` | default date range preset |
 | `lq_table_density` | compact/comfortable/spacious |
 | `lq_sr_fee` | SR fee per RAU for revenue calc |
+| `lq_meta_token` | Cached Meta access token |
+| `lq_chat_convs` | VASU AI conversation list |
 
 ---
 
@@ -236,8 +280,53 @@ NO colored top border. NO colored icon squares. NO tinted backgrounds.
 
 CSS classes used in pages:
 - `.lq-page-shell` — outer wrapper div (gets `padding-top: 52px` on mobile)
-- `.lq-mobile-topbar` — fixed top bar on mobile (shown via CSS)
+- `.lq-mobile-topbar` — fixed top bar on mobile
 - `.lq-kpi-grid` — KPI card grid (2-col on mobile, 1-col on small)
+
+---
+
+## Email Reports
+
+- **Trigger:** GitHub Actions cron, 9:30 AM IST daily (`report.yml`)
+- **API:** `POST /api/send-report`
+- **Content:** Last 30 Days + Current Month MTD sections, each with Meta API data + `aiContext.js` sheet data → Groq single prompt
+- **Template:** High-end HTML email with Quantum logo (wordmark + icon — 3 bars: green/cyan/blue)
+- **From:** `noreply@leverageedu.com` (Resend, domain verification **still pending**)
+- **Recipients:** Users with `receive_reports: true` in Supabase `allowed_users`
+- **AI:** Groq `llama-3.3-70b-versatile`
+
+---
+
+## MTD Dashboard
+
+- **Month dropdown:** `onChange={v=>setSel(Number(v))}` — receives numeric index, NOT month name
+- **Dropdown display:** `options.find(o=>o.value===value)?.label ?? value`
+- **Delta rule for volume metrics** (Total Leads, Total Revenue, FW Qualified, Applications, Est. RAU): use per-day running-average vs prev month (current run-rate/day vs previous month's average/day) — NOT total vs total
+- **Delta rule for cost/ratio metrics** (CPL, CPQL, ROAS, spend, QL%): use total vs total
+
+---
+
+## Meta Ads — Creatives Tab
+
+- `graphGetAll()` — paginates through all ads (follows `paging.next` cursors, limit 200/page)
+- First page renders immediately, remaining fetched in background
+- Per-ad `previewLink` logic:
+  1. `instagram_permalink_url` → Instagram post (IG pill badge)
+  2. `object_story_id` parts → Facebook post (FB pill badge)
+  3. Fallback → Ads Library URL (AD LIB badge)
+- Fatigue scoring: week-over-week CTR comparison (primary) + frequency (secondary). Score 0–20 healthy, 21–45 moderate, 46+ high
+- Creative cards: coloured top borders by health status (green/amber/red)
+- Multi-account picker: switches between ~10 ad accounts on the token
+
+---
+
+## QL Ops Dashboard
+
+- File: `src/pages/LeadQualificationDashboard.jsx`
+- Data: Google Sheets CSV `gid=0`
+- Providers: Futwork (human calling agents) and Superbot (automated IVR)
+- Header must include: bell icon, send/report icon, presence avatars
+- Filters: date range, provider, source
 
 ---
 
@@ -255,42 +344,49 @@ if (!me) return res.status(401).json({ error: 'Not signed in' })
 if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
 ```
 
-```js
-// GitHub Contents API (for pushing code)
-// ALWAYS re-fetch SHA immediately before PUT — stored SHAs go stale → HTTP 409
-// Validate JSX before pushing: npx esbuild@0.21.5 /tmp/x.jsx --bundle=false
+---
+
+## GitHub API Pattern (primary push mechanism)
+
+```python
+import urllib.request, json, base64
+
+TOKEN = "ghp_[REDACTED — check Claude chat history or GitHub settings]"
+REPO  = "shivamsharma-dot/leverage-quantum"
+
+# 1. ALWAYS re-fetch SHA immediately before PUT (stored SHAs go stale → HTTP 409)
+req = urllib.request.Request(
+    f'https://api.github.com/repos/{REPO}/contents/{PATH}',
+    headers={'Authorization': f'token {TOKEN}', 'Accept': 'application/vnd.github+json'}
+)
+with urllib.request.urlopen(req) as r:
+    sha = json.loads(r.read())['sha']
+
+# 2. Validate JSX before pushing
+# npx esbuild@0.21.5 /tmp/file.jsx --bundle=false --outfile=/tmp/o.js
+
+# 3. Push
+with open('/tmp/file.js', 'rb') as f:
+    content = base64.b64encode(f.read()).decode()
+
+payload = json.dumps({'message': 'feat: ...', 'content': content, 'sha': sha}).encode()
+req2 = urllib.request.Request(
+    f'https://api.github.com/repos/{REPO}/contents/{PATH}',
+    data=payload, method='PUT',
+    headers={'Authorization': f'token {TOKEN}', 'Content-Type': 'application/json'}
+)
+with urllib.request.urlopen(req2) as r:
+    result = json.loads(r.read())
+    print('Pushed:', result['commit']['sha'][:12])
 ```
 
----
-
-## Meta Ads — Creatives Tab
-
-- `graphGetAll()` — paginates through all ads (follows `paging.next` cursors, limit 200/page)
-- First page renders immediately, remaining pages fetched in background
-- Per-ad `previewLink` logic:
-  1. `instagram_permalink_url` → Instagram post (IG pill badge)
-  2. `object_story_id` parts → Facebook post (FB pill badge)
-  3. Fallback → Ads Library URL (AD LIB badge)
-- Click any ad card → opens in new tab
-
----
-
-## Email Reports
-
-- **Trigger:** GitHub Actions cron, 9:30 AM IST daily
-- **API:** `POST /api/send-report`
-- **Content:** Last 30 Days + Current Month MTD sections
-- **Data:** Meta API + `aiContext.js` sheet data → Groq single prompt
-- **Template:** High-end HTML email with Quantum logo (wordmark + icon)
-- **From:** `noreply@leverageedu.com` (Resend, domain verification pending)
-
----
-
-## MTD Dashboard
-
-- **Month dropdown:** `onChange={v=>setSel(Number(v))}` — receives numeric index, NOT month name
-- **Dropdown display:** `options.find(o=>o.value===value)?.label ?? value`
-- **Delta rule:** Volume metrics (leads, spend, QLs) use per-day running-average vs prev month (not total vs total). Cost/ratio metrics (CPL, CPQL, ROAS) use total vs total.
+**Force redeploy (empty commit):**
+```python
+# GET /git/ref/heads/main → HEAD sha
+# GET /git/commits/{sha} → tree sha
+# POST /git/commits with same tree + parent = HEAD sha → new commit sha
+# PATCH /git/refs/heads/main with new commit sha
+```
 
 ---
 
@@ -302,9 +398,13 @@ if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
 | MTD filter broken | `onChange` received index, was calling `findIndex(name===index)` |
 | Logout flicker | White overlay DOM-injected before React unmounts, `window.location.replace` |
 | Page visibility same-tab sync | `CustomEvent('lq:hidden-pages-changed')` — `storage` event only fires cross-tab |
-| Sidebar not filtering hidden pages | Full sidebar nav (L284) was missing `isPageVisible()` — only collapsed nav had it |
+| Sidebar not filtering hidden pages | Full sidebar nav (L284) was missing `isPageVisible()` |
 | Creative badge broken icon | SVG with single-quote attrs in JSX → replaced with text pill (IG/FB/AD LIB) |
 | WhatsApp header missing grey border | Added `background:#F8FAFC, border:0.5px solid #E5E7EB, borderRadius:12, padding:6px 10px` to filter controls wrapper |
+| Meta spend wrong (FX multiply) | Meta returns INR directly — never multiply by 83 or any FX rate |
+| Meta API 400 on nested insights | Use `insights.date_preset(last_7d)` syntax, not `time_range` in nested insights |
+| VASU AI no live queries | Upgraded `vasu-chat.js` with `query_meta_ads` tool — Claude fetches live Meta data mid-chat |
+| QL Ops header missing bell/send/presence | Header must include all standard header elements |
 
 ---
 
@@ -313,27 +413,28 @@ if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
 - **Platform:** Vercel (auto-deploy on push to `main`)
 - **Validate before pushing:** `npx esbuild@0.21.5 /tmp/file.jsx --bundle=false`
 - **Force redeploy without code change:** Push empty commit via GitHub API
-- **GitHub API pattern:** Always re-fetch file SHA before PUT (409 if stale)
+- **GitHub token lacks `workflow` scope** — use GitHub web UI for `.github/workflows/` files
 
 ---
 
 ## Development Workflow
 
-1. Check live page via Browser MCP **first** before touching GitHub
-2. Read file from GitHub → edit locally in `/tmp/` → validate with esbuild → push
-3. After push, wait ~65s for Vercel deploy, check commit status
+1. Check live page via Browser MCP **first** before touching GitHub (Browser = first check)
+2. Read file from GitHub → edit in `/tmp/` → validate with esbuild → push
+3. After push, wait ~65s for Vercel deploy
 4. Verify on live page
 
 ---
 
-## What's Pending / In Progress
+## Pending / In Progress
 
-- Resend domain verification for `noreply@leverageedu.com`
+- Resend domain verification for `noreply@leverageedu.com` — required for email delivery
 - BigQuery integration (requirements drafted)
 - `app_preferences` Supabase table — needs manual SQL creation if not done
 - Google Ads dashboard — connected but data source is live
-- VASU AI memories / chat persistence
+- VASU AI memories / chat persistence improvements
+- Meta Ads numbers investigation vs Business Manager discrepancy
 
 ---
 
-*Update this file whenever significant features are added, bugs are fixed, or architecture changes.*
+*Update this file after every significant session.*
