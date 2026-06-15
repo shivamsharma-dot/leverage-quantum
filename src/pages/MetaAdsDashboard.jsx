@@ -1020,30 +1020,37 @@ export default function MetaAdsDashboard() {
 
       // Background: fetch remaining ad pages while user is already browsing
       ;(async () => {
-        const firstPage = adsRaw
-        if (!firstPage.paging?.next) return // only 1 page, done
+        if (!adsRaw.paging?.next) return
+        function mkLink(ad) {
+          const ig = ad.creative?.instagram_permalink_url || null
+          const osId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || ''
+          const parts = osId.split('_')
+          const fb = parts.length === 2 ? 'https://www.facebook.com/' + parts[0] + '/posts/' + parts[1] : null
+          return ig || fb || 'https://www.facebook.com/ads/library/?id=' + ad.id
+        }
+        function mkPlat(ad) {
+          if (ad.creative?.instagram_permalink_url) return 'instagram'
+          const osId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || ''
+          return osId.split('_').length === 2 ? 'facebook' : 'library'
+        }
         try {
-          let nextUrl = firstPage.paging.next
-          let allAds = [...(firstPage.data || [])]
+          let nextUrl = adsRaw.paging.next
+          let allAds = adsRaw.data ? [...adsRaw.data] : []
           while (nextUrl) {
             const res = await fetch(nextUrl)
-            const page = await res.json()
-            if (page.error) break
-            allAds = allAds.concat(page.data || [])
-            nextUrl = page.paging?.next || null
-            // Re-process and update ads in state
-            const moreWithThumbs = allAds.map(ad => {
-              const isVid = !!ad.creative?.video_id
-              const igP = ad.creative?.instagram_permalink_url || null
-              const osId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || null
-              const fbP = osId ? (() => { const pts = osId.split('_'); return pts.length===2?`https://www.facebook.com/${pts[0]}/posts/${pts[1]}`:null })() : null
-              const pLink = igP || fbP || `https://www.facebook.com/ads/library/?id=${ad.id}`
-              const pPlat = igP?'instagram':fbP?'facebook':'library'
-              return { ...ad, creative: { ...ad.creative, _thumbUrl: creativeThumbs[ad.creative?.id]||null }, previewLink: pLink, previewPlatform: pPlat }
-            })
+            const pg = await res.json()
+            if (pg.error) break
+            allAds = allAds.concat(pg.data || [])
+            nextUrl = pg.paging?.next || null
+            const moreWithThumbs = allAds.map(ad => ({
+              ...ad,
+              creative: { ...ad.creative, _thumbUrl: creativeThumbs[ad.creative?.id] || null },
+              previewLink: mkLink(ad),
+              previewPlatform: mkPlat(ad),
+            }))
             setData(prev => prev ? { ...prev, ads: moreWithThumbs } : prev)
           }
-        } catch(e) { console.warn('Background ad fetch stopped:', e.message) }
+        } catch(e) { console.warn('BG ad page fetch stopped:', e.message) }
       })()
       setDatePreset(preset)
     } catch (e) {
