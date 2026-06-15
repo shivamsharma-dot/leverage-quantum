@@ -266,3 +266,61 @@ input:focus, textarea:focus {
   0%, 100% { transform: scale(0.6); opacity: 0.35; }
   50% { transform: scale(1); opacity: 1; }
 }
+
+/* ============================================================
+   MOTION LAYER — subtle, on-brand micro-interactions
+   Brand: navy #1F3C84 · blue #1C9FD4 · cyan #29B9C3 · green #4CAE6F
+   ============================================================ */
+@keyframes lqRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes lqFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes lqSheen {
+  0%   { background-position: -160% 0; }
+  100% { background-position: 260% 0; }
+}
+@keyframes lqFloat {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-3px); }
+}
+
+/* Entrance: fade + rise. Add .lq-rise to any element. */
+.lq-rise { animation: lqRise .5s cubic-bezier(0.22,0.61,0.36,1) both; }
+.lq-fade { animation: lqFade .5s ease both; }
+
+/* Staggered children: apply .lq-stagger to a container; direct
+   children animate in sequence. */
+.lq-stagger > * { animation: lqRise .5s cubic-bezier(0.22,0.61,0.36,1) both; }
+.lq-stagger > *:nth-child(1) { animation-delay: .04s; }
+.lq-stagger > *:nth-child(2) { animation-delay: .10s; }
+.lq-stagger > *:nth-child(3) { animation-delay: .16s; }
+.lq-stagger > *:nth-child(4) { animation-delay: .22s; }
+.lq-stagger > *:nth-child(5) { animation-delay: .28s; }
+.lq-stagger > *:nth-child(6) { animation-delay: .34s; }
+.lq-stagger > *:nth-child(7) { animation-delay: .40s; }
+.lq-stagger > *:nth-child(8) { animation-delay: .46s; }
+
+/* Hover lift — premium card interaction. */
+.lq-lift { transition: transform .22s cubic-bezier(0.22,0.61,0.36,1), box-shadow .22s ease, border-color .22s ease; }
+.lq-lift:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(15,23,42,0.10); }
+
+/* Brand sheen — for 'AI' surfaces. Element needs position/overflow set by caller. */
+.lq-sheen {
+  background-image: linear-gradient(110deg, transparent 30%, rgba(28,159,212,0.10) 45%, rgba(41,185,195,0.14) 50%, transparent 70%);
+  background-size: 220% 100%;
+  animation: lqSheen 3.2s ease-in-out infinite;
+}
+.lq-float { animation: lqFloat 3s ease-in-out infinite; }
+
+/* Respect users who prefer less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .lq-rise, .lq-fade, .lq-stagger > *, .lq-sheen, .lq-float,
+  .lq-stagger > *:nth-child(n) {
+    animation: none !important;
+  }
+  .lq-lift { transition: none; }
+}

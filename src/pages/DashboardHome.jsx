@@ -190,7 +190,7 @@ export default function DashboardHome() {
         </div>
 
         {/* Live stats bar */}
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:12, marginBottom:32, animation:'fadeUp .4s ease .05s both' }}>
+        <div className="lq-stagger" style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:12, marginBottom:32, animation:'fadeUp .4s ease .05s both' }}>
           <StatCard label="Meta Spend · 30D"  value={fmtC(liveStats?.meta?.spend||0)}      sub="Last 30 days" accent={C.blue}  loading={statsLoading}
             icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>}/>
           <StatCard label="Meta Leads · 30D"  value={fmtN(liveStats?.meta?.leads||0)}      sub="Last 30 days" accent={C.navy}  loading={statsLoading}
