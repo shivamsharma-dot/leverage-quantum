@@ -1021,14 +1021,14 @@ export default function MetaAdsDashboard() {
       // Background: fetch remaining ad pages while user is already browsing
       ;(async () => {
         if (!adsRaw.paging?.next) return
-        function mkLink(ad) {
+        const mkLink = (ad) => {
           const ig = ad.creative?.instagram_permalink_url || null
           const osId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || ''
           const parts = osId.split('_')
           const fb = parts.length === 2 ? 'https://www.facebook.com/' + parts[0] + '/posts/' + parts[1] : null
           return ig || fb || 'https://www.facebook.com/ads/library/?id=' + ad.id
         }
-        function mkPlat(ad) {
+        const mkPlat = (ad) => {
           if (ad.creative?.instagram_permalink_url) return 'instagram'
           const osId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || ''
           return osId.split('_').length === 2 ? 'facebook' : 'library'
