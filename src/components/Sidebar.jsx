@@ -115,11 +115,18 @@ export default function Sidebar() {
       }
     }
     const onCustom = (e) => { setHiddenPages(e.detail || []) }
+    const onSidebarMode = (e) => {
+      if (e.detail && e.detail.collapsed !== undefined) {
+        setCollapsed(e.detail.collapsed)
+      }
+    }
     window.addEventListener('storage', onStorage)
     window.addEventListener('lq:hidden-pages-changed', onCustom)
+    window.addEventListener('lq:sidebar-mode-changed', onSidebarMode)
     return () => {
       window.removeEventListener('storage', onStorage)
       window.removeEventListener('lq:hidden-pages-changed', onCustom)
+      window.removeEventListener('lq:sidebar-mode-changed', onSidebarMode)
     }
   }, [])
   const isPageVisible = (label) => {
