@@ -59,18 +59,15 @@ async function graphGet(path, token, params = {}, retries = 2) {
   return d
 }
 
-// ─── Paginated fetch — follows cursor until all pages collected ─
-async function graphGetAll(path, token, params = {}, maxPages = 20) {
+// ─── Paginated fetch — first page returns immediately, rest via callback ─
+async function graphGetAll(path, token, params = {}, maxPages = 20, onProgress = null) {
   let allData = []
-  let nextUrl = null
-  let page = 0
-
-  // First page via graphGet
   const first = await graphGet(path, token, { ...params, limit: 200 })
-  allData = allData.concat(first.data || [])
-  nextUrl = first.paging?.next || null
-
-  // Follow cursors
+  allData = first.data || []
+  // Notify caller with first-page data immediately
+  if (onProgress) onProgress(allData)
+  let nextUrl = first.paging?.next || null
+  let page = 0
   while (nextUrl && page < maxPages) {
     page++
     try {
@@ -78,6 +75,7 @@ async function graphGetAll(path, token, params = {}, maxPages = 20) {
       const d = await res.json()
       if (d.error) break
       allData = allData.concat(d.data || [])
+      if (onProgress) onProgress(allData)
       nextUrl = d.paging?.next || null
     } catch { break }
   }
@@ -475,10 +473,15 @@ function CreativesTab({ data }) {
       {viewMode==='grid'?(
         <div style={{ display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:12 }}>
           {filtered.map((ad,i)=>(
-            <div key={ad.id||i} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden',transition:'border-color .15s,box-shadow .15s',display:'flex',flexDirection:'column' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#1F3C84';e.currentTarget.style.boxShadow='0 2px 12px rgba(31,60,132,0.1)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#E5E7EB';e.currentTarget.style.boxShadow='none'}}>
+            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden',cursor:'pointer',transition:'border-color .15s,box-shadow .15s',display:'flex',flexDirection:'column' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#1F3C84';e.currentTarget.style.boxShadow='0 2px 12px rgba(31,60,132,0.1)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#E5E7EB';e.currentTarget.style.boxShadow='none'}}>
               <div style={{ position:'relative',height:130,background:'#F3F4F6',overflow:'hidden' }}>
                 {ad.creative?._thumbUrl?<img src={proxyImg(ad.creative._thumbUrl)} alt={ad.name} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>:<div style={{ width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4 }}><span style={{ fontSize:28,opacity:0.25 }}>{ad.type==='video'?'▶':ad.type==='carousel'?'▧':'□'}</span><span style={{ fontSize:10,color:'#9CA3AF' }}>{ad.type}</span></div>}
-                <span style={{ position:'absolute',top:8,right:8,background:hBg[ad.fatigueLabel]||'#E9F8EF',color:hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span>
+<span title={ad.previewPlatform==='instagram'?'View on Instagram':ad.previewPlatform==='facebook'?'View on Facebook':'View in Ads Library'} style={{ position:'absolute',bottom:8,right:8,width:22,height:22,borderRadius:6,background:'rgba(255,255,255,0.92)',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 1px 4px rgba(0,0,0,0.12)' }}>
+                {ad.previewPlatform==='instagram'&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#E1306C" strokeWidth="2" strokeLinecap="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="#E1306C" stroke="none"/></svg>}
+                {ad.previewPlatform==='facebook'&&<svg width="12" height="12" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.269h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>}
+                {ad.previewPlatform==='library'&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>}
+              </span>
+              <span style={{ position:'absolute',top:8,right:8,background:hBg[ad.fatigueLabel]||'#E9F8EF',color:hColor[ad.fatigueLabel]||'#16653
                 <span style={{ position:'absolute',top:8,left:8,background:tBg[ad.type]||'#F3F4F6',color:tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span>
                 <div style={{ position:'absolute',bottom:8,left:8,right:8 }}><SB score={ad.score}/></div>
               </div>
@@ -500,7 +503,7 @@ function CreativesTab({ data }) {
             {['','Creative','Type','Health','Spend','Leads','CTR','CPL','Freq','Score','WoW CTR'].map(h=><div key={h} style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>{h}</div>)}
           </div>
           {filtered.map((ad,i)=>(
-            <div key={ad.id||i} style={{ display:'grid',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 80px 90px 90px 80px 80px',padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
+            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 80px 90px 90px 80px 80px',padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
               <div style={{ width:32,height:32,borderRadius:6,background:'#F3F4F6',overflow:'hidden',flexShrink:0 }}>{ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div>
               <div style={{ overflow:'hidden' }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }} title={ad.name}>{ad.name}</div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
               <span style={{ background:tBg[ad.type]||'#F3F4F6',color:tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span>
@@ -885,9 +888,11 @@ export default function MetaAdsDashboard() {
           fields: `name,status,objective,created_time,insights${useTimeRange ? `.time_range(${timeRange})` : `.date_preset(${metaPreset})`}{spend,impressions,clicks,ctr,frequency,actions}`,
           limit: 300
         }),
-        // Ads + creatives - fetch ALL ads (paginated, no status filter so every ad shows)
-        graphGetAll(`${AD_ACCOUNT_ID}/ads`, t, {
-          fields: 'name,status,effective_status,creative{id,name,video_id}',
+        // Ads + creatives - fetch ALL ads (paginated, progressive)
+        // We pass a placeholder promise that resolves on first page, then continues in background
+        graphGet(`${AD_ACCOUNT_ID}/ads`, t, {
+          fields: 'name,status,effective_status,creative{id,name,video_id,object_story_id,instagram_permalink_url,effective_object_story_id}',
+          limit: 200,
         }),
         graphGet(`${AD_ACCOUNT_ID}/adspixels`, t, { fields: 'id,name,last_fired_time' })
       ])
@@ -988,18 +993,58 @@ export default function MetaAdsDashboard() {
         const thumbUrl = isVideo
           ? (videoImg || staticImg || inlineImg)
           : (staticImg || spec.link_data?.picture || carouselImg || inlineImg || videoImg)
-        // previewLink = Ads Library URL (kept for potential future use)
-        const previewLink = `https://www.facebook.com/ads/library/?id=${ad.id}`
+        // Smart permaLink: Instagram post → Facebook post → Ads Library
+        const igPerma = ad.creative?.instagram_permalink_url || null
+        const objectStoryId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || null
+        const fbPostUrl = objectStoryId
+          ? (() => {
+              const parts = objectStoryId.split('_')
+              return parts.length === 2
+                ? `https://www.facebook.com/${parts[0]}/posts/${parts[1]}`
+                : null
+            })()
+          : null
+        const previewLink = igPerma || fbPostUrl || `https://www.facebook.com/ads/library/?id=${ad.id}`
+        const previewPlatform = igPerma ? 'instagram' : fbPostUrl ? 'facebook' : 'library'
         if (!thumbUrl) console.warn('[no thumb]', ad.name, 'creativeId:', ad.creative?.id, 'isVideo:', isVideo, 'spec keys:', Object.keys(spec))
         return {
           ...ad,
           creative: { ...ad.creative, _thumbUrl: thumbUrl || null },
-          previewLink
+          previewLink,
+          previewPlatform
         }
       })
 
       setData({ account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, prevInsightsMap, range, preset })
       setLastSync(new Date())
+
+      // Background: fetch remaining ad pages while user is already browsing
+      ;(async () => {
+        const firstPage = adsRaw
+        if (!firstPage.paging?.next) return // only 1 page, done
+        try {
+          let nextUrl = firstPage.paging.next
+          let allAds = [...(firstPage.data || [])]
+          while (nextUrl) {
+            const res = await fetch(nextUrl)
+            const page = await res.json()
+            if (page.error) break
+            allAds = allAds.concat(page.data || [])
+            nextUrl = page.paging?.next || null
+            // Re-process and update ads in state
+            const moreWithThumbs = allAds.map(ad => {
+              const isVid = !!ad.creative?.video_id
+              const igP = ad.creative?.instagram_permalink_url || null
+              const osId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || null
+              const fbP = osId ? (() => { const pts = osId.split('_'); return pts.length===2?`https://www.facebook.com/${pts[0]}/posts/${pts[1]}`:null })() : null
+              const pLink = igP || fbP || `https://www.facebook.com/ads/library/?id=${ad.id}`
+              const pPlat = igP?'instagram':fbP?'facebook':'library'
+              return { ...ad, creative: { ...ad.creative, _thumbUrl: creativeThumbs[ad.creative?.id]||null }, previewLink: pLink, previewPlatform: pPlat }
+            })
+            setData(prev => prev ? { ...prev, ads: moreWithThumbs } : prev)
+          }
+        } catch(e) { console.warn('Background ad fetch stopped:', e.message) }
+      })()
       setDatePreset(preset)
     } catch (e) {
       setError(e.message)
