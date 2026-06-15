@@ -462,9 +462,7 @@ function CreativesTab({ data }) {
         <div style={{ display:'flex',alignItems:'center',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:10 }}><span style={{ fontSize:10,fontWeight:600,color:'#9CA3AF',marginRight:4,whiteSpace:'nowrap' }}>Health</span>
           {[{v:'all',l:'All'},{v:'healthy',l:'Healthy'},{v:'moderate',l:'Moderate'},{v:'fatigue',l:'Fatigue'}].map(h=><button key={h.v} onClick={()=>setHealthFilter(h.v)} style={{ padding:'5px 11px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:healthFilter===h.v?(h.v==='all'?'#1F3C84':h.v==='healthy'?'#166534':h.v==='moderate'?'#854D0E':'#991B1B'):'#fff',color:healthFilter===h.v?'#fff':'#6B7280' }}>{h.l}</button>)}
         </div>
-        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ padding:'5px 10px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:11,fontFamily:'inherit',cursor:'pointer',background:'#fff',color:'#374151',marginLeft:2 }}>
-          <option value="spend">Sort: Spend</option><option value="leads">Sort: Leads</option><option value="cpl">Sort: CPL</option><option value="ctr">Sort: CTR</option><option value="frequency">Sort: Frequency</option><option value="score">Sort: Score</option><option value="impressions">Sort: Impressions</option>
-        </select>
+        <CustomDropdown value={sortBy} onChange={setSortBy} minWidth={130} options={[{value:'spend',label:'Sort: Spend'},{value:'leads',label:'Sort: Leads'},{value:'cpl',label:'Sort: CPL'},{value:'ctr',label:'Sort: CTR'},{value:'frequency',label:'Sort: Frequency'},{value:'score',label:'Sort: Score'},{value:'impressions',label:'Sort: Impressions'}]}/>
         <div style={{ marginLeft:'auto',display:'flex',gap:4 }}>
           {[{m:'grid',l:'⊞ Grid'},{m:'list',l:'☰ List'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} style={{ padding:'5px 10px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,cursor:'pointer',fontFamily:'inherit',background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
         </div>
@@ -665,7 +663,7 @@ function DatePicker({ value, onChange, placeholder = 'Select date', maxDate }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
   const DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa']
 
   const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate()
@@ -686,8 +684,8 @@ function DatePicker({ value, onChange, placeholder = 'Select date', maxDate }) {
   return (
     <div ref={ref} style={{position:'relative',userSelect:'none'}}>
       <div onClick={() => setOpen(o => !o)}
-        style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',borderRadius:7,border:`1.5px solid ${open?'#6366F1':'#E5E7EB'}`,background:'#fff',cursor:'pointer',fontSize:12,color:value?'#0F172A':'#9CA3AF',minWidth:130,transition:'border .15s'}}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={value?'#6366F1':'#9CA3AF'} strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',borderRadius:7,border:`1.5px solid ${open?'#1C9FD4':'#E2E8F0'}`,background:'#fff',cursor:'pointer',fontSize:12,color:value?'#0F172A':'#9CA3AF',minWidth:130,transition:'border-color .15s,box-shadow .15s',boxShadow:open?'0 0 0 3px rgba(28,159,212,0.1)':'0 1px 2px rgba(15,23,42,0.04)'}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={value?'#1C9FD4':'#9CA3AF'} strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         <span style={{flex:1}}>{displayVal}</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
@@ -696,10 +694,10 @@ function DatePicker({ value, onChange, placeholder = 'Select date', maxDate }) {
           {/* Month/Year nav */}
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
             <button onClick={() => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y=>y-1) } else setViewMonth(m=>m-1) }}
-              style={{background:'none',border:'none',cursor:'pointer',padding:'2px 6px',borderRadius:5,fontSize:16,color:'#374151',lineHeight:1}}>‹</button>
+              style={{background:'#F8FAFC',border:'1px solid #E2E8F0',cursor:'pointer',padding:'2px 6px',borderRadius:5,fontSize:16,color:'#374151',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.background='#E3F5FD'} onMouseLeave={e=>e.currentTarget.style.background='#F8FAFC'}>‹</button>
             <span style={{fontSize:13,fontWeight:700,color:'#0F172A'}}>{MONTHS[viewMonth]} {viewYear}</span>
             <button onClick={() => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y=>y+1) } else setViewMonth(m=>m+1) }}
-              style={{background:'none',border:'none',cursor:'pointer',padding:'2px 6px',borderRadius:5,fontSize:16,color:'#374151',lineHeight:1}}>›</button>
+              style={{background:'#F8FAFC',border:'1px solid #E2E8F0',cursor:'pointer',padding:'2px 6px',borderRadius:5,fontSize:16,color:'#374151',lineHeight:1}} onMouseEnter={e=>e.currentTarget.style.background='#E3F5FD'} onMouseLeave={e=>e.currentTarget.style.background='#F8FAFC'}>›</button>
           </div>
           {/* Day headers */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:4}}>
@@ -717,10 +715,10 @@ function DatePicker({ value, onChange, placeholder = 'Select date', maxDate }) {
               return (
                 <div key={day} onClick={() => !isFuture && select(day)}
                   style={{textAlign:'center',padding:'5px 2px',borderRadius:6,fontSize:12,fontWeight:isSelected?700:400,
-                    background:isSelected?'#6366F1':isToday?'#EEF2FF':'transparent',
-                    color:isSelected?'#fff':isFuture?'#D1D5DB':isToday?'#6366F1':'#374151',
+                    background:isSelected?'#1C9FD4':isToday?'#E3F5FD':'transparent',
+                    color:isSelected?'#fff':isFuture?'#D1D5DB':isToday?'#1C9FD4':'#334155',
                     cursor:isFuture?'not-allowed':'pointer',transition:'background .1s'}}
-                  onMouseEnter={e=>{ if(!isSelected&&!isFuture) e.target.style.background='#F3F4F6' }}
+                  onMouseEnter={e=>{ if(!isSelected&&!isFuture) e.target.style.background='#F0F9FF' }}
                   onMouseLeave={e=>{ if(!isSelected&&!isFuture) e.target.style.background='transparent' }}>
                   {day}
                 </div>
@@ -733,6 +731,37 @@ function DatePicker({ value, onChange, placeholder = 'Select date', maxDate }) {
   )
 }
 
+function CustomDropdown({ value, onChange, options, disabled, minWidth = 130 }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+  const selected = options.find(o => o.value === value)
+  return (
+    <div ref={ref} style={{position:'relative',userSelect:'none'}}>
+      <div onClick={() => !disabled && setOpen(o => !o)}
+        style={{display:'flex',alignItems:'center',gap:7,padding:'6px 11px',borderRadius:8,border:`1.5px solid ${open?'#1C9FD4':'#E2E8F0'}`,background:disabled?'#F8FAFC':'#fff',cursor:disabled?'not-allowed':'pointer',fontSize:12,fontWeight:600,color:disabled?'#94A3B8':'#0F172A',minWidth,transition:'border-color .15s,box-shadow .15s',boxShadow:open?'0 0 0 3px rgba(28,159,212,0.1)':'0 1px 2px rgba(15,23,42,0.04)',whiteSpace:'nowrap'}}>
+        <span style={{flex:1}}>{selected?.label || value}</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2.5" strokeLinecap="round" style={{flexShrink:0,transform:open?'rotate(180deg)':'rotate(0deg)',transition:'transform .2s'}}><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      {open && (
+        <div style={{position:'absolute',top:'calc(100% + 5px)',left:0,zIndex:300,background:'#fff',border:'1px solid #E2E8F0',borderRadius:10,boxShadow:'0 8px 28px rgba(15,23,42,0.12)',overflow:'hidden',minWidth:'100%'}}>
+          {options.map(o => (
+            <div key={o.value} onClick={() => { onChange(o.value); setOpen(false) }}
+              style={{padding:'8px 14px',fontSize:12,fontWeight:o.value===value?600:400,color:o.value===value?'#1C9FD4':'#334155',background:o.value===value?'#E3F5FD':'transparent',cursor:'pointer',transition:'background .1s',whiteSpace:'nowrap'}}
+              onMouseEnter={e=>{ if(o.value!==value) e.currentTarget.style.background='#F8FAFC' }}
+              onMouseLeave={e=>{ if(o.value!==value) e.currentTarget.style.background='transparent' }}>
+              {o.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function TokenExpiryBanner({ createdAt }) {
   if (!createdAt) return null
@@ -1191,20 +1220,13 @@ export default function MetaAdsDashboard() {
                 )}
               </div>
             )}
-            <select value={datePreset} onChange={e => handleDateChange(e.target.value)} className={styles.dateSelect} disabled={loading}>
-              {PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-            </select>
+            <CustomDropdown value={datePreset} onChange={handleDateChange} disabled={loading} minWidth={140} options={PRESETS.map(p=>({value:p.id,label:p.label}))}/>
             {datePreset === 'custom_range' && (
-              <div style={{display:'flex',alignItems:'center',gap:6}}>
+              <div style={{display:'flex',alignItems:'center',gap:6,background:'#F8FAFC',border:'1px solid #E2E8F0',borderRadius:9,padding:'4px 10px'}}>
                 <DatePicker value={customFrom} onChange={setCustomFrom} placeholder="From date" maxDate={customTo || new Date().toISOString().slice(0,10)}/>
-                <span style={{fontSize:12,color:'#9CA3AF'}}>to</span>
+                <span style={{fontSize:11,color:'#94A3B8',fontWeight:500,padding:'0 2px'}}>→</span>
                 <DatePicker value={customTo} onChange={setCustomTo} placeholder="To date" maxDate={new Date().toISOString().slice(0,10)}/>
-                <button
-                  disabled={!customFrom || !customTo || loading}
-                  onClick={() => customFrom && customTo && loadAllData(token, 'custom_range', customFrom, customTo)}
-                  style={{padding:'6px 14px',borderRadius:7,background:customFrom&&customTo?'#0F172A':'#E5E7EB',color:customFrom&&customTo?'#fff':'#9CA3AF',border:'none',fontSize:12,fontWeight:600,cursor:customFrom&&customTo?'pointer':'not-allowed',fontFamily:'Inter,sans-serif',transition:'all .15s'}}>
-                  Apply
-                </button>
+                <button disabled={!customFrom || !customTo || loading} onClick={() => customFrom && customTo && loadAllData(token, 'custom_range', customFrom, customTo)} style={{padding:'6px 14px',borderRadius:7,background:customFrom&&customTo?'#1F3C84':'#E2E8F0',color:customFrom&&customTo?'#fff':'#94A3B8',border:'none',fontSize:12,fontWeight:700,cursor:customFrom&&customTo?'pointer':'not-allowed',fontFamily:'Plus Jakarta Sans,Inter,sans-serif',transition:'all .15s',whiteSpace:'nowrap'}}>Apply</button>
               </div>
             )}
             {lastSync && <span className={styles.syncTag}>Synced {lastSync.toLocaleTimeString()}</span>}
