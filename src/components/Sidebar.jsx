@@ -7,7 +7,7 @@ const NAV = [
   {
     label: 'Intelligence',
     items: [
-      { to: '/vasu', icon: <VasuIcon />, label: 'Chat', end: true },
+      { to: '/ask-ai', icon: <AskAIIcon />, label: 'Ask AI', end: true },
     ]
   },
   {
@@ -66,7 +66,7 @@ export const PAGE_LIST = [
   { id:'revenue',      label:'Revenue',      path:'/dashboard/revenue',     adminOnly:false },
   { id:'lq_ops',       label:'QL Ops',       path:'/dashboard/lq-ops',      adminOnly:false },
   { id:'whatsapp',     label:'WhatsApp',     path:'/dashboard/whatsapp',    adminOnly:false },
-  { id:'vasu',         label:'Chat',      path:'/vasu',                  adminOnly:true  },
+  { id:'ask_ai',         label:'Ask AI',      path:'/ask-ai',                  adminOnly:true  },
   { id:'settings',     label:'Settings',     path:'/settings',              adminOnly:true  },
 ]
 
@@ -80,7 +80,7 @@ function PeopleIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fi
 function RevenueIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg> }
 function MetaIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg> }
 function SettingsIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg> }
-function VasuIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7h1a1 1 0 010 2h-1v1a2 2 0 01-2 2H5a2 2 0 01-2-2v-1H2a1 1 0 010-2h1a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2z"/><path d="M10 12v4M14 12v4"/></svg> }
+function AskAIIcon() { return (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ animation: 'askAiPulse 2.6s ease-in-out infinite', transformOrigin: 'center' }}><defs><linearGradient id="askAiGrad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#1F3C84"/><stop offset="45%" stopColor="#1C9FD4"/><stop offset="75%" stopColor="#29B9C3"/><stop offset="100%" stopColor="#4CAE6F"/></linearGradient></defs><path d="M12 2.2c.5 3.7 2.1 5.3 5.8 5.8-3.7.5-5.3 2.1-5.8 5.8-.5-3.7-2.1-5.3-5.8-5.8C9.9 7.5 11.5 5.9 12 2.2Z" fill="url(#askAiGrad)"/><path d="M18.5 14c.25 1.85 1.05 2.65 2.9 2.9-1.85.25-2.65 1.05-2.9 2.9-.25-1.85-1.05-2.65-2.9-2.9 1.85-.25 2.65-1.05 2.9-2.9Z" fill="#29B9C3" style={{ animation: 'askAiTwinkle 1.8s ease-in-out infinite', transformOrigin: '18.5px 16.9px' }}/></svg>); }
 
 const ICON_MAP = {
   'Summary': <HomeIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
@@ -88,7 +88,7 @@ const ICON_MAP = {
   'Revenue': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>,
   'Google Ads': <GoogleAdsIcon/>, 'QL Ops': <PeopleIcon/>,
   'WhatsApp': <WhatsAppIcon/>,
-  'Chat': <VasuIcon/>, 'Settings': <SettingsIcon/>
+  'Ask AI': <AskAIIcon/>, 'Settings': <SettingsIcon/>
 }
 function GoogleAdsIcon(){
   return <svg width='16' height='16' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M21.35 11.1H12.18V13.83H18.69C18.36 17.64 15.19 19.27 12.19 19.27C8.36 19.27 5 16.25 5 12C5 7.9 8.2 4.73 12.2 4.73C15.29 4.73 17.1 6.7 17.1 6.7L19 4.72C19 4.72 16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12C2.03 17.05 6.16 22 12.25 22C17.6 22 21.5 18.33 21.5 12.91C21.5 11.76 21.35 11.1 21.35 11.1Z' fill='currentColor'/></svg>
@@ -183,8 +183,8 @@ export default function Sidebar() {
     if (id === 'settings') return userRole === 'admin'
     // Admin sees everything
     if (userRole === 'admin') return true
-    // Plain viewer = all dashboards EXCEPT chat/vasu (must be explicitly granted)
-    if (userRole === 'viewer') return id !== 'vasu'
+    // Plain viewer = all dashboards EXCEPT ask-ai (must be explicitly granted)
+    if (userRole === 'viewer') return id !== 'ask_ai'
     // Custom viewer access: "viewer:home,meta_ads,..." — only granted ids are visible
     if (userRole?.startsWith('viewer:')) {
       const granted = userRole.replace('viewer:', '').split(',').filter(Boolean)
@@ -193,8 +193,8 @@ export default function Sidebar() {
     // Legacy support
     if (userRole === 'roas_only') return id === 'roas'
     if (userRole?.startsWith('custom:')) return userRole.replace('custom:', '').split(',').filter(Boolean).includes(id)
-    // Fallback: treat unknown as viewer (no chat)
-    return id !== 'vasu'
+    // Fallback: treat unknown as viewer (no ask-ai)
+    return id !== 'ask_ai'
   }
 
   const initials = user?.name

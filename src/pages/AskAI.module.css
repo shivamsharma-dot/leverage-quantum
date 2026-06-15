@@ -44,7 +44,7 @@
 
 .turnAvatar { flex-shrink:0; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-top:1px; }
 .userAvatar { width:32px; height:32px; border-radius:50%; background:#0A1628; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; font-family:'Inter',sans-serif; }
-.vasuAvatar { width:32px; height:32px; border-radius:50%; background:#EEF9FF; border:1px solid #BAE6FD; display:flex; align-items:center; justify-content:center; }
+.askAiAvatar { width:32px; height:32px; border-radius:50%; background:#EEF9FF; border:1px solid #BAE6FD; display:flex; align-items:center; justify-content:center; }
 
 .turnBody { flex:1; min-width:0; }
 .turnName { font-size:13px; font-weight:600; color:#111827; margin-bottom:6px; }

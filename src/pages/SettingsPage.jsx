@@ -314,11 +314,11 @@ export default function SettingsPage() {
   }
   const parsePermissions = (role) => {
     if (role === 'admin') return DASHBOARDS.map(d => d.id)
-    // plain viewer = all dashboards except chat/vasu
-    if (!role || role === 'viewer') return DASHBOARDS.filter(d => d.id !== 'vasu').map(d => d.id)
+    // plain viewer = all dashboards except ask-ai
+    if (!role || role === 'viewer') return DASHBOARDS.filter(d => d.id !== 'ask_ai').map(d => d.id)
     if (role.startsWith('viewer:')) return role.replace('viewer:', '').split(',').filter(Boolean)
     if (role.startsWith('custom:')) return role.replace('custom:', '').split(',').filter(Boolean)
-    return DASHBOARDS.filter(d => d.id !== 'vasu').map(d => d.id)
+    return DASHBOARDS.filter(d => d.id !== 'ask_ai').map(d => d.id)
   }
   const buildRoleString = (ids, isAdmin) => {
     if (isAdmin) return 'admin'

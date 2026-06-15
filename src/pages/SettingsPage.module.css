@@ -92,10 +92,10 @@
 .input:focus { border-color: var(--accent); box-shadow: var(--ring); }
 
 /* ============================================================
-   VASU AI — chat
+   Ask AI
    ============================================================ */
-.chat { display: flex; flex-direction: column; height: calc(100vh - 230px); min-height: 440px; }
-.chatScroll { flex: 1; overflow-y: auto; padding: 4px 2px 16px; display: flex; flex-direction: column; gap: 16px; }
+.askAi { display: flex; flex-direction: column; height: calc(100vh - 230px); min-height: 440px; }
+.askAiScroll { flex: 1; overflow-y: auto; padding: 4px 2px 16px; display: flex; flex-direction: column; gap: 16px; }
 .msgRow { display: flex; gap: 11px; max-width: 90%; }
 .msgUser { align-self: flex-end; flex-direction: row-reverse; }
 .avatar {

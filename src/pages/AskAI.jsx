@@ -14,7 +14,7 @@ const FONT   = "'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif"
 const SB_URL  = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 const TK_KEY  = 'lq_meta_token'
-const CV_KEY  = 'lq_chat_convs'
+const CV_KEY  = 'lq_ask_ai_convs'
 const SBH     = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' }
 
 /* ─── supabase ────────────────────────────────────────────────── */
@@ -70,7 +70,7 @@ const CATS = ['All','META','LEAD GEN','WHATSAPP','REPORTS','ANALYSIS','QL OPS']
 
 /* ─── SSE ask ─────────────────────────────────────────────────── */
 async function askClaude(messages, metaToken, memories, onChunk) {
-  const res = await fetch('/api/vasu-chat', {
+  const res = await fetch('/api/ask-ai', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ messages:messages.slice(-1).map(m=>({role:m.role||'user',content:m.content})), history:messages.slice(0,-1).map(m=>({role:m.role,content:m.content})), metaToken, memories:memories.map(m=>m.content) })
   })
@@ -159,7 +159,7 @@ const QUICK = [
 ]
 
 /* ─── main ────────────────────────────────────────────────────── */
-export default function ChatPage() {
+export default function AskAI() {
   const { user } = useAuth()
   const uid = user?.email||'default'
   const firstName = (user?.name||'there').split(' ')[0]
@@ -168,7 +168,7 @@ export default function ChatPage() {
 
   // Load conversations from Supabase on mount and merge
   useEffect(()=>{
-    sbGet('chat_conversations',`?user_id=eq.${uid}&order=updated_at.desc&limit=60`)
+    sbGet('ask_ai_conversations',`?user_id=eq.${uid}&order=updated_at.desc&limit=60`)
       .then(d=>{
         if(!Array.isArray(d)||!d.length) return
         setConvs(prev=>{
@@ -179,7 +179,7 @@ export default function ChatPage() {
           // Also load messages from SB for convs missing in localStorage
           d.forEach(async c=>{
             if(!localStorage.getItem(`ch_${c.id}`)){
-              const msgs = await sbGet('chat_messages',`?conv_id=eq.${c.id}&order=updated_at.desc&limit=1`)
+              const msgs = await sbGet('ask_ai_messages',`?conv_id=eq.${c.id}&order=updated_at.desc&limit=1`)
               if(msgs?.[0]?.messages){ try{localStorage.setItem(`ch_${c.id}`,msgs[0].messages)}catch{} }
             }
           })
@@ -220,7 +220,7 @@ export default function ChatPage() {
   // load memories
   useEffect(()=>{
     setMemLoading(true)
-    sbGet('vasu_memories',`?user_id=eq.${uid}&order=created_at.desc&limit=50`)
+    sbGet('ask_ai_memories',`?user_id=eq.${uid}&order=created_at.desc&limit=50`)
       .then(d=>{setMemories(Array.isArray(d)?d:[]);setMemLoading(false)})
       .catch(()=>setMemLoading(false))
   },[uid])
@@ -230,15 +230,15 @@ export default function ChatPage() {
 
   /* conversation helpers */
   const saveMessages = useCallback(async(id,msgs)=>{
-    const title = msgs.find(m=>m.role==='user')?.content?.slice(0,45)||'New chat'
+    const title = msgs.find(m=>m.role==='user')?.content?.slice(0,45)||'New conversation'
     const now = new Date().toISOString()
     // Keep localStorage as fast cache
     try{localStorage.setItem(`ch_${id}`,JSON.stringify(msgs.slice(-120)))}catch{}
     setConvs(cs=>cs.map(c=>c.id===id?{...c,updated_at:now,message_count:msgs.length,title}:c))
     // Persist to Supabase
     try {
-      await sbPost('chat_messages', { conv_id:id, user_id:uid, messages:JSON.stringify(msgs.slice(-120)), updated_at:now })
-      await fetch(`${SB_URL}/rest/v1/chat_conversations?id=eq.${id}`, {
+      await sbPost('ask_ai_messages', { conv_id:id, user_id:uid, messages:JSON.stringify(msgs.slice(-120)), updated_at:now })
+      await fetch(`${SB_URL}/rest/v1/ask_ai_conversations?id=eq.${id}`, {
         method:'PATCH', headers:{...SBH,Prefer:'return=minimal'},
         body:JSON.stringify({title,updated_at:now,message_count:msgs.length})
       })
@@ -248,11 +248,11 @@ export default function ChatPage() {
   const newConv = useCallback(async()=>{
     const id='cv_'+Date.now()
     const now = new Date().toISOString()
-    const conv = {id,title:'New chat',created_at:now,updated_at:now,message_count:0}
+    const conv = {id,title:'New conversation',created_at:now,updated_at:now,message_count:0}
     setConvs(cs=>[conv,...cs])
     setActiveId(id); setMessages([]); setShowWelcomeAnim(true); setRail(null)
     // Create in Supabase
-    try { await sbPost('chat_conversations',{...conv,user_id:uid}) } catch(e){ console.warn('SB conv create failed',e) }
+    try { await sbPost('ask_ai_conversations',{...conv,user_id:uid}) } catch(e){ console.warn('SB conv create failed',e) }
   },[uid])
 
   const selectConv = useCallback(c=>{
@@ -265,8 +265,8 @@ export default function ChatPage() {
     setConvs(cs=>cs.filter(c=>c.id!==id)); localStorage.removeItem(`ch_${id}`)
     if(activeId===id){setActiveId(null);setMessages([])}
     try {
-      await sbDel('chat_messages',`?conv_id=eq.${id}`)
-      await sbDel('chat_conversations',`?id=eq.${id}`)
+      await sbDel('ask_ai_messages',`?conv_id=eq.${id}`)
+      await sbDel('ask_ai_conversations',`?id=eq.${id}`)
     } catch(e){ console.warn('SB delete failed',e) }
   },[activeId, uid])
 
@@ -330,10 +330,10 @@ export default function ChatPage() {
   const addMem = async()=>{
     if(!newMem.trim()||savingMem) return; setSavingMem(true)
     const row={user_id:uid,content:newMem.trim(),created_at:new Date().toISOString()}
-    const r=await sbPost('vasu_memories',row)
+    const r=await sbPost('ask_ai_memories',row)
     setMemories(m=>[...(Array.isArray(r)&&r.length?r:[row]),...m]); setNewMem(''); setSavingMem(false)
   }
-  const delMem=async id=>{ setMemories(m=>m.filter(x=>x.id!==id)); if(id)await sbDel('vasu_memories',`?id=eq.${id}`) }
+  const delMem=async id=>{ setMemories(m=>m.filter(x=>x.id!==id)); if(id)await sbDel('ask_ai_memories',`?id=eq.${id}`) }
 
   /* grouped convs */
   const now0=new Date(); now0.setHours(0,0,0,0)
@@ -361,7 +361,7 @@ export default function ChatPage() {
   const RAIL_W = 300
 
   /* styles */
-  const chatBg='#F4F6F9'
+  const askAiBg='#F4F6F9'
   const panelBg='#fff'
   const railBg='#F7F8FA'
   const inputBg='#fff'
@@ -393,8 +393,8 @@ export default function ChatPage() {
       {/* Quantum sidebar */}
       <Sidebar/>
 
-      {/* Chat shell */}
-      <div style={{flex:1,display:'flex',minWidth:0,background:chatBg}}>
+      {/* Ask AI shell */}
+      <div style={{flex:1,display:'flex',minWidth:0,background:askAiBg}}>
 
         {/* Left panel (history/prompts/memories) */}
         <div style={{
@@ -618,15 +618,15 @@ export default function ChatPage() {
           })}
         </div>
 
-        {/* Chat area */}
+        {/* Ask AI area */}
         <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0,position:'relative'}}>
 
-          {/* Chat header */}
+          {/* Ask AI header */}
           <div style={{padding:'12px 20px',borderBottom:`1px solid ${borderColor}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,background:'#fff',borderBottom:'0.5px solid #E5E7EB'}}>
             <Logo size={16}/>
-            <span style={{fontSize:14,fontWeight:700,color:'rgba(255,255,255,0.9)',letterSpacing:'-0.01em'}}>Chat</span>
+            <span style={{fontSize:14,fontWeight:700,color:'rgba(255,255,255,0.9)',letterSpacing:'-0.01em'}}>Ask AI</span>
             <span style={{fontSize:11,color:'#94A3B8',background:'#F1F5F9',padding:'2px 8px',borderRadius:20,fontWeight:500}}>Claude Sonnet 4.5</span>
-            <button onClick={newConv} title="New chat" className="ibtn"
+            <button onClick={newConv} title="New conversation" className="ibtn"
               style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:`0.5px solid #E5E7EB`,background:'#fff',borderRadius:7,cursor:'pointer',marginLeft:2}}>
               <Ico n="new" s={13} c="#9CA3AF"/>
             </button>
@@ -758,7 +758,7 @@ export default function ChatPage() {
               </button>
             </div>
               <div style={{background:'#fff',border:`0.5px solid ${input?BLUE:borderColor}`,borderRadius:14,padding:'12px 14px',transition:'border-color .2s',boxShadow:'0 2px 12px rgba(15,23,42,0.06)'}}>
-                <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Chat…"
+                <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…"
                   onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
                   onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
                   style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
@@ -777,7 +777,7 @@ export default function ChatPage() {
                   </button>
                 </div>
               </div>
-              <div style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Chat can make mistakes. Always verify important numbers.</div>
+              <div style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Ask AI can make mistakes. Always verify important numbers.</div>
             </div>
           </div>
         </div>

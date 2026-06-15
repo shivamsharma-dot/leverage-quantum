@@ -562,8 +562,8 @@ function CreativesTab({ data }) {
   )
 }
 
-// ─── VASU AI TAB ──────────────────────────────────────────
-function VasuAITab({ data }) {
+// ─── Ask AI TAB ──────────────────────────────────────────
+function AskAITab({ data }) {
   const [messages, setMessages] = useState([])
   const [input, setInput]       = useState('')
   const [loading, setLoading]   = useState(false)
@@ -584,11 +584,11 @@ function VasuAITab({ data }) {
 
     setMessages([{
       role: 'assistant',
-      content: `Hi! I'm **VASU AI** - connected to your Meta Ads ✅\n\n**Last 7 days snapshot:**\n- Spend: ${fmtINR(parseFloat(account.spend||0))} | Impressions: ${parseInt(account.impressions||0).toLocaleString()}\n- Clicks: ${parseInt(account.clicks||0).toLocaleString()} | CTR: ${parseFloat(account.ctr||0).toFixed(2)}%\n- Total Leads: ${leads.toLocaleString()} | ${campaigns.length} campaigns · ${ads.length} ads loaded\n\n**Top 5 campaigns by spend:**\n${topCampaigns}\n\nAsk me anything about your campaigns, creatives, or what actions to take this week.`
+      content: `Hi! I'm **Ask AI** - connected to your Meta Ads ✅\n\n**Last 7 days snapshot:**\n- Spend: ${fmtINR(parseFloat(account.spend||0))} | Impressions: ${parseInt(account.impressions||0).toLocaleString()}\n- Clicks: ${parseInt(account.clicks||0).toLocaleString()} | CTR: ${parseFloat(account.ctr||0).toFixed(2)}%\n- Total Leads: ${leads.toLocaleString()} | ${campaigns.length} campaigns · ${ads.length} ads loaded\n\n**Top 5 campaigns by spend:**\n${topCampaigns}\n\nAsk me anything about your campaigns, creatives, or what actions to take this week.`
     }])
   }, [])
 
-  const buildPrompt = () => `You are VASU AI - the Meta Ads intelligence layer inside Leverage Quantum (Leverage Edu's internal marketing dashboard).
+  const buildPrompt = () => `You are Ask AI - the Meta Ads intelligence layer inside Leverage Quantum (Leverage Edu's internal marketing dashboard).
 
 You have access to live Meta Ads data for account act_641914389215638 (last 7 days):
 - Spend: ${fmtINR(parseFloat(data.account.spend||0))}
@@ -630,38 +630,38 @@ Guidelines: Be concise, lead with the number, always give a specific action. Rea
   const QUICK = ['Analyse campaigns','Why is CTR low?','Best creative this week','Where to cut spend?','High fatigue ads','Scale recommendations']
 
   return (
-    <div className={styles.vasuWrap}>
-      <div className={styles.vasuMessages}>
+    <div className={styles.askAiWrap}>
+      <div className={styles.askAiMessages}>
         {messages.map((m,i) => (
           <div key={i} className={m.role==='user'?styles.userMsg:styles.asstMsg}>
             {m.role==='assistant' && (
-              <div className={styles.vasuAvatar}>
+              <div className={styles.askAiAvatar}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round">
                   <rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/>
                 </svg>
               </div>
             )}
-            <div className={styles.vasuBubble} dangerouslySetInnerHTML={{__html:render(m.content)}}/>
+            <div className={styles.askAiBubble} dangerouslySetInnerHTML={{__html:render(m.content)}}/>
           </div>
         ))}
         {loading && (
           <div className={styles.asstMsg}>
-            <div className={styles.vasuAvatar}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/></svg></div>
-            <div className={styles.vasuBubble}><span className={styles.typing}><span/><span/><span/></span></div>
+            <div className={styles.askAiAvatar}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="4" height="18" rx="1"/><rect x="10" y="8" width="4" height="13" rx="1"/><rect x="17" y="5" width="4" height="16" rx="1"/></svg></div>
+            <div className={styles.askAiBubble}><span className={styles.typing}><span/><span/><span/></span></div>
           </div>
         )}
         <div ref={bottomRef}/>
       </div>
-      <div className={styles.vasuQuickRow}>
-        {QUICK.map(p => <button key={p} className={styles.vasuQuickBtn} onClick={()=>send(p)} disabled={loading}>{p}</button>)}
+      <div className={styles.askAiQuickRow}>
+        {QUICK.map(p => <button key={p} className={styles.askAiQuickBtn} onClick={()=>send(p)} disabled={loading}>{p}</button>)}
       </div>
-      <div className={styles.vasuInputRow}>
-        <textarea className={styles.vasuInput} value={input}
+      <div className={styles.askAiInputRow}>
+        <textarea className={styles.askAiInput} value={input}
           onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,160)+'px'}}
           onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
           placeholder="Ask about campaigns, creatives, pixel… (Shift+Enter for new line)"
           disabled={loading} rows={1} style={{resize:'none',overflowY:'auto'}}/>
-        <button className={styles.vasuSendBtn} onClick={()=>send()} disabled={loading||!input.trim()}>
+        <button className={styles.askAiSendBtn} onClick={()=>send()} disabled={loading||!input.trim()}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
@@ -1175,7 +1175,7 @@ export default function MetaAdsDashboard() {
           <>
             {activeTab === 'campaigns' && <CampaignsTab data={data}/>}
             {activeTab === 'creatives' && <CreativesTab data={data}/>}
-            {activeTab === 'vasu'      && null}
+            {activeTab === 'ask_ai'      && null}
           </>
         ) : null}
       </div>

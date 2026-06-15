@@ -1,4 +1,4 @@
-// api/vasu-chat.js — Chat AI · Production · Claude-powered · SSE streaming · Meta Tool Use
+// api/ask-ai.js — Ask AI · Production · Claude-powered · SSE streaming · Meta Tool Use
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'

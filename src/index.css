@@ -256,3 +256,13 @@ input:focus, textarea:focus {
 [data-sidebar-wide="true"] .lq-sidebar-full {
   width: 280px !important;
 }
+
+/* Ask AI sidebar icon animations */
+@keyframes askAiPulse {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50% { transform: scale(1.14); opacity: 1; }
+}
+@keyframes askAiTwinkle {
+  0%, 100% { transform: scale(0.6); opacity: 0.35; }
+  50% { transform: scale(1); opacity: 1; }
+}

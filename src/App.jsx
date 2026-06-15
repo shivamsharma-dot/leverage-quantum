@@ -13,7 +13,7 @@ import WhatsAppDashboard from './pages/WhatsAppDashboard'
 import MTDDashboard from './pages/MTDDashboard'
 import MetaAdsDashboard from './pages/MetaAdsDashboard'
 import GoogleAdsDashboard from './pages/GoogleAdsDashboard'
-import VasuAI from './pages/VasuAI'
+import AskAI from './pages/AskAI'
 import SettingsPage from './pages/SettingsPage'
 
 // Suspense fallback — slim skeleton shown while lazy chunk loads
@@ -30,7 +30,7 @@ const PAGE_TITLES = {
   '/dashboard/revenue':       'Revenue',
   '/dashboard/lq-ops':        'QL Ops',
   '/dashboard/whatsapp':      'WhatsApp',
-  '/vasu':                    'Chat',
+  '/ask-ai':                    'Ask AI',
   '/settings':                'Settings',
 }
 
@@ -75,9 +75,9 @@ function ProtectedRoute({ children, dashboardId }) {
     }
   }, [location.pathname, user?.email])
 
-  // Clean up stale localStorage keys from old chat implementation
+  // Clean up stale localStorage keys from old Ask AI implementation
   useEffect(() => {
-    const staleKeys = ['lq_vasu_conversations']
+    const staleKeys = ['lq_ask_ai_conversations']
     const allKeys = Object.keys(localStorage)
     allKeys.forEach(k => {
       if (staleKeys.includes(k) || (k.startsWith('conv_') && !k.startsWith('conv_cv_'))) {
@@ -149,7 +149,7 @@ export default function App() {
         <Route path="/dashboard/whatsapp"     element={<ProtectedRoute dashboardId="whatsapp">    <WhatsAppDashboard /></ProtectedRoute>} />
         <Route path="/dashboard/meta-ads"     element={<ProtectedRoute dashboardId="meta_ads">    <MetaAdsDashboard /></ProtectedRoute>} />
         <Route path="/dashboard/google-ads"   element={<ProtectedRoute dashboardId="google_ads">  <GoogleAdsDashboard /></ProtectedRoute>} />
-        <Route path="/vasu"                   element={<ProtectedRoute dashboardId="vasu">         <VasuAI /></ProtectedRoute>} />
+        <Route path="/ask-ai"                   element={<ProtectedRoute dashboardId="ask_ai">         <AskAI /></ProtectedRoute>} />
         <Route path="/settings"               element={<ProtectedRoute dashboardId="settings">    <SettingsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
