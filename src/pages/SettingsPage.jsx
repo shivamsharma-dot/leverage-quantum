@@ -563,6 +563,48 @@ export default function SettingsPage() {
           {/* ---------------- USER ACCESS ---------------- */}
           {activeTab === 'users' && userIsAdmin && (
             <>
+              {/* ── GLOBAL PAGE VISIBILITY ── */}
+              <div className={styles.card} style={{marginBottom:0}}>
+                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16}}>
+                  <div>
+                    <h3 className={styles.cardTitle} style={{marginBottom:4}}>Global Page Visibility</h3>
+                    <p className={styles.cardDesc} style={{margin:0}}>Pages hidden here disappear from <strong>everyone's</strong> sidebar. Per-user access below only applies to the remaining visible pages.</p>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0,marginTop:2}}>
+                    {prefSaveMsg&&<span style={{fontSize:11,fontWeight:600,color:prefSaveMsg.type==='ok'?'#16A34A':'#DC2626',background:prefSaveMsg.type==='ok'?'#F0FDF4':'#FEF2F2',border:'0.5px solid '+(prefSaveMsg.type==='ok'?'#BBF7D0':'#FECACA'),borderRadius:6,padding:'3px 10px',whiteSpace:'nowrap'}}>{prefSaveMsg.text}</span>}
+                    <button onClick={saveHiddenPages} disabled={prefSaving||!hasPendingChanges||prefLoading}
+                      style={{padding:'6px 16px',borderRadius:8,border:'none',cursor:hasPendingChanges&&!prefSaving?'pointer':'not-allowed',background:hasPendingChanges&&!prefSaving?'#1F3C84':'#E2E8F0',color:hasPendingChanges&&!prefSaving?'#fff':'#94A3B8',fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",transition:'all .15s',display:'flex',alignItems:'center',gap:6,opacity:prefSaving?0.65:1}}>
+                      {prefSaving?<><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{animation:'spin .8s linear infinite'}}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Saving…</>:<><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>{hasPendingChanges?'Save changes':'Saved'}</>}
+                    </button>
+                  </div>
+                </div>
+                {prefLoading?<div style={{fontSize:12,color:'#94A3B8'}}>Loading…</div>:
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:8}}>
+                    {DASHBOARDS.map(page=>{
+                      const isHidden=hiddenPages.includes(page.id)
+                      return(
+                        <div key={page.id} onClick={()=>togglePageVisibility(page.id)}
+                          style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:9,border:'0.5px solid '+(isHidden?'#E2E8F0':'#D1E9F7'),background:isHidden?'#F8FAFC':'#F0FBFF',cursor:'pointer',transition:'all .15s',userSelect:'none'}}>
+                          <div style={{width:26,height:26,borderRadius:7,flexShrink:0,background:isHidden?'#F1F5F9':'#E3F5FD',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={isHidden?'#CBD5E1':'#1C9FD4'} strokeWidth="2" strokeLinecap="round">
+                              {isHidden?<><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}
+                            </svg>
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:12,fontWeight:600,color:isHidden?'#94A3B8':'#0F172A',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{page.label}</div>
+                            <div style={{fontSize:10,color:isHidden?'#CBD5E1':'#94A3B8',marginTop:1}}>{isHidden?'Hidden — all users':'Visible to all'}</div>
+                          </div>
+                          <div style={{width:30,height:17,borderRadius:9,flexShrink:0,background:isHidden?'#E2E8F0':'#1C9FD4',position:'relative',transition:'background .2s'}}>
+                            <div style={{position:'absolute',top:2,left:isHidden?2:13,width:13,height:13,borderRadius:7,background:'#fff',transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,0.15)'}}/>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                }
+                {hiddenPages.length>0&&!prefLoading&&<button onClick={()=>{setHiddenPages([]);setPrefSaveMsg(null)}} style={{marginTop:10,fontSize:11.5,fontWeight:600,color:'#DC2626',background:'none',border:'none',cursor:'pointer',padding:'4px 0',display:'flex',alignItems:'center',gap:5,fontFamily:"'Plus Jakarta Sans',sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>Reset — show all</button>}
+              </div>
+              <div style={{borderTop:'0.5px solid #F1F5F9'}}/>
               {/* page header */}
               <div className={styles.uaHeader}>
                 <div>
@@ -706,11 +748,16 @@ export default function SettingsPage() {
                             <div className={styles.dashGrid}>
                               {DASHBOARDS.map(d => {
                                 const checked = editIds.includes(d.id)
+                                const gHidden = hiddenPages.includes(d.id)
                                 return (
-                                  <label key={d.id} className={`${styles.dashChip} ${checked ? styles.dashChipActive : ''}`}>
-                                    <input type="checkbox" checked={checked}
-                                      onChange={() => setEditIds(p => checked ? p.filter(x => x !== d.id) : [...p, d.id])} />
+                                  <label key={d.id}
+                                    title={gHidden?'Globally hidden — change in Global Page Visibility above':undefined}
+                                    className={`${styles.dashChip} ${checked&&!gHidden?styles.dashChipActive:''}`}
+                                    style={gHidden?{opacity:0.38,cursor:'not-allowed',filter:'grayscale(1)'}:{}}>
+                                    <input type="checkbox" checked={checked&&!gHidden} disabled={gHidden}
+                                      onChange={()=>!gHidden&&setEditIds(p=>checked?p.filter(x=>x!==d.id):[...p,d.id])} />
                                     {d.label}
+                                    {gHidden&&<span style={{fontSize:9,display:'block',color:'#94A3B8',fontWeight:600,lineHeight:1,marginTop:2}}>globally off</span>}
                                   </label>
                                 )
                               })}
@@ -824,7 +871,19 @@ export default function SettingsPage() {
           {/* ---------------- APPEARANCE ---------------- */}
           {activeTab === 'appearance' && userIsAdmin && (
             <>
-              {/* PAGE VISIBILITY */}
+              {/* PAGE VISIBILITY → now in User Access tab */}
+              <div className={styles.card} style={{display:'flex',alignItems:'center',gap:14,padding:'14px 18px'}}>
+                <div style={{width:34,height:34,borderRadius:9,background:'#E8EFF9',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </div>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:13,fontWeight:700,color:'#0F172A',marginBottom:2}}>Global Page Visibility</div>
+                  <div style={{fontSize:12,color:'#94A3B8',lineHeight:1.5}}>Unified with per-user access in the <strong>User Access</strong> tab — manage global and individual page access together.</div>
+                </div>
+                <button onClick={()=>setActiveTab('users')} style={{padding:'7px 14px',borderRadius:8,background:'#F8FAFC',border:'0.5px solid #E2E8F0',fontSize:12,fontWeight:600,color:'#1F3C84',cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                  User Access →
+                </button>
+              </div>
               <div className={styles.card}>
                 <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:18}}>
                   <div>
