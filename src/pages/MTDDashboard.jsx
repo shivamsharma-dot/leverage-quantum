@@ -122,7 +122,7 @@ function Dropdown({options,value,onChange,minWidth=120}){
   return(
     <div style={{position:'relative'}} ref={ref}>
       <button onClick={()=>setOpen(v=>!v)} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 11px 7px 13px',borderRadius:9,border:`0.5px solid ${open?C2.navy:C2.border}`,background:open?C2.navyBg:'#fff',color:C2.text,cursor:'pointer',fontFamily:FONT2,fontSize:12,fontWeight:600,minWidth,boxShadow:open?`0 0 0 3px rgba(31,60,132,0.09)`:'0 1px 3px rgba(15,23,42,0.06)',transition:'all .15s',whiteSpace:'nowrap'}}>
-        <span style={{flex:1,textAlign:'left'}}>{value}</span>
+        <span style={{flex:1,textAlign:'left'}}>{(options.find(o=>(o.value??o)===value)?.label)??value}</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{flexShrink:0,transition:'transform .2s',transform:open?'rotate(180deg)':'rotate(0deg)'}}>
           <path d="M1 1l4 4 4-4" stroke={C2.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
@@ -230,8 +230,8 @@ export default function MTDDashboard(){
           </div>}
           {months.length>0&&<Dropdown
             options={months.map((m,i)=>({label:m.name,value:i}))}
-            value={month?.name||''}
-            onChange={v=>setSel(months.findIndex(m=>m.name===v))}
+            value={sel}
+            onChange={v=>setSel(Number(v))}
             minWidth={130}
           />}
           <div style={{fontSize:11,color:'#94A3B8',borderLeft:'0.5px solid #E5E7EB',paddingLeft:14}}>{lastSync?'Synced '+fmt.format(lastSync):''}</div>
