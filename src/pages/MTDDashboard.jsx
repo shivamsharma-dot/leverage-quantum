@@ -87,13 +87,12 @@ const KPI=({label,value,sub,accent,prev,cur,invert,prorate})=>{
   const adjPrev = (prev!=null&&prorate&&prorate!==1)?prev*prorate:prev
   const d = (adjPrev!=null&&cur!=null)?delta(cur,adjPrev):null
   const good = d==null?null:(invert?d<=0:d>=0)
-  return <div style={{background:'#fff',border:'0.5px solid #E2E8F0',borderRadius:12,padding:'16px 20px 14px',border:'0.5px solid #E5E7EB'}}>
-    <div style={{fontSize:'9.5px',fontWeight:700,color:'#94A3B8',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:6}}>{label}</div>
-    <div style={{fontSize:20,fontWeight:700,color:'#0F172A',letterSpacing:'-0.5px',lineHeight:1}}>{value}</div>
-    <div style={{display:'flex',alignItems:'center',gap:6,marginTop:5}}>
-      {sub&&<div style={{fontSize:11,color:'#94A3B8'}}>{sub}</div>}
-      {d!=null&&<span style={{fontSize:10,fontWeight:700,padding:'1px 6px',borderRadius:10,
-        background:good?'#E9F8EF':'#FEF2F2',color:good?'#4CAE6F':'#DC2626'}}>
+  return <div style={{background:'#fff',border:'0.5px solid #E2E8F0',borderRadius:12,padding:'16px 20px 14px',boxShadow:'0 1px 4px rgba(15,23,42,0.04)'}}>
+    <div style={{fontSize:10,fontWeight:700,color:'#94A3B8',letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:8}}>{label}</div>
+    <div style={{fontSize:26,fontWeight:800,color:'#0F172A',letterSpacing:'-1px',lineHeight:1,marginBottom:6}}>{value}</div>
+    <div style={{display:'flex',alignItems:'center',gap:8,minHeight:18}}>
+      {sub&&<div style={{fontSize:11.5,color:'#94A3B8',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sub}</div>}
+      {d!=null&&<span style={{fontSize:10.5,fontWeight:700,color:good?'#16A34A':'#DC2626',flexShrink:0}}>
         {d>=0?'\u25B2':'\u25BC'}{Math.abs(d).toFixed(1)}%
       </span>}
     </div>
