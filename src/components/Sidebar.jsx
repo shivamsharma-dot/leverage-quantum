@@ -281,7 +281,7 @@ export default function Sidebar() {
         {NAV.map(group => (
           <div key={group.label} className={styles.group}>
             {group.label !== 'Intelligence' && <p className={styles.groupLabel}>{group.label}</p>}
-            {group.items.filter(item => canSee(idMap[item.label])).map(item => {
+            {group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item => {
               if (item.subItems) {
                 return (
                   <div key={item.label}>
