@@ -140,6 +140,67 @@ export default function SettingsPage() {
   const [kpiIcons, setKpiIcons] = useState(() => {
     try { return JSON.parse(localStorage.getItem('lq_kpi_icons') || '{}') } catch { return {} }
   })
+
+  // ── Layout preferences ───────────────────────────────────────────────────
+  const [sidebarMode, setSidebarMode] = useState(() => localStorage.getItem('lq_sidebar_mode') || 'default')
+  const applySidebarMode = (mode) => {
+    setSidebarMode(mode)
+    localStorage.setItem('lq_sidebar_mode', mode)
+    // Collapse state: icon-only = collapsed=true, default/wide = collapsed=false
+    const collapsed = mode === 'compact'
+    localStorage.setItem('lq_sidebar_collapsed', String(collapsed))
+    window.dispatchEvent(new CustomEvent('lq:sidebar-mode-changed', { detail: { mode, collapsed } }))
+  }
+
+  const SIDEBAR_MODES = [
+    { id: 'compact',  label: 'Compact',  desc: 'Icon-only — maximum data space',     icon: '⟵' },
+    { id: 'default',  label: 'Default',  desc: '232px — labels + icons',              icon: '☰' },
+    { id: 'wide',     label: 'Wide',     desc: '280px — more breathing room',          icon: '⟹' },
+  ]
+
+  // Number format
+  const [numberFormat, setNumberFormat] = useState(() => localStorage.getItem('lq_number_format') || 'indian')
+  const applyNumberFormat = (fmt) => {
+    setNumberFormat(fmt)
+    localStorage.setItem('lq_number_format', fmt)
+    window.dispatchEvent(new CustomEvent('lq:number-format-changed', { detail: fmt }))
+  }
+  const NUMBER_FORMATS = [
+    { id: 'indian',       label: 'Indian',       example: '₹1,00,000 · 6.1L · 1.2Cr',  desc: 'Lakh / Crore notation' },
+    { id: 'international',label: 'International', example: '₹100,000 · 61K · 1.2M',     desc: 'Thousand / Million' },
+    { id: 'compact',      label: 'Compact',       example: '₹1L · ₹1Cr · 61K',          desc: 'Always abbreviated' },
+  ]
+
+  // Default date range
+  const [defaultDateRange, setDefaultDateRange] = useState(() => localStorage.getItem('lq_default_date') || 'last_7d')
+  const applyDefaultDate = (range) => {
+    setDefaultDateRange(range)
+    localStorage.setItem('lq_default_date', range)
+  }
+  const DATE_RANGES = [
+    { id: 'yesterday',  label: 'Yesterday',       desc: 'Prior day only' },
+    { id: 'last_7d',    label: 'Last 7 days',      desc: 'Rolling 7-day window' },
+    { id: 'last_30d',   label: 'Last 30 days',     desc: 'Rolling 30-day window' },
+    { id: 'mtd',        label: 'Month to date',    desc: 'Current month so far' },
+    { id: 'last_month', label: 'Last month',       desc: 'Previous full month' },
+  ]
+
+  // Table density
+  const [tableDensity, setTableDensity] = useState(() => localStorage.getItem('lq_table_density') || 'comfortable')
+  const applyDensity = (d) => {
+    setTableDensity(d)
+    localStorage.setItem('lq_table_density', d)
+    document.documentElement.setAttribute('data-density', d)
+    window.dispatchEvent(new CustomEvent('lq:density-changed', { detail: d }))
+  }
+  React.useEffect(() => {
+    document.documentElement.setAttribute('data-density', tableDensity)
+  }, [])
+  const DENSITIES = [
+    { id: 'compact',      label: 'Compact',      rowH: '10px 12px',  desc: 'Tight rows — show more data' },
+    { id: 'comfortable',  label: 'Comfortable',  rowH: '14px 16px',  desc: 'Balanced — default' },
+    { id: 'spacious',     label: 'Spacious',     rowH: '18px 20px',  desc: 'Airy rows — easier scanning' },
+  ]
   const KPI_ICON_SETS = {
     spend:       { label: 'Spend / Cost',   icons: ['rupee','dollar','wallet','card','chart-bar'] },
     leads:       { label: 'Leads / Opps',   icons: ['users','person','funnel','target','star'] },
@@ -330,6 +391,125 @@ export default function SettingsPage() {
                       <span className={styles.sourceStatus}>Connected</span>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* LAYOUT */}
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Sidebar Layout</h3>
+                <p className={styles.cardDesc}>Control how much space the navigation takes up. Applies immediately.</p>
+                <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+                  {SIDEBAR_MODES.map(mode => {
+                    const isActive = sidebarMode === mode.id
+                    return (
+                      <div key={mode.id} onClick={() => applySidebarMode(mode.id)}
+                        style={{
+                          flex:'1 1 150px',padding:'14px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',
+                          border:`1.5px solid ${isActive ? '#1C9FD4' : '#E2E8F0'}`,
+                          background: isActive ? '#F0FBFF' : '#fff',
+                          boxShadow: isActive ? '0 0 0 3px rgba(28,159,212,0.1)' : '0 1px 3px rgba(15,23,42,0.04)',
+                          position:'relative',
+                        }}>
+                        {isActive && (
+                          <div style={{position:'absolute',top:10,right:10,width:18,height:18,borderRadius:9,background:'#1C9FD4',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          </div>
+                        )}
+                        <div style={{fontSize:13,fontWeight:700,color:'#0F172A',marginBottom:3}}>{mode.label}</div>
+                        <div style={{fontSize:11.5,color:'#94A3B8'}}>{mode.desc}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* NUMBER FORMAT */}
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Number Format</h3>
+                <p className={styles.cardDesc}>How large numbers are displayed across all dashboards. Saved per-user, persists across sessions.</p>
+                <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                  {NUMBER_FORMATS.map(fmt => {
+                    const isActive = numberFormat === fmt.id
+                    return (
+                      <div key={fmt.id} onClick={() => applyNumberFormat(fmt.id)}
+                        style={{
+                          display:'flex',alignItems:'center',justifyContent:'space-between',
+                          padding:'13px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',
+                          border:`1.5px solid ${isActive ? '#1C9FD4' : '#E2E8F0'}`,
+                          background: isActive ? '#F0FBFF' : '#fff',
+                        }}>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:600,color:'#0F172A',marginBottom:2}}>{fmt.label}</div>
+                          <div style={{fontSize:11.5,color:'#94A3B8'}}>{fmt.desc}</div>
+                        </div>
+                        <div style={{fontFamily:'monospace',fontSize:12,color: isActive ? '#1C9FD4' : '#94A3B8',fontWeight:600,textAlign:'right',flexShrink:0,marginLeft:12}}>
+                          {fmt.example}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* DEFAULT DATE RANGE */}
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Default Date Range</h3>
+                <p className={styles.cardDesc}>The time period that loads by default when you open a dashboard. Overridden per-session by your manual selection.</p>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:10}}>
+                  {DATE_RANGES.map(range => {
+                    const isActive = defaultDateRange === range.id
+                    return (
+                      <div key={range.id} onClick={() => applyDefaultDate(range.id)}
+                        style={{
+                          padding:'12px 14px',borderRadius:10,cursor:'pointer',transition:'all .15s',
+                          border:`1.5px solid ${isActive ? '#1C9FD4' : '#E2E8F0'}`,
+                          background: isActive ? '#F0FBFF' : '#fff',
+                          position:'relative',
+                        }}>
+                        {isActive && (
+                          <div style={{position:'absolute',top:10,right:10,width:16,height:16,borderRadius:8,background:'#1C9FD4',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          </div>
+                        )}
+                        <div style={{fontSize:13,fontWeight:600,color:'#0F172A',marginBottom:3}}>{range.label}</div>
+                        <div style={{fontSize:11.5,color:'#94A3B8'}}>{range.desc}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* TABLE DENSITY */}
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Table Density</h3>
+                <p className={styles.cardDesc}>Row height across all data tables. Compact shows more rows; Spacious is easier to scan quickly.</p>
+                <div style={{display:'flex',gap:12,flexWrap:'wrap'}}>
+                  {DENSITIES.map(d => {
+                    const isActive = tableDensity === d.id
+                    return (
+                      <div key={d.id} onClick={() => applyDensity(d.id)}
+                        style={{
+                          flex:'1 1 140px',cursor:'pointer',borderRadius:10,transition:'all .15s',overflow:'hidden',
+                          border:`1.5px solid ${isActive ? '#1C9FD4' : '#E2E8F0'}`,
+                          boxShadow: isActive ? '0 0 0 3px rgba(28,159,212,0.1)' : 'none',
+                        }}>
+                        {/* Mini table preview */}
+                        <div style={{padding:'10px 12px 6px',background: isActive ? '#F0FBFF' : '#F8FAFC'}}>
+                          {[1,2,3].map(row => (
+                            <div key={row} style={{display:'flex',gap:6,padding:`${d.rowH} 0`,borderBottom:'0.5px solid #E2E8F0'}}>
+                              <div style={{width:'40%',height:8,borderRadius:3,background: isActive ? '#BAE3F9' : '#E2E8F0'}}/>
+                              <div style={{width:'30%',height:8,borderRadius:3,background: isActive ? '#D1EEFB' : '#EEF0F3'}}/>
+                              <div style={{width:'20%',height:8,borderRadius:3,background: isActive ? '#D1EEFB' : '#EEF0F3'}}/>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{padding:'10px 12px',borderTop:`1.5px solid ${isActive ? '#1C9FD4' : '#E2E8F0'}`,background:'#fff'}}>
+                          <div style={{fontSize:12,fontWeight:700,color: isActive ? '#1C9FD4' : '#0F172A'}}>{d.label}</div>
+                          <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{d.desc}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             </>
