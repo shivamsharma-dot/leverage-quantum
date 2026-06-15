@@ -92,6 +92,8 @@ export default function SettingsPage() {
     setHiddenPages(prev => {
       const next = prev.includes(pageId) ? prev.filter(id => id !== pageId) : [...prev, pageId]
       localStorage.setItem('lq_hidden_pages', JSON.stringify(next))
+      // Broadcast to same-tab listeners (storage event only fires cross-tab)
+      window.dispatchEvent(new CustomEvent('lq:hidden-pages-changed', { detail: next }))
       return next
     })
   }
@@ -652,7 +654,7 @@ export default function SettingsPage() {
                   })}
                 </div>
                 {hiddenPages.length > 0 && (
-                  <button onClick={() => { setHiddenPages([]); localStorage.removeItem('lq_hidden_pages') }}
+                  <button onClick={() => { setHiddenPages([]); localStorage.removeItem('lq_hidden_pages'); window.dispatchEvent(new CustomEvent('lq:hidden-pages-changed', { detail: [] })) }}
                     style={{marginTop:16,fontSize:12,fontWeight:600,color:'#DC2626',background:'none',border:'none',cursor:'pointer',padding:'4px 0',display:'flex',alignItems:'center',gap:5}}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
                     Reset all — show all pages
