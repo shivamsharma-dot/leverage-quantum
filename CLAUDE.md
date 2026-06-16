@@ -540,3 +540,12 @@ Built via 7 /tmp/part*.txt fragments concat (part1/2 reused from prior). Build 7
 - Sidebar.jsx (SHARED component - changed with explicit user approval): settings gear no longer shares the destructive .logoutBtn style. New .gearBtn class (neutral grey -> navy #1F3C84 / #E8EFF9 on hover, NO red), plus a .footDivider (1px) separating the gear from the Sign-out button so they no longer read as one control.
 - _DashboardTemplate.jsx: added rigid header rules - (1) BRAND COLOR RULE: charts use only navy->blue->cyan->green; never C.amber/orange/red/yellow. (2) SHELL RULE: outer display:flex;height:100vh;overflow:hidden + inner flex:1;overflowY:auto (keeps sidebar+header fixed). Template already had the KPI strip / Card / RankedBars / records-table scaffold.
 - Build OK (7.09s). Pushed 57d774c..95b8073.
+
+## Update (commit 4dcadcd) - Ask AI premium redesign (flagship feature)
+- File: src/pages/AskAI.jsx (787->~840 lines). Backend wiring (Supabase sbGet, send/stream, PROMPTS, memories, report logs, inner rail History/Prompts/Memories/Logs) left FULLY UNTOUCHED - redesign is presentational only. Verified live: AI still answers with real data + tables, Prompt Library panel still opens.
+- Added PREMIUM AI MOTION TOOLKIT to existing <style> block (all brand colors navy #1F3C84/blue #1C9FD4/cyan #29B9C3/green; NO amber): @keyframes qSwoosh (diagonal sheen), qAurora (gradient shift), qOrbit/qOrbitR (rings), qFloat, qGlow, qTextShine, qScan, qSpark, qRise; classes .qShine (gradient shimmer text), .qOrb (animated gradient orb w/ swoosh ::after), .qChip (premium chip hover).
+- Hero: flat grey avatar -> animated .qOrb (gradient + swoosh + glow + float) with white Logo and two orbiting sparkle dots; greeting word wrapped in .qShine; quick-prompt chips got .qChip.
+- MagicLoader component (new, before default export): replaces plain 3-dot blink loader. Gradient orb + dual counter-rotating rings + sweeping scan bar + rotating status text ('Reading your Meta Ads data...', 'Pulling QL Ops & WhatsApp signals...', 'Crunching the numbers...', 'Spotting trends & risks...', 'Composing your answer...') cycling every 1.7s with qShine.
+- AI message avatar -> mini .qOrb. Send button -> brand gradient + glow when active, refresh icon spins while loading.
+- NOTE: AskAI.jsx defines a local AMBER token (#F59E0B) but it is NOT used in any render path; do not introduce it.
+- Build OK (6.45s). Pushed a622fcf..4dcadcd.
