@@ -702,6 +702,77 @@ export default function LeadQualificationDashboard() {
     return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 10)
   }, [filtered])
 
+  // ── NEW DIMENSION BREAKDOWNS ─────────────────────────────────────────────
+  const countryBar = useMemo(() => {
+    const map = {}
+    filtered.forEach(r => {
+      const k = (r.country || 'Unknown').replace(/ *\(.*\)/, '').trim() || 'Unknown'
+      if (!map[k]) map[k] = { country: k, count: 0 }
+      map[k].count++
+    })
+    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 10)
+  }, [filtered])
+
+  const degreeBar = useMemo(() => {
+    const map = {}
+    filtered.forEach(r => {
+      const k = r.degree_type || 'Unknown'
+      if (!map[k]) map[k] = { degree: k, count: 0 }
+      map[k].count++
+    })
+    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 8)
+  }, [filtered])
+
+  const dispositionBar = useMemo(() => {
+    const map = {}
+    filtered.forEach(r => {
+      const k = r.disposition || 'Unknown'
+      if (!map[k]) map[k] = { disposition: k, count: 0 }
+      map[k].count++
+    })
+    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 8)
+  }, [filtered])
+
+  const budgetBar = useMemo(() => {
+    const ORDER = ['<5L','5-10L','10-15L','15-20L','20-30L','30-50L','>50L']
+    const map = {}
+    filtered.forEach(r => {
+      const k = r.budget || 'Unknown'
+      if (!map[k]) map[k] = { budget: k, count: 0 }
+      map[k].count++
+    })
+    return Object.values(map)
+      .sort((a, b) => {
+        const ai = ORDER.indexOf(a.budget), bi = ORDER.indexOf(b.budget)
+        if (ai !== -1 && bi !== -1) return ai - bi
+        if (ai !== -1) return -1
+        if (bi !== -1) return 1
+        return b.count - a.count
+      })
+      .slice(0, 8)
+  }, [filtered])
+
+  const intakeBar = useMemo(() => {
+    const map = {}
+    filtered.forEach(r => {
+      const k = r.preferred_intake || 'Unknown'
+      if (!map[k]) map[k] = { intake: k, count: 0 }
+      map[k].count++
+    })
+    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 8)
+  }, [filtered])
+
+  const passportPie = useMemo(() => {
+    const yes = filtered.filter(r => r.valid_passport === 'Yes').length
+    const no  = filtered.filter(r => r.valid_passport === 'No').length
+    return [
+      { name: 'Has Passport', value: yes },
+      { name: 'No Passport',  value: no },
+    ].filter(d => d.value > 0)
+  }, [filtered])
+
+  const topCountries = useMemo(() => countryBar.slice(0, 5), [countryBar])
+
   const tableRows = useMemo(() => {
     const q = search.toLowerCase()
     return filtered
@@ -1018,7 +1089,7 @@ export default function LeadQualificationDashboard() {
             </div>
           ) : (
             <>
-              {/* KPI ROW */}
+              {/* ── KPI ROW ── */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 20 }}>
                 <KPICard label="Total Qualified" value={fmtN(totals.total)} sub={selMonth} delta={totals.totalDelta} />
                 <KPICard label="Futwork"    value={fmtN(totals.fw)}   sub={pct(totals.fw,   totals.total) + ' of total'} delta={totals.fwDelta} />
@@ -1029,136 +1100,254 @@ export default function LeadQualificationDashboard() {
                   sub="FW / FW AI / SB" />
               </div>
 
-              {/* SOURCE BAR + DONUT ROW */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16 }}>
-
-                {/* SOURCE STACKED BAR */}
-                <Card
-                  title="Qualified by source"
-                  sub={selProvider !== 'All' || selSource !== 'All'
-                    ? `Filtered · ${selProvider !== 'All' ? selProvider : 'All providers'} · ${selSource !== 'All' ? selSource : 'All sources'}`
-                    : 'Stacked by provider · selected month'}
-                >
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={sourceBar} margin={{ top: 8, right: 12, left: -8, bottom: 0 }} barCategoryGap="28%">
-                      <XAxis
-                        dataKey="source"
-                        axisLine={false} tickLine={false}
-                        interval={0}
-                       tick={{fontSize:10.5,fill:"#94A3B8",fontFamily:"'Plus Jakarta Sans',sans-serif"}}/>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
-                      <YAxis
-                        tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }}
-                        tickFormatter={v => fmtN(v)}
-                        axisLine={false} tickLine={false}
-                      />
-                      <Tooltip content={<BrandTooltip/>} cursor={{ fill: 'var(--bg3)' }} />
-                      <Bar dataKey="Futwork"     stackId="a" fill={C.navy} radius={[0,0,0,0]} maxBarSize={52} />
-                      <Bar dataKey="Futwork AI" stackId="a" fill={C.cyan} radius={[0,0,0,0]} maxBarSize={52} />
-                      <Bar dataKey="Superbot"   stackId="a" fill={C.blue} radius={[6,6,0,0]} maxBarSize={52} />
+              {/* ── ROW 1: SOURCE BAR + PROVIDER DONUT ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, marginBottom: 16 }}>
+                <Card title="Qualified by source" sub="Stacked by provider · selected period">
+                  <ResponsiveContainer width="100%" height={240}>
+                    <BarChart data={sourceBar} margin={{ top: 4, right: 12, left: -8, bottom: 0 }} barCategoryGap="28%">
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                      <XAxis dataKey="source" axisLine={false} tickLine={false} tick={{ fontSize: 10.5, fill: '#94A3B8', fontFamily: FONT }} interval={0} />
+                      <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
+                      <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
+                      <Bar dataKey="Futwork"     stackId="a" fill={C.navy} radius={[0,0,0,0]} maxBarSize={48} />
+                      <Bar dataKey="Futwork AI"  stackId="a" fill={C.cyan} radius={[0,0,0,0]} maxBarSize={48} />
+                      <Bar dataKey="Superbot"    stackId="a" fill={C.blue} radius={[6,6,0,0]} maxBarSize={48} />
                     </BarChart>
                   </ResponsiveContainer>
-                  <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Superbot', color: C.blue }]} />
+                  <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Futwork AI', color: C.cyan }, { name: 'Superbot', color: C.blue }]} />
                 </Card>
 
-                {/* DONUT */}
-                <Card title="Provider share" sub="Full month · Futwork vs Superbot">
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 260 }}>
-                    {provPie.length > 0 ? (
-                      <>
-                        <ResponsiveContainer width="100%" height={200}>
-                          <PieChart>
-                            <Pie
-                              data={provPie} cx="50%" cy="50%"
-                              innerRadius={68} outerRadius={95}
-                              dataKey="value" startAngle={90} endAngle={-270}
-                              isAnimationActive={false} strokeWidth={0}
-                            >
-                              {provPie.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.name] || C.muted} />)}
-                            </Pie>
-                            <Tooltip content={<BrandTooltip/>} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                        {/* Provider breakdown pills */}
-                        <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
-                          {provPie.map(p => (
-                            <div key={p.name} style={{ textAlign: 'center' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'center' }}>
-                                <div style={{ width: 8, height: 8, borderRadius: 2, background: PROVIDER_COLORS[p.name] }} />
-                                <span style={{ fontSize: 11, fontWeight: 600, color: C.sub, fontFamily: FONT }}>{p.name}</span>
-                              </div>
-                              <div style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: '-0.4px', fontFamily: FONT, lineHeight: 1.2 }}>{fmtN(p.value)}</div>
-                              <div style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>{pct(p.value, totals.total)}</div>
+                <Card title="Provider share" sub="Donut by qualified count">
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 240 }}>
+                    {provPie.length > 0 ? (<>
+                      <ResponsiveContainer width="100%" height={170}>
+                        <PieChart>
+                          <Pie data={provPie} cx="50%" cy="50%" innerRadius={60} outerRadius={82} dataKey="value" startAngle={90} endAngle={-270} isAnimationActive={false} strokeWidth={0}>
+                            {provPie.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.name] || C.muted} />)}
+                          </Pie>
+                          <Tooltip content={<BrandTooltip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div style={{ display: 'flex', gap: 12, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                        {provPie.map(p => (
+                          <div key={p.name} style={{ textAlign: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                              <div style={{ width: 7, height: 7, borderRadius: 2, background: PROVIDER_COLORS[p.name] }} />
+                              <span style={{ fontSize: 10, fontWeight: 600, color: C.sub, fontFamily: FONT }}>{p.name}</span>
                             </div>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT }}>No data</div>
-                    )}
+                            <div style={{ fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: '-0.3px', fontFamily: FONT }}>{fmtN(p.value)}</div>
+                            <div style={{ fontSize: 10, color: C.muted, fontFamily: FONT }}>{pct(p.value, totals.total)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>) : <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT }}>No data</div>}
                   </div>
                 </Card>
               </div>
 
-              {/* TREND */}
-              <div style={{ marginBottom: 16 }}>
-                <Card title="Month-on-month trend" sub="Total qualified per provider across all months">
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={trend} margin={{ top: 8, right: 24, left: -8, bottom: 0 }}>
-                      <XAxis dataKey="month"  tick={{fontSize:10.5,fill:"#94A3B8",fontFamily:"'Plus Jakarta Sans',sans-serif"}} axisLine={false} tickLine={false}/>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
-                      <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
-                      <Tooltip content={<BrandTooltip/>} />
-                      <Line type="monotone" dataKey="Futwork"     stroke={C.navy} strokeWidth={2.5} dot={{ r: 3.5, fill: C.navy, strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                      <Line type="monotone" dataKey="Futwork AI" stroke={C.cyan} strokeWidth={2.5} dot={{ r: 3.5, fill: C.cyan, strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                      <Line type="monotone" dataKey="Superbot"   stroke={C.blue} strokeWidth={2.5} dot={{ r: 3.5, fill: C.blue, strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                  <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Superbot', color: C.blue }]} />
+              {/* ── ROW 2: COUNTRY + DEGREE TYPE ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                <Card title="Top countries interested" sub="By qualified lead count · cleaned labels">
+                  {countryBar.length === 0
+                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No country data</div>
+                    : (<>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: '4px 0' }}>
+                        {countryBar.map((r, i) => {
+                          const w = countryBar[0].count > 0 ? (r.count / countryBar[0].count * 100) : 0
+                          const CTRY_COLORS = [C.navy, C.blue, C.cyan, C.green, C.amber, '#8B5CF6', '#F59E0B', '#EC4899', '#64748B', '#10B981']
+                          return (
+                            <div key={r.country} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ width: 18, textAlign: 'right', fontSize: 10, fontWeight: 700, color: C.muted, fontFamily: FONT, flexShrink: 0 }}>#{i + 1}</div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>{r.country}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: CTRY_COLORS[i] || C.muted, fontFamily: FONT, flexShrink: 0 }}>{fmtN(r.count)}</span>
+                                </div>
+                                <div style={{ height: 5, borderRadius: 99, background: '#F1F5F9', overflow: 'hidden' }}>
+                                  <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: CTRY_COLORS[i] || C.muted, transition: 'width .5s ease' }} />
+                                </div>
+                              </div>
+                              <div style={{ fontSize: 10.5, color: C.muted, fontFamily: FONT, width: 34, textAlign: 'right', flexShrink: 0 }}>{pct(r.count, totals.total)}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>)
+                  }
                 </Card>
-              </div>
 
-              {/* TOP CAMPAIGNS */}
-              <div style={{ marginBottom: 16 }}>
-                <Card
-                  title="Top 10 campaigns by qualified leads"
-                  sub={selProvider !== 'All' || selSource !== 'All'
-                    ? `Filtered · ${selProvider !== 'All' ? selProvider : 'All providers'} · ${selSource !== 'All' ? selSource : 'All sources'}`
-                    : 'Selected month · coloured by provider'}
-                >
-                  {topCampaigns.length === 0
-                    ? <div style={{ textAlign: 'center', padding: '32px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No data for selected filters</div>
-                    : (
-                      <>
-                        <ResponsiveContainer width="100%" height={Math.max(220, topCampaigns.length * 34)}>
-                          <BarChart data={topCampaigns} layout="vertical" margin={{ top: 4, right: 56, left: 8, bottom: 4 }} barCategoryGap="22%">
-                            <XAxis type="number" tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
-                            <YAxis type="category" dataKey="campaign" tick={{ fontSize: 10.5, fill: C.sub, fontFamily: FONT }} width={248} axisLine={false} tickLine={false}
-                              tickFormatter={v => v.length > 36 ? v.slice(0, 34) + '…' : v} />
-                            <Tooltip content={<BrandTooltip/>} cursor={{ fill: 'var(--bg3)' }} />
-                            <Bar dataKey="count" radius={[0, 5, 5, 0]} maxBarSize={22}>
-                              {topCampaigns.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.provider] || C.muted} />)}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                        <ChartLegend items={Object.entries(PROVIDER_COLORS).map(([n, c]) => ({ name: n, color: c }))} />
-                      </>
-                    )
+                <Card title="Degree type breakdown" sub="Masters vs Bachelors vs PhD etc.">
+                  {degreeBar.length === 0
+                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No degree data</div>
+                    : (<>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={degreeBar} layout="vertical" margin={{ top: 4, right: 48, left: 8, bottom: 4 }} barCategoryGap="20%">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" horizontal={false} />
+                          <XAxis type="number" tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
+                          <YAxis type="category" dataKey="degree" tick={{ fontSize: 11, fill: C.sub, fontFamily: FONT }} width={110} axisLine={false} tickLine={false}
+                            tickFormatter={v => v.length > 14 ? v.slice(0, 13) + '…' : v} />
+                          <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
+                          <Bar dataKey="count" radius={[0, 5, 5, 0]} maxBarSize={18}>
+                            {degreeBar.map((_, i) => <Cell key={i} fill={[C.navy, C.blue, C.cyan, C.green, C.amber, '#8B5CF6', '#F59E0B', '#EC4899'][i % 8]} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </>)
                   }
                 </Card>
               </div>
 
-              {/* CAMPAIGN TABLE */}
+              {/* ── ROW 3: DISPOSITION + BUDGET ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                <Card title="Disposition breakdown" sub="Call outcome classification">
+                  {dispositionBar.length === 0
+                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No disposition data</div>
+                    : (<>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 0' }}>
+                        {dispositionBar.map((r, i) => {
+                          const w = dispositionBar[0].count > 0 ? (r.count / dispositionBar[0].count * 100) : 0
+                          const DISP_COLORS = [C.green, C.blue, C.navy, C.cyan, C.amber, '#8B5CF6', '#F59E0B', '#EC4899']
+                          return (
+                            <div key={r.disposition} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                  <span style={{ fontSize: 11.5, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}>{r.disposition}</span>
+                                  <span style={{ fontSize: 11.5, fontWeight: 700, color: DISP_COLORS[i], fontFamily: FONT, flexShrink: 0 }}>{fmtN(r.count)}</span>
+                                </div>
+                                <div style={{ height: 5, borderRadius: 99, background: '#F1F5F9', overflow: 'hidden' }}>
+                                  <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: DISP_COLORS[i], transition: 'width .5s ease' }} />
+                                </div>
+                              </div>
+                              <div style={{ fontSize: 10.5, color: C.muted, fontFamily: FONT, width: 34, textAlign: 'right', flexShrink: 0 }}>{pct(r.count, totals.total)}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>)
+                  }
+                </Card>
+
+                <Card title="Budget range" sub="Student budget preference distribution">
+                  {budgetBar.length === 0
+                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No budget data</div>
+                    : (<>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <BarChart data={budgetBar} margin={{ top: 4, right: 16, left: -8, bottom: 4 }} barCategoryGap="22%">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                          <XAxis dataKey="budget" axisLine={false} tickLine={false} tick={{ fontSize: 10.5, fill: '#94A3B8', fontFamily: FONT }} />
+                          <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
+                          <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
+                          <Bar dataKey="count" radius={[5,5,0,0]} maxBarSize={44}>
+                            {budgetBar.map((_, i) => <Cell key={i} fill={[C.green, C.cyan, C.blue, C.navy, C.amber, '#8B5CF6', '#F59E0B', '#EC4899'][i % 8]} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </>)
+                  }
+                </Card>
+              </div>
+
+              {/* ── ROW 4: PREFERRED INTAKE + PASSPORT ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16 }}>
+                <Card title="Preferred intake" sub="When students want to start">
+                  {intakeBar.length === 0
+                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No intake data</div>
+                    : (<>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={intakeBar} margin={{ top: 4, right: 16, left: -8, bottom: 0 }} barCategoryGap="24%">
+                          <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                          <XAxis dataKey="intake" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94A3B8', fontFamily: FONT }}
+                            tickFormatter={v => v.length > 12 ? v.slice(0, 11) + '…' : v} />
+                          <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
+                          <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
+                          <Bar dataKey="count" radius={[5,5,0,0]} maxBarSize={40} fill={C.blue} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </>)
+                  }
+                </Card>
+
+                <Card title="Passport status" sub="Valid passport at time of qualification">
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200 }}>
+                    {passportPie.length > 0 ? (<>
+                      <ResponsiveContainer width="100%" height={140}>
+                        <PieChart>
+                          <Pie data={passportPie} cx="50%" cy="50%" innerRadius={48} outerRadius={66} dataKey="value" startAngle={90} endAngle={-270} isAnimationActive={false} strokeWidth={0}>
+                            <Cell fill={C.green} />
+                            <Cell fill="#E5E7EB" />
+                          </Pie>
+                          <Tooltip content={<BrandTooltip />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div style={{ display: 'flex', gap: 20, marginTop: 4 }}>
+                        {passportPie.map((p, i) => (
+                          <div key={p.name} style={{ textAlign: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                              <div style={{ width: 7, height: 7, borderRadius: 2, background: i === 0 ? C.green : '#E5E7EB' }} />
+                              <span style={{ fontSize: 10.5, fontWeight: 600, color: C.sub, fontFamily: FONT }}>{p.name}</span>
+                            </div>
+                            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, fontFamily: FONT }}>{fmtN(p.value)}</div>
+                            <div style={{ fontSize: 10.5, color: C.muted, fontFamily: FONT }}>{pct(p.value, passportPie.reduce((s,x) => s+x.value, 0))}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </>) : <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT }}>No passport data</div>}
+                  </div>
+                </Card>
+              </div>
+
+              {/* ── ROW 5: TREND ── */}
+              <div style={{ marginBottom: 16 }}>
+                <Card title="Month-on-month trend" sub="Total qualified per provider across all months">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={trend} margin={{ top: 8, right: 24, left: -8, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 10.5, fill: '#94A3B8', fontFamily: FONT }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
+                      <Tooltip content={<BrandTooltip />} />
+                      <Line type="monotone" dataKey="Futwork"     stroke={C.navy} strokeWidth={2.5} dot={{ r: 3.5, fill: C.navy, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="Futwork AI"  stroke={C.cyan} strokeWidth={2.5} dot={{ r: 3.5, fill: C.cyan, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="Superbot"    stroke={C.blue} strokeWidth={2.5} dot={{ r: 3.5, fill: C.blue, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Futwork AI', color: C.cyan }, { name: 'Superbot', color: C.blue }]} />
+                </Card>
+              </div>
+
+              {/* ── ROW 6: TOP CAMPAIGNS ── */}
+              <div style={{ marginBottom: 16 }}>
+                <Card title="Top campaigns by qualified leads" sub="Selected period · coloured by provider">
+                  {topCampaigns.length === 0
+                    ? <div style={{ textAlign: 'center', padding: '32px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No data for selected filters</div>
+                    : (<>
+                      <ResponsiveContainer width="100%" height={Math.max(220, topCampaigns.length * 34)}>
+                        <BarChart data={topCampaigns} layout="vertical" margin={{ top: 4, right: 56, left: 8, bottom: 4 }} barCategoryGap="22%">
+                          <XAxis type="number" tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
+                          <YAxis type="category" dataKey="campaign" tick={{ fontSize: 10.5, fill: C.sub, fontFamily: FONT }} width={248} axisLine={false} tickLine={false}
+                            tickFormatter={v => v.length > 36 ? v.slice(0, 34) + '…' : v} />
+                          <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
+                          <Bar dataKey="count" radius={[0, 5, 5, 0]} maxBarSize={22}>
+                            {topCampaigns.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.provider] || C.muted} />)}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                      <ChartLegend items={Object.entries(PROVIDER_COLORS).map(([n, c]) => ({ name: n, color: c }))} />
+                    </>)
+                  }
+                </Card>
+              </div>
+
+              {/* ── ROW 7: RAW TABLE ── */}
               <Card
-                title="Campaign breakdown"
-                sub={`${tableRows.length.toLocaleString()} rows · ${selMonth}${selProvider !== 'All' ? ' · ' + selProvider : ''}${selSource !== 'All' ? ' · ' + selSource : ''}`}
+                title="Lead records"
+                sub={`${tableRows.length.toLocaleString()} leads · ${selMonth}${selProvider !== 'All' ? ' · ' + selProvider : ''}${selSource !== 'All' ? ' · ' + selSource : ''}`}
                 action={
                   <div style={{ position: 'relative' }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
                       <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
                     </svg>
-                    <input value={search} onChange={e => onSearch(e.target.value)} placeholder="Search campaign, source…"
-                      style={{ paddingLeft: 30, paddingRight: 10, paddingTop: 6, paddingBottom: 6, borderRadius: 8, border: `0.5px solid ${C.border}`, fontSize: 12, fontFamily: FONT, outline: 'none', width: 220, color: C.text }} />
+                    <input value={search} onChange={e => onSearch(e.target.value)} placeholder="Search campaign, source, country…"
+                      style={{ paddingLeft: 30, paddingRight: 10, paddingTop: 6, paddingBottom: 6, borderRadius: 8, border: `0.5px solid ${C.border}`, fontSize: 12, fontFamily: FONT, outline: 'none', width: 240, color: C.text, background: 'var(--card)' }} />
                   </div>
                 }
                 noPad
@@ -1166,8 +1355,8 @@ export default function LeadQualificationDashboard() {
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
-                      <tr>
-                        {[['campaign', 'Campaign'], ['provider', 'Provider'], ['source', 'Source'], ['sub_source', 'Sub-source'], ['count', 'Qualified']].map(([col, lbl]) => (
+                      <tr style={{ background: '#F8FAFC' }}>
+                        {[['campaign','Campaign'],['provider','Provider'],['source','Source'],['country','Country'],['degree_type','Degree'],['disposition','Disposition'],['budget','Budget'],['preferred_intake','Intake']].map(([col, lbl]) => (
                           <th key={col} style={thS(col)} onClick={() => sortBy(col)}>
                             {lbl} <span style={{ opacity: sortCol === col ? 1 : 0.3, fontSize: 9 }}>{sortCol === col ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}</span>
                           </th>
@@ -1179,28 +1368,33 @@ export default function LeadQualificationDashboard() {
                         <tr key={i} style={{ borderBottom: `0.5px solid #F3F4F6`, background: i % 2 ? '#FAFBFC' : 'var(--card)', transition: 'background .1s' }}
                           onMouseEnter={e => e.currentTarget.style.background = '#F0F7FF'}
                           onMouseLeave={e => e.currentTarget.style.background = i % 2 ? '#FAFBFC' : 'var(--card)'}>
-                          <td style={{ padding: '10px 12px', color: C.text, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }} title={r.campaign}>{r.campaign || '—'}</td>
-                          <td style={{ padding: '10px 12px', fontFamily: FONT }}>
-                            <span style={{
-                              fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
+                          <td style={{ padding: '9px 12px', color: C.text, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }} title={r.campaign}>{r.campaign || '—'}</td>
+                          <td style={{ padding: '9px 12px', fontFamily: FONT }}>
+                            <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 20,
                               background: r.provider === 'Futwork' ? C.navyBg : r.provider === 'Futwork AI' ? C.cyanBg : C.blueBg,
                               color: r.provider === 'Futwork' ? C.navy : r.provider === 'Futwork AI' ? C.cyan : C.blue,
                             }}>{r.provider}</span>
                           </td>
-                          <td style={{ padding: '10px 12px', color: C.sub, fontFamily: FONT }}>{r.source}</td>
-                          <td style={{ padding: '10px 12px', color: C.muted, fontSize: 11, fontFamily: FONT }}>{r.sub_source || '—'}</td>
-                          <td style={{ padding: '10px 12px', fontWeight: 700, color: C.text, textAlign: 'right', fontFamily: FONT, paddingRight: 20 }}>{r.count.toLocaleString('en-IN')}</td>
+                          <td style={{ padding: '9px 12px', color: C.sub, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.source || '—'}</td>
+                          <td style={{ padding: '9px 12px', color: C.text, fontFamily: FONT, whiteSpace: 'nowrap' }}>
+                            {r.country ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 13 }}>🌍</span>
+                              <span style={{ fontSize: 11.5, fontWeight: 600 }}>{r.country.replace(/ *\(.*\)/, '').trim()}</span>
+                            </span> : '—'}
+                          </td>
+                          <td style={{ padding: '9px 12px', color: C.sub, fontSize: 11, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.degree_type || '—'}</td>
+                          <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11, fontFamily: FONT, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.disposition}>{r.disposition || '—'}</td>
+                          <td style={{ padding: '9px 12px', fontFamily: FONT }}>
+                            {r.budget ? <span style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: C.greenBg, color: C.green }}>{r.budget}</span> : '—'}
+                          </td>
+                          <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.preferred_intake || '—'}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
 
-                  {/* Pagination */}
                   {totalPages > 1 && (
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '14px 12px 12px', borderTop: `0.5px solid ${C.border}`,
-                    }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 12px 12px', borderTop: `0.5px solid ${C.border}` }}>
                       <span style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT }}>
                         {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, tableRows.length)} of {tableRows.length.toLocaleString()} rows
                       </span>
@@ -1213,14 +1407,9 @@ export default function LeadQualificationDashboard() {
                           const start = Math.max(0, Math.min(page - 3, totalPages - 7)); const p = start + i
                           return (
                             <button key={p} onClick={() => setPage(p)}
-                              style={{
-                                width: 32, height: 32, borderRadius: 8,
-                                border: `0.5px solid ${p === page ? C.navy : C.border}`,
-                                background: p === page ? C.navy : 'var(--card)',
-                                color: p === page ? 'var(--card)' : C.text,
-                                fontSize: 12, fontWeight: p === page ? 700 : 400,
-                                fontFamily: FONT, cursor: 'pointer',
-                              }}>{p + 1}</button>
+                              style={{ width: 32, height: 32, borderRadius: 8, border: `0.5px solid ${p === page ? C.navy : C.border}`, background: p === page ? C.navy : 'var(--card)', color: p === page ? 'var(--card)' : C.text, fontSize: 12, fontWeight: p === page ? 700 : 400, fontFamily: FONT, cursor: 'pointer' }}>
+                              {p + 1}
+                            </button>
                           )
                         })}
                         <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
