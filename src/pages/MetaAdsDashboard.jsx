@@ -541,7 +541,7 @@ function CreativesTab({ data }) {
       </div>
       <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · showing {filtered.length===0?0:((safePage-1)*PER_PAGE+1)}–{Math.min(safePage*PER_PAGE, filtered.length)} · account avg CTR {accCTRpct.toFixed(2)}%</div>
         <div style={{ marginBottom:16,padding:'16px 18px',background:'#FFFFFF',border:'1px solid #E5E7EB',borderRadius:14,boxShadow:'0 1px 2px rgba(16,24,40,0.04)' }}>
-          <div style={{ fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:0.5,marginBottom:12 }}>Totals for these {filteredTotals && filtered.length} creatives</div><div style={{ display:'grid',gridTemplateColumns:'repeat(10, minmax(0, 1fr))',gap:8 }}>
+          <div style={{ fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:0.5,marginBottom:12 }}>Totals for these {filteredTotals && filtered.length} creatives</div><div style={{ display:'grid',gridTemplateColumns:'repeat(10, minmax(0, 1fr))',gap:6 }}>
           {[
             { label:'SPEND', value:fmtINR(filteredTotals.spend), accent:'#1C9FD4' },
             { label:'LEADS', value:filteredTotals.leads.toLocaleString('en-IN'), accent:'#4CAE6F' },
@@ -554,9 +554,9 @@ function CreativesTab({ data }) {
             { label:'REACH', value:filteredTotals.reach.toLocaleString('en-IN'), accent:'#4CAE6F' },
             { label:'AVG FREQ', value:filteredTotals.frequency.toFixed(2), accent:'#6B7280' },
           ].map(m => (
-            <div key={m.label} style={{ display:'flex',flexDirection:'column',gap:6,minWidth:0,padding:'12px 11px',background:'#FFFFFF',border:'1px solid #ECEEF2',borderRadius:12,boxShadow:'0 1px 2px rgba(16,24,40,0.05)' }}>
-              <span style={{ display:'flex',alignItems:'center',gap:5,minWidth:0 }}><span style={{ width:6,height:6,borderRadius:'50%',background:m.accent,flexShrink:0 }}></span><span style={{ fontSize:9.5,fontWeight:700,color:'#98A2B3',letterSpacing:0.3,textTransform:'uppercase',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{m.label}</span></span>
-              <span style={{ fontSize:15,fontWeight:700,color:'#101828',whiteSpace:'nowrap',fontVariantNumeric:'tabular-nums',letterSpacing:'-0.02em',overflow:'hidden',textOverflow:'ellipsis' }}>{m.value}</span>
+            <div key={m.label} style={{ display:'flex',flexDirection:'column',gap:6,minWidth:0,padding:'11px 8px',background:'#FFFFFF',border:'1px solid #ECEEF2',borderRadius:12,boxShadow:'0 1px 2px rgba(16,24,40,0.05)' }}>
+              <span style={{ display:'flex',alignItems:'center',gap:4,minWidth:0 }}><span style={{ width:6,height:6,borderRadius:'50%',background:m.accent,flexShrink:0 }}></span><span style={{ fontSize:9,fontWeight:700,color:'#98A2B3',letterSpacing:0.2,textTransform:'uppercase',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{m.label}</span></span>
+              <span style={{ fontSize:13,fontWeight:700,color:'#101828',whiteSpace:'nowrap',fontVariantNumeric:'tabular-nums',letterSpacing:'-0.02em' }}>{m.value}</span>
             </div>
           ))}
         </div>
