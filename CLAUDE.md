@@ -525,3 +525,18 @@ Rebuilt ReferralDashboard.jsx to match QL Ops shell exactly. Fixes from user fee
 - RECORDS: replaced 24k-row paginated table with grouped summary (toggle Status/Referred By/Intake) showing Total/STUs/Offers/EC/Deposits/STU%. M.groups computed via buildGroup helper.
 Built via 7 /tmp/part*.txt fragments concat (part1/2 reused from prior). Build 7.58s. push a063d1a..465c090. Verified live: sidebar+header stay fixed on scroll, icons show, grouped table works, conversion lines readable.
 ## OPEN: settings gear placement - sits bottom-left next to logout, ambiguous. Suggested moving to header bar or relabeling footer row. Awaiting user decision. Sidebar is shared component - changing affects all pages.
+
+## Update (commit 57d774c) - Referral brand-color fix
+- RULE REINFORCED: charts must use ONLY the on-brand palette navy->blue->cyan->green (C.navy/C.blue/C.cyan/C.green). C.amber (#F59E0B) is OFF-BRAND and must NOT be used in any dashboard page.
+- Replaced all 5 C.amber usages in ReferralDashboard.jsx with brand tokens, keeping series visually distinct per chart:
+  - OFFERS KPI accent: amber -> C.green (now matches its greenBg)
+  - Source-wise lead gen EMP bar: amber -> C.blue (Student=cyan, EMP=blue, Total=navy)
+  - Cohort STU-Offer line: amber -> C.navy (leadStu=blue, stuOffer=navy, offerDep=green)
+  - Intake funnel First Deposit bar: amber -> C.cyan (firstApp=navy, firstOffer=blue, firstDep=cyan)
+  - Intake conversion App-Deposit line: amber -> C.green dashed (appOffer=navy, offerDep=cyan, appDep=green)
+- Build OK (7.22s). Pushed 20d4dcb..57d774c. Verified live: no orange anywhere on Referral page.
+
+## Update (commit 95b8073) - Sidebar settings/logout separation + template rules
+- Sidebar.jsx (SHARED component - changed with explicit user approval): settings gear no longer shares the destructive .logoutBtn style. New .gearBtn class (neutral grey -> navy #1F3C84 / #E8EFF9 on hover, NO red), plus a .footDivider (1px) separating the gear from the Sign-out button so they no longer read as one control.
+- _DashboardTemplate.jsx: added rigid header rules - (1) BRAND COLOR RULE: charts use only navy->blue->cyan->green; never C.amber/orange/red/yellow. (2) SHELL RULE: outer display:flex;height:100vh;overflow:hidden + inner flex:1;overflowY:auto (keeps sidebar+header fixed). Template already had the KPI strip / Card / RankedBars / records-table scaffold.
+- Build OK (7.09s). Pushed 57d774c..95b8073.
