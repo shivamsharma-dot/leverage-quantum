@@ -260,7 +260,7 @@ export default function ReferralDashboard() {
             <PremKPI label='EMPLOYEE' value={fmtN(M.kpis.emp)} sub={pct(M.kpis.emp, M.kpis.total) + ' of total'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label='STUDENT' value={fmtN(M.kpis.stu)} sub={pct(M.kpis.stu, M.kpis.total) + ' of total'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
             <PremKPI label='APPLICATIONS (STUs)' value={fmtN(M.kpis.firstStu)} sub={pct(M.kpis.firstStu, M.kpis.total) + ' conv.'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
-            <PremKPI label='OFFERS' value={fmtN(M.kpis.offers)} sub={pct(M.kpis.offers, M.kpis.total) + ' of total'} accent={C.amber} accentBg={C.greenBg} icon={KPI_ICONS.globe} />
+            <PremKPI label='OFFERS' value={fmtN(M.kpis.offers)} sub={pct(M.kpis.offers, M.kpis.total) + ' of total'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.globe} />
           </div>
 
           {/* REFERRAL FUNNEL */}
@@ -292,7 +292,7 @@ export default function ReferralDashboard() {
                   <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
                   <Legend wrapperStyle={{ fontSize:11.5, fontFamily:FONT }} iconType='circle' />
                   <Bar dataKey='Student' name='Student' fill={C.cyan} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='Student' position='top' style={{ fontSize:10, fontWeight:700, fill:C.muted }} /></Bar>
-                  <Bar dataKey='EMP' name='EMP' fill={C.amber} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='EMP' position='top' style={{ fontSize:10, fontWeight:700, fill:C.muted }} /></Bar>
+                  <Bar dataKey='EMP' name='EMP' fill={C.blue} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='EMP' position='top' style={{ fontSize:10, fontWeight:700, fill:C.muted }} /></Bar>
                   <Bar dataKey='Total' name='Total' fill={C.navy} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='Total' position='top' style={{ fontSize:10, fontWeight:700, fill:C.muted }} /></Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -324,7 +324,7 @@ export default function ReferralDashboard() {
                 <Tooltip content={<BrandTooltip />} />
                 <Legend wrapperStyle={{ fontSize:11.5, fontFamily:FONT }} iconType='circle' />
                 <Line type='monotone' dataKey='leadStu' name='Lead-STU %' stroke={C.blue} strokeWidth={2.5} dot={{ r:3 }} />
-                <Line type='monotone' dataKey='stuOffer' name='STU-Offer %' stroke={C.amber} strokeWidth={2.5} dot={{ r:3 }} />
+                <Line type='monotone' dataKey='stuOffer' name='STU-Offer %' stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }} />
                 <Line type='monotone' dataKey='offerDep' name='Offer-Deposit %' stroke={C.green} strokeWidth={2.5} dot={{ r:3 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -343,7 +343,7 @@ export default function ReferralDashboard() {
                   <Legend wrapperStyle={{ fontSize:11.5, fontFamily:FONT }} iconType='circle' />
                   <Bar dataKey='firstApp' name='First App' fill={C.navy} radius={[4,4,0,0]} barSize={16} />
                   <Bar dataKey='firstOffer' name='First Offer received' fill={C.blue} radius={[4,4,0,0]} barSize={16} />
-                  <Bar dataKey='firstDep' name='First Deposit made' fill={C.amber} radius={[4,4,0,0]} barSize={16} />
+                  <Bar dataKey='firstDep' name='First Deposit made' fill={C.cyan} radius={[4,4,0,0]} barSize={16} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -358,7 +358,7 @@ export default function ReferralDashboard() {
                   <Legend wrapperStyle={{ fontSize:11.5, fontFamily:FONT }} iconType='circle' />
                   <Line type='monotone' dataKey='appOffer' name='App-Offer %' stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }}><LabelList dataKey='appOffer' position='top' formatter={v => v + '%'} style={{ fontSize:9.5, fontWeight:700, fill:C.navy }} /></Line>
                   <Line type='monotone' dataKey='offerDep' name='Offer-Deposit %' stroke={C.cyan} strokeWidth={2.5} dot={{ r:3 }} />
-                  <Line type='monotone' dataKey='appDep' name='App-Deposit %' stroke={C.amber} strokeWidth={2.5} strokeDasharray='4 3' dot={{ r:3 }} />
+                  <Line type='monotone' dataKey='appDep' name='App-Deposit %' stroke={C.green} strokeWidth={2.5} strokeDasharray='4 3' dot={{ r:3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </Card>
