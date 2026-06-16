@@ -837,7 +837,8 @@ export default function MetaAdsDashboard() {
   const [loading, setLoading]       = useState(false)
   const [pageLoad, setPageLoad]     = useState(true)
   const [error, setError]           = useState('')
-  const [data, setData]             = useState(null)
+  const [data, setData] = useState(() => { try { const c = localStorage.getItem('meta_cache'); if (!c) return null; const pp = JSON.parse(c); return pp && pp.d ? pp.d : null; } catch (e) { return null; } })
+  const [cacheTs, setCacheTs] = useState(() => { try { const c = localStorage.getItem('meta_cache'); if (!c) return null; const pp = JSON.parse(c); return pp && pp.t ? pp.t : null; } catch (e) { return null; } })
   const [tokenExpired, setTokenExpired] = useState(false)
   const [tokenCreatedAt, setTokenCreatedAt] = useState(null)
   const [sdkReady, setSdkReady] = useState(false)
@@ -1079,7 +1080,10 @@ export default function MetaAdsDashboard() {
         }
       })
 
-      setData({ account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, prevInsightsMap, range, preset })
+      const __metaPayload = { account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, prevInsightsMap, range, preset }
+      setData(__metaPayload)
+      const __ts = Date.now(); setCacheTs(__ts)
+      try { localStorage.setItem('meta_cache', JSON.stringify({ d: __metaPayload, t: __ts })) } catch (e) {}
       setLastSync(new Date())
 
       // Background: fetch remaining ad pages while user is already browsing
@@ -1320,7 +1324,7 @@ export default function MetaAdsDashboard() {
           </div>
         </div>
 
-        {error && <div className={styles.errorBanner}>{error}</div>}
+        {error && (data ? (<div className={styles.errorBanner} style={{ background:'#FFF7E6', borderColor:'#F2C744', color:'#8A6100' }}>Showing cached data{cacheTs ? ` from ${new Date(cacheTs).toLocaleString()}` : ''} — live refresh failed (Meta rate limit). Retrying shortly…</div>) : (<div className={styles.errorBanner}>{error}</div>))}
 
         {loading && !data ? (
           <div style={{ textAlign: 'center', padding: 60, color: '#9CA3AF' }}>
