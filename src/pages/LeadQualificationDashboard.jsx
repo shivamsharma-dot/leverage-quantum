@@ -109,6 +109,75 @@ const Card = ({ title, sub, children, action, noPad }) => (
   </div>
 )
 
+/* Brand color ramp — ONLY brand colors, used for multi-series breakdowns */
+const RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F']
+
+/* KPI icons — crisp monochrome SVGs, brand-coloured */
+const KPI_ICONS = {
+  total: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>,
+  agent: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  bot:   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>,
+  ai:    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4"/><path d="m6.4 6.4 2.8 2.8"/><path d="M2 12h4"/><circle cx="12" cy="13" r="5"/><path d="M12 18v4"/></svg>,
+  globe: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>,
+}
+
+/* Premium KPI card — matches Meta Ads / WhatsApp standard: 3px accent top border, tinted icon square, delta pill */
+const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon }) => {
+  const up = delta != null && delta >= 0
+  return (
+    <div style={{
+      background: 'var(--card)', borderRadius: 14, padding: '16px 18px 14px',
+      border: '0.5px solid #E2E8F0', borderTop: `3px solid ${accent}`,
+      boxShadow: '0 1px 6px rgba(15,23,42,0.06)', fontFamily: FONT,
+      display: 'flex', flexDirection: 'column', minWidth: 0,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', fontFamily: FONT }}>{label}</span>
+        <div style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: accentBg, color: accent, flexShrink: 0 }}>{icon}</div>
+      </div>
+      <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.9px', color: '#0F172A', lineHeight: 1, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, minHeight: 18 }}>
+        {delta != null && (
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: up ? '#15803D' : '#B91C1C', background: up ? '#E9F8EF' : '#FEF2F2', padding: '2px 7px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 2, fontFamily: FONT, flexShrink: 0 }}>
+            {up ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}%
+          </span>
+        )}
+        {sub && <span style={{ fontSize: 11.5, color: '#94A3B8', fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
+      </div>
+    </div>
+  )
+}
+
+/* Horizontal ranked bar list — premium look for category breakdowns */
+const RankedBars = ({ data, labelKey, max, total, colorFn, showRank }) => {
+  if (!data || data.length === 0) return <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No data</div>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '2px 0' }}>
+      {data.map((r, i) => {
+        const w = max > 0 ? (r.count / max * 100) : 0
+        const col = colorFn ? colorFn(i) : RAMP[i % RAMP.length]
+        return (
+          <div key={r[labelKey] + i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {showRank && <div style={{ width: 20, textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#fff', background: col, borderRadius: 6, padding: '2px 0', flexShrink: 0, fontFamily: FONT }}>{i + 1}</div>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, alignItems: 'baseline' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                  {r[labelKey]}
+                </span>
+                <span style={{ fontSize: 12.5, fontWeight: 800, color: col, fontFamily: FONT, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.count)}</span>
+              </div>
+              <div style={{ height: 7, borderRadius: 99, background: '#F1F5F9', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: `linear-gradient(90deg,${col},${col}cc)`, transition: 'width .6s cubic-bezier(.4,0,.2,1)' }} />
+              </div>
+            </div>
+            <div style={{ fontSize: 10.5, color: C.muted, fontFamily: FONT, width: 36, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{pct(r.count, total)}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /* Custom tooltip */
 const ChartTip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
@@ -1041,13 +1110,14 @@ export default function LeadQualificationDashboard() {
                 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>How metrics are calculated</div>
                   {[
-                    ['qualified_count', 'Leads processed by that provider from that campaign in that month that were marked as qualified.'],
-                    ['Total Qualified', 'Sum of qualified_count across all providers and sources for the selected month.'],
-                    ['Provider split', "Each provider's total as a share of the combined total (with MoM delta vs previous month)."],
-                    ['Source bar', 'Qualified leads grouped by originating source, stacked per provider. Respects Provider + Source filters.'],
-                    ['Provider donut', 'Futwork vs Superbot share of the full month (not filtered).'],
+                    ['Qualified lead', 'One row in the sheet = one qualified lead. Each row carries provider, source, country, degree, disposition, budget and intake.'],
+                    ['Total Qualified', 'Count of qualified-lead rows across all providers and sources for the selected period.'],
+                    ['Providers', 'Futwork (human agents), Futwork AI (automated voice agent), and Superbot (IVR bot). Each shown as count and share of total.'],
+                    ['Country / Degree', 'Qualified leads grouped by country interested and preferred degree type. Country labels are cleaned of parenthetical suffixes.'],
+                    ['Disposition', 'Call outcome classification (e.g. Discover Future Intent, Interested in Call Back, Call Transferred To Counsellor).'],
+                    ['Budget / Intake', 'Student budget range preference and preferred start intake, distributed across qualified leads.'],
+                    ['Passport', 'Share of qualified leads that already hold a valid passport at qualification time.'],
                     ['Trend', 'Total qualified per provider per calendar month across all history.'],
-                    ['Top campaigns', 'Top 10 campaigns by qualified_count for selected filters.'],
                     ['MoM delta', '% change vs the immediately preceding month.'],
                   ].map(([m, d]) => (
                     <div key={m} style={{ display: 'flex', gap: 10, padding: '7px 0', borderTop: '0.5px solid #F3F4F6' }}>
@@ -1094,53 +1164,62 @@ export default function LeadQualificationDashboard() {
             </div>
           ) : (
             <>
-              {/* ── KPI ROW ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 20 }}>
-                <KPICard label="Total Qualified" value={fmtN(totals.total)} sub={selMonth} delta={totals.totalDelta} />
-                <KPICard label="Futwork"    value={fmtN(totals.fw)}   sub={pct(totals.fw,   totals.total) + ' of total'} delta={totals.fwDelta} />
-                <KPICard label="Futwork AI" value={fmtN(totals.fwai)} sub={pct(totals.fwai, totals.total) + ' of total'} delta={totals.fwaiDelta} />
-                <KPICard label="Superbot"   value={fmtN(totals.sb)}   sub={pct(totals.sb,   totals.total) + ' of total'} delta={totals.sbDelta} />
-                <KPICard label="Provider Split"
-                  value={totals.total > 0 ? pct(totals.fw, totals.total) + ' / ' + pct(totals.fwai, totals.total) + ' / ' + pct(totals.sb, totals.total) : '—'}
-                  sub="FW / FW AI / SB" />
+              {/* ── PREMIUM KPI ROW ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 18 }}>
+                <PremKPI label="Total Qualified" value={fmtN(totals.total)} sub={selMonth}                       delta={totals.totalDelta} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
+                <PremKPI label="Futwork"          value={fmtN(totals.fw)}   sub={pct(totals.fw, totals.total) + ' share'}   delta={totals.fwDelta}    accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
+                <PremKPI label="Futwork AI"       value={fmtN(totals.fwai)} sub={pct(totals.fwai, totals.total) + ' share'} delta={totals.fwaiDelta}  accent="#29B9C3" accentBg="#E4F8F9" icon={KPI_ICONS.ai} />
+                <PremKPI label="Superbot"         value={fmtN(totals.sb)}   sub={pct(totals.sb, totals.total) + ' share'}   delta={totals.sbDelta}    accent="#1C9FD4" accentBg="#E3F5FD" icon={KPI_ICONS.bot} />
+                <PremKPI label="Top Country"      value={topCountries[0]?.country || '—'} sub={topCountries[0] ? fmtN(topCountries[0].count) + ' qualified' : 'no data'} accent="#4CAE6F" accentBg="#E9F8EF" icon={KPI_ICONS.globe} />
               </div>
 
-              {/* ── ROW 1: SOURCE BAR + PROVIDER DONUT ── */}
+              {/* ── ROW 1: SOURCE STACKED BAR + PROVIDER DONUT ── */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, marginBottom: 16 }}>
                 <Card title="Qualified by source" sub="Stacked by provider · selected period">
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={sourceBar} margin={{ top: 4, right: 12, left: -8, bottom: 0 }} barCategoryGap="28%">
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={sourceBar} margin={{ top: 4, right: 12, left: -8, bottom: 0 }} barCategoryGap="30%">
+                      <defs>
+                        <linearGradient id="gFw" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2D4A9E"/><stop offset="100%" stopColor="#1F3C84"/></linearGradient>
+                        <linearGradient id="gFwai" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5FCBD2"/><stop offset="100%" stopColor="#29B9C3"/></linearGradient>
+                        <linearGradient id="gSb" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5BB8DE"/><stop offset="100%" stopColor="#1C9FD4"/></linearGradient>
+                      </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                      <XAxis dataKey="source" axisLine={false} tickLine={false} tick={{ fontSize: 10.5, fill: '#94A3B8', fontFamily: FONT }} interval={0} />
+                      <XAxis dataKey="source" axisLine={false} tickLine={false} interval={0} tick={{ fontSize: 10.5, fill: '#94A3B8', fontFamily: FONT }} />
                       <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
-                      <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
-                      <Bar dataKey="Futwork"     stackId="a" fill={C.navy} radius={[0,0,0,0]} maxBarSize={48} />
-                      <Bar dataKey="Futwork AI"  stackId="a" fill={C.cyan} radius={[0,0,0,0]} maxBarSize={48} />
-                      <Bar dataKey="Superbot"    stackId="a" fill={C.blue} radius={[6,6,0,0]} maxBarSize={48} />
+                      <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
+                      <Bar dataKey="Futwork"    stackId="a" fill="url(#gFw)"   radius={[0,0,0,0]} maxBarSize={46} />
+                      <Bar dataKey="Futwork AI" stackId="a" fill="url(#gFwai)" radius={[0,0,0,0]} maxBarSize={46} />
+                      <Bar dataKey="Superbot"   stackId="a" fill="url(#gSb)"   radius={[7,7,0,0]} maxBarSize={46} />
                     </BarChart>
                   </ResponsiveContainer>
                   <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Futwork AI', color: C.cyan }, { name: 'Superbot', color: C.blue }]} />
                 </Card>
 
                 <Card title="Provider share" sub="Donut by qualified count">
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 240 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 250, position: 'relative' }}>
                     {provPie.length > 0 ? (<>
-                      <ResponsiveContainer width="100%" height={170}>
-                        <PieChart>
-                          <Pie data={provPie} cx="50%" cy="50%" innerRadius={60} outerRadius={82} dataKey="value" startAngle={90} endAngle={-270} isAnimationActive={false} strokeWidth={0}>
-                            {provPie.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.name] || C.muted} />)}
-                          </Pie>
-                          <Tooltip content={<BrandTooltip />} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div style={{ display: 'flex', gap: 12, marginTop: 4, flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <div style={{ position: 'relative', width: '100%' }}>
+                        <ResponsiveContainer width="100%" height={172}>
+                          <PieChart>
+                            <Pie data={provPie} cx="50%" cy="50%" innerRadius={62} outerRadius={84} dataKey="value" startAngle={90} endAngle={-270} isAnimationActive={true} strokeWidth={0} paddingAngle={2} cornerRadius={4}>
+                              {provPie.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.name] || C.muted} />)}
+                            </Pie>
+                            <Tooltip content={<BrandTooltip />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: C.text, letterSpacing: '-0.5px', fontFamily: FONT, lineHeight: 1 }}>{fmtN(totals.total)}</div>
+                          <div style={{ fontSize: 9.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2, fontFamily: FONT }}>Total</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 14, marginTop: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
                         {provPie.map(p => (
                           <div key={p.name} style={{ textAlign: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
                               <div style={{ width: 7, height: 7, borderRadius: 2, background: PROVIDER_COLORS[p.name] }} />
                               <span style={{ fontSize: 10, fontWeight: 600, color: C.sub, fontFamily: FONT }}>{p.name}</span>
                             </div>
-                            <div style={{ fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: '-0.3px', fontFamily: FONT }}>{fmtN(p.value)}</div>
+                            <div style={{ fontSize: 15, fontWeight: 800, color: C.text, letterSpacing: '-0.3px', fontFamily: FONT }}>{fmtN(p.value)}</div>
                             <div style={{ fontSize: 10, color: C.muted, fontFamily: FONT }}>{pct(p.value, totals.total)}</div>
                           </div>
                         ))}
@@ -1150,149 +1229,85 @@ export default function LeadQualificationDashboard() {
                 </Card>
               </div>
 
-              {/* ── ROW 2: COUNTRY + DEGREE TYPE ── */}
+              {/* ── ROW 2: COUNTRY + DEGREE ── */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                <Card title="Top countries interested" sub="By qualified lead count · cleaned labels">
-                  {countryBar.length === 0
-                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No country data</div>
-                    : (<>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: '4px 0' }}>
-                        {countryBar.map((r, i) => {
-                          const w = countryBar[0].count > 0 ? (r.count / countryBar[0].count * 100) : 0
-                          // brand ramp used via brandColor(i)
-                          return (
-                            <div key={r.country} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <div style={{ width: 18, textAlign: 'right', fontSize: 10, fontWeight: 700, color: C.muted, fontFamily: FONT, flexShrink: 0 }}>#{i + 1}</div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                                  <span style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>{r.country}</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: brandColor(i), fontFamily: FONT, flexShrink: 0 }}>{fmtN(r.count)}</span>
-                                </div>
-                                <div style={{ height: 5, borderRadius: 99, background: '#F1F5F9', overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: brandColor(i), transition: 'width .5s ease' }} />
-                                </div>
-                              </div>
-                              <div style={{ fontSize: 10.5, color: C.muted, fontFamily: FONT, width: 34, textAlign: 'right', flexShrink: 0 }}>{pct(r.count, totals.total)}</div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </>)
-                  }
+                <Card title="Top countries interested" sub="By qualified lead count">
+                  <RankedBars data={countryBar} labelKey="country" max={countryBar[0]?.count || 0} total={totals.total} showRank />
                 </Card>
-
-                <Card title="Degree type breakdown" sub="Masters vs Bachelors vs PhD etc.">
-                  {degreeBar.length === 0
-                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No degree data</div>
-                    : (<>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <BarChart data={degreeBar} layout="vertical" margin={{ top: 4, right: 48, left: 8, bottom: 4 }} barCategoryGap="20%">
-                          <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" horizontal={false} />
-                          <XAxis type="number" tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
-                          <YAxis type="category" dataKey="degree" tick={{ fontSize: 11, fill: C.sub, fontFamily: FONT }} width={110} axisLine={false} tickLine={false}
-                            tickFormatter={v => v.length > 14 ? v.slice(0, 13) + '…' : v} />
-                          <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
-                          <Bar dataKey="count" radius={[0, 5, 5, 0]} maxBarSize={18}>
-                            {degreeBar.map((_, i) => <Cell key={i} fill={brandColor(i)} />)}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </>)
-                  }
+                <Card title="Degree type" sub="What students want to pursue">
+                  <RankedBars data={degreeBar} labelKey="degree" max={degreeBar[0]?.count || 0} total={totals.total} colorFn={i => RAMP[i % RAMP.length]} />
                 </Card>
               </div>
 
               {/* ── ROW 3: DISPOSITION + BUDGET ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                <Card title="Disposition breakdown" sub="Call outcome classification">
-                  {dispositionBar.length === 0
-                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No disposition data</div>
-                    : (<>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 0' }}>
-                        {dispositionBar.map((r, i) => {
-                          const w = dispositionBar[0].count > 0 ? (r.count / dispositionBar[0].count * 100) : 0
-                          // brand ramp used via brandColor(i)
-                          return (
-                            <div key={r.disposition} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                                  <span style={{ fontSize: 11.5, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}>{r.disposition}</span>
-                                  <span style={{ fontSize: 11.5, fontWeight: 700, color: brandColor(i), fontFamily: FONT, flexShrink: 0 }}>{fmtN(r.count)}</span>
-                                </div>
-                                <div style={{ height: 5, borderRadius: 99, background: '#F1F5F9', overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: brandColor(i), transition: 'width .5s ease' }} />
-                                </div>
-                              </div>
-                              <div style={{ fontSize: 10.5, color: C.muted, fontFamily: FONT, width: 34, textAlign: 'right', flexShrink: 0 }}>{pct(r.count, totals.total)}</div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </>)
-                  }
+              <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 16, marginBottom: 16 }}>
+                <Card title="Call disposition" sub="Outcome classification of qualifying calls">
+                  <RankedBars data={dispositionBar} labelKey="disposition" max={dispositionBar[0]?.count || 0} total={totals.total} colorFn={i => [C.green, C.blue, C.navy, C.cyan][i % 4]} />
                 </Card>
-
-                <Card title="Budget range" sub="Student budget preference distribution">
+                <Card title="Budget range" sub="Student budget distribution">
                   {budgetBar.length === 0
-                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No budget data</div>
-                    : (<>
-                      <ResponsiveContainer width="100%" height={220}>
-                        <BarChart data={budgetBar} margin={{ top: 4, right: 16, left: -8, bottom: 4 }} barCategoryGap="22%">
+                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No budget data</div>
+                    : (
+                      <ResponsiveContainer width="100%" height={208}>
+                        <BarChart data={budgetBar} margin={{ top: 8, right: 12, left: -8, bottom: 0 }} barCategoryGap="24%">
+                          <defs><linearGradient id="gBudget" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7AC796"/><stop offset="100%" stopColor="#4CAE6F"/></linearGradient></defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                          <XAxis dataKey="budget" axisLine={false} tickLine={false} tick={{ fontSize: 10.5, fill: '#94A3B8', fontFamily: FONT }} />
+                          <XAxis dataKey="budget" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94A3B8', fontFamily: FONT }} />
                           <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
-                          <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
-                          <Bar dataKey="count" radius={[5,5,0,0]} maxBarSize={44}>
-                            {budgetBar.map((_, i) => <Cell key={i} fill={brandColor(i)} />)}
-                          </Bar>
+                          <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(76,174,111,0.06)' }} />
+                          <Bar dataKey="count" radius={[6,6,0,0]} maxBarSize={42} fill="url(#gBudget)" />
                         </BarChart>
                       </ResponsiveContainer>
-                    </>)
+                    )
                   }
                 </Card>
               </div>
 
-              {/* ── ROW 4: PREFERRED INTAKE + PASSPORT ── */}
+              {/* ── ROW 4: INTAKE + PASSPORT ── */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16 }}>
-                <Card title="Preferred intake" sub="When students want to start">
+                <Card title="Preferred intake" sub="When students plan to start">
                   {intakeBar.length === 0
-                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No intake data</div>
-                    : (<>
+                    ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No intake data</div>
+                    : (
                       <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={intakeBar} margin={{ top: 4, right: 16, left: -8, bottom: 0 }} barCategoryGap="24%">
+                        <BarChart data={intakeBar} margin={{ top: 8, right: 12, left: -8, bottom: 0 }} barCategoryGap="26%">
+                          <defs><linearGradient id="gIntake" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5BB8DE"/><stop offset="100%" stopColor="#1C9FD4"/></linearGradient></defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                          <XAxis dataKey="intake" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94A3B8', fontFamily: FONT }}
-                            tickFormatter={v => v.length > 12 ? v.slice(0, 11) + '…' : v} />
+                          <XAxis dataKey="intake" axisLine={false} tickLine={false} tick={{ fontSize: 9.5, fill: '#94A3B8', fontFamily: FONT }} tickFormatter={v => v.length > 11 ? v.slice(0, 10) + '…' : v} />
                           <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
-                          <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
-                          <Bar dataKey="count" radius={[5,5,0,0]} maxBarSize={40} fill={C.blue} />
+                          <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(28,159,212,0.06)' }} />
+                          <Bar dataKey="count" radius={[6,6,0,0]} maxBarSize={40} fill="url(#gIntake)" />
                         </BarChart>
                       </ResponsiveContainer>
-                    </>)
+                    )
                   }
                 </Card>
-
-                <Card title="Passport status" sub="Valid passport at time of qualification">
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200 }}>
+                <Card title="Passport status" sub="Valid passport at qualification">
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, position: 'relative' }}>
                     {passportPie.length > 0 ? (<>
-                      <ResponsiveContainer width="100%" height={140}>
-                        <PieChart>
-                          <Pie data={passportPie} cx="50%" cy="50%" innerRadius={48} outerRadius={66} dataKey="value" startAngle={90} endAngle={-270} isAnimationActive={false} strokeWidth={0}>
-                            <Cell fill={C.green} />
-                            <Cell fill="#E5E7EB" />
-                          </Pie>
-                          <Tooltip content={<BrandTooltip />} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div style={{ display: 'flex', gap: 20, marginTop: 4 }}>
+                      <div style={{ position: 'relative', width: '100%' }}>
+                        <ResponsiveContainer width="100%" height={140}>
+                          <PieChart>
+                            <Pie data={passportPie} cx="50%" cy="50%" innerRadius={46} outerRadius={62} dataKey="value" startAngle={90} endAngle={-270} isAnimationActive={true} strokeWidth={0} paddingAngle={2} cornerRadius={4}>
+                              <Cell fill="#4CAE6F" />
+                              <Cell fill="#CBD5E1" />
+                            </Pie>
+                            <Tooltip content={<BrandTooltip />} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none' }}>
+                          <div style={{ fontSize: 18, fontWeight: 800, color: C.green, fontFamily: FONT, lineHeight: 1 }}>{pct(passportPie[0]?.value || 0, passportPie.reduce((s, x) => s + x.value, 0))}</div>
+                          <div style={{ fontSize: 8.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', marginTop: 1, fontFamily: FONT }}>Have it</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 18, marginTop: 4 }}>
                         {passportPie.map((p, i) => (
                           <div key={p.name} style={{ textAlign: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                              <div style={{ width: 7, height: 7, borderRadius: 2, background: i === 0 ? C.green : '#E5E7EB' }} />
-                              <span style={{ fontSize: 10.5, fontWeight: 600, color: C.sub, fontFamily: FONT }}>{p.name}</span>
+                              <div style={{ width: 7, height: 7, borderRadius: 2, background: i === 0 ? C.green : '#CBD5E1' }} />
+                              <span style={{ fontSize: 10, fontWeight: 600, color: C.sub, fontFamily: FONT }}>{p.name}</span>
                             </div>
-                            <div style={{ fontSize: 18, fontWeight: 800, color: C.text, fontFamily: FONT }}>{fmtN(p.value)}</div>
-                            <div style={{ fontSize: 10.5, color: C.muted, fontFamily: FONT }}>{pct(p.value, passportPie.reduce((s,x) => s+x.value, 0))}</div>
+                            <div style={{ fontSize: 16, fontWeight: 800, color: C.text, fontFamily: FONT }}>{fmtN(p.value)}</div>
                           </div>
                         ))}
                       </div>
@@ -1301,18 +1316,21 @@ export default function LeadQualificationDashboard() {
                 </Card>
               </div>
 
-              {/* ── ROW 5: TREND ── */}
+              {/* ── ROW 5: MoM TREND ── */}
               <div style={{ marginBottom: 16 }}>
                 <Card title="Month-on-month trend" sub="Total qualified per provider across all months">
-                  <ResponsiveContainer width="100%" height={200}>
+                  <ResponsiveContainer width="100%" height={210}>
                     <LineChart data={trend} margin={{ top: 8, right: 24, left: -8, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1F3C84" stopOpacity={0.12}/><stop offset="100%" stopColor="#1F3C84" stopOpacity={0}/></linearGradient>
+                      </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                       <XAxis dataKey="month" tick={{ fontSize: 10.5, fill: '#94A3B8', fontFamily: FONT }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
                       <Tooltip content={<BrandTooltip />} />
-                      <Line type="monotone" dataKey="Futwork"     stroke={C.navy} strokeWidth={2.5} dot={{ r: 3.5, fill: C.navy, strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                      <Line type="monotone" dataKey="Futwork AI"  stroke={C.cyan} strokeWidth={2.5} dot={{ r: 3.5, fill: C.cyan, strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                      <Line type="monotone" dataKey="Superbot"    stroke={C.blue} strokeWidth={2.5} dot={{ r: 3.5, fill: C.blue, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="Futwork"    stroke="#1F3C84" strokeWidth={2.5} dot={{ r: 3, fill: '#1F3C84', strokeWidth: 0 }} activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#fff' }} />
+                      <Line type="monotone" dataKey="Futwork AI" stroke="#29B9C3" strokeWidth={2.5} dot={{ r: 3, fill: '#29B9C3', strokeWidth: 0 }} activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#fff' }} />
+                      <Line type="monotone" dataKey="Superbot"   stroke="#1C9FD4" strokeWidth={2.5} dot={{ r: 3, fill: '#1C9FD4', strokeWidth: 0 }} activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#fff' }} />
                     </LineChart>
                   </ResponsiveContainer>
                   <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Futwork AI', color: C.cyan }, { name: 'Superbot', color: C.blue }]} />
@@ -1328,10 +1346,9 @@ export default function LeadQualificationDashboard() {
                       <ResponsiveContainer width="100%" height={Math.max(220, topCampaigns.length * 34)}>
                         <BarChart data={topCampaigns} layout="vertical" margin={{ top: 4, right: 56, left: 8, bottom: 4 }} barCategoryGap="22%">
                           <XAxis type="number" tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
-                          <YAxis type="category" dataKey="campaign" tick={{ fontSize: 10.5, fill: C.sub, fontFamily: FONT }} width={248} axisLine={false} tickLine={false}
-                            tickFormatter={v => v.length > 36 ? v.slice(0, 34) + '…' : v} />
-                          <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
-                          <Bar dataKey="count" radius={[0, 5, 5, 0]} maxBarSize={22}>
+                          <YAxis type="category" dataKey="campaign" tick={{ fontSize: 10.5, fill: C.sub, fontFamily: FONT }} width={248} axisLine={false} tickLine={false} tickFormatter={v => v.length > 36 ? v.slice(0, 34) + '…' : v} />
+                          <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
+                          <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={22}>
                             {topCampaigns.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.provider] || C.muted} />)}
                           </Bar>
                         </BarChart>
@@ -1342,7 +1359,7 @@ export default function LeadQualificationDashboard() {
                 </Card>
               </div>
 
-              {/* ── ROW 7: RAW TABLE ── */}
+              {/* ── ROW 7: LEAD RECORDS TABLE ── */}
               <Card
                 title="Lead records"
                 sub={`${tableRows.length.toLocaleString()} leads · ${selMonth}${selProvider !== 'All' ? ' · ' + selProvider : ''}${selSource !== 'All' ? ' · ' + selSource : ''}`}
@@ -1352,7 +1369,7 @@ export default function LeadQualificationDashboard() {
                       <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
                     </svg>
                     <input value={search} onChange={e => onSearch(e.target.value)} placeholder="Search campaign, source, country…"
-                      style={{ paddingLeft: 30, paddingRight: 10, paddingTop: 6, paddingBottom: 6, borderRadius: 8, border: `0.5px solid ${C.border}`, fontSize: 12, fontFamily: FONT, outline: 'none', width: 240, color: C.text, background: 'var(--card)' }} />
+                      style={{ paddingLeft: 30, paddingRight: 10, paddingTop: 7, paddingBottom: 7, borderRadius: 8, border: `0.5px solid ${C.border}`, fontSize: 12, fontFamily: FONT, outline: 'none', width: 250, color: C.text, background: 'var(--card)' }} />
                   </div>
                 }
                 noPad
@@ -1373,24 +1390,21 @@ export default function LeadQualificationDashboard() {
                         <tr key={i} style={{ borderBottom: `0.5px solid #F3F4F6`, background: i % 2 ? '#FAFBFC' : 'var(--card)', transition: 'background .1s' }}
                           onMouseEnter={e => e.currentTarget.style.background = '#F0F7FF'}
                           onMouseLeave={e => e.currentTarget.style.background = i % 2 ? '#FAFBFC' : 'var(--card)'}>
-                          <td style={{ padding: '9px 12px', color: C.text, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT }} title={r.campaign}>{r.campaign || '—'}</td>
+                          <td style={{ padding: '9px 12px', color: C.text, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT, fontWeight: 500 }} title={r.campaign}>{r.campaign || '—'}</td>
                           <td style={{ padding: '9px 12px', fontFamily: FONT }}>
-                            <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 20,
+                            <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
                               background: r.provider === 'Futwork' ? C.navyBg : r.provider === 'Futwork AI' ? C.cyanBg : C.blueBg,
                               color: r.provider === 'Futwork' ? C.navy : r.provider === 'Futwork AI' ? C.cyan : C.blue,
                             }}>{r.provider}</span>
                           </td>
                           <td style={{ padding: '9px 12px', color: C.sub, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.source || '—'}</td>
                           <td style={{ padding: '9px 12px', color: C.text, fontFamily: FONT, whiteSpace: 'nowrap' }}>
-                            {r.country ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{ fontSize: 13 }}>🌍</span>
-                              <span style={{ fontSize: 11.5, fontWeight: 600 }}>{r.country.replace(/ *\(.*\)/, '').trim()}</span>
-                            </span> : '—'}
+                            {r.country ? <span style={{ fontSize: 11.5, fontWeight: 600 }}>{r.country.replace(/ *\(.*\)/, '').trim()}</span> : '—'}
                           </td>
                           <td style={{ padding: '9px 12px', color: C.sub, fontSize: 11, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.degree_type || '—'}</td>
                           <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11, fontFamily: FONT, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.disposition}>{r.disposition || '—'}</td>
                           <td style={{ padding: '9px 12px', fontFamily: FONT }}>
-                            {r.budget ? <span style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: C.greenBg, color: C.green }}>{r.budget}</span> : '—'}
+                            {r.budget ? <span style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: C.greenBg, color: C.green }}>{r.budget}</span> : '—'}
                           </td>
                           <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.preferred_intake || '—'}</td>
                         </tr>
@@ -1412,7 +1426,7 @@ export default function LeadQualificationDashboard() {
                           const start = Math.max(0, Math.min(page - 3, totalPages - 7)); const p = start + i
                           return (
                             <button key={p} onClick={() => setPage(p)}
-                              style={{ width: 32, height: 32, borderRadius: 8, border: `0.5px solid ${p === page ? C.navy : C.border}`, background: p === page ? C.navy : 'var(--card)', color: p === page ? 'var(--card)' : C.text, fontSize: 12, fontWeight: p === page ? 700 : 400, fontFamily: FONT, cursor: 'pointer' }}>
+                              style={{ width: 32, height: 32, borderRadius: 8, border: `0.5px solid ${p === page ? C.navy : C.border}`, background: p === page ? C.navy : 'var(--card)', color: p === page ? '#fff' : C.text, fontSize: 12, fontWeight: p === page ? 700 : 400, fontFamily: FONT, cursor: 'pointer' }}>
                               {p + 1}
                             </button>
                           )
