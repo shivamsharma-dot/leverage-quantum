@@ -450,6 +450,18 @@ function CreativesTab({ data }) {
     if (adNameSearch) out=out.filter(a=>a.name?.toLowerCase().includes(adNameSearch.toLowerCase()))
     return [...out].sort((a,b)=>sortBy==='score'?b.score-a.score:(b[sortBy]||0)-(a[sortBy]||0))
   }, [processed,adTypeFilter,statusFilter,healthFilter,adNameSearch,sortBy])
+  const filteredTotals = useMemo(() => {
+    let spend=0, impressions=0, clicks=0, leads=0;
+    for (const a of filtered) {
+      spend += parseFloat(a.spend||0);
+      impressions += parseFloat(a.impressions||0);
+      clicks += parseFloat(a.clicks||0);
+      leads += parseFloat(a.leads||0);
+    }
+    const cpl = leads>0 ? Math.round(spend/leads) : 0;
+    const ctr = impressions>0 ? (clicks/impressions*100) : 0;
+    return { spend, impressions, clicks, leads, cpl, ctr };
+  }, [filtered])
   const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   useEffect(() => { setPage(1) }, [adTypeFilter,healthFilter,adNameSearch,sortBy,viewMode,filtered.length])
   const safePage = Math.min(page, pageCount)
@@ -521,6 +533,22 @@ function CreativesTab({ data }) {
         </div>
       </div>
       <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · showing {filtered.length===0?0:((safePage-1)*PER_PAGE+1)}–{Math.min(safePage*PER_PAGE, filtered.length)} · account avg CTR {accCTRpct.toFixed(2)}%</div>
+        <div style={{ display:'flex',flexWrap:'wrap',gap:10,marginBottom:16,padding:'14px 16px',background:'#F8FAFC',border:'1px solid #E5E7EB',borderRadius:12 }}>
+          <div style={{ fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:0.4,alignSelf:'center',marginRight:4 }}>Totals for these {filteredTotals && filtered.length} creatives</div>
+          {[
+            { label:'SPEND', value:fmtINR(filteredTotals.spend), accent:'#1C9FD4' },
+            { label:'LEADS', value:filteredTotals.leads.toLocaleString('en-IN'), accent:'#4CAE6F' },
+            { label:'CPL', value:fmtINR(filteredTotals.cpl), accent:'#1F3C84' },
+            { label:'IMPRESSIONS', value:filteredTotals.impressions.toLocaleString('en-IN'), accent:'#29B9C3' },
+            { label:'CLICKS', value:filteredTotals.clicks.toLocaleString('en-IN'), accent:'#6B7280' },
+            { label:'CTR', value:filteredTotals.ctr.toFixed(2)+'%', accent:'#1F3C84' },
+          ].map(m => (
+            <div key={m.label} style={{ display:'flex',flexDirection:'column',gap:2,minWidth:96,padding:'2px 14px',borderLeft:`3px solid ${m.accent}` }}>
+              <span style={{ fontSize:10,fontWeight:700,color:'#9CA3AF',letterSpacing:0.3 }}>{m.label}</span>
+              <span style={{ fontSize:16,fontWeight:700,color:'#111827' }}>{m.value}</span>
+            </div>
+          ))}
+        </div>
       {viewMode==='grid'?(
         <div className="lq-stagger" style={{ display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:12 }}>
           {pageItems.map((ad,i)=>(
