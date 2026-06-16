@@ -451,16 +451,23 @@ function CreativesTab({ data }) {
     return [...out].sort((a,b)=>sortBy==='score'?b.score-a.score:(b[sortBy]||0)-(a[sortBy]||0))
   }, [processed,adTypeFilter,statusFilter,healthFilter,adNameSearch,sortBy])
   const filteredTotals = useMemo(() => {
-    let spend=0, impressions=0, clicks=0, leads=0;
+    let spend=0, impressions=0, clicks=0, leads=0, reach=0, active=0, freqSum=0, freqW=0;
     for (const a of filtered) {
-      spend += parseFloat(a.spend||0);
-      impressions += parseFloat(a.impressions||0);
+      const sp=parseFloat(a.spend||0), im=parseFloat(a.impressions||0);
+      spend += sp;
+      impressions += im;
       clicks += parseFloat(a.clicks||0);
       leads += parseFloat(a.leads||0);
+      reach += parseFloat(a.reach||0);
+      if ((a.effective_status||a.status)==='ACTIVE') active++;
+      if (parseFloat(a.frequency||0)>0 && im>0) { freqSum += parseFloat(a.frequency)*im; freqW += im; }
     }
     const cpl = leads>0 ? Math.round(spend/leads) : 0;
     const ctr = impressions>0 ? (clicks/impressions*100) : 0;
-    return { spend, impressions, clicks, leads, cpl, ctr };
+    const cpm = impressions>0 ? (spend/impressions*1000) : 0;
+    const cpc = clicks>0 ? (spend/clicks) : 0;
+    const frequency = freqW>0 ? (freqSum/freqW) : 0;
+    return { spend, impressions, clicks, leads, cpl, ctr, reach, cpm, cpc, frequency, active };
   }, [filtered])
   const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   useEffect(() => { setPage(1) }, [adTypeFilter,healthFilter,adNameSearch,sortBy,viewMode,filtered.length])
@@ -533,7 +540,7 @@ function CreativesTab({ data }) {
         </div>
       </div>
       <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · showing {filtered.length===0?0:((safePage-1)*PER_PAGE+1)}–{Math.min(safePage*PER_PAGE, filtered.length)} · account avg CTR {accCTRpct.toFixed(2)}%</div>
-        <div style={{ display:'flex',flexWrap:'wrap',gap:10,marginBottom:16,padding:'14px 16px',background:'#F8FAFC',border:'1px solid #E5E7EB',borderRadius:12 }}>
+        <div style={{ display:'flex',flexWrap:'wrap',alignItems:'stretch',gap:0,marginBottom:16,padding:'14px 18px',background:'#F8FAFC',border:'1px solid #E5E7EB',borderRadius:12 }}>
           <div style={{ fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:0.4,alignSelf:'center',marginRight:4 }}>Totals for these {filteredTotals && filtered.length} creatives</div>
           {[
             { label:'SPEND', value:fmtINR(filteredTotals.spend), accent:'#1C9FD4' },
@@ -542,8 +549,13 @@ function CreativesTab({ data }) {
             { label:'IMPRESSIONS', value:filteredTotals.impressions.toLocaleString('en-IN'), accent:'#29B9C3' },
             { label:'CLICKS', value:filteredTotals.clicks.toLocaleString('en-IN'), accent:'#6B7280' },
             { label:'CTR', value:filteredTotals.ctr.toFixed(2)+'%', accent:'#1F3C84' },
+            { label:'CPM', value:fmtINR(filteredTotals.cpm), accent:'#29B9C3' },
+            { label:'CPC', value:fmtINR(filteredTotals.cpc), accent:'#1C9FD4' },
+            { label:'REACH', value:filteredTotals.reach.toLocaleString('en-IN'), accent:'#4CAE6F' },
+            { label:'AVG FREQ', value:filteredTotals.frequency.toFixed(2), accent:'#6B7280' },
+            { label:'ACTIVE', value:filteredTotals.active.toLocaleString('en-IN'), accent:'#4CAE6F' },
           ].map(m => (
-            <div key={m.label} style={{ display:'flex',flexDirection:'column',gap:2,minWidth:96,padding:'2px 14px',borderLeft:`3px solid ${m.accent}` }}>
+            <div key={m.label} style={{ display:'flex',flexDirection:'column',gap:2,flex:'1 1 0',minWidth:90,padding:'2px 14px',borderLeft:`3px solid ${m.accent}` }}>
               <span style={{ fontSize:10,fontWeight:700,color:'#9CA3AF',letterSpacing:0.3 }}>{m.label}</span>
               <span style={{ fontSize:16,fontWeight:700,color:'#111827' }}>{m.value}</span>
             </div>
