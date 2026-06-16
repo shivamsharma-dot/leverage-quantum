@@ -459,3 +459,16 @@ Changes shipped:
 Key palette: navy #1F3C84, blue #1C9FD4, cyan #29B9C3, green #4CAE6F. FONT = 'Plus Jakarta Sans','Inter'.
 
 Workflow followed each change: read source → backup to /tmp → python exact-string replace w/ assert → `npm run build` → stash DashboardHome.jsx → commit → fetch → rebase origin/main → push rename-ask-ai:main → pop stash → verify live. (DashboardHome.jsx has a pre-existing unrelated uncommitted change — keep stashed during pushes, restore after.)
+
+---
+
+## Recent Changes — Design System reference file (2026-06-17)
+
+Added **`DESIGN_SYSTEM.md`** at repo root (commit `2dbad7f`): the single source of
+truth for dashboard UI. It documents the brand tokens (C object, BRAND_RAMP, FONT,
+PAGE_SIZE), the reusable components (Card, PremKPI, RankedBars, thS, BrandTooltip),
+table + pagination + toolbar conventions, a copy-paste page skeleton for new pages,
+and a recommended setup to make new pages premium-by-default (extract a shared
+`src/ui/dashboardKit.jsx`, keep a `_DashboardTemplate.jsx`, paste DESIGN_SYSTEM.md
+into the Claude Project knowledge base). QL Ops / LeadQualificationDashboard.jsx is
+the canonical reference page. Keep DESIGN_SYSTEM.md in sync whenever tokens change.
