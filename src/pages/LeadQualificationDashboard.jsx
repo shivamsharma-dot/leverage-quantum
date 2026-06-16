@@ -126,23 +126,25 @@ const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon }) => {
   const up = delta != null && delta >= 0
   return (
     <div style={{
-      background: 'var(--card)', borderRadius: 14, padding: '16px 18px 14px',
-      border: '0.5px solid #E2E8F0', borderTop: `3px solid ${accent}`,
-      boxShadow: '0 1px 6px rgba(15,23,42,0.06)', fontFamily: FONT,
+      position: 'relative', overflow: 'hidden', borderRadius: 16, padding: '16px 18px',
+      background: '#fff', border: '1px solid #EEF1F6', fontFamily: FONT,
+      boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)',
       display: 'flex', flexDirection: 'column', minWidth: 0,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', fontFamily: FONT }}>{label}</span>
-        <div style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: accentBg, color: accent, flexShrink: 0 }}>{icon}</div>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: `linear-gradient(90deg, ${accent}, ${accent}99)` }} />
+      <div style={{ position: 'absolute', top: -28, right: -28, width: 96, height: 96, borderRadius: '50%', background: `linear-gradient(135deg, ${accent}14, ${accent}05)` }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, position: 'relative' }}>
+        <div style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, color: '#fff', background: `linear-gradient(135deg, ${accent}, ${accent}D9)`, boxShadow: `0 4px 10px -2px ${accent}66`, flexShrink: 0 }}>{icon}</div>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', color: '#64748B', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       </div>
-      <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.9px', color: '#0F172A', lineHeight: 1, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, minHeight: 18 }}>
+      <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.6px', color: '#0F1B33', lineHeight: 1.05, position: 'relative', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, minHeight: 18, position: 'relative' }}>
         {delta != null && (
           <span style={{ fontSize: 10.5, fontWeight: 700, color: up ? '#15803D' : '#B91C1C', background: up ? '#E9F8EF' : '#FEF2F2', padding: '2px 7px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 2, fontFamily: FONT, flexShrink: 0 }}>
-            {up ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}%
+            {up ? '\u25B2' : '\u25BC'} {Math.abs(delta).toFixed(1)}%
           </span>
         )}
-        {sub && <span style={{ fontSize: 11.5, color: '#94A3B8', fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
+        {sub && <span style={{ fontSize: 11.5, color: '#8A94A6', fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
       </div>
     </div>
   )
