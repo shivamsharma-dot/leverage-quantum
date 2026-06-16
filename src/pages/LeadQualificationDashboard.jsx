@@ -17,6 +17,11 @@ const C = {
   border:'var(--card-border)', text:'var(--text)', muted:'var(--text3)', sub:'var(--text2)', bg:'var(--bg)',
 }
 const PROVIDER_COLORS = { Futwork: C.navy, 'Futwork AI': C.cyan, Superbot: C.blue }
+
+// On-brand ordered palette — navy → blue → cyan → green, then tinted repeats.
+// Used for multi-category bars so everything stays within brand colors.
+const BRAND_RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F', '#3A5BA0', '#52B5DC', '#5BCAD2', '#73C58E']
+const brandColor = i => BRAND_RAMP[i % BRAND_RAMP.length]
 const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 const PAGE_SIZE = 10
 
@@ -1154,17 +1159,17 @@ export default function LeadQualificationDashboard() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: '4px 0' }}>
                         {countryBar.map((r, i) => {
                           const w = countryBar[0].count > 0 ? (r.count / countryBar[0].count * 100) : 0
-                          const CTRY_COLORS = [C.navy, C.blue, C.cyan, C.green, C.amber, '#8B5CF6', '#F59E0B', '#EC4899', '#64748B', '#10B981']
+                          // brand ramp used via brandColor(i)
                           return (
                             <div key={r.country} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <div style={{ width: 18, textAlign: 'right', fontSize: 10, fontWeight: 700, color: C.muted, fontFamily: FONT, flexShrink: 0 }}>#{i + 1}</div>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                   <span style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>{r.country}</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: CTRY_COLORS[i] || C.muted, fontFamily: FONT, flexShrink: 0 }}>{fmtN(r.count)}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: brandColor(i), fontFamily: FONT, flexShrink: 0 }}>{fmtN(r.count)}</span>
                                 </div>
                                 <div style={{ height: 5, borderRadius: 99, background: '#F1F5F9', overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: CTRY_COLORS[i] || C.muted, transition: 'width .5s ease' }} />
+                                  <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: brandColor(i), transition: 'width .5s ease' }} />
                                 </div>
                               </div>
                               <div style={{ fontSize: 10.5, color: C.muted, fontFamily: FONT, width: 34, textAlign: 'right', flexShrink: 0 }}>{pct(r.count, totals.total)}</div>
@@ -1188,7 +1193,7 @@ export default function LeadQualificationDashboard() {
                             tickFormatter={v => v.length > 14 ? v.slice(0, 13) + '…' : v} />
                           <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
                           <Bar dataKey="count" radius={[0, 5, 5, 0]} maxBarSize={18}>
-                            {degreeBar.map((_, i) => <Cell key={i} fill={[C.navy, C.blue, C.cyan, C.green, C.amber, '#8B5CF6', '#F59E0B', '#EC4899'][i % 8]} />)}
+                            {degreeBar.map((_, i) => <Cell key={i} fill={brandColor(i)} />)}
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
@@ -1206,16 +1211,16 @@ export default function LeadQualificationDashboard() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 0' }}>
                         {dispositionBar.map((r, i) => {
                           const w = dispositionBar[0].count > 0 ? (r.count / dispositionBar[0].count * 100) : 0
-                          const DISP_COLORS = [C.green, C.blue, C.navy, C.cyan, C.amber, '#8B5CF6', '#F59E0B', '#EC4899']
+                          // brand ramp used via brandColor(i)
                           return (
                             <div key={r.disposition} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                   <span style={{ fontSize: 11.5, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '68%' }}>{r.disposition}</span>
-                                  <span style={{ fontSize: 11.5, fontWeight: 700, color: DISP_COLORS[i], fontFamily: FONT, flexShrink: 0 }}>{fmtN(r.count)}</span>
+                                  <span style={{ fontSize: 11.5, fontWeight: 700, color: brandColor(i), fontFamily: FONT, flexShrink: 0 }}>{fmtN(r.count)}</span>
                                 </div>
                                 <div style={{ height: 5, borderRadius: 99, background: '#F1F5F9', overflow: 'hidden' }}>
-                                  <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: DISP_COLORS[i], transition: 'width .5s ease' }} />
+                                  <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: brandColor(i), transition: 'width .5s ease' }} />
                                 </div>
                               </div>
                               <div style={{ fontSize: 10.5, color: C.muted, fontFamily: FONT, width: 34, textAlign: 'right', flexShrink: 0 }}>{pct(r.count, totals.total)}</div>
@@ -1238,7 +1243,7 @@ export default function LeadQualificationDashboard() {
                           <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
                           <Tooltip content={<BrandTooltip />} cursor={{ fill: 'var(--bg3)' }} />
                           <Bar dataKey="count" radius={[5,5,0,0]} maxBarSize={44}>
-                            {budgetBar.map((_, i) => <Cell key={i} fill={[C.green, C.cyan, C.blue, C.navy, C.amber, '#8B5CF6', '#F59E0B', '#EC4899'][i % 8]} />)}
+                            {budgetBar.map((_, i) => <Cell key={i} fill={brandColor(i)} />)}
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
