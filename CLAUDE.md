@@ -472,3 +472,21 @@ and a recommended setup to make new pages premium-by-default (extract a shared
 `src/ui/dashboardKit.jsx`, keep a `_DashboardTemplate.jsx`, paste DESIGN_SYSTEM.md
 into the Claude Project knowledge base). QL Ops / LeadQualificationDashboard.jsx is
 the canonical reference page. Keep DESIGN_SYSTEM.md in sync whenever tokens change.
+
+---
+
+## Recent Changes — Shared dashboard kit + template (2026-06-17)
+
+Added **`src/ui/dashboardKit.jsx`** (commit `2f11e5b`): shared, byte-accurate
+extraction of the stateless design-system primitives from QL Ops —
+exports `C`, `PROVIDER_COLORS`, `BRAND_RAMP`, `brandColor`, `FONT`, `PAGE_SIZE`,
+`fmtN`, `pct`, `Card`, `KPI_ICONS`, `PremKPI`, `RankedBars`. New pages import these
+so styling stays identical everywhere; edit once, all pages update.
+Also added **`src/pages/_DashboardTemplate.jsx`**: copy-paste scaffold (toolbar
+placeholder, PremKPI row, Card sections, RankedBars, records-table placeholder) that
+imports from the kit. Build verified clean (`npm run build` ✓ 7.63s).
+
+NOTE: this was additive — `LeadQualificationDashboard.jsx` still defines its own copies
+and was NOT rewired (state-bound bits like `thS`, ExportMenu, BrandTooltip stay local).
+A later step could migrate QL Ops to import from the kit, verified individually.
+DashboardHome.jsx stash preserved/popped as usual.
