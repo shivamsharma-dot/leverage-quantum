@@ -490,3 +490,19 @@ NOTE: this was additive — `LeadQualificationDashboard.jsx` still defines its o
 and was NOT rewired (state-bound bits like `thS`, ExportMenu, BrandTooltip stay local).
 A later step could migrate QL Ops to import from the kit, verified individually.
 DashboardHome.jsx stash preserved/popped as usual.
+
+---
+
+## Recent Changes — New "Referral" dashboard page (2026-06-17)
+
+Added **`src/pages/ReferralDashboard.jsx`** (commit `325652a`) — first page built on
+the shared kit. Data: published Google Sheet CSV (gid 1233447443, ~24k referral rows).
+Layout: source filter pills (All/Employee/Student), 5 PremKPI cards (Total, Employee,
+Student, Enrolments, Payment Done), a referral funnel bar chart (AppCreated→Submitted→
+Offer→Deposit→PaymentDone→Registered), Top student statuses RankedBars, Source split
+donut, Referrals-by-created-month area chart, and a paginated records table — all using
+Card/PremKPI/RankedBars + tokens from dashboardKit.
+Wired in 4 places: App.jsx import + `<Route path="/dashboard/referral" dashboardId="referral">`;
+Sidebar NAV item, PAGE_LIST access entry (id 'referral', adminOnly:false), ICON_MAP +
+new ReferralIcon (share-node glyph). Build verified clean (npm run build ✓ 7.39s).
+DashboardHome.jsx stash preserved/popped as usual.
