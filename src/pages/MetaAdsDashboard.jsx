@@ -540,8 +540,8 @@ function CreativesTab({ data }) {
         </div>
       </div>
       <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · showing {filtered.length===0?0:((safePage-1)*PER_PAGE+1)}–{Math.min(safePage*PER_PAGE, filtered.length)} · account avg CTR {accCTRpct.toFixed(2)}%</div>
-        <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(130px, 1fr))',alignItems:'stretch',gap:12,marginBottom:16,padding:'14px 18px',background:'#F8FAFC',border:'1px solid #E5E7EB',borderRadius:12 }}>
-          <div style={{ gridColumn:'1 / -1',fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:0.4,alignSelf:'center',marginRight:4 }}>Totals for these {filteredTotals && filtered.length} creatives</div>
+        <div style={{ marginBottom:16,padding:'16px 18px',background:'#FFFFFF',border:'1px solid #E5E7EB',borderRadius:14,boxShadow:'0 1px 2px rgba(16,24,40,0.04)' }}>
+          <div style={{ fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:0.5,marginBottom:12 }}>Totals for these {filteredTotals && filtered.length} creatives</div><div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(116px, 1fr))',gap:10 }}>
           {[
             { label:'SPEND', value:fmtINR(filteredTotals.spend), accent:'#1C9FD4' },
             { label:'LEADS', value:filteredTotals.leads.toLocaleString('en-IN'), accent:'#4CAE6F' },
@@ -555,12 +555,13 @@ function CreativesTab({ data }) {
             { label:'AVG FREQ', value:filteredTotals.frequency.toFixed(2), accent:'#6B7280' },
             { label:'ACTIVE', value:filteredTotals.active.toLocaleString('en-IN'), accent:'#4CAE6F' },
           ].map(m => (
-            <div key={m.label} style={{ display:'flex',flexDirection:'column',gap:2,minWidth:0,padding:'2px 14px',borderLeft:`3px solid ${m.accent}` }}>
-              <span style={{ fontSize:10,fontWeight:700,color:'#9CA3AF',letterSpacing:0.3 }}>{m.label}</span>
-              <span style={{ fontSize:16,fontWeight:700,color:'#111827',whiteSpace:'nowrap' }}>{m.value}</span>
+            <div key={m.label} style={{ display:'flex',flexDirection:'column',gap:4,minWidth:0,padding:'10px 12px',background:'#FAFBFC',border:'1px solid #EEF0F3',borderRadius:10,borderTop:`2px solid ${m.accent}` }}>
+              <span style={{ fontSize:10,fontWeight:700,color:'#98A2B3',letterSpacing:0.4,textTransform:'uppercase',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{m.label}</span>
+              <span style={{ fontSize:17,fontWeight:700,color:'#101828',whiteSpace:'nowrap',fontVariantNumeric:'tabular-nums',letterSpacing:'-0.01em' }}>{m.value}</span>
             </div>
           ))}
         </div>
+      </div>
       {viewMode==='grid'?(
         <div className="lq-stagger" style={{ display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:12 }}>
           {pageItems.map((ad,i)=>(
