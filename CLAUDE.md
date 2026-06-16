@@ -438,3 +438,24 @@ with urllib.request.urlopen(req2) as r:
 ---
 
 *Update this file after every significant session.*
+
+
+---
+
+## Recent Changes — QL Ops / Lead Qualification premium redesign (2026-06-17)
+
+File: `src/pages/LeadQualificationDashboard.jsx` (branch `rename-ask-ai` → pushed to `main`).
+
+Goal: make the QL Ops page production-grade / premium, reusing the Meta Ads MAIN KPI card design.
+
+Changes shipped:
+- **Top KPI cards** (`PremKPI`, ~line 125): rebuilt to match Meta Ads main-card style — gradient top accent bar, soft corner glow blob, gradient icon square (white icon + colored shadow), dual soft drop shadow, bold value, uppercase muted label, red/green delta pill. Same props kept (label, value, sub, delta, accent, accentBg, icon); gradients derived from single `accent` color. Commit `fe82c86`.
+- **Section card wrapper** (`Card`, ~line 93): elevated to match — border #EEF1F6, radius 16, dual shadow `0 1px 2px / 0 12px 28px -16px`, bolder header title (800, #0F1B33), refined sub (#94A3B8). Commit `a087f92`.
+- **Lead records table** (`thS`, ~line 918): crisper uppercase header, active-sort tinted #EEF2FB + navy text, stronger bottom border.
+- **Pagination** active page button: navy→cyan gradient `linear-gradient(135deg,#1F3C84,#1C9FD4)` + colored shadow. Commit `a087f92`.
+- **Top toolbar date-preset pills** (LD/L7D/MTD, ~line 982): active pill now navy→cyan gradient + white text + colored shadow (matches cards/pagination).
+- Charts (Recharts) + RankedBars left as-is — already on-brand (gradient bars, muted axes, BrandTooltip).
+
+Key palette: navy #1F3C84, blue #1C9FD4, cyan #29B9C3, green #4CAE6F. FONT = 'Plus Jakarta Sans','Inter'.
+
+Workflow followed each change: read source → backup to /tmp → python exact-string replace w/ assert → `npm run build` → stash DashboardHome.jsx → commit → fetch → rebase origin/main → push rename-ask-ai:main → pop stash → verify live. (DashboardHome.jsx has a pre-existing unrelated uncommitted change — keep stashed during pushes, restore after.)

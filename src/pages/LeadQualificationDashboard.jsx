@@ -981,9 +981,9 @@ export default function LeadQualificationDashboard() {
                       style={{
                         padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer',
                         fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
-                        background: activeFilter==='custom' ? 'transparent' : datePreset === key ? 'var(--card)' : 'transparent',
-                        color: activeFilter==='custom' ? '#CBD5E1' : datePreset === key ? C.navy : C.muted,
-                        boxShadow: activeFilter==='custom' ? 'none' : datePreset === key ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
+                        background: activeFilter==='custom' ? 'transparent' : datePreset === key ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent',
+                        color: activeFilter==='custom' ? '#CBD5E1' : datePreset === key ? '#fff' : '#64748B',
+                        boxShadow: activeFilter==='custom' ? 'none' : datePreset === key ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
                         opacity: activeFilter==='custom' ? 0.5 : 1,
                         pointerEvents: activeFilter==='custom' ? 'none' : 'auto',
                         transition: 'all .15s',
