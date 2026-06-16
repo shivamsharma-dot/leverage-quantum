@@ -16,7 +16,7 @@ const C = {
   amber:'#F59E0B', navyBg:'#E8EFF9', blueBg:'#E3F5FD', cyanBg:'#E4F8F9', greenBg:'#E9F8EF',
   border:'var(--card-border)', text:'var(--text)', muted:'var(--text3)', sub:'var(--text2)', bg:'var(--bg)',
 }
-const PROVIDER_COLORS = { Futwork: C.navy, Superbot: C.blue }
+const PROVIDER_COLORS = { Futwork: C.navy, 'Futwork AI': C.cyan, Superbot: C.blue }
 const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 const PAGE_SIZE = 10
 
@@ -37,15 +37,23 @@ function parseCSV(csv) {
     cols.push(buf.trim()); return cols
   })
   const [hdr, ...data] = rows
-  const h = k => hdr.indexOf(k)
-  return data.filter(r => r[h('provider')]).map(r => ({
-    provider:    r[h('provider')] || '',
-    qualified_date: r[h('qualified_date')] || r[h('month_start')] || '',
-    month:       r[h('qualified_month')] || '',
-    campaign:    (r[h('opp_first_campaign_name')] || '').trim(),
-    source:      (r[h('source')] || 'Others').trim(),
-    sub_source:  (r[h('sub_source')] || '').trim(),
-    count:       parseInt(r[h('qualified_count')]) || 0,
+  const h = k => hdr.map(x => x.toLowerCase().trim()).indexOf(k.toLowerCase())
+  return data.filter(r => r[h('provider')] && r[h('provider')] !== 'provider').map(r => ({
+    provider:        (r[h('provider')] || '').trim(),
+    qualified_date:  r[h('qualified_date')] || '',
+    month:           r[h('qualified_month')] || '',
+    campaign:        (r[h('opp_first_campaign_name')] || '').trim(),
+    source:          (r[h('source')] || 'Others').trim(),
+    sub_source:      (r[h('sub_source')] || '').trim(),
+    country:         (r[h('country_interested')] || '').trim(),
+    degree_type:     (r[h('degree_type')] || '').trim(),
+    disposition:     (r[h('disposition')] || '').trim(),
+    futwork_project: (r[h('futwork_project')] || '').trim(),
+    budget:          (r[h('budget')] || '').trim(),
+    valid_passport:  (r[h('valid_passport')] || '').trim(),
+    preferred_intake:(r[h('preferred_intake')] || '').trim(),
+    highest_qual:    (r[h('highest_qualification')] || '').trim(),
+    count:           1,  // one row = one qualified lead
   }))
 }
 
@@ -633,22 +641,25 @@ export default function LeadQualificationDashboard() {
 
   // 5. KPI totals — use filtered so provider/source dropdowns affect the cards
   const totals = useMemo(() => {
-    const fw = filtered.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
-    const sb = filtered.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
-    const total = fw + sb
+    const fw   = filtered.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
+    const fwai = filtered.filter(r => r.provider === 'Futwork AI').reduce((s, r) => s + r.count, 0)
+    const sb   = filtered.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
+    const total = fw + fwai + sb
     // MoM delta: compare filtered selection against same provider/source in previous month
     const prevM    = months[months.indexOf(selMonth) - 1]
     const prevBase = prevM ? rows.filter(r => r.month === prevM
       && (selProvider === 'All' || r.provider === selProvider)
       && (selSource   === 'All' || r.source   === selSource)
     ) : []
-    const prevFw  = prevBase.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
-    const prevSb  = prevBase.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
-    const prevTot = prevFw + prevSb
+    const prevFw   = prevBase.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
+    const prevFwai = prevBase.filter(r => r.provider === 'Futwork AI').reduce((s, r) => s + r.count, 0)
+    const prevSb   = prevBase.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0)
+    const prevTot  = prevFw + prevFwai + prevSb
     return {
-      fw, sb, total,
+      fw, fwai, sb, total,
       totalDelta: prevTot > 0 ? ((total - prevTot)  / prevTot * 100) : null,
       fwDelta:    prevFw  > 0 ? ((fw    - prevFw)   / prevFw  * 100) : null,
+      fwaiDelta:  prevFwai > 0 ? ((fwai - prevFwai) / prevFwai * 100) : null,
       sbDelta:    prevSb  > 0 ? ((sb    - prevSb)   / prevSb  * 100) : null,
     }
   }, [filtered, rows, months, selMonth, selProvider, selSource])
@@ -658,15 +669,16 @@ export default function LeadQualificationDashboard() {
     const map = {}
     filtered.forEach(r => {
       const s = r.source || 'Others'
-      if (!map[s]) map[s] = { source: s, Futwork: 0, Superbot: 0 }
+      if (!map[s]) map[s] = { source: s, Futwork: 0, 'Futwork AI': 0, Superbot: 0 }
       map[s][r.provider] = (map[s][r.provider] || 0) + r.count
     })
-    return Object.values(map).sort((a, b) => (b.Futwork + b.Superbot) - (a.Futwork + a.Superbot)).slice(0, 8)
+    return Object.values(map).sort((a, b) => (b.Futwork + b['Futwork AI'] + b.Superbot) - (a.Futwork + a['Futwork AI'] + a.Superbot)).slice(0, 8)
   }, [filtered])
 
   /* Donut always from full month (shows whole picture) */
   const provPie = useMemo(() => [
     { name: 'Futwork', value: totals.fw },
+    { name: 'Futwork AI', value: totals.fwai },
     { name: 'Superbot', value: totals.sb },
   ].filter(d => d.value > 0), [totals])
 
@@ -674,8 +686,9 @@ export default function LeadQualificationDashboard() {
     const mr = rows.filter(r => r.month === m)
     return {
       month: m,
-      Futwork:  mr.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0),
-      Superbot: mr.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0),
+      Futwork:      mr.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0),
+      'Futwork AI': mr.filter(r => r.provider === 'Futwork AI').reduce((s, r) => s + r.count, 0),
+      Superbot:     mr.filter(r => r.provider === 'Superbot').reduce((s, r) => s + r.count, 0),
     }
   }), [rows, months])
 
@@ -1006,13 +1019,14 @@ export default function LeadQualificationDashboard() {
           ) : (
             <>
               {/* KPI ROW */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 20 }}>
                 <KPICard label="Total Qualified" value={fmtN(totals.total)} sub={selMonth} delta={totals.totalDelta} />
-                <KPICard label="Futwork"  value={fmtN(totals.fw)}  sub={pct(totals.fw, totals.total) + ' of total'} delta={totals.fwDelta} />
-                <KPICard label="Superbot" value={fmtN(totals.sb)}  sub={pct(totals.sb, totals.total) + ' of total'} delta={totals.sbDelta} />
-                <KPICard label="FW : SB Split"
-                  value={totals.total > 0 ? pct(totals.fw, totals.total) + ' / ' + pct(totals.sb, totals.total) : '—'}
-                  sub="Futwork share / Superbot share" />
+                <KPICard label="Futwork"    value={fmtN(totals.fw)}   sub={pct(totals.fw,   totals.total) + ' of total'} delta={totals.fwDelta} />
+                <KPICard label="Futwork AI" value={fmtN(totals.fwai)} sub={pct(totals.fwai, totals.total) + ' of total'} delta={totals.fwaiDelta} />
+                <KPICard label="Superbot"   value={fmtN(totals.sb)}   sub={pct(totals.sb,   totals.total) + ' of total'} delta={totals.sbDelta} />
+                <KPICard label="Provider Split"
+                  value={totals.total > 0 ? pct(totals.fw, totals.total) + ' / ' + pct(totals.fwai, totals.total) + ' / ' + pct(totals.sb, totals.total) : '—'}
+                  sub="FW / FW AI / SB" />
               </div>
 
               {/* SOURCE BAR + DONUT ROW */}
@@ -1039,8 +1053,9 @@ export default function LeadQualificationDashboard() {
                         axisLine={false} tickLine={false}
                       />
                       <Tooltip content={<BrandTooltip/>} cursor={{ fill: 'var(--bg3)' }} />
-                      <Bar dataKey="Futwork"  stackId="a" fill={C.navy} radius={[6,6,0,0]} maxBarSize={52} />
-                      <Bar dataKey="Superbot" stackId="a" fill={C.blue} radius={[6,6,0,0]} maxBarSize={52} />
+                      <Bar dataKey="Futwork"     stackId="a" fill={C.navy} radius={[0,0,0,0]} maxBarSize={52} />
+                      <Bar dataKey="Futwork AI" stackId="a" fill={C.cyan} radius={[0,0,0,0]} maxBarSize={52} />
+                      <Bar dataKey="Superbot"   stackId="a" fill={C.blue} radius={[6,6,0,0]} maxBarSize={52} />
                     </BarChart>
                   </ResponsiveContainer>
                   <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Superbot', color: C.blue }]} />
@@ -1094,8 +1109,9 @@ export default function LeadQualificationDashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                       <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
                       <Tooltip content={<BrandTooltip/>} />
-                      <Line type="monotone" dataKey="Futwork"  stroke={C.navy} strokeWidth={2.5} dot={{ r: 3.5, fill: C.navy, strokeWidth: 0 }} activeDot={{ r: 5 }} />
-                      <Line type="monotone" dataKey="Superbot" stroke={C.blue} strokeWidth={2.5} dot={{ r: 3.5, fill: C.blue, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="Futwork"     stroke={C.navy} strokeWidth={2.5} dot={{ r: 3.5, fill: C.navy, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="Futwork AI" stroke={C.cyan} strokeWidth={2.5} dot={{ r: 3.5, fill: C.cyan, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                      <Line type="monotone" dataKey="Superbot"   stroke={C.blue} strokeWidth={2.5} dot={{ r: 3.5, fill: C.blue, strokeWidth: 0 }} activeDot={{ r: 5 }} />
                     </LineChart>
                   </ResponsiveContainer>
                   <ChartLegend items={[{ name: 'Futwork', color: C.navy }, { name: 'Superbot', color: C.blue }]} />
@@ -1167,8 +1183,8 @@ export default function LeadQualificationDashboard() {
                           <td style={{ padding: '10px 12px', fontFamily: FONT }}>
                             <span style={{
                               fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
-                              background: r.provider === 'Futwork' ? C.navyBg : C.blueBg,
-                              color: r.provider === 'Futwork' ? C.navy : C.blue,
+                              background: r.provider === 'Futwork' ? C.navyBg : r.provider === 'Futwork AI' ? C.cyanBg : C.blueBg,
+                              color: r.provider === 'Futwork' ? C.navy : r.provider === 'Futwork AI' ? C.cyan : C.blue,
                             }}>{r.provider}</span>
                           </td>
                           <td style={{ padding: '10px 12px', color: C.sub, fontFamily: FONT }}>{r.source}</td>
