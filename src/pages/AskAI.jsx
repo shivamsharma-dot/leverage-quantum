@@ -159,6 +159,31 @@ const QUICK = [
 ]
 
 /* ─── main ────────────────────────────────────────────────────── */
+function MagicLoader(){
+  const phases=['Reading your Meta Ads data…','Pulling QL Ops & WhatsApp signals…','Crunching the numbers…','Spotting trends & risks…','Composing your answer…'];
+  const [i,setI]=useState(0);
+  useEffect(()=>{const t=setInterval(()=>setI(p=>(p+1)%phases.length),1700);return ()=>clearInterval(t)},[]);
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:14,padding:'8px 2px',animation:'qRise .4s ease'}}>
+      <div style={{position:'relative',width:40,height:40,flexShrink:0}}>
+        <div className="qOrb" style={{width:40,height:40,borderRadius:13,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{filter:'brightness(0) invert(1)',display:'flex'}}><Logo size={18}/></div>
+        </div>
+        <div style={{position:'absolute',inset:-5,borderRadius:18,border:'1.5px solid transparent',borderTopColor:'#1C9FD4',borderRightColor:'#29B9C3',animation:'qOrbit 1.1s linear infinite'}}/>
+        <div style={{position:'absolute',inset:-9,borderRadius:22,border:'1px solid transparent',borderBottomColor:'rgba(28,159,212,0.5)',animation:'qOrbitR 1.8s linear infinite'}}/>
+      </div>
+      <div style={{minWidth:0}}>
+        <div style={{position:'relative',width:170,height:7,borderRadius:6,background:'#E8EFF9',overflow:'hidden',marginBottom:8}}>
+          <div style={{position:'absolute',top:0,left:0,height:'100%',width:'45%',borderRadius:6,background:'linear-gradient(90deg,transparent,#1C9FD4,#29B9C3,transparent)',animation:'qScan 1.3s ease-in-out infinite'}}/>
+        </div>
+        <div key={i} style={{fontSize:13,fontWeight:600,color:'#475569',animation:'qRise .45s ease'}}>
+          <span className="qShine">{phases[i]}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AskAI() {
   const { user } = useAuth()
   const uid = user?.email||'default'
@@ -388,6 +413,22 @@ export default function AskAI() {
         .sendbtn:hover:not(:disabled){transform:scale(1.05);background:${BLUE}!important}
         input::placeholder,textarea::placeholder{color:#CBD5E1!important}
         input,textarea{caret-color:#1C9FD4;}
+        /* ===== PREMIUM AI MOTION TOOLKIT (brand: navy/blue/cyan/green) ===== */
+        @keyframes qSwoosh{0%{transform:translateX(-120%) skewX(-18deg)}60%,100%{transform:translateX(220%) skewX(-18deg)}}
+        @keyframes qAurora{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+        @keyframes qOrbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @keyframes qOrbitR{from{transform:rotate(360deg)}to{transform:rotate(0deg)}}
+        @keyframes qFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+        @keyframes qGlow{0%,100%{box-shadow:0 8px 30px -6px rgba(28,159,212,0.45),0 0 0 0 rgba(28,159,212,0.30)}50%{box-shadow:0 12px 44px -4px rgba(41,185,195,0.60),0 0 0 10px rgba(28,159,212,0.06)}}
+        @keyframes qTextShine{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+        @keyframes qScan{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
+        @keyframes qSpark{0%,100%{opacity:.25;transform:scale(.7)}50%{opacity:1;transform:scale(1.1)}}
+        @keyframes qRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        .qShine{background:linear-gradient(100deg,#1F3C84 0%,#1C9FD4 28%,#29B9C3 52%,#1C9FD4 74%,#1F3C84 100%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:qTextShine 4.5s linear infinite}
+        .qOrb{position:relative;border-radius:22px;background:linear-gradient(135deg,#1F3C84,#1C9FD4 45%,#29B9C3);background-size:200% 200%;animation:qAurora 6s ease infinite,qGlow 3.4s ease-in-out infinite,qFloat 5s ease-in-out infinite;overflow:hidden}
+        .qOrb::after{content:'';position:absolute;top:0;left:0;width:40%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent);animation:qSwoosh 3.6s ease-in-out infinite}
+        .qChip{transition:all .2s ease;position:relative;overflow:hidden}
+        .qChip:hover{transform:translateY(-2px);border-color:rgba(28,159,212,0.55)!important;box-shadow:0 10px 22px -10px rgba(28,159,212,0.55)!important;color:#1F3C84!important}
       `}</style>
 
       {/* Quantum sidebar */}
@@ -642,11 +683,15 @@ export default function AskAI() {
             {messages.length===0?(
               <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'20px',animation:'fadeUp .5s ease'}}>
                 {/* Logo orb */}
-                <div style={{width:72,height:72,borderRadius:22,background:'#E8EFF9',border:'0.5px solid #D1DCF0',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:20,boxShadow:'0 4px 16px rgba(31,60,132,0.12)',animation:'scaleIn .4s ease'}}>
-                  <Logo size={32}/>
-                </div>
+            <div style={{position:'relative',marginBottom:22,animation:'scaleIn .5s ease'}}>
+              <div className="qOrb" style={{width:78,height:78,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <div style={{filter:'brightness(0) invert(1)',display:'flex'}}><Logo size={34}/></div>
+              </div>
+              <div style={{position:'absolute',top:-3,right:-3,width:9,height:9,borderRadius:'50%',background:'#29B9C3',boxShadow:'0 0 10px 2px rgba(41,185,195,0.8)',animation:'qSpark 2.4s ease-in-out infinite'}}/>
+              <div style={{position:'absolute',bottom:2,left:-5,width:6,height:6,borderRadius:'50%',background:'#1C9FD4',boxShadow:'0 0 8px 1px rgba(28,159,212,0.8)',animation:'qSpark 2.4s ease-in-out infinite .8s'}}/>
+            </div>
                 <div style={{fontSize:26,fontWeight:800,color:'#0F172A',marginBottom:6,letterSpacing:'-0.03em',textAlign:'center',animation:'fadeUp .5s ease .1s both'}}>
-                  {greeting()}, {firstName}
+                  <span className="qShine">{greeting()}</span>, {firstName}
                 </div>
                 <div style={{fontSize:14,color:'#94A3B8',textAlign:'center',maxWidth:440,lineHeight:1.6,marginBottom:28,animation:'fadeUp .5s ease .15s both'}}>
                   Your marketing intelligence layer. Ask anything about Meta Ads, QL Ops, or WhatsApp — or generate a full report.
@@ -654,7 +699,7 @@ export default function AskAI() {
                 {/* quick prompts */}
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',maxWidth:620,animation:'fadeUp .5s ease .2s both'}}>
                   {QUICK.map((q,i)=>(
-                    <button key={i} onClick={()=>send(q.text)} className="qp"
+                    <button key={i} onClick={()=>send(q.text)} className="qp qChip"
                       style={{padding:'8px 14px',borderRadius:20,border:`0.5px solid #E5E7EB`,background:'#fff',color:'#475569',fontSize:12.5,fontWeight:500,cursor:'pointer',fontFamily:FONT,transition:'all .2s',whiteSpace:'nowrap'}}>
                       {q.label}
                     </button>
@@ -673,8 +718,8 @@ export default function AskAI() {
                       </div>
                     ):(
                       <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
-                        <div style={{width:28,height:28,borderRadius:8,background:'#E8EFF9',border:'0.5px solid #D1DCF0',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>
-                          <Logo size={14}/>
+                        <div className="qOrb" style={{width:30,height:30,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>
+                          <div style={{filter:'brightness(0) invert(1)',display:'flex'}}><Logo size={15}/></div>
                         </div>
                         <div style={{flex:1,minWidth:0}}>
                           {m.content?(
@@ -693,10 +738,8 @@ export default function AskAI() {
                               )}
                             </>
                           ):(
-                            /* typing dots */
-                            <div style={{display:'flex',alignItems:'center',gap:5,padding:'12px 0'}}>
-                              {[0,1,2].map(d=><div key={d} style={{width:7,height:7,borderRadius:'50%',background:'#94A3B8',animation:`blink 1.2s infinite ${d*0.15}s`}}/>)}
-                            </div>
+                            /* magic loader */
+                            <MagicLoader/>
                           )}
                         </div>
                       </div>
@@ -772,8 +815,8 @@ export default function AskAI() {
                     ))}
                   </div>
                   <button onClick={()=>send()} disabled={!input.trim()||loading} className="sendbtn"
-                    style={{width:36,height:36,borderRadius:10,border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:input.trim()&&!loading?'pointer':'not-allowed',background:input.trim()&&!loading?NAVY:'#E5E7EB',transition:'all .2s'}}>
-                    <Ico n={loading?'refresh':'send'} s={15} c="#fff" sw={2}/>
+                    style={{width:36,height:36,borderRadius:10,border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:input.trim()&&!loading?'pointer':'not-allowed',background:input.trim()&&!loading?'linear-gradient(135deg,#1F3C84,#1C9FD4 60%,#29B9C3)':'#E5E7EB',boxShadow:input.trim()&&!loading?'0 6px 16px -4px rgba(28,159,212,0.6)':'none',transition:'all .2s'}}>
+                    <span style={loading?{display:'flex',animation:'spin 0.9s linear infinite'}:{display:'flex'}}><Ico n={loading?'refresh':'send'} s={15} c="#fff" sw={2}/></span>
                   </button>
                 </div>
               </div>
