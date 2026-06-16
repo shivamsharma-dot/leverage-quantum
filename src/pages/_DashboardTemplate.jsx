@@ -4,6 +4,14 @@
 // and wire it into the sidebar + router like the other pages.
 // All styling comes from the shared kit so the page is premium by default.
 // See DESIGN_SYSTEM.md at repo root.
+// 
+// >> BRAND COLOR RULE (rigid): charts use ONLY the on-brand palette
+//    navy -> blue -> cyan -> green  (C.navy / C.blue / C.cyan / C.green,
+//    or brandColor(i) / BRAND_RAMP which cycle the same ramp).
+//    NEVER use C.amber (#F59E0B) or any orange/red/yellow accent.
+// >> SHELL RULE: outer wrapper = display:flex; height:100vh; overflow:hidden.
+//    Scrollable content lives in an inner div: flex:1; overflowY:auto.
+//    This keeps the shared Sidebar + page header fixed while content scrolls.
 // ---------------------------------------------------------------------------
 import React from 'react';
 import {

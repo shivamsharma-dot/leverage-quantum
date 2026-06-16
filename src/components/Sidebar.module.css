@@ -354,3 +354,17 @@
     padding-top: 52px !important;
   }
 }
+
+
+/* Settings gear: navigation action, visually distinct from destructive Sign out */
+.gearBtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 8px;
+  color: #6B7280; background: transparent; border: none; cursor: pointer;
+  text-decoration: none; transition: background .15s, color .15s;
+}
+.gearBtn:hover { color: #1F3C84; background: #E8EFF9; }
+.gearBtnActive { color: #1F3C84; background: #E8EFF9; }
+.footDivider {
+  width: 1px; height: 18px; background: #E5E7EB; margin: 0 2px; flex-shrink: 0;
+}
