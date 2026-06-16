@@ -506,3 +506,8 @@ Wired in 4 places: App.jsx import + `<Route path="/dashboard/referral" dashboard
 Sidebar NAV item, PAGE_LIST access entry (id 'referral', adminOnly:false), ICON_MAP +
 new ReferralIcon (share-node glyph). Build verified clean (npm run build ✓ 7.39s).
 DashboardHome.jsx stash preserved/popped as usual.
+
+Follow-up fix (commit `0f62c5b`): RankedBars needs `max` + `total` props to render bar
+widths and percentages — initial Referral call omitted them (bars empty, pct showed '–').
+Fixed by passing max={statusRows[0]?.count} total={sum of counts}. Verified live: bars
+fill proportionally + percentages show. Reminder for future kit usage: always pass max+total to RankedBars.
