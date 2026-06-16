@@ -92,16 +92,16 @@ const Sparkline = ({ data, color='#1C9FD4', height=28, width=72 }) => {
 
 const Card = ({ title, sub, children, action, noPad }) => (
   <div style={{
-    background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 14,
-    overflow: 'hidden', boxShadow: '0 1px 4px rgba(15,23,42,0.04)',
+    background: '#fff', border: '1px solid #EEF1F6', borderRadius: 16, overflow: 'hidden',
+    boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 12px 28px -16px rgba(16,24,40,0.16)',
   }}>
     <div style={{
-      padding: '14px 20px 12px', borderBottom: `0.5px solid #F1F5F9`,
+      padding: '15px 20px 13px', borderBottom: '1px solid #F1F4F9',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
     }}>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, fontFamily: FONT }}>{title}</div>
-        {sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 2, fontFamily: FONT }}>{sub}</div>}
+        <div style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.2px', color: '#0F1B33', fontFamily: FONT }}>{title}</div>
+        {sub && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 3, fontFamily: FONT }}>{sub}</div>}
       </div>
       {action && <div style={{ flexShrink: 0 }}>{action}</div>}
     </div>
@@ -916,11 +916,11 @@ export default function LeadQualificationDashboard() {
   const onSearch = v  => { setSearch(v); setPage(0) }
 
   const thS = col => ({
-    fontSize: 10, fontWeight: 700, color: C.muted, letterSpacing: '0.07em',
-    textTransform: 'uppercase', padding: '10px 12px', cursor: 'pointer',
+    fontSize: 10, fontWeight: 800, color: sortCol === col ? '#1F3C84' : '#64748B', letterSpacing: '0.07em',
+    textTransform: 'uppercase', padding: '11px 12px', cursor: 'pointer', textAlign: 'left',
     userSelect: 'none', fontFamily: FONT, whiteSpace: 'nowrap',
-    background: sortCol === col ? 'var(--navy-tint)' : 'transparent',
-    borderBottom: `0.5px solid ${C.border}`,
+    background: sortCol === col ? '#EEF2FB' : 'transparent',
+    borderBottom: '1px solid #E8ECF3', transition: 'background .15s',
   })
 
   const sendReport = async () => {
@@ -1428,7 +1428,7 @@ export default function LeadQualificationDashboard() {
                           const start = Math.max(0, Math.min(page - 3, totalPages - 7)); const p = start + i
                           return (
                             <button key={p} onClick={() => setPage(p)}
-                              style={{ width: 32, height: 32, borderRadius: 8, border: `0.5px solid ${p === page ? C.navy : C.border}`, background: p === page ? C.navy : 'var(--card)', color: p === page ? '#fff' : C.text, fontSize: 12, fontWeight: p === page ? 700 : 400, fontFamily: FONT, cursor: 'pointer' }}>
+                              style={{ width: 32, height: 32, borderRadius: 8, border: p === page ? 'none' : '1px solid #E8ECF3', background: p === page ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : '#fff', color: p === page ? '#fff' : '#475569', fontSize: 12, fontWeight: p === page ? 700 : 500, fontFamily: FONT, cursor: 'pointer', boxShadow: p === page ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none', transition: 'all .15s' }}>
                               {p + 1}
                             </button>
                           )
