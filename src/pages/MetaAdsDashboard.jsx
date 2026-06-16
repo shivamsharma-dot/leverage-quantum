@@ -555,7 +555,7 @@ function CreativesTab({ data }) {
             { label:'AVG FREQ', value:filteredTotals.frequency.toFixed(2), accent:'#6B7280' },
             { label:'ACTIVE', value:filteredTotals.active.toLocaleString('en-IN'), accent:'#4CAE6F' },
           ].map(m => (
-            <div key={m.label} style={{ display:'flex',flexDirection:'column',gap:2,flex:'1 1 0',minWidth:115,padding:'2px 14px',borderLeft:`3px solid ${m.accent}` }}>
+            <div key={m.label} style={{ display:'flex',flexDirection:'column',gap:2,flex:'1 1 0',minWidth:130,padding:'2px 14px',borderLeft:`3px solid ${m.accent}` }}>
               <span style={{ fontSize:10,fontWeight:700,color:'#9CA3AF',letterSpacing:0.3 }}>{m.label}</span>
               <span style={{ fontSize:16,fontWeight:700,color:'#111827',whiteSpace:'nowrap' }}>{m.value}</span>
             </div>
