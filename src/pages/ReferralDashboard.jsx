@@ -181,7 +181,7 @@ export default function ReferralDashboard() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             <Card title="Top student statuses" sub="largest groups">
-              <RankedBars data={statusRows} labelKey="name" colorFn={brandColor} />
+              <RankedBars data={statusRows} labelKey="name" max={statusRows[0]?.count || 0} total={statusRows.reduce((a,b)=>a+b.count,0)} colorFn={brandColor} />
             </Card>
             <Card title="Source split">
               <div style={{ width: '100%', height: 240, display: 'flex', alignItems: 'center' }}>
