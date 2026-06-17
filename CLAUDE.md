@@ -793,3 +793,9 @@ Revamped src/components/Sidebar.module.css into a premium FLOATING sidebar: deta
 - Referral data: created_at format is D-Mon-YYYY (e.g. 8-Nov-2025); parseD regex /^(d{1,2})-([A-Za-z]{3})-(d{4})$/ + MON map already handle it. Date filter for header is buildable on top of parseD/created_at.
 - QL Ops budget range chart (LeadQualificationDashboard.jsx L1258): margin left:-8 -> left:6, barCategoryGap 24%% -> 18% to stop first-bar clipping/misalignment.
 - NOTE: production deploy lagged badly during this work (served old bundle index-DDfedRkP.js); changes built+pushed, verify live once deploy catches up.
+
+## Session: headers + loader + sidebar toggle + referral dates
+- Sidebar collapsed toggle: in-flow (position:static, centered) so it no longer overlaps Ask AI; expand/collapse animation flattened (no nav drag).
+- Uniform FLOATING headers on all pages (margin 12px 14px 0, borderRadius 14, 1px #EEF1F6 border, soft shadow, no borderBottom): MTD/GoogleAds/WhatsApp/QL inline; Revenue/ROAS/ChannelMix inline wrapper; MetaAds via .header module override; Referral done earlier.
+- Loader: SkeletonLoader.jsx InlineLoader rewritten to a single brand spinner (.spinner + @keyframes qspin), removed QUANTUM wordmark. DashboardSkeleton now returns the spinner so skeleton never shows alongside the loader.
+- Referral: added date-range controls (All/MTD/7D/30D) in header, wired to created_at via parseD; filter window anchored to max created_at in data.
