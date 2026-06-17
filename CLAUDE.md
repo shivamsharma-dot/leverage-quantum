@@ -635,3 +635,15 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 - getTarget(): captures the FULL scrollable page, not just viewport. Panel shell is flex row: <Sidebar/> + flex:1 overflowY:auto content div. Heuristic picks widest+tallest scrollable div (>700w, scrollHeight>=viewport). First version fell back to BODY (only 941px = viewport, cut off below fold); fixed in c7ca746 -> now resolves the 3757px content container. Verified live: resolvedScrollHeight 3757 vs viewport 941.
 - Built 6.25s / 6.31s. Verified live on QL Ops + MTD: button renders, menu opens, Copy-to-clipboard runs (spinner->done, no fatal console errors). NOTE: html-to-image logs benign "Error inlining remote css / cssRules SecurityError" for cross-origin Google Fonts CSS — caught internally, capture still succeeds.
 - DashboardHome.jsx kept uncommitted (stash/pop on both pushes). HEAD = c7ca746.
+
+## 2026-06-17 — Snapshot tool v2: modes + crop + preview (commit 8875ced)
+- USER: full-page capture must work; add CROP/region select where user drags their own view; add any extra-ordinary feature.
+- Rewrote src/components/SnapshotTool.jsx (303 lines). FAB menu now has 3 modes:
+  * Full page    -> captureNode(getContentRoot()) at scrollWidth x scrollHeight (whole dashboard, below fold included).
+  * Visible area -> captureViewport(): toPng(root) clipped to clientWidth x window.innerHeight, style transform translate(-scrollLeft,-scrollTop) so only on-screen content renders.
+  * Select region-> fullscreen crop overlay (navy dim, crosshair). onMouseDown/Move/Up draws a cyan selection rect with live "W x H" badge. On release: captureViewport() then cropDataUrl() draws the selected rect onto a canvas (rect translated screen->content-root-local by subtracting root.getBoundingClientRect, scaled by pixelRatio 2). Esc cancels (keydown effect).
+- EXTRA feature: result PREVIEW modal. After any capture, shows the PNG thumbnail + header "Snapshot ready / <Page> · <stamp>" with Copy + Download PNG actions. Click backdrop or x to dismiss. Toasts unchanged (green ok / navy fail, 3.2s).
+- Brand only: navy/blue/cyan/green; #94A3B8 used for muted subtitle TEXT only (not data). data-snapshot-ignore on overlay+modal+FAB so none appear in shots. Real middot char in 2 places (grep u-literal=0, dots=2).
+- Built 6.43s. Pushed 8875ced. Verified LIVE on QL Ops: menu shows 3 modes; Select region cropped the Provider-share card exactly; Visible area captured on-screen content; preview modal + Copy worked (no console errors). 
+- NOTE re clipboard: works in https Chromium; falls back to "use download" toast otherwise.
+- DashboardHome.jsx kept uncommitted (stash/pop). HEAD = 8875ced.
