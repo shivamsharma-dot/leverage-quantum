@@ -561,3 +561,12 @@ Fixes (src/pages/AskAI.jsx, pushes 8f5a83c then e4cfe08 -> main):
 - Inner rail buttons (.rb / History/Prompts/Memories/Logs): active state -> brand gradient pill + glowing gradient marker bar.
 All backend wiring untouched (Supabase, send/stream, PROMPTS, memories, logs). Build OK; verified live (single magic orb during load, real data tables render, fixed shell). DashboardHome.jsx kept stashed/uncommitted as always.
 Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>' -> 'Unterminated regular expression' build error; removed the 2 orphan lines, then built clean.
+
+## 2026-06-17 — Ask AI deep polish round 3 (commit 7d5ac4b)
+- Inner rail (History/Prompts/Memory/Logs) FULLY rebuilt: rounded 14px pills, active = navy->blue gradient (linear-gradient(145deg,#1F3C84,#1C9FD4)) with white icon+label + glowing left accent bar + shadow; inactive grey #8A94A6; hover tint rgba(28,159,212,0.07). "Memories" label shortened to "Memory".
+- Markdown fixes (function Markdown / ih at lines ~93-124): (1) headings rendered color:'#fff' (white-on-white, invisible) -> now navy #1F3C84; (2) added emoji-strip regex at start of ih() to remove emoji from AI output; bold/**...** already worked via ih, now verified clean.
+- Memory panel: premium empty state (gradient icon chip + navy "No memories yet" + helper subtitle) replacing faint grey text; delete/trash icon changed off RED rgba(255,80,80) -> neutral grey #94A3B8 (brand compliance).
+- Composer ("Message Ask AI"): placeholder color #CBD5E1 (near-white, looked broken) -> readable #9AA7B8; container gets focus glow (border rgba(28,159,212,0.55) + blue shadow) when input present, radius 16.
+- VERIFIED LIVE: gradient rail pill, premium memory empty state, navy readable headings, no emojis, clean table, bold works, single magic loader orb.
+- NOTE (backend, NOT frontend): chat history only lasting ~2 days is a Supabase-side retention/RLS/cron issue on ask_ai_conversations — frontend loads limit=60 with no date cutoff. Needs DB-side fix. Memory persistence TESTED working (survives reload).
+- All backend wiring untouched; DashboardHome.jsx kept uncommitted (M).
