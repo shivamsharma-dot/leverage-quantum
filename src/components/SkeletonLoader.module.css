@@ -101,3 +101,15 @@
   letter-spacing: 2px;
   color: #fff;
 }
+
+/* === simple universal spinner === */
+.spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid #E6ECF7;
+  border-top-color: #1C9FD4;
+  border-right-color: #1F3C84;
+  animation: qspin 0.7s linear infinite;
+}
+@keyframes qspin { to { transform: rotate(360deg); } }

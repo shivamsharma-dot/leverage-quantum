@@ -70,46 +70,17 @@ export function TableSkeleton({ rows = 6, cols = 5 }) {
 }
 
 // Unified, brand-styled full-page loader used across every dashboard page
-export function DashboardSkeleton() {
+
+// Simple universal loader — a single brand-colored spinner (no skeleton, no wordmark)
+export function InlineLoader({ label, height = 300 }) {
   return (
-    <div className={styles.wrap}>
-      {/* Branded header */}
-      <div className={styles.head}>
-        <div className={styles.brandChip}>
-          <span className={styles.brandDot}/>
-          <span className={styles.brandWord}>QUANTUM</span>
-        </div>
-        <div style={{ flex:1 }}>
-          <Bone w={210} h={16} style={{ marginBottom: 8 }}/>
-          <Bone w={120} h={10}/>
-        </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <Bone w={108} h={32} radius={8}/>
-          <Bone w={108} h={32} radius={8}/>
-          <Bone w={90}  h={32} radius={8}/>
-        </div>
-      </div>
-      <KPIGridSkeleton count={6}/>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap: 14 }}>
-        <ChartSkeleton/>
-        <ChartSkeleton/>
-      </div>
-      <TableSkeleton/>
+    <div style={{ minHeight: height, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, width: '100%' }}>
+      <span className={styles.spinner} />
+      {label ? <div style={{ color: '#647488', fontSize: 12.5, fontWeight: 600, letterSpacing: 0.2 }}>{label}</div> : null}
     </div>
   )
 }
 
+// Skeleton entry points now show the same simple loader so the shimmer never appears alongside it
+export function DashboardSkeleton() { return <InlineLoader height={420} /> }
 export default DashboardSkeleton
-
-// Compact branded loader for in-panel / per-tab loading states
-export function InlineLoader({ label = 'Loading', height = 300 }) {
-  return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14, height }}>
-      <div className={styles.brandChip}>
-        <span className={styles.brandDot}/>
-        <span className={styles.brandWord}>QUANTUM</span>
-      </div>
-      <div style={{ color:'#647488', fontSize:12.5, fontWeight:600, letterSpacing:.3, fontFamily:"'Outfit','Inter',system-ui,sans-serif" }}>{label}</div>
-    </div>
-  )
-}

@@ -456,3 +456,8 @@
   z-index: 1 !important;
 }
 .sidebarCollapsed .collapseBtn:hover { transform: none !important; }
+
+/* === kill janky expand/collapse drag animation === */
+.collapseBtn, .collapseBtnExpanded { transition: background 0.12s ease, color 0.12s ease !important; }
+.nav, .collapsedNav, .navItem, .navItem a { animation: none !important; }
+.nav .navItem { transition: background 0.12s ease, color 0.12s ease !important; }

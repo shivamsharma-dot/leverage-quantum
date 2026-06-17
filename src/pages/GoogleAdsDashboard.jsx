@@ -296,7 +296,7 @@ export default function GoogleAdsDashboard(){
       <Sidebar/>
       <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
 
-        <div style={{background:'#fff',borderBottom:'0.5px solid #E5E7EB',padding:'0 24px',flexShrink:0}}>
+        <div style={{margin:'12px 14px 0',borderRadius:14,border:'1px solid #EEF1F6',boxShadow:'0 1px 3px rgba(31,60,132,0.06)',background:'#fff',padding:'0 24px',flexShrink:0}}>
           <div style={{height:56,display:'flex',alignItems:'center',gap:16}}>
             <div style={{flex:1}}>
               <div style={{fontSize:11,color:'#94A3B8',letterSpacing:'0.04em',textTransform:'uppercase',marginBottom:2}}>Analytics / Google Ads</div>
