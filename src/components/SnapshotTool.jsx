@@ -165,7 +165,9 @@ function brandImage(dataUrl, title) {
   })
 }
 
-// Stack several branded PNGs into one tall sheet for batch capture.
+// Stack several branded PNGs into one tall sheet for batch capture. Caps the
+// final canvas to a browser-safe height by scaling everything down uniformly.
+const MAX_SHEET = 15000
 function stitchVertical(dataUrls) {
   return new Promise(async (resolve) => {
     const imgs = await Promise.all(dataUrls.map((u) => new Promise((r) => {
@@ -174,15 +176,23 @@ function stitchVertical(dataUrls) {
     const ok = imgs.filter(Boolean)
     if (!ok.length) return resolve(null)
     const gap = 28
-    const W = Math.max(...ok.map((i) => i.width))
-    const H = ok.reduce((a, i) => a + i.height, 0) + gap * (ok.length + 1)
+    const baseW = Math.max(...ok.map((i) => i.width))
+    const baseH = ok.reduce((a, i) => a + i.height, 0) + gap * (ok.length + 1)
+    const scale = Math.min(1, MAX_SHEET / baseH)
+    const W = Math.round(baseW * scale)
+    const H = Math.round(baseH * scale)
     const canvas = document.createElement('canvas')
     canvas.width = W; canvas.height = H
     const ctx = canvas.getContext('2d')
     ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H)
-    let y = gap
-    ok.forEach((i) => { ctx.drawImage(i, Math.round((W - i.width) / 2), y); y += i.height + gap })
-    resolve(canvas.toDataURL('image/png'))
+    let y = Math.round(gap * scale)
+    ok.forEach((i) => {
+      const w = Math.round(i.width * scale)
+      const h = Math.round(i.height * scale)
+      ctx.drawImage(i, Math.round((W - w) / 2), y, w, h)
+      y += h + Math.round(gap * scale)
+    })
+    try { resolve(canvas.toDataURL('image/png')) } catch { resolve(null) }
   })
 }
 
@@ -237,7 +247,9 @@ export default function SnapshotTool() {
       setBatch({ done: BATCH_PAGES.length, total: BATCH_PAGES.length, label: 'Stitching' })
       const sheet = await stitchVertical(shots)
       navigate(startPath)
-      setResult(sheet); flash('Captured ' + shots.length + ' pages')
+      if (sheet) { setResult(sheet); flash('Captured ' + shots.length + ' pages') }
+      else if (shots.length) { setResult(shots[0]); flash('Captured ' + shots.length + ' pages (showing first)') }
+      else flash('Batch produced no image', false)
     } catch {
       navigate(startPath)
       flash('Batch failed, please retry', false)
