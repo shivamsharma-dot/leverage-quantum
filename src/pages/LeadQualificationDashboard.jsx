@@ -715,18 +715,23 @@ export default function LeadQualificationDashboard() {
     (selSource === 'All' || r.source === selSource)
   ), [dateFilteredRows, selProvider, selSource]);
 
-  // Day-on-day breakdown: group filtered rows by qualified_date
+  // Day-on-day breakdown: group filtered rows by normalized qualified_date (YYYY-MM-DD)
   const dayOnDay = useMemo(() => {
     const map = {};
     filtered.forEach(r => {
-      const d = r.qualified_date;
-      if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
-      if (!map[d]) map[d] = { date: d, Futwork: 0, 'Futwork AI': 0, Superbot: 0, total: 0 };
-      map[d][r.provider] = (map[d][r.provider] || 0) + r.count;
-      map[d].total += r.count;
+      const ms = r.qualified_date;
+      if (!ms) return;
+      let dd;
+      if (/^\d{4}-\d{2}-\d{2}/.test(ms)) { const [y, mo, dy] = String(ms).slice(0, 10).split('-').map(Number); dd = new Date(y, mo - 1, dy); }
+      else { dd = new Date(ms); }
+      if (isNaN(dd)) return;
+      const key = dd.getFullYear() + '-' + String(dd.getMonth() + 1).padStart(2, '0') + '-' + String(dd.getDate()).padStart(2, '0');
+      if (!map[key]) map[key] = { date: key, Futwork: 0, 'Futwork AI': 0, Superbot: 0, total: 0 };
+      map[key][r.provider] = (map[key][r.provider] || 0) + r.count;
+      map[key].total += r.count;
     });
     return Object.values(map).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 31);
-  }, [filtered])
+  }, [filtered]);
 
   // 5. KPI totals — use filtered so provider/source dropdowns affect the cards
   const totals = useMemo(() => {
@@ -1355,7 +1360,7 @@ export default function LeadQualificationDashboard() {
               {/* ── ROW 6: TOP CAMPAIGNS ── */}
               <div style={{ marginBottom: 16 }}>
                 <div style={{ marginBottom: 16 }}>
-            <Card title="Day-on-day qualified" sub="Daily qualified leads by provider \u00b7 most recent first">
+            <Card title="Day-on-day qualified" sub="Daily qualified leads by provider · most recent first">
               {dayOnDay.length === 0 ? (
                 <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT, padding: '8px 0' }}>No daily data for this selection</div>
               ) : (
@@ -1373,7 +1378,7 @@ export default function LeadQualificationDashboard() {
                     <tbody>
                       {dayOnDay.map((row, i) => {
                         const dt = new Date(row.date + 'T00:00:00');
-                        const lbl = isNaN(dt) ? row.date : dt.getDate() + ' ' + dt.toLocaleString('en-US', { month: 'short' }) + ' \u00b7 ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
+                        const lbl = isNaN(dt) ? row.date : dt.getDate() + ' ' + dt.toLocaleString('en-US', { month: 'short' }) + ' · ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
                         return (
                           <tr key={row.date} style={{ background: i % 2 ? '#F8FAFC' : '#fff' }}>
                             <td style={{ textAlign: 'left', padding: '8px 10px', fontSize: 12.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap' }}>{lbl}</td>
