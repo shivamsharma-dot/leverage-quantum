@@ -429,6 +429,7 @@ export default function AskAI() {
         .qOrb::after{content:'';position:absolute;top:0;left:0;width:40%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent);animation:qSwoosh 3.6s ease-in-out infinite}
         .qChip{transition:all .2s ease;position:relative;overflow:hidden}
         .qChip:hover{transform:translateY(-2px);border-color:rgba(28,159,212,0.55)!important;box-shadow:0 10px 22px -10px rgba(28,159,212,0.55)!important;color:#1F3C84!important}
+        .rb:hover{background:rgba(28,159,212,0.07)!important}
       `}</style>
 
       {/* Quantum sidebar */}
@@ -651,10 +652,10 @@ export default function AskAI() {
           ].map(r=>{
             const on=rail===r.id
             return <button key={r.id} onClick={()=>{toggleRail(r.id);if(r.id==='logs')loadLogs()}} title={r.label} className="rb"
-              style={{width:44,height:44,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,border:'none',borderRadius:10,cursor:'pointer',background:on?'#E3F5FD':'transparent',transition:'background .15s',position:'relative',padding:'4px 2px'}}>
+              style={{width:44,height:44,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,border:'none',borderRadius:12,cursor:'pointer',background:on?'linear-gradient(135deg,rgba(28,159,212,0.16),rgba(41,185,195,0.12))':'transparent',boxShadow:on?'0 4px 12px -6px rgba(28,159,212,0.55)':'none',transition:'all .18s ease',position:'relative',padding:'4px 2px'}}>
               <Ico n={r.icon} s={15} c={on?BLUE:'#9CA3AF'}/>
               <span style={{fontSize:8.5,fontWeight:on?700:500,color:on?BLUE:'#9CA3AF',letterSpacing:'0.03em',fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1}}>{r.label}</span>
-              {on&&<div style={{position:'absolute',right:-1,top:'50%',transform:'translateY(-50%)',width:2,height:20,background:BLUE,borderRadius:2}}/>}
+              {on&&<div style={{position:'absolute',right:-1,top:'50%',transform:'translateY(-50%)',width:3,height:22,background:'linear-gradient(#1C9FD4,#29B9C3)',borderRadius:3,boxShadow:'0 0 8px rgba(28,159,212,0.7)'}}/>}
             </button>
           })}
         </div>
@@ -672,8 +673,8 @@ export default function AskAI() {
               <Ico n="new" s={13} c="#9CA3AF"/>
             </button>
             <div style={{flex:1}}/>
-            <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 10px',borderRadius:20,background:connected?'rgba(74,174,111,0.12)':'rgba(255,255,255,0.06)',border:`1px solid ${connected?'rgba(74,174,111,0.3)':borderColor}`}}>
-              <div style={{width:6,height:6,borderRadius:'50%',background:connected?GREEN:'rgba(255,255,255,0.2)',animation:connected?'pulse 2s infinite':''}}/>              <span style={{fontSize:11,fontWeight:600,color:connected?GREEN:'rgba(255,255,255,0.3)'}}>{connected?'Meta Ads connected':'Meta not connected'}</span>
+            <div style={{display:'flex',alignItems:'center',gap:7,padding:'5px 12px',borderRadius:20,background:connected?'linear-gradient(135deg,rgba(76,174,111,0.14),rgba(41,185,195,0.10))':'rgba(255,255,255,0.06)',border:`1px solid ${connected?'rgba(76,174,111,0.35)':borderColor}`,boxShadow:connected?'0 2px 10px -4px rgba(76,174,111,0.5)':'none'}}>
+              <div style={{width:7,height:7,borderRadius:'50%',background:connected?GREEN:'rgba(255,255,255,0.2)',boxShadow:connected?`0 0 0 3px rgba(76,174,111,0.18)`:'none',animation:connected?'qGlow 2.4s infinite':''}}/>              <span style={{fontSize:11,fontWeight:700,letterSpacing:'.01em',color:connected?GREEN:'rgba(255,255,255,0.3)'}}>{connected?'Meta Ads connected':'Meta not connected'}</span>
             </div>
 
           </div>
@@ -712,7 +713,7 @@ export default function AskAI() {
                   <div key={k} style={{marginBottom:24,animation:k===messages.length-1||k===messages.length-2?'fadeUp .3s ease':'none'}}>
                     {m.role==='user'?(
                       <div style={{display:'flex',justifyContent:'flex-end'}}>
-                        <div style={{maxWidth:'75%',background:'#1F3C84',border:'none',borderRadius:'16px 16px 4px 16px',padding:'12px 16px'}}>
+                        <div style={{maxWidth:'74%',background:'linear-gradient(135deg,#1F3C84,#2456B8)',border:'none',borderRadius:'18px 18px 5px 18px',padding:'11px 16px',boxShadow:'0 6px 18px -6px rgba(31,60,132,0.55)'}}>
                           <div style={{fontSize:14,color:'#fff',lineHeight:1.65,whiteSpace:'pre-wrap'}}>{m.content}</div>
                         </div>
                       </div>
@@ -755,25 +756,25 @@ export default function AskAI() {
           <div style={{padding:'12px 20px 16px',flexShrink:0}}>
             <div style={{maxWidth:820,margin:'0 auto'}}>
             {/* Schedule Strip */}
-            <div style={{display:'flex',alignItems:'center',gap:0,marginBottom:8,padding:'7px 12px',background:'rgba(255,255,255,0.04)',border:'0.5px solid rgba(255,255,255,0.08)',borderRadius:8,overflow:'hidden'}}>
-              <span style={{fontSize:10,fontWeight:700,letterSpacing:'.06em',color:'rgba(255,255,255,0.3)',textTransform:'uppercase',marginRight:10,flexShrink:0}}>Auto-sends</span>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:18,marginBottom:9,padding:'7px 14px',background:'linear-gradient(135deg,rgba(31,60,132,0.05),rgba(28,159,212,0.05))',border:'0.5px solid rgba(28,159,212,0.18)',borderRadius:10,flexWrap:'wrap'}}>
+              <span style={{fontSize:9.5,fontWeight:800,letterSpacing:'.1em',color:'#94A3B8',textTransform:'uppercase'}}>Auto-send</span>
               {[
-                {color:BLUE,  bg:'rgba(28,159,212,0.12)', label:'Daily',   desc:'Every day · 9:30 AM IST'},
-                {color:GREEN, bg:'rgba(76,174,111,0.12)', label:'Weekly',  desc:'Every Monday · 9:30 AM IST'},
-                {color:NAVY,  bg:'rgba(31,60,132,0.2)',   label:'Monthly', desc:'1st of month · 9:30 AM IST'},
-              ].map(({color,bg,label,desc}) => (
-                <div key={label} style={{display:'flex',alignItems:'center',gap:5,marginRight:16,flexShrink:0}}>
-                  <div style={{width:6,height:6,borderRadius:'50%',background:color,flexShrink:0}}/>
-                  <span style={{fontSize:11,fontWeight:700,color,fontFamily:FONT}}>{label}</span>
-                  <span style={{fontSize:11,color:'rgba(255,255,255,0.35)',fontFamily:FONT}}>{desc}</span>
+                {color:BLUE,  label:'Daily',   desc:'Every day · 9:30 AM'},
+                {color:GREEN, label:'Weekly',  desc:'Mondays · 9:30 AM'},
+                {color:NAVY,  label:'Monthly', desc:'1st · 9:30 AM'},
+              ].map(({color,label,desc}) => (
+                <div key={label} style={{display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{width:7,height:7,borderRadius:'50%',background:color,boxShadow:`0 0 0 3px ${color}1f`,flexShrink:0}}/>
+                  <span style={{fontSize:11.5,fontWeight:700,color:'#475569',fontFamily:FONT}}>{label}</span>
+                  <span style={{fontSize:10.5,color:'#94A3B8',fontFamily:FONT}}>{desc}</span>
                 </div>
               ))}
             </div>
 
             {/* Send Report Bar */}
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,padding:'8px 12px',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,boxShadow:'0 1px 4px rgba(15,23,42,0.04)'}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              <span style={{fontSize:12,fontWeight:600,color:'#64748B',fontFamily:FONT,flex:1}}>Send Report</span>
+            <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:10,padding:'9px 13px',background:'linear-gradient(135deg,#FFFFFF,#F7FBFE)',border:'0.5px solid rgba(28,159,212,0.22)',borderRadius:12,boxShadow:'0 6px 18px -10px rgba(31,60,132,0.22)'}}>
+              <span style={{width:24,height:24,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(135deg,#1F3C84,#1C9FD4)',boxShadow:'0 3px 8px -3px rgba(28,159,212,0.6)',flexShrink:0}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span>
+              <span style={{fontSize:12.5,fontWeight:700,color:'#1F3C84',fontFamily:FONT,flex:1}}>Send Report</span>
               {sendMsg&&<span style={{fontSize:11.5,fontWeight:600,color:sendMsg.startsWith('✓')?'#059669':'#DC2626'}}>{sendMsg}</span>}
               <div style={{position:'relative'}}>
                 <button onClick={()=>setSendDropOpen(v=>!v)}
