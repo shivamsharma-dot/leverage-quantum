@@ -825,7 +825,9 @@ export default function AskAI() {
                 {sendingReport?'Sending…':'Send'}
               </button>
             </div>
-              <div style={{background:'#fff',border:`1px solid ${input?'rgba(28,159,212,0.55)':borderColor}`,borderRadius:16,padding:'12px 14px',transition:'all .2s',boxShadow:input?'0 4px 20px -4px rgba(28,159,212,0.25)':'0 2px 12px rgba(15,23,42,0.05)'}}>
+              <div style={{position:'relative',background:'#fff',border:'none',borderRadius:16,padding:'14px 14px 12px',transition:'all .2s',boxShadow:input?'0 6px 24px -6px rgba(28,159,212,0.28), 0 1px 3px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)',overflow:'hidden'}}>
+                {/* QL Ops-style brand gradient top accent bar */}
+                <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:input?1:0.85,transition:'opacity .2s'}}/>
                 <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…"
                   onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
                   onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
