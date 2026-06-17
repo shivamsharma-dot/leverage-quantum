@@ -719,9 +719,11 @@ export default function AskAI() {
                       </div>
                     ):(
                       <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+                        {m.content&&(
                         <div className="qOrb" style={{width:30,height:30,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>
                           <div style={{filter:'brightness(0) invert(1)',display:'flex'}}><Logo size={15}/></div>
                         </div>
+                        )}
                         <div style={{flex:1,minWidth:0}}>
                           {m.content?(
                             <>
