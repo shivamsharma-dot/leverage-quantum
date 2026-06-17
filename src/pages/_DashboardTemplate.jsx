@@ -53,7 +53,7 @@ export default function _DashboardTemplate() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
         <Card title="Ranked breakdown">
-          <RankedBars data={rankedRows} labelKey="name" />
+          <RankedBars data={rankedRows} labelKey="name" max={rankedRows[0]?.count || 0} total={rankedRows.reduce((a, b) => a + b.count, 0)} colorFn={brandColor} showRank />
         </Card>
         <Card title="Distribution">
           {/* <YourDonut /> using BRAND_RAMP */}

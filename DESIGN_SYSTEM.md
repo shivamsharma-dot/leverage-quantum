@@ -36,7 +36,7 @@ Use `fontFamily: FONT` on headings, values, labels, table cells.
 ### Colour object
 ```js
 const C = {
-  navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', amber:'#F59E0B',
+  navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', // NOTE: amber:'#F59E0B' exists in code but is OFF-BRAND — never use it on any data element
   navyBg:'#E8EFF9', blueBg:'#E3F5FD', cyanBg:'#E4F8F9', greenBg:'#E9F8EF',
   border:'var(--card-border)', text:'var(--text)', muted:'var(--text3)',
   sub:'var(--text2)', bg:'var(--bg)',
@@ -94,7 +94,7 @@ The one premium metric card used across Meta Ads, WhatsApp, and QL Ops. Reuse id
   - Gradient **icon square** 30x30, white icon inside, shadow `0 4px 10px -2px ${accent}66`.
   - Label: uppercase, `fontSize 10.5, fontWeight 700`, muted.
   - Value: `fontSize 26, fontWeight 800, letterSpacing -0.6px, color #0F1B33`, tabular nums.
-  - Delta pill (optional): green up / red down, `\u25B2` / `\u25BC`.
+  - Delta pill (optional): green up / navy down, `\u25B2` / `\u25BC`.
   - Sub: `fontSize 11.5, color #8A94A6`.
 - KPI row layout: CSS grid `repeat(N, 1fr)`, `gap:14`.
 - Icons come from a `KPI_ICONS` map — crisp monochrome SVGs, `stroke="currentColor"`, `strokeWidth 2.2`, rounded caps.
@@ -172,7 +172,7 @@ export default function MyNewDashboard() {
 
 So a new page is "premium by default" without re-styling each time:
 
-1. **Extract a shared UI module.** Move `C`, `FONT`, `BRAND_RAMP`, `PAGE_SIZE`,
+1. **Shared UI module (DONE).** Already extracted — import `C`, `FONT`, `BRAND_RAMP`, `PAGE_SIZE`,
    `KPI_ICONS`, `Card`, `PremKPI`, `RankedBars`, `thS`, `BrandTooltip` out of
    `LeadQualificationDashboard.jsx` into e.g. `src/ui/dashboardKit.jsx` and import
    them everywhere. One change then updates every page.

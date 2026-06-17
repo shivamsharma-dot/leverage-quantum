@@ -94,7 +94,7 @@ export const RankedBars = ({ data, labelKey, max, total, colorFn, showRank }) =>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '2px 0' }}>
       {data.map((r, i) => {
         const w = max > 0 ? (r.count / max * 100) : 0
-        const col = colorFn ? colorFn(i) : RAMP[i % RAMP.length]
+        const col = colorFn ? colorFn(i) : BRAND_RAMP[i % BRAND_RAMP.length]
         return (
           <div key={r[labelKey] + i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {showRank && <div style={{ width: 20, textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#fff', background: col, borderRadius: 6, padding: '2px 0', flexShrink: 0, fontFamily: FONT }}>{i + 1}</div>}
