@@ -616,3 +616,12 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 - QL Ops reference: LeadQualificationDashboard.jsx ~line 1195-1230 (Card "Provider share"), PROVIDER_COLORS, center uses fmtN(totals.total).
 - Built 6.70s. Pushed 1a80e19..1000d3a. Verified live + zoomed: matches QL Ops.
 - NEXT (USER req): QL Ops needs a DOD (day-on-day) tabular graph/table. QL Ops already has "Month-on-month trend" Card (~line 1323). Need to ADD a day-on-day view.
+
+## 2026-06-17 — QL Ops Day-on-day table (commits fdc526c, 813f208)
+- USER: "in QL ops - i need DOD tabular graph or something".
+- Added "Day-on-day qualified" Card to LeadQualificationDashboard.jsx between Month-on-month trend and Top campaigns. New dayOnDay useMemo (inserted after `filtered` memo ~line 717) groups `filtered` rows by normalized qualified_date -> {date, Futwork, Futwork AI, Superbot, total}, sorted desc, slice(0,31).
+- IMPORTANT data note: qualified_date is NOT always YYYY-MM-DD; must normalize like the dateFilteredRows parser: if /^\\d{4}-\\d{2}-\\d{2}/ use split else new Date(ms), then build YYYY-MM-DD key via getFullYear/getMonth/getDate. First strict-regex version showed "No daily data" -> fixed (commit 813f208).
+- Table: sticky header, zebra rows, columns DATE / FUTWORK(navy #1F3C84) / FUTWORK AI(cyan #29B9C3) / SUPERBOT(blue #1C9FD4) / TOTAL(navy bold), date label "12 Jun \u00b7 Fri". fmtN for counts, tabular-nums.
+- GOTCHA: when writing JSX strings via python heredoc, '\\u00b7' lands as LITERAL backslash-u in file; must write the actual middot char. Fixed both subtitle + date label.
+- The `filtered` memo closes with `), [dateFilteredRows, selProvider, selSource])` (NO semicolon) - watch anchor matching.
+- Built 6.24s. Pushed 813f208. Verified live: table populates (e.g. 11 Jun 549, 10 Jun 549), middot correct.
