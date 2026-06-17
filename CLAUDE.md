@@ -609,3 +609,10 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 - Kept the dashed Avg ReferenceLine + its "Average" legend swatch (height:2) grey #94A3B8 (neutral guide line, not a data element).
 - Built OK 7.07s. Pushed 229f280..16f8115. Verified live + zoomed: Google bar now navy, no grey in chart bars.
 - REMINDER: grey/slate (#94A3B8/#64748B) is off-brand for any DATA element. Brand only: navy #1F3C84, blue #1C9FD4, cyan #29B9C3, green #4CAE6F. Use navy for "above-avg/worse" semantics, NOT grey/red.
+
+## 2026-06-17 — MTD pie card matched to QL Ops donut (commit 1000d3a)
+- USER: "pie card should be similar to pie chart of QL ops".
+- Replaced MTD "Spend by source" pie: removed floating PieLbl labels; donut now innerR62/outerR84, startAngle90/endAngle-270, paddingAngle2, cornerRadius4, strokeWidth0 (same as QL Ops Provider-share). Added center TOTAL label fmtINR(total.spend)+"TOTAL SPEND". Replaced flat legend with QL-Ops column legend: dot+name (10px 600 #64748B), bold value fmtINR(s.value) (15px 800 #0F1F4B), muted % (10px #94A3B8).
+- QL Ops reference: LeadQualificationDashboard.jsx ~line 1195-1230 (Card "Provider share"), PROVIDER_COLORS, center uses fmtN(totals.total).
+- Built 6.70s. Pushed 1a80e19..1000d3a. Verified live + zoomed: matches QL Ops.
+- NEXT (USER req): QL Ops needs a DOD (day-on-day) tabular graph/table. QL Ops already has "Month-on-month trend" Card (~line 1323). Need to ADD a day-on-day view.
