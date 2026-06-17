@@ -729,3 +729,6 @@ Added src/lib/sessionLoad.js: in-memory per-tab session store (getSession/setSes
 Dashboards auto-fetch ONCE per session; SPA nav between pages reuses cached data (no refetch); only Refresh forces a refetch (bust=true -> cache-busted fetch + store update).
 Wired into QL Ops, WhatsApp, Referral, Home (Home stays uncommitted/stashed). Added a Refresh button to Referral and Home headers (previously none).
 Pushed to main as 82939b0 (sessionLoad + QLOps/WhatsApp/Referral); Home kept local only. Build clean (6.74s). Verified live: SPA nav no refetch, Refresh refetches (csv&_=ts), reload refetches once; no app console errors.
+
+## 2026-06-18 - Home fetch-once-per-session (one-time DashboardHome push)
+DashboardHome.jsx now uses sessionLoad getSession(home) + bust param so Home auto-fetches once per session and never again on SPA nav; added a Refresh button (brand-safe, forces fetchStats(true)). NOTE: one-time exception to the never-commit-DashboardHome rule, made at user explicit request (commit 5b2c95d). The standing stash-DashboardHome-before-push rule REMAINS in effect for future work unless the user says otherwise.
