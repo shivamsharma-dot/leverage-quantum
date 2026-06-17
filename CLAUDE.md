@@ -672,3 +672,44 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 - Note: shared src/components/KPICard.jsx (MetaAds/GoogleAds/ChannelMix/WhatsApp/Revenue) already used slate (#64748B) for negative delta - left as-is (on-brand muted).
 - Remaining red usages (status maps Removed/Paused/Video, error/connect banners, fatigue warnings) are semantic, left intact.
 - Build OK 6.42s. Commit b9afd63 (pushed origin main). Verified live on QL Ops: down pills now navy.
+
+---
+
+# >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
+_Last updated: 2026-06-17_
+
+## How to restart with the Claude browser extension
+When you reconnect, open BOTH tabs in the same tab group and paste the kickoff prompt below:
+1. Live app tab: https://quantum.leverageedu.com/dashboard/mtd (log in as Shivam ADMIN, shivam.sharma@leverageedu.com - YOU enter the password, Claude never does).
+2. Codespace tab: https://fictional-telegram-4qj7467pwrrvf7w79.github.dev/ (VS Code web; if it shows "Codespace is stopped", click "Restart codespace" and wait ~30s; open a terminal at /workspaces/leverage-quantum).
+
+## COPY-PASTE KICKOFF PROMPT FOR THE EXTENSION
+"""
+Resume the Leverage Quantum premium pass. Read CLAUDE.md (bottom 'SESSION RESUME' section) first. Repo leverage-quantum, branch rename-ask-ai pushes to main. Current origin/main HEAD = bc791d8; working tree must show ONLY 'M src/pages/DashboardHome.jsx' (never commit/discard it - stash during pushes, pop after). Continue the page-by-page premium pass in this order: Meta Ads -> Google Ads -> ROAS -> WhatsApp -> Channel Mix -> Revenue -> Lead Quality, then the major Settings redesign, then the homepage. Per-page small verifiable commits. Follow the per-change sub-workflow in CLAUDE.md. Use ONLY brand colors (navy #1F3C84 / blue #1C9FD4 / cyan #29B9C3 / green #4CAE6F; grey/slate only for muted text). Keep Ask AI backend untouched. Don't change Sidebar logic without my approval. Build before push, verify live after, update this file after every change.
+"""
+
+## CURRENT STATE (as of 2026-06-17)
+- origin/main HEAD = bc791d8.
+- Working tree: ONLY M src/pages/DashboardHome.jsx (uncommitted on purpose).
+- DONE & live: unified branded loader (SkeletonLoader DashboardSkeleton + InlineLoader) wired into MTD/Referral/GoogleAds/QL Ops; snapshot batch render timing (SnapshotTool waitTall); PremKPI negative-delta pill recolored red->navy in src/ui/dashboardKit.jsx (verified live on QL Ops down pills).
+- IN PROGRESS / NEXT: premium visual pass per page (start at Meta Ads), then Settings redesign (SettingsPage.jsx ~66k chars), then homepage (DashboardHome.jsx, free rein but stays UNCOMMITTED).
+- DEFERRED: snapshot 'Copy shareable link' - blocked until you choose a storage backend (S3 / Cloudinary / upload endpoint).
+
+## STANDING RULES (do not break)
+- Brand colors ONLY for any data element. NEVER amber/orange/red/yellow. Grey/slate only for muted text labels.
+- Update CLAUDE.md after EVERY change.
+- NEVER commit/discard src/pages/DashboardHome.jsx; stash (git stash push -m wip-dh src/pages/DashboardHome.jsx) before push, pop after (WITHOUT 2>/dev/null), confirm it stays 'M'.
+- Ask AI backend wiring: untouched (presentational only).
+- Sidebar: render-only additions OK; no logic changes without explicit approval.
+- SSO/OAuth/passwords: YOU do it, not Claude.
+- ALWAYS build before push; ALWAYS verify live after.
+
+## PER-CHANGE SUB-WORKFLOW
+1) Observe live page. 2) Inspect source in codespace terminal (redirect output to /tmp/*.txt and cat - terminal screenshots lag). 3) Back up target file to /tmp. 4) Edit via Python heredoc with assert count==1 guards. 5) npm run build, confirm built in Ns. 6) git stash push DashboardHome; git add <files>; git commit; git push origin rename-ask-ai:main; git stash pop; verify only M DashboardHome.jsx. 7) Wait ~50-60s, verify live + check console (font cssRules + extension 'message channel' errors are benign). 8) Append dated note to CLAUDE.md, commit separately.
+
+## GOTCHAS
+- Codespace stops on inactivity -> Restart codespace button.
+- Terminal screenshot lag -> redirect to /tmp + cat, re-cat if stale.
+- Strings may use real ellipsis char, not three dots - match with regex.
+- Block-replacement can match the wrong close brace - anchor on a unique line.
+- git stash pop 2>/dev/null can fail silently - run without redirect.
