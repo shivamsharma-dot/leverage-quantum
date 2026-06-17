@@ -647,3 +647,14 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 - Built 6.43s. Pushed 8875ced. Verified LIVE on QL Ops: menu shows 3 modes; Select region cropped the Provider-share card exactly; Visible area captured on-screen content; preview modal + Copy worked (no console errors). 
 - NOTE re clipboard: works in https Chromium; falls back to "use download" toast otherwise.
 - DashboardHome.jsx kept uncommitted (stash/pop). HEAD = 8875ced.
+
+## 2026-06-17 — Snapshot v3: branded watermark + batch all-pages (commits cab844b, 92961b1, e13664e)
+- USER: "do it" -> watermark + multi-page batch (shareable-link DEFERRED: needs storage/backend decision).
+- New dep already present (html-to-image). brandImage(dataUrl,title): canvas composite of a navy->#16306B gradient footer bar (~4.5% of width) with cyan accent line, cyan dot + QUANTUM wordmark + "· <PageTitle>", right-aligned localized timestamp. All single captures (full/visible/region) now run through brandImage.
+- stitchVertical(urls): stacks branded PNGs into one tall sheet on #F4F6F9, gap 28; CAPS height to MAX_SHEET=15000 by uniform downscale (avoids Chrome 32767px canvas limit -> blank toDataURL). try/catch -> null.
+- BATCH "All pages" menu item -> captures MTD, QL-Ops, ROAS, Revenue, Referral, WhatsApp (BATCH_PAGES) and stitches. Progress overlay card (spinner + "N of 6 · label" + navy->cyan bar).
+- CRITICAL BUG FOUND+FIXED: each page renders its OWN <Sidebar/>, so SnapshotTool UNMOUNTS/REMOUNTS on every route change (verified: tagged FAB did not survive navigation). The batch loop's component-instance setState calls became no-ops after the first navigate -> no result modal. FIX (e13664e): module-level `snapStore` (batch/result/running + listeners) + standalone `runBatchGlobal()`; the mounted instance registers `navRef = navigate` and subscribes to the store (setResultState/setBatchState/setBusy). Now progress + final stitched preview show correctly regardless of remounts.
+- result/batch state are now store-backed (setResult -> snapStore.set). Old waitForRender left unused (harmless); global uses its own waitTall.
+- Built 6.99s/7.63s. Verified LIVE: watermark footer crisp on Visible-area shot; batch ran 6 pages with live "2 of 6 · QL-Ops" progress, returned to MTD, preview showed stitched sheet with per-page QUANTUM footers (MTD->QL-Ops->ROAS...). NOTE: pages with slow charts may capture mid-render; waitTall caps at 2.6s/page.
+- Window got resized mid-test (menu coords shift) — re-open menu after any resize.
+- DashboardHome.jsx uncommitted throughout (stash/pop each push). HEAD = e13664e.
