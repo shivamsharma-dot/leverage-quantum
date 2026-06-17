@@ -625,3 +625,13 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 - GOTCHA: when writing JSX strings via python heredoc, '\\u00b7' lands as LITERAL backslash-u in file; must write the actual middot char. Fixed both subtitle + date label.
 - The `filtered` memo closes with `), [dateFilteredRows, selProvider, selSource])` (NO semicolon) - watch anchor matching.
 - Built 6.24s. Pushed 813f208. Verified live: table populates (e.g. 11 Jun 549, 10 Jun 549), middot correct.
+
+## 2026-06-17 — Panel-wide Snapshot tool (commits 5e59e5c, c7ca746)
+- USER: "make our own feature/tool within the panel which would be able to capture our panel snapshot ... need a very amazing working snapshot taker feature / for whole of the panel and not just limited to any page".
+- Added new src/components/SnapshotTool.jsx (self-contained floating control). Mounted from the shared Sidebar (one import + <SnapshotTool/> before BOTH </aside> close tags — collapsed + expanded render paths) so it appears on EVERY page. No Sidebar logic changed (render-only addition).
+- New dependency: html-to-image ^1.11.13 (npm install; in package.json + lock).
+- Button: position:fixed bottom-right, z-9999, navy->cyan gradient (#1F3C84->#29B9C3), white camera icon, hover lift. Click opens popup menu "Capture this view" -> Download PNG / Copy to clipboard. Busy spinner state; success/fail toast (green border=ok, navy=fail) auto-dismiss 3.2s. data-snapshot-ignore="true" on the tool so it never appears in its own shot.
+- Capture: toPng(node,{pixelRatio:2, backgroundColor:'#F4F6F9', cacheBust, filter excludes data-snapshot-ignore}). Filename Quantum_<Page>_<YYYY-MM-DD_HHMM>.png via PAGE_NAMES map.
+- getTarget(): captures the FULL scrollable page, not just viewport. Panel shell is flex row: <Sidebar/> + flex:1 overflowY:auto content div. Heuristic picks widest+tallest scrollable div (>700w, scrollHeight>=viewport). First version fell back to BODY (only 941px = viewport, cut off below fold); fixed in c7ca746 -> now resolves the 3757px content container. Verified live: resolvedScrollHeight 3757 vs viewport 941.
+- Built 6.25s / 6.31s. Verified live on QL Ops + MTD: button renders, menu opens, Copy-to-clipboard runs (spinner->done, no fatal console errors). NOTE: html-to-image logs benign "Error inlining remote css / cssRules SecurityError" for cross-origin Google Fonts CSS — caught internally, capture still succeeds.
+- DashboardHome.jsx kept uncommitted (stash/pop on both pushes). HEAD = c7ca746.
