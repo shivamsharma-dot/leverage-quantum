@@ -786,3 +786,10 @@ Revamped src/components/Sidebar.module.css into a premium FLOATING sidebar: deta
 - collapse/expand toggle now sits FULLY inside the sidebar (was half-out via right:-13px + overlapping Ask AI via top:70px).
 - Override at end of src/components/Sidebar.module.css: .collapseBtn/.collapseBtnExpanded -> position absolute, top:16px right:14px, 24px rounded-square, light surface, navy hover.
 - Collapsed-state .collapseBtn is re-centered under the logo (top:56px, left:50% translateX) to avoid overlapping the collapsed logo icon.
+
+## Referral + QL Ops header/KPI/chart fixes
+- Referral header (ReferralDashboard.jsx ~L255): now a FLOATING rounded card (margin 12px 12px 0, borderRadius 14, boxShadow, border instead of borderBottom) so it no longer overlaps the floating sidebar.
+- Referral KPI overflow fixed: grid changed repeat(5, 1fr) -> repeat(5, minmax(0, 1fr)) so cards never bleed past container.
+- Referral data: created_at format is D-Mon-YYYY (e.g. 8-Nov-2025); parseD regex /^(d{1,2})-([A-Za-z]{3})-(d{4})$/ + MON map already handle it. Date filter for header is buildable on top of parseD/created_at.
+- QL Ops budget range chart (LeadQualificationDashboard.jsx L1258): margin left:-8 -> left:6, barCategoryGap 24%% -> 18% to stop first-bar clipping/misalignment.
+- NOTE: production deploy lagged badly during this work (served old bundle index-DDfedRkP.js); changes built+pushed, verify live once deploy catches up.
