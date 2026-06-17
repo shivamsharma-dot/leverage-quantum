@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { getSession, setSession } from '../lib/sessionLoad';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area, CartesianGrid,
@@ -6,7 +7,6 @@ import {
 } from 'recharts';
 import Sidebar from '../components/Sidebar';
 import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
-import { fetchCSV } from '../lib/sheetCache';
 import {
   C, FONT, BRAND_RAMP, brandColor, PAGE_SIZE,
   fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
@@ -73,12 +73,24 @@ export default function ReferralDashboard() {
   const [source, setSource] = useState('All');
   const [grpBy, setGrpBy] = useState('status');
 
-  useEffect(() => {
-    let alive = true;
-    fetchCSV(CSV_URL).then(txt => { if (alive) { setRows(parseCSV(txt)); setLoading(false); } })
-      .catch(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+  const loadData = useCallback(async (bust = false) => {
+    setLoading(true);
+    try {
+      const cached = getSession('referral');
+      let txt;
+      if (!bust && cached) {
+        txt = cached.data;
+      } else {
+        const u = bust ? CSV_URL + (CSV_URL.includes('?') ? '&' : '?') + '_=' + Date.now() : CSV_URL;
+        const res = await fetch(u);
+        txt = await res.text();
+        setSession('referral', txt);
+      }
+      setRows(parseCSV(txt));
+    } catch (e) { console.error('Referral fetch', e); }
+    finally { setLoading(false); }
   }, []);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const filtered = useMemo(
     () => source === 'All' ? rows : rows.filter(r => r.source === source),
@@ -246,6 +258,10 @@ export default function ReferralDashboard() {
             <h1 style={{ fontSize:18, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.4px', fontFamily:FONT }}>Referral</h1>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <button onClick={() => loadData(true)} disabled={loading} title="Refresh data"
+            style={{ padding:'6px 14px', borderRadius:8, border:'1px solid #e5e7eb', fontSize:12, fontWeight:500, cursor: loading ? 'wait' : 'pointer', fontFamily:FONT, background:'#fff', color:'#374151', display:'flex', alignItems:'center', gap:6, opacity: loading ? 0.65 : 1 }}>
+            {loading ? 'Refreshing' : 'Refresh'}
+          </button>
             <span style={{ fontSize:10.5, fontWeight:700, color:C.muted, letterSpacing:0.5 }}>SOURCE</span>
             {PILLS.map(p => <div key={p} style={pillStyle(source === p)} onClick={() => setSource(p)}>{p}</div>)}
           </div>

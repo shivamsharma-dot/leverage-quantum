@@ -5,6 +5,7 @@ import {
 import Sidebar from '../components/Sidebar'
 import KPICard from '../components/KPICard'
 import { fetchCSV } from '../lib/sheetCache'
+import { getSession, setSession } from '../lib/sessionLoad'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=1222628502&single=true&output=csv'
 
@@ -264,9 +265,17 @@ export default function WhatsAppDashboard() {
     setLoading(true)
     const t0 = Date.now()
     try {
-      const res = await fetch(bust ? SHEET_CSV+'&_='+Date.now() : SHEET_CSV)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const parsed = parseCSV(await res.text())
+      const cached = getSession('whatsapp')
+      let csv
+      if (!bust && cached) {
+        csv = cached.data
+      } else {
+        const res = await fetch(bust ? SHEET_CSV+'&_='+Date.now() : SHEET_CSV)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        csv = await res.text()
+        setSession('whatsapp', csv)
+      }
+      const parsed = parseCSV(csv)
       setRows(parsed)
       const mm = {}
       parsed.forEach(r => { if (r.month && (!mm[r.month] || r.monthSort < (mm[r.month]||999999))) mm[r.month] = r.monthSort })

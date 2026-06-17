@@ -7,6 +7,7 @@ import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { fetchCSV } from '../lib/sheetCache'
+import { getSession, setSession } from '../lib/sessionLoad'
 import { usePresence } from '../hooks/usePresence'
 import { useAuth } from '../hooks/useAuth'
 
@@ -616,9 +617,16 @@ export default function LeadQualificationDashboard() {
     setLoading(true)
     const t0 = Date.now()
     try {
-      const url = bust ? SHEET_CSV + '&_=' + Date.now() : SHEET_CSV
-      const res = await fetch(url)
-      const csv = await res.text()
+      const cached = getSession('qlops')
+      let csv
+      if (!bust && cached) {
+        csv = cached.data
+      } else {
+        const url = bust ? SHEET_CSV + '&_=' + Date.now() : SHEET_CSV
+        const res = await fetch(url)
+        csv = await res.text()
+        setSession('qlops', csv)
+      }
       const parsed = parseCSV(csv)
       setRows(parsed)
       // Build month list sorted by actual qualified_date (earliest per month)
