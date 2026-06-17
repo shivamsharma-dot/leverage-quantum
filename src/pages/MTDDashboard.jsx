@@ -83,19 +83,36 @@ const PieLbl = ({cx,cy,midAngle,outerRadius,percent,name})=>{
   </text>
 }
 
-const KPI=({label,value,sub,accent,prev,cur,invert,prorate})=>{
+const KPI_ICONS = {
+  spend: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+  leads: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  cpl: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+  revenue: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>,
+  roas: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
+  qual: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+  pct: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>,
+  apps: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
+}
+const FONT_KPI = "'Plus Jakarta Sans','Inter',sans-serif"
+const KPI=({label,value,sub,accent='#1F3C84',accentBg='#EEF1FB',icon,prev,cur,invert,prorate})=>{
   const adjPrev = (prev!=null&&prorate&&prorate!==1)?prev*prorate:prev
   const d = (adjPrev!=null&&cur!=null)?delta(cur,adjPrev):null
-  const good = d==null?null:(invert?d<=0:d>=0)
-  return <div className='qkpi' style={{position:'relative',background:'linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%)',border:'1px solid #EEF1F6',borderRadius:16,padding:'18px 20px 15px',boxShadow:'0 1px 2px rgba(15,23,42,0.04),0 4px 14px -6px rgba(15,23,42,0.08)',overflow:'hidden',transition:'transform .18s ease,box-shadow .18s ease'}}>
-    <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${accent||'#1F3C84'},#1C9FD4 55%,#29B9C3)`}}/>
-    <div style={{fontSize:10,fontWeight:700,color:'#94A3B8',letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:8}}>{label}</div>
-    <div style={{fontSize:26,fontWeight:800,color:'#0F172A',letterSpacing:'-1px',lineHeight:1,marginBottom:6}}>{value}</div>
-    <div style={{display:'flex',alignItems:'center',gap:8,minHeight:18}}>
-      {sub&&<div style={{fontSize:11.5,color:'#94A3B8',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sub}</div>}
-      {d!=null&&<span style={{fontSize:10.5,fontWeight:700,color:good?'#1F8F5B':'#64748B',flexShrink:0}}>
-        {d>=0?'\u25B2':'\u25BC'}{Math.abs(d).toFixed(1)}%
-      </span>}
+  const up = d==null?null:(invert?d<=0:d>=0)
+  return <div className='qkpi' style={{position:'relative',background:'linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%)',border:'1px solid #EEF1F6',borderRadius:16,padding:'16px 18px 14px',boxShadow:'0 1px 2px rgba(15,23,42,0.04),0 4px 14px -6px rgba(15,23,42,0.08)',overflow:'hidden',transition:'transform .18s ease,box-shadow .18s ease'}}>
+    <div style={{position:'absolute',top:0,left:0,right:0,height:4,background:`linear-gradient(90deg,${accent},${accent}99)`}}/>
+    <div style={{position:'absolute',top:-28,right:-28,width:96,height:96,borderRadius:'50%',background:`linear-gradient(135deg,${accent}14,${accent}05)`}}/>
+    <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:11,position:'relative'}}>
+      <div style={{width:30,height:30,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,color:'#fff',background:`linear-gradient(135deg,${accent},${accent}D9)`,boxShadow:`0 4px 10px -2px ${accent}66`,flexShrink:0}}>{icon}</div>
+      <span style={{fontSize:10.5,fontWeight:700,letterSpacing:'0.07em',color:'#64748B',textTransform:'uppercase',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{label}</span>
+    </div>
+    <div style={{fontSize:26,fontWeight:800,letterSpacing:'-0.6px',color:'#0F1B33',lineHeight:1.05,position:'relative',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{value}</div>
+    <div style={{display:'flex',alignItems:'center',gap:8,marginTop:7,minHeight:18,position:'relative'}}>
+      {d!=null && (
+        <span style={{fontSize:10.5,fontWeight:700,color:up?'#15803D':'#1F3C84',background:up?'#E9F8EF':'#EEF1FB',padding:'2px 7px',borderRadius:6,display:'inline-flex',alignItems:'center',gap:2,fontFamily:FONT_KPI,flexShrink:0}}>
+          {up?'\u25B2':'\u25BC'} {Math.abs(d).toFixed(1)}%
+        </span>
+      )}
+      {sub && <span style={{fontSize:11.5,color:'#8A94A6',fontFamily:FONT_KPI,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sub}</span>}
     </div>
   </div>
 }
@@ -184,7 +201,6 @@ export default function MTDDashboard(){
   },[])
 
   useEffect(()=>{loadData()},[loadData])
-  useEffect(()=>{const t=setInterval(loadData,60000);return()=>clearInterval(t)},[loadData])
 
   const month=months[sel]
   const prevMonth=months[sel-1]
@@ -279,20 +295,20 @@ export default function MTDDashboard(){
           {total&&(<>
 
             <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:12}}>
-              <KPI label='Total Spend' value={fmtINR(total.spend)} accent='#1F3C84' sub={prevTotal?'prev '+fmtINR(prevTotal.spend):undefined} cur={total.spend} prev={prevTotal?.spend} invert/>
-              <KPI label='Total Leads' value={fmtNum(total.leads)} accent='#1C9FD4' sub={prevTotal?'prev '+fmtNum(prevTotal.leads):undefined} cur={total.leads} prev={prevTotal?.leads} prorate={prorate}/>
-              <KPI label='CPL' value={fmtINR(total.cpl)} accent='#1C9FD4' sub='Cost per lead' cur={total.cpl} prev={prevTotal?.cpl} invert/>
-              <KPI label='Total Revenue' value={fmtINR(total.totalRev)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtINR(prevTotal.totalRev):undefined} cur={total.totalRev} prev={prevTotal?.totalRev} prorate={prorate}/>
-              <KPI label='ROAS' value={total.roas>0?total.roas.toFixed(2)+'x':'\u2014'} accent={roasColor(total.roas)} cur={total.roas} prev={prevTotal?.roas}/>
+              <KPI icon={KPI_ICONS.spend} label='Total Spend' value={fmtINR(total.spend)} accent='#1F3C84' sub={prevTotal?'prev '+fmtINR(prevTotal.spend):undefined} cur={total.spend} prev={prevTotal?.spend} invert/>
+              <KPI icon={KPI_ICONS.leads} label='Total Leads' value={fmtNum(total.leads)} accent='#1C9FD4' sub={prevTotal?'prev '+fmtNum(prevTotal.leads):undefined} cur={total.leads} prev={prevTotal?.leads} prorate={prorate}/>
+              <KPI icon={KPI_ICONS.cpl} label='CPL' value={fmtINR(total.cpl)} accent='#1C9FD4' sub='Cost per lead' cur={total.cpl} prev={prevTotal?.cpl} invert/>
+              <KPI icon={KPI_ICONS.revenue} label='Total Revenue' value={fmtINR(total.totalRev)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtINR(prevTotal.totalRev):undefined} cur={total.totalRev} prev={prevTotal?.totalRev} prorate={prorate}/>
+              <KPI icon={KPI_ICONS.roas} label='ROAS' value={total.roas>0?total.roas.toFixed(2)+'x':'\u2014'} accent={roasColor(total.roas)} cur={total.roas} prev={prevTotal?.roas}/>
             </div>
 
             <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12,marginBottom:22}}>
-              <KPI label='FW Qualified' value={fmtNum(total.fwQual)} accent='#1F3C84' sub={'of '+fmtNum(total.fwQ)+' queued'} cur={total.fwQual} prev={prevTotal?.fwQual} prorate={prorate}/>
-              <KPI label='FW QL%' value={total.fwQL.toFixed(2)+'%'} accent='#1C9FD4' sub='Futwork quality' cur={total.fwQL} prev={prevTotal?.fwQL}/>
-              <KPI label='SB Qualified' value={fmtNum(total.sbQual)} accent='#29B9C3' sub={total.sbQL.toFixed(2)+'% QL'} cur={total.sbQual} prev={prevTotal?.sbQual}/>
-              <KPI label='Applications' value={fmtNum(total.apps)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtNum(prevTotal.apps):undefined} cur={total.apps} prev={prevTotal?.apps} prorate={prorate}/>
-              <KPI label='Est. RAU' value={total.rau>0?total.rau.toFixed(1):'\u2014'} accent='#29B9C3' sub='Revenue attr. units' cur={total.rau} prev={prevTotal?.rau} prorate={prorate}/>
-              <KPI label='CPQL' value={fmtINR(total.cpql)} accent='#29B9C3' sub='Cost per qual. lead' cur={total.cpql} prev={prevTotal?.cpql} invert/>
+              <KPI icon={KPI_ICONS.qual} label='FW Qualified' value={fmtNum(total.fwQual)} accent='#1F3C84' sub={'of '+fmtNum(total.fwQ)+' queued'} cur={total.fwQual} prev={prevTotal?.fwQual} prorate={prorate}/>
+              <KPI icon={KPI_ICONS.pct} label='FW QL%' value={total.fwQL.toFixed(2)+'%'} accent='#1C9FD4' sub='Futwork quality' cur={total.fwQL} prev={prevTotal?.fwQL}/>
+              <KPI icon={KPI_ICONS.qual} label='SB Qualified' value={fmtNum(total.sbQual)} accent='#29B9C3' sub={total.sbQL.toFixed(2)+'% QL'} cur={total.sbQual} prev={prevTotal?.sbQual}/>
+              <KPI icon={KPI_ICONS.apps} label='Applications' value={fmtNum(total.apps)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtNum(prevTotal.apps):undefined} cur={total.apps} prev={prevTotal?.apps} prorate={prorate}/>
+              <KPI icon={KPI_ICONS.revenue} label='Est. RAU' value={total.rau>0?total.rau.toFixed(1):'\u2014'} accent='#29B9C3' sub='Revenue attr. units' cur={total.rau} prev={prevTotal?.rau} prorate={prorate}/>
+              <KPI icon={KPI_ICONS.cpl} label='CPQL' value={fmtINR(total.cpql)} accent='#29B9C3' sub='Cost per qual. lead' cur={total.cpql} prev={prevTotal?.cpql} invert/>
             </div>
 
             {compare&&(()=>{
