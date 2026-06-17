@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import Sidebar from '../components/Sidebar'
 import styles from './DashboardHome.module.css'
 import { fetchCSV } from '../lib/sheetCache'
+import { getSession, setSession } from '../lib/sessionLoad'
 
 const FONT = "'Plus Jakarta Sans',-apple-system,sans-serif"
 const C = { navy:'#1F3C84', blue:'#1C9FD4', green:'#4CAE6F', cyan:'#29B9C3', amber:'#F59E0B', border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8', bg:'#F4F6F9' }
@@ -100,8 +101,10 @@ export default function DashboardHome() {
   const greeting  = (() => { const h=new Date().getHours(); return h<12?'Good morning':h<17?'Good afternoon':h<21?'Good evening':'Good evening' })()
 
   // Fetch live stats: Meta spend + QL today
-  const fetchStats = useCallback(async () => {
+  const fetchStats = useCallback(async (bust = false) => {
     setStatsLoading(true)
+    const cachedHome = getSession('home')
+    if (!bust && cachedHome) { setLiveStats(cachedHome.data); setStatsLoading(false); return }
     try {
       const [sbRes, qlRes] = await Promise.all([
         fetch(`${SUPABASE_URL}/rest/v1/meta_tokens?select=token&order=created_at.desc&limit=1`, {
@@ -119,7 +122,8 @@ export default function DashboardHome() {
           if (metaRes.ok) {
             const md = await metaRes.json()
             const acc = md.data?.[0]||{}
-            const leads = parseInt(acc.actions?.find(a=>a.action_type==='onsite_conversion.lead_grouped'||a.action_type==='lead')?.value||0)
+            const findAct = (t) => parseInt(acc.actions?.find(a=>a.action_type===t)?.value||0)
+        const leads = findAct('onsite_conversion.lead_grouped') || findAct('onsite_web_lead') || findAct('offsite_complete_registration_add_meta_leads') || findAct('lead') || 0
             metaStats = { spend: parseFloat(acc.spend||0), leads, ctr: parseFloat(acc.ctr||0) }
           }
         }
@@ -146,7 +150,9 @@ export default function DashboardHome() {
         qlStats = { total, futwork, superbot }
       }
 
-      setLiveStats({ meta: metaStats, ql: qlStats, ts: new Date() })
+      const _stats = { meta: metaStats, ql: qlStats, ts: new Date() }
+    setSession('home', _stats)
+    setLiveStats(_stats)
     } catch(e) { console.error('stats fetch:', e) }
     setStatsLoading(false)
   }, [])
@@ -181,6 +187,10 @@ export default function DashboardHome() {
             </p>
           </div>
           <div style={{ display:'flex', gap:10 }}>
+          <button onClick={() => fetchStats(true)} disabled={statsLoading} title="Refresh data"
+            style={{ paddingLeft:16, paddingRight:16, paddingTop:8, paddingBottom:8, borderRadius:10, border: `0.5px solid ${C.border}`, fontSize:13, fontWeight:600, fontFamily:FONT, background:'#fff', color:C.text, cursor: statsLoading ? 'wait' : 'pointer', boxShadow:'0 1px 3px rgba(15,23,42,0.05)', opacity: statsLoading ? 0.65 : 1 }}>
+            {statsLoading ? 'Refreshing…' : 'Refresh'}
+          </button>
             <div style={{ position:'relative' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search dashboards…"
