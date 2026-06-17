@@ -666,3 +666,9 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 - VERIFIED LIVE: MTD + QL Ops now show the IDENTICAL branded loader (was the user's main complaint about QL Ops 'old render design skeleton').
 - SNAPSHOT BATCH TIMING: SnapshotTool.jsx waitTall() upgraded - cap 2600->5000ms; now also requires (a) loading skeleton GONE (no [class*=bone]/[class*=Skeleton]), (b) scroll height STABLE across 2 consecutive ticks, then a fixed 650ms chart-entrance settle before capturing. Prevents capturing pages mid-render in the all-pages batch.
 - GOTCHA hit: Referral 'Loading referral data' used a real ellipsis char (...) not three dots; matched with regex [^<]* instead. QL Ops ternary replaced via find anchor '? (' ... ') : ('. waitTall rewrite left an orphaned old tail (forEach close matched first) - had to delete 6 leftover lines. Build OK 6.95s. DashboardHome.jsx kept uncommitted (M).
+
+## 2026-06-17 - Premium pass: PremKPI negative-delta pill
+- src/ui/dashboardKit.jsx (shared PremKPI used by QL Ops / Referral / _DashboardTemplate): negative delta pill changed from off-brand red (#B91C1C text / #FEF2F2 bg) to on-brand navy (#1F3C84 text / #EEF1FB bg). Positive delta stays green (#15803D / #E9F8EF).
+- Note: shared src/components/KPICard.jsx (MetaAds/GoogleAds/ChannelMix/WhatsApp/Revenue) already used slate (#64748B) for negative delta - left as-is (on-brand muted).
+- Remaining red usages (status maps Removed/Paused/Video, error/connect banners, fatigue warnings) are semantic, left intact.
+- Build OK 6.42s. Commit b9afd63 (pushed origin main). Verified live on QL Ops: down pills now navy.
