@@ -585,3 +585,11 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 - TODO next (per approved plan): chart wrapper premium style applied page-by-page; fix off-brand red/amber values seen in Meta Ads table (CTR red, CPL amber) -> brand palette; major Settings redesign.
 - OPEN QUESTION for user: Home/Summary page is DashboardHome.jsx which must stay UNCOMMITTED (standing rule). Also "Good morning ... wave emoji" lives there. Need user's call before editing/committing DashboardHome.
 - DashboardHome.jsx kept uncommitted (M) as always.
+
+## 2026-06-17 — Premium design pass: MTD dashboard (commit 2484584)
+- MTDDashboard.jsx fully upgraded to premium + brand-only palette:
+  - Local KPI card: gradient accent top bar (uses each card's `accent` prop -> navy/blue/cyan), 16px radius, layered shadow, gradient bg, hover lift (.qkpi:hover style injected after <Sidebar/>). Delta color good->#1F8F5B green / bad->#64748B slate (removed red #DC2626 / green #16A34A pair).
+  - Local Card chart wrapper: 16px radius, layered shadow, navy (#1F3C84) bold titles, refined header border.
+  - Brand-only colors: SRC_COLOR amber #F59E0B (Remarketing->#29B9C3 cyan, Bing->#6B8FD4 slate-blue). cplColor/roasColor/qlColor thresholds now navy/blue/green/slate (no red/amber). CPL chart bars above-avg #FCA5A5 red->#94A3B8 slate; legend swatch likewise. FW QL% table pill bg green/yellow/red tints -> brand tints (#E8F6EF/#E7F4FB/#F1F5F9). KPI accents CPL #F59E0B->#1C9FD4, Est.RAU #F59E0B->#29B9C3. Error fallback #DC2626->#64748B. Remaining #F59E0B count = 0.
+  - Built OK (6.18s). Verified live: KPI gradient bars + hover lift work; CPL chart red bar now slate; QL% bars slate not red; table CPL/ROAS/QL% pills all brand. Backup at /tmp/MTD.bak.
+- NEXT: continue page-by-page premium pass (other dashboards), then major Settings redesign. Home/Summary: user said "do whatever you want" for homepage (DashboardHome.jsx still must stay UNCOMMITTED M / stash on push).
