@@ -570,3 +570,9 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 - VERIFIED LIVE: gradient rail pill, premium memory empty state, navy readable headings, no emojis, clean table, bold works, single magic loader orb.
 - NOTE (backend, NOT frontend): chat history only lasting ~2 days is a Supabase-side retention/RLS/cron issue on ask_ai_conversations — frontend loads limit=60 with no date cutoff. Needs DB-side fix. Memory persistence TESTED working (survives reload).
 - All backend wiring untouched; DashboardHome.jsx kept uncommitted (M).
+
+## 2026-06-17 — Ask AI rail hover fix (commit 0353c8a)
+- Bug: hovering inner-rail tabs flashed white->blue and the hover fill (rgba blue, !important, square, no radius) overrode the ACTIVE tab's gradient.
+- Fix: (1) active button className -> {on?'rb rb-active':'rb'}; (2) hover scoped to .rb:not(.rb-active):hover with border-radius:14px + rgba(28,159,212,0.10); (3) base .rb gets smooth transition (background .18s, border-radius .18s).
+- VERIFIED LIVE: active tab keeps gradient on hover; inactive tabs show clean rounded blue hover pill, no flash.
+- All backend wiring untouched; DashboardHome.jsx kept uncommitted (M).
