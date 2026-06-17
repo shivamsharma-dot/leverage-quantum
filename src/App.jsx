@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
-import { logActivity } from './components/ActivityLogger'
+import { logActivity, pageLabel, installActivityTracker } from './components/ActivityLogger'
 import LoginPage from './pages/LoginPage'
 import DashboardHome from './pages/DashboardHome'
 import ROASDashboard from './pages/ROASDashboard'
@@ -70,12 +70,28 @@ function ProtectedRoute({ children, dashboardId }) {
     document.title = base ? `${base} | Leverage Quantum` : 'Leverage Quantum'
   }, [location.pathname])
 
-  // Activity logging
+  // Activity logging — page view + dwell time on leave
   useEffect(() => {
     if (user?.email && dashboardId) {
-      logActivity(user.email, 'view', location.pathname)
+      logActivity(user.email, 'view', location.pathname, 'Viewed ' + pageLabel(location.pathname))
+      const enteredAt = Date.now()
+      const path = location.pathname
+      return () => {
+        const secs = Math.round((Date.now() - enteredAt) / 1000)
+        if (secs >= 3) {
+          const mins = secs >= 60 ? Math.floor(secs / 60) + 'm ' + (secs % 60) + 's' : secs + 's'
+          logActivity(user.email, 'leave', path, 'Left ' + pageLabel(path) + ' after ' + mins)
+        }
+      }
     }
   }, [location.pathname, user?.email])
+
+  // Install global interaction tracker once (clicks, tab switches)
+  useEffect(() => {
+    if (!user?.email) return
+    const cleanup = installActivityTracker(() => user?.email, () => window.location.pathname)
+    return cleanup
+  }, [user?.email])
 
   // Clean up stale localStorage keys from old Ask AI implementation
   useEffect(() => {
