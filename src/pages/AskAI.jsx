@@ -90,7 +90,7 @@ async function askClaude(messages, metaToken, memories, onChunk) {
 }
 
 /* ─── markdown ────────────────────────────────────────────────── */
-function ih(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/`([^`]+)`/g,`<code style="background:#F1F5F9;padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace">$1</code>`)}
+function ih(t){return t.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}\u{20D0}-\u{20FF}]/gu,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/`([^`]+)`/g,`<code style="background:#F1F5F9;padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace">$1</code>`)}
 function Markdown({text}){
   const out=[]; const lines=(text||'').split('\n'); let i=0
   while(i<lines.length){
@@ -112,7 +112,7 @@ function Markdown({text}){
           <tbody>{rows.map((r,ri)=><tr key={ri}>{r.map((cc,ci)=><td key={ci} style={{border:'1px solid #E5E7EB',padding:'8px 12px',color:'#374151'}} dangerouslySetInnerHTML={{__html:ih(cc)}}/>)}</tr>)}</tbody>
         </table></div>);continue}
     if(/^#{1,3}\s/.test(l)){const lv=l.match(/^#+/)[0].length;const sz=lv===1?18:lv===2?15.5:14
-      out.push(<div key={out.length} style={{fontSize:sz,fontWeight:800,color:'#fff',margin:'16px 0 6px',letterSpacing:'-0.02em'}} dangerouslySetInnerHTML={{__html:ih(l.replace(/^#+\s/,''))}}/>);i++;continue}
+      out.push(<div key={out.length} style={{fontSize:sz,fontWeight:800,color:'#1F3C84',margin:'16px 0 6px',letterSpacing:'-0.02em'}} dangerouslySetInnerHTML={{__html:ih(l.replace(/^#+\s/,''))}}/>);i++;continue}
     if(/^[-•*]\s/.test(l)){const items=[];while(i<lines.length&&/^[-•*]\s/.test(lines[i])){items.push(lines[i].replace(/^[-•*]\s/,''));i++}
       out.push(<ul key={out.length} style={{margin:'8px 0',paddingLeft:18,color:'#374151',fontSize:14,lineHeight:1.7}}>{items.map((it,j)=><li key={j} style={{marginBottom:4}} dangerouslySetInnerHTML={{__html:ih(it)}}/>)}</ul>);continue}
     if(/^\d+\.\s/.test(l)){const items=[];while(i<lines.length&&/^\d+\.\s/.test(lines[i])){items.push(lines[i].replace(/^\d+\.\s/,''));i++}
@@ -405,13 +405,13 @@ export default function AskAI() {
         @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
         @keyframes scaleIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
-        .rb:hover{background:#F3F4F6!important;transition:background .15s}
+        .rb:hover{background:rgba(28,159,212,0.07)!important;transition:all .15s}
         .qp:hover{background:rgba(28,159,212,0.15)!important;border-color:rgba(28,159,212,0.4)!important;color:#fff!important;transform:translateY(-1px)!important;transition:all .2s!important}
         .cv:hover .delbtn{opacity:1!important}
         .ibtn:hover{background:#F3F4F6!important}
         .mabtn:hover{background:#F3F4F6!important}
         .sendbtn:hover:not(:disabled){transform:scale(1.05);background:${BLUE}!important}
-        input::placeholder,textarea::placeholder{color:#CBD5E1!important}
+        input::placeholder,textarea::placeholder{color:#9AA7B8!important}
         input,textarea{caret-color:#1C9FD4;}
         /* ===== PREMIUM AI MOTION TOOLKIT (brand: navy/blue/cyan/green) ===== */
         @keyframes qSwoosh{0%{transform:translateX(-120%) skewX(-18deg)}60%,100%{transform:translateX(220%) skewX(-18deg)}}
@@ -546,13 +546,13 @@ export default function AskAI() {
                   </div>
                   <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 12px 8px'}}>
                     {memLoading&&<div style={{padding:20,textAlign:'center',color:'#CBD5E1',fontSize:12}}>Loading…</div>}
-                    {!memLoading&&memories.length===0&&<div style={{padding:'30px 0',textAlign:'center',color:'#CBD5E1',fontSize:12.5}}>No memories yet</div>}
+                    {!memLoading&&memories.length===0&&<div style={{padding:'34px 16px',textAlign:'center'}}><div style={{width:44,height:44,margin:'0 auto 12px',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(145deg,rgba(31,60,132,0.08),rgba(28,159,212,0.08))',border:`1px solid ${borderColor}`}}><Ico n='brain' s={20} c={BLUE}/></div><div style={{fontSize:13,fontWeight:700,color:'#1F3C84',marginBottom:4,fontFamily:FONT}}>No memories yet</div><div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.5}}>Add a fact above — it stays with the assistant across every conversation.</div></div>}
                     {memories.map((m,i)=>(
                       <div key={m.id||i} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'9px 10px',borderRadius:8,marginBottom:4,background:'#FAFAFA',border:'0.5px solid #E5E7EB'}}>
                         <div style={{width:5,height:5,borderRadius:'50%',background:BLUE,flexShrink:0,marginTop:6}}/>
                         <span style={{flex:1,fontSize:12.5,color:'#374151',lineHeight:1.5}}>{m.content}</span>
-                        <button onClick={()=>delMem(m.id)} style={{background:'transparent',border:'none',cursor:'pointer',padding:2,borderRadius:4,color:'rgba(255,80,80,0.5)',flexShrink:0}}>
-                          <Ico n="trash" s={12} c="rgba(255,80,80,0.5)"/>
+                        <button onClick={()=>delMem(m.id)} title="Remove" style={{background:'transparent',border:'none',cursor:'pointer',padding:2,borderRadius:4,color:'#94A3B8',flexShrink:0}}>
+                          <Ico n="trash" s={12} c="#94A3B8"/>
                         </button>
                       </div>
                     ))}
@@ -643,19 +643,19 @@ export default function AskAI() {
         </div>
 
         {/* Icon rail */}
-        <div style={{width:52,background:railBg,borderRight:`1px solid ${borderColor}`,display:'flex',flexDirection:'column',alignItems:'center',padding:'10px 0',gap:2,flexShrink:0}}>
+        <div style={{width:56,background:`linear-gradient(180deg,#FFFFFF,#F7F9FC)`,borderRight:`1px solid ${borderColor}`,display:'flex',flexDirection:'column',alignItems:'center',padding:'12px 0',gap:6,flexShrink:0}}>
           {[
             {id:'history', icon:'history', label:'History'},
             {id:'prompts', icon:'prompts', label:'Prompts'},
-            {id:'memories',icon:'brain',   label:'Memories'},
+            {id:'memories',icon:'brain',   label:'Memory'},
             {id:'logs',    icon:'logs',    label:'Logs'},
           ].map(r=>{
             const on=rail===r.id
             return <button key={r.id} onClick={()=>{toggleRail(r.id);if(r.id==='logs')loadLogs()}} title={r.label} className="rb"
-              style={{width:44,height:44,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,border:'none',borderRadius:12,cursor:'pointer',background:on?'linear-gradient(135deg,rgba(28,159,212,0.16),rgba(41,185,195,0.12))':'transparent',boxShadow:on?'0 4px 12px -6px rgba(28,159,212,0.55)':'none',transition:'all .18s ease',position:'relative',padding:'4px 2px'}}>
-              <Ico n={r.icon} s={15} c={on?BLUE:'#9CA3AF'}/>
-              <span style={{fontSize:8.5,fontWeight:on?700:500,color:on?BLUE:'#9CA3AF',letterSpacing:'0.03em',fontFamily:"'Plus Jakarta Sans',sans-serif",lineHeight:1}}>{r.label}</span>
-              {on&&<div style={{position:'absolute',right:-1,top:'50%',transform:'translateY(-50%)',width:3,height:22,background:'linear-gradient(#1C9FD4,#29B9C3)',borderRadius:3,boxShadow:'0 0 8px rgba(28,159,212,0.7)'}}/>}
+              style={{width:46,height:46,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,borderRadius:14,border:on?'1px solid rgba(28,159,212,0.35)':'1px solid transparent',cursor:'pointer',background:on?'linear-gradient(145deg,#1F3C84,#1C9FD4)':'transparent',boxShadow:on?'0 6px 16px -4px rgba(28,159,212,0.55)':'none',transition:'all .2s cubic-bezier(.4,0,.2,1)',position:'relative'}}>
+              <Ico n={r.icon} s={16} c={on?'#fff':'#8A94A6'}/>
+              <span style={{fontSize:8.5,fontWeight:on?700:600,color:on?'#fff':'#8A94A6',letterSpacing:'0.04em',fontFamily:FONT,lineHeight:1}}>{r.label}</span>
+              {on&&<div style={{position:'absolute',left:-1,top:'50%',transform:'translateY(-50%)',width:3,height:24,background:'linear-gradient(#1C9FD4,#29B9C3)',borderRadius:3,boxShadow:'0 0 10px rgba(28,159,212,0.8)'}}/>}
             </button>
           })}
         </div>
@@ -803,7 +803,7 @@ export default function AskAI() {
                 {sendingReport?'Sending…':'Send'}
               </button>
             </div>
-              <div style={{background:'#fff',border:`0.5px solid ${input?BLUE:borderColor}`,borderRadius:14,padding:'12px 14px',transition:'border-color .2s',boxShadow:'0 2px 12px rgba(15,23,42,0.06)'}}>
+              <div style={{background:'#fff',border:`1px solid ${input?'rgba(28,159,212,0.55)':borderColor}`,borderRadius:16,padding:'12px 14px',transition:'all .2s',boxShadow:input?'0 4px 20px -4px rgba(28,159,212,0.25)':'0 2px 12px rgba(15,23,42,0.05)'}}>
                 <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…"
                   onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
                   onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
