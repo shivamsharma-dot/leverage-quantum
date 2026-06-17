@@ -206,16 +206,75 @@ const BATCH_PAGES = [
   ['/dashboard/whatsapp', 'WhatsApp'],
 ]
 
+// Module-level store so batch progress + result survive the SnapshotTool
+// REMOUNTING that happens on every route change (each page renders its own
+// <Sidebar/>, hence a fresh SnapshotTool). Components subscribe to this.
+const snapStore = {
+  batch: null,
+  result: null,
+  listeners: new Set(),
+  set(patch) { Object.assign(this, patch); this.listeners.forEach((l) => l()) },
+  subscribe(l) { this.listeners.add(l); return () => this.listeners.delete(l) },
+  running: false,
+}
+
+// Standalone batch runner (not tied to any component instance). Uses the global
+// `nav` setter registered by the mounted component to change routes.
+let navRef = null
+async function runBatchGlobal() {
+  if (snapStore.running) return
+  snapStore.running = true
+  const startPath = window.location.pathname
+  const shots = []
+  const waitTall = (ms = 2600) => new Promise((res) => {
+    const start = Date.now()
+    const tick = () => {
+      let best = null
+      document.querySelectorAll('div').forEach((d) => {
+        const cs = getComputedStyle(d)
+        if (cs.overflowY !== 'auto' && cs.overflowY !== 'scroll') return
+        const r = d.getBoundingClientRect()
+        if (r.width < 700) return
+        if (!best || d.scrollHeight > best.scrollHeight) best = d
+      })
+      const tall = best && best.scrollHeight > window.innerHeight * 1.1
+      if (tall || Date.now() - start > ms) return res()
+      setTimeout(tick, 200)
+    }
+    setTimeout(tick, 500)
+  })
+  try {
+    for (let i = 0; i < BATCH_PAGES.length; i++) {
+      const [path, label] = BATCH_PAGES[i]
+      snapStore.set({ batch: { done: i, total: BATCH_PAGES.length, label } })
+      if (navRef) navRef(path)
+      await waitTall()
+      const raw = await captureNode(getContentRoot())
+      shots.push(await brandImage(raw, label))
+    }
+    snapStore.set({ batch: { done: BATCH_PAGES.length, total: BATCH_PAGES.length, label: 'Stitching' } })
+    const sheet = await stitchVertical(shots)
+    if (navRef) navRef(startPath)
+    snapStore.set({ batch: null, result: sheet || shots[0] || null })
+  } catch (e) {
+    if (navRef) navRef(startPath)
+    snapStore.set({ batch: null })
+  } finally {
+    snapStore.running = false
+  }
+}
+
 export default function SnapshotTool() {
   const [open, setOpen] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const [toast, setToast] = React.useState(null)
-  const [result, setResult] = React.useState(null) // data URL of finished shot
+  const [result, setResultState] = React.useState(snapStore.result) // data URL of finished shot
+  const setResult = (v) => { snapStore.set({ result: v }) }
   const [cropping, setCropping] = React.useState(false)
   const [sel, setSel] = React.useState(null) // {x,y,w,h} live drag rect (screen coords)
   const dragRef = React.useRef(null)
   const toastTimer = React.useRef(null)
-  const [batch, setBatch] = React.useState(null) // {done,total,label} progress
+  const [batch, setBatchState] = React.useState(snapStore.batch) // {done,total,label} progress
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -231,32 +290,16 @@ export default function SnapshotTool() {
     setTimeout(tick, 400)
   })
 
-  const runBatch = async () => {
-    setOpen(false); setBusy(true)
-    const startPath = location.pathname
-    const shots = []
-    try {
-      for (let i = 0; i < BATCH_PAGES.length; i++) {
-        const [path, label] = BATCH_PAGES[i]
-        setBatch({ done: i, total: BATCH_PAGES.length, label })
-        navigate(path)
-        await waitForRender()
-        const raw = await captureNode(getContentRoot())
-        shots.push(await brandImage(raw, label))
-      }
-      setBatch({ done: BATCH_PAGES.length, total: BATCH_PAGES.length, label: 'Stitching' })
-      const sheet = await stitchVertical(shots)
-      navigate(startPath)
-      if (sheet) { setResult(sheet); flash('Captured ' + shots.length + ' pages') }
-      else if (shots.length) { setResult(shots[0]); flash('Captured ' + shots.length + ' pages (showing first)') }
-      else flash('Batch produced no image', false)
-    } catch {
-      navigate(startPath)
-      flash('Batch failed, please retry', false)
-    } finally {
-      setBatch(null); setBusy(false)
-    }
-  }
+  // Keep this instance in sync with the module store (survives remounts).
+  React.useEffect(() => {
+    navRef = navigate
+    const sync = () => { setResultState(snapStore.result); setBatchState(snapStore.batch); setBusy(snapStore.running) }
+    const unsub = snapStore.subscribe(sync)
+    sync()
+    return () => { unsub() }
+  }, [navigate])
+
+  const runBatch = () => { setOpen(false); runBatchGlobal() }
 
   const flash = (msg, ok = true) => {
     setToast({ msg, ok })
