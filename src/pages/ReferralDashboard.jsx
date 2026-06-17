@@ -5,6 +5,7 @@ import {
   LineChart, Line, Legend, LabelList,
 } from 'recharts';
 import Sidebar from '../components/Sidebar';
+import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 import { fetchCSV } from '../lib/sheetCache';
 import {
   C, FONT, BRAND_RAMP, brandColor, PAGE_SIZE,
@@ -229,7 +230,7 @@ export default function ReferralDashboard() {
     return (
       <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
         <Sidebar />
-        <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:C.muted, fontSize:14 }}>Loading referral data…</div>
+        <div style={{ flex:1, overflow:'auto' }}><DashboardSkeleton/></div>
       </div>
     );
   }

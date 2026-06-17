@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
   PieChart, Pie, ComposedChart, Line, CartesianGrid, ReferenceLine } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT58jwL_E0MSciEW_nyrHQMA-0DiFqUN3wstB9yTpfM3gdhK-ctxaODRuqtdxurFRJwmhvbzqS_9EuM/pub?output=csv'
@@ -229,7 +230,7 @@ export default function MTDDashboard(){
   const qlColor=v=>v>15?'#1F8F5B':v>5?'#1C9FD4':'#64748B'
   const maxSpend=srcs.length?Math.max(...srcs.map(s=>s.spend)):1
 
-  if(loading)return <div style={{display:'flex',height:'100vh',background:'#F4F6F9'}}><Sidebar/><div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:14,fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>Loading from Google Sheets...</div></div>
+  if(loading)return <div style={{display:'flex',height:'100vh',background:'#F4F6F9'}}><Sidebar/><div style={{flex:1,overflow:'auto'}}><DashboardSkeleton/></div></div>
   if(error)return <div style={{display:'flex',height:'100vh',background:'#F4F6F9'}}><Sidebar/><div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#64748B',fontSize:14}}>{error}</div></div>
 
   return(

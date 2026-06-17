@@ -226,8 +226,9 @@ async function runBatchGlobal() {
   snapStore.running = true
   const startPath = window.location.pathname
   const shots = []
-  const waitTall = (ms = 2600) => new Promise((res) => {
+  const waitTall = (ms = 5000) => new Promise((res) => {
     const start = Date.now()
+    let lastH = -1, stableCount = 0
     const tick = () => {
       let best = null
       document.querySelectorAll('div').forEach((d) => {
@@ -237,8 +238,19 @@ async function runBatchGlobal() {
         if (r.width < 700) return
         if (!best || d.scrollHeight > best.scrollHeight) best = d
       })
-      const tall = best && best.scrollHeight > window.innerHeight * 1.1
-      if (tall || Date.now() - start > ms) return res()
+      const elapsed = Date.now() - start
+      const h = best ? best.scrollHeight : 0
+      const tall = best && h > window.innerHeight * 1.1
+      // still showing the unified loading skeleton? keep waiting
+      const stillLoading = document.querySelector('[class*="bone"], [class*="Skeleton"]')
+      // height stable across consecutive ticks = layout settled
+      if (h === lastH && h > 0) stableCount++; else stableCount = 0
+      lastH = h
+      const settled = tall && !stillLoading && stableCount >= 2
+      if (settled || elapsed > ms) {
+        // give charts a beat to finish their entrance animation
+        return setTimeout(res, 650)
+      }
       setTimeout(tick, 200)
     }
     setTimeout(tick, 500)

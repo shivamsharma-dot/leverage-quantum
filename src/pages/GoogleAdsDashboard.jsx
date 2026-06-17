@@ -2,6 +2,7 @@ import React,{useState,useEffect,useCallback,useRef} from 'react'
 import{useSearchParams}from 'react-router-dom'
 import{BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,Cell,CartesianGrid,ComposedChart,Line,ReferenceLine}from 'recharts'
 import Sidebar from '../components/Sidebar'
+import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 
 const DATE_RANGES=[{id:'TODAY',label:'Today'},{id:'LAST_7_DAYS',label:'Last 7 days'},{id:'LAST_30_DAYS',label:'Last 30 days'},{id:'LAST_90_DAYS',label:'Last 90 days'},{id:'THIS_MONTH',label:'This month'},{id:'LAST_MONTH',label:'Last month'}]
 const TABS=[{id:'campaigns',label:'Campaigns'},{id:'keywords',label:'Keywords'},{id:'searchTerms',label:'Search terms'},{id:'adGroups',label:'Ad groups'}]
@@ -134,7 +135,7 @@ function CampaignsTab({data,loading}){
   </>
 }
 
-const Loader=()=><div style={{display:'flex',alignItems:'center',justifyContent:'center',height:300,color:'#94A3B8',fontSize:13}}>Loading from Google Ads...</div>
+const Loader=()=><InlineLoader label='Loading from Google Ads' height={300}/>
 
 function KeywordsTab({data,loading}){
   const {sort,Th}=useSort('spend')

@@ -3,6 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend, Cell, PieChart, Pie, CartesianGrid} from 'recharts'
 import Sidebar from '../components/Sidebar'
+import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { fetchCSV } from '../lib/sheetCache'
@@ -1158,31 +1159,8 @@ export default function LeadQualificationDashboard() {
         {/* ── BODY ─────────────────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
           {loading && rows.length === 0 ? (
-            <div style={{ animation:'fadeUp .3s ease' }}>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:20 }}>
-                {[C.navy,C.blue,C.cyan,C.green].map((c,ci)=>(
-                  <div key={c} style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:14, padding:'18px 20px', borderTop:`3px solid ${c}`, boxShadow:'0 1px 4px rgba(15,23,42,0.04)' }}>
-                    {[[60,9,10],[75,26,8],[50,13,0]].map(([w,h,mb],j)=>(
-                      <div key={j} style={{ width:`${w}%`, height:h, borderRadius:6, marginBottom:mb, background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)', backgroundSize:'200% 100%', animation:`shimmer 1.4s ease ${(ci*3+j)*0.06}s infinite` }}/>
-                    ))}
-                  </div>
-                ))}
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1.5fr 1fr', gap:14, marginBottom:14 }}>
-                {[260,260].map((h,ci)=>(
-                  <div key={ci} style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:14, padding:'16px 20px' }}>
-                    <div style={{ width:'45%', height:13, borderRadius:6, marginBottom:8, background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)', backgroundSize:'200% 100%', animation:'shimmer 1.4s ease infinite' }}/>
-                    <div style={{ width:'60%', height:11, borderRadius:6, marginBottom:16, background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)', backgroundSize:'200% 100%', animation:'shimmer 1.4s ease .05s infinite' }}/>
-                    <div style={{ display:'flex', alignItems:'flex-end', gap:6, height:h }}>
-                      {[55,70,45,85,60,90,40,75,55,80,50,65].map((p,j)=>(
-                        <div key={j} style={{ flex:1, height:`${p}%`, borderRadius:'4px 4px 0 0', background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)', backgroundSize:'200% 100%', animation:`shimmer 1.4s ease ${j*0.06}s infinite` }}/>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
+          <DashboardSkeleton/>
+        ) : (
             <>
               {/* ── PREMIUM KPI ROW ── */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 18 }}>
