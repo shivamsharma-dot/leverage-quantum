@@ -193,7 +193,7 @@ export default function AskAI() {
 
   // Load conversations from Supabase on mount and merge
   useEffect(()=>{
-    sbGet('ask_ai_conversations',`?user_id=eq.${uid}&order=updated_at.desc&limit=60`)
+    sbGet('ask_ai_conversations',`?order=updated_at.desc&limit=500`)
       .then(d=>{
         if(!Array.isArray(d)||!d.length) return
         setConvs(prev=>{
@@ -208,7 +208,7 @@ export default function AskAI() {
               if(msgs?.[0]?.messages){ try{localStorage.setItem(`ch_${c.id}`,msgs[0].messages)}catch{} }
             }
           })
-          return merged.slice(0,60)
+          return merged.slice(0,500)
         })
       }).catch(()=>{})
   },[uid])
@@ -234,7 +234,7 @@ export default function AskAI() {
   const textRef     = useRef(null)
 
   // persist convs
-  useEffect(()=>{try{localStorage.setItem(CV_KEY,JSON.stringify(convs.slice(0,60)))}catch{}},[convs])
+  useEffect(()=>{try{localStorage.setItem(CV_KEY,JSON.stringify(convs.slice(0,500)))}catch{}},[convs])
   useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:'smooth'})},[messages,loading])
 
   // load meta token
@@ -258,11 +258,11 @@ export default function AskAI() {
     const title = msgs.find(m=>m.role==='user')?.content?.slice(0,45)||'New conversation'
     const now = new Date().toISOString()
     // Keep localStorage as fast cache
-    try{localStorage.setItem(`ch_${id}`,JSON.stringify(msgs.slice(-120)))}catch{}
+    try{localStorage.setItem(`ch_${id}`,JSON.stringify(msgs.slice(-400)))}catch{}
     setConvs(cs=>cs.map(c=>c.id===id?{...c,updated_at:now,message_count:msgs.length,title}:c))
     // Persist to Supabase
     try {
-      await sbPost('ask_ai_messages', { conv_id:id, user_id:uid, messages:JSON.stringify(msgs.slice(-120)), updated_at:now })
+      await sbPost('ask_ai_messages', { conv_id:id, user_id:uid, messages:JSON.stringify(msgs.slice(-400)), updated_at:now })
       await fetch(`${SB_URL}/rest/v1/ask_ai_conversations?id=eq.${id}`, {
         method:'PATCH', headers:{...SBH,Prefer:'return=minimal'},
         body:JSON.stringify({title,updated_at:now,message_count:msgs.length})
@@ -280,10 +280,21 @@ export default function AskAI() {
     try { await sbPost('ask_ai_conversations',{...conv,user_id:uid}) } catch(e){ console.warn('SB conv create failed',e) }
   },[uid])
 
-  const selectConv = useCallback(c=>{
+  const selectConv = useCallback(async c=>{
     setActiveId(c.id)
-    try{setMessages(JSON.parse(localStorage.getItem(`ch_${c.id}`)||'[]'))}catch{setMessages([])}
     setRail(null); setShowWelcomeAnim(false)
+    // Show cached instantly, then refresh from Supabase (authoritative — survives localStorage clears / other devices)
+    try{ setMessages(JSON.parse(localStorage.getItem(`ch_${c.id}`)||'[]')) }catch{ setMessages([]) }
+    try {
+      const rows = await sbGet('ask_ai_messages',`?conv_id=eq.${c.id}&order=updated_at.desc&limit=1`)
+      if(rows?.[0]?.messages){
+        const msgs = typeof rows[0].messages==='string' ? JSON.parse(rows[0].messages) : rows[0].messages
+        if(Array.isArray(msgs) && msgs.length){
+          setMessages(msgs)
+          try{ localStorage.setItem(`ch_${c.id}`, JSON.stringify(msgs)) }catch{}
+        }
+      }
+    } catch {}
   },[])
 
   const deleteConv = useCallback(async id=>{
@@ -364,7 +375,7 @@ export default function AskAI() {
   const now0=new Date(); now0.setHours(0,0,0,0)
   const grouped=useMemo(()=>{
     const q=convSearch.toLowerCase()
-    const filtered=convs.filter(c=>!q||c.title.toLowerCase().includes(q))
+    const filtered=convs.filter(c=>!q||c.title.toLowerCase().includes(q)||(c.user_id||'').toLowerCase().includes(q))
     const T=[],Y=[],E=[]
     filtered.forEach(c=>{
       const d=new Date(c.updated_at||c.created_at||0); d.setHours(0,0,0,0)
@@ -462,7 +473,7 @@ export default function AskAI() {
                   <div style={{padding:'10px 12px',flexShrink:0}}>
                     <div style={{position:'relative'}}>
                       <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={12} c="#CBD5E1"/></span>
-                      <input value={convSearch} onChange={e=>setConvSearch(e.target.value)} placeholder="Search conversations…"
+                      <input value={convSearch} onChange={e=>setConvSearch(e.target.value)} placeholder="Search conversations or person…"
                         style={{width:'100%',background:'#F8FAFC',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px 7px 30px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
                     </div>
                   </div>
@@ -475,7 +486,13 @@ export default function AskAI() {
                             style={{display:'flex',alignItems:'center',gap:0,borderRadius:8,margin:'1px 0',cursor:'pointer',background:c.id===activeId?'rgba(28,159,212,0.12)':'transparent',borderLeft:c.id===activeId?`2px solid ${BLUE}`:'2px solid transparent',transition:'all .15s'}}>
                             <div style={{flex:1,padding:'8px 10px 8px 8px',minWidth:0}}>
                               <div style={{fontSize:12.5,color:c.id===activeId?'#fff':'#374151',fontWeight:c.id===activeId?600:400,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.title}</div>
-                              <div style={{fontSize:10.5,color:'#CBD5E1',marginTop:1}}>{c.message_count||0} messages</div>
+                              <div style={{fontSize:10.5,color:c.id===activeId?'rgba(255,255,255,0.7)':'#94A3B8',marginTop:2,display:'flex',alignItems:'center',gap:5,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>
+                                {c.user_id && c.user_id!=='default' && <span style={{display:'inline-flex',alignItems:'center',gap:3}}>
+                                  <span style={{width:13,height:13,borderRadius:'50%',background:c.id===activeId?'rgba(255,255,255,0.25)':'#E8EFF9',color:c.id===activeId?'#fff':'#1F3C84',fontSize:7.5,fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{(c.user_id.split('@')[0][0]||'?').toUpperCase()}</span>
+                                  {c.user_id.split('@')[0]}
+                                </span>}
+                                <span style={{opacity:0.7}}>· {c.message_count||0} msg</span>
+                              </div>
                             </div>
                             <button className="delbtn" onClick={e=>{e.stopPropagation();deleteConv(c.id)}}
                               style={{padding:'0 8px',background:'transparent',border:'none',cursor:'pointer',opacity:0,transition:'opacity .15s',flexShrink:0}}>
