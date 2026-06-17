@@ -77,7 +77,7 @@ export default function SettingsPage() {
   const [activityLoading, setActivityLoading] = useState(false)
   const loadActivity = async () => {
     setActivityLoading(true)
-    setActivityLog(await getActivityLog(200))
+    setActivityLog(await getActivityLog(500))
     setActivityLoading(false)
   }
 
@@ -701,7 +701,7 @@ export default function SettingsPage() {
                   <table style={{width:'100%',borderCollapse:'collapse',fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12.5}}>
                     <thead>
                       <tr style={{borderBottom:'1.5px solid #F1F5F9'}}>
-                        {['USER','EMAIL','ACTION','PAGE','DATE','TIME','AGO'].map(h=>(
+                        {['USER','ACTION','PAGE','DETAIL','DATE','TIME','AGO'].map(h=>(
                           <th key={h} style={{padding:'9px 12px',textAlign:'left',fontSize:10.5,fontWeight:700,color:'#94A3B8',letterSpacing:'0.06em',whiteSpace:'nowrap'}}>{h}</th>
                         ))}
                       </tr>
@@ -710,12 +710,21 @@ export default function SettingsPage() {
                       {activityLog.map((log,idx)=>{
                         const diff = Date.now()-new Date(log.created_at)
                         const rel = diff<60000?'just now':diff<3600000?Math.round(diff/60000)+'m ago':diff<86400000?Math.round(diff/3600000)+'h ago':Math.round(diff/86400000)+'d ago'
-                        const avColor = ['#1F3C84','#1C9FD4','#4CAE6F','#29B9C3','#8B5CF6'][((log.email||'').charCodeAt(0)||65)%5]
+                        const avColor = ['#1F3C84','#1C9FD4','#4CAE6F','#29B9C3','#1C9FD4'][((log.email||'').charCodeAt(0)||65)%5]
                         const avColor2 = ['#1C9FD4','#29B9C3','#4CAE6F','#1F3C84','#29B9C3'][((log.email||'').charCodeAt(1)||66)%5]
                         const pg = (log.page||'app').replace('/dashboard/','').replace('/','').split('?')[0]||'app'
-                        const pgLabel = pg.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ')
-                        const actionColor = log.action==='view'?'#1C9FD4':log.action==='login'?'#4CAE6F':'#94A3B8'
-                        const actionBg = log.action==='view'?'#E3F5FD':log.action==='login'?'#E9F8EF':'#F3F4F6'
+                        const pgLabel = pg==='app'?'Summary':pg.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ')
+                        const ACT = {
+                          view:   {c:'#1C9FD4', bg:'#E3F5FD'},
+                          click:  {c:'#1F3C84', bg:'#E8EFF9'},
+                          tab:    {c:'#29B9C3', bg:'#E4F8F9'},
+                          login:  {c:'#15803D', bg:'#E9F8EF'},
+                          logout: {c:'#B45309', bg:'#FEF3C7'},
+                          leave:  {c:'#94A3B8', bg:'#F3F4F6'},
+                          search: {c:'#1C9FD4', bg:'#E3F5FD'},
+                          export: {c:'#4CAE6F', bg:'#E9F8EF'},
+                        }
+                        const a = ACT[log.action] || {c:'#94A3B8', bg:'#F3F4F6'}
                         const dt = new Date(log.created_at)
                         const dateStr = dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
                         const timeStr = dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})
@@ -731,11 +740,11 @@ export default function SettingsPage() {
                                 <span style={{fontWeight:600,color:'#0F172A'}}>{(log.email||'').split('@')[0]}</span>
                               </div>
                             </td>
-                            <td style={{padding:'10px 12px',color:'#64748B',fontSize:11.5}}>{log.email}</td>
                             <td style={{padding:'10px 12px'}}>
-                              <span style={{padding:'3px 9px',borderRadius:20,fontSize:10.5,fontWeight:700,background:actionBg,color:actionColor,textTransform:'uppercase',letterSpacing:'0.04em'}}>{log.action||'view'}</span>
+                              <span style={{padding:'3px 9px',borderRadius:20,fontSize:10.5,fontWeight:700,background:a.bg,color:a.c,textTransform:'uppercase',letterSpacing:'0.04em'}}>{log.action||'view'}</span>
                             </td>
-                            <td style={{padding:'10px 12px',color:'#0F172A',fontWeight:600}}>{pgLabel}</td>
+                            <td style={{padding:'10px 12px',color:'#0F172A',fontWeight:600,whiteSpace:'nowrap'}}>{pgLabel}</td>
+                            <td style={{padding:'10px 12px',color:'#475569',fontSize:11.5,maxWidth:280,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={log.detail||''}>{log.detail||'—'}</td>
                             <td style={{padding:'10px 12px',whiteSpace:'nowrap',color:'#374151'}}>{dateStr}</td>
                             <td style={{padding:'10px 12px',whiteSpace:'nowrap',color:'#374151'}}>{timeStr}</td>
                             <td style={{padding:'10px 12px',color:'#94A3B8',whiteSpace:'nowrap',fontSize:11.5}}>{rel}</td>
