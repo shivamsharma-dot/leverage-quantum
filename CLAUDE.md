@@ -602,3 +602,10 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 - BRAND DELTA COLOR (both MTD + QL Ops): negative delta was red #B91C1C/#FEF2F2 (QL Ops) or grey #64748B (my earlier MTD). Now negative = navy #1F3C84 text on #EEF1FB tint; positive stays green #15803D/#E9F8EF. NO red, NO grey.
 - Built OK (6.94s). Verified live: MTD KPI cards now have icon badges + delta pills matching QL Ops; negative deltas navy-tinted on both pages. Backups /tmp/MTD2.bak, /tmp/LQ.bak.
 - TODO: other pages still have red #B91C1C/#FEF2F2 in PremKPI delta (MetaAds, WhatsApp, ChannelMix, GoogleAds, LeadQuality, Revenue, Settings) — fix those negative-delta reds during each page's premium pass. Then major Settings redesign.
+
+## 2026-06-17 — MTD CPL-by-source grey fix (commit 16f8115)
+- USER feedback: "MTD still have grey colour in cpl by source graph".
+- Root cause: prior pass set the above-average CPL bar to slate #94A3B8 (grey is NOT brand). Fixed MTDDashboard.jsx CPL-by-source: above-avg bar Cell fill #94A3B8 -> brand navy #1F3C84, and matching "Above avg" legend swatch (height:3) #94A3B8 -> #1F3C84. Below-avg stays green #4CAE6F.
+- Kept the dashed Avg ReferenceLine + its "Average" legend swatch (height:2) grey #94A3B8 (neutral guide line, not a data element).
+- Built OK 7.07s. Pushed 229f280..16f8115. Verified live + zoomed: Google bar now navy, no grey in chart bars.
+- REMINDER: grey/slate (#94A3B8/#64748B) is off-brand for any DATA element. Brand only: navy #1F3C84, blue #1C9FD4, cyan #29B9C3, green #4CAE6F. Use navy for "above-avg/worse" semantics, NOT grey/red.
