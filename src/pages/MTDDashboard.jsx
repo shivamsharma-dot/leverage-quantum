@@ -345,17 +345,31 @@ export default function MTDDashboard(){
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1.2fr',gap:14,marginBottom:14}}>
 
               <Card title='Spend by source' sub='Share of total ad spend'>
-                <ResponsiveContainer width='100%' height={240}>
-                  <PieChart>
-                    <Pie data={spendPie} cx='50%' cy='50%' innerRadius={55} outerRadius={85} isAnimationActive={false}
-                      dataKey='value' labelLine={false} label={PieLbl}>
-                      {spendPie.map((e,i)=><Cell key={i} fill={sc(e.name)}/>)}
-                    </Pie>
-                    <Tooltip content={<BrandTooltip fmt={v=>fmtINR(v)}/>}/>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div style={{display:'flex',flexWrap:'wrap',gap:'6px 14px',marginTop:8}}>
-                  {spendPie.slice(0,6).map(s=><div key={s.name} style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'#374151'}}><span style={{width:8,height:8,borderRadius:'50%',background:sc(s.name),display:'inline-block',flexShrink:0}}/>{s.name}</div>)}
+                <div style={{position:'relative',width:'100%'}}>
+                  <ResponsiveContainer width='100%' height={186}>
+                    <PieChart>
+                      <Pie data={spendPie} cx='50%' cy='50%' innerRadius={62} outerRadius={84} dataKey='value' startAngle={90} endAngle={-270} isAnimationActive={false} strokeWidth={0} paddingAngle={2} cornerRadius={4}>
+                        {spendPie.map((e,i)=><Cell key={i} fill={sc(e.name)}/>)}
+                      </Pie>
+                      <Tooltip content={<BrandTooltip fmt={v=>fmtINR(v)}/>}/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center',pointerEvents:'none'}}>
+                    <div style={{fontSize:21,fontWeight:800,color:'#0F1F4B',letterSpacing:'-0.5px',lineHeight:1}}>{fmtINR(total.spend)}</div>
+                    <div style={{fontSize:9.5,fontWeight:700,color:'#94A3B8',textTransform:'uppercase',letterSpacing:'0.06em',marginTop:3}}>Total Spend</div>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:14,marginTop:10,flexWrap:'wrap',justifyContent:'center'}}>
+                  {spendPie.slice(0,6).map(s=>(
+                    <div key={s.name} style={{textAlign:'center'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}>
+                        <span style={{width:7,height:7,borderRadius:2,background:sc(s.name),display:'inline-block',flexShrink:0}}/>
+                        <span style={{fontSize:10,fontWeight:600,color:'#64748B'}}>{s.name}</span>
+                      </div>
+                      <div style={{fontSize:15,fontWeight:800,color:'#0F1F4B',letterSpacing:'-0.3px'}}>{fmtINR(s.value)}</div>
+                      <div style={{fontSize:10,color:'#94A3B8'}}>{total.spend>0?(s.value/total.spend*100).toFixed(1):0}%</div>
+                    </div>
+                  ))}
                 </div>
               </Card>
 
