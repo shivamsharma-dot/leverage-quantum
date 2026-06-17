@@ -735,3 +735,8 @@ DashboardHome.jsx now uses sessionLoad getSession(home) + bust param so Home aut
 
 ## 2026-06-18 - Premium sidebar revamp (UI/design only)
 Revamped src/components/Sidebar.module.css into a premium FLOATING sidebar: detached rounded card (margin 12px, border-radius 18px, elevated shadow, no hard border-right), brand-tinted active states (cyan->navy gradient pill + left accent bar, navy bold text), refined nav items/group labels/typography, and a REDESIGNED collapse/expand toggle (prominent circular edge-mounted control with hover scale + navy fill, rotates between < and >). Collapsed = 78px icon-only floating rail with native title tooltips. Light surface (per user). All sidebar LOGIC untouched: NAV/PAGE_LIST/idMap, canSee role access, /api/preferences hidden-pages fetch + events, localStorage lq_sidebar_collapsed persistence, sub-menu expand, mobile drawer. JSX render unchanged - revamp done purely via CSS-module overrides (commit 0df0b25). Verified live: floating look, active pill, collapse/expand both work, no app console errors.
+
+## Sidebar toggle embed fix (post-revamp)
+- collapse/expand toggle now sits FULLY inside the sidebar (was half-out via right:-13px + overlapping Ask AI via top:70px).
+- Override at end of src/components/Sidebar.module.css: .collapseBtn/.collapseBtnExpanded -> position absolute, top:16px right:14px, 24px rounded-square, light surface, navy hover.
+- Collapsed-state .collapseBtn is re-centered under the logo (top:56px, left:50% translateX) to avoid overlapping the collapsed logo icon.
