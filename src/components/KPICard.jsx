@@ -16,6 +16,7 @@ const FONT = "'Plus Jakarta Sans', sans-serif"
  * @param {string}  [deltaLabel]  — override delta pill text
  * @param {React.ReactNode} [icon] — optional 14x14 SVG icon (rendered as muted monochrome)
  */
+if(typeof document!=='undefined' && !document.getElementById('qkpi-style')){const st=document.createElement('style');st.id='qkpi-style';st.textContent='.qkpi:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(15,23,42,0.05),0 16px 32px -14px rgba(28,159,212,0.28)!important}';document.head.appendChild(st);} /* qkpi-style-injected */
 export function KPICard({ label, value, sub, delta, deltaInvert = false, deltaLabel, icon }) {
   const isGood = deltaInvert ? delta <= 0 : delta >= 0
   const deltaText = deltaLabel
@@ -25,18 +26,22 @@ export function KPICard({ label, value, sub, delta, deltaInvert = false, deltaLa
     : null
 
   return (
-    <div style={{
-      background: '#fff',
-      border: '0.5px solid #E2E8F0',
-      borderRadius: 12,
-      padding: '16px 20px 14px',
+    <div className="qkpi" style={{
+      position: 'relative',
+      background: 'linear-gradient(160deg,#FFFFFF 0%,#FBFCFE 100%)',
+      border: '1px solid #EAEEF4',
+      borderRadius: 16,
+      padding: '16px 20px 15px',
       display: 'flex',
       flexDirection: 'column',
       gap: 0,
-      boxShadow: '0 1px 4px rgba(15,23,42,0.04)',
+      boxShadow: '0 1px 2px rgba(15,23,42,0.04), 0 8px 20px -12px rgba(15,23,42,0.10)',
       fontFamily: FONT,
       minWidth: 0,
+      overflow: 'hidden',
+      transition: 'transform .18s ease, box-shadow .18s ease',
     }}>
+      <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#1F3C84,#1C9FD4,#29B9C3)',opacity:0.9}}/>
       {/* Label row */}
       <div style={{
         display: 'flex',
@@ -99,7 +104,7 @@ export function KPICard({ label, value, sub, delta, deltaInvert = false, deltaLa
           <span style={{
             fontSize: 10.5,
             fontWeight: 700,
-            color: isGood ? '#16A34A' : '#DC2626',
+            color: isGood ? '#16A34A' : '#64748B',
             fontFamily: FONT,
             flexShrink: 0,
           }}>
