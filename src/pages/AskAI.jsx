@@ -780,7 +780,7 @@ export default function AskAI() {
           <div style={{padding:'12px 20px 16px',flexShrink:0}}>
             <div style={{maxWidth:820,margin:'0 auto'}}>
             {/* Schedule Strip */}
-            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:18,marginBottom:9,padding:'7px 14px',background:'linear-gradient(135deg,rgba(31,60,132,0.05),rgba(28,159,212,0.05))',border:'0.5px solid rgba(28,159,212,0.18)',borderRadius:10,flexWrap:'wrap'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:18,marginBottom:9,padding:'7px 14px',background:'linear-gradient(135deg,rgba(31,60,132,0.04),rgba(28,159,212,0.04))',border:'0.5px solid #EEF2F6',borderRadius:10,flexWrap:'wrap'}}>
               <span style={{fontSize:9.5,fontWeight:800,letterSpacing:'.1em',color:'#94A3B8',textTransform:'uppercase'}}>Auto-send</span>
               {[
                 {color:BLUE,  label:'Daily',   desc:'Every day · 9:30 AM'},
@@ -796,7 +796,7 @@ export default function AskAI() {
             </div>
 
             {/* Send Report Bar */}
-            <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:10,padding:'9px 13px',background:'linear-gradient(135deg,#FFFFFF,#F7FBFE)',border:'0.5px solid rgba(28,159,212,0.22)',borderRadius:12,boxShadow:'0 6px 18px -10px rgba(31,60,132,0.22)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:10,padding:'9px 13px',background:'linear-gradient(135deg,#FFFFFF,#F7FBFE)',border:'0.5px solid #EEF2F6',borderRadius:12,boxShadow:'0 6px 18px -10px rgba(31,60,132,0.18)'}}>
               <span style={{width:24,height:24,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(135deg,#1F3C84,#1C9FD4)',boxShadow:'0 3px 8px -3px rgba(28,159,212,0.6)',flexShrink:0}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span>
               <span style={{fontSize:12.5,fontWeight:700,color:'#1F3C84',fontFamily:FONT,flex:1}}>Send Report</span>
               {sendMsg&&<span style={{fontSize:11.5,fontWeight:600,color:sendMsg.startsWith('✓')?'#059669':'#DC2626'}}>{sendMsg}</span>}
