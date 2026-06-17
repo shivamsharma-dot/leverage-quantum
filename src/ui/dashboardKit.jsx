@@ -77,7 +77,7 @@ export const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon }) =>
       <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.6px', color: '#0F1B33', lineHeight: 1.05, position: 'relative', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, minHeight: 18, position: 'relative' }}>
         {delta != null && (
-          <span style={{ fontSize: 10.5, fontWeight: 700, color: up ? '#15803D' : '#B91C1C', background: up ? '#E9F8EF' : '#FEF2F2', padding: '2px 7px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 2, fontFamily: FONT, flexShrink: 0 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: up ? '#15803D' : '#1F3C84', background: up ? '#E9F8EF' : '#EEF1FB', padding: '2px 7px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 2, fontFamily: FONT, flexShrink: 0 }}>
             {up ? '\u25B2' : '\u25BC'} {Math.abs(delta).toFixed(1)}%
           </span>
         )}
