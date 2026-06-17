@@ -576,3 +576,12 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 - Fix: (1) active button className -> {on?'rb rb-active':'rb'}; (2) hover scoped to .rb:not(.rb-active):hover with border-radius:14px + rgba(28,159,212,0.10); (3) base .rb gets smooth transition (background .18s, border-radius .18s).
 - VERIFIED LIVE: active tab keeps gradient on hover; inactive tabs show clean rounded blue hover pill, no flash.
 - All backend wiring untouched; DashboardHome.jsx kept uncommitted (M).
+
+## 2026-06-17 — Premium design system pass: START (commit 5fa1703)
+- GOAL (user): premium look across ALL pages (KPI cards, charts, headers), logo section, + major Settings redesign.
+- Shared KPICard.jsx upgraded: gradient accent bar (navy->blue->cyan) top strip, layered shadow, 16px radius, gradient bg, hover lift (.qkpi via injected style tag), negative delta off RED #DC2626 -> on-brand slate #64748B. Affects every page using KPICard.
+- Logo: QUANTUM wordmark (.quantumLabel span in Sidebar.module.css) -> brand gradient text (navy->blue->cyan), weight 800, letter-spacing 2.8px. Sidebar logic untouched (user approved logo work).
+- VERIFIED LIVE: gradient KPI cards on Meta Ads page, gradient QUANTUM wordmark.
+- TODO next (per approved plan): chart wrapper premium style applied page-by-page; fix off-brand red/amber values seen in Meta Ads table (CTR red, CPL amber) -> brand palette; major Settings redesign.
+- OPEN QUESTION for user: Home/Summary page is DashboardHome.jsx which must stay UNCOMMITTED (standing rule). Also "Good morning ... wave emoji" lives there. Need user's call before editing/committing DashboardHome.
+- DashboardHome.jsx kept uncommitted (M) as always.
