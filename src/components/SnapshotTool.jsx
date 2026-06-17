@@ -4,15 +4,21 @@ import { toPng } from 'html-to-image'
 /*
   SnapshotTool — panel-wide screenshot capture.
   Self-contained floating control rendered from the shared Sidebar so it
-  appears on every page. Captures the dashboard view to a PNG that can be
-  downloaded or copied to the clipboard for sharing.
+  appears on every page. Three modes:
+    - Full page      : the entire scrollable dashboard
+    - Visible area   : just what is on screen right now (fast)
+    - Select region  : drag a box, capture only that crop
+  Then preview the result and Download / Copy to clipboard.
   Brand palette only: navy #1F3C84, blue #1C9FD4, cyan #29B9C3, green #4CAE6F.
 */
 
 const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 const NAVY = '#1F3C84'
+const BLUE = '#1C9FD4'
 const CYAN = '#29B9C3'
 const GREEN = '#4CAE6F'
+const INK = '#0F1F4B'
+const BG = '#F4F6F9'
 
 const PAGE_NAMES = {
   '/': 'Home',
@@ -29,10 +35,95 @@ const PAGE_NAMES = {
   '/settings': 'Settings',
 }
 
+const pageLabel = () => {
+  const p = window.location.pathname
+  return PAGE_NAMES[p] || (p.split('/').filter(Boolean).pop() || 'panel')
+}
+const stamp = () => {
+  const d = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`
+}
+const ignoreFilter = (el) => !(el?.dataset && el.dataset.snapshotIgnore === 'true')
+
+// The full scrollable content region (flex:1 / overflowY:auto), so a full-page
+// shot includes everything below the fold. Falls back to the document body.
+const getContentRoot = () => {
+  const explicit = document.querySelector('[data-snapshot-root]')
+  if (explicit) return explicit
+  let best = null
+  document.querySelectorAll('div').forEach((d) => {
+    const cs = getComputedStyle(d)
+    if (cs.overflowY !== 'auto' && cs.overflowY !== 'scroll') return
+    const r = d.getBoundingClientRect()
+    if (r.width < 700) return
+    if (d.scrollHeight < window.innerHeight - 40) return
+    if (!best || d.scrollHeight > best.scrollHeight) best = d
+  })
+  return best || document.querySelector('main') || document.body
+}
+
+// Capture an element fully (its whole scrollHeight) to a PNG data URL.
+async function captureNode(node) {
+  return toPng(node, {
+    cacheBust: true,
+    pixelRatio: 2,
+    backgroundColor: BG,
+    width: node.scrollWidth,
+    height: node.scrollHeight,
+    filter: ignoreFilter,
+  })
+}
+
+// Capture only the current viewport (fast). Renders the content root but clips
+// to what is scrolled into view.
+async function captureViewport() {
+  const root = getContentRoot()
+  const r = root.getBoundingClientRect()
+  const scrollTop = root.scrollTop || 0
+  const scrollLeft = root.scrollLeft || 0
+  return toPng(root, {
+    cacheBust: true,
+    pixelRatio: 2,
+    backgroundColor: BG,
+    width: Math.min(r.width, root.clientWidth),
+    height: Math.min(r.height, window.innerHeight),
+    filter: ignoreFilter,
+    style: { transform: `translate(${-scrollLeft}px, ${-scrollTop}px)`, transformOrigin: 'top left' },
+  })
+}
+
+// Crop a region (viewport coordinates) out of a freshly captured viewport image.
+function cropDataUrl(dataUrl, rect, ratio) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(rect.w * ratio))
+      canvas.height = Math.max(1, Math.round(rect.h * ratio))
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(
+        img,
+        Math.round(rect.x * ratio), Math.round(rect.y * ratio),
+        Math.round(rect.w * ratio), Math.round(rect.h * ratio),
+        0, 0,
+        canvas.width, canvas.height,
+      )
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = reject
+    img.src = dataUrl
+  })
+}
+
 export default function SnapshotTool() {
   const [open, setOpen] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
-  const [toast, setToast] = React.useState(null) // {msg, ok}
+  const [toast, setToast] = React.useState(null)
+  const [result, setResult] = React.useState(null) // data URL of finished shot
+  const [cropping, setCropping] = React.useState(false)
+  const [sel, setSel] = React.useState(null) // {x,y,w,h} live drag rect (screen coords)
+  const dragRef = React.useRef(null)
   const toastTimer = React.useRef(null)
 
   const flash = (msg, ok = true) => {
@@ -41,156 +132,172 @@ export default function SnapshotTool() {
     toastTimer.current = setTimeout(() => setToast(null), 3200)
   }
 
-  // Pick the panel content node to capture. Prefer the main scrollable
-  // content region; fall back to the whole document body.
-  const getTarget = () => {
-    // Explicit opt-in wins if a page ever marks its content root.
-    const explicit = document.querySelector('[data-snapshot-root]')
-    if (explicit) return explicit
-    // The panel shell is a flex row: <Sidebar/> + a flex:1 scrolling content
-    // region. Find that scroll container so we capture the WHOLE page (not
-    // just the viewport). Pick the widest, tallest scrollable element.
-    let best = null
-    document.querySelectorAll('div').forEach((d) => {
-      const cs = getComputedStyle(d)
-      const scrolls = cs.overflowY === 'auto' || cs.overflowY === 'scroll'
-      if (!scrolls) return
-      const r = d.getBoundingClientRect()
-      if (r.width < 700) return
-      if (d.scrollHeight < window.innerHeight - 40) return
-      if (!best || d.scrollHeight > best.scrollHeight) best = d
-    })
-    return best || document.querySelector('main') || document.body
+  const runFull = async () => {
+    setOpen(false); setBusy(true)
+    try {
+      const url = await captureNode(getContentRoot())
+      setResult(url); flash('Full page captured')
+    } catch { flash('Capture failed, please retry', false) }
+    finally { setBusy(false) }
   }
 
-  const pageLabel = () => {
-    const p = window.location.pathname
-    return PAGE_NAMES[p] || (p.split('/').filter(Boolean).pop() || 'panel')
+  const runVisible = async () => {
+    setOpen(false); setBusy(true)
+    try {
+      const url = await captureViewport()
+      setResult(url); flash('Visible area captured')
+    } catch { flash('Capture failed, please retry', false) }
+    finally { setBusy(false) }
   }
 
-  const stamp = () => {
-    const d = new Date()
-    const pad = (n) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`
-  }
+  const startCrop = () => { setOpen(false); setSel(null); setCropping(true) }
 
-  const capture = async () => {
-    const node = getTarget()
-    if (!node) throw new Error('Nothing to capture')
-    // Hide the floating tool itself so it never appears in the shot.
-    return toPng(node, {
-      cacheBust: true,
-      pixelRatio: 2,
-      backgroundColor: '#F4F6F9',
-      filter: (el) => !(el?.dataset && el.dataset.snapshotIgnore === 'true'),
+  // mouse handlers for the crop overlay
+  const onCropDown = (e) => {
+    dragRef.current = { x: e.clientX, y: e.clientY }
+    setSel({ x: e.clientX, y: e.clientY, w: 0, h: 0 })
+  }
+  const onCropMove = (e) => {
+    if (!dragRef.current) return
+    const s = dragRef.current
+    setSel({
+      x: Math.min(s.x, e.clientX), y: Math.min(s.y, e.clientY),
+      w: Math.abs(e.clientX - s.x), h: Math.abs(e.clientY - s.y),
     })
   }
-
-  const handleDownload = async () => {
-    setOpen(false)
-    setBusy(true)
+  const onCropUp = async () => {
+    const rect = sel
+    dragRef.current = null
+    if (!rect || rect.w < 8 || rect.h < 8) { setCropping(false); setSel(null); return }
+    setCropping(false); setSel(null); setBusy(true)
     try {
-      const url = await capture()
-      const a = document.createElement('a')
-      a.download = `Quantum_${pageLabel()}_${stamp()}.png`
-      a.href = url
-      a.click()
-      flash('Snapshot downloaded')
-    } catch (e) {
-      flash('Capture failed, please retry', false)
-    } finally {
-      setBusy(false)
-    }
+      const root = getContentRoot()
+      const rr = root.getBoundingClientRect()
+      // translate screen rect -> content-root-relative rect
+      const local = { x: rect.x - rr.left, y: rect.y - rr.top, w: rect.w, h: rect.h }
+      const full = await captureViewport()
+      const cropped = await cropDataUrl(full, local, 2)
+      setResult(cropped); flash('Region captured')
+    } catch { flash('Capture failed, please retry', false) }
+    finally { setBusy(false) }
   }
 
-  const handleCopy = async () => {
-    setOpen(false)
-    setBusy(true)
+  React.useEffect(() => {
+    if (!cropping) return
+    const onKey = (e) => { if (e.key === 'Escape') { dragRef.current = null; setCropping(false); setSel(null) } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [cropping])
+
+  const download = () => {
+    if (!result) return
+    const a = document.createElement('a')
+    a.download = `Quantum_${pageLabel()}_${stamp()}.png`
+    a.href = result
+    a.click()
+    flash('Snapshot downloaded')
+  }
+  const copy = async () => {
+    if (!result) return
     try {
-      const url = await capture()
-      const blob = await (await fetch(url)).blob()
-      await navigator.clipboard.write([
-        new window.ClipboardItem({ 'image/png': blob }),
-      ])
+      const blob = await (await fetch(result)).blob()
+      await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })])
       flash('Copied to clipboard')
-    } catch (e) {
-      flash('Copy unavailable, try download', false)
-    } finally {
-      setBusy(false)
-    }
+    } catch { flash('Copy unavailable, use download', false) }
   }
 
   return (
-    <div
-      data-snapshot-ignore="true"
-      style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 9999, fontFamily: FONT }}
-    >
-      {toast && (
+    <>
+      {/* Crop overlay */}
+      {cropping && (
         <div
-          style={{
-            position: 'absolute', bottom: 64, right: 0, whiteSpace: 'nowrap',
-            background: '#fff', border: '1px solid #E6EAF2',
-            borderLeft: `3px solid ${toast.ok ? GREEN : NAVY}`,
-            borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 600,
-            color: '#0F1F4B', boxShadow: '0 10px 30px rgba(15,31,75,0.16)',
-          }}
+          data-snapshot-ignore="true"
+          onMouseDown={onCropDown}
+          onMouseMove={onCropMove}
+          onMouseUp={onCropUp}
+          style={{ position: 'fixed', inset: 0, zIndex: 10000, cursor: 'crosshair', background: 'rgba(15,31,75,0.30)', fontFamily: FONT }}
         >
-          {toast.msg}
-        </div>
-      )}
-
-      {open && !busy && (
-        <div
-          style={{
-            position: 'absolute', bottom: 64, right: 0, width: 232,
-            background: '#fff', border: '1px solid #E6EAF2', borderRadius: 14,
-            boxShadow: '0 16px 40px rgba(15,31,75,0.20)', overflow: 'hidden',
-          }}
-        >
-          <div style={{ padding: '12px 14px 8px', fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#94A3B8' }}>
-            Capture this view
+          <div style={{ position: 'absolute', top: 18, left: '50%', transform: 'translateX(-50%)', background: '#fff', borderRadius: 10, padding: '8px 16px', fontSize: 13, fontWeight: 700, color: INK, boxShadow: '0 8px 24px rgba(15,31,75,0.25)' }}>
+            Drag to select an area &nbsp;·&nbsp; <span style={{ color: '#94A3B8', fontWeight: 600 }}>Esc to cancel</span>
           </div>
-          <button onClick={handleDownload} style={menuItem}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download PNG
-          </button>
-          <button onClick={handleCopy} style={menuItem}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            Copy to clipboard
-          </button>
+          {sel && sel.w > 0 && (
+            <div style={{ position: 'absolute', left: sel.x, top: sel.y, width: sel.w, height: sel.h, border: `2px solid ${CYAN}`, background: 'rgba(41,185,195,0.12)', boxShadow: '0 0 0 9999px rgba(15,31,75,0.10)' }}>
+              <span style={{ position: 'absolute', top: -22, left: 0, fontSize: 11, fontWeight: 700, color: '#fff', background: NAVY, borderRadius: 5, padding: '1px 6px' }}>
+                {Math.round(sel.w)} × {Math.round(sel.h)}
+              </span>
+            </div>
+          )}
         </div>
       )}
 
-      <button
-        onClick={() => (busy ? null : setOpen((o) => !o))}
-        title="Capture panel snapshot"
-        aria-label="Capture panel snapshot"
-        style={{
-          width: 52, height: 52, borderRadius: 16, border: 'none', cursor: busy ? 'wait' : 'pointer',
-          background: `linear-gradient(135deg, ${NAVY} 0%, ${CYAN} 130%)`,
-          boxShadow: '0 10px 26px rgba(31,60,132,0.38)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center', transition: 'transform .15s ease',
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
-      >
-        {busy ? (
-          <svg width="22" height="22" viewBox="0 0 24 24" style={{ animation: 'qspin 0.8s linear infinite' }}>
-            <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5"/>
-            <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
-          </svg>
-        ) : (
-          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      {/* Result preview modal */}
+      {result && (
+        <div data-snapshot-ignore="true" style={{ position: 'fixed', inset: 0, zIndex: 10001, background: 'rgba(15,31,75,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: FONT }} onClick={() => setResult(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 18, boxShadow: '0 24px 70px rgba(15,31,75,0.40)', maxWidth: 'min(880px, 92vw)', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #EEF1F6' }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: INK }}>Snapshot ready</div>
+                <div style={{ fontSize: 12, color: '#94A3B8', fontWeight: 600 }}>{pageLabel()} · {stamp().replace('_', ' ')}</div>
+              </div>
+              <button onClick={() => setResult(null)} aria-label="Close" style={{ border: 'none', background: '#F4F6F9', width: 32, height: 32, borderRadius: 9, cursor: 'pointer', fontSize: 17, color: '#64748B', lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ padding: 18, overflow: 'auto', background: BG }}>
+              <img src={result} alt="snapshot preview" style={{ display: 'block', maxWidth: '100%', borderRadius: 10, border: '1px solid #E6EAF2', boxShadow: '0 8px 24px rgba(15,31,75,0.12)' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', padding: '14px 20px', borderTop: '1px solid #EEF1F6' }}>
+              <button onClick={copy} style={btnGhost}>Copy</button>
+              <button onClick={download} style={btnPrimary}>Download PNG</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating control */}
+      <div data-snapshot-ignore="true" style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 9999, fontFamily: FONT }}>
+        {toast && (
+          <div style={{ position: 'absolute', bottom: 64, right: 0, whiteSpace: 'nowrap', background: '#fff', border: '1px solid #E6EAF2', borderLeft: `3px solid ${toast.ok ? GREEN : NAVY}`, borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 600, color: INK, boxShadow: '0 10px 30px rgba(15,31,75,0.16)' }}>
+            {toast.msg}
+          </div>
         )}
-      </button>
-      <style>{`@keyframes qspin{to{transform:rotate(360deg)}}`}</style>
-    </div>
+
+        {open && !busy && (
+          <div style={{ position: 'absolute', bottom: 64, right: 0, width: 248, background: '#fff', border: '1px solid #E6EAF2', borderRadius: 14, boxShadow: '0 16px 40px rgba(15,31,75,0.20)', overflow: 'hidden' }}>
+            <div style={{ padding: '12px 14px 8px', fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#94A3B8' }}>Capture</div>
+            <button onClick={runFull} style={menuItem}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+              <span><b>Full page</b><i style={subTxt}>entire dashboard</i></span>
+            </button>
+            <button onClick={runVisible} style={menuItem}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/></svg>
+              <span><b>Visible area</b><i style={subTxt}>what is on screen</i></span>
+            </button>
+            <button onClick={startCrop} style={menuItem}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>
+              <span><b>Select region</b><i style={subTxt}>drag to crop</i></span>
+            </button>
+          </div>
+        )}
+
+        <button onClick={() => (busy ? null : setOpen((o) => !o))} title="Capture panel snapshot" aria-label="Capture panel snapshot"
+          style={{ width: 52, height: 52, borderRadius: 16, border: 'none', cursor: busy ? 'wait' : 'pointer', background: `linear-gradient(135deg, ${NAVY} 0%, ${CYAN} 130%)`, boxShadow: '0 10px 26px rgba(31,60,132,0.38)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .15s ease' }}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}>
+          {busy ? (
+            <svg width="22" height="22" viewBox="0 0 24 24" style={{ animation: 'qspin 0.8s linear infinite' }}>
+              <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5"/>
+              <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          )}
+        </button>
+        <style>{`@keyframes qspin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    </>
   )
 }
 
-const menuItem = {
-  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-  padding: '11px 14px', border: 'none', background: 'transparent',
-  fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: '#0F1F4B',
-  cursor: 'pointer', textAlign: 'left',
-}
+const menuItem = { display: 'flex', alignItems: 'center', gap: 11, width: '100%', padding: '11px 14px', border: 'none', background: 'transparent', fontFamily: FONT, fontSize: 13.5, fontWeight: 600, color: INK, cursor: 'pointer', textAlign: 'left' }
+const subTxt = { display: 'block', fontSize: 11, fontWeight: 500, fontStyle: 'normal', color: '#94A3B8', marginTop: 1 }
+const btnGhost = { padding: '9px 18px', borderRadius: 10, border: '1px solid #D8DEEA', background: '#fff', color: NAVY, fontFamily: FONT, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }
+const btnPrimary = { padding: '9px 18px', borderRadius: 10, border: 'none', background: `linear-gradient(135deg, ${NAVY}, ${BLUE})`, color: '#fff', fontFamily: FONT, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }
