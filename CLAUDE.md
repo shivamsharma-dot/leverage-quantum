@@ -4,6 +4,30 @@
 
 ---
 
+## Recent Work (June 2026 — latest session)
+
+**PWA / installable iOS app** — Quantum is now installable to iOS/Android home screen (free, no App Store).
+- Files: `public/manifest.json`, `public/sw.js` (network-first SW — deliberately NOT cache-first, avoids stale-chunk blank pages), `public/icon-{180,192,512}.png` + `icon-maskable-512.png` + `icon.svg`. Apple meta tags + SW registration in `index.html`.
+- Icon = official Quantum sidebar mark (3 ascending bars green `#4CAE6F` → blue `#1C9FD4` → navy `#1F3C84`) on WHITE rounded square (sidebar logo treatment, NOT dark navy). Manifest `background_color` white, `theme_color` `#1F3C84`.
+- Icon source geometry from `Sidebar.jsx` logo SVG (viewBox 0 0 22 22). No emoji, no dot.
+- iOS install is manual (Apple blocks auto-prompt): Safari → Share → Add to Home Screen. Tell users once.
+
+**Ask AI chat history — now permanent & SHARED across all users**
+- Was disappearing because the SB tables never existed (writes silently failed → localStorage only). Tables created + upsert bug fixed (see Critical Bugs).
+- Load: `sbGet('ask_ai_conversations','?order=updated_at.desc&limit=500')` — NO user_id filter (shared). Reads are Supabase-authoritative (localStorage is just fast cache).
+- `selectConv` fetches messages from Supabase (survives localStorage clears / new devices).
+- Conversation list shows creator (avatar + name from `user_id`), searchable by person.
+- Caps raised: 500 convs, 400 msgs each (was 60/120).
+- `saveMessages` upserts the conversation row (POST + `Prefer: resolution=merge-duplicates`) — never PATCH.
+
+**Activity log — now comprehensive** (`src/components/ActivityLogger.js`)
+- Tracks: page views (friendly labels), clicks (button/link/nav labels), tab switches (sub-tabs + browser away/return), dwell time on leave, login/logout, search, export.
+- `installActivityTracker(getEmail, getPathname)` — global document click + visibilitychange listeners, throttled 1.2s. Mounted once in `App.jsx` on login.
+- `logActivity(email, action, page, detail)` — added `detail` field (240 char cap). `activity_log.detail` column already existed.
+- Settings → Activity Log: added DETAIL column, all action types color-coded (brand colors only), limit raised to 500.
+
+---
+
 ## What is Quantum?
 
 **Leverage Quantum** is an internal analytics dashboard for Leverage Edu (Indian edtech, study abroad vertical).
@@ -111,8 +135,28 @@ Aggregates Meta Ads performance, cross-channel metrics, lead qualification data,
 | `meta_tokens` | Shared Meta access token so scheduled reports + viewers work without user being online |
 | `presence` | Live presence heartbeats — shown as stacked avatar circles with green dots in header |
 | `ask_ai_memories` | Ask AI persistent memory |
-| `chat_conversations` | Ask AI chat history |
+| `ask_ai_conversations` | Ask AI chat history — conversation list (id, user_id, title, message_count, created_at, updated_at). SHARED across all users. Created June 2026. |
+| `ask_ai_messages` | Ask AI chat history — one row per conversation, full thread as JSON `messages` text (conv_id, user_id, messages, updated_at). Created June 2026. |
+| `activity_log` | User activity — email, action, page, `detail` (text), created_at. action ∈ view/click/tab/login/logout/leave/search/export. RLS off, `detail` column exists. |
 | `report_logs` | Email report send history |
+
+> NOTE: chat tables are `ask_ai_conversations` / `ask_ai_messages` (NOT `chat_conversations`/`chat_messages` — that older name is obsolete). All have RLS DISABLED (anon key read/write), matching every other Quantum table.
+
+### SQL to create Ask AI chat tables (if missing):
+```sql
+CREATE TABLE IF NOT EXISTS public.ask_ai_conversations (
+  id TEXT PRIMARY KEY, user_id TEXT, title TEXT, message_count INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS public.ask_ai_messages (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  conv_id TEXT, user_id TEXT, messages TEXT, updated_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ask_ai_msg_conv ON public.ask_ai_messages(conv_id);
+ALTER TABLE public.ask_ai_conversations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ask_ai_messages DISABLE ROW LEVEL SECURITY;
+```
+> When pasting this in Supabase SQL editor, the popup asks "Run" vs "Enable RLS" — click **Run** (RLS must stay OFF, like all other tables).
 
 ### SQL to create app_preferences (if missing):
 ```sql
@@ -405,6 +449,8 @@ with urllib.request.urlopen(req2) as r:
 | Meta API 400 on nested insights | Use `insights.date_preset(last_7d)` syntax, not `time_range` in nested insights |
 | Ask AI no live queries | Upgraded `ask-ai.js` with `query_meta_ads` tool — Claude fetches live Meta data mid-chat |
 | QL Ops header missing bell/send/presence | Header must include all standard header elements |
+| Ask AI history kept disappearing | ROOT CAUSE: `ask_ai_conversations`/`ask_ai_messages` tables never existed → all SB writes silently failed (caught), history only in localStorage. Created tables June 2026. |
+| Ask AI history not showing even after tables created | `saveMessages` used PATCH on `ask_ai_conversations` — PATCH updates 0 rows when the row was never inserted (typed convs only POST via `newConv`, not `send`). Fixed: upsert via `POST` + `Prefer: resolution=merge-duplicates`. |
 
 ---
 
