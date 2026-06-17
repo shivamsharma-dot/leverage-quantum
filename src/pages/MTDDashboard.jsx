@@ -120,7 +120,7 @@ const KPI=({label,value,sub,accent='#1F3C84',accentBg='#EEF1FB',icon,prev,cur,in
 
 const Card=({title,sub,children,action})=>(
   <div style={{background:'#fff',border:'1px solid #EEF1F6',borderRadius:16,overflow:'hidden',boxShadow:'0 1px 2px rgba(15,23,42,0.04),0 8px 24px -12px rgba(15,23,42,0.10)'}}>
-    <div style={{padding:'15px 20px 13px',borderBottom:'1px solid #F1F4F8',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+    <div style={{padding:'14px 20px',margin:'12px 14px 0',borderRadius:14,border:'1px solid #F1F4F8',boxShadow:'0 1px 3px rgba(31,60,132,0.05)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
       <div><div style={{fontSize:13.5,fontWeight:700,color:'#1F3C84',letterSpacing:'-0.01em'}}>{title}</div>{sub&&<div style={{fontSize:11,color:'#94A3B8',marginTop:3}}>{sub}</div>}</div>
       {action}
     </div>

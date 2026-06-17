@@ -443,3 +443,16 @@
 .collapseBtn:hover {
   transform: translateX(-50%) !important;
 }
+
+/* === collapsed toggle: in-flow, no overlap with Ask AI === */
+.sidebarCollapsed .collapseBtn {
+  position: static !important;
+  transform: none !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  align-self: center !important;
+  margin: 2px auto 8px !important;
+  z-index: 1 !important;
+}
+.sidebarCollapsed .collapseBtn:hover { transform: none !important; }
