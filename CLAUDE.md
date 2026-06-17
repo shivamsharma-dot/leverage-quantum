@@ -713,3 +713,13 @@ Resume the Leverage Quantum premium pass. Read CLAUDE.md (bottom 'SESSION RESUME
 - Strings may use real ellipsis char, not three dots - match with regex.
 - Block-replacement can match the wrong close brace - anchor on a unique line.
 - git stash pop 2>/dev/null can fail silently - run without redirect.
+
+## 2026-06-17 — Fix: dashboardKit RankedBars undefined RAMP
+
+- BUG: src/ui/dashboardKit.jsx RankedBars referenced an undefined RAMP in its colorFn fallback (colorFn ? colorFn(i) : RAMP[i % RAMP.length]). The kit only defines/exports BRAND_RAMP; RAMP exists only as a LOCAL const inside LeadQualificationDashboard.jsx (QL Ops keeps its own copy of RankedBars, so QL Ops was never affected). Any kit consumer calling RankedBars WITHOUT a colorFn would throw ReferenceError: RAMP is not defined.
+
+- IMPACT: ReferralDashboard.jsx (only live page importing the kit RankedBars) passes colorFn={brandColor}, so it never hit the fallback - production unaffected. Latent crash: _DashboardTemplate.jsx called RankedBars with NO colorFn, so any new page copied from the template would crash.
+
+- FIX (3 files, 1 commit 6a216bd): (1) dashboardKit.jsx ~line 97 RAMP -> BRAND_RAMP. (2) _DashboardTemplate.jsx RankedBars call hardened with colorFn={brandColor} + max + total + showRank. (3) DESIGN_SYSTEM.md refreshed: delta pill 'red down' -> 'navy down', amber flagged OFF-BRAND in token block, 'Extract a shared UI module' step marked DONE.
+
+- VERIFIED: npm run build clean (7.42s). Pushed e39cab6..6a216bd origin rename-ask-ai:main. Live (admin): QL Ops 3 RankedBars render; Referral 'Top student statuses' RankedBars renders; no console errors on Referral after reload. DashboardHome.jsx stashed during push, popped after.
