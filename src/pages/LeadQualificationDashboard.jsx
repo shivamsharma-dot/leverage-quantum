@@ -713,7 +713,20 @@ export default function LeadQualificationDashboard() {
   const filtered = useMemo(() => dateFilteredRows.filter(r =>
     (selProvider === 'All' || r.provider === selProvider) &&
     (selSource === 'All' || r.source === selSource)
-  ), [dateFilteredRows, selProvider, selSource])
+  ), [dateFilteredRows, selProvider, selSource]);
+
+  // Day-on-day breakdown: group filtered rows by qualified_date
+  const dayOnDay = useMemo(() => {
+    const map = {};
+    filtered.forEach(r => {
+      const d = r.qualified_date;
+      if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return;
+      if (!map[d]) map[d] = { date: d, Futwork: 0, 'Futwork AI': 0, Superbot: 0, total: 0 };
+      map[d][r.provider] = (map[d][r.provider] || 0) + r.count;
+      map[d].total += r.count;
+    });
+    return Object.values(map).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 31);
+  }, [filtered])
 
   // 5. KPI totals — use filtered so provider/source dropdowns affect the cards
   const totals = useMemo(() => {
@@ -1341,7 +1354,44 @@ export default function LeadQualificationDashboard() {
 
               {/* ── ROW 6: TOP CAMPAIGNS ── */}
               <div style={{ marginBottom: 16 }}>
-                <Card title="Top campaigns by qualified leads" sub="Selected period · coloured by provider">
+                <div style={{ marginBottom: 16 }}>
+            <Card title="Day-on-day qualified" sub="Daily qualified leads by provider \u00b7 most recent first">
+              {dayOnDay.length === 0 ? (
+                <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT, padding: '8px 0' }}>No daily data for this selection</div>
+              ) : (
+                <div style={{ overflowX: 'auto', maxHeight: 360, overflowY: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT }}>
+                    <thead>
+                      <tr style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+                        <th style={{ textAlign: 'left', padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #EEF1F6' }}>Date</th>
+                        <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: '#1F3C84', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #EEF1F6' }}>Futwork</th>
+                        <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: '#29B9C3', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #EEF1F6' }}>Futwork AI</th>
+                        <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: '#1C9FD4', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #EEF1F6' }}>Superbot</th>
+                        <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: C.text, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #EEF1F6' }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dayOnDay.map((row, i) => {
+                        const dt = new Date(row.date + 'T00:00:00');
+                        const lbl = isNaN(dt) ? row.date : dt.getDate() + ' ' + dt.toLocaleString('en-US', { month: 'short' }) + ' \u00b7 ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
+                        return (
+                          <tr key={row.date} style={{ background: i % 2 ? '#F8FAFC' : '#fff' }}>
+                            <td style={{ textAlign: 'left', padding: '8px 10px', fontSize: 12.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap' }}>{lbl}</td>
+                            <td style={{ textAlign: 'right', padding: '8px 10px', fontSize: 12.5, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>{fmtN(row.Futwork)}</td>
+                            <td style={{ textAlign: 'right', padding: '8px 10px', fontSize: 12.5, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>{fmtN(row['Futwork AI'])}</td>
+                            <td style={{ textAlign: 'right', padding: '8px 10px', fontSize: 12.5, color: '#374151', fontVariantNumeric: 'tabular-nums' }}>{fmtN(row.Superbot)}</td>
+                            <td style={{ textAlign: 'right', padding: '8px 10px', fontSize: 12.5, fontWeight: 800, color: '#0F1F4B', fontVariantNumeric: 'tabular-nums' }}>{fmtN(row.total)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          </div>
+
+          <Card title="Top campaigns by qualified leads" sub="Selected period · coloured by provider">
                   {topCampaigns.length === 0
                     ? <div style={{ textAlign: 'center', padding: '32px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No data for selected filters</div>
                     : (<>
