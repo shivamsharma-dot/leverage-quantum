@@ -1,5 +1,6 @@
 import React from 'react'
 import { toPng } from 'html-to-image'
+import { useNavigate, useLocation } from 'react-router-dom'
 
 /*
   SnapshotTool — panel-wide screenshot capture.
@@ -116,6 +117,85 @@ function cropDataUrl(dataUrl, rect, ratio) {
   })
 }
 
+// Composite a branded footer onto a captured PNG: navy strip with the QUANTUM
+// wordmark, the page title and a timestamp. Returns a new PNG data URL.
+function brandImage(dataUrl, title) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const W = img.width
+      const bar = Math.max(64, Math.round(W * 0.045))
+      const canvas = document.createElement('canvas')
+      canvas.width = W
+      canvas.height = img.height + bar
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      // footer gradient
+      const g = ctx.createLinearGradient(0, img.height, W, canvas.height)
+      g.addColorStop(0, NAVY); g.addColorStop(1, '#16306B')
+      ctx.fillStyle = g
+      ctx.fillRect(0, img.height, W, bar)
+      // cyan accent line
+      ctx.fillStyle = CYAN
+      ctx.fillRect(0, img.height, W, Math.max(2, Math.round(bar * 0.05)))
+      const cy = img.height + bar / 2
+      const pad = Math.round(bar * 0.5)
+      // wordmark dot + QUANTUM
+      const fs = Math.round(bar * 0.30)
+      ctx.fillStyle = CYAN
+      ctx.beginPath(); ctx.arc(pad, cy, fs * 0.34, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = '#fff'
+      ctx.font = `800 ${fs}px ${FONT}`
+      ctx.textBaseline = 'middle'
+      ctx.fillText('QUANTUM', pad + fs * 0.7, cy)
+      const wm = ctx.measureText('QUANTUM').width
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'
+      ctx.font = `600 ${Math.round(fs * 0.78)}px ${FONT}`
+      ctx.fillText('· ' + (title || pageLabel()), pad + fs * 0.7 + wm + fs * 0.5, cy)
+      // right-aligned timestamp
+      const ts = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+      ctx.textAlign = 'right'
+      ctx.fillStyle = 'rgba(255,255,255,0.75)'
+      ctx.font = `600 ${Math.round(fs * 0.72)}px ${FONT}`
+      ctx.fillText(ts, W - pad, cy)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = () => resolve(dataUrl)
+    img.src = dataUrl
+  })
+}
+
+// Stack several branded PNGs into one tall sheet for batch capture.
+function stitchVertical(dataUrls) {
+  return new Promise(async (resolve) => {
+    const imgs = await Promise.all(dataUrls.map((u) => new Promise((r) => {
+      const im = new Image(); im.onload = () => r(im); im.onerror = () => r(null); im.src = u
+    })))
+    const ok = imgs.filter(Boolean)
+    if (!ok.length) return resolve(null)
+    const gap = 28
+    const W = Math.max(...ok.map((i) => i.width))
+    const H = ok.reduce((a, i) => a + i.height, 0) + gap * (ok.length + 1)
+    const canvas = document.createElement('canvas')
+    canvas.width = W; canvas.height = H
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H)
+    let y = gap
+    ok.forEach((i) => { ctx.drawImage(i, Math.round((W - i.width) / 2), y); y += i.height + gap })
+    resolve(canvas.toDataURL('image/png'))
+  })
+}
+
+// Pages included in a full-panel batch capture (path + label).
+const BATCH_PAGES = [
+  ['/dashboard/mtd', 'MTD'],
+  ['/dashboard/lq-ops', 'QL-Ops'],
+  ['/dashboard/roas', 'ROAS'],
+  ['/dashboard/revenue', 'Revenue'],
+  ['/dashboard/referral', 'Referral'],
+  ['/dashboard/whatsapp', 'WhatsApp'],
+]
+
 export default function SnapshotTool() {
   const [open, setOpen] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
@@ -125,6 +205,46 @@ export default function SnapshotTool() {
   const [sel, setSel] = React.useState(null) // {x,y,w,h} live drag rect (screen coords)
   const dragRef = React.useRef(null)
   const toastTimer = React.useRef(null)
+  const [batch, setBatch] = React.useState(null) // {done,total,label} progress
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  // wait until the page content has grown (charts rendered) or timeout
+  const waitForRender = (ms = 2600) => new Promise((res) => {
+    const start = Date.now()
+    const tick = () => {
+      const root = getContentRoot()
+      const tall = root && root.scrollHeight > window.innerHeight * 1.1
+      if (tall || Date.now() - start > ms) return res()
+      setTimeout(tick, 200)
+    }
+    setTimeout(tick, 400)
+  })
+
+  const runBatch = async () => {
+    setOpen(false); setBusy(true)
+    const startPath = location.pathname
+    const shots = []
+    try {
+      for (let i = 0; i < BATCH_PAGES.length; i++) {
+        const [path, label] = BATCH_PAGES[i]
+        setBatch({ done: i, total: BATCH_PAGES.length, label })
+        navigate(path)
+        await waitForRender()
+        const raw = await captureNode(getContentRoot())
+        shots.push(await brandImage(raw, label))
+      }
+      setBatch({ done: BATCH_PAGES.length, total: BATCH_PAGES.length, label: 'Stitching' })
+      const sheet = await stitchVertical(shots)
+      navigate(startPath)
+      setResult(sheet); flash('Captured ' + shots.length + ' pages')
+    } catch {
+      navigate(startPath)
+      flash('Batch failed, please retry', false)
+    } finally {
+      setBatch(null); setBusy(false)
+    }
+  }
 
   const flash = (msg, ok = true) => {
     setToast({ msg, ok })
@@ -136,7 +256,7 @@ export default function SnapshotTool() {
     setOpen(false); setBusy(true)
     try {
       const url = await captureNode(getContentRoot())
-      setResult(url); flash('Full page captured')
+      setResult(await brandImage(url)); flash('Full page captured')
     } catch { flash('Capture failed, please retry', false) }
     finally { setBusy(false) }
   }
@@ -145,7 +265,7 @@ export default function SnapshotTool() {
     setOpen(false); setBusy(true)
     try {
       const url = await captureViewport()
-      setResult(url); flash('Visible area captured')
+      setResult(await brandImage(url)); flash('Visible area captured')
     } catch { flash('Capture failed, please retry', false) }
     finally { setBusy(false) }
   }
@@ -177,7 +297,7 @@ export default function SnapshotTool() {
       const local = { x: rect.x - rr.left, y: rect.y - rr.top, w: rect.w, h: rect.h }
       const full = await captureViewport()
       const cropped = await cropDataUrl(full, local, 2)
-      setResult(cropped); flash('Region captured')
+      setResult(await brandImage(cropped)); flash('Region captured')
     } catch { flash('Capture failed, please retry', false) }
     finally { setBusy(false) }
   }
@@ -230,6 +350,25 @@ export default function SnapshotTool() {
         </div>
       )}
 
+      {/* Batch progress */}
+      {batch && (
+        <div data-snapshot-ignore="true" style={{ position: 'fixed', inset: 0, zIndex: 10002, background: 'rgba(15,31,75,0.62)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: FONT }}>
+          <div style={{ background: '#fff', borderRadius: 16, padding: '26px 30px', minWidth: 280, textAlign: 'center', boxShadow: '0 24px 70px rgba(15,31,75,0.45)' }}>
+            <svg width="34" height="34" viewBox="0 0 24 24" style={{ animation: 'qspin 0.8s linear infinite', margin: '0 auto 14px', display: 'block' }}>
+              <circle cx="12" cy="12" r="9" fill="none" stroke="#E6EAF2" strokeWidth="2.5"/>
+              <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke={NAVY} strokeWidth="2.5" strokeLinecap="round"/>
+            </svg>
+            <div style={{ fontSize: 15, fontWeight: 800, color: INK }}>Capturing all pages</div>
+            <div style={{ fontSize: 13, color: '#64748B', fontWeight: 600, marginTop: 4 }}>
+              {Math.min(batch.done + 1, batch.total)} of {batch.total} · {batch.label}
+            </div>
+            <div style={{ height: 6, width: 220, background: '#EEF1F6', borderRadius: 99, marginTop: 14, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.round((batch.done / batch.total) * 100)}%`, background: `linear-gradient(90deg, ${NAVY}, ${CYAN})`, transition: 'width .3s ease' }} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Result preview modal */}
       {result && (
         <div data-snapshot-ignore="true" style={{ position: 'fixed', inset: 0, zIndex: 10001, background: 'rgba(15,31,75,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: FONT }} onClick={() => setResult(null)}>
@@ -274,6 +413,10 @@ export default function SnapshotTool() {
             <button onClick={startCrop} style={menuItem}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>
               <span><b>Select region</b><i style={subTxt}>drag to crop</i></span>
+            </button>
+            <button onClick={runBatch} style={{...menuItem, borderTop: '1px solid #F0F2F7'}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+              <span><b>All pages</b><i style={subTxt}>branded multi-page sheet</i></span>
             </button>
           </div>
         )}
