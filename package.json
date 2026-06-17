@@ -10,6 +10,7 @@
   "dependencies": {
     "@react-oauth/google": "^0.12.1",
     "google-auth-library": "^10.7.0",
+    "html-to-image": "^1.11.13",
     "jsonwebtoken": "^9.0.3",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^0.383.0",

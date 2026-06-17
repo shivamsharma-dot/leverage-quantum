@@ -2,6 +2,7 @@ import React from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import styles from './Sidebar.module.css'
+import SnapshotTool from './SnapshotTool'
 
 const NAV = [
   {
@@ -278,6 +279,7 @@ export default function Sidebar() {
             {user?.picture ? <img src={user.picture} alt={user.name}/> : initials}
           </div>
         </div>
+        <SnapshotTool/>
       </aside>
       </>
     )
@@ -385,6 +387,7 @@ export default function Sidebar() {
           </svg>
         </button>
       </div>
+      <SnapshotTool/>
     </aside>
   )
                                   }
