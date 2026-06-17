@@ -260,12 +260,17 @@ export default function AskAI() {
     // Keep localStorage as fast cache
     try{localStorage.setItem(`ch_${id}`,JSON.stringify(msgs.slice(-400)))}catch{}
     setConvs(cs=>cs.map(c=>c.id===id?{...c,updated_at:now,message_count:msgs.length,title}:c))
-    // Persist to Supabase
+    // Persist to Supabase. UPSERT the conversation row so it always exists in the
+    // list (conversations started by typing never POST a row otherwise → history vanished).
     try {
+      // Replace the single messages row for this conversation (delete old, insert fresh)
+      await sbDel('ask_ai_messages', `?conv_id=eq.${id}`)
       await sbPost('ask_ai_messages', { conv_id:id, user_id:uid, messages:JSON.stringify(msgs.slice(-400)), updated_at:now })
-      await fetch(`${SB_URL}/rest/v1/ask_ai_conversations?id=eq.${id}`, {
-        method:'PATCH', headers:{...SBH,Prefer:'return=minimal'},
-        body:JSON.stringify({title,updated_at:now,message_count:msgs.length})
+      // Upsert conversation row (insert or merge on primary key id)
+      await fetch(`${SB_URL}/rest/v1/ask_ai_conversations`, {
+        method:'POST',
+        headers:{...SBH, Prefer:'resolution=merge-duplicates,return=minimal'},
+        body:JSON.stringify({ id, user_id:uid, title, message_count:msgs.length, updated_at:now })
       })
     } catch(e){ console.warn('SB save failed',e) }
   },[uid])
