@@ -549,3 +549,15 @@ Built via 7 /tmp/part*.txt fragments concat (part1/2 reused from prior). Build 7
 - AI message avatar -> mini .qOrb. Send button -> brand gradient + glow when active, refresh icon spins while loading.
 - NOTE: AskAI.jsx defines a local AMBER token (#F59E0B) but it is NOT used in any render path; do not introduce it.
 - Build OK (6.45s). Pushed a622fcf..4dcadcd.
+
+## 2026-06-17 - Ask AI deep polish (round 2)
+User feedback: page still looked sober; chat section old (navy block user bubble + stray blue square avatar during loading), inner rail traditional, Daily/Weekly/Monthly row white-on-white + misaligned, Send Report bar plain, Meta Ads pill weak.
+Fixes (src/pages/AskAI.jsx, pushes 8f5a83c then e4cfe08 -> main):
+- User bubble: flat #1F3C84 -> linear-gradient(135deg,#1F3C84,#2456B8) + soft shadow + refined radius.
+- AI avatar orb now wrapped in {m.content&&(...)} so it is HIDDEN during loading -> only the MagicLoader shows (fixed the double-orb / stray blue square).
+- Schedule strip (Daily/Weekly/Monthly) fully rebuilt: was rgba(255,255,255,..) white-on-white + unaligned. Now centered, contained brand-tinted pill 'AUTO-SEND' with brand dots (BLUE/GREEN/NAVY) + readable grey descs.
+- Send Report bar: brand gradient send-icon chip (navy->blue), navy label, brand border + shadow.
+- Meta Ads connected pill: glassy green gradient + glow dot (qGlow).
+- Inner rail buttons (.rb / History/Prompts/Memories/Logs): active state -> brand gradient pill + glowing gradient marker bar.
+All backend wiring untouched (Supabase, send/stream, PROMPTS, memories, logs). Build OK; verified live (single magic orb during load, real data tables render, fixed shell). DashboardHome.jsx kept stashed/uncommitted as always.
+Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>' -> 'Unterminated regular expression' build error; removed the 2 orphan lines, then built clean.
