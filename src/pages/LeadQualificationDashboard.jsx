@@ -1255,7 +1255,7 @@ export default function LeadQualificationDashboard() {
                     ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No budget data</div>
                     : (
                       <ResponsiveContainer width="100%" height={208}>
-                        <BarChart data={budgetBar} margin={{ top: 8, right: 12, left: -8, bottom: 0 }} barCategoryGap="24%">
+                        <BarChart data={budgetBar} margin={{ top: 8, right: 12, left: 6, bottom: 0 }} barCategoryGap="18%">
                           <defs><linearGradient id="gBudget" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7AC796"/><stop offset="100%" stopColor="#4CAE6F"/></linearGradient></defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
                           <XAxis dataKey="budget" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94A3B8', fontFamily: FONT }} />
