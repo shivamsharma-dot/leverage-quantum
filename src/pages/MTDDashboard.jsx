@@ -369,13 +369,13 @@ export default function MTDDashboard(){
                     <ReferenceLine y={avgCPL} stroke='#94A3B8' strokeDasharray='4 4' label={{value:'Avg',position:'right',fill:'#94A3B8',fontSize:10}}/>
                     <Bar dataKey='cpl' name='CPL' radius={[5,5,0,0]} maxBarSize={36}>
                       <LabelList dataKey='cpl' position='top' formatter={v=>fmtINR(v)} style={{fontSize:9,fontWeight:600,fill:'#374151'}}/>
-                      {cplBar.map((e,i)=><Cell key={i} fill={e.cpl>avgCPL?'#94A3B8':'#4CAE6F'}/>)}
+                      {cplBar.map((e,i)=><Cell key={i} fill={e.cpl>avgCPL?'#1F3C84':'#4CAE6F'}/>)}
                     </Bar>
                   </ComposedChart>
                 </ResponsiveContainer>
                 <div style={{display:'flex',gap:14,marginTop:4,fontSize:11}}>
                   <span style={{display:'flex',alignItems:'center',gap:4,color:'#374151'}}><span style={{width:10,height:3,background:'#4CAE6F',display:'inline-block'}}/> Below avg</span>
-                  <span style={{display:'flex',alignItems:'center',gap:4,color:'#374151'}}><span style={{width:10,height:3,background:'#94A3B8',display:'inline-block'}}/> Above avg</span>
+                  <span style={{display:'flex',alignItems:'center',gap:4,color:'#374151'}}><span style={{width:10,height:3,background:'#1F3C84',display:'inline-block'}}/> Above avg</span>
                   <span style={{display:'flex',alignItems:'center',gap:4,color:'#374151'}}><span style={{width:10,height:2,background:'#94A3B8',display:'inline-block'}}/> Average</span>
                 </div>
               </Card>
