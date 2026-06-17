@@ -71,6 +71,7 @@ export default function ReferralDashboard() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState('All');
+  const [dateRange, setDateRange] = useState('all');
   const [grpBy, setGrpBy] = useState('status');
 
   const loadData = useCallback(async (bust = false) => {
@@ -92,10 +93,21 @@ export default function ReferralDashboard() {
   }, []);
   useEffect(() => { loadData(); }, [loadData]);
 
-  const filtered = useMemo(
-    () => source === 'All' ? rows : rows.filter(r => r.source === source),
-    [rows, source]
-  );
+  const filtered = useMemo(() => {
+    let rs = source === 'All' ? rows : rows.filter(r => r.source === source);
+    if (dateRange !== 'all') {
+      let maxD = null;
+      rows.forEach(r => { const d = parseD(r.created_at); if (d && (!maxD || d > maxD)) maxD = d; });
+      if (maxD) {
+        let cut = null;
+        if (dateRange === 'L7D') { cut = new Date(maxD); cut.setDate(cut.getDate() - 6); }
+        else if (dateRange === 'L30D') { cut = new Date(maxD); cut.setDate(cut.getDate() - 29); }
+        else if (dateRange === 'MTD') { cut = new Date(maxD.getFullYear(), maxD.getMonth(), 1); }
+        if (cut) rs = rs.filter(r => { const d = parseD(r.created_at); return d && d >= cut && d <= maxD; });
+      }
+    }
+    return rs;
+  }, [rows, source, dateRange]);
 
   const M = useMemo(() => {
     const all = filtered;
@@ -262,6 +274,10 @@ export default function ReferralDashboard() {
             style={{ padding:'6px 14px', borderRadius:8, border:'1px solid #e5e7eb', fontSize:12, fontWeight:500, cursor: loading ? 'wait' : 'pointer', fontFamily:FONT, background:'#fff', color:'#374151', display:'flex', alignItems:'center', gap:6, opacity: loading ? 0.65 : 1 }}>
             {loading ? 'Refreshing' : 'Refresh'}
           </button>
+          {/* DATE_RANGE_GROUP */}
+          <span style={{ fontSize:10.5, fontWeight:700, color:C.muted, letterSpacing:0.5 }}>DATE</span>
+          {[['all','All'],['MTD','MTD'],['L7D','7D'],['L30D','30D']].map(([v,lab]) => <div key={v} style={pillStyle(dateRange === v)} onClick={() => setDateRange(v)}>{lab}</div>)}
+          <span style={{ width:1, height:18, background:C.border, margin:'0 4px' }} />
             <span style={{ fontSize:10.5, fontWeight:700, color:C.muted, letterSpacing:0.5 }}>SOURCE</span>
             {PILLS.map(p => <div key={p} style={pillStyle(source === p)} onClick={() => setSource(p)}>{p}</div>)}
           </div>

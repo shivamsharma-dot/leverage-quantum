@@ -51,7 +51,7 @@ const CustomTooltip=({active,payload,label})=>{
 function InfoTooltip({ items }) {
   const [show, setShow] = React.useState(false)
   return (
-    <div style={{ position:'relative', flexShrink:0 }}>
+    <div style={{ position:'relative', flexShrink:0,background:'#fff', padding:'12px 22px', margin:'12px 14px 0', borderRadius:14, border:'1px solid #EEF1F6', boxShadow:'0 1px 3px rgba(31,60,132,0.06)', }}>
       <button onClick={() => setShow(v => !v)}
         style={{ width:30, height:30, borderRadius:8, border:'0.5px solid #E5E7EB', background:show?'#E8EFF9':'#fff', color:'#1F3C84', fontSize:14, fontWeight:700, fontStyle:'italic', fontFamily:'Georgia,serif', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
         i
