@@ -402,3 +402,33 @@
 .collapsedActive { background: linear-gradient(135deg, rgba(28,159,212,0.12), rgba(31,60,132,0.08)) !important; color: #1F3C84 !important; }
 .avatar { box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(31,60,132,0.15) !important; }
 .logoutBtn:hover { color: #1F3C84 !important; background: #F1F5FB !important; }
+
+/* === toggle embedded inside sidebar (fix half-out + Ask AI overlap) === */
+.collapseBtn, .collapseBtnExpanded {
+  position: absolute !important;
+  top: 16px !important;
+  right: 14px !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 7px !important;
+  background: #F1F5FB !important;
+  border: 1px solid #E3E9F2 !important;
+  box-shadow: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #1F3C84 !important;
+  cursor: pointer !important;
+  z-index: 5 !important;
+  transition: background .18s ease, color .18s ease, transform .18s ease !important;
+  padding: 0 !important;
+}
+.collapseBtn:hover, .collapseBtnExpanded:hover {
+  background: #1F3C84 !important;
+  color: #fff !important;
+  transform: none !important;
+  box-shadow: 0 2px 6px rgba(31,60,132,0.28) !important;
+}
+.collapseBtn svg, .collapseBtnExpanded svg { width: 13px !important; height: 13px !important; }
