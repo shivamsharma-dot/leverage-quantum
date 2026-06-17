@@ -405,7 +405,7 @@ export default function AskAI() {
         @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
         @keyframes scaleIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
-        .rb:hover{background:rgba(28,159,212,0.07)!important;transition:all .15s}
+        .rb:not(.rb-active):hover{background:rgba(28,159,212,0.10)!important;border-radius:14px!important}
         .qp:hover{background:rgba(28,159,212,0.15)!important;border-color:rgba(28,159,212,0.4)!important;color:#fff!important;transform:translateY(-1px)!important;transition:all .2s!important}
         .cv:hover .delbtn{opacity:1!important}
         .ibtn:hover{background:#F3F4F6!important}
@@ -429,7 +429,7 @@ export default function AskAI() {
         .qOrb::after{content:'';position:absolute;top:0;left:0;width:40%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent);animation:qSwoosh 3.6s ease-in-out infinite}
         .qChip{transition:all .2s ease;position:relative;overflow:hidden}
         .qChip:hover{transform:translateY(-2px);border-color:rgba(28,159,212,0.55)!important;box-shadow:0 10px 22px -10px rgba(28,159,212,0.55)!important;color:#1F3C84!important}
-        .rb:hover{background:rgba(28,159,212,0.07)!important}
+        .rb{transition:background .18s ease,border-radius .18s ease}
       `}</style>
 
       {/* Quantum sidebar */}
@@ -651,7 +651,7 @@ export default function AskAI() {
             {id:'logs',    icon:'logs',    label:'Logs'},
           ].map(r=>{
             const on=rail===r.id
-            return <button key={r.id} onClick={()=>{toggleRail(r.id);if(r.id==='logs')loadLogs()}} title={r.label} className="rb"
+            return <button key={r.id} onClick={()=>{toggleRail(r.id);if(r.id==='logs')loadLogs()}} title={r.label} className={on?'rb rb-active':'rb'}
               style={{width:46,height:46,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,borderRadius:14,border:on?'1px solid rgba(28,159,212,0.35)':'1px solid transparent',cursor:'pointer',background:on?'linear-gradient(145deg,#1F3C84,#1C9FD4)':'transparent',boxShadow:on?'0 6px 16px -4px rgba(28,159,212,0.55)':'none',transition:'all .2s cubic-bezier(.4,0,.2,1)',position:'relative'}}>
               <Ico n={r.icon} s={16} c={on?'#fff':'#8A94A6'}/>
               <span style={{fontSize:8.5,fontWeight:on?700:600,color:on?'#fff':'#8A94A6',letterSpacing:'0.04em',fontFamily:FONT,lineHeight:1}}>{r.label}</span>
