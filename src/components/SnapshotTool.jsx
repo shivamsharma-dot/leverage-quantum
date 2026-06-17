@@ -44,11 +44,23 @@ export default function SnapshotTool() {
   // Pick the panel content node to capture. Prefer the main scrollable
   // content region; fall back to the whole document body.
   const getTarget = () => {
-    return (
-      document.querySelector('[data-snapshot-root]') ||
-      document.querySelector('main') ||
-      document.body
-    )
+    // Explicit opt-in wins if a page ever marks its content root.
+    const explicit = document.querySelector('[data-snapshot-root]')
+    if (explicit) return explicit
+    // The panel shell is a flex row: <Sidebar/> + a flex:1 scrolling content
+    // region. Find that scroll container so we capture the WHOLE page (not
+    // just the viewport). Pick the widest, tallest scrollable element.
+    let best = null
+    document.querySelectorAll('div').forEach((d) => {
+      const cs = getComputedStyle(d)
+      const scrolls = cs.overflowY === 'auto' || cs.overflowY === 'scroll'
+      if (!scrolls) return
+      const r = d.getBoundingClientRect()
+      if (r.width < 700) return
+      if (d.scrollHeight < window.innerHeight - 40) return
+      if (!best || d.scrollHeight > best.scrollHeight) best = d
+    })
+    return best || document.querySelector('main') || document.body
   }
 
   const pageLabel = () => {
