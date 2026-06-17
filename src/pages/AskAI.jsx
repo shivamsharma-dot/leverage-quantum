@@ -429,6 +429,8 @@ export default function AskAI() {
         .sendbtn:hover:not(:disabled){transform:scale(1.05);background:${BLUE}!important}
         input::placeholder,textarea::placeholder{color:#9AA7B8!important}
         input,textarea{caret-color:#1C9FD4;}
+        textarea{-webkit-appearance:none!important;appearance:none!important;border:none!important;box-shadow:none!important;}
+        textarea:focus,textarea:focus-visible{outline:none!important;border:none!important;box-shadow:none!important;}
         /* ===== PREMIUM AI MOTION TOOLKIT (brand: navy/blue/cyan/green) ===== */
         @keyframes qSwoosh{0%{transform:translateX(-120%) skewX(-18deg)}60%,100%{transform:translateX(220%) skewX(-18deg)}}
         @keyframes qAurora{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
@@ -831,7 +833,7 @@ export default function AskAI() {
                 <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…"
                   onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
                   onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
-                  style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
+                  style={{width:'100%',border:'none',outline:'none',WebkitAppearance:'none',appearance:'none',boxShadow:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:10}}>
                   <div style={{display:'flex',alignItems:'center',gap:6}}>
                     {[['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
