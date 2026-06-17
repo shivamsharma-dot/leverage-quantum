@@ -11,7 +11,7 @@ const isMonthHeader = v => v && MONTH_NAMES.some(m => v.startsWith(m)) && v.leng
 
 const SRC_COLOR = {
   Facebook:'#1F3C84', Google:'#1C9FD4', 'Google MBBS':'#29B9C3', Affiliate:'#4CAE6F',
-  Remarketing:'#F59E0B', Referral:'#0D9488', Bing:'#F59E0B', Others:'#9CA3AF',
+  Remarketing:'#29B9C3', Referral:'#0D9488', Bing:'#6B8FD4', Others:'#9CA3AF',
   Branding:'#6B7280', 'Content+Brand':'#EC4899', 'Lead Source NA':'#14B8A6',
   'Affiliate Partner':'#84CC16', Offline:'#374151'
 }
@@ -87,12 +87,13 @@ const KPI=({label,value,sub,accent,prev,cur,invert,prorate})=>{
   const adjPrev = (prev!=null&&prorate&&prorate!==1)?prev*prorate:prev
   const d = (adjPrev!=null&&cur!=null)?delta(cur,adjPrev):null
   const good = d==null?null:(invert?d<=0:d>=0)
-  return <div style={{background:'#fff',border:'0.5px solid #E2E8F0',borderRadius:12,padding:'16px 20px 14px',boxShadow:'0 1px 4px rgba(15,23,42,0.04)'}}>
+  return <div className='qkpi' style={{position:'relative',background:'linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%)',border:'1px solid #EEF1F6',borderRadius:16,padding:'18px 20px 15px',boxShadow:'0 1px 2px rgba(15,23,42,0.04),0 4px 14px -6px rgba(15,23,42,0.08)',overflow:'hidden',transition:'transform .18s ease,box-shadow .18s ease'}}>
+    <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,${accent||'#1F3C84'},#1C9FD4 55%,#29B9C3)`}}/>
     <div style={{fontSize:10,fontWeight:700,color:'#94A3B8',letterSpacing:'0.08em',textTransform:'uppercase',marginBottom:8}}>{label}</div>
     <div style={{fontSize:26,fontWeight:800,color:'#0F172A',letterSpacing:'-1px',lineHeight:1,marginBottom:6}}>{value}</div>
     <div style={{display:'flex',alignItems:'center',gap:8,minHeight:18}}>
       {sub&&<div style={{fontSize:11.5,color:'#94A3B8',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sub}</div>}
-      {d!=null&&<span style={{fontSize:10.5,fontWeight:700,color:good?'#16A34A':'#DC2626',flexShrink:0}}>
+      {d!=null&&<span style={{fontSize:10.5,fontWeight:700,color:good?'#1F8F5B':'#64748B',flexShrink:0}}>
         {d>=0?'\u25B2':'\u25BC'}{Math.abs(d).toFixed(1)}%
       </span>}
     </div>
@@ -100,9 +101,9 @@ const KPI=({label,value,sub,accent,prev,cur,invert,prorate})=>{
 }
 
 const Card=({title,sub,children,action})=>(
-  <div style={{background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden'}}>
-    <div style={{padding:'14px 18px 12px',borderBottom:'0.5px solid #F3F4F6',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-      <div><div style={{fontSize:13,fontWeight:600,color:'#0F172A'}}>{title}</div>{sub&&<div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{sub}</div>}</div>
+  <div style={{background:'#fff',border:'1px solid #EEF1F6',borderRadius:16,overflow:'hidden',boxShadow:'0 1px 2px rgba(15,23,42,0.04),0 8px 24px -12px rgba(15,23,42,0.10)'}}>
+    <div style={{padding:'15px 20px 13px',borderBottom:'1px solid #F1F4F8',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <div><div style={{fontSize:13.5,fontWeight:700,color:'#1F3C84',letterSpacing:'-0.01em'}}>{title}</div>{sub&&<div style={{fontSize:11,color:'#94A3B8',marginTop:3}}>{sub}</div>}</div>
       {action}
     </div>
     <div style={{padding:'16px 18px'}}>{children}</div>
@@ -207,17 +208,18 @@ export default function MTDDashboard(){
   const avgCPL=useMemo(()=>{ const a=srcs.filter(s=>s.cpl>0); return a.length?Math.round(a.reduce((t,s)=>t+s.cpl,0)/a.length):0 },[srcs])
 
   const fmt=new Intl.DateTimeFormat('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
-  const cplColor=v=>v>500?'#DC2626':v>250?'#F59E0B':'#4CAE6F'
-  const roasColor=v=>v>=3?'#4CAE6F':v>=1.5?'#F59E0B':'#DC2626'
-  const qlColor=v=>v>15?'#4CAE6F':v>5?'#F59E0B':'#DC2626'
+  const cplColor=v=>v>500?'#64748B':v>250?'#1C9FD4':'#1F8F5B'
+  const roasColor=v=>v>=3?'#1F8F5B':v>=1.5?'#1C9FD4':'#64748B'
+  const qlColor=v=>v>15?'#1F8F5B':v>5?'#1C9FD4':'#64748B'
   const maxSpend=srcs.length?Math.max(...srcs.map(s=>s.spend)):1
 
   if(loading)return <div style={{display:'flex',height:'100vh',background:'#F4F6F9'}}><Sidebar/><div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#94A3B8',fontSize:14,fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>Loading from Google Sheets...</div></div>
-  if(error)return <div style={{display:'flex',height:'100vh',background:'#F4F6F9'}}><Sidebar/><div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#DC2626',fontSize:14}}>{error}</div></div>
+  if(error)return <div style={{display:'flex',height:'100vh',background:'#F4F6F9'}}><Sidebar/><div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#64748B',fontSize:14}}>{error}</div></div>
 
   return(
     <div style={{display:'flex',height:'100vh',overflow:'hidden',background:'#F4F6F9',fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>
       <Sidebar/>
+      <style>{`.qkpi:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(15,23,42,0.05),0 16px 32px -14px rgba(31,60,132,0.22)!important}`}</style>
       <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
 
         <div style={{background:'#fff',borderBottom:'0.5px solid #E5E7EB',padding:'0 28px',height:56,display:'flex',alignItems:'center',gap:12,flexShrink:0}}>
@@ -279,7 +281,7 @@ export default function MTDDashboard(){
             <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:12}}>
               <KPI label='Total Spend' value={fmtINR(total.spend)} accent='#1F3C84' sub={prevTotal?'prev '+fmtINR(prevTotal.spend):undefined} cur={total.spend} prev={prevTotal?.spend} invert/>
               <KPI label='Total Leads' value={fmtNum(total.leads)} accent='#1C9FD4' sub={prevTotal?'prev '+fmtNum(prevTotal.leads):undefined} cur={total.leads} prev={prevTotal?.leads} prorate={prorate}/>
-              <KPI label='CPL' value={fmtINR(total.cpl)} accent='#F59E0B' sub='Cost per lead' cur={total.cpl} prev={prevTotal?.cpl} invert/>
+              <KPI label='CPL' value={fmtINR(total.cpl)} accent='#1C9FD4' sub='Cost per lead' cur={total.cpl} prev={prevTotal?.cpl} invert/>
               <KPI label='Total Revenue' value={fmtINR(total.totalRev)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtINR(prevTotal.totalRev):undefined} cur={total.totalRev} prev={prevTotal?.totalRev} prorate={prorate}/>
               <KPI label='ROAS' value={total.roas>0?total.roas.toFixed(2)+'x':'\u2014'} accent={roasColor(total.roas)} cur={total.roas} prev={prevTotal?.roas}/>
             </div>
@@ -289,7 +291,7 @@ export default function MTDDashboard(){
               <KPI label='FW QL%' value={total.fwQL.toFixed(2)+'%'} accent='#1C9FD4' sub='Futwork quality' cur={total.fwQL} prev={prevTotal?.fwQL}/>
               <KPI label='SB Qualified' value={fmtNum(total.sbQual)} accent='#29B9C3' sub={total.sbQL.toFixed(2)+'% QL'} cur={total.sbQual} prev={prevTotal?.sbQual}/>
               <KPI label='Applications' value={fmtNum(total.apps)} accent='#4CAE6F' sub={prevTotal?'prev '+fmtNum(prevTotal.apps):undefined} cur={total.apps} prev={prevTotal?.apps} prorate={prorate}/>
-              <KPI label='Est. RAU' value={total.rau>0?total.rau.toFixed(1):'\u2014'} accent='#F59E0B' sub='Revenue attr. units' cur={total.rau} prev={prevTotal?.rau} prorate={prorate}/>
+              <KPI label='Est. RAU' value={total.rau>0?total.rau.toFixed(1):'\u2014'} accent='#29B9C3' sub='Revenue attr. units' cur={total.rau} prev={prevTotal?.rau} prorate={prorate}/>
               <KPI label='CPQL' value={fmtINR(total.cpql)} accent='#29B9C3' sub='Cost per qual. lead' cur={total.cpql} prev={prevTotal?.cpql} invert/>
             </div>
 
@@ -351,13 +353,13 @@ export default function MTDDashboard(){
                     <ReferenceLine y={avgCPL} stroke='#94A3B8' strokeDasharray='4 4' label={{value:'Avg',position:'right',fill:'#94A3B8',fontSize:10}}/>
                     <Bar dataKey='cpl' name='CPL' radius={[5,5,0,0]} maxBarSize={36}>
                       <LabelList dataKey='cpl' position='top' formatter={v=>fmtINR(v)} style={{fontSize:9,fontWeight:600,fill:'#374151'}}/>
-                      {cplBar.map((e,i)=><Cell key={i} fill={e.cpl>avgCPL?'#FCA5A5':'#86EFAC'}/>)}
+                      {cplBar.map((e,i)=><Cell key={i} fill={e.cpl>avgCPL?'#94A3B8':'#4CAE6F'}/>)}
                     </Bar>
                   </ComposedChart>
                 </ResponsiveContainer>
                 <div style={{display:'flex',gap:14,marginTop:4,fontSize:11}}>
-                  <span style={{display:'flex',alignItems:'center',gap:4,color:'#374151'}}><span style={{width:10,height:3,background:'#86EFAC',display:'inline-block'}}/> Below avg</span>
-                  <span style={{display:'flex',alignItems:'center',gap:4,color:'#374151'}}><span style={{width:10,height:3,background:'#FCA5A5',display:'inline-block'}}/> Above avg</span>
+                  <span style={{display:'flex',alignItems:'center',gap:4,color:'#374151'}}><span style={{width:10,height:3,background:'#4CAE6F',display:'inline-block'}}/> Below avg</span>
+                  <span style={{display:'flex',alignItems:'center',gap:4,color:'#374151'}}><span style={{width:10,height:3,background:'#94A3B8',display:'inline-block'}}/> Above avg</span>
                   <span style={{display:'flex',alignItems:'center',gap:4,color:'#374151'}}><span style={{width:10,height:2,background:'#94A3B8',display:'inline-block'}}/> Average</span>
                 </div>
               </Card>
@@ -462,7 +464,7 @@ export default function MTDDashboard(){
                         <td style={{padding:'9px 10px',textAlign:'right',color:'#374151',fontSize:12.5}}>{fmtNum(s.leads)}</td>
                         <td style={{padding:'9px 10px',textAlign:'right',fontWeight:600,color:cplColor(s.cpl),fontSize:12.5,whiteSpace:'nowrap'}}>{fmtINR(s.cpl)}</td>
                         <td style={{padding:'9px 10px',textAlign:'right',color:'#374151',fontSize:12.5}}>{fmtNum(s.fwQual)}</td>
-                        <td style={{padding:'9px 10px',textAlign:'right',fontSize:12.5}}><span style={{background:s.fwQL>15?'#E9F8EF':s.fwQL>5?'#FEF9C3':'#FEF2F2',color:qlColor(s.fwQL),fontWeight:600,padding:'2px 8px',borderRadius:10,fontSize:11}}>{s.fwQL.toFixed(1)}%</span></td>
+                        <td style={{padding:'9px 10px',textAlign:'right',fontSize:12.5}}><span style={{background:s.fwQL>15?'#E8F6EF':s.fwQL>5?'#E7F4FB':'#F1F5F9',color:qlColor(s.fwQL),fontWeight:600,padding:'2px 8px',borderRadius:10,fontSize:11}}>{s.fwQL.toFixed(1)}%</span></td>
                         <td style={{padding:'9px 10px',textAlign:'right',color:'#374151',fontSize:12.5}}>{fmtNum(s.sbQual)}</td>
                         <td style={{padding:'9px 10px',textAlign:'right',color:'#374151',fontSize:12.5}}>{fmtNum(s.apps)}</td>
                         <td style={{padding:'9px 10px',textAlign:'right',color:'#374151',fontSize:12.5,whiteSpace:'nowrap'}}>{fmtINR(s.cpql)}</td>
