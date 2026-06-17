@@ -399,7 +399,7 @@ export default function AskAI() {
   const toggleRail=id=>{setRail(r=>r===id?null:id)}
 
   const panelOpen = rail!==null
-  const RAIL_W = 300
+  const RAIL_W = 322
 
   /* styles */
   const askAiBg='#F4F6F9'
@@ -424,13 +424,12 @@ export default function AskAI() {
         .rb:not(.rb-active):hover{background:rgba(28,159,212,0.10)!important;border-radius:14px!important}
         .qp:hover{background:rgba(28,159,212,0.15)!important;border-color:rgba(28,159,212,0.4)!important;color:#fff!important;transform:translateY(-1px)!important;transition:all .2s!important}
         .cv:hover .delbtn{opacity:1!important}
+        .cv:hover{transform:translateY(-1px)}
         .ibtn:hover{background:#F3F4F6!important}
         .mabtn:hover{background:#F3F4F6!important}
         .sendbtn:hover:not(:disabled){transform:scale(1.05);background:${BLUE}!important}
         input::placeholder,textarea::placeholder{color:#9AA7B8!important}
         input,textarea{caret-color:#1C9FD4;}
-        textarea{-webkit-appearance:none!important;appearance:none!important;border:none!important;box-shadow:none!important;}
-        textarea:focus,textarea:focus-visible{outline:none!important;border:none!important;box-shadow:none!important;}
         /* ===== PREMIUM AI MOTION TOOLKIT (brand: navy/blue/cyan/green) ===== */
         @keyframes qSwoosh{0%{transform:translateX(-120%) skewX(-18deg)}60%,100%{transform:translateX(220%) skewX(-18deg)}}
         @keyframes qAurora{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
@@ -464,52 +463,70 @@ export default function AskAI() {
         }}>
           {panelOpen&&(
             <div style={{width:RAIL_W,flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
-              {/* panel header */}
-              <div style={{padding:'16px 16px 12px',borderBottom:`1px solid ${borderColor}`,display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
-                <span style={{fontSize:13,fontWeight:700,color:'#0F172A',letterSpacing:'-0.01em'}}>
-                  {rail==='history'?'Conversations':rail==='prompts'?'Prompt Library':rail==='logs'?'Report Logs':'Memories'}
-                </span>
-                <button onClick={()=>setRail(null)} className="ibtn" style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:'none',background:'transparent',borderRadius:6,cursor:'pointer'}}>
+              {/* panel header — premium */}
+              <div style={{padding:'16px 16px 13px',borderBottom:'1px solid #EEF1F6',display:'flex',alignItems:'center',gap:11,flexShrink:0,background:'linear-gradient(180deg,#FBFCFE,#fff)'}}>
+                <div style={{width:34,height:34,borderRadius:11,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:'linear-gradient(145deg,#1F3C84,#1C9FD4 70%,#29B9C3)',boxShadow:'0 6px 16px -6px rgba(28,159,212,0.6), inset 0 1px 0 rgba(255,255,255,0.3)'}}>
+                  <Ico n={rail==='history'?'history':rail==='prompts'?'prompts':rail==='logs'?'logs':'brain'} s={16} c="#fff"/>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:800,color:'#0F172A',letterSpacing:'-0.02em',lineHeight:1.1}}>
+                    {rail==='history'?'Conversations':rail==='prompts'?'Prompt Library':rail==='logs'?'Report Logs':'Memories'}
+                  </div>
+                  <div style={{fontSize:10.5,color:'#94A3B8',fontWeight:500,marginTop:2,letterSpacing:'0.01em'}}>
+                    {rail==='history'?`${convs.length} conversation${convs.length!==1?'s':''} · shared`:rail==='prompts'?`${PROMPTS.length} ready-to-use prompts`:rail==='logs'?'Email send history':'Persistent AI memory'}
+                  </div>
+                </div>
+                <button onClick={()=>setRail(null)} className="ibtn" style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:'none',background:'transparent',borderRadius:8,cursor:'pointer',flexShrink:0}}>
                   <Ico n="close" s={14} c="#9CA3AF"/>
                 </button>
               </div>
 
               {/* History */}
               {rail==='history'&&(
-                <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                  <div style={{padding:'10px 12px',flexShrink:0}}>
+                <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',background:'linear-gradient(180deg,#FAFBFD,#F5F7FA)'}}>
+                  <div style={{padding:'12px 12px 8px',flexShrink:0}}>
                     <div style={{position:'relative'}}>
-                      <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={12} c="#CBD5E1"/></span>
+                      <span style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={13} c="#94A3B8"/></span>
                       <input value={convSearch} onChange={e=>setConvSearch(e.target.value)} placeholder="Search conversations or person…"
-                        style={{width:'100%',background:'#F8FAFC',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px 7px 30px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
+                        style={{width:'100%',background:'#fff',border:'1px solid #E8ECF2',borderRadius:11,padding:'9px 12px 9px 34px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT,boxShadow:'0 1px 3px rgba(15,23,42,0.04)'}}/>
                     </div>
                   </div>
-                  <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 6px 6px'}}>
+                  <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 10px 10px'}}>
                     {Object.entries(grouped).map(([label,items])=>items.length>0&&(
-                      <div key={label}>
-                        <div style={{padding:'8px 10px 4px',fontSize:10,fontWeight:700,color:'#CBD5E1',letterSpacing:'0.07em',textTransform:'uppercase'}}>{label}</div>
-                        {items.map(c=>(
+                      <div key={label} style={{marginBottom:6}}>
+                        <div style={{padding:'10px 6px 6px',fontSize:9.5,fontWeight:800,color:'#A8B2C2',letterSpacing:'0.1em',textTransform:'uppercase',display:'flex',alignItems:'center',gap:7}}>
+                          {label}<div style={{flex:1,height:1,background:'linear-gradient(90deg,#E8ECF2,transparent)'}}/>
+                        </div>
+                        {items.map(c=>{
+                          const on=c.id===activeId
+                          const initial=(c.user_id&&c.user_id!=='default')?(c.user_id.split('@')[0][0]||'?').toUpperCase():'AI'
+                          return (
                           <div key={c.id} className="cv" onClick={()=>selectConv(c)}
-                            style={{display:'flex',alignItems:'center',gap:0,borderRadius:8,margin:'1px 0',cursor:'pointer',background:c.id===activeId?'rgba(28,159,212,0.12)':'transparent',borderLeft:c.id===activeId?`2px solid ${BLUE}`:'2px solid transparent',transition:'all .15s'}}>
-                            <div style={{flex:1,padding:'8px 10px 8px 8px',minWidth:0}}>
-                              <div style={{fontSize:12.5,color:c.id===activeId?'#fff':'#374151',fontWeight:c.id===activeId?600:400,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.title}</div>
-                              <div style={{fontSize:10.5,color:c.id===activeId?'rgba(255,255,255,0.7)':'#94A3B8',marginTop:2,display:'flex',alignItems:'center',gap:5,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>
-                                {c.user_id && c.user_id!=='default' && <span style={{display:'inline-flex',alignItems:'center',gap:3}}>
-                                  <span style={{width:13,height:13,borderRadius:'50%',background:c.id===activeId?'rgba(255,255,255,0.25)':'#E8EFF9',color:c.id===activeId?'#fff':'#1F3C84',fontSize:7.5,fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{(c.user_id.split('@')[0][0]||'?').toUpperCase()}</span>
-                                  {c.user_id.split('@')[0]}
-                                </span>}
-                                <span style={{opacity:0.7}}>· {c.message_count||0} msg</span>
+                            style={{display:'flex',alignItems:'center',gap:10,borderRadius:13,margin:'3px 0',cursor:'pointer',padding:'10px 11px',position:'relative',overflow:'hidden',background:on?'linear-gradient(135deg,#1F3C84,#1C9FD4)':'#fff',border:on?'1px solid transparent':'1px solid #EDF0F5',boxShadow:on?'0 8px 22px -8px rgba(28,159,212,0.55)':'0 1px 3px rgba(15,23,42,0.05)',transition:'all .18s cubic-bezier(.4,0,.2,1)'}}>
+                            {/* creator avatar */}
+                            <div style={{width:30,height:30,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,fontFamily:FONT,color:on?'#1F3C84':'#fff',background:on?'rgba(255,255,255,0.9)':'linear-gradient(145deg,#1F3C84,#29B9C3)',boxShadow:on?'none':'0 2px 6px -2px rgba(31,60,132,0.5)'}}>{initial}</div>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:12.5,color:on?'#fff':'#1E293B',fontWeight:on?700:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.01em'}}>{c.title}</div>
+                              <div style={{fontSize:10.5,color:on?'rgba(255,255,255,0.8)':'#94A3B8',marginTop:2,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',fontWeight:500}}>
+                                {c.user_id && c.user_id!=='default' ? c.user_id.split('@')[0] : 'You'}<span style={{opacity:0.6}}> · {c.message_count||0} msg</span>
                               </div>
                             </div>
                             <button className="delbtn" onClick={e=>{e.stopPropagation();deleteConv(c.id)}}
-                              style={{padding:'0 8px',background:'transparent',border:'none',cursor:'pointer',opacity:0,transition:'opacity .15s',flexShrink:0}}>
-                              <Ico n="trash" s={12} c="rgba(255,100,100,0.6)"/>
+                              style={{padding:'6px',background:'transparent',border:'none',cursor:'pointer',opacity:0,transition:'opacity .15s',flexShrink:0,borderRadius:7}}>
+                              <Ico n="trash" s={13} c={on?'rgba(255,255,255,0.85)':'#CBD5E1'}/>
                             </button>
                           </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     ))}
-                    {convs.length===0&&<div style={{padding:'30px 20px',textAlign:'center',color:'#CBD5E1',fontSize:12.5}}>No conversations yet</div>}
+                    {convs.length===0&&(
+                      <div style={{padding:'44px 20px',textAlign:'center'}}>
+                        <div style={{width:48,height:48,margin:'0 auto 14px',borderRadius:14,display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(145deg,rgba(31,60,132,0.08),rgba(41,185,195,0.08))',border:'1px solid #EDF0F5'}}><Ico n="history" s={22} c={BLUE}/></div>
+                        <div style={{fontSize:13,fontWeight:700,color:'#1F3C84',marginBottom:4,fontFamily:FONT}}>No conversations yet</div>
+                        <div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.5}}>Start a chat below — it's saved and shared with your team.</div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -666,8 +683,10 @@ export default function AskAI() {
           )}
         </div>
 
-        {/* Icon rail */}
-        <div style={{width:56,background:`linear-gradient(180deg,#FFFFFF,#F7F9FC)`,borderRight:`1px solid ${borderColor}`,display:'flex',flexDirection:'column',alignItems:'center',padding:'12px 0',gap:6,flexShrink:0}}>
+        {/* Icon rail — premium dark navy glass */}
+        <div style={{width:64,background:'linear-gradient(180deg,#16203F 0%,#1F3C84 55%,#1A346F 100%)',borderRight:'1px solid rgba(255,255,255,0.06)',display:'flex',flexDirection:'column',alignItems:'center',padding:'16px 0',gap:8,flexShrink:0,position:'relative',boxShadow:'inset -8px 0 24px -16px rgba(0,0,0,0.6)'}}>
+          {/* subtle top sheen */}
+          <div style={{position:'absolute',top:0,left:0,right:0,height:80,background:'linear-gradient(180deg,rgba(255,255,255,0.07),transparent)',pointerEvents:'none'}}/>
           {[
             {id:'history', icon:'history', label:'History'},
             {id:'prompts', icon:'prompts', label:'Prompts'},
@@ -676,12 +695,19 @@ export default function AskAI() {
           ].map(r=>{
             const on=rail===r.id
             return <button key={r.id} onClick={()=>{toggleRail(r.id);if(r.id==='logs')loadLogs()}} title={r.label} className={on?'rb rb-active':'rb'}
-              style={{width:46,height:46,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,borderRadius:14,border:on?'1px solid rgba(28,159,212,0.35)':'1px solid transparent',cursor:'pointer',background:on?'linear-gradient(145deg,#1F3C84,#1C9FD4)':'transparent',boxShadow:on?'0 6px 16px -4px rgba(28,159,212,0.55)':'none',transition:'all .2s cubic-bezier(.4,0,.2,1)',position:'relative'}}>
-              <Ico n={r.icon} s={16} c={on?'#fff':'#8A94A6'}/>
-              <span style={{fontSize:8.5,fontWeight:on?700:600,color:on?'#fff':'#8A94A6',letterSpacing:'0.04em',fontFamily:FONT,lineHeight:1}}>{r.label}</span>
-              {on&&<div style={{position:'absolute',left:-1,top:'50%',transform:'translateY(-50%)',width:3,height:24,background:'linear-gradient(#1C9FD4,#29B9C3)',borderRadius:3,boxShadow:'0 0 10px rgba(28,159,212,0.8)'}}/>}
+              style={{width:50,height:52,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4,borderRadius:15,border:on?'1px solid rgba(255,255,255,0.22)':'1px solid transparent',cursor:'pointer',background:on?'linear-gradient(145deg,rgba(255,255,255,0.22),rgba(255,255,255,0.06))':'transparent',boxShadow:on?'0 8px 20px -6px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.25)':'none',backdropFilter:on?'blur(6px)':'none',transition:'all .22s cubic-bezier(.4,0,.2,1)',position:'relative',zIndex:1}}>
+              <Ico n={r.icon} s={17} c={on?'#fff':'rgba(255,255,255,0.55)'}/>
+              <span style={{fontSize:8.5,fontWeight:on?800:600,color:on?'#fff':'rgba(255,255,255,0.55)',letterSpacing:'0.04em',fontFamily:FONT,lineHeight:1}}>{r.label}</span>
+              {on&&<div style={{position:'absolute',left:-9,top:'50%',transform:'translateY(-50%)',width:3.5,height:26,background:'linear-gradient(#29B9C3,#4CAE6F)',borderRadius:4,boxShadow:'0 0 12px rgba(41,185,195,0.9)'}}/>}
             </button>
           })}
+          <div style={{flex:1}}/>
+          {/* new chat at rail bottom */}
+          <button onClick={newConv} title="New conversation" className="rb"
+            style={{width:50,height:50,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,borderRadius:15,border:'1px solid rgba(255,255,255,0.18)',cursor:'pointer',background:'linear-gradient(145deg,rgba(41,185,195,0.30),rgba(28,159,212,0.12))',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.2)',transition:'all .2s',position:'relative',zIndex:1}}>
+            <Ico n="new" s={16} c="#fff"/>
+            <span style={{fontSize:8.5,fontWeight:700,color:'#fff',letterSpacing:'0.03em',fontFamily:FONT,lineHeight:1}}>New</span>
+          </button>
         </div>
 
         {/* Ask AI area */}
@@ -833,7 +859,7 @@ export default function AskAI() {
                 <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…"
                   onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
                   onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
-                  style={{width:'100%',border:'none',outline:'none',WebkitAppearance:'none',appearance:'none',boxShadow:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
+                  style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:10}}>
                   <div style={{display:'flex',alignItems:'center',gap:6}}>
                     {[['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
