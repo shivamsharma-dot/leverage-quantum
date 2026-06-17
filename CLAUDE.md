@@ -723,3 +723,9 @@ Resume the Leverage Quantum premium pass. Read CLAUDE.md (bottom 'SESSION RESUME
 - FIX (3 files, 1 commit 6a216bd): (1) dashboardKit.jsx ~line 97 RAMP -> BRAND_RAMP. (2) _DashboardTemplate.jsx RankedBars call hardened with colorFn={brandColor} + max + total + showRank. (3) DESIGN_SYSTEM.md refreshed: delta pill 'red down' -> 'navy down', amber flagged OFF-BRAND in token block, 'Extract a shared UI module' step marked DONE.
 
 - VERIFIED: npm run build clean (7.42s). Pushed e39cab6..6a216bd origin rename-ask-ai:main. Live (admin): QL Ops 3 RankedBars render; Referral 'Top student statuses' RankedBars renders; no console errors on Referral after reload. DashboardHome.jsx stashed during push, popped after.
+
+## 2026-06-18 — Fetch-once-per-session caching
+Added src/lib/sessionLoad.js: in-memory per-tab session store (getSession/setSession/hasLoaded). Reload (F5) = fresh session.
+Dashboards auto-fetch ONCE per session; SPA nav between pages reuses cached data (no refetch); only Refresh forces a refetch (bust=true -> cache-busted fetch + store update).
+Wired into QL Ops, WhatsApp, Referral, Home (Home stays uncommitted/stashed). Added a Refresh button to Referral and Home headers (previously none).
+Pushed to main as 82939b0 (sessionLoad + QLOps/WhatsApp/Referral); Home kept local only. Build clean (6.74s). Verified live: SPA nav no refetch, Refresh refetches (csv&_=ts), reload refetches once; no app console errors.
