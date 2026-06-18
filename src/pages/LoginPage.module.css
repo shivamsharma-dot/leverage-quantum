@@ -25,29 +25,42 @@
 }
 
 .ribbonSvg {
-  position: absolute; right: -140px; top: 50%; transform: translateY(-50%);
-  width: 760px; max-width: 60vw; height: auto; opacity: 0.5;
-  animation: floatRibbon 12s ease-in-out infinite alternate;
+  position: absolute; right: -140px; top: 50%;
+  width: 760px; max-width: 60vw; height: auto; opacity: 0.42;
+  transform: translateY(-50%);
+  animation: floatA 18s ease-in-out infinite alternate;
   pointer-events: none;
 }
 .ribbonSvgLeft {
   position: absolute; left: -200px; bottom: -120px;
-  width: 560px; max-width: 46vw; height: auto; opacity: 0.28;
+  width: 560px; max-width: 46vw; height: auto; opacity: 0.22;
   transform: rotate(180deg);
-  animation: floatRibbon 14s ease-in-out infinite alternate-reverse;
+  animation: floatB 22s ease-in-out infinite alternate;
   pointer-events: none;
 }
 .ribbon {
-  fill: none; stroke-width: 30; stroke-linecap: round;
-  stroke-dasharray: 1500; stroke-dashoffset: 1500;
-  animation: drawRibbon 2.4s cubic-bezier(.4,0,.2,1) forwards;
+  fill: none; stroke-width: 9; stroke-linecap: round;
+  stroke-dasharray: 1600; stroke-dashoffset: 1600;
+  opacity: 0;
+  filter: drop-shadow(0 0 6px rgba(28,159,212,0.18));
+  animation: drawRibbon 2.6s cubic-bezier(.22,1,.36,1) forwards, shimmerRibbon 7s ease-in-out 2.6s infinite;
 }
-.r1 { stroke: var(--green); animation-delay: .10s; }
-.r2 { stroke: var(--cyan);  animation-delay: .28s; }
-.r3 { stroke: var(--blue);  animation-delay: .46s; }
-.r4 { stroke: var(--navy);  animation-delay: .64s; }
-@keyframes floatRibbon { from { transform: translateY(-50%) translateX(0); } to { transform: translateY(-50%) translateX(-24px); } }
-@keyframes drawRibbon { to { stroke-dashoffset: 0; } }
+.r1 { stroke: var(--green); stroke-width: 7;  animation-delay: .15s; }
+.r2 { stroke: var(--cyan);  stroke-width: 9;  animation-delay: .40s; }
+.r3 { stroke: var(--blue);  stroke-width: 8;  animation-delay: .65s; }
+.r4 { stroke: var(--navy);  stroke-width: 10; animation-delay: .90s; }
+@keyframes floatA {
+  0%   { transform: translateY(-50%) translateX(0) rotate(0deg); }
+  50%  { transform: translateY(-52%) translateX(-26px) rotate(-1.2deg); }
+  100% { transform: translateY(-48%) translateX(-12px) rotate(0.8deg); }
+}
+@keyframes floatB {
+  0%   { transform: rotate(180deg) translateX(0); }
+  50%  { transform: rotate(181deg) translateX(-22px) translateY(10px); }
+  100% { transform: rotate(179deg) translateX(-8px) translateY(-6px); }
+}
+@keyframes shimmerRibbon { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+@keyframes drawRibbon { 0% { stroke-dashoffset: 1600; opacity: 0; } 12% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 1; } }
 
 .card {
   position: relative;
