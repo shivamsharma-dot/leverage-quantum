@@ -142,6 +142,8 @@ function Ico({n,s=16,c='currentColor',sw=2}){
     spark:    <><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></>,
     refresh:  <><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></>,
     logs:     <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></>,
+    pin:      <><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.5-2.5V8l1.5-2H5l1.5 2v6.5z"/></>,
+    edit:     <><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4z"/></>,
   }
   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d[n]}</svg>
 }
@@ -227,6 +229,9 @@ export default function AskAI() {
   const [promptSearch, setPromptSearch] = useState('')
   const [expandedPrompt, setExpandedPrompt] = useState(null)
   const [convSearch, setConvSearch] = useState('')
+  const [editingId, setEditingId]   = useState(null)   // conversation being renamed
+  const [editTitle, setEditTitle]   = useState('')
+  const [personFilter, setPersonFilter] = useState('all') // 'all' | 'mine' | '<email>'
   const [copied, setCopied]       = useState(null)
   const [showWelcomeAnim, setShowWelcomeAnim] = useState(true)
 
@@ -311,6 +316,33 @@ export default function AskAI() {
     } catch(e){ console.warn('SB delete failed',e) }
   },[activeId, uid])
 
+  /* pin / unpin — persists to ask_ai_conversations.pinned */
+  const togglePin = useCallback(async (id, current)=>{
+    const next=!current
+    setConvs(cs=>cs.map(c=>c.id===id?{...c,pinned:next}:c))
+    try {
+      await fetch(`${SB_URL}/rest/v1/ask_ai_conversations?id=eq.${id}`,{
+        method:'PATCH', headers:{...SBH,Prefer:'return=minimal'},
+        body:JSON.stringify({pinned:next})
+      })
+    } catch(e){ console.warn('pin failed',e) }
+  },[])
+
+  /* rename — persists title to ask_ai_conversations */
+  const startRename = useCallback((id, title)=>{ setEditingId(id); setEditTitle(title||'') },[])
+  const commitRename = useCallback(async ()=>{
+    const id=editingId, t=editTitle.trim()
+    setEditingId(null)
+    if(!id||!t) return
+    setConvs(cs=>cs.map(c=>c.id===id?{...c,title:t}:c))
+    try {
+      await fetch(`${SB_URL}/rest/v1/ask_ai_conversations?id=eq.${id}`,{
+        method:'PATCH', headers:{...SBH,Prefer:'return=minimal'},
+        body:JSON.stringify({title:t,updated_at:new Date().toISOString()})
+      })
+    } catch(e){ console.warn('rename failed',e) }
+  },[editingId, editTitle])
+
   /* send */
   const send = useCallback(async(text)=>{
     const q=(text||input).trim(); if(!q||loading) return
@@ -376,19 +408,32 @@ export default function AskAI() {
   }
   const delMem=async id=>{ setMemories(m=>m.filter(x=>x.id!==id)); if(id)await sbDel('ask_ai_memories',`?id=eq.${id}`) }
 
-  /* grouped convs */
+  /* people who have conversations (for the filter dropdown) */
+  const people=useMemo(()=>{
+    const set=new Set()
+    convs.forEach(c=>{ if(c.user_id&&c.user_id!=='default')set.add(c.user_id) })
+    return Array.from(set).sort()
+  },[convs])
+
+  /* grouped convs — Pinned first, then Today/Yesterday/Earlier; respects search + person filter */
   const now0=new Date(); now0.setHours(0,0,0,0)
   const grouped=useMemo(()=>{
     const q=convSearch.toLowerCase()
-    const filtered=convs.filter(c=>!q||c.title.toLowerCase().includes(q)||(c.user_id||'').toLowerCase().includes(q))
-    const T=[],Y=[],E=[]
+    const filtered=convs.filter(c=>{
+      if(q && !(c.title.toLowerCase().includes(q)||(c.user_id||'').toLowerCase().includes(q))) return false
+      if(personFilter==='mine' && c.user_id!==uid) return false
+      if(personFilter!=='all' && personFilter!=='mine' && c.user_id!==personFilter) return false
+      return true
+    })
+    const P=[],T=[],Y=[],E=[]
     filtered.forEach(c=>{
+      if(c.pinned){ P.push(c); return }
       const d=new Date(c.updated_at||c.created_at||0); d.setHours(0,0,0,0)
       const diff=(now0-d)/86400000
       if(diff<1)T.push(c); else if(diff<2)Y.push(c); else E.push(c)
     })
-    return{Today:T,Yesterday:Y,Earlier:E}
-  },[convs,convSearch,now0])
+    return{Pinned:P,Today:T,Yesterday:Y,Earlier:E}
+  },[convs,convSearch,personFilter,uid,now0])
 
   const filteredPrompts=useMemo(()=>PROMPTS.filter(p=>(promptCat==='All'||p.cat===promptCat)&&(!promptSearch||p.title.toLowerCase().includes(promptSearch.toLowerCase())||p.text.toLowerCase().includes(promptSearch.toLowerCase()))),[promptCat,promptSearch])
 
@@ -423,7 +468,9 @@ export default function AskAI() {
         @keyframes scaleIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
         .rb:not(.rb-active):hover{background:rgba(28,159,212,0.10)!important;border-radius:14px!important}
         .qp:hover{background:rgba(28,159,212,0.15)!important;border-color:rgba(28,159,212,0.4)!important;color:#fff!important;transform:translateY(-1px)!important;transition:all .2s!important}
+        .cv:hover .cvact{opacity:1!important}
         .cv:hover .delbtn{opacity:1!important}
+        .cvact button:hover{background:rgba(0,0,0,0.06)!important}
         .cv:hover{transform:translateY(-1px)}
         .ibtn:hover{background:#F3F4F6!important}
         .mabtn:hover{background:#F3F4F6!important}
@@ -498,36 +545,68 @@ export default function AskAI() {
               {rail==='history'&&(
                 <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',background:'linear-gradient(180deg,#FAFBFD,#F5F7FA)'}}>
                   <div style={{padding:'12px 12px 8px',flexShrink:0}}>
-                    <div style={{position:'relative'}}>
+                    <div style={{position:'relative',marginBottom:8}}>
                       <span style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={13} c="#94A3B8"/></span>
                       <input value={convSearch} onChange={e=>setConvSearch(e.target.value)} placeholder="Search conversations or person…"
                         style={{width:'100%',background:'#fff',border:'1px solid #E8ECF2',borderRadius:11,padding:'9px 12px 9px 34px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT,boxShadow:'0 1px 3px rgba(15,23,42,0.04)'}}/>
                     </div>
+                    {/* person filter pills */}
+                    {people.length>0&&(
+                      <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                        {[['all','Everyone'],['mine','Just me']].concat(people.filter(p=>p!==uid).map(p=>[p,p.split('@')[0]])).map(([val,lbl])=>{
+                          const on=personFilter===val
+                          return <button key={val} onClick={()=>setPersonFilter(val)}
+                            style={{padding:'3px 10px',borderRadius:20,border:`1px solid ${on?'#1C9FD4':'#E8ECF2'}`,background:on?'#E3F5FD':'#fff',fontSize:10.5,fontWeight:on?700:500,color:on?'#1C9FD4':'#64748B',cursor:'pointer',fontFamily:FONT,transition:'all .15s',whiteSpace:'nowrap'}}>{lbl}</button>
+                        })}
+                      </div>
+                    )}
                   </div>
                   <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 10px 10px'}}>
                     {Object.entries(grouped).map(([label,items])=>items.length>0&&(
                       <div key={label} style={{marginBottom:6}}>
-                        <div style={{padding:'10px 6px 6px',fontSize:9.5,fontWeight:800,color:'#A8B2C2',letterSpacing:'0.1em',textTransform:'uppercase',display:'flex',alignItems:'center',gap:7}}>
-                          {label}<div style={{flex:1,height:1,background:'linear-gradient(90deg,#E8ECF2,transparent)'}}/>
+                        <div style={{padding:'10px 6px 6px',fontSize:9.5,fontWeight:800,color:label==='Pinned'?'#1C9FD4':'#A8B2C2',letterSpacing:'0.1em',textTransform:'uppercase',display:'flex',alignItems:'center',gap:6}}>
+                          {label==='Pinned'&&<Ico n="pin" s={11} c="#1C9FD4"/>}{label}<div style={{flex:1,height:1,background:`linear-gradient(90deg,${label==='Pinned'?'rgba(28,159,212,0.3)':'#E8ECF2'},transparent)`}}/>
                         </div>
                         {items.map(c=>{
                           const on=c.id===activeId
+                          const editing=editingId===c.id
                           const initial=(c.user_id&&c.user_id!=='default')?(c.user_id.split('@')[0][0]||'?').toUpperCase():'AI'
                           return (
-                          <div key={c.id} className="cv" onClick={()=>selectConv(c)}
-                            style={{display:'flex',alignItems:'center',gap:10,borderRadius:13,margin:'3px 0',cursor:'pointer',padding:'10px 11px',position:'relative',overflow:'hidden',background:on?'linear-gradient(135deg,#1F3C84,#1C9FD4)':'#fff',border:on?'1px solid transparent':'1px solid #EDF0F5',boxShadow:on?'0 8px 22px -8px rgba(28,159,212,0.55)':'0 1px 3px rgba(15,23,42,0.05)',transition:'all .18s cubic-bezier(.4,0,.2,1)'}}>
-                            {/* creator avatar */}
+                          <div key={c.id} className="cv" onClick={()=>!editing&&selectConv(c)}
+                            style={{display:'flex',alignItems:'center',gap:10,borderRadius:13,margin:'3px 0',cursor:editing?'default':'pointer',padding:'10px 11px',position:'relative',overflow:'hidden',background:on?'linear-gradient(135deg,#1F3C84,#1C9FD4)':'#fff',border:on?'1px solid transparent':`1px solid ${c.pinned?'rgba(28,159,212,0.3)':'#EDF0F5'}`,boxShadow:on?'0 8px 22px -8px rgba(28,159,212,0.55)':'0 1px 3px rgba(15,23,42,0.05)',transition:'all .18s cubic-bezier(.4,0,.2,1)'}}>
                             <div style={{width:30,height:30,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,fontFamily:FONT,color:on?'#1F3C84':'#fff',background:on?'rgba(255,255,255,0.9)':'linear-gradient(145deg,#1F3C84,#29B9C3)',boxShadow:on?'none':'0 2px 6px -2px rgba(31,60,132,0.5)'}}>{initial}</div>
                             <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontSize:12.5,color:on?'#fff':'#1E293B',fontWeight:on?700:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.01em'}}>{c.title}</div>
-                              <div style={{fontSize:10.5,color:on?'rgba(255,255,255,0.8)':'#94A3B8',marginTop:2,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',fontWeight:500}}>
-                                {c.user_id && c.user_id!=='default' ? c.user_id.split('@')[0] : 'You'}<span style={{opacity:0.6}}> · {c.message_count||0} msg</span>
-                              </div>
+                              {editing?(
+                                <input autoFocus value={editTitle} onChange={e=>setEditTitle(e.target.value)} onClick={e=>e.stopPropagation()}
+                                  onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();commitRename()}if(e.key==='Escape')setEditingId(null)}}
+                                  onBlur={commitRename}
+                                  style={{width:'100%',border:'1px solid #1C9FD4',borderRadius:7,padding:'4px 8px',fontSize:12.5,fontWeight:600,color:'#1E293B',outline:'none',fontFamily:FONT,background:'#fff'}}/>
+                              ):(<>
+                                <div style={{display:'flex',alignItems:'center',gap:5}}>
+                                  {c.pinned&&!on&&<Ico n="pin" s={10} c="#1C9FD4"/>}
+                                  <div style={{flex:1,fontSize:12.5,color:on?'#fff':'#1E293B',fontWeight:on?700:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.01em'}}>{c.title}</div>
+                                </div>
+                                <div style={{fontSize:10.5,color:on?'rgba(255,255,255,0.8)':'#94A3B8',marginTop:2,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',fontWeight:500}}>
+                                  {c.user_id && c.user_id!=='default' ? c.user_id.split('@')[0] : 'You'}<span style={{opacity:0.6}}> · {c.message_count||0} msg</span>
+                                </div>
+                              </>)}
                             </div>
-                            <button className="delbtn" onClick={e=>{e.stopPropagation();deleteConv(c.id)}}
-                              style={{padding:'6px',background:'transparent',border:'none',cursor:'pointer',opacity:0,transition:'opacity .15s',flexShrink:0,borderRadius:7}}>
-                              <Ico n="trash" s={13} c={on?'rgba(255,255,255,0.85)':'#CBD5E1'}/>
-                            </button>
+                            {!editing&&(
+                              <div className="cvact" style={{display:'flex',alignItems:'center',gap:1,opacity:0,transition:'opacity .15s',flexShrink:0}}>
+                                <button title={c.pinned?'Unpin':'Pin'} onClick={e=>{e.stopPropagation();togglePin(c.id,c.pinned)}}
+                                  style={{padding:'5px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
+                                  <Ico n="pin" s={12} c={c.pinned?'#1C9FD4':(on?'rgba(255,255,255,0.85)':'#CBD5E1')}/>
+                                </button>
+                                <button title="Rename" onClick={e=>{e.stopPropagation();startRename(c.id,c.title)}}
+                                  style={{padding:'5px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
+                                  <Ico n="edit" s={12} c={on?'rgba(255,255,255,0.85)':'#CBD5E1'}/>
+                                </button>
+                                <button title="Delete" onClick={e=>{e.stopPropagation();deleteConv(c.id)}}
+                                  style={{padding:'5px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
+                                  <Ico n="trash" s={12} c={on?'rgba(255,255,255,0.85)':'#CBD5E1'}/>
+                                </button>
+                              </div>
+                            )}
                           </div>
                           )
                         })}
