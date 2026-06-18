@@ -683,10 +683,10 @@ export default function AskAI() {
           )}
         </div>
 
-        {/* Icon rail — premium dark navy glass */}
-        <div style={{width:64,background:'linear-gradient(180deg,#16203F 0%,#1F3C84 55%,#1A346F 100%)',borderRight:'1px solid rgba(255,255,255,0.06)',display:'flex',flexDirection:'column',alignItems:'center',padding:'16px 0',gap:8,flexShrink:0,position:'relative',boxShadow:'inset -8px 0 24px -16px rgba(0,0,0,0.6)'}}>
-          {/* subtle top sheen */}
-          <div style={{position:'absolute',top:0,left:0,right:0,height:80,background:'linear-gradient(180deg,rgba(255,255,255,0.07),transparent)',pointerEvents:'none'}}/>
+        {/* Icon rail — light premium gradient */}
+        <div style={{width:64,background:'linear-gradient(180deg,#FFFFFF 0%,#F6F9FC 45%,#EEF3F9 100%)',borderRight:'1px solid #E8ECF2',display:'flex',flexDirection:'column',alignItems:'center',padding:'16px 0',gap:8,flexShrink:0,position:'relative',boxShadow:'inset -10px 0 24px -20px rgba(31,60,132,0.18)'}}>
+          {/* subtle top brand sheen */}
+          <div style={{position:'absolute',top:0,left:0,right:0,height:70,background:'linear-gradient(180deg,rgba(28,159,212,0.06),transparent)',pointerEvents:'none'}}/>
           {[
             {id:'history', icon:'history', label:'History'},
             {id:'prompts', icon:'prompts', label:'Prompts'},
@@ -695,18 +695,18 @@ export default function AskAI() {
           ].map(r=>{
             const on=rail===r.id
             return <button key={r.id} onClick={()=>{toggleRail(r.id);if(r.id==='logs')loadLogs()}} title={r.label} className={on?'rb rb-active':'rb'}
-              style={{width:50,height:52,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4,borderRadius:15,border:on?'1px solid rgba(255,255,255,0.22)':'1px solid transparent',cursor:'pointer',background:on?'linear-gradient(145deg,rgba(255,255,255,0.22),rgba(255,255,255,0.06))':'transparent',boxShadow:on?'0 8px 20px -6px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.25)':'none',backdropFilter:on?'blur(6px)':'none',transition:'all .22s cubic-bezier(.4,0,.2,1)',position:'relative',zIndex:1}}>
-              <Ico n={r.icon} s={17} c={on?'#fff':'rgba(255,255,255,0.55)'}/>
-              <span style={{fontSize:8.5,fontWeight:on?800:600,color:on?'#fff':'rgba(255,255,255,0.55)',letterSpacing:'0.04em',fontFamily:FONT,lineHeight:1}}>{r.label}</span>
-              {on&&<div style={{position:'absolute',left:-9,top:'50%',transform:'translateY(-50%)',width:3.5,height:26,background:'linear-gradient(#29B9C3,#4CAE6F)',borderRadius:4,boxShadow:'0 0 12px rgba(41,185,195,0.9)'}}/>}
+              style={{width:50,height:52,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4,borderRadius:15,border:on?'1px solid transparent':'1px solid transparent',cursor:'pointer',background:on?'linear-gradient(145deg,#1F3C84,#1C9FD4 70%,#29B9C3)':'transparent',boxShadow:on?'0 8px 20px -6px rgba(28,159,212,0.6), inset 0 1px 0 rgba(255,255,255,0.3)':'none',transition:'all .22s cubic-bezier(.4,0,.2,1)',position:'relative',zIndex:1}}>
+              <Ico n={r.icon} s={17} c={on?'#fff':'#8A94A6'}/>
+              <span style={{fontSize:8.5,fontWeight:on?800:600,color:on?'#fff':'#8A94A6',letterSpacing:'0.04em',fontFamily:FONT,lineHeight:1}}>{r.label}</span>
+              {on&&<div style={{position:'absolute',left:-9,top:'50%',transform:'translateY(-50%)',width:3.5,height:26,background:'linear-gradient(#1C9FD4,#29B9C3)',borderRadius:4,boxShadow:'0 0 12px rgba(28,159,212,0.7)'}}/>}
             </button>
           })}
           <div style={{flex:1}}/>
           {/* new chat at rail bottom */}
           <button onClick={newConv} title="New conversation" className="rb"
-            style={{width:50,height:50,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,borderRadius:15,border:'1px solid rgba(255,255,255,0.18)',cursor:'pointer',background:'linear-gradient(145deg,rgba(41,185,195,0.30),rgba(28,159,212,0.12))',boxShadow:'inset 0 1px 0 rgba(255,255,255,0.2)',transition:'all .2s',position:'relative',zIndex:1}}>
-            <Ico n="new" s={16} c="#fff"/>
-            <span style={{fontSize:8.5,fontWeight:700,color:'#fff',letterSpacing:'0.03em',fontFamily:FONT,lineHeight:1}}>New</span>
+            style={{width:50,height:50,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,borderRadius:15,border:'1px solid rgba(28,159,212,0.30)',cursor:'pointer',background:'linear-gradient(145deg,rgba(41,185,195,0.16),rgba(28,159,212,0.08))',boxShadow:'0 4px 12px -6px rgba(28,159,212,0.5), inset 0 1px 0 rgba(255,255,255,0.6)',transition:'all .2s',position:'relative',zIndex:1}}>
+            <Ico n="new" s={16} c={NAVY}/>
+            <span style={{fontSize:8.5,fontWeight:700,color:NAVY,letterSpacing:'0.03em',fontFamily:FONT,lineHeight:1}}>New</span>
           </button>
         </div>
 
