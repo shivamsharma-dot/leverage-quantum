@@ -6,6 +6,7 @@ import Sidebar from '../components/Sidebar'
 import KPICard from '../components/KPICard'
 import { PremKPI } from '../ui/dashboardKit'
 import { fetchCSV } from '../lib/sheetCache'
+import { toast } from '../components/ToastHost'
 import { getSession, setSession } from '../lib/sessionLoad'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=1222628502&single=true&output=csv'
@@ -284,6 +285,7 @@ export default function WhatsAppDashboard() {
       setMonths(ms)
       setSelMonth(prev => prev || ms[ms.length-1] || '')
       setError(''); setLastSync(new Date())
+        if (bust) toast('WhatsApp data refreshed', { type: 'success' })
     } catch(e) { setError(e.message) }
     finally { setTimeout(()=>setLoading(false), Math.max(0,750-(Date.now()-t0))) }
   }, [])
