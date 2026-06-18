@@ -268,9 +268,9 @@ export default function ReferralDashboard() {
   return (
     <div className='lq-page-shell' style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
       <Sidebar />
-      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
+      <div style={{ margin:'12px 14px 0', borderRadius:14, border:'1px solid #EEF1F6', boxShadow:'0 1px 3px rgba(31,60,132,0.06)', flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
         {/* HEADER BAR */}
-        <div style={{ background:'var(--card)', padding:'0 22px', minHeight:56, height:'auto', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, margin:'12px 12px 0', borderRadius:14, border:'0.5px solid ' + C.border, boxShadow:'0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -14px rgba(31,60,132,0.18)' }}>
+        <div style={{ background:'var(--card)', borderBottom:'0.5px solid ' + C.border, padding:'0 28px', minHeight:56, height:'auto', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, overflow:'visible' }}>
           <div>
             <p style={{ fontSize:10.5, color:C.muted, margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / Referral</p>
             <h1 style={{ fontSize:18, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.4px', fontFamily:FONT }}>Referral</h1>
@@ -292,7 +292,7 @@ export default function ReferralDashboard() {
 
         {/* SCROLLABLE CONTENT */}
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
-          <div style={{ display:'flex', justifyContent:'flex-end', fontSize:11.5, color:C.muted, fontWeight:600, marginBottom:14 }}>{fmtN(filtered.length)} referrals</div>
+          
 
           {/* KPI ROW */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(5, minmax(0, 1fr))', gap:14 }}>

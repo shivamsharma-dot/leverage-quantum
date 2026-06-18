@@ -62,7 +62,7 @@ export const KPI_ICONS = {
 export const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon }) => {
   const up = delta != null && delta >= 0
   return (
-    <div style={{
+    <div className="kpiCard" style={{
       position: 'relative', overflow: 'hidden', borderRadius: 16, padding: '16px 18px',
       background: '#fff', border: '1px solid #EEF1F6', fontFamily: FONT,
       boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)',

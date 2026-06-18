@@ -324,3 +324,7 @@ input:focus, textarea:focus {
   }
   .lq-lift { transition: none; }
 }
+
+/* KPI card hover lift — applies to all PremKPI across dashboards */
+.kpiCard { transition: transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s cubic-bezier(.4,0,.2,1), border-color .18s ease; will-change: transform; }
+.kpiCard:hover { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(16,24,40,0.05), 0 18px 36px -16px rgba(31,60,132,0.32); border-color: rgba(31,60,132,0.22); }
