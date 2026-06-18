@@ -1,21 +1,21 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { logActivity, pageLabel, installActivityTracker } from './components/ActivityLogger'
 import LoginPage from './pages/LoginPage'
-import DashboardHome from './pages/DashboardHome'
-import ROASDashboard from './pages/ROASDashboard'
-import LeadQualityDashboard from './pages/LeadQualityDashboard'
-import ChannelMixDashboard from './pages/ChannelMixDashboard'
-import RevenueDashboard from './pages/RevenueDashboard'
-import LeadQualificationDashboard from './pages/LeadQualificationDashboard'
-import WhatsAppDashboard from './pages/WhatsAppDashboard'
-import MTDDashboard from './pages/MTDDashboard'
-import MetaAdsDashboard from './pages/MetaAdsDashboard'
-import GoogleAdsDashboard from './pages/GoogleAdsDashboard'
-import ReferralDashboard from './pages/ReferralDashboard'
-import AskAI from './pages/AskAI'
-import SettingsPage from './pages/SettingsPage'
+const DashboardHome = lazy(() => import('./pages/DashboardHome'))
+const ROASDashboard = lazy(() => import('./pages/ROASDashboard'))
+const LeadQualityDashboard = lazy(() => import('./pages/LeadQualityDashboard'))
+const ChannelMixDashboard = lazy(() => import('./pages/ChannelMixDashboard'))
+const RevenueDashboard = lazy(() => import('./pages/RevenueDashboard'))
+const LeadQualificationDashboard = lazy(() => import('./pages/LeadQualificationDashboard'))
+const WhatsAppDashboard = lazy(() => import('./pages/WhatsAppDashboard'))
+const MTDDashboard = lazy(() => import('./pages/MTDDashboard'))
+const MetaAdsDashboard = lazy(() => import('./pages/MetaAdsDashboard'))
+const GoogleAdsDashboard = lazy(() => import('./pages/GoogleAdsDashboard'))
+const ReferralDashboard = lazy(() => import('./pages/ReferralDashboard'))
+const AskAI = lazy(() => import('./pages/AskAI'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 
 // Suspense fallback — slim skeleton shown while lazy chunk loads
 
@@ -155,7 +155,8 @@ export default function App() {
   return (
     <ErrorBoundary>
       <style>{FADE_STYLE}</style>
-      <Routes>
+      <Suspense fallback={<div style={{minHeight:"60vh"}} />}>
+          <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/"                       element={<ProtectedRoute dashboardId="home">        <DashboardHome /></ProtectedRoute>} />
         <Route path="/dashboard/roas"         element={<ProtectedRoute dashboardId="roas">        <ROASDashboard /></ProtectedRoute>} />
@@ -172,6 +173,7 @@ export default function App() {
         <Route path="/settings"               element={<ProtectedRoute dashboardId="settings">    <SettingsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+          </Suspense>
     </ErrorBoundary>
   )
 }
