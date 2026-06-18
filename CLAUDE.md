@@ -799,3 +799,5 @@ Revamped src/components/Sidebar.module.css into a premium FLOATING sidebar: deta
 - Uniform FLOATING headers on all pages (margin 12px 14px 0, borderRadius 14, 1px #EEF1F6 border, soft shadow, no borderBottom): MTD/GoogleAds/WhatsApp/QL inline; Revenue/ROAS/ChannelMix inline wrapper; MetaAds via .header module override; Referral done earlier.
 - Loader: SkeletonLoader.jsx InlineLoader rewritten to a single brand spinner (.spinner + @keyframes qspin), removed QUANTUM wordmark. DashboardSkeleton now returns the spinner so skeleton never shows alongside the loader.
 - Referral: added date-range controls (All/MTD/7D/30D) in header, wired to created_at via parseD; filter window anchored to max created_at in data.
+
+- Settings page premium redesign (SettingsPage.jsx + .module.css): Profile tab fully rebuilt with gradient hero (px* classes), copy-email (copied state), stat row + account-detail grid; theme cards get .pxThemeCard hover lift; .statCard gradient top-accent + hover; member rows .uRow hover, .userAvatar rounded. All additive, no backend changes. Brand colors only.
