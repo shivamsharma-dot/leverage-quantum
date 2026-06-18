@@ -843,3 +843,5 @@ Shared (src/ui/dashboardKit.jsx + src/index.css):
 - 2026-06-18 Chore cleanup: removed dead files src/pages/MetaAdsDashboard.backup.jsx (1184 LOC) and src/pages/_DashboardTemplate.jsx. Verified zero imports/routes referenced either (real MetaAdsDashboard still imported in App.jsx:14, routed :169). Build OK (recoverable via git history).
 
 - 2026-06-18 Perf: route-level code-splitting in App.jsx (React.lazy + Suspense for all 13 dashboard pages; LoginPage kept eager). Main index chunk 1167kB->187kB (gzip 310->62kB); each page now its own on-demand chunk; 500kB chunk warning cleared. Verified live: WhatsApp/MetaAds/Referral load via nav + direct hard-reload, no chunk-load errors. (commit 1dbc874)
+
+- 2026-06-18 refactor(lead-qual): LeadQualification now imports shared Card from dashboardKit; removed identical local Card duplicate (-18 LOC). Verified live (QL Ops page) unchanged. commit d4e5bc6. MTD Card left as-is (divergent: no noPad, different title sizing, Compare/info popover).
