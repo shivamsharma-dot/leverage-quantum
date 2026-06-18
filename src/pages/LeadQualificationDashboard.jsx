@@ -628,6 +628,10 @@ export default function LeadQualificationDashboard() {
         setSession('qlops', csv)
       }
       const parsed = parseCSV(csv)
+        // Normalize month to clean 'Mon-YYYY' from qualified_date (raw
+        // qualified_month column mixes '01-Apr-2026','Apr-2026' & stray values).
+        const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+        parsed.forEach(r=>{ const d=new Date(r.qualified_date); if(!isNaN(d)) r.month=MON[d.getMonth()]+'-'+d.getFullYear() })
       setRows(parsed)
       // Build month list sorted by actual qualified_date (earliest per month)
       const monthMap = {}
@@ -643,7 +647,9 @@ export default function LeadQualificationDashboard() {
         .sort((a, b) => new Date(monthMap[a] || 0) - new Date(monthMap[b] || 0))
       setMonths(ms)
       setMonthStartMap(monthMap)
-      setSelMonth(prev => prev || ms[ms.length - 1] || '')
+      const _now=new Date(); const _curKey=MON[_now.getMonth()]+'-'+_now.getFullYear()
+        const _def = ms.includes(_curKey) ? _curKey : (ms[ms.length-1] || '')
+        setSelMonth(prev => prev || _def)
       setLastSync(new Date())
     } catch (e) { console.error('QL fetch', e) }
     finally { setTimeout(() => setLoading(false), Math.max(0, 750 - (Date.now() - t0))) }
@@ -1254,7 +1260,7 @@ export default function LeadQualificationDashboard() {
                   {budgetBar.length === 0
                     ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No budget data</div>
                     : (
-                      <ResponsiveContainer width="100%" height={208}>
+                      <ResponsiveContainer width="100%" height={264}>
                         <BarChart data={budgetBar} margin={{ top: 8, right: 12, left: 6, bottom: 0 }} barCategoryGap="18%">
                           <defs><linearGradient id="gBudget" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7AC796"/><stop offset="100%" stopColor="#4CAE6F"/></linearGradient></defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
