@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { Card } from '../ui/dashboardKit'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend, Cell, PieChart, Pie, CartesianGrid} from 'recharts'
@@ -91,25 +92,6 @@ const Sparkline = ({ data, color='#1C9FD4', height=28, width=72 }) => {
   )
 }
 
-
-const Card = ({ title, sub, children, action, noPad }) => (
-  <div style={{
-    background: '#fff', border: '1px solid #EEF1F6', borderRadius: 16, overflow: 'hidden',
-    boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 12px 28px -16px rgba(16,24,40,0.16)',
-  }}>
-    <div style={{
-      padding: '15px 20px 13px', borderBottom: '1px solid #F1F4F9',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-    }}>
-      <div>
-        <div style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.2px', color: '#0F1B33', fontFamily: FONT }}>{title}</div>
-        {sub && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 3, fontFamily: FONT }}>{sub}</div>}
-      </div>
-      {action && <div style={{ flexShrink: 0 }}>{action}</div>}
-    </div>
-    <div style={noPad ? {} : { padding: '16px 20px' }}>{children}</div>
-  </div>
-)
 
 /* Brand color ramp — ONLY brand colors, used for multi-series breakdowns */
 const RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F']
