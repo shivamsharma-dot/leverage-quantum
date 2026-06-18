@@ -810,3 +810,24 @@ Revamped src/components/Sidebar.module.css into a premium FLOATING sidebar: deta
 ## 2026-06-18 — Login swoosh ribbons refined (commit 2a94e11)
 - USER: "swoosh lines are so thick and the animation are also not upto the par".
 - LoginPage.module.css: .ribbon stroke-width 30 -> 9 (per-line r1=7,r2=9,r3=8,r4=10), added soft drop-shadow glow + opacity fade-in. drawRibbon keyframe now fades opacity 0->1 (was stroke-dashoffset only; base .ribbon opacity:0 needed the fade or ribbons stayed invisible). Added shimmerRibbon (opacity 1<->0.55, 7s, starts after 2.6s draw). Replaced single floatRibbon with floatA (right svg, 18s, preserves translateY(-50%), adds sway+rotate) and floatB (left svg, 22s, preserves rotate(180deg)). Staggered draw delays .15/.40/.65/.90s. Lowered svg opacities (0.5->0.42, 0.28->0.22). Built 6.39s, pushed. Verified deployed CSS bundle contains floatA/floatB/shimmerRibbon/stroke-width:9; visually confirmed thin elegant brand-colored ribbons via injected preview (couldn't view /login directly — user is logged in, did not log out).
+
+## 2026-06-18 — QL Ops + Referral bug fixes (commits 8d0a5ed, 96397a6)
+QL Ops (src/pages/LeadQualificationDashboard.jsx):
+- Month normalized to 'Mon-YYYY' from qualified_date right after parseCSV (raw
+  qualified_month column mixed '01-Apr-2026','Apr-2026' & stray values). Fallback
+  _norm() strips day prefix for rows whose qualified_date won't Date-parse.
+- selMonth now defaults to current month (_curKey) when present, else latest.
+  This makes isCurrentMonth true on load so the Last Day / Last 7D / MTD preset
+  pills render (they are gated behind isCurrentMonth).
+- Budget range ResponsiveContainer height 208 -> 264 so the chart fills its row
+  next to the (taller) Call disposition card (was floating up with empty space).
+Referral (src/pages/ReferralDashboard.jsx):
+- Removed top-right '{fmtN(filtered.length)} referrals' flex-end line.
+- Adopted QL Ops page-shell: inner container now the rounded wrapper card
+  (margin 12/14, borderRadius 14, border, boxShadow); header changed from its own
+  floating card to a borderBottom section. KPI row now sits cleanly between
+  header and funnel.
+Shared (src/ui/dashboardKit.jsx + src/index.css):
+- PremKPI root div got className="kpiCard". New .kpiCard / .kpiCard:hover rules in
+  index.css add a translateY(-3px) lift + shadow on hover — applies to KPI cards
+  on ALL pages (brand navy shadow tint only).
