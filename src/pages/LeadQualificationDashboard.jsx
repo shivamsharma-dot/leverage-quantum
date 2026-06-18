@@ -631,7 +631,8 @@ export default function LeadQualificationDashboard() {
         // Normalize month to clean 'Mon-YYYY' from qualified_date (raw
         // qualified_month column mixes '01-Apr-2026','Apr-2026' & stray values).
         const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-        parsed.forEach(r=>{ const d=new Date(r.qualified_date); if(!isNaN(d)) r.month=MON[d.getMonth()]+'-'+d.getFullYear() })
+        const _norm=(raw)=>{ const m=String(raw||'').match(/([A-Za-z]{3})[a-z]*[-\s]*(\d{4})/); return m?(m[1][0].toUpperCase()+m[1].slice(1,3).toLowerCase()+'-'+m[2]):'' }
+        parsed.forEach(r=>{ const d=new Date(r.qualified_date); if(!isNaN(d)){ r.month=MON[d.getMonth()]+'-'+d.getFullYear() } else { const c=_norm(r.month); r.month = c || '' } })
       setRows(parsed)
       // Build month list sorted by actual qualified_date (earliest per month)
       const monthMap = {}
