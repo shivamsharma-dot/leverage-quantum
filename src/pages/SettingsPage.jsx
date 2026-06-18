@@ -66,6 +66,7 @@ export default function SettingsPage() {
   const { user } = useAuth()
   const userIsAdmin = user?.role === 'admin'
   const [activeTab, setActiveTab] = useState('data')
+  const [copied, setCopied] = useState(false)
 
   const _actRef = useRef(false)
   useEffect(() => {
@@ -868,7 +869,7 @@ export default function SettingsPage() {
                   {THEMES.map(theme => {
                     const isActive = activeTheme === theme.id
                     return (
-                      <div key={theme.id} onClick={() => applyTheme(theme.id)}
+                      <div key={theme.id} onClick={() => applyTheme(theme.id)} className={styles.pxThemeCard}
                         style={{
                           borderRadius:12,border:`1.5px solid ${isActive ? '#1C9FD4' : '#E2E8F0'}`,
                           padding:'14px 16px',cursor:'pointer',transition:'all .15s',
@@ -1024,23 +1025,61 @@ export default function SettingsPage() {
         )}
 
                     {activeTab === 'profile' && (
-            <div className={styles.card}>
-              <h3 className={styles.cardTitle}>Your Profile</h3>
-              <p className={styles.cardDesc}>Signed in with your Leverage Edu Google account.</p>
-              <div className={styles.profileRow}>
-                <div className={styles.profileAvatar}>
-                  {user?.picture
-                    ? <img src={user.picture} alt={user.name} className={styles.profileImg} />
-                    : <span>{user?.name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'LE'}</span>}
+              <div className={styles.pxProfileWrap}>
+                <div className={styles.pxHero}>
+                  <div className={styles.pxHeroGlow} />
+                  <div className={styles.pxHeroInner}>
+                    <div className={styles.pxAvatarRing}>
+                      <div className={styles.pxAvatar}>
+                        {user?.picture
+                          ? <img src={user.picture} alt={user.name} className={styles.pxAvatarImg}/>
+                          : <span>{(user?.name||'U').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</span>}
+                      </div>
+                    </div>
+                    <div className={styles.pxHeroText}>
+                      <div className={styles.pxHeroName}>{user?.name || 'User'}</div>
+                      <div className={styles.pxHeroEmail}>{user?.email}</div>
+                      <div className={styles.pxHeroBadges}>
+                        <span className={styles.pxRoleBadge}>{user?.role === 'admin' ? 'Administrator' : 'Viewer'}</span>
+                        <span className={styles.pxStatusBadge}><i className={styles.pxDot}/> Active session</span>
+                      </div>
+                    </div>
+                    <button className={styles.pxCopyBtn} onClick={()=>{ if(user?.email){navigator.clipboard?.writeText(user.email); setCopied(true); setTimeout(()=>setCopied(false),1600);} }}>
+                      {copied ? 'Copied' : 'Copy email'}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <div className={styles.profileName}>{user?.name || 'User'}</div>
-                  <div className={styles.profileEmail}>{user?.email}</div>
-                  <div className={styles.profileBadge}>{user?.role === 'admin' ? 'Admin' : 'Member'}</div>
+
+                <div className={styles.pxStatRow}>
+                  <div className={styles.pxStatCard}>
+                    <div className={styles.pxStatLabel}>Access level</div>
+                    <div className={styles.pxStatValue}>{user?.role === 'admin' ? 'Full' : 'Standard'}</div>
+                    <div className={styles.pxStatSub}>{user?.role === 'admin' ? 'All dashboards & settings' : 'Assigned dashboards'}</div>
+                  </div>
+                  <div className={styles.pxStatCard}>
+                    <div className={styles.pxStatLabel}>Sign-in method</div>
+                    <div className={styles.pxStatValue}>Google</div>
+                    <div className={styles.pxStatSub}>Leverage Edu workspace</div>
+                  </div>
+                  <div className={styles.pxStatCard}>
+                    <div className={styles.pxStatLabel}>Workspace</div>
+                    <div className={styles.pxStatValue}>Quantum</div>
+                    <div className={styles.pxStatSub}>leverageedu.com</div>
+                  </div>
+                </div>
+
+                <div className={styles.card}>
+                  <h3 className={styles.cardTitle}>Account details</h3>
+                  <p className={styles.cardDesc}>Your profile is managed through your Leverage Edu Google account.</p>
+                  <div className={styles.pxDetailGrid}>
+                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Full name</span><span className={styles.pxDetailVal}>{user?.name || '\u2014'}</span></div>
+                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Email address</span><span className={styles.pxDetailVal}>{user?.email || '\u2014'}</span></div>
+                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Role</span><span className={styles.pxDetailVal}>{user?.role === 'admin' ? 'Administrator' : 'Viewer'}</span></div>
+                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Theme</span><span className={styles.pxDetailVal} style={{textTransform:'capitalize'}}>{activeTheme || 'light'}</span></div>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+              )}
         </div>
       </div>
     </div>
