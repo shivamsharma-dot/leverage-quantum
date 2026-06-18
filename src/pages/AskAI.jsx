@@ -216,7 +216,7 @@ export default function AskAI() {
   const [messages, setMessages]   = useState([])
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
-  const [rail, setRail]           = useState(null) // null | 'history' | 'prompts' | 'memories'
+  const [rail, setRail]           = useState('history') // 'history' | 'prompts' | 'memories' | 'logs' — always one active (Claude-style unified sidebar)
   const [metaToken, setMetaToken] = useState('')
   const [connected, setConnected] = useState(false)
   const [memories, setMemories]   = useState([])
@@ -280,14 +280,14 @@ export default function AskAI() {
     const now = new Date().toISOString()
     const conv = {id,title:'New conversation',created_at:now,updated_at:now,message_count:0}
     setConvs(cs=>[conv,...cs])
-    setActiveId(id); setMessages([]); setShowWelcomeAnim(true); setRail(null)
+    setActiveId(id); setMessages([]); setShowWelcomeAnim(true); setRail('history')
     // Create in Supabase
     try { await sbPost('ask_ai_conversations',{...conv,user_id:uid}) } catch(e){ console.warn('SB conv create failed',e) }
   },[uid])
 
   const selectConv = useCallback(async c=>{
     setActiveId(c.id)
-    setRail(null); setShowWelcomeAnim(false)
+    setShowWelcomeAnim(false)
     // Show cached instantly, then refresh from Supabase (authoritative — survives localStorage clears / other devices)
     try{ setMessages(JSON.parse(localStorage.getItem(`ch_${c.id}`)||'[]')) }catch{ setMessages([]) }
     try {
@@ -398,7 +398,7 @@ export default function AskAI() {
   /* rail toggle */
   const toggleRail=id=>{setRail(r=>r===id?null:id)}
 
-  const panelOpen = rail!==null
+  const panelOpen = true // Claude-style: sidebar always visible
   const RAIL_W = 322
 
   /* styles */
@@ -455,30 +455,43 @@ export default function AskAI() {
       {/* Ask AI shell */}
       <div style={{flex:1,display:'flex',minWidth:0,background:askAiBg}}>
 
-        {/* Left panel (history/prompts/memories) */}
+        {/* Left sidebar — Claude-style unified (always visible) */}
         <div style={{
-          width:panelOpen?RAIL_W:0, minWidth:0, transition:'width .25s cubic-bezier(0.4,0,0.2,1)',
-          overflow:'hidden', background:panelBg, borderRight:`1px solid ${borderColor}`,
+          width:RAIL_W, minWidth:0,
+          overflow:'hidden', background:panelBg, borderRight:'1px solid #E8ECF2',
           display:'flex', flexDirection:'column', flexShrink:0, alignSelf:'stretch',
         }}>
           {panelOpen&&(
             <div style={{width:RAIL_W,flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
-              {/* panel header — premium */}
-              <div style={{padding:'16px 16px 13px',borderBottom:'1px solid #EEF1F6',display:'flex',alignItems:'center',gap:11,flexShrink:0,background:'linear-gradient(180deg,#FBFCFE,#fff)'}}>
-                <div style={{width:34,height:34,borderRadius:11,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:'linear-gradient(145deg,#1F3C84,#1C9FD4 70%,#29B9C3)',boxShadow:'0 6px 16px -6px rgba(28,159,212,0.6), inset 0 1px 0 rgba(255,255,255,0.3)'}}>
-                  <Ico n={rail==='history'?'history':rail==='prompts'?'prompts':rail==='logs'?'logs':'brain'} s={16} c="#fff"/>
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:14,fontWeight:800,color:'#0F172A',letterSpacing:'-0.02em',lineHeight:1.1}}>
-                    {rail==='history'?'Conversations':rail==='prompts'?'Prompt Library':rail==='logs'?'Report Logs':'Memories'}
-                  </div>
-                  <div style={{fontSize:10.5,color:'#94A3B8',fontWeight:500,marginTop:2,letterSpacing:'0.01em'}}>
-                    {rail==='history'?`${convs.length} conversation${convs.length!==1?'s':''} · shared`:rail==='prompts'?`${PROMPTS.length} ready-to-use prompts`:rail==='logs'?'Email send history':'Persistent AI memory'}
-                  </div>
-                </div>
-                <button onClick={()=>setRail(null)} className="ibtn" style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:'none',background:'transparent',borderRadius:8,cursor:'pointer',flexShrink:0}}>
-                  <Ico n="close" s={14} c="#9CA3AF"/>
+              {/* Unified sidebar header — Claude-style (matches main Quantum sidebar) */}
+              <div style={{padding:'14px 12px 8px',flexShrink:0,background:'#fff'}}>
+                {/* New chat button */}
+                <button onClick={newConv}
+                  style={{width:'100%',display:'flex',alignItems:'center',gap:9,padding:'10px 12px',borderRadius:10,border:'1px solid #E8EFF9',cursor:'pointer',background:'linear-gradient(135deg,#1F3C84,#1C9FD4 70%,#29B9C3)',color:'#fff',fontFamily:FONT,fontSize:13,fontWeight:700,boxShadow:'0 6px 16px -8px rgba(28,159,212,0.6)',transition:'all .18s',marginBottom:12}}
+                  onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow='0 10px 22px -8px rgba(28,159,212,0.7)'}}
+                  onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='0 6px 16px -8px rgba(28,159,212,0.6)'}}>
+                  <Ico n="new" s={15} c="#fff"/> New chat
                 </button>
+                {/* Tab nav — matches main sidebar nav item styling */}
+                <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                  {[
+                    {id:'history', icon:'history', label:'History'},
+                    {id:'prompts', icon:'prompts', label:'Prompts'},
+                    {id:'memories',icon:'brain',   label:'Memory'},
+                    {id:'logs',    icon:'logs',    label:'Logs'},
+                  ].map(t=>{
+                    const on=rail===t.id
+                    return <button key={t.id} onClick={()=>{setRail(t.id);if(t.id==='logs')loadLogs()}}
+                      style={{display:'flex',alignItems:'center',gap:11,padding:'9px 11px',borderRadius:9,border:'1px solid transparent',cursor:'pointer',width:'100%',textAlign:'left',background:on?'#E8EFF9':'transparent',color:on?'#1F3C84':'#6B7280',fontFamily:FONT,fontSize:13,fontWeight:on?700:500,transition:'all .15s'}}
+                      onMouseEnter={e=>{if(!on){e.currentTarget.style.background='#F4F6F9';e.currentTarget.style.color='#1F3C84'}}}
+                      onMouseLeave={e=>{if(!on){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#6B7280'}}}>
+                      <Ico n={t.icon} s={16} c={on?'#1F3C84':'#9CA3AF'}/>
+                      <span style={{flex:1}}>{t.label}</span>
+                      {t.id==='history'&&convs.length>0&&<span style={{fontSize:11,fontWeight:700,padding:'1px 7px',borderRadius:20,background:on?'#1C9FD4':'#E3F5FD',color:on?'#fff':'#1C9FD4'}}>{convs.length}</span>}
+                    </button>
+                  })}
+                </div>
+                <div style={{height:1,background:'#EEF1F6',margin:'12px 2px 0'}}/>
               </div>
 
               {/* History */}
@@ -559,7 +572,7 @@ export default function AskAI() {
                         {expandedPrompt===p.id&&(
                           <div style={{padding:'0 12px 12px',animation:'fadeIn .2s ease'}}>
                             <div style={{fontSize:11.5,color:'#9CA3AF',lineHeight:1.6,marginBottom:10,maxHeight:100,overflowY:'auto',background:'#F8FAFC',padding:8,borderRadius:6}}>{p.text.slice(0,200)}{p.text.length>200?'…':''}</div>
-                            <button onClick={()=>{setInput(p.text);setRail(null);textRef.current?.focus()}}
+                            <button onClick={()=>{setInput(p.text);textRef.current?.focus()}}
                               style={{width:'100%',padding:'8px',borderRadius:8,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:12.5,fontWeight:700,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
                               <Ico n="spark" s={12} c="#fff"/> Use this prompt
                             </button>
@@ -600,9 +613,6 @@ export default function AskAI() {
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
           {/* Report Logs */}
           {rail==='logs'&&(
             <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',background:'#F8FAFC'}}>
@@ -681,33 +691,9 @@ export default function AskAI() {
               </div>
             </div>
           )}
-        </div>
+            </div>
+          )}
 
-        {/* Icon rail — light premium gradient */}
-        <div style={{width:64,background:'linear-gradient(180deg,#FFFFFF 0%,#F6F9FC 45%,#EEF3F9 100%)',borderRight:'1px solid #E8ECF2',display:'flex',flexDirection:'column',alignItems:'center',padding:'16px 0',gap:8,flexShrink:0,position:'relative',boxShadow:'inset -10px 0 24px -20px rgba(31,60,132,0.18)'}}>
-          {/* subtle top brand sheen */}
-          <div style={{position:'absolute',top:0,left:0,right:0,height:70,background:'linear-gradient(180deg,rgba(28,159,212,0.06),transparent)',pointerEvents:'none'}}/>
-          {[
-            {id:'history', icon:'history', label:'History'},
-            {id:'prompts', icon:'prompts', label:'Prompts'},
-            {id:'memories',icon:'brain',   label:'Memory'},
-            {id:'logs',    icon:'logs',    label:'Logs'},
-          ].map(r=>{
-            const on=rail===r.id
-            return <button key={r.id} onClick={()=>{toggleRail(r.id);if(r.id==='logs')loadLogs()}} title={r.label} className={on?'rb rb-active':'rb'}
-              style={{width:50,height:52,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4,borderRadius:15,border:on?'1px solid transparent':'1px solid transparent',cursor:'pointer',background:on?'linear-gradient(145deg,#1F3C84,#1C9FD4 70%,#29B9C3)':'transparent',boxShadow:on?'0 8px 20px -6px rgba(28,159,212,0.6), inset 0 1px 0 rgba(255,255,255,0.3)':'none',transition:'all .22s cubic-bezier(.4,0,.2,1)',position:'relative',zIndex:1}}>
-              <Ico n={r.icon} s={17} c={on?'#fff':'#8A94A6'}/>
-              <span style={{fontSize:8.5,fontWeight:on?800:600,color:on?'#fff':'#8A94A6',letterSpacing:'0.04em',fontFamily:FONT,lineHeight:1}}>{r.label}</span>
-              {on&&<div style={{position:'absolute',left:-9,top:'50%',transform:'translateY(-50%)',width:3.5,height:26,background:'linear-gradient(#1C9FD4,#29B9C3)',borderRadius:4,boxShadow:'0 0 12px rgba(28,159,212,0.7)'}}/>}
-            </button>
-          })}
-          <div style={{flex:1}}/>
-          {/* new chat at rail bottom */}
-          <button onClick={newConv} title="New conversation" className="rb"
-            style={{width:50,height:50,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,borderRadius:15,border:'1px solid rgba(28,159,212,0.30)',cursor:'pointer',background:'linear-gradient(145deg,rgba(41,185,195,0.16),rgba(28,159,212,0.08))',boxShadow:'0 4px 12px -6px rgba(28,159,212,0.5), inset 0 1px 0 rgba(255,255,255,0.6)',transition:'all .2s',position:'relative',zIndex:1}}>
-            <Ico n="new" s={16} c={NAVY}/>
-            <span style={{fontSize:8.5,fontWeight:700,color:NAVY,letterSpacing:'0.03em',fontFamily:FONT,lineHeight:1}}>New</span>
-          </button>
         </div>
 
         {/* Ask AI area */}
