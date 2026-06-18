@@ -447,7 +447,8 @@ export default function WhatsAppDashboard() {
       <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
 
         {/* ── HEADER ── */}
-        <div style={{margin:'12px 14px 0',borderRadius:14,border:'1px solid #EEF1F6',boxShadow:'0 1px 3px rgba(31,60,132,0.06)', background:'var(--card)',  padding:'0 28px', minHeight:56, height:'auto', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0 }}>
+        <div style={{ margin:'12px 14px 0', borderRadius:14, border:'1px solid #EEF1F6', boxShadow:'0 1px 3px rgba(31,60,132,0.06)', background:'var(--card)', overflow:'hidden', flexShrink:0 }}>
+          <div style={{ padding:'10px 28px 6px', minHeight:52, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
           <div>
             <p style={{ fontSize:10.5, color:'var(--text3)', margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / WhatsApp</p>
             <h1 style={{ fontSize:18, fontWeight:800, color:'var(--text)', margin:'2px 0 0', letterSpacing:'-0.5px', fontFamily:FONT }}>WhatsApp{selMonth ? ' · '+selMonth : ''}</h1>
@@ -542,7 +543,7 @@ export default function WhatsAppDashboard() {
         </div>
 
         {/* ── TAB BAR ── */}
-        <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${'var(--card-border)'}`, padding:'0 28px', display:'flex', gap:0, flexShrink:0 }}>
+        <div style={{ borderTop:`0.5px solid ${'var(--card-border)'}`, padding:'0 28px', display:'flex', gap:0 }}>
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>setActiveTab(t.id)}
               style={{ padding:'12px 18px', border:'none', background:'none', cursor:'pointer', fontFamily:FONT, fontSize:13, fontWeight:activeTab===t.id?700:500, color:activeTab===t.id?C.navy:'var(--text3)', borderBottom:activeTab===t.id?`2px solid ${C.navy}`:'2px solid transparent', marginBottom:-1, transition:'all .15s' }}>
@@ -550,7 +551,7 @@ export default function WhatsAppDashboard() {
             </button>
           ))}
         </div>
-
+          </div>
         {/* ── BODY ── */}
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
           {loading&&rows.length===0 ? (
