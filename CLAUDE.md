@@ -831,3 +831,5 @@ Shared (src/ui/dashboardKit.jsx + src/index.css):
 - PremKPI root div got className="kpiCard". New .kpiCard / .kpiCard:hover rules in
   index.css add a translateY(-3px) lift + shadow on hover — applies to KPI cards
   on ALL pages (brand navy shadow tint only).
+
+- 2026-06-18 Referral: equalized vertical padding around the KPI row — added marginBottom:20 to the KPI grid and set Referral funnel Card marginTop:0 so the gap above (header) and below (funnel) the KPI cards is symmetric (commit 09a67b4).
