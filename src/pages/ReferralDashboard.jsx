@@ -72,6 +72,8 @@ export default function ReferralDashboard() {
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState('All');
   const [dateRange, setDateRange] = useState('all');
+  const [cStart, setCStart] = useState('');
+  const [cEnd, setCEnd] = useState('');
   const [grpBy, setGrpBy] = useState('status');
 
   const loadData = useCallback(async (bust = false) => {
@@ -96,18 +98,22 @@ export default function ReferralDashboard() {
   const filtered = useMemo(() => {
     let rs = source === 'All' ? rows : rows.filter(r => r.source === source);
     if (dateRange !== 'all') {
-      let maxD = null;
-      rows.forEach(r => { const d = parseD(r.created_at); if (d && (!maxD || d > maxD)) maxD = d; });
-      if (maxD) {
-        let cut = null;
-        if (dateRange === 'L7D') { cut = new Date(maxD); cut.setDate(cut.getDate() - 6); }
-        else if (dateRange === 'L30D') { cut = new Date(maxD); cut.setDate(cut.getDate() - 29); }
-        else if (dateRange === 'MTD') { cut = new Date(maxD.getFullYear(), maxD.getMonth(), 1); }
-        if (cut) rs = rs.filter(r => { const d = parseD(r.created_at); return d && d >= cut && d <= maxD; });
+      const now = new Date();
+      const anchor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let cut = null, end = anchor;
+      if (dateRange === 'L7D') { cut = new Date(anchor); cut.setDate(cut.getDate() - 6); }
+      else if (dateRange === 'L30D') { cut = new Date(anchor); cut.setDate(cut.getDate() - 29); }
+      else if (dateRange === 'MTD') { cut = new Date(anchor.getFullYear(), anchor.getMonth(), 1); }
+      else if (dateRange === 'custom') {
+        if (cStart) { const p = cStart.split('-'); cut = new Date(+p[0], +p[1] - 1, +p[2]); }
+        if (cEnd) { const q = cEnd.split('-'); end = new Date(+q[0], +q[1] - 1, +q[2]); }
+      }
+      if (cut || dateRange === 'custom') {
+        rs = rs.filter(r => { const d = parseD(r.created_at); if (!d) return false; if (cut && d < cut) return false; if (end && d > end) return false; return true; });
       }
     }
     return rs;
-  }, [rows, source, dateRange]);
+  }, [rows, source, dateRange, cStart, cEnd]);
 
   const M = useMemo(() => {
     const all = filtered;
@@ -276,7 +282,8 @@ export default function ReferralDashboard() {
           </button>
           {/* DATE_RANGE_GROUP */}
           <span style={{ fontSize:10.5, fontWeight:700, color:C.muted, letterSpacing:0.5 }}>DATE</span>
-          {[['all','All'],['MTD','MTD'],['L7D','7D'],['L30D','30D']].map(([v,lab]) => <div key={v} style={pillStyle(dateRange === v)} onClick={() => setDateRange(v)}>{lab}</div>)}
+          {[['all','All'],['MTD','MTD'],['L7D','7D'],['L30D','30D'],['custom','Custom']].map(([v,lab]) => <div key={v} style={pillStyle(dateRange === v)} onClick={() => setDateRange(v)}>{lab}</div>)}
+            {dateRange === 'custom' && <div style={{ display:'flex', alignItems:'center', gap:6, marginLeft:2 }}><input type="date" value={cStart} max={cEnd || undefined} onChange={e => setCStart(e.target.value)} style={{ fontFamily:FONT, fontSize:12, color:C.text, border:'0.5px solid ' + C.border, borderRadius:8, padding:'5px 8px', background:'var(--card)', outline:'none' }} /><span style={{ fontSize:11, color:C.muted }}>to</span><input type="date" value={cEnd} min={cStart || undefined} onChange={e => setCEnd(e.target.value)} style={{ fontFamily:FONT, fontSize:12, color:C.text, border:'0.5px solid ' + C.border, borderRadius:8, padding:'5px 8px', background:'var(--card)', outline:'none' }} /></div>}
           <span style={{ width:1, height:18, background:C.border, margin:'0 4px' }} />
             <span style={{ fontSize:10.5, fontWeight:700, color:C.muted, letterSpacing:0.5 }}>SOURCE</span>
             {PILLS.map(p => <div key={p} style={pillStyle(source === p)} onClick={() => setSource(p)}>{p}</div>)}
