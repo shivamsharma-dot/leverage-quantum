@@ -295,7 +295,7 @@ export default function ReferralDashboard() {
           
 
           {/* KPI ROW */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(5, minmax(0, 1fr))', gap:14 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(5, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
             <PremKPI label='TOTAL REFERRALS' value={fmtN(M.kpis.total)} sub='all sources' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label='EMPLOYEE' value={fmtN(M.kpis.emp)} sub={pct(M.kpis.emp, M.kpis.total) + ' of total'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label='STUDENT' value={fmtN(M.kpis.stu)} sub={pct(M.kpis.stu, M.kpis.total) + ' of total'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
@@ -304,7 +304,7 @@ export default function ReferralDashboard() {
           </div>
 
           {/* REFERRAL FUNNEL */}
-          <Card style={{ marginTop:16 }}>
+          <Card style={{ marginTop:0 }}>
             {sectionTitle('Referral funnel', 'how referrals progress through stages')}
             <ResponsiveContainer width='100%' height={300}>
               <BarChart data={M.funnel} layout='vertical' margin={{ left:30, right:40, top:4, bottom:4 }}>
