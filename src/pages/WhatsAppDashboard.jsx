@@ -19,7 +19,7 @@ const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 const PAGE_SIZE = 10
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-const SOURCE_COLORS = { CAMPAIGN: C.navy, NETCORE: C.blue, BOT: C.cyan, SYNCAPI: C.amber }
+const SOURCE_COLORS = { CAMPAIGN: C.navy, NETCORE: C.blue, BOT: C.cyan, SYNCAPI: C.green, 'SYSTEM USER': '#5BCAD2' }
 const CAT_COLORS    = { MARKETING: C.blue, UTILITY: C.navy }
 
 // ── parse ────────────────────────────────────────────────────────────────────
@@ -216,8 +216,8 @@ const StatusPill = ({ status }) => {
     'Delivered': { bg:C.blueBg,  color:C.blue    },
     'Sent':      { bg:C.navyBg,  color:C.navy    },
     'Replied':   { bg:C.cyanBg,  color:C.cyan    },
-    'Clicked':   { bg:C.amberBg, color:C.amber   },
-    'Failed':    { bg:C.redBg,   color:C.red     },
+    'Clicked':    { bg:'#EEF1FB', color:'#3A5BA0'    },
+    'Failed':     { bg:'#EEF1F6', color:'#64748B'    },
   }[status] || { bg:'var(--bg3)', color:'var(--text3)' }
   return <span style={{ fontSize:10.5, fontWeight:700, padding:'2px 8px', borderRadius:20, background:cfg.bg, color:cfg.color, fontFamily:FONT }}>{status}</span>
 }
@@ -357,7 +357,7 @@ export default function WhatsAppDashboard() {
     { name:'Delivered', value:totals.delivered, fill:C.blue,  pct:totals.deliveryRate },
     { name:'Read',      value:totals.read,      fill:C.cyan,  pct:totals.readRate },
     { name:'Replied',   value:totals.replied,   fill:C.green, pct:totals.replyRate },
-    { name:'Clicked',   value:totals.clicked,   fill:C.amber, pct:totals.ctr },
+    { name:'Clicked',   value:totals.clicked,   fill:'#3A5BA0', pct:totals.ctr },
   ].filter(d=>d.value>0),[totals])
 
   // by source bar
@@ -589,9 +589,9 @@ export default function WhatsAppDashboard() {
                   icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}/>
                 <KPICard label="Replied"       value={fmtN(totals.replied)}   sub={fmtPct(totals.replyRate,100)+' reply rate'}    accent={C.green} accentBg={C.greenBg}
                   icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>}/>
-                <KPICard label="Failed"        value={fmtN(totals.failed)}    sub={fmtPct(totals.failRate,100)+' fail rate'}      accent={C.red}   accentBg={C.redBg}
+                <KPICard label="Failed"        value={fmtN(totals.failed)}    sub={fmtPct(totals.failRate,100)+' fail rate'}      accent={'#64748B'} accentBg={'#EEF1F6'}
                   icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>}/>
-                <KPICard label="Total Spend"   value={fmtC(totals.total)}     sub={`CPD ${fmtC(totals.cpd)}`} delta={totals.spendDelta} accent={C.amber} accentBg={C.amberBg}
+                <KPICard label="Total Spend"   value={fmtC(totals.total)}     sub={`CPD ${fmtC(totals.cpd)}`} delta={totals.spendDelta} accent={C.cyan} accentBg={C.cyanBg}
                   icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>}/>
               </div>
 
@@ -626,7 +626,7 @@ export default function WhatsAppDashboard() {
                     <Card title="By source" sub="Messages sent per sending channel">
                       <ResponsiveContainer width="100%" height={220}>
                         <BarChart data={sourceBar} margin={{top:4,right:8,left:-8,bottom:0}} barCategoryGap="30%">
-                          <XAxis dataKey="source" tick={{fontSize:11,fill:'var(--text3)',fontFamily:FONT}} axisLine={false} tickLine={false} tick={{fontSize:10.5,fill:"#94A3B8",fontFamily:"'Plus Jakarta Sans',sans-serif"}} axisLine={false} tickLine={false}/>
+                          <XAxis dataKey="source" tick={{fontSize:11,fill:'var(--text3)',fontFamily:FONT}} axisLine={false} tickLine={false}/>
               <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                           <YAxis tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtN(v)} axisLine={false} tickLine={false}/>
                           <ReTooltip content={<ChartTip/>} cursor={{fill:'var(--bg3)'}}/>
@@ -685,10 +685,10 @@ export default function WhatsAppDashboard() {
                           <ReTooltip content={<ChartTip/>} cursor={{fill:'var(--bg3)'}}/>
                           <Bar yAxisId="l" dataKey="Sent"     fill={C.navy} radius={[6,6,0,0]} maxBarSize={28} name="Sent"/>
                           <Bar yAxisId="l" dataKey="Delivered" fill={C.blue} radius={[6,6,0,0]} maxBarSize={28} name="Delivered" opacity={0.8}/>
-                          <Bar yAxisId="r" dataKey="Spend"    fill={C.amber} radius={[6,6,0,0]} maxBarSize={16} name="Spend ₹" opacity={0.7}/>
+                          <Bar yAxisId="r" dataKey="Spend"    fill={C.green} radius={[6,6,0,0]} maxBarSize={16} name="Spend ₹" opacity={0.7}/>
                         </BarChart>
                       </ResponsiveContainer>
-                      <ChartLegend items={[{name:'Sent',color:C.navy},{name:'Delivered',color:C.blue},{name:'Spend ₹',color:C.amber}]}/>
+                      <ChartLegend items={[{name:'Sent',color:C.navy},{name:'Delivered',color:C.blue},{name:'Spend ₹',color:C.green}]}/>
                     </Card>
                   </div>
 
@@ -703,10 +703,10 @@ export default function WhatsAppDashboard() {
                             <YAxis yAxisId="r" orientation="right" tick={{fontSize:10,fill:'var(--text3)',fontFamily:FONT}} tickFormatter={v=>fmtC(v)} axisLine={false} tickLine={false}/>
                             <ReTooltip content={<ChartTip/>}/>
                             <Line yAxisId="l" type="monotone" dataKey="Sent"  stroke={C.navy}  strokeWidth={2.5} dot={{r:3.5,fill:C.navy, strokeWidth:0}} activeDot={{r:5}}/>
-                            <Line yAxisId="r" type="monotone" dataKey="Spend" stroke={C.amber} strokeWidth={2.5} dot={{r:3.5,fill:C.amber,strokeWidth:0}} activeDot={{r:5}}/>
+                            <Line yAxisId="r" type="monotone" dataKey="Spend" stroke={C.green} strokeWidth={2.5} dot={{r:3.5,fill:C.green,strokeWidth:0}} activeDot={{r:5}}/>
                           </LineChart>
                         </ResponsiveContainer>
-                        <ChartLegend items={[{name:'Sent',color:C.navy},{name:'Spend ₹',color:C.amber}]}/>
+                        <ChartLegend items={[{name:'Sent',color:C.navy},{name:'Spend ₹',color:C.green}]}/>
                       </Card>
                     </div>
                   )}
@@ -847,7 +847,7 @@ export default function WhatsAppDashboard() {
                             <td style={{padding:'9px 12px',textAlign:'right',color:'var(--text)',fontWeight:600,fontFamily:FONT,paddingRight:12}}>{r.sent||'—'}</td>
                             <td style={{padding:'9px 12px',textAlign:'right',color:'var(--text2)',fontFamily:FONT,paddingRight:12}}>{r.delivered||'—'}</td>
                             <td style={{padding:'9px 12px',textAlign:'right',color:'var(--text2)',fontFamily:FONT,paddingRight:12}}>{r.read||'—'}</td>
-                            <td style={{padding:'9px 12px',textAlign:'right',color:r.failed>0?C.red:'var(--text3)',fontFamily:FONT,paddingRight:12}}>{r.failed||'—'}</td>
+                            <td style={{padding:'9px 12px',textAlign:'right',color:r.failed>0?'#64748B':'var(--text3)',fontFamily:FONT,paddingRight:12}}>{r.failed||'—'}</td>
                             <td style={{padding:'9px 12px',textAlign:'right',color:'var(--text2)',fontFamily:FONT,paddingRight:12}}>{r.replied||'—'}</td>
                             <td style={{padding:'9px 12px',textAlign:'right',fontWeight:700,color:'var(--text)',fontFamily:FONT,paddingRight:20}}>{r.total_spend>0?fmtC(r.total_spend):'—'}</td>
                           </tr>
