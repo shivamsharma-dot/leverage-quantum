@@ -1,5 +1,6 @@
 import React, { useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import CommandPalette from './components/CommandPalette'
 import { useAuth } from './hooks/useAuth'
 import { logActivity, pageLabel, installActivityTracker } from './components/ActivityLogger'
 import LoginPage from './pages/LoginPage'
@@ -155,6 +156,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <style>{FADE_STYLE}</style>
+      <CommandPalette />
       <Suspense fallback={<div style={{minHeight:"60vh"}} />}>
           <Routes>
         <Route path="/login" element={<LoginPage />} />
