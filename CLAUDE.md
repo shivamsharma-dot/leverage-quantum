@@ -833,3 +833,5 @@ Shared (src/ui/dashboardKit.jsx + src/index.css):
   on ALL pages (brand navy shadow tint only).
 
 - 2026-06-18 Referral: equalized vertical padding around the KPI row — added marginBottom:20 to the KPI grid and set Referral funnel Card marginTop:0 so the gap above (header) and below (funnel) the KPI cards is symmetric (commit 09a67b4).
+
+- 2026-06-18 WhatsApp: merged the page header and the tab bar (Overview/Campaigns/Templates/Raw Data) into ONE connected card — wrapped both in a single rounded bordered card (margin 12px 14px 0, borderRadius 14, overflow hidden); header became an inner padded section; tab bar lost its own background and now sits as a borderTop divider section inside the same card so they read as one unit, not two (commit e06adad).
