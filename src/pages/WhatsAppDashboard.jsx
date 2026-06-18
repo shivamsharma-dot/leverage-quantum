@@ -4,6 +4,7 @@ import {
   LineChart, Line, Cell, PieChart, Pie, FunnelChart, Funnel, LabelList, CartesianGrid} from 'recharts'
 import Sidebar from '../components/Sidebar'
 import KPICard from '../components/KPICard'
+import { PremKPI } from '../ui/dashboardKit'
 import { fetchCSV } from '../lib/sheetCache'
 import { getSession, setSession } from '../lib/sessionLoad'
 
@@ -581,17 +582,17 @@ export default function WhatsAppDashboard() {
             <>
               {/* KPI ROW — always visible */}
               <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:14, marginBottom:20 }}>
-                <KPICard label="Sent"          value={fmtN(totals.sent)}      sub={selMonth} delta={totals.sentDelta}  accent={C.navy}  accentBg={C.navyBg}
+                <PremKPI label="Sent"          value={fmtN(totals.sent)}      sub={selMonth} delta={totals.sentDelta}  accent={C.navy}  accentBg={C.navyBg}
                   icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>}/>
-                <KPICard label="Delivered"     value={fmtN(totals.delivered)} sub={fmtPct(totals.deliveryRate,100)+' delivery rate'} accent={C.blue}  accentBg={C.blueBg}
+                <PremKPI label="Delivered"     value={fmtN(totals.delivered)} sub={fmtPct(totals.deliveryRate,100)+' delivery rate'} accent={C.blue}  accentBg={C.blueBg}
                   icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}/>
-                <KPICard label="Read"          value={fmtN(totals.read)}      sub={fmtPct(totals.readRate,100)+' read rate'}     accent={C.cyan}  accentBg={C.cyanBg}
+                <PremKPI label="Read"          value={fmtN(totals.read)}      sub={fmtPct(totals.readRate,100)+' read rate'}     accent={C.cyan}  accentBg={C.cyanBg}
                   icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}/>
-                <KPICard label="Replied"       value={fmtN(totals.replied)}   sub={fmtPct(totals.replyRate,100)+' reply rate'}    accent={C.green} accentBg={C.greenBg}
+                <PremKPI label="Replied"       value={fmtN(totals.replied)}   sub={fmtPct(totals.replyRate,100)+' reply rate'}    accent={C.green} accentBg={C.greenBg}
                   icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>}/>
-                <KPICard label="Failed"        value={fmtN(totals.failed)}    sub={fmtPct(totals.failRate,100)+' fail rate'}      accent={'#64748B'} accentBg={'#EEF1F6'}
+                <PremKPI label="Failed"        value={fmtN(totals.failed)}    sub={fmtPct(totals.failRate,100)+' fail rate'}      accent={'#64748B'} accentBg={'#EEF1F6'}
                   icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>}/>
-                <KPICard label="Total Spend"   value={fmtC(totals.total)}     sub={`CPD ${fmtC(totals.cpd)}`} delta={totals.spendDelta} accent={C.cyan} accentBg={C.cyanBg}
+                <PremKPI label="Total Spend"   value={fmtC(totals.total)}     sub={`CPD ${fmtC(totals.cpd)}`} delta={totals.spendDelta} accent={C.cyan} accentBg={C.cyanBg}
                   icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>}/>
               </div>
 
