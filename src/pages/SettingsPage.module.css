@@ -362,3 +362,12 @@
 .statValue { font-size:26px !important; }
 .statIcon { width:42px !important; height:42px !important; border-radius:12px !important; box-shadow:0 4px 12px rgba(31,60,132,0.10); }
 .uaTitle { font-size:21px !important; letter-spacing:-0.02em; }
+
+/* ===== Premium member table polish ===== */
+.userAvatar { width:38px !important; height:38px !important; border-radius:11px !important; box-shadow:0 2px 6px rgba(31,60,132,0.10); font-weight:800 !important; }
+.uRow { transition:background .14s ease; border-radius:10px; }
+.uRow:hover { background:rgba(28,159,212,0.05); }
+.userName { font-size:14px !important; }
+.addInput { border-radius:10px !important; transition:border-color .15s, box-shadow .15s; }
+.addInput:focus { box-shadow:0 0 0 3px rgba(28,159,212,0.14); }
+.filterSelect { border-radius:10px !important; }
