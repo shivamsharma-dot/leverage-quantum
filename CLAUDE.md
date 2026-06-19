@@ -872,3 +872,9 @@ Shared (src/ui/dashboardKit.jsx + src/index.css):
 - User: "remove the jump to button".
 - CommandPalette.jsx: replaced the floating pill button block (lines 106-130, commit 1ea9385) with the original `if (!open) return null;`. Commit c86bbb3.
 - Ctrl/Cmd+K command palette STILL works (modal kept). Verified live: no pill in DOM, no Open-command-palette button, Ctrl+K opens palette. Build OK 7.33s.
+]633;E;printf -- '\\n## %s \\u2014 FIX snapshot Select-region (was capturing blank)\\n' "$(date +%Y-%m-%d)";45b3050b-e575-429b-9728-e499b179965e]633;C
+## 2026-06-19 — FIX snapshot Select-region (was capturing blank)
+- User: "snapshot feature - select region is not capturing anything". Reproduced live: Snapshot-ready modal showed blank preview.
+- ROOT CAUSE: cropDataUrl() multiplied the crop rect by a HARDCODED ratio=2, but the captured viewport image pixel size != cssSize*2 when devicePixelRatio!=1 (test machine was 1.125). drawImage read source coords outside the image -> transparent/blank crop.
+- FIX (SnapshotTool.jsx): cropDataUrl(dataUrl,rect,srcW,srcH) now derives the TRUE per-axis scale from the loaded image: ratioX=img.naturalWidth/srcW, ratioY=img.naturalHeight/srcH (fallback 2). onCropUp passes rr.width/rr.height (content-root CSS dims). Correct at any DPR. Commit 091c5b3.
+- Verified live (MTD): region drag over KPI cards now captures the 4 cards correctly (img 2225x326, content present). Build OK 7.90s.
