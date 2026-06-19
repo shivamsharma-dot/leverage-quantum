@@ -437,8 +437,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No Meta token. Connect Meta Ads first.' })
     }
 
-    recipients = await getRecipients(report_type)
-    if (!recipients.length) recipients = ['shivam.sharma@leverageedu.com']
+    const bodyRecipients = Array.isArray(req.body?.recipients) ? req.body.recipients.filter(Boolean) : []
+    if (triggered_by === 'test' && bodyRecipients.length) {
+      // Test send: honour the explicit recipient list from the request (never the full DB list)
+      recipients = bodyRecipients
+    } else {
+      recipients = await getRecipients(report_type)
+      if (!recipients.length) recipients = ['shivam.sharma@leverageedu.com']
+    }
 
   const cfg = await getReportConfig()
   // Auto-reports master switch: skip scheduled sends when disabled

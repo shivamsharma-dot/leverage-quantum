@@ -65,7 +65,7 @@ function KpiIconPreview({ name, color = '#94A3B8' }) {
 export default function SettingsPage() {
   const { user } = useAuth()
   const userIsAdmin = user?.role === 'admin'
-  const [activeTab, setActiveTab] = useState('data')
+  const [activeTab, setActiveTab] = useState(userIsAdmin ? 'data' : 'profile')
   const [copied, setCopied] = useState(false)
 
   const _actRef = useRef(false)
@@ -446,7 +446,7 @@ export default function SettingsPage() {
   }
 
   const TABS = [
-    { id: 'data',       label: 'Data' },
+    ...(userIsAdmin ? [{ id: 'data', label: 'Data' }] : []),
     ...(userIsAdmin ? [{ id: 'users', label: 'User Access' }, { id: 'activity', label: 'Activity Log' }] : []),
     ...(userIsAdmin ? [{ id: 'reports', label: 'Reports' }] : []),
     ...(userIsAdmin ? [{ id: 'appearance', label: 'Appearance' }] : []),
