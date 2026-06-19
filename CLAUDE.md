@@ -909,3 +909,11 @@ Commits e65e967 (fix), 083f9dd (feature) on rename-ask-ai -> main.
 - SettingsPage Reports tab: per-recipient daily/weekly/monthly checkboxes (toggleReportType PATCHes report_types).
 - Hardening: setAccessList guarded to always store an array (prevents Settings crash if GET errors before column exists).
 - MetaAds/LeadQual/AskAI Send Report buttons now window.confirm() before firing a real send.
+
+## 2026-06-19 (2) — Test-send recipient fix, superadmin, settings tab visibility
+
+Commit 825f499 on rename-ask-ai -> main.
+
+- BUG FIX: api/send-report.js ignored req.body.recipients and always emailed the full DB list, so "Send test to me only" blasted everyone. Now: when triggered_by==='test' and body.recipients is non-empty, send ONLY to that list; otherwise query DB as before.
+- AUTH: lib/auth.mjs now has SUPERADMINS=['shivam.sharma@leverageedu.com']; getSessionUser() force-sets role='admin' for those emails. Applies everywhere (all APIs + frontend via /api/auth/me). Superadmin regardless of stored DB role.
+- SETTINGS: Data tab is now admin-only; non-admins see ONLY the Profile tab and default to it (activeTab = userIsAdmin ? 'data' : 'profile').
