@@ -867,3 +867,8 @@ Shared (src/ui/dashboardKit.jsx + src/index.css):
 - Restored CommandPalette.jsx (no theme toggle/isDark), main.jsx (no global theme bootstrap), WhatsAppDashboard.jsx (tooltip back to original).
 - Cmd+K "Jump to..." pill (1ea9385) + toast system (7b4ebf9) RETAINED - unrelated to dark mode.
 - Removed stale localStorage lq_theme from live app. Verified live: light mode, data-theme=null, no toggle button, build OK 7.94s, console clean.
+]633;E;printf -- '\\n## %s — Removed floating Jump-to pill (per user request)\\n' "$(date +%Y-%m-%d)";319d53d8-cef6-4472-b766-c6a6161b96f6]633;C
+## 2026-06-19 — Removed floating Jump-to pill (per user request)
+- User: "remove the jump to button".
+- CommandPalette.jsx: replaced the floating pill button block (lines 106-130, commit 1ea9385) with the original `if (!open) return null;`. Commit c86bbb3.
+- Ctrl/Cmd+K command palette STILL works (modal kept). Verified live: no pill in DOM, no Open-command-palette button, Ctrl+K opens palette. Build OK 7.33s.
