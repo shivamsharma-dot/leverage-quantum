@@ -433,7 +433,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${RESEND_KEY}` },
       body: JSON.stringify({
-        from: process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <onboarding@resend.dev>',
+        from: process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <quantum@platform.leverageedu.com>',
         to: recipients,
         subject: SUBJECTS[report_type],
         html,
