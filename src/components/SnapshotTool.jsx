@@ -95,18 +95,21 @@ async function captureViewport() {
 }
 
 // Crop a region (viewport coordinates) out of a freshly captured viewport image.
-function cropDataUrl(dataUrl, rect, ratio) {
+function cropDataUrl(dataUrl, rect, srcW, srcH) {
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.onload = () => {
       const canvas = document.createElement('canvas')
-      canvas.width = Math.max(1, Math.round(rect.w * ratio))
-      canvas.height = Math.max(1, Math.round(rect.h * ratio))
+      // True pixel scale derived from the captured image itself -> correct at any devicePixelRatio.
+      const ratioX = srcW > 0 ? img.naturalWidth / srcW : 2
+      const ratioY = srcH > 0 ? img.naturalHeight / srcH : 2
+      canvas.width = Math.max(1, Math.round(rect.w * ratioX))
+      canvas.height = Math.max(1, Math.round(rect.h * ratioY))
       const ctx = canvas.getContext('2d')
       ctx.drawImage(
         img,
-        Math.round(rect.x * ratio), Math.round(rect.y * ratio),
-        Math.round(rect.w * ratio), Math.round(rect.h * ratio),
+        Math.round(rect.x * ratioX), Math.round(rect.y * ratioY),
+        Math.round(rect.w * ratioX), Math.round(rect.h * ratioY),
         0, 0,
         canvas.width, canvas.height,
       )
@@ -363,7 +366,7 @@ export default function SnapshotTool() {
       // translate screen rect -> content-root-relative rect
       const local = { x: rect.x - rr.left, y: rect.y - rr.top, w: rect.w, h: rect.h }
       const full = await captureViewport()
-      const cropped = await cropDataUrl(full, local, 2)
+      const cropped = await cropDataUrl(full, local, rr.width, rr.height)
       setResult(await brandImage(cropped)); flash('Region captured')
     } catch { flash('Capture failed, please retry', false) }
     finally { setBusy(false) }
