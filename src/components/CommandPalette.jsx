@@ -103,31 +103,7 @@ export default function CommandPalette() {
     if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' })
   }, [active, open])
 
-  if (!open) return (
-    <button
-      type="button"
-      onClick={() => setOpen(true)}
-      aria-label="Open command palette"
-      title="Quick navigation (Ctrl/Cmd K)"
-      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 6px 20px rgba(31,60,132,0.28)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 3px 12px rgba(31,60,132,0.18)'; e.currentTarget.style.transform = 'none' }}
-      style={{
-        position: 'fixed', bottom: 20, right: 20, zIndex: 9998,
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '9px 14px', borderRadius: 10, border: '1px solid #E3E8F2',
-        background: '#fff', color: NAVY, cursor: 'pointer',
-        fontSize: 12.5, fontWeight: 600, letterSpacing: '0.01em',
-        boxShadow: '0 3px 12px rgba(31,60,132,0.18)',
-        transition: 'box-shadow 0.15s ease, transform 0.15s ease',
-      }}>
-      <span style={{ fontSize: 13 }}>Jump to…</span>
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        padding: '2px 7px', borderRadius: 6, background: '#F1F5F9',
-        color: SLATE, fontSize: 11, fontWeight: 700,
-      }}>{'\u2318'} K</span>
-    </button>
-  )
+  if (!open) return null;
 
   return (
     <div
