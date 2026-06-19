@@ -385,6 +385,7 @@ export default function AskAI() {
   }
 
   const sendReport = async () => {
+    if (!window.confirm('Send this report by email to ALL configured recipients now? Manage recipients in Settings → Reports.')) return
     setSendingReport(true); setSendMsg('')
     try {
       const res = await fetch('/api/send-report', {

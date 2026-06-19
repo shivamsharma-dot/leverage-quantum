@@ -395,6 +395,17 @@ export default function SettingsPage() {
     loadUsers()
   }
 
+  const toggleReportType = async (u, type, checked) => {
+    const current = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily','weekly','monthly']
+    const next = checked ? Array.from(new Set([...current, type])) : current.filter(t => t !== type)
+    await fetch('/api/users', {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: u.email, report_types: next }),
+    })
+    loadUsers()
+  }
+
   const saveReportConfig = async () => {
     setRcSaving(true); setRcMsg('')
     try {
@@ -851,6 +862,28 @@ export default function SettingsPage() {
                 <h3 className={styles.cardTitle}>Recipients</h3>
                 <p className={styles.cardDesc}>People who currently receive reports (toggled per user in the User Access tab):</p>
                 <p style={{ fontSize: 13, color: '#1F3C84', fontWeight: 600, marginTop: 8, lineHeight: 1.6 }}>{accessList.filter(u => u.receive_reports).map(u => u.email).join(', ') || 'No one selected \u2014 reports fall back to ' + (user?.email || 'admin')}</p>
+          <div style={{ marginTop: 14, borderTop: '0.5px solid #E2E8F0', paddingTop: 12 }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: '#64748B', margin: '0 0 8px', letterSpacing: '0.02em' }}>Per-recipient report types</p>
+            <p style={{ fontSize: 11.5, color: '#94A3B8', margin: '0 0 10px', lineHeight: 1.5 }}>Choose which scheduled reports each person receives. Unchecking all three is the same as receiving all.</p>
+            {accessList.filter(u => u.receive_reports).length === 0 ? (
+              <p style={{ fontSize: 12, color: '#94A3B8' }}>No recipients yet — enable people in the User Access tab.</p>
+            ) : accessList.filter(u => u.receive_reports).map(u => {
+              const types = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily','weekly','monthly']
+              return (
+                <div key={u.email} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: '0.5px solid #F1F5F9', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12.5, color: '#1F3C84', fontWeight: 500 }}>{u.email}</span>
+                  <div style={{ display: 'flex', gap: 14 }}>
+                    {['daily','weekly','monthly'].map(t => (
+                      <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#475569', cursor: 'pointer', textTransform: 'capitalize' }}>
+                        <input type="checkbox" checked={types.includes(t)} onChange={e => toggleReportType(u, t, e.target.checked)} />
+                        {t}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button className={styles.primaryBtn} onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving\u2026' : 'Save report settings'}</button>

@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     const r = await supabaseAdmin(
-      'allowed_users?select=email,role,added_by,created_at,job_title,department,receive_reports&order=created_at.asc',
+      'allowed_users?select=email,role,added_by,created_at,job_title,department,receive_reports,report_types&order=created_at.asc',
     )
     return res.status(200).json({ users: await r.json() })
   }
@@ -30,7 +30,7 @@ export default async function handler(req, res) {
   }
 
  if (req.method === 'PATCH') {
-    const { email, role, receive_reports, job_title, department } = req.body || {}
+    const { email, role, receive_reports, job_title, department, report_types } = req.body || {}
     const clean = (email || '').toLowerCase().trim()
     if (!clean) return res.status(400).json({ error: 'email is required' })
     const patch = {}
@@ -38,6 +38,7 @@ export default async function handler(req, res) {
     if (receive_reports !== undefined) patch.receive_reports = receive_reports
     if (job_title !== undefined) patch.job_title = job_title
     if (department !== undefined) patch.department = department
+    if (report_types !== undefined) patch.report_types = report_types
     if (Object.keys(patch).length === 0) return res.status(400).json({ error: 'nothing to update' })
     const r = await supabaseAdmin(`allowed_users?email=eq.${encodeURIComponent(clean)}`, {
       method: 'PATCH',

@@ -940,6 +940,7 @@ export default function LeadQualificationDashboard() {
   })
 
   const sendReport = async () => {
+    if (!window.confirm('Send this report by email to ALL configured recipients now? Manage recipients in Settings → Reports.')) return
     setSending(true); setSendMsg('')
     try {
       const res = await fetch('/api/send-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })

@@ -58,12 +58,19 @@ async function getStoredToken() {
   } catch { return null }
 }
 
-async function getRecipients() {
+async function getRecipients(reportType) {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?receive_reports=eq.true&select=email`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?receive_reports=eq.true&select=email,report_types`, {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
     })
-    return ((await res.json()) || []).map(r => r.email).filter(Boolean)
+    const rows = (await res.json()) || []
+    return rows.filter(r => {
+      if (!reportType) return true
+      const t = r.report_types
+      if (t == null) return true
+      if (Array.isArray(t)) return t.length === 0 || t.includes(reportType)
+      return true
+    }).map(r => r.email).filter(Boolean)
   } catch { return [] }
 }
 
@@ -430,7 +437,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No Meta token. Connect Meta Ads first.' })
     }
 
-    recipients = await getRecipients()
+    recipients = await getRecipients(report_type)
     if (!recipients.length) recipients = ['shivam.sharma@leverageedu.com']
 
   const cfg = await getReportConfig()
