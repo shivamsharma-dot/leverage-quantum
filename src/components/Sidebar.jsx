@@ -358,16 +358,18 @@ export default function Sidebar() {
       <div className={styles.userArea}>
         <div className={styles.avatar}>
           {user?.picture ? <img src={user.picture} alt={user.name}/> : initials}
+          <span className={styles.statusDot} aria-hidden="true" />
         </div>
         <div className={styles.userInfo}>
-          <div style={{display:'flex',alignItems:'center',gap:5}}>
+          <div className={styles.userMeta}>
             <p className={styles.userName}>{user?.name?.split(' ')[0] || 'User'}</p>
-            <span style={{fontSize:9,fontWeight:700,padding:'1px 6px',borderRadius:10,
-              background: userRole==='admin' ? '#E8EFF9' : '#F3F4F6',
-              color: userRole==='admin' ? '#1F3C84' : '#6B7280',
-              textTransform:'uppercase',letterSpacing:.04}}>
+            <NavLink
+              to="/settings?tab=profile"
+              title="View profile"
+              className={`${styles.roleBadge} ${userRole==='admin' ? styles.roleBadgeAdmin : styles.roleBadgeViewer}`}
+            >
               {userRole==='admin' ? 'Admin' : 'Viewer'}
-            </span>
+            </NavLink>
           </div>
           <p className={styles.userEmail}>{user?.email}</p>
         </div>

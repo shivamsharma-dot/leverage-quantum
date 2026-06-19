@@ -68,6 +68,13 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState(userIsAdmin ? 'data' : 'profile')
   const [copied, setCopied] = useState(false)
 
+  // Open a specific tab when navigated with ?tab=... (e.g. role badge -> profile)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('tab');
+    if (requested) setActiveTab(requested);
+  }, []);
+
   const _actRef = useRef(false)
   useEffect(() => {
     if (activeTab === 'activity' && userIsAdmin && !_actRef.current) { _actRef.current=true; loadActivity() }
