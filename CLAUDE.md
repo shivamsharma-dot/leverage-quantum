@@ -898,3 +898,14 @@ Backend `api/send-report.js`: added getReportConfig() reading those keys from ap
 
 Verified live: Reports tab renders, Save posts 4x /api/preferences (200), recipients list correct. No emails sent during build/verify.
 Commits: f29b3f0 (feature), backend+frontend. Branch rename-ask-ai -> main.
+
+## 2026-06-19 — Per-recipient report-type granularity + Send-Report confirm guards
+
+Commits e65e967 (fix), 083f9dd (feature) on rename-ask-ai -> main.
+
+- allowed_users gains report_types JSONB column (NULL/empty = all types). REQUIRES Supabase SQL (run by user).
+- api/users.mjs: GET select + PATCH now include report_types.
+- api/send-report.js: getRecipients(reportType) filters by report_types containing the requested type (NULL/empty => receives all).
+- SettingsPage Reports tab: per-recipient daily/weekly/monthly checkboxes (toggleReportType PATCHes report_types).
+- Hardening: setAccessList guarded to always store an array (prevents Settings crash if GET errors before column exists).
+- MetaAds/LeadQual/AskAI Send Report buttons now window.confirm() before firing a real send.
