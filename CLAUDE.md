@@ -920,3 +920,6 @@ Commit 825f499 on rename-ask-ai -> main.
 
 ## 2026-06-19 — Verified test-send fix
 Confirmed live: POST /api/send-report with triggered_by=test honors body.recipients. Response: recipients=["shivam.sharma@leverageedu.com"] only (not full list). Bug fixed.
+
+## 2026-06-19 — Sidebar footer redesign + clickable role badge
+Footer user block in Sidebar.jsx/Sidebar.module.css redesigned as a rounded soft-shadow card (grid: avatar | name+badge / email | gear | logout). Avatar gains soft slate ring + green status dot. Role badge moved from inline styles to .roleBadge/.roleBadgeAdmin/.roleBadgeViewer classes and is now a NavLink to /settings?tab=profile (title "View profile"). SettingsPage.jsx: added mount useEffect reading ?tab= from URL -> setActiveTab. Verified live: badge click opens Profile tab. Commit 147f573.
