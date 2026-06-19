@@ -148,7 +148,7 @@ export default function CommandPalette() {
           boxShadow: '0 3px 12px rgba(31,60,132,0.16)',
           transition: 'box-shadow 0.15s ease, transform 0.15s ease',
         }}>
-        <span style={{ fontSize: 13 }}>Jump to{'\u2026'}</span>
+        <span style={{ fontSize: 13 }}>Jump to\u2026</span>
         <span style={{
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           padding: '2px 7px', borderRadius: 6, background: 'var(--bg2)',
