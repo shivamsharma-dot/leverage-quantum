@@ -101,6 +101,11 @@ export default function SettingsPage() {
       .then(r => r.ok ? r.json() : { prefs: {} })
       .then(data => {
         const hp = data.prefs?.hidden_pages || []
+        const pf = data.prefs || {}
+        if (pf.report_from_name != null) setRcName(pf.report_from_name)
+        if (pf.report_from_email != null) setRcEmail(pf.report_from_email)
+        if (pf.report_subjects) setRcSubjects({ daily: pf.report_subjects.daily || '', weekly: pf.report_subjects.weekly || '', monthly: pf.report_subjects.monthly || '' })
+        if (pf.auto_reports_enabled != null) setRcAuto(pf.auto_reports_enabled !== false)
         setSavedHiddenPages(hp)
         setHiddenPages(hp)
         // Also sync to localStorage so Sidebar gets it immediately
@@ -276,6 +281,14 @@ export default function SettingsPage() {
   const [usersLoading, setUsersLoading] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [accessMsg, setAccessMsg] = useState('')
+  // --- Report config (sender, subjects, auto switch) ---
+  const [rcName, setRcName] = useState('')
+  const [rcEmail, setRcEmail] = useState('')
+  const [rcSubjects, setRcSubjects] = useState({ daily: '', weekly: '', monthly: '' })
+  const [rcAuto, setRcAuto] = useState(true)
+  const [rcSaving, setRcSaving] = useState(false)
+  const [rcMsg, setRcMsg] = useState('')
+  const [rcTesting, setRcTesting] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [editIds, setEditIds] = useState([])
   const [editIsAdmin, setEditIsAdmin] = useState(false)
@@ -382,9 +395,49 @@ export default function SettingsPage() {
     loadUsers()
   }
 
+  const saveReportConfig = async () => {
+    setRcSaving(true); setRcMsg('')
+    try {
+      const subj = { daily: rcSubjects.daily || '', weekly: rcSubjects.weekly || '', monthly: rcSubjects.monthly || '' }
+      const entries = [
+        ['report_from_name', rcName.trim()],
+        ['report_from_email', rcEmail.trim()],
+        ['report_subjects', subj],
+        ['auto_reports_enabled', rcAuto],
+      ]
+      for (const [key, value] of entries) {
+        const r = await fetch('/api/preferences', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, value }),
+        })
+        if (!r.ok) throw new Error('Failed to save ' + key)
+      }
+      setRcMsg('Saved \u2713 report settings updated')
+    } catch (e) { setRcMsg('\u2715 ' + e.message) }
+    finally { setRcSaving(false); setTimeout(() => setRcMsg(''), 5000) }
+  }
+
+  const sendTestReport = async () => {
+    if (!window.confirm('Send a TEST report to only your own email (' + (user?.email || 'you') + ')? No one else will receive it.')) return
+    setRcTesting(true); setRcMsg('')
+    try {
+      const r = await fetch('/api/send-report', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'daily', recipients: [user?.email].filter(Boolean), triggered_by: 'test' }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Failed')
+      setRcMsg('Test sent \u2713 to ' + (d.recipients?.join(', ') || user?.email))
+    } catch (e) { setRcMsg('\u2715 ' + e.message) }
+    finally { setRcTesting(false); setTimeout(() => setRcMsg(''), 6000) }
+  }
+
   const TABS = [
     { id: 'data',       label: 'Data' },
     ...(userIsAdmin ? [{ id: 'users', label: 'User Access' }, { id: 'activity', label: 'Activity Log' }] : []),
+    ...(userIsAdmin ? [{ id: 'reports', label: 'Reports' }] : []),
     ...(userIsAdmin ? [{ id: 'appearance', label: 'Appearance' }] : []),
     { id: 'profile',    label: 'Profile' },
   ]
@@ -760,6 +813,53 @@ export default function SettingsPage() {
           )}
 
           {/* ---------------- PROFILE ---------------- */}
+          {/* --------------- REPORTS --------------- */}
+          {activeTab === 'reports' && userIsAdmin && (
+            <>
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Email Sender</h3>
+                <p className={styles.cardDesc}>Name and address that report emails are sent from. The address domain must be verified in Resend (currently platform.leverageedu.com).</p>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
+                  <label style={{ flex: 1, minWidth: 220, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: '#1F3C84' }}>Sender name
+                    <input value={rcName} onChange={e => setRcName(e.target.value)} placeholder="Leverage Quantum" style={{ padding: '8px 12px', border: '1px solid #d8dded', borderRadius: 8, fontSize: 14, fontWeight: 400 }} />
+                  </label>
+                  <label style={{ flex: 1, minWidth: 220, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: '#1F3C84' }}>Sender email
+                    <input value={rcEmail} onChange={e => setRcEmail(e.target.value)} placeholder="quantum@platform.leverageedu.com" style={{ padding: '8px 12px', border: '1px solid #d8dded', borderRadius: 8, fontSize: 14, fontWeight: 400 }} />
+                  </label>
+                </div>
+                {rcEmail && !rcEmail.endsWith('@platform.leverageedu.com') && (<p style={{ color: '#8a6d1f', fontSize: 12, marginTop: 8 }}>Note: this address is not on the verified domain platform.leverageedu.com \u2014 Resend may reject it.</p>)}
+              </div>
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Subject Lines</h3>
+                <p className={styles.cardDesc}>Optional overrides per report type. Leave blank to use the default subject.</p>
+                {['daily', 'weekly', 'monthly'].map(t => (
+                  <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, fontSize: 13, fontWeight: 600, color: '#1F3C84' }}>
+                    <span style={{ width: 70, textTransform: 'capitalize' }}>{t}</span>
+                    <input value={rcSubjects[t]} onChange={e => setRcSubjects(prev => ({ ...prev, [t]: e.target.value }))} placeholder={'Default ' + t + ' subject'} style={{ flex: 1, padding: '8px 12px', border: '1px solid #d8dded', borderRadius: 8, fontSize: 14, fontWeight: 400 }} />
+                  </label>
+                ))}
+              </div>
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Automatic Reports</h3>
+                <p className={styles.cardDesc}>Master switch for scheduled (cron) reports. Turning this off stops all automatic sends; manual Send Report buttons still work.</p>
+                <label className={styles.reportsToggle} style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                  <input type="checkbox" checked={rcAuto} onChange={e => setRcAuto(e.target.checked)} />
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#1F3C84' }}>{rcAuto ? 'Automatic reports enabled' : 'Automatic reports disabled'}</span>
+                </label>
+              </div>
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Recipients</h3>
+                <p className={styles.cardDesc}>People who currently receive reports (toggled per user in the User Access tab):</p>
+                <p style={{ fontSize: 13, color: '#1F3C84', fontWeight: 600, marginTop: 8, lineHeight: 1.6 }}>{accessList.filter(u => u.receive_reports).map(u => u.email).join(', ') || 'No one selected \u2014 reports fall back to ' + (user?.email || 'admin')}</p>
+              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button className={styles.primaryBtn} onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving\u2026' : 'Save report settings'}</button>
+                <button className={styles.ghostBtn} onClick={sendTestReport} disabled={rcTesting}>{rcTesting ? 'Sending\u2026' : 'Send test to me only'}</button>
+                {rcMsg && <span style={{ fontSize: 13, fontWeight: 600, color: rcMsg.charAt(0) === '\u2715' ? '#b4413c' : '#4CAE6F' }}>{rcMsg}</span>}
+              </div>
+            </>
+          )}
+
           {/* ---------------- APPEARANCE ---------------- */}
           {activeTab === 'appearance' && userIsAdmin && (
             <>

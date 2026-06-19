@@ -67,6 +67,18 @@ async function getRecipients() {
   } catch { return [] }
 }
 
+async function getReportConfig() {
+  const out = {}
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled)`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    })
+    const rows = (await res.json()) || []
+    for (const r of rows) out[r.key] = r.value
+  } catch {}
+  return out
+}
+
 async function logReport({ report_type, recipients, status, error = null, triggered_by = 'cron' }) {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/report_logs`, {
@@ -421,6 +433,16 @@ export default async function handler(req, res) {
     recipients = await getRecipients()
     if (!recipients.length) recipients = ['shivam.sharma@leverageedu.com']
 
+  const cfg = await getReportConfig()
+  // Auto-reports master switch: skip scheduled sends when disabled
+  if (triggered_by === 'cron' && cfg.auto_reports_enabled === false) {
+    return res.status(200).json({ ok: true, skipped: true, reason: 'auto_reports_disabled' })
+  }
+  const fromAddr = cfg.report_from_email
+    ? `${cfg.report_from_name || 'Leverage Quantum'} <${cfg.report_from_email}>`
+    : (process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <quantum@platform.leverageedu.com>')
+  const subjOverride = (cfg.report_subjects && cfg.report_subjects[report_type]) || null
+
     const html = await buildReport(token, report_type)
     const todayLabel = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
     const SUBJECTS = {
@@ -433,9 +455,9 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${RESEND_KEY}` },
       body: JSON.stringify({
-        from: process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <quantum@platform.leverageedu.com>',
+        from: fromAddr,
         to: recipients,
-        subject: SUBJECTS[report_type],
+        subject: subjOverride || SUBJECTS[report_type],
         html,
       })
     })
