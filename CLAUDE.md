@@ -860,3 +860,10 @@ Shared (src/ui/dashboardKit.jsx + src/index.css):
 - FIX 3 CommandPalette.jsx: added 1-click dark toggle (moon/sun) stacked above the Jump-to pill (bottom:66). isDark state + toggleTheme writes lq_theme + sets data-theme (same mechanism as SettingsPage). Made pill + toggle theme-aware (var(--card)/--card-border/--bg2). Icons via JS strings; FIXED literal \u2026 bug in JSX text (use {String} not bare text).
 - Brand DATA colors (navy/blue/cyan/green) preserved in dark — only surfaces/text/borders adapt.
 - Verified live: toggle flips WhatsApp to dark instantly; persists to QL Ops on nav (prev bug gone). NOTE: only WhatsApp content fully migrated; other pages chrome goes dark but their content cards may still have hardcoded whites — page-by-page rollout pending. Reset live app to light after test.
+]633;E;printf -- '\\n## %s — ROLLED BACK dark-mode pilot + toggle (per user request)\\n' "$(date +%Y-%m-%d)";319d53d8-cef6-4472-b766-c6a6161b96f6]633;C
+## 2026-06-19 — ROLLED BACK dark-mode pilot + toggle (per user request)
+- User: "rollback dark changes and the toggle should be removed".
+- git revert 9b05401 (ellipsis fix) + 63713a8 (dark pilot) -> commits c9a6e59, 398787e.
+- Restored CommandPalette.jsx (no theme toggle/isDark), main.jsx (no global theme bootstrap), WhatsAppDashboard.jsx (tooltip back to original).
+- Cmd+K "Jump to..." pill (1ea9385) + toast system (7b4ebf9) RETAINED - unrelated to dark mode.
+- Removed stale localStorage lq_theme from live app. Verified live: light mode, data-theme=null, no toggle button, build OK 7.94s, console clean.
