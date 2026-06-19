@@ -884,3 +884,17 @@ Shared (src/ui/dashboardKit.jsx + src/index.css):
 - ROOT CAUSE #2: captureViewport() used an html-to-image transform:translate(-scrollTop) hack to grab just the viewport; unreliable when the content root has an inner scrollTop (got truncated/empty image).
 - FIX (SnapshotTool.jsx onCropUp): now uses captureNode(root) [full-content, same path as Full page, reliable] and crops in CONTENT coords = rect - root box + root scroll offset; passes root.scrollWidth/scrollHeight to cropDataUrl so the per-axis scale derivation maps correctly. captureViewport left intact for Visible-area mode. Commit 2e5c243.
 - Verified live (MTD scrolled to bottom): region drag over Source-breakdown table now captures header+Google/Facebook/Remarketing/Google MBBS rows correctly (img 1768x428). Build OK 6.64s, console clean.
+]633;E;printf -- '\\n## Reports settings hub (2026-06-19)\\n\\nAdded a comprehensive **Reports** tab to Settings (admin-only) in `src/pages/SettingsPage.jsx`:\\n- Email Sender: editable sender name + email (stored in app_preferences keys report_from_name / report_from_email).\\n- Subject Lines: per-type overrides (report_subjects JSON).\\n- Automatic Reports: master switch (auto_reports_enabled) - skips cron sends when false.\\n- Recipients summary: lists users with receive_reports=true (toggled in User Access tab).\\n- Send test to me only: confirm-gated, sends solely to current admin email.\\n\\nBackend `api/send-report.js`: added getReportConfig() reading those keys from app_preferences\x3b from-address and subjects now config-driven (fallback to env REPORT_FROM_EMAIL then hardcoded quantum@platform.leverageedu.com). Cron skip when auto disabled.\\n\\nVerified live: Reports tab renders, Save posts 4x /api/preferences (200), recipients list correct. No emails sent during build/verify.\\nCommits: f29b3f0 (feature), backend+frontend. Branch rename-ask-ai -> main.\\n';520b745e-7389-4a53-85e4-8d85e8ec8850]633;C
+## Reports settings hub (2026-06-19)
+
+Added a comprehensive **Reports** tab to Settings (admin-only) in `src/pages/SettingsPage.jsx`:
+- Email Sender: editable sender name + email (stored in app_preferences keys report_from_name / report_from_email).
+- Subject Lines: per-type overrides (report_subjects JSON).
+- Automatic Reports: master switch (auto_reports_enabled) - skips cron sends when false.
+- Recipients summary: lists users with receive_reports=true (toggled in User Access tab).
+- Send test to me only: confirm-gated, sends solely to current admin email.
+
+Backend `api/send-report.js`: added getReportConfig() reading those keys from app_preferences; from-address and subjects now config-driven (fallback to env REPORT_FROM_EMAIL then hardcoded quantum@platform.leverageedu.com). Cron skip when auto disabled.
+
+Verified live: Reports tab renders, Save posts 4x /api/preferences (200), recipients list correct. No emails sent during build/verify.
+Commits: f29b3f0 (feature), backend+frontend. Branch rename-ask-ai -> main.
