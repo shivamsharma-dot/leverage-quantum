@@ -878,3 +878,9 @@ Shared (src/ui/dashboardKit.jsx + src/index.css):
 - ROOT CAUSE: cropDataUrl() multiplied the crop rect by a HARDCODED ratio=2, but the captured viewport image pixel size != cssSize*2 when devicePixelRatio!=1 (test machine was 1.125). drawImage read source coords outside the image -> transparent/blank crop.
 - FIX (SnapshotTool.jsx): cropDataUrl(dataUrl,rect,srcW,srcH) now derives the TRUE per-axis scale from the loaded image: ratioX=img.naturalWidth/srcW, ratioY=img.naturalHeight/srcH (fallback 2). onCropUp passes rr.width/rr.height (content-root CSS dims). Correct at any DPR. Commit 091c5b3.
 - Verified live (MTD): region drag over KPI cards now captures the 4 cards correctly (img 2225x326, content present). Build OK 7.90s.
+]633;E;printf -- '\\n## %s \\u2014 FIX snapshot Select-region when SCROLLED (was blank if page scrolled)\\n' "$(date +%Y-%m-%d)";45b3050b-e575-429b-9728-e499b179965e]633;C
+## 2026-06-19 — FIX snapshot Select-region when SCROLLED (was blank if page scrolled)
+- User: scroll MTD to bottom, then Select region -> capture was blank (footer only). Reproduced live.
+- ROOT CAUSE #2: captureViewport() used an html-to-image transform:translate(-scrollTop) hack to grab just the viewport; unreliable when the content root has an inner scrollTop (got truncated/empty image).
+- FIX (SnapshotTool.jsx onCropUp): now uses captureNode(root) [full-content, same path as Full page, reliable] and crops in CONTENT coords = rect - root box + root scroll offset; passes root.scrollWidth/scrollHeight to cropDataUrl so the per-axis scale derivation maps correctly. captureViewport left intact for Visible-area mode. Commit 2e5c243.
+- Verified live (MTD scrolled to bottom): region drag over Source-breakdown table now captures header+Google/Facebook/Remarketing/Google MBBS rows correctly (img 1768x428). Build OK 6.64s, console clean.
