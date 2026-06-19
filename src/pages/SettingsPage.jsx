@@ -298,7 +298,7 @@ export default function SettingsPage() {
 
   const loadUsers = async () => {
     setUsersLoading(true)
-    setAccessList(await getAccessList())
+    const _al = await getAccessList(); setAccessList(Array.isArray(_al) ? _al : [])
     setUsersLoading(false)
   }
   useEffect(() => { if (userIsAdmin) loadUsers() }, [userIsAdmin])
