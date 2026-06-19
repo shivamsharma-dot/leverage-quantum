@@ -37,15 +37,6 @@ export default function CommandPalette() {
   const [active, setActive] = useState(0)
   const inputRef = useRef(null)
   const listRef = useRef(null)
-  const [isDark, setIsDark] = useState(() => {
-    try { return (localStorage.getItem('lq_theme') || 'light') === 'dark' } catch (e) { return false }
-  })
-  const toggleTheme = () => {
-    const next = isDark ? 'light' : 'dark'
-    setIsDark(!isDark)
-    try { localStorage.setItem('lq_theme', next) } catch (e) {}
-    document.documentElement.setAttribute('data-theme', next)
-  }
 
   // Global shortcut: Cmd+K (mac) / Ctrl+K (win/linux). Esc closes.
   useEffect(() => {
@@ -113,49 +104,29 @@ export default function CommandPalette() {
   }, [active, open])
 
   if (!open) return (
-    <>
-      <button
-        type="button"
-        onClick={toggleTheme}
-        aria-label="Toggle dark mode"
-        title="Toggle light / dark"
-        onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 6px 20px rgba(31,60,132,0.28)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 3px 12px rgba(31,60,132,0.16)'; e.currentTarget.style.transform = 'none' }}
-        style={{
-          position: 'fixed', bottom: 66, right: 20, zIndex: 9998,
-          width: 40, height: 40, borderRadius: 10,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'var(--card)', color: NAVY, cursor: 'pointer',
-          border: '1px solid var(--card-border)', fontSize: 17,
-          boxShadow: '0 3px 12px rgba(31,60,132,0.16)',
-          transition: 'box-shadow 0.15s ease, transform 0.15s ease',
-        }}>
-        {isDark ? '\u2600' : '\u263d'}
-      </button>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Open command palette"
-        title="Quick navigation (Ctrl/Cmd K)"
-        onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 6px 20px rgba(31,60,132,0.28)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-        onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 3px 12px rgba(31,60,132,0.16)'; e.currentTarget.style.transform = 'none' }}
-        style={{
-          position: 'fixed', bottom: 20, right: 20, zIndex: 9998,
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '9px 14px', borderRadius: 10, border: '1px solid var(--card-border)',
-          background: 'var(--card)', color: NAVY, cursor: 'pointer',
-          fontSize: 12.5, fontWeight: 600, letterSpacing: '0.01em',
-          boxShadow: '0 3px 12px rgba(31,60,132,0.16)',
-          transition: 'box-shadow 0.15s ease, transform 0.15s ease',
-        }}>
-        <span style={{ fontSize: 13 }}>Jump to\u2026</span>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          padding: '2px 7px', borderRadius: 6, background: 'var(--bg2)',
-          color: SLATE, fontSize: 11, fontWeight: 700,
-        }}>{'\u2318'} K</span>
-      </button>
-    </>
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      aria-label="Open command palette"
+      title="Quick navigation (Ctrl/Cmd K)"
+      onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 6px 20px rgba(31,60,132,0.28)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 3px 12px rgba(31,60,132,0.18)'; e.currentTarget.style.transform = 'none' }}
+      style={{
+        position: 'fixed', bottom: 20, right: 20, zIndex: 9998,
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '9px 14px', borderRadius: 10, border: '1px solid #E3E8F2',
+        background: '#fff', color: NAVY, cursor: 'pointer',
+        fontSize: 12.5, fontWeight: 600, letterSpacing: '0.01em',
+        boxShadow: '0 3px 12px rgba(31,60,132,0.18)',
+        transition: 'box-shadow 0.15s ease, transform 0.15s ease',
+      }}>
+      <span style={{ fontSize: 13 }}>Jump to…</span>
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        padding: '2px 7px', borderRadius: 6, background: '#F1F5F9',
+        color: SLATE, fontSize: 11, fontWeight: 700,
+      }}>{'\u2318'} K</span>
+    </button>
   )
 
   return (

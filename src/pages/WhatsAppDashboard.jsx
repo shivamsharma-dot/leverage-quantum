@@ -229,8 +229,8 @@ const StatusPill = ({ status }) => {
 const BrandTooltip = ({ active, payload, label, fmt }) => {
   if (!active || !payload?.length) return null
   return (
-    <div style={{ background:'var(--card)', border:'0.5px solid var(--card-border)', borderRadius:12, padding:'10px 14px', fontFamily:"'Plus Jakarta Sans','Inter',sans-serif", boxShadow:'0 8px 32px rgba(15,23,42,0.13)', minWidth:140 }}>
-      {label && <div style={{ fontSize:11, fontWeight:700, color:'var(--text)', marginBottom:7, paddingBottom:6, borderBottom:'0.5px solid var(--card-border)' }}>{label}</div>}
+    <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, padding:'10px 14px', fontFamily:"'Plus Jakarta Sans','Inter',sans-serif", boxShadow:'0 8px 32px rgba(15,23,42,0.13)', minWidth:140 }}>
+      {label && <div style={{ fontSize:11, fontWeight:700, color:'#0F172A', marginBottom:7, paddingBottom:6, borderBottom:'0.5px solid #F1F5F9' }}>{label}</div>}
       {payload.map((p, i) => (
         <div key={i} style={{ display:'flex', alignItems:'center', gap:7, marginTop:i>0?4:0 }}>
           <div style={{ width:8, height:8, borderRadius:'50%', background:p.color||p.fill||'#1C9FD4', flexShrink:0 }}/>
