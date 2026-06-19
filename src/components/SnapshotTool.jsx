@@ -363,10 +363,14 @@ export default function SnapshotTool() {
     try {
       const root = getContentRoot()
       const rr = root.getBoundingClientRect()
-      // translate screen rect -> content-root-relative rect
-      const local = { x: rect.x - rr.left, y: rect.y - rr.top, w: rect.w, h: rect.h }
-      const full = await captureViewport()
-      const cropped = await cropDataUrl(full, local, rr.width, rr.height)
+      // Capture the FULL content (reliable, no transform hack), then crop in content
+      // coordinates = screen rect translated by the root's box AND its scroll offset.
+      // This works whether the page is scrolled to top or anywhere in the middle.
+      const sLeft = root.scrollLeft || 0
+      const sTop = root.scrollTop || 0
+      const local = { x: rect.x - rr.left + sLeft, y: rect.y - rr.top + sTop, w: rect.w, h: rect.h }
+      const full = await captureNode(root)
+      const cropped = await cropDataUrl(full, local, root.scrollWidth, root.scrollHeight)
       setResult(await brandImage(cropped)); flash('Region captured')
     } catch { flash('Capture failed, please retry', false) }
     finally { setBusy(false) }
