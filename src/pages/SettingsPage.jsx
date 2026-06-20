@@ -7,7 +7,7 @@ import styles from './SettingsPage.module.css'
 
 const getRoleMeta = (role) => {
   if (role === 'admin') return { label: 'Admin', color: '#1F3C84', bg: '#E8EFF9' }
-  if (role === 'viewer') return { label: 'Viewer', color: '#1C9FD4', bg: '#E3F5FD' }
+  if (role === 'viewer') return { label: 'Viewehr', color: '#1C9FD4', bg: '#E3F5FD' }
   // viewer:home,meta_ads,... or custom:... => Custom badge
   if (typeof role === 'string' && (role.startsWith('viewer:') || role.startsWith('custom:'))) {
     return { label: 'Custom', color: '#29B9C3', bg: '#E4F8F9' }
@@ -500,17 +500,20 @@ export default function SettingsPage() {
 
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>Data Sources</h3>
-                <div className={styles.sourceList}>
-                  {DATA_SOURCES.map(s => (
-                    <div key={s.name} className={styles.sourceRow}>
-                      <div>
-                        <div className={styles.sourceName}>{s.name}</div>
-                        <div className={styles.sourceMeta}>{s.src} — {s.rows} rows</div>
-                      </div>
-                      <span className={styles.sourceStatus}>Connected</span>
+                <div className={styles.dsList}>
+                {DATA_SOURCES.map(s => (
+                  <div key={s.name} className={styles.dsRow}>
+                    <span className={styles.dsIcon}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+                    </span>
+                    <div className={styles.dsBody}>
+                      <div className={styles.dsName}>{s.name}</div>
+                      <div className={styles.dsMeta}>{s.src} — {s.rows} rows</div>
                     </div>
-                  ))}
-                </div>
+                    <span className={styles.dsStatus}>Connected</span>
+                  </div>
+                ))}
+              </div>
               </div>
 
             </>
@@ -535,28 +538,25 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 {prefLoading?<div style={{fontSize:12,color:'#94A3B8'}}>Loading…</div>:
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:8}}>
-                    {DASHBOARDS.map(page=>{
-                      const isHidden=hiddenPages.includes(page.id)
-                      return(
-                        <div key={page.id} onClick={()=>togglePageVisibility(page.id)}
-                          style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:9,border:'0.5px solid '+(isHidden?'#E2E8F0':'#D1E9F7'),background:isHidden?'#F8FAFC':'#F0FBFF',cursor:'pointer',transition:'all .15s',userSelect:'none'}}>
-                          <div style={{width:26,height:26,borderRadius:7,flexShrink:0,background:isHidden?'#F1F5F9':'#E3F5FD',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={isHidden?'#CBD5E1':'#1C9FD4'} strokeWidth="2" strokeLinecap="round">
-                              {isHidden?<><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}
-                            </svg>
-                          </div>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontSize:12,fontWeight:600,color:isHidden?'#94A3B8':'#0F172A',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{page.label}</div>
-                            <div style={{fontSize:10,color:isHidden?'#CBD5E1':'#94A3B8',marginTop:1}}>{isHidden?'Hidden — all users':'Visible to all'}</div>
-                          </div>
-                          <div style={{width:30,height:17,borderRadius:9,flexShrink:0,background:isHidden?'#E2E8F0':'#1C9FD4',position:'relative',transition:'background .2s'}}>
-                            <div style={{position:'absolute',top:2,left:isHidden?2:13,width:13,height:13,borderRadius:7,background:'#fff',transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,0.15)'}}/>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                  <div className={styles.pvGrid}>
+                {DASHBOARDS.map(page=>{
+                  const isHidden=hiddenPages.includes(page.id)
+                  return(
+                    <div key={page.id} onClick={()=>togglePageVisibility(page.id)} className={`${styles.pvCard} ${isHidden?styles.pvCardHidden:''}`}>
+                      <div className={styles.pvIcon}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          {isHidden?<><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}
+                        </svg>
+                      </div>
+                      <div className={styles.pvBody}>
+                        <div className={styles.pvName}>{page.label}</div>
+                        <div className={styles.pvSub}>{isHidden?'Hidden — all users':'Visible to all'}</div>
+                      </div>
+                      <div className={styles.pvToggle}><div className={styles.pvKnob}/></div>
+                    </div>
+                  )
+                })}
+              </div>
                 }
                 {hiddenPages.length>0&&!prefLoading&&<button onClick={()=>{setHiddenPages([]);setPrefSaveMsg(null)}} style={{marginTop:10,fontSize:11.5,fontWeight:600,color:'#DC2626',background:'none',border:'none',cursor:'pointer',padding:'4px 0',display:'flex',alignItems:'center',gap:5,fontFamily:"'Plus Jakarta Sans',sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>Reset — show all</button>}
               </div>
@@ -771,12 +771,13 @@ export default function SettingsPage() {
               )}
 
               {activityLog.length > 0 && (
-                <div style={{overflowX:'auto',marginTop:8}}>
-                  <table style={{width:'100%',borderCollapse:'collapse',fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12.5}}>
-                    <thead>
-                      <tr style={{borderBottom:'1.5px solid #F1F5F9'}}>
+                <div className={styles.alCard}>
+                  <div className={styles.tableWrap}>
+                  <table className={styles.alTable}>
+                    <thead className={styles.alHead}>
+                      <tr>
                         {['USER','ACTION','PAGE','DETAIL','DATE','TIME','AGO'].map(h=>(
-                          <th key={h} style={{padding:'9px 12px',textAlign:'left',fontSize:10.5,fontWeight:700,color:'#94A3B8',letterSpacing:'0.06em',whiteSpace:'nowrap'}}>{h}</th>
+                          <th key={h}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -789,46 +790,46 @@ export default function SettingsPage() {
                         const pg = (log.page||'app').replace('/dashboard/','').replace('/','').split('?')[0]||'app'
                         const pgLabel = pg==='app'?'Summary':pg.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ')
                         const ACT = {
-                          view:   {c:'#1C9FD4', bg:'#E3F5FD'},
-                          click:  {c:'#1F3C84', bg:'#E8EFF9'},
-                          tab:    {c:'#29B9C3', bg:'#E4F8F9'},
-                          login:  {c:'#15803D', bg:'#E9F8EF'},
-                          logout: {c:'#B45309', bg:'#FEF3C7'},
-                          leave:  {c:'#94A3B8', bg:'#F3F4F6'},
-                          search: {c:'#1C9FD4', bg:'#E3F5FD'},
-                          export: {c:'#4CAE6F', bg:'#E9F8EF'},
+                          view: {c:'#1577A0', bg:'#E3F5FD'},
+                          click: {c:'#1F3C84', bg:'#E8EFF9'},
+                          tab: {c:'#16868F', bg:'#E4F8F9'},
+                          login: {c:'#2E7D4F', bg:'#E9F8EF'},
+                          logout: {c:'#1577A0', bg:'#E3F5FD'},
+                          leave: {c:'#64748B', bg:'#F1F5F9'},
+                          search: {c:'#1577A0', bg:'#E3F5FD'},
+                          export: {c:'#2E7D4F', bg:'#E9F8EF'},
                         }
-                        const a = ACT[log.action] || {c:'#94A3B8', bg:'#F3F4F6'}
+                        const a = ACT[log.action] || {c:'#64748B', bg:'#F1F5F9'}
                         const dt = new Date(log.created_at)
                         const dateStr = dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
                         const timeStr = dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})
                         return (
-                          <tr key={idx} style={{borderBottom:'0.5px solid #F8FAFC',background:idx%2===0?'#fff':'#FAFBFC',transition:'background .1s'}}
-                            onMouseEnter={e=>e.currentTarget.style.background='#F0F4FF'}
-                            onMouseLeave={e=>e.currentTarget.style.background=idx%2===0?'#fff':'#FAFBFC'}>
-                            <td style={{padding:'10px 12px',whiteSpace:'nowrap'}}>
-                              <div style={{display:'flex',alignItems:'center',gap:8}}>
-                                <div style={{width:28,height:28,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:10,fontWeight:700,background:`linear-gradient(135deg,${avColor},${avColor2})`,boxShadow:'0 1px 4px rgba(15,23,42,0.15)'}}>
+                          <tr key={idx} className={styles.alRow}>
+                            <td className={styles.alTd}>
+                              <div className={styles.alUserCell}>
+                                <div className={styles.alAvatar} style={{background:`linear-gradient(135deg,${avColor},${avColor2})`}}>
                                   {(log.email||'?').split('@')[0].slice(0,2).toUpperCase()}
                                 </div>
-                                <span style={{fontWeight:600,color:'#0F172A'}}>{(log.email||'').split('@')[0]}</span>
+                                <span className={styles.alUserName}>{(log.email||'').split('@')[0]}</span>
                               </div>
                             </td>
-                            <td style={{padding:'10px 12px'}}>
-                              <span style={{padding:'3px 9px',borderRadius:20,fontSize:10.5,fontWeight:700,background:a.bg,color:a.c,textTransform:'uppercase',letterSpacing:'0.04em'}}>{log.action||'view'}</span>
+                            <td className={styles.alTd}>
+                              <span className={styles.alTag} style={{background:a.bg,color:a.c}}>{log.action||'view'}</span>
                             </td>
-                            <td style={{padding:'10px 12px',color:'#0F172A',fontWeight:600,whiteSpace:'nowrap'}}>{pgLabel}</td>
-                            <td style={{padding:'10px 12px',color:'#475569',fontSize:11.5,maxWidth:280,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={log.detail||''}>{log.detail||'—'}</td>
-                            <td style={{padding:'10px 12px',whiteSpace:'nowrap',color:'#374151'}}>{dateStr}</td>
-                            <td style={{padding:'10px 12px',whiteSpace:'nowrap',color:'#374151'}}>{timeStr}</td>
-                            <td style={{padding:'10px 12px',color:'#94A3B8',whiteSpace:'nowrap',fontSize:11.5}}>{rel}</td>
+                            <td className={`${styles.alTd} ${styles.alPage}`}>{pgLabel}</td>
+                            <td className={`${styles.alTd} ${styles.alDetail}`} title={log.detail||''}>{log.detail||'—'}</td>
+                            <td className={styles.alTd}>{dateStr}</td>
+                            <td className={styles.alTd}>{timeStr}</td>
+                            <td className={`${styles.alTd} ${styles.alMuted}`}>{rel}</td>
                           </tr>
                         )
                       })}
                     </tbody>
                   </table>
+                  </div>
+                  <div className={styles.alFoot}>Showing {activityLog.length} {activityLog.length===1?'entry':'entries'}</div>
                 </div>
-              )}
+                )}
             </div>
           )}
 
