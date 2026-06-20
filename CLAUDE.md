@@ -949,3 +949,10 @@ reset it to transparent (first attempt adada8d looked applied but bgColor stayed
 samples rgb(14,28,68) and a 100vw/100vh red probe covers the whole page. Note: screenshots
 showed a white band right/bottom that was a CAPTURE artifact (screenshot frame larger than the
 browser window), NOT an in-page gap — confirmed via the red-probe test.
+
+## 2026-06-20 — Settings page premium revamp (in progress)
+- Shell: gradient .title (navy->cyan), .titleSub subtitle, segmented pill .tabBar with KpiIconPreview icons per tab (data=layers, users=users, activity=activity, reports=mail, appearance=eye, profile=person), elevated .card (border #EEF1F6, dual shadow, hover lift). Commit 8836779.
+- All .cardTitle now have a gradient accent bar (::before navy->cyan); added .secIcon / .cardHead / .cardHeadText helper classes for deeper per-tab work.
+- Verified live on profile/data/reports tabs. SR fee, visibility toggles, report config backend untouched.
+- Backups: /tmp/SettingsPage.jsx.revbak, /tmp/SettingsPage.module.css.revbak
+- TODO: deeper polish on Data Sources rows + page-visibility cards (heavy inline styles), Activity Log table, Appearance config grids.
