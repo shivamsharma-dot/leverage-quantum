@@ -178,7 +178,7 @@ export default function Sidebar() {
     try { localStorage.setItem('lq_sidebar_collapsed', String(next)) } catch {}
   }
 
-  const handleLogout = () => { logout(); navigate('/login') }
+  const handleLogout = () => { logout(); }
 
   const userRole = user?.role || 'viewer'
   const isViewerRole = userRole !== 'admin'
