@@ -926,3 +926,14 @@ Footer user block in Sidebar.jsx/Sidebar.module.css redesigned as a rounded soft
 
 ## 2026-06-20 — Sign-out animation refined (commit 27b85d0)
 Replaced the basic logout overlay in src/hooks/useAuth.jsx with a premium animated sign-out sequence. Logo mark enters via a 3D flip-up (perspective rotateX -90deg to upright, lqMark 1.0s) instead of the old bounce-scale. The three chart bars inside the mark grow from the bottom, staggered left to right (lqBar .5s at .45s/.62s/.79s), like a chart drawing in. Followed by a sheen sweep, "Signing out" text, and a brand-gradient line fill (navy/blue/cyan/green, lqLine). White veil fades in/out (lqVeil), then fetch /api/auth/logout and redirect to /login. Prototyped live as a looping preview on the login tab and approved before commit. Brand colours only.
+
+## 2026-06-20 — Sign-out animation root cause fixed (commit ea29646)
+The premium logout animation never appeared on real sign-out: clicking logout jumped
+straight to /login with no overlay. Root cause was in src/components/Sidebar.jsx, not
+the animation itself: handleLogout was `() => { logout(); navigate('/login') }`. Since
+logout() is async, the synchronous navigate('/login') fired immediately, unmounting the
+dashboard and routing to login before the ~2.15s animation could play. Fix: handleLogout
+now just calls logout(); logout() (in useAuth.jsx) owns the animation AND the redirect via
+window.location.replace('/login') after the hold. navigate is still used elsewhere in the
+file so the import stays. Lesson: when an async handler ends with its own redirect, callers
+must not also navigate synchronously.
