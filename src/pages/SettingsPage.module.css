@@ -75,7 +75,18 @@
   padding: 24px; margin-bottom: 18px; transition: box-shadow .2s ease, transform .2s ease;
 }
 .card:hover { box-shadow: 0 1px 2px rgba(16,30,68,.05), 0 16px 40px -16px rgba(16,30,68,.16); }
-.cardTitle { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; color: var(--text); }
+.cardTitle { font-size: 15.5px; font-weight: 750; letter-spacing: -0.015em; margin: 0 0 4px; color: var(--text);
+  display: flex; align-items: center; gap: 10px; }
+.cardTitle::before { content:''; width:4px; height:16px; border-radius:3px; flex:0 0 auto;
+  background: linear-gradient(180deg,#1F3C84,#1C9FD4 60%,#29B9C3); }
+/* section accent icon chip (optional, used in revamped tabs) */
+.secIcon { width:34px; height:34px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center;
+  flex:0 0 auto; color:#1F3C84; background:#E8EFF9; }
+.secIcon svg { width:17px; height:17px; }
+.cardHead { display:flex; align-items:flex-start; gap:13px; margin-bottom:6px; }
+.cardHead .cardTitle { margin:0; }
+.cardHead .cardTitle::before { display:none; }
+.cardHeadText { min-width:0; flex:1; }
 .cardDesc { font-size: 13px; line-height: 1.5; color: var(--text-2); margin: 0 0 18px; }
 
 /* ---------- buttons ---------- */
