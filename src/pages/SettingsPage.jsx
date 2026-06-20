@@ -7,7 +7,7 @@ import styles from './SettingsPage.module.css'
 
 const getRoleMeta = (role) => {
   if (role === 'admin') return { label: 'Admin', color: '#1F3C84', bg: '#E8EFF9' }
-  if (role === 'viewer') return { label: 'Viewehr', color: '#1C9FD4', bg: '#E3F5FD' }
+  if (role === 'viewer') return { label: 'Viewer', color: '#1C9FD4', bg: '#E3F5FD' }
   // viewer:home,meta_ads,... or custom:... => Custom badge
   if (typeof role === 'string' && (role.startsWith('viewer:') || role.startsWith('custom:'))) {
     return { label: 'Custom', color: '#29B9C3', bg: '#E4F8F9' }
