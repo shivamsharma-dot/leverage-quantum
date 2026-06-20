@@ -1,10 +1,16 @@
 # LEVERAGE QUANTUM — Claude Context File
 
-> Auto-read by Claude at every session start. Last updated: June 15, 2026.
+> Auto-read by Claude at every session start. Last updated: June 20, 2026.
 
 ---
 
 ## Recent Work (June 2026 — latest session)
+
+**Settings premium polish + Activity Log user search (June 20, 2026)** — branch `settings-premium-polish`, PR #4 (open, not yet merged; needs `npm run build` + live verify before merge).
+- Refactored Settings page inline styles into CSS-module classes: Data Sources rows (`ds*`), page-visibility cards on User Access tab (`pv*`), and Activity Log table (`al*`). Appearance-tab duplicate visibility grid left on inline styles intentionally.
+- Cleaned Activity Log status color map to brand colors only (navy/blue/cyan/green); no amber/orange/red.
+- NEW: Activity Log user search — `actSearch` state + `.filter()` on `activityLog` by `log.email`, search input UI (`.alSearch` / `.alSearchClear`) with magnifier SVG + clear button. Lets you filter the log by user to see who did what.
+- Fixed an accidental 'Viewehr' typo back to 'Viewer'.
 
 **PWA / installable iOS app** — Quantum is now installable to iOS/Android home screen (free, no App Store).
 - Files: `public/manifest.json`, `public/sw.js` (network-first SW — deliberately NOT cache-first, avoids stale-chunk blank pages), `public/icon-{180,192,512}.png` + `icon-maskable-512.png` + `icon.svg`. Apple meta tags + SW registration in `index.html`.
