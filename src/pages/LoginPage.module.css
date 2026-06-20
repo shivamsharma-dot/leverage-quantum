@@ -3,7 +3,6 @@
   width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  background-color: #0E1C44;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -14,6 +13,7 @@
     radial-gradient(1000px 680px at 16% 90%, rgba(76,174,111,0.15), transparent 60%),
     radial-gradient(900px 600px at 50% 42%, rgba(41,185,195,0.10), transparent 65%),
     linear-gradient(160deg, #0c1838 0%, #12245a 46%, #0e1c44 100%);
+  background-color: #0e1c44;
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
