@@ -923,3 +923,6 @@ Confirmed live: POST /api/send-report with triggered_by=test honors body.recipie
 
 ## 2026-06-19 — Sidebar footer redesign + clickable role badge
 Footer user block in Sidebar.jsx/Sidebar.module.css redesigned as a rounded soft-shadow card (grid: avatar | name+badge / email | gear | logout). Avatar gains soft slate ring + green status dot. Role badge moved from inline styles to .roleBadge/.roleBadgeAdmin/.roleBadgeViewer classes and is now a NavLink to /settings?tab=profile (title "View profile"). SettingsPage.jsx: added mount useEffect reading ?tab= from URL -> setActiveTab. Verified live: badge click opens Profile tab. Commit 147f573.
+
+## 2026-06-20 — Sign-out animation refined (commit 27b85d0)
+Replaced the basic logout overlay in src/hooks/useAuth.jsx with a premium animated sign-out sequence. Logo mark enters via a 3D flip-up (perspective rotateX -90deg to upright, lqMark 1.0s) instead of the old bounce-scale. The three chart bars inside the mark grow from the bottom, staggered left to right (lqBar .5s at .45s/.62s/.79s), like a chart drawing in. Followed by a sheen sweep, "Signing out" text, and a brand-gradient line fill (navy/blue/cyan/green, lqLine). White veil fades in/out (lqVeil), then fetch /api/auth/logout and redirect to /login. Prototyped live as a looping preview on the login tab and approved before commit. Brand colours only.
