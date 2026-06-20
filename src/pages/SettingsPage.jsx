@@ -83,6 +83,7 @@ export default function SettingsPage() {
   // Activity
   const [activityLog, setActivityLog] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
+  const [actSearch, setActSearch] = useState('')
   const loadActivity = async () => {
     setActivityLoading(true)
     setActivityLog(await getActivityLog(500))
@@ -763,6 +764,14 @@ export default function SettingsPage() {
                 </button>
               </div>
 
+              {activityLog.length > 0 && (
+                <div className={styles.alSearch}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input type="text" placeholder="Search by user..." value={actSearch} onChange={e=>setActSearch(e.target.value)} />
+                  {actSearch && (<button type="button" className={styles.alSearchClear} onClick={()=>setActSearch('')} aria-label="Clear">×</button>)}
+                </div>
+              )}
+
               {activityLog.length === 0 && !activityLoading && (
                 <div className={styles.empty}>
                   Click “Load log” to see activity.<br />
@@ -782,7 +791,7 @@ export default function SettingsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {activityLog.map((log,idx)=>{
+                      {activityLog.filter(log => { const q = actSearch.trim().toLowerCase(); if (!q) return true; const u = (log.email||'').toLowerCase(); return u.includes(q); }).map((log,idx)=>{
                         const diff = Date.now()-new Date(log.created_at)
                         const rel = diff<60000?'just now':diff<3600000?Math.round(diff/60000)+'m ago':diff<86400000?Math.round(diff/3600000)+'h ago':Math.round(diff/86400000)+'d ago'
                         const avColor = ['#1F3C84','#1C9FD4','#4CAE6F','#29B9C3','#1C9FD4'][((log.email||'').charCodeAt(0)||65)%5]
