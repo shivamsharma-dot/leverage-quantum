@@ -453,11 +453,11 @@ export default function SettingsPage() {
   }
 
   const TABS = [
-    ...(userIsAdmin ? [{ id: 'data', label: 'Data' }] : []),
-    ...(userIsAdmin ? [{ id: 'users', label: 'User Access' }, { id: 'activity', label: 'Activity Log' }] : []),
-    ...(userIsAdmin ? [{ id: 'reports', label: 'Reports' }] : []),
-    ...(userIsAdmin ? [{ id: 'appearance', label: 'Appearance' }] : []),
-    { id: 'profile',    label: 'Profile' },
+    ...(userIsAdmin ? [{ id: 'data', label: 'Data', icon: 'layers' }] : []),
+    ...(userIsAdmin ? [{ id: 'users', label: 'User Access', icon: 'users' }, { id: 'activity', label: 'Activity Log', icon: 'activity' }] : []),
+    ...(userIsAdmin ? [{ id: 'reports', label: 'Reports', icon: 'mail' }] : []),
+    ...(userIsAdmin ? [{ id: 'appearance', label: 'Appearance', icon: 'eye' }] : []),
+    { id: 'profile', label: 'Profile', icon: 'person' },
   ]
 
   return (
@@ -467,6 +467,7 @@ export default function SettingsPage() {
         <div className={styles.header}>
           <p className={styles.breadcrumb}>Settings</p>
           <h1 className={styles.title}>Settings</h1>
+          <p className={styles.titleSub}>Manage data, access, reports, and how Quantum looks for your workspace.</p>
         </div>
 
         <div className={styles.content}>
@@ -475,6 +476,7 @@ export default function SettingsPage() {
               <button key={t.id}
                 className={`${styles.tab} ${activeTab === t.id ? styles.tabActive : ''}`}
                 onClick={() => setActiveTab(t.id)}>
+                <KpiIconPreview name={t.icon} color="currentColor" />
                 {t.label}
               </button>
             ))}

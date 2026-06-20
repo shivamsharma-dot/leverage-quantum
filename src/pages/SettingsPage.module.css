@@ -40,28 +40,41 @@
 /* ---------- header ---------- */
 .header { padding: 24px 28px 0; }
 .breadcrumb { font-size: 11px; font-weight: 700; letter-spacing: 0.10em; text-transform: uppercase; color: var(--text-3); margin: 0 0 6px; }
-.title { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; margin: 0; color: var(--text); }
+.title { font-size: 30px; font-weight: 800; letter-spacing: -0.025em; margin: 0;
+  background: linear-gradient(92deg,#1F3C84 0%,#1C9FD4 55%,#29B9C3 100%);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.titleSub { font-size: 13.5px; color: var(--text-2); margin: 6px 0 0; font-weight: 500; }
 
 /* ---------- tab bar ---------- */
 .content { padding: 20px 28px 48px; }
-.tabBar { display: flex; gap: 2px; border-bottom: 1px solid var(--card-border); margin-bottom: 28px; }
+.tabBar {
+  display: inline-flex; gap: 4px; margin-bottom: 28px; padding: 5px;
+  background: #F3F6FB; border: 1px solid #E6ECF5; border-radius: 14px;
+  box-shadow: inset 0 1px 2px rgba(16,30,68,.04); flex-wrap: wrap;
+}
 .tab {
   appearance: none; background: none; border: none; cursor: pointer;
-  font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--text-3);
-  padding: 10px 14px; position: relative; transition: color .15s; letter-spacing: -0.01em;
+  font-family: inherit; font-size: 13px; font-weight: 650; color: #5B6577;
+  padding: 9px 15px; position: relative; border-radius: 10px;
+  transition: all .18s ease; letter-spacing: -0.01em;
+  display: inline-flex; align-items: center; gap: 7px;
 }
-.tab:hover { color: var(--text-2); }
-.tabActive { color: var(--text); }
-.tabActive::after {
-  content: ""; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 2px;
-  background: var(--accent); border-radius: 2px;
+.tab svg { width: 15px; height: 15px; opacity: .85; }
+.tab:hover { color: #1F3C84; background: rgba(31,60,132,.06); }
+.tabActive, .tab.tabActive {
+  color: #fff;
+  background: linear-gradient(135deg,#1F3C84,#2A57B0);
+  box-shadow: 0 4px 12px rgba(31,60,132,.28), 0 1px 2px rgba(31,60,132,.2);
 }
+.tabActive svg { opacity: 1; }
 
 /* ---------- card ---------- */
 .card {
-  background: var(--card); border: 0.5px solid var(--border-2); border-radius: var(--radius);
-  box-shadow: var(--shadow-sm); padding: 24px; margin-bottom: 18px;
+  background: var(--card); border: 1px solid #EEF1F6; border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(16,30,68,.04), 0 8px 24px -12px rgba(16,30,68,.10);
+  padding: 24px; margin-bottom: 18px; transition: box-shadow .2s ease, transform .2s ease;
 }
+.card:hover { box-shadow: 0 1px 2px rgba(16,30,68,.05), 0 16px 40px -16px rgba(16,30,68,.16); }
 .cardTitle { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; color: var(--text); }
 .cardDesc { font-size: 13px; line-height: 1.5; color: var(--text-2); margin: 0 0 18px; }
 
