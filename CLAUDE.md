@@ -937,3 +937,15 @@ now just calls logout(); logout() (in useAuth.jsx) owns the animation AND the re
 window.location.replace('/login') after the hold. navigate is still used elsewhere in the
 file so the import stays. Lesson: when an async handler ends with its own redirect, callers
 must not also navigate synchronously.
+
+## 2026-06-20 — Login page white gap fix (commits adada8d, 234b396)
+.scene in src/pages/LoginPage.module.css had min-height:100vh but no explicit width and
+no solid fallback background; the gradient layers don't paint a solid colour everywhere, so
+the light global --bg (#F4F6F9 on html/body/#root) showed through at edges. Fix: added
+width:100%, min-height:100dvh, and background-color:#0e1c44. IMPORTANT: the background-color
+must come AFTER the `background:` gradient shorthand — placing it before let the shorthand
+reset it to transparent (first attempt adada8d looked applied but bgColor stayed transparent;
+234b396 reordered it and the navy fallback finally stuck). Verified live: every viewport edge
+samples rgb(14,28,68) and a 100vw/100vh red probe covers the whole page. Note: screenshots
+showed a white band right/bottom that was a CAPTURE artifact (screenshot frame larger than the
+browser window), NOT an in-page gap — confirmed via the red-probe test.
