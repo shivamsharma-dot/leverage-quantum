@@ -106,10 +106,15 @@ export function AuthProvider({ children }) {
       </div>`;
     document.body.appendChild(overlay);
 
-    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }) } catch {}
-    await new Promise(r => setTimeout(r, 1000));
-    overlay.style.animation = 'lqOut .3s ease forwards';
-    await new Promise(r => setTimeout(r, 260));
+    // Fire the logout request but don't block the animation on it (a slow/hung
+    // request must never freeze the overlay). Race it against a max wait.
+    const logoutReq = fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+    // Let the full sign-out choreography play out (~2.15s: logo flip, bars, sheen, text, line).
+    await new Promise(r => setTimeout(r, 2150));
+    // Ensure the server logout has at least been attempted before redirecting.
+    await Promise.race([logoutReq, new Promise(r => setTimeout(r, 800))]);
+    overlay.style.animation = 'lqOut .35s ease forwards';
+    await new Promise(r => setTimeout(r, 320));
     window.location.replace('/login')
   }
 
