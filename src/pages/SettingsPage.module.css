@@ -395,3 +395,72 @@
 .addInput { border-radius:10px !important; transition:border-color .15s, box-shadow .15s; }
 .addInput:focus { box-shadow:0 0 0 3px rgba(28,159,212,0.14); }
 .filterSelect { border-radius:10px !important; }
+
+/* ============================================================
+   Premium Data Sources rows (dsRow*)
+============================================================ */
+.dsList { display:flex; flex-direction:column; gap:10px; margin-top:4px; }
+.dsRow { display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:13px;
+          border:1px solid #EEF1F6; background:#fff; box-shadow:0 1px 2px rgba(16,30,68,.04);
+          transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+.dsRow:hover { transform:translateY(-2px); border-color:#D8E6F6; box-shadow:0 10px 24px -14px rgba(31,60,132,.20); }
+.dsIcon { width:40px; height:40px; border-radius:11px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+           color:#1F3C84; background:#E8EFF9; box-shadow:0 3px 10px rgba(31,60,132,.10); }
+.dsIcon svg { width:19px; height:19px; }
+.dsBody { flex:1; min-width:0; }
+.dsName { font-size:14px; font-weight:700; color:var(--text); letter-spacing:-0.01em; }
+.dsMeta { font-size:12px; color:var(--text-3); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dsStatus { flex:0 0 auto; font-size:11px; font-weight:700; color:#2E7D4F; background:#E9F8EF;
+             border:0.5px solid #C5EFD6; border-radius:999px; padding:4px 11px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+.dsStatus::before { content:''; width:7px; height:7px; border-radius:50%; background:#4CAE6F; box-shadow:0 0 0 3px rgba(76,174,111,.22); }
+
+/* ============================================================
+   Premium Page Visibility cards (pv*)
+============================================================ */
+.pvGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
+.pvCard { display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px;
+           border:1px solid #D1E9F7; background:#F4FBFF; cursor:pointer; user-select:none;
+           transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease, background .15s ease; }
+.pvCard:hover { transform:translateY(-2px); box-shadow:0 10px 22px -14px rgba(31,60,132,.22); }
+.pvCardHidden { border-color:#E6EAF1; background:#F8FAFC; }
+.pvIcon { width:34px; height:34px; border-radius:9px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+           background:#E3F5FD; color:#1577A0; transition:all .15s ease; }
+.pvIcon svg { width:15px; height:15px; }
+.pvCardHidden .pvIcon { background:#F1F5F9; color:#94A3B8; }
+.pvBody { flex:1; min-width:0; }
+.pvName { font-size:13px; font-weight:650; color:var(--text); letter-spacing:-0.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pvCardHidden .pvName { color:var(--text-3); }
+.pvSub { font-size:11px; color:var(--text-3); margin-top:1px; }
+.pvToggle { width:36px; height:20px; border-radius:11px; flex:0 0 auto; background:#1C9FD4; position:relative; transition:background .2s ease; }
+.pvCardHidden .pvToggle { background:#E2E8F0; }
+.pvKnob { position:absolute; top:2px; left:18px; width:16px; height:16px; border-radius:8px; background:#fff;
+           box-shadow:0 1px 3px rgba(0,0,0,.18); transition:left .2s ease; }
+.pvCardHidden .pvKnob { left:2px; }
+.pvReset { margin-top:14px; display:inline-flex; align-items:center; gap:6px; font-family:inherit; font-size:12px; font-weight:600;
+            color:#1577A0; background:#F0FBFF; border:0.5px solid #D1E9F7; border-radius:8px; padding:6px 12px; cursor:pointer; transition:all .15s ease; }
+.pvReset:hover { background:#E3F5FD; border-color:#B6E2F4; }
+.pvReset svg { width:12px; height:12px; }
+
+/* ============================================================
+   Premium Activity Log (al*)
+============================================================ */
+.alCard { border:1px solid #EEF1F6; border-radius:14px; overflow:hidden; box-shadow:var(--shadow-sm); margin-top:6px; }
+.alTable { width:100%; border-collapse:collapse; font-family:var(--font); font-size:12.5px; }
+.alHead th { text-align:left; font-size:10px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase;
+              color:var(--text-3); padding:11px 14px; white-space:nowrap;
+              background:#F7FAFE; border-bottom:1px solid #E6ECF5; }
+.alRow { border-bottom:0.5px solid #F4F5F7; transition:background .12s ease; }
+.alRow:nth-child(even) { background:#FBFCFE; }
+.alRow:hover { background:rgba(28,159,212,.06); }
+.alRow:last-child { border-bottom:none; }
+.alTd { padding:11px 14px; color:var(--text-2); white-space:nowrap; vertical-align:middle; }
+.alUserCell { display:flex; align-items:center; gap:9px; }
+.alAvatar { width:28px; height:28px; border-radius:8px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+             color:#fff; font-size:10px; font-weight:700; box-shadow:0 1px 4px rgba(15,23,42,.15); }
+.alUserName { font-weight:600; color:var(--text); }
+.alPage { color:var(--text); font-weight:600; }
+.alDetail { color:var(--text-2); font-size:11.5px; max-width:280px; overflow:hidden; text-overflow:ellipsis; }
+.alMuted { color:var(--text-3); font-size:11.5px; }
+.alTag { padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+.alFoot { padding:12px 16px; font-size:12px; color:var(--text-3); background:#FBFCFE; border-top:1px solid #F1F5F9; }
+.alHeaderRow { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:16px; }
