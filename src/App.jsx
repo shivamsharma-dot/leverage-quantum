@@ -41,7 +41,7 @@ const PAGE_TITLES = {
 }
 
 // ── Route fade transition ──────────────────────────────────────────────────────
-const FADE_STYLE = \`
+const FADE_STYLE = `
 @keyframes qFadeIn {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
@@ -50,7 +50,7 @@ const FADE_STYLE = \`
   animation: qFadeIn 0.42s cubic-bezier(0.22,0.61,0.36,1) both;
   will-change: opacity, transform;
 }
-\`
+`
 
 function getAllowedDashboards(role) {
   if (!role || role === 'admin' || role === 'viewer') return 'all'
@@ -72,7 +72,7 @@ function ProtectedRoute({ children, dashboardId }) {
   // Dynamic page title
   useEffect(() => {
     const base = PAGE_TITLES[location.pathname] || ''
-    document.title = base ? \`\${base} | Leverage Quantum\` : 'Leverage Quantum'
+    document.title = base ? `${base} | Leverage Quantum` : 'Leverage Quantum'
   }, [location.pathname])
 
   // Activity logging — page view + dwell time on leave
