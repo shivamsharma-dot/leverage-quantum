@@ -16,6 +16,7 @@ const MTDDashboard = lazy(() => import('./pages/MTDDashboard'))
 const MetaAdsDashboard = lazy(() => import('./pages/MetaAdsDashboard'))
 const GoogleAdsDashboard = lazy(() => import('./pages/GoogleAdsDashboard'))
 const ReferralDashboard = lazy(() => import('./pages/ReferralDashboard'))
+const LeadsAssignedDashboard = lazy(() => import('./pages/LeadsAssignedDashboard'))
 const AskAI = lazy(() => import('./pages/AskAI'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 
@@ -23,31 +24,33 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 
 // Page title map — dynamic titles per route
 const PAGE_TITLES = {
-  '/':                        'Summary',
-  '/dashboard/meta-ads':      'Meta Ads',
-  '/dashboard/google-ads':    'Google Ads',
-  '/dashboard/roas':          'ROAS',
-  '/dashboard/mtd':           'MTD',
-  '/dashboard/lead-quality':  'Lead Quality',
-  '/dashboard/channel-mix':   'Channel Mix',
-  '/dashboard/revenue':       'Revenue',
-  '/dashboard/lq-ops':        'QL Ops',
-  '/dashboard/whatsapp':      'WhatsApp',
-  '/ask-ai':                    'Ask AI',
-  '/settings':                'Settings',
+  '/': 'Summary',
+  '/dashboard/meta-ads': 'Meta Ads',
+  '/dashboard/google-ads': 'Google Ads',
+  '/dashboard/roas': 'ROAS',
+  '/dashboard/mtd': 'MTD',
+  '/dashboard/lead-quality': 'Lead Quality',
+  '/dashboard/channel-mix': 'Channel Mix',
+  '/dashboard/revenue': 'Revenue',
+  '/dashboard/lq-ops': 'QL Ops',
+  '/dashboard/whatsapp': 'WhatsApp',
+  '/dashboard/referral': 'Referral',
+  '/dashboard/leads-assigned': 'Leads Assigned',
+  '/ask-ai': 'Ask AI',
+  '/settings': 'Settings',
 }
 
 // ── Route fade transition ──────────────────────────────────────────────────────
-const FADE_STYLE = `
-  @keyframes qFadeIn {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .q-page-enter {
-    animation: qFadeIn 0.42s cubic-bezier(0.22,0.61,0.36,1) both;
-    will-change: opacity, transform;
-  }
-`
+const FADE_STYLE = \`
+@keyframes qFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.q-page-enter {
+  animation: qFadeIn 0.42s cubic-bezier(0.22,0.61,0.36,1) both;
+  will-change: opacity, transform;
+}
+\`
 
 function getAllowedDashboards(role) {
   if (!role || role === 'admin' || role === 'viewer') return 'all'
@@ -69,7 +72,7 @@ function ProtectedRoute({ children, dashboardId }) {
   // Dynamic page title
   useEffect(() => {
     const base = PAGE_TITLES[location.pathname] || ''
-    document.title = base ? `${base} | Leverage Quantum` : 'Leverage Quantum'
+    document.title = base ? \`\${base} | Leverage Quantum\` : 'Leverage Quantum'
   }, [location.pathname])
 
   // Activity logging — page view + dwell time on leave
@@ -123,7 +126,6 @@ function ProtectedRoute({ children, dashboardId }) {
   )
 }
 
-
 // Error boundary — catches React render crashes, shows clean fallback
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null } }
@@ -160,24 +162,25 @@ export default function App() {
       <CommandPalette />
       <ToastHost />
       <Suspense fallback={<div style={{minHeight:"60vh"}} />}>
-          <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/"                       element={<ProtectedRoute dashboardId="home">        <DashboardHome /></ProtectedRoute>} />
-        <Route path="/dashboard/roas"         element={<ProtectedRoute dashboardId="roas">        <ROASDashboard /></ProtectedRoute>} />
-        <Route path="/dashboard/mtd"          element={<ProtectedRoute dashboardId="mtd">         <MTDDashboard /></ProtectedRoute>} />
-        <Route path="/dashboard/lead-quality" element={<ProtectedRoute dashboardId="lead_quality"><LeadQualityDashboard /></ProtectedRoute>} />
-        <Route path="/dashboard/channel-mix"  element={<ProtectedRoute dashboardId="channel_mix"><ChannelMixDashboard /></ProtectedRoute>} />
-        <Route path="/dashboard/revenue"      element={<ProtectedRoute dashboardId="revenue">     <RevenueDashboard /></ProtectedRoute>} />
-        <Route path="/dashboard/lq-ops"       element={<ProtectedRoute dashboardId="lq_ops">      <LeadQualificationDashboard /></ProtectedRoute>} />
-        <Route path="/dashboard/referral" element={<ProtectedRoute dashboardId="referral"><ReferralDashboard /></ProtectedRoute>} />
-        <Route path="/dashboard/whatsapp"     element={<ProtectedRoute dashboardId="whatsapp">    <WhatsAppDashboard /></ProtectedRoute>} />
-        <Route path="/dashboard/meta-ads"     element={<ProtectedRoute dashboardId="meta_ads">    <MetaAdsDashboard /></ProtectedRoute>} />
-        <Route path="/dashboard/google-ads"   element={<ProtectedRoute dashboardId="google_ads">  <GoogleAdsDashboard /></ProtectedRoute>} />
-        <Route path="/ask-ai"                   element={<ProtectedRoute dashboardId="ask_ai">         <AskAI /></ProtectedRoute>} />
-        <Route path="/settings"               element={<ProtectedRoute dashboardId="settings">    <SettingsPage /></ProtectedRoute>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-          </Suspense>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<ProtectedRoute dashboardId="home"> <DashboardHome /></ProtectedRoute>} />
+          <Route path="/dashboard/roas" element={<ProtectedRoute dashboardId="roas"> <ROASDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/mtd" element={<ProtectedRoute dashboardId="mtd"> <MTDDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/lead-quality" element={<ProtectedRoute dashboardId="lead_quality"><LeadQualityDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/channel-mix" element={<ProtectedRoute dashboardId="channel_mix"><ChannelMixDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/revenue" element={<ProtectedRoute dashboardId="revenue"> <RevenueDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/lq-ops" element={<ProtectedRoute dashboardId="lq_ops"> <LeadQualificationDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/referral" element={<ProtectedRoute dashboardId="referral"><ReferralDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/leads-assigned" element={<ProtectedRoute dashboardId="leads_assigned"><LeadsAssignedDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/whatsapp" element={<ProtectedRoute dashboardId="whatsapp"> <WhatsAppDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/meta-ads" element={<ProtectedRoute dashboardId="meta_ads"> <MetaAdsDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/google-ads" element={<ProtectedRoute dashboardId="google_ads"> <GoogleAdsDashboard /></ProtectedRoute>} />
+          <Route path="/ask-ai" element={<ProtectedRoute dashboardId="ask_ai"> <AskAI /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute dashboardId="settings"> <SettingsPage /></ProtectedRoute>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </ErrorBoundary>
   )
-}
+    }
