@@ -962,3 +962,10 @@ browser window), NOT an in-page gap — confirmed via the red-probe test.
 - Verified live on profile/data/reports tabs. SR fee, visibility toggles, report config backend untouched.
 - Backups: /tmp/SettingsPage.jsx.revbak, /tmp/SettingsPage.module.css.revbak
 - TODO: deeper polish on Data Sources rows + page-visibility cards (heavy inline styles), Activity Log table, Appearance config grids.
+
+## 2026-06-22 — Leads Assigned reframed around qualified leads (commits 957b012, 1d2b0e7)
+Reworked src/pages/LeadsAssignedDashboard.jsx so the page is centred on QUALIFIED leads, not raw assignment volume. Qualified is defined explicitly: futwork_disposition === 'qualified' OR superbot_disposition === 'superbotqualified' (helper isQualified + norm). Replaced the old ne() any-non-blank test, which happened to work but was fragile.
+- KPI hero row now: QUALIFIED LEADS (8,235), QUALIFICATION RATE (6.8%), LEADS ASSIGNED (1,21,006, context only), QUALIFIED OWNERS (246 of 290), AVG QUALIFIED / AGENT (per active agent).
+- Trend chart = qualified leads per day (brand green). Leaderboard = top owners by qualified (ranked by qualified, share-of-qualified labels). Donut = qualified by source (Futwork ~8,233 vs Floor 2). Table = Qualified / Assigned / Qual % / Share of Qual, sorted by qualified.
+- Data source unchanged: published sheet gid=1262736672. Brand colours only; shared dashboardKit; ReferralDashboard remains the reference.
+- Lesson: the GitHub web editor (CodeMirror) did not register an execCommand-only full replace as a dirty change on the first attempt, so commit 957b012 silently saved the OLD file (built green but wrong). Fix: after programmatic replace, make one real keystroke (type a space + backspace) so GitHub marks the buffer dirty, verify the new code is actually in the editor, then commit. The corrected build (1d2b0e7) is live in Production and verified on the live panel.
