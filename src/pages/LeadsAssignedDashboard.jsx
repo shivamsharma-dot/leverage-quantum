@@ -216,7 +216,7 @@ export default function LeadsAssignedDashboard() {
           <div style={{ display:'grid', gridTemplateColumns:'repeat(5, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
             <PremKPI label='LEADS ASSIGNED' value={fmtN(M.total)} sub='total opportunities' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label='OWNERS' value={fmtN(M.owners)} sub={fmtN(M.agents) + ' agents'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
-            <PremKPI label='TOP OWNER' value={ownerName(M.topOwner?.email)} sub={M.topOwner ? fmtN(M.topOwner.count) + ' leads' : '\u2014'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} />
+            <PremKPI label='TOP OWNER' value={ownerName(M.topOwner?.email)} sub={M.topOwner ? fmtN(M.topOwner.count) + ' leads' : '—'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} />
             <PremKPI label='QUALIFIED' value={fmtN(M.qualified)} sub={pct(M.qualified, M.total) + ' of assigned'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
             <PremKPI label='AVG / AGENT' value={fmtN(M.avgPerAgent)} sub='leads per agent' accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.bot} />
           </div>
@@ -258,7 +258,7 @@ export default function LeadsAssignedDashboard() {
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10, marginBottom:14 }}>
               <div>
                 <div style={{ fontSize:14, fontWeight:800, color:C.text, letterSpacing:'-0.2px' }}>Leads by owner</div>
-                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{fmtN(M.ownerArr.length)} owners \u00b7 {fmtN(M.total)} leads assigned</div>
+                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{fmtN(M.ownerArr.length)} owners · {fmtN(M.total)} leads assigned</div>
               </div>
             </div>
             <div style={{ overflowX:'auto' }}>
