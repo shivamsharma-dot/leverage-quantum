@@ -41,7 +41,8 @@ function parseD(s) {
   return new Date(+m[3], +m[1] - 1, +m[2]);
 }
 const num = v => { const n = parseFloat(String(v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n; };
-const ne = v => v != null && String(v).trim() !== '';
+const norm = v => String(v == null ? '' : v).trim().toLowerCase();
+const isQualified = r => norm(r.futwork_disposition) === 'qualified' || norm(r.superbot_disposition) === 'superbotqualified';
 const dKey = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 const dLabel = d => d.getDate() + ' ' + MN[d.getMonth()];
 const SYSTEM_OWNERS = ['futwork@leverageedu.com', 'superbot@leverageedu.com', 'futwork.ai@leverageedu.com', 'leverage@leadsquared.com'];
@@ -125,36 +126,46 @@ export default function LeadsAssignedDashboard() {
   const M = useMemo(() => {
     const all = filtered;
     let total = 0, qualified = 0;
-    const byOwner = {}, bySource = {}, byDate = {};
+    const byOwner = {}, srcAssigned = {}, srcQualified = {}, byDate = {};
     all.forEach(r => {
       const c = num(r.opp_count);
       total += c;
       const oe = r.opportunity_owner_email || 'Unassigned';
       if (!byOwner[oe]) byOwner[oe] = { email: oe, count: 0, qualified: 0, system: isSystem(oe) };
       byOwner[oe].count += c;
-      const isQ = ne(r.futwork_disposition) || ne(r.superbot_disposition);
-      if (isQ) { qualified += c; byOwner[oe].qualified += c; }
       const src = (r.lead_source || 'unknown').toLowerCase();
-      bySource[src] = (bySource[src] || 0) + c;
+      srcAssigned[src] = (srcAssigned[src] || 0) + c;
       const d = parseD(r.opportunity_created_date);
-      if (d) { const k = dKey(d); if (!byDate[k]) byDate[k] = { d, count: 0 }; byDate[k].count += c; }
+      const q = isQualified(r);
+      if (q) {
+        qualified += c;
+        byOwner[oe].qualified += c;
+        srcQualified[src] = (srcQualified[src] || 0) + c;
+        if (d) { const k = dKey(d); if (!byDate[k]) byDate[k] = { d, count: 0 }; byDate[k].count += c; }
+      }
     });
 
-    const ownerArr = Object.values(byOwner).sort((a, b) => b.count - a.count);
+    const ownerArr = Object.values(byOwner).sort((a, b) => b.qualified - a.qualified || b.count - a.count);
     const agentArr = ownerArr.filter(o => !o.system);
     const owners = ownerArr.length;
     const agents = agentArr.length;
+    const qualifiedOwners = ownerArr.filter(o => o.qualified > 0).length;
     const topOwner = ownerArr[0];
 
-    const leaderboard = ownerArr.slice(0, 10).map(o => ({ name: ownerName(o.email), count: o.count }));
+    const leaderboard = ownerArr.filter(o => o.qualified > 0).slice(0, 10).map(o => ({ name: ownerName(o.email), count: o.qualified }));
 
-    const split = Object.keys(bySource).map(s => ({ name: s.charAt(0).toUpperCase() + s.slice(1), value: bySource[s] })).sort((a, b) => b.value - a.value);
+    const split = Object.keys(srcAssigned).map(s => ({
+      name: s.charAt(0).toUpperCase() + s.slice(1),
+      value: srcQualified[s] || 0,
+    })).sort((a, b) => b.value - a.value);
 
     const trend = Object.values(byDate).sort((a, b) => a.d - b.d).map(x => ({ date: dLabel(x.d), count: x.count }));
 
-    const avgPerAgent = agents ? agentArr.reduce((s, o) => s + o.count, 0) / agents : 0;
+    const activeAgents = agentArr.filter(o => o.qualified > 0).length;
+    const avgQualPerAgent = activeAgents ? agentArr.reduce((s, o) => s + o.qualified, 0) / activeAgents : 0;
+    const qualRate = total ? (qualified / total) * 100 : 0;
 
-    return { total, qualified, owners, agents, topOwner, leaderboard, split, trend, ownerArr, avgPerAgent };
+    return { total, qualified, qualRate, owners, agents, qualifiedOwners, topOwner, leaderboard, split, trend, ownerArr, avgQualPerAgent };
   }, [filtered]);
 
   const totalPages = Math.max(1, Math.ceil(M.ownerArr.length / PAGE_SIZE));
@@ -214,34 +225,34 @@ export default function LeadsAssignedDashboard() {
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
 
           <div style={{ display:'grid', gridTemplateColumns:'repeat(5, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
+            <PremKPI label='QUALIFIED LEADS' value={fmtN(M.qualified)} sub='qualified assignments' accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
+            <PremKPI label='QUALIFICATION RATE' value={M.qualRate.toFixed(1) + '%'} sub={fmtN(M.qualified) + ' of ' + fmtN(M.total)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} />
             <PremKPI label='LEADS ASSIGNED' value={fmtN(M.total)} sub='total opportunities' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-            <PremKPI label='OWNERS' value={fmtN(M.owners)} sub={fmtN(M.agents) + ' agents'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
-            <PremKPI label='TOP OWNER' value={ownerName(M.topOwner?.email)} sub={M.topOwner ? fmtN(M.topOwner.count) + ' leads' : '—'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} />
-            <PremKPI label='QUALIFIED' value={fmtN(M.qualified)} sub={pct(M.qualified, M.total) + ' of assigned'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
-            <PremKPI label='AVG / AGENT' value={fmtN(M.avgPerAgent)} sub='leads per agent' accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.bot} />
+            <PremKPI label='QUALIFIED OWNERS' value={fmtN(M.qualifiedOwners)} sub={'of ' + fmtN(M.owners) + ' owners'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            <PremKPI label='AVG QUALIFIED / AGENT' value={fmtN(Math.round(M.avgQualPerAgent))} sub='per active agent' accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.bot} />
           </div>
 
           <Card>
-            {sectionTitle('Leads assigned per day', 'daily volume of opportunities assigned')}
+            {sectionTitle('Qualified leads per day', 'daily volume of qualified assignments')}
             <ResponsiveContainer width='100%' height={280}>
               <AreaChart data={M.trend} margin={{ left:0, right:20, top:10, bottom:4 }}>
-                <defs><linearGradient id='laArea' x1='0' y1='0' x2='0' y2='1'><stop offset='5%' stopColor={C.navy} stopOpacity={0.32} /><stop offset='95%' stopColor={C.navy} stopOpacity={0.02} /></linearGradient></defs>
+                <defs><linearGradient id='laArea' x1='0' y1='0' x2='0' y2='1'><stop offset='5%' stopColor={C.green} stopOpacity={0.32} /><stop offset='95%' stopColor={C.green} stopOpacity={0.02} /></linearGradient></defs>
                 <CartesianGrid vertical={false} stroke={C.border} />
                 <XAxis dataKey='date' tick={axis} axisLine={false} tickLine={false} />
                 <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
                 <Tooltip content={<BrandTooltip />} />
-                <Area type='monotone' dataKey='count' name='Leads assigned' stroke={C.navy} strokeWidth={2.5} fill='url(#laArea)' />
+                <Area type='monotone' dataKey='count' name='Qualified leads' stroke={C.green} strokeWidth={2.5} fill='url(#laArea)' />
               </AreaChart>
             </ResponsiveContainer>
           </Card>
 
           <div style={grid2}>
             <Card>
-              {sectionTitle('Top owners by leads assigned', 'highest assigned volume (incl. pools)')}
+              {sectionTitle('Top owners by qualified leads', 'highest qualified assignments (agents + pools)')}
               <RankedBars data={M.leaderboard} labelKey='name' max={M.leaderboard[0]?.count || 0} total={M.leaderboard.reduce((a, b) => a + b.count, 0)} colorFn={brandColor} showRank />
             </Card>
             <Card>
-              {sectionTitle('Source split', 'futwork vs floor assignment')}
+              {sectionTitle('Qualified by source', 'futwork vs floor qualified leads')}
               <ResponsiveContainer width='100%' height={280}>
                 <PieChart>
                   <Pie data={M.split} dataKey='value' nameKey='name' innerRadius={62} outerRadius={100} paddingAngle={2}>
@@ -258,14 +269,14 @@ export default function LeadsAssignedDashboard() {
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10, marginBottom:14 }}>
               <div>
                 <div style={{ fontSize:14, fontWeight:800, color:C.text, letterSpacing:'-0.2px' }}>Leads by owner</div>
-                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{fmtN(M.ownerArr.length)} owners · {fmtN(M.total)} leads assigned</div>
+                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{fmtN(M.ownerArr.length)} owners · {fmtN(M.qualified)} qualified of {fmtN(M.total)} assigned · ranked by qualified</div>
               </div>
             </div>
             <div style={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontFamily:FONT }}>
                 <thead>
                   <tr>
-                    {['#', 'Owner', 'Type', 'Leads Assigned', 'Qualified', 'Qual %', 'Share'].map((h, hi) => (
+                    {['#', 'Owner', 'Type', 'Qualified', 'Assigned', 'Qual %', 'Share of Qual'].map((h, hi) => (
                       <th key={h} style={{ textAlign: hi <= 2 ? 'left' : 'right', fontSize:10.5, fontWeight:700, color:C.muted, letterSpacing:0.4, padding:'10px 12px', borderBottom:'0.5px solid ' + C.border, textTransform:'uppercase' }}>{h}</th>
                     ))}
                   </tr>
@@ -281,10 +292,10 @@ export default function LeadsAssignedDashboard() {
                         <td style={{ fontSize:11, padding:'10px 12px', borderBottom:'0.5px solid ' + C.border }}>
                           <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:6, color: o.system ? C.blue : C.navy, background: o.system ? C.blueBg : C.navyBg }}>{o.system ? 'Pool' : 'Agent'}</span>
                         </td>
-                        <td style={{ ...tdR, fontWeight:800, color:C.text }}>{fmtN(o.count)}</td>
-                        <td style={tdR}>{fmtN(o.qualified)}</td>
-                        <td style={{ ...tdR, color:C.green, fontWeight:700 }}>{pct(o.qualified, o.count)}</td>
-                        <td style={{ ...tdR, color:C.navy, fontWeight:700 }}>{pct(o.count, M.total)}</td>
+                        <td style={{ ...tdR, fontWeight:800, color:C.green }}>{fmtN(o.qualified)}</td>
+                        <td style={tdR}>{fmtN(o.count)}</td>
+                        <td style={{ ...tdR, color:C.text, fontWeight:700 }}>{pct(o.qualified, o.count)}</td>
+                        <td style={{ ...tdR, color:C.navy, fontWeight:700 }}>{pct(o.qualified, M.qualified)}</td>
                       </tr>
                     );
                   })}
