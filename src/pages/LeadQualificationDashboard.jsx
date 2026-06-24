@@ -13,6 +13,11 @@ import { usePresence } from '../hooks/usePresence'
 import { useAuth } from '../hooks/useAuth'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=0&single=true&output=csv'
+const MONTHLY_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=2053851581&single=true&output=csv'
+const QL_VIEWS = [
+  { id: 'daily', label: 'Daily QLs', csv: SHEET_CSV },
+  { id: 'monthly', label: 'Monthly QLs', csv: MONTHLY_CSV },
+]
 
 const C = {
   navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F',
@@ -572,6 +577,9 @@ const BrandTooltip = ({ active, payload, label, fmt }) => {
 
 export default function LeadQualificationDashboard() {
   const [rows, setRows]             = useState([])
+  const [monthlyRows, setMonthlyRows] = useState([])
+  const [view, setView]             = useState('daily')
+  const [selPeriod, setSelPeriod]   = useState('all')
   const [months, setMonths]         = useState([])
   const [selMonth, setSelMonth]     = useState('')
   const [selProvider, setSelProvider] = useState('All')
@@ -599,44 +607,52 @@ export default function LeadQualificationDashboard() {
     setLoading(true)
     const t0 = Date.now()
     try {
-      const cached = getSession('qlops')
+      const cfg = QL_VIEWS.find(v => v.id === view) || QL_VIEWS[0]
+      const cacheKey = 'qlops_' + cfg.id
+      const cached = getSession(cacheKey)
       let csv
       if (!bust && cached) {
         csv = cached.data
       } else {
-        const url = bust ? SHEET_CSV + '&_=' + Date.now() : SHEET_CSV
+        const url = bust ? cfg.csv + '&_=' + Date.now() : cfg.csv
         const res = await fetch(url)
         csv = await res.text()
-        setSession('qlops', csv)
+        setSession(cacheKey, csv)
       }
       const parsed = parseCSV(csv)
-        // Normalize month to clean 'Mon-YYYY' from qualified_date (raw
-        // qualified_month column mixes '01-Apr-2026','Apr-2026' & stray values).
-        const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-        const _norm=(raw)=>{ const m=String(raw||'').match(/([A-Za-z]{3})[a-z]*[-\s]*(\d{4})/); return m?(m[1][0].toUpperCase()+m[1].slice(1,3).toLowerCase()+'-'+m[2]):'' }
-        parsed.forEach(r=>{ const d=new Date(r.qualified_date); if(!isNaN(d)){ r.month=MON[d.getMonth()]+'-'+d.getFullYear() } else { const c=_norm(r.month); r.month = c || '' } })
-      setRows(parsed)
-      // Build month list sorted by actual qualified_date (earliest per month)
-      const monthMap = {}
-      parsed.forEach(r => {
-        const dateVal = r.qualified_date
-        if (r.month && dateVal) {
-          // keep the earliest date per month so sort is stable
-          if (!monthMap[r.month] || dateVal < monthMap[r.month])
-            monthMap[r.month] = dateVal
-        }
-      })
-      const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
-        .sort((a, b) => new Date(monthMap[a] || 0) - new Date(monthMap[b] || 0))
-      setMonths(ms)
-      setMonthStartMap(monthMap)
-      const _now=new Date(); const _curKey=MON[_now.getMonth()]+'-'+_now.getFullYear()
-        const _def = ms.includes(_curKey) ? _curKey : (ms[ms.length-1] || '')
-        setSelMonth(prev => prev || _def)
+      if (cfg.id !== 'daily') {
+        setMonthlyRows(parsed)
+      } else {
+
+          // Normalize month to clean 'Mon-YYYY' from qualified_date (raw
+          // qualified_month column mixes '01-Apr-2026','Apr-2026' & stray values).
+          const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+          const _norm=(raw)=>{ const m=String(raw||'').match(/([A-Za-z]{3})[a-z]*[-\s]*(\d{4})/); return m?(m[1][0].toUpperCase()+m[1].slice(1,3).toLowerCase()+'-'+m[2]):'' }
+          parsed.forEach(r=>{ const d=new Date(r.qualified_date); if(!isNaN(d)){ r.month=MON[d.getMonth()]+'-'+d.getFullYear() } else { const c=_norm(r.month); r.month = c || '' } })
+        setRows(parsed)
+        // Build month list sorted by actual qualified_date (earliest per month)
+        const monthMap = {}
+        parsed.forEach(r => {
+          const dateVal = r.qualified_date
+          if (r.month && dateVal) {
+            // keep the earliest date per month so sort is stable
+            if (!monthMap[r.month] || dateVal < monthMap[r.month])
+              monthMap[r.month] = dateVal
+          }
+        })
+        const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
+          .sort((a, b) => new Date(monthMap[a] || 0) - new Date(monthMap[b] || 0))
+        setMonths(ms)
+        setMonthStartMap(monthMap)
+        const _now=new Date(); const _curKey=MON[_now.getMonth()]+'-'+_now.getFullYear()
+          const _def = ms.includes(_curKey) ? _curKey : (ms[ms.length-1] || '')
+          setSelMonth(prev => prev || _def)
+        
+      }
       setLastSync(new Date())
     } catch (e) { console.error('QL fetch', e) }
     finally { setTimeout(() => setLoading(false), Math.max(0, 750 - (Date.now() - t0))) }
-  }, [])
+  }, [view])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -706,6 +722,51 @@ export default function LeadQualificationDashboard() {
   const sources = useMemo(() =>
     ['All', ...[...new Set(dateFilteredRows.map(r => r.source))].filter(Boolean).sort()]
   , [dateFilteredRows])
+
+  // ===== MONTHLY VIEW (Monthly QLs sheet) =====
+  const MQ_METRICS = useMemo(() => ([
+    { key: 'opp_count',       label: 'Total Opp Count' },
+    { key: 'floor_queued',    label: 'Floor Queued' },
+    { key: 'futwork_queued',  label: 'Futwork Queued' },
+    { key: 'superbot_queued', label: 'Superbot Queued' },
+    { key: 'futwork_ai_queued',  label: 'Futwork AI Queued' },
+    { key: 'futwork_qualified',  label: 'Futwork Qualified' },
+    { key: 'superbot_qualified', label: 'Superbot Qualified' },
+    { key: 'futwork_ai_qualified', label: 'Futwork AI Qualified' },
+  ]), [])
+  const mNum = (x) => { const n = parseFloat(String(x).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n }
+  const MQ_MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const periodKey = (p) => { const m = String(p||'').match(/([A-Za-z]{3})[a-z]*-(\d{4})/); return m ? (parseInt(m[2],10) * 12 + MQ_MON.indexOf(m[1])) : 0 }
+  const monthlyPeriods = useMemo(() =>
+    [...new Set(monthlyRows.map(r => r.period))].filter(Boolean).sort((a,b) => periodKey(a) - periodKey(b))
+  , [monthlyRows])
+  const periodOptions = useMemo(() => ['all', ...monthlyPeriods], [monthlyPeriods])
+  const monthlyFiltered = useMemo(() =>
+    selPeriod === 'all' ? monthlyRows : monthlyRows.filter(r => r.period === selPeriod)
+  , [monthlyRows, selPeriod])
+  const monthlyTotals = useMemo(() => {
+    const t = {}
+    MQ_METRICS.forEach(m => { t[m.key] = monthlyFiltered.reduce((s,r) => s + mNum(r[m.key]), 0) })
+    return t
+  }, [monthlyFiltered, MQ_METRICS])
+  const monthlyBySource = useMemo(() => {
+    const map = {}
+    monthlyFiltered.forEach(r => {
+      const k = r.source || 'Unknown'
+      if (!map[k]) map[k] = { source: k, qualified: 0, queued: 0 }
+      map[k].qualified += mNum(r.futwork_qualified) + mNum(r.superbot_qualified) + mNum(r.futwork_ai_qualified)
+      map[k].queued += mNum(r.floor_queued)
+    })
+    return Object.values(map).sort((a,b) => b.qualified - a.qualified)
+  }, [monthlyFiltered])
+  const monthlyByPeriod = useMemo(() =>
+    monthlyPeriods.map(p => {
+      const rs = monthlyRows.filter(r => r.period === p)
+      const row = { period: p }
+      MQ_METRICS.forEach(m => { row[m.key] = rs.reduce((s,r) => s + mNum(r[m.key]), 0) })
+      return row
+    })
+  , [monthlyRows, monthlyPeriods, MQ_METRICS])
 
   // 4. Apply provider + source dropdowns
   const filtered = useMemo(() => dateFilteredRows.filter(r =>
@@ -1088,8 +1149,10 @@ export default function LeadQualificationDashboard() {
                 </>
               )}
             </div>
-            <Dropdown label="Provider" options={providers} value={selProvider} minWidth={100} onChange={v => { setSelProvider(v); setPage(0) }} />
-            <Dropdown label="Source" options={sources} value={selSource} minWidth={100} onChange={v => { setSelSource(v); setPage(0) }} />
+            <Dropdown label="View" options={QL_VIEWS.map(v => ({ value: v.id, label: v.label }))} value={view} minWidth={150} onChange={v => { setView(v); setSelPeriod('all'); setPage(0) }} />
+              {view === 'monthly' && <Dropdown label="Period" options={periodOptions} value={selPeriod} minWidth={140} onChange={v => setSelPeriod(v)} />}
+              {view === 'daily' && <><Dropdown label="Provider" options={providers} value={selProvider} minWidth={100} onChange={v => { setSelProvider(v); setPage(0) }} />
+            <Dropdown label="Source" options={sources} value={selSource} minWidth={100} onChange={v => { setSelSource(v); setPage(0) }} /></>}
             {lastSync && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {lastSync.toLocaleTimeString()}</span>}
             <button onClick={() => loadData(true)} disabled={loading} className="lqRefreshBtn"
               style={{
@@ -1156,10 +1219,11 @@ export default function LeadQualificationDashboard() {
 
         {/* ── BODY ─────────────────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
-          {loading && rows.length === 0 ? (
+          {loading && rows.length === 0 && monthlyRows.length === 0 ? (
           <DashboardSkeleton/>
         ) : (
             <>
+            {view === 'daily' && (<>
               {/* ── PREMIUM KPI ROW ── */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 18 }}>
                 <PremKPI label="Total Qualified" value={fmtN(totals.total)} sub={selMonth}                       delta={totals.totalDelta} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
@@ -1473,6 +1537,82 @@ export default function LeadQualificationDashboard() {
                   )}
                 </div>
               </Card>
+            </>)}
+            {view === 'monthly' && (<>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 14, marginBottom: 14 }}>
+                <PremKPI label="Total Opp Count" value={fmtN(monthlyTotals.opp_count)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
+                <PremKPI label="Floor Queued" value={fmtN(monthlyTotals.floor_queued)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#1C9FD4" accentBg="#E3F4FB" icon={KPI_ICONS.total} />
+                <PremKPI label="Futwork Queued" value={fmtN(monthlyTotals.futwork_queued)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
+                <PremKPI label="Superbot Queued" value={fmtN(monthlyTotals.superbot_queued)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#29B9C3" accentBg="#E4F7F8" icon={KPI_ICONS.bot} />
+                <PremKPI label="Futwork AI Queued" value={fmtN(monthlyTotals.futwork_ai_queued)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#4CAE6F" accentBg="#E8F6EE" icon={KPI_ICONS.ai} />
+                <PremKPI label="Futwork Qualified" value={fmtN(monthlyTotals.futwork_qualified)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
+                <PremKPI label="Superbot Qualified" value={fmtN(monthlyTotals.superbot_qualified)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#29B9C3" accentBg="#E4F7F8" icon={KPI_ICONS.bot} />
+                <PremKPI label="Futwork AI Qualified" value={fmtN(monthlyTotals.futwork_ai_qualified)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#4CAE6F" accentBg="#E8F6EE" icon={KPI_ICONS.ai} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                <Card title="Qualified by source" sub={selPeriod === 'all' ? 'All months · queued vs qualified' : selPeriod}>
+                  <div style={{ padding: '4px 2px' }}>
+                    {monthlyBySource.map((s, i) => {
+                      const maxQ = Math.max(...monthlyBySource.map(x => x.qualified), 1)
+                      return (
+                        <div key={i} style={{ marginBottom: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 4, fontFamily: FONT }}>
+                            <span>{s.source}</span>
+                            <span>{fmtN(s.qualified)} <span style={{ color: C.muted, fontWeight: 500 }}>({pct(s.qualified, s.queued)} conv)</span></span>
+                          </div>
+                          <div style={{ height: 8, background: '#EEF2FB', borderRadius: 6, overflow: 'hidden' }}>
+                            <div style={{ width: (s.qualified / maxQ * 100) + '%', height: '100%', background: 'linear-gradient(90deg,#1F3C84,#29B9C3)', borderRadius: 6 }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {monthlyBySource.length === 0 && <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT, padding: 12 }}>No data for this selection.</div>}
+                  </div>
+                </Card>
+                <Card title="Overall queued → QL conversion" sub={selPeriod === 'all' ? 'All months combined' : selPeriod}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '28px 12px' }}>
+                    <div style={{ fontSize: 48, fontWeight: 800, color: C.navy, fontFamily: FONT, lineHeight: 1 }}>{pct(monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified, monthlyTotals.floor_queued)}</div>
+                    <div style={{ fontSize: 13, color: C.muted, marginTop: 8, fontFamily: FONT }}>{fmtN(monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified)} qualified of {fmtN(monthlyTotals.floor_queued)} queued</div>
+                  </div>
+                </Card>
+              </div>
+              {selPeriod === 'all' && (
+                <Card title="Monthly breakdown" sub="All months · summed across sources">
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT, fontSize: 12.5 }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.06em', borderBottom: `1.5px solid ${C.border}` }}>
+                          <th style={{ padding: '10px 12px', position: 'sticky', left: 0, background: 'var(--card)' }}>Period</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Total Opp Count</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Floor Queued</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork Queued</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Superbot Queued</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork AI Queued</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork Qualified</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Superbot Qualified</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork AI Qualified</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlyByPeriod.map((row, i) => (
+                          <tr key={i} style={{ borderBottom: `0.5px solid ${C.border}`, background: i % 2 ? '#FAFBFD' : 'transparent' }}>
+                            <td style={{ padding: '9px 12px', fontWeight: 700, color: C.navy, position: 'sticky', left: 0, background: i % 2 ? '#FAFBFD' : 'var(--card)' }}>{row.period}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.opp_count)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.floor_queued)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_queued)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.superbot_queued)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_ai_queued)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_qualified)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_ai_qualified)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+            </>)}
             </>
           )}
         </div>
