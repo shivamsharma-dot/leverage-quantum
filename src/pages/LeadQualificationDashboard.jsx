@@ -26,7 +26,7 @@ const C = {
 }
 const PROVIDER_COLORS = { Futwork: C.navy, 'Futwork AI': C.cyan, Superbot: C.blue }
 
-// On-brand ordered palette â navy â blue â cyan â green, then tinted repeats.
+// On-brand ordered palette Ã¢ÂÂ navy Ã¢ÂÂ blue Ã¢ÂÂ cyan Ã¢ÂÂ green, then tinted repeats.
 // Used for multi-category bars so everything stays within brand colors.
 const BRAND_RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F', '#3A5BA0', '#52B5DC', '#5BCAD2', '#73C58E']
 const brandColor = i => BRAND_RAMP[i % BRAND_RAMP.length]
@@ -34,10 +34,10 @@ const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 const PAGE_SIZE = 10
 
 function fmtN(n) {
-  if (!n && n !== 0) return 'â'
+  if (!n && n !== 0) return 'Ã¢ÂÂ'
   return Math.round(n).toLocaleString('en-IN')
 }
-function pct(a, b) { return b > 0 ? ((a / b) * 100).toFixed(1) + '%' : 'â' }
+function pct(a, b) { return b > 0 ? ((a / b) * 100).toFixed(1) + '%' : 'Ã¢ÂÂ' }
 
 function parseCSV(csv) {
   const rows = csv.trim().split('\n').map(r => {
@@ -70,7 +70,36 @@ function parseCSV(csv) {
   }))
 }
 
-/* ââ Shared UI components ââââââââââââââââââââââââââââââââââââââââââââââ */
+function parseMonthlyCSV(csv) {
+  const rows = csv.trim().split('\n').map(r => {
+    const cols = []; let buf = '', inQ = false
+    for (const ch of r) {
+      if (ch === '"') { inQ = !inQ }
+      else if (ch === ',' && !inQ) { cols.push(buf.trim()); buf = '' }
+      else buf += ch
+    }
+    cols.push(buf.trim())
+    return cols
+  })
+  const [hdr, ...data] = rows
+  const h = k => hdr.map(x => x.toLowerCase().trim()).indexOf(k.toLowerCase())
+  const num = v => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n }
+  return data.filter(r => r.length > 1 && (r[h('period')] || '').trim()).map(r => ({
+    period:               (r[h('period')] || '').trim(),
+    source:               (r[h('source')] || '').trim(),
+    sub_source:           (r[h('sub_source')] || '').trim(),
+    opp_count:            num(r[h('opp_count')]),
+    floor_queued:         num(r[h('floor_queued')]),
+    futwork_queued:       num(r[h('futwork_queued')]),
+    superbot_queued:      num(r[h('superbot_queued')]),
+    futwork_ai_queued:    num(r[h('futwork_ai_queued')]),
+    futwork_qualified:    num(r[h('futwork_qualified')]),
+    superbot_qualified:   num(r[h('superbot_qualified')]),
+    futwork_ai_qualified: num(r[h('futwork_ai_qualified')]),
+  }))
+}
+
+/* Ã¢ÂÂÃ¢ÂÂ Shared UI components Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ */
 
 
 const Sparkline = ({ data, color='#1C9FD4', height=28, width=72 }) => {
@@ -98,10 +127,10 @@ const Sparkline = ({ data, color='#1C9FD4', height=28, width=72 }) => {
 }
 
 
-/* Brand color ramp â ONLY brand colors, used for multi-series breakdowns */
+/* Brand color ramp Ã¢ÂÂ ONLY brand colors, used for multi-series breakdowns */
 const RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F']
 
-/* KPI icons â crisp monochrome SVGs, brand-coloured */
+/* KPI icons Ã¢ÂÂ crisp monochrome SVGs, brand-coloured */
 const KPI_ICONS = {
   total: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>,
   agent: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
@@ -110,7 +139,7 @@ const KPI_ICONS = {
   globe: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>,
 }
 
-/* Premium KPI card â matches Meta Ads / WhatsApp standard: 3px accent top border, tinted icon square, delta pill */
+/* Premium KPI card Ã¢ÂÂ matches Meta Ads / WhatsApp standard: 3px accent top border, tinted icon square, delta pill */
 const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon }) => {
   const up = delta != null && delta >= 0
   return (
@@ -139,7 +168,7 @@ const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon }) => {
   )
 }
 
-/* Horizontal ranked bar list â premium look for category breakdowns */
+/* Horizontal ranked bar list Ã¢ÂÂ premium look for category breakdowns */
 const RankedBars = ({ data, labelKey, max, total, colorFn, showRank }) => {
   if (!data || data.length === 0) return <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No data</div>
   return (
@@ -210,7 +239,7 @@ const DonutLabel = ({ cx, cy, total, label }) => (
   </text>
 )
 
-/* Custom production-grade dropdown â replaces all native <select> */
+/* Custom production-grade dropdown Ã¢ÂÂ replaces all native <select> */
 const Dropdown = ({ options, value, onChange, label, minWidth = 120 }) => {
   const [open, setOpen] = React.useState(false)
   const ref = React.useRef(null)
@@ -289,7 +318,7 @@ const Dropdown = ({ options, value, onChange, label, minWidth = 120 }) => {
 }
 
 
-/* ââ Production date picker âââââââââââââââââââââââââââââââââââââââââââ */
+/* Ã¢ÂÂÃ¢ÂÂ Production date picker Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ */
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
 
@@ -451,7 +480,7 @@ function DateRangePicker({ from, to, onChange, onClose }) {
 const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
   const [open, setOpen] = React.useState(false)
   const views = [
-    { key:'day',      label:'Day on day',     desc:'One row per date Â· provider Â· campaign' },
+    { key:'day',      label:'Day on day',     desc:'One row per date ÃÂ· provider ÃÂ· campaign' },
     { key:'month',    label:'Month on month',  desc:'Totals grouped by month + provider' },
     { key:'source',   label:'By source',       desc:'Totals grouped by source + provider' },
     { key:'campaign', label:'By campaign',     desc:'Campaigns ranked by qualified count' },
@@ -547,7 +576,7 @@ const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
               ))}
             </div>
             <div style={{fontSize:10,color:C.muted,textAlign:'center',padding:'4px 0 2px'}}>
-              {(exportData||[]).length.toLocaleString()} rows Â· respects active filters
+              {(exportData||[]).length.toLocaleString()} rows ÃÂ· respects active filters
             </div>
           </div>
         </>
@@ -557,7 +586,7 @@ const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
 }
 
 
-/* ââ Main dashboard âââââââââââââââââââââââââââââââââââââââââââââââââââ */
+/* Ã¢ÂÂÃ¢ÂÂ Main dashboard Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ */
 
 const BrandTooltip = ({ active, payload, label, fmt }) => {
   if (!active || !payload?.length) return null
@@ -621,7 +650,7 @@ export default function LeadQualificationDashboard() {
       }
       const parsed = parseCSV(csv)
       if (cfg.id !== 'daily') {
-        setMonthlyRows(parsed)
+        setMonthlyRows(parseMonthlyCSV(csv))
       } else {
 
           // Normalize month to clean 'Mon-YYYY' from qualified_date (raw
@@ -665,13 +694,13 @@ export default function LeadQualificationDashboard() {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
   }, [selMonth, monthStartMap])
 
-  // Single active filter â what's currently driving the data
+  // Single active filter Ã¢ÂÂ what's currently driving the data
   // 'preset' = LD/L7D/MTD, 'month' = month picker, 'custom' = calendar range
   const activeFilter = datePreset === 'custom' ? 'custom'
     : (datePreset === 'month') ? 'month'
     : 'preset'
 
-  // ââ Derived data (correct dependency order) âââââââââââââââââââââââââââââ
+  // Ã¢ÂÂÃ¢ÂÂ Derived data (correct dependency order) Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
   // 1. Date window from preset
   const dateWindow = useMemo(() => {
@@ -692,9 +721,9 @@ export default function LeadQualificationDashboard() {
     if (datePreset === 'custom' && customFrom && customTo) {
       const [fy,fm,fd]=customFrom.split('-').map(Number); const cf=new Date(fy,fm-1,fd); cf.setHours(0,0,0,0)
       const [ty,tm,td]=customTo.split('-').map(Number);   const ct=new Date(ty,tm-1,td); ct.setHours(23,59,59,999)
-      return { from: cf, to: ct, label: customFrom + ' â ' + customTo }
+      return { from: cf, to: ct, label: customFrom + ' Ã¢ÂÂ ' + customTo }
     }
-    return null // 'month' mode â handled below
+    return null // 'month' mode Ã¢ÂÂ handled below
   }, [datePreset, customFrom, customTo])
 
   // 2. Row set filtered by date window OR selected month
@@ -792,7 +821,7 @@ export default function LeadQualificationDashboard() {
     return Object.values(map).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 31);
   }, [filtered]);
 
-  // 5. KPI totals â use filtered so provider/source dropdowns affect the cards
+  // 5. KPI totals Ã¢ÂÂ use filtered so provider/source dropdowns affect the cards
   const totals = useMemo(() => {
     const fw   = filtered.filter(r => r.provider === 'Futwork').reduce((s, r) => s + r.count, 0)
     const fwai = filtered.filter(r => r.provider === 'Futwork AI').reduce((s, r) => s + r.count, 0)
@@ -855,7 +884,7 @@ export default function LeadQualificationDashboard() {
     return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 10)
   }, [filtered])
 
-  // ââ NEW DIMENSION BREAKDOWNS âââââââââââââââââââââââââââââââââââââââââââââ
+  // Ã¢ÂÂÃ¢ÂÂ NEW DIMENSION BREAKDOWNS Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
   const countryBar = useMemo(() => {
     const map = {}
     filtered.forEach(r => {
@@ -938,7 +967,7 @@ export default function LeadQualificationDashboard() {
       })
   }, [filtered, search, sortCol, sortDir])
 
-  // Export datasets â all respect active filters (date + provider + source)
+  // Export datasets Ã¢ÂÂ all respect active filters (date + provider + source)
   const exportData = React.useMemo(() => {
     const label = exportView
     if (label === 'day') {
@@ -1001,13 +1030,13 @@ export default function LeadQualificationDashboard() {
   })
 
   const sendReport = async () => {
-    if (!window.confirm('Send this report by email to ALL configured recipients now? Manage recipients in Settings â Reports.')) return
+    if (!window.confirm('Send this report by email to ALL configured recipients now? Manage recipients in Settings Ã¢ÂÂ Reports.')) return
     setSending(true); setSendMsg('')
     try {
       const res = await fetch('/api/send-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
       const d = await res.json()
-      setSendMsg(d.ok ? 'â Sent' : 'â Failed')
-    } catch (e) { setSendMsg('â ' + e.message) }
+      setSendMsg(d.ok ? 'Ã¢ÂÂ Sent' : 'Ã¢ÂÂ Failed')
+    } catch (e) { setSendMsg('Ã¢ÂÂ ' + e.message) }
     finally { setSending(false); setTimeout(() => setSendMsg(''), 4000) }
   }
 
@@ -1017,7 +1046,7 @@ export default function LeadQualificationDashboard() {
       <Sidebar />
       <div style={{margin:'12px 14px 0',borderRadius:14,border:'1px solid #EEF1F6',boxShadow:'0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
-        {/* ââ HEADER âââââââââââââââââââââââââââââââââââââââââââââââââ */}
+        {/* Ã¢ÂÂÃ¢ÂÂ HEADER Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ */}
         <div style={{
           background: 'var(--card)', borderBottom: `0.5px solid ${C.border}`,
           padding: '0 28px', minHeight: 56, height: 'auto', display: 'flex', alignItems: 'center',
@@ -1027,12 +1056,12 @@ export default function LeadQualificationDashboard() {
             <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / QL Ops</p>
             <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px', fontFamily: FONT }}>
               Lead Qualification
-              {' Â· '}
+              {' ÃÂ· '}
               {activeFilter === 'custom' && customFrom
-                ? <span style={{fontSize:13,fontWeight:600,color:C.blue}}>{customFrom} â {customTo}</span>
+                ? <span style={{fontSize:13,fontWeight:600,color:C.blue}}>{customFrom} Ã¢ÂÂ {customTo}</span>
                 : activeFilter === 'preset' && dateWindow
                   ? <span style={{fontSize:13,fontWeight:600,color:C.blue}}>{dateWindow.label}</span>
-                  : <span>{selMonth || 'â'}</span>
+                  : <span>{selMonth || 'Ã¢ÂÂ'}</span>
               }
             </h1>
           </div>
@@ -1048,7 +1077,7 @@ export default function LeadQualificationDashboard() {
                 if (key==='LD') { tipFrom=new Date(today2); tipFrom.setDate(today2.getDate()-1); tipTo=tipFrom }
                 else if (key==='L7D') { tipTo=new Date(today2); tipTo.setDate(today2.getDate()-1); tipFrom=new Date(tipTo); tipFrom.setDate(tipTo.getDate()-6) }
                 else { tipFrom=new Date(today2.getFullYear(),today2.getMonth(),1); tipTo=today2 }
-                const tipLabel = fmtShort(tipFrom) + ' â ' + fmtShort(tipTo)
+                const tipLabel = fmtShort(tipFrom) + ' Ã¢ÂÂ ' + fmtShort(tipTo)
                 const isHov = hoveredPreset===key
                 return (
                   <div key={key} style={{position:'relative'}}>
@@ -1098,7 +1127,7 @@ export default function LeadQualificationDashboard() {
                 minWidth={110}
                 onChange={v => {
                   setSelMonth(v)
-                  // Month picker always wins â clear any preset or custom range
+                  // Month picker always wins Ã¢ÂÂ clear any preset or custom range
                   setDatePreset('month')
                   setCustomFrom(''); setCustomTo('')
                   setShowCustom(false); setPage(0)
@@ -1106,7 +1135,7 @@ export default function LeadQualificationDashboard() {
               />
               </div>
             )}
-            {/* Custom range â production calendar picker */}
+            {/* Custom range Ã¢ÂÂ production calendar picker */}
             <div style={{ position: 'relative' }}>
               <button onClick={() => { setShowCustom(v => !v); if (!showCustom) { setDatePreset('month') } }}
                 style={{
@@ -1124,7 +1153,7 @@ export default function LeadQualificationDashboard() {
                   <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
                   <line x1="3" y1="10" x2="21" y2="10"/>
                 </svg>
-                {datePreset==='custom'&&customFrom ? customFrom+' â '+customTo : 'Custom'}
+                {datePreset==='custom'&&customFrom ? customFrom+' Ã¢ÂÂ '+customTo : 'Custom'}
               </button>
               {showCustom && (
                 <>
@@ -1217,25 +1246,25 @@ export default function LeadQualificationDashboard() {
           </div>
         </div>
 
-        {/* ââ BODY âââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+        {/* Ã¢ÂÂÃ¢ÂÂ BODY Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
           {loading && rows.length === 0 && monthlyRows.length === 0 ? (
           <DashboardSkeleton/>
         ) : (
             <>
             {view === 'daily' && (<>
-              {/* ââ PREMIUM KPI ROW ââ */}
+              {/* Ã¢ÂÂÃ¢ÂÂ PREMIUM KPI ROW Ã¢ÂÂÃ¢ÂÂ */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 18 }}>
                 <PremKPI label="Total Qualified" value={fmtN(totals.total)} sub={selMonth}                       delta={totals.totalDelta} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
                 <PremKPI label="Futwork"          value={fmtN(totals.fw)}   sub={pct(totals.fw, totals.total) + ' share'}   delta={totals.fwDelta}    accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
                 <PremKPI label="Futwork AI"       value={fmtN(totals.fwai)} sub={pct(totals.fwai, totals.total) + ' share'} delta={totals.fwaiDelta}  accent="#29B9C3" accentBg="#E4F8F9" icon={KPI_ICONS.ai} />
                 <PremKPI label="Superbot"         value={fmtN(totals.sb)}   sub={pct(totals.sb, totals.total) + ' share'}   delta={totals.sbDelta}    accent="#1C9FD4" accentBg="#E3F5FD" icon={KPI_ICONS.bot} />
-                <PremKPI label="Top Country"      value={topCountries[0]?.country || 'â'} sub={topCountries[0] ? fmtN(topCountries[0].count) + ' qualified' : 'no data'} accent="#4CAE6F" accentBg="#E9F8EF" icon={KPI_ICONS.globe} />
+                <PremKPI label="Top Country"      value={topCountries[0]?.country || 'Ã¢ÂÂ'} sub={topCountries[0] ? fmtN(topCountries[0].count) + ' qualified' : 'no data'} accent="#4CAE6F" accentBg="#E9F8EF" icon={KPI_ICONS.globe} />
               </div>
 
-              {/* ââ ROW 1: SOURCE STACKED BAR + PROVIDER DONUT ââ */}
+              {/* Ã¢ÂÂÃ¢ÂÂ ROW 1: SOURCE STACKED BAR + PROVIDER DONUT Ã¢ÂÂÃ¢ÂÂ */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, marginBottom: 16 }}>
-                <Card title="Qualified by source" sub="Stacked by provider Â· selected period">
+                <Card title="Qualified by source" sub="Stacked by provider ÃÂ· selected period">
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={sourceBar} margin={{ top: 4, right: 12, left: -8, bottom: 0 }} barCategoryGap="30%">
                       <defs>
@@ -1289,7 +1318,7 @@ export default function LeadQualificationDashboard() {
                 </Card>
               </div>
 
-              {/* ââ ROW 2: COUNTRY + DEGREE ââ */}
+              {/* Ã¢ÂÂÃ¢ÂÂ ROW 2: COUNTRY + DEGREE Ã¢ÂÂÃ¢ÂÂ */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                 <Card title="Top countries interested" sub="By qualified lead count">
                   <RankedBars data={countryBar} labelKey="country" max={countryBar[0]?.count || 0} total={totals.total} showRank />
@@ -1299,7 +1328,7 @@ export default function LeadQualificationDashboard() {
                 </Card>
               </div>
 
-              {/* ââ ROW 3: DISPOSITION + BUDGET ââ */}
+              {/* Ã¢ÂÂÃ¢ÂÂ ROW 3: DISPOSITION + BUDGET Ã¢ÂÂÃ¢ÂÂ */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 16, marginBottom: 16 }}>
                 <Card title="Call disposition" sub="Outcome classification of qualifying calls">
                   <RankedBars data={dispositionBar} labelKey="disposition" max={dispositionBar[0]?.count || 0} total={totals.total} colorFn={i => [C.green, C.blue, C.navy, C.cyan][i % 4]} />
@@ -1323,7 +1352,7 @@ export default function LeadQualificationDashboard() {
                 </Card>
               </div>
 
-              {/* ââ ROW 4: INTAKE + PASSPORT ââ */}
+              {/* Ã¢ÂÂÃ¢ÂÂ ROW 4: INTAKE + PASSPORT Ã¢ÂÂÃ¢ÂÂ */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16 }}>
                 <Card title="Preferred intake" sub="When students plan to start">
                   {intakeBar.length === 0
@@ -1333,7 +1362,7 @@ export default function LeadQualificationDashboard() {
                         <BarChart data={intakeBar} margin={{ top: 8, right: 12, left: -8, bottom: 0 }} barCategoryGap="26%">
                           <defs><linearGradient id="gIntake" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5BB8DE"/><stop offset="100%" stopColor="#1C9FD4"/></linearGradient></defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                          <XAxis dataKey="intake" axisLine={false} tickLine={false} tick={{ fontSize: 9.5, fill: '#94A3B8', fontFamily: FONT }} tickFormatter={v => v.length > 11 ? v.slice(0, 10) + 'â¦' : v} />
+                          <XAxis dataKey="intake" axisLine={false} tickLine={false} tick={{ fontSize: 9.5, fill: '#94A3B8', fontFamily: FONT }} tickFormatter={v => v.length > 11 ? v.slice(0, 10) + 'Ã¢ÂÂ¦' : v} />
                           <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
                           <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(28,159,212,0.06)' }} />
                           <Bar dataKey="count" radius={[6,6,0,0]} maxBarSize={40} fill="url(#gIntake)" />
@@ -1376,7 +1405,7 @@ export default function LeadQualificationDashboard() {
                 </Card>
               </div>
 
-              {/* ââ ROW 5: MoM TREND ââ */}
+              {/* Ã¢ÂÂÃ¢ÂÂ ROW 5: MoM TREND Ã¢ÂÂÃ¢ÂÂ */}
               <div style={{ marginBottom: 16 }}>
                 <Card title="Month-on-month trend" sub="Total qualified per provider across all months">
                   <ResponsiveContainer width="100%" height={210}>
@@ -1397,10 +1426,10 @@ export default function LeadQualificationDashboard() {
                 </Card>
               </div>
 
-              {/* ââ ROW 6: TOP CAMPAIGNS ââ */}
+              {/* Ã¢ÂÂÃ¢ÂÂ ROW 6: TOP CAMPAIGNS Ã¢ÂÂÃ¢ÂÂ */}
               <div style={{ marginBottom: 16 }}>
                 <div style={{ marginBottom: 16 }}>
-            <Card title="Day-on-day qualified" sub="Daily qualified leads by provider Â· most recent first">
+            <Card title="Day-on-day qualified" sub="Daily qualified leads by provider ÃÂ· most recent first">
               {dayOnDay.length === 0 ? (
                 <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT, padding: '8px 0' }}>No daily data for this selection</div>
               ) : (
@@ -1418,7 +1447,7 @@ export default function LeadQualificationDashboard() {
                     <tbody>
                       {dayOnDay.map((row, i) => {
                         const dt = new Date(row.date + 'T00:00:00');
-                        const lbl = isNaN(dt) ? row.date : dt.getDate() + ' ' + dt.toLocaleString('en-US', { month: 'short' }) + ' Â· ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
+                        const lbl = isNaN(dt) ? row.date : dt.getDate() + ' ' + dt.toLocaleString('en-US', { month: 'short' }) + ' ÃÂ· ' + ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
                         return (
                           <tr key={row.date} style={{ background: i % 2 ? '#F8FAFC' : '#fff' }}>
                             <td style={{ textAlign: 'left', padding: '8px 10px', fontSize: 12.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap' }}>{lbl}</td>
@@ -1436,14 +1465,14 @@ export default function LeadQualificationDashboard() {
             </Card>
           </div>
 
-          <Card title="Top campaigns by qualified leads" sub="Selected period Â· coloured by provider">
+          <Card title="Top campaigns by qualified leads" sub="Selected period ÃÂ· coloured by provider">
                   {topCampaigns.length === 0
                     ? <div style={{ textAlign: 'center', padding: '32px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No data for selected filters</div>
                     : (<>
                       <ResponsiveContainer width="100%" height={Math.max(220, topCampaigns.length * 34)}>
                         <BarChart data={topCampaigns} layout="vertical" margin={{ top: 4, right: 56, left: 8, bottom: 4 }} barCategoryGap="22%">
                           <XAxis type="number" tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
-                          <YAxis type="category" dataKey="campaign" tick={{ fontSize: 10.5, fill: C.sub, fontFamily: FONT }} width={248} axisLine={false} tickLine={false} tickFormatter={v => v.length > 36 ? v.slice(0, 34) + 'â¦' : v} />
+                          <YAxis type="category" dataKey="campaign" tick={{ fontSize: 10.5, fill: C.sub, fontFamily: FONT }} width={248} axisLine={false} tickLine={false} tickFormatter={v => v.length > 36 ? v.slice(0, 34) + 'Ã¢ÂÂ¦' : v} />
                           <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
                           <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={22}>
                             {topCampaigns.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.provider] || C.muted} />)}
@@ -1456,16 +1485,16 @@ export default function LeadQualificationDashboard() {
                 </Card>
               </div>
 
-              {/* ââ ROW 7: LEAD RECORDS TABLE ââ */}
+              {/* Ã¢ÂÂÃ¢ÂÂ ROW 7: LEAD RECORDS TABLE Ã¢ÂÂÃ¢ÂÂ */}
               <Card
                 title="Lead records"
-                sub={`${tableRows.length.toLocaleString()} leads Â· ${selMonth}${selProvider !== 'All' ? ' Â· ' + selProvider : ''}${selSource !== 'All' ? ' Â· ' + selSource : ''}`}
+                sub={`${tableRows.length.toLocaleString()} leads ÃÂ· ${selMonth}${selProvider !== 'All' ? ' ÃÂ· ' + selProvider : ''}${selSource !== 'All' ? ' ÃÂ· ' + selSource : ''}`}
                 action={
                   <div style={{ position: 'relative' }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
                       <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
                     </svg>
-                    <input value={search} onChange={e => onSearch(e.target.value)} placeholder="Search campaign, source, countryâ¦"
+                    <input value={search} onChange={e => onSearch(e.target.value)} placeholder="Search campaign, source, countryÃ¢ÂÂ¦"
                       style={{ paddingLeft: 30, paddingRight: 10, paddingTop: 7, paddingBottom: 7, borderRadius: 8, border: `0.5px solid ${C.border}`, fontSize: 12, fontFamily: FONT, outline: 'none', width: 250, color: C.text, background: 'var(--card)' }} />
                   </div>
                 }
@@ -1477,7 +1506,7 @@ export default function LeadQualificationDashboard() {
                       <tr style={{ background: '#F8FAFC' }}>
                         {[['campaign','Campaign'],['provider','Provider'],['source','Source'],['country','Country'],['degree_type','Degree'],['disposition','Disposition'],['budget','Budget'],['preferred_intake','Intake']].map(([col, lbl]) => (
                           <th key={col} style={thS(col)} onClick={() => sortBy(col)}>
-                            {lbl} <span style={{ opacity: sortCol === col ? 1 : 0.3, fontSize: 9 }}>{sortCol === col ? (sortDir === 'desc' ? 'â' : 'â') : 'â'}</span>
+                            {lbl} <span style={{ opacity: sortCol === col ? 1 : 0.3, fontSize: 9 }}>{sortCol === col ? (sortDir === 'desc' ? 'Ã¢ÂÂ' : 'Ã¢ÂÂ') : 'Ã¢ÂÂ'}</span>
                           </th>
                         ))}
                       </tr>
@@ -1487,23 +1516,23 @@ export default function LeadQualificationDashboard() {
                         <tr key={i} style={{ borderBottom: `0.5px solid #F3F4F6`, background: i % 2 ? '#FAFBFC' : 'var(--card)', transition: 'background .1s' }}
                           onMouseEnter={e => e.currentTarget.style.background = '#F0F7FF'}
                           onMouseLeave={e => e.currentTarget.style.background = i % 2 ? '#FAFBFC' : 'var(--card)'}>
-                          <td style={{ padding: '9px 12px', color: C.text, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT, fontWeight: 500 }} title={r.campaign}>{r.campaign || 'â'}</td>
+                          <td style={{ padding: '9px 12px', color: C.text, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT, fontWeight: 500 }} title={r.campaign}>{r.campaign || 'Ã¢ÂÂ'}</td>
                           <td style={{ padding: '9px 12px', fontFamily: FONT }}>
                             <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
                               background: r.provider === 'Futwork' ? C.navyBg : r.provider === 'Futwork AI' ? C.cyanBg : C.blueBg,
                               color: r.provider === 'Futwork' ? C.navy : r.provider === 'Futwork AI' ? C.cyan : C.blue,
                             }}>{r.provider}</span>
                           </td>
-                          <td style={{ padding: '9px 12px', color: C.sub, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.source || 'â'}</td>
+                          <td style={{ padding: '9px 12px', color: C.sub, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.source || 'Ã¢ÂÂ'}</td>
                           <td style={{ padding: '9px 12px', color: C.text, fontFamily: FONT, whiteSpace: 'nowrap' }}>
-                            {r.country ? <span style={{ fontSize: 11.5, fontWeight: 600 }}>{r.country.replace(/ *\(.*\)/, '').trim()}</span> : 'â'}
+                            {r.country ? <span style={{ fontSize: 11.5, fontWeight: 600 }}>{r.country.replace(/ *\(.*\)/, '').trim()}</span> : 'Ã¢ÂÂ'}
                           </td>
-                          <td style={{ padding: '9px 12px', color: C.sub, fontSize: 11, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.degree_type || 'â'}</td>
-                          <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11, fontFamily: FONT, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.disposition}>{r.disposition || 'â'}</td>
+                          <td style={{ padding: '9px 12px', color: C.sub, fontSize: 11, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.degree_type || 'Ã¢ÂÂ'}</td>
+                          <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11, fontFamily: FONT, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.disposition}>{r.disposition || 'Ã¢ÂÂ'}</td>
                           <td style={{ padding: '9px 12px', fontFamily: FONT }}>
-                            {r.budget ? <span style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: C.greenBg, color: C.green }}>{r.budget}</span> : 'â'}
+                            {r.budget ? <span style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: C.greenBg, color: C.green }}>{r.budget}</span> : 'Ã¢ÂÂ'}
                           </td>
-                          <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.preferred_intake || 'â'}</td>
+                          <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.preferred_intake || 'Ã¢ÂÂ'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1512,12 +1541,12 @@ export default function LeadQualificationDashboard() {
                   {totalPages > 1 && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 12px 12px', borderTop: `0.5px solid ${C.border}` }}>
                       <span style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT }}>
-                        {page * PAGE_SIZE + 1}â{Math.min((page + 1) * PAGE_SIZE, tableRows.length)} of {tableRows.length.toLocaleString()} rows
+                        {page * PAGE_SIZE + 1}Ã¢ÂÂ{Math.min((page + 1) * PAGE_SIZE, tableRows.length)} of {tableRows.length.toLocaleString()} rows
                       </span>
                       <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
                         <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
                           style={{ padding: '5px 13px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: page === 0 ? 'not-allowed' : 'pointer', opacity: page === 0 ? 0.35 : 1, color: C.text }}>
-                          â Prev
+                          Ã¢ÂÂ Prev
                         </button>
                         {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
                           const start = Math.max(0, Math.min(page - 3, totalPages - 7)); const p = start + i
@@ -1530,7 +1559,7 @@ export default function LeadQualificationDashboard() {
                         })}
                         <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
                           style={{ padding: '5px 13px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: page === totalPages - 1 ? 'not-allowed' : 'pointer', opacity: page === totalPages - 1 ? 0.35 : 1, color: C.text }}>
-                          Next â
+                          Next Ã¢ÂÂ
                         </button>
                       </div>
                     </div>
@@ -1550,7 +1579,7 @@ export default function LeadQualificationDashboard() {
                 <PremKPI label="Futwork AI Qualified" value={fmtN(monthlyTotals.futwork_ai_qualified)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#4CAE6F" accentBg="#E8F6EE" icon={KPI_ICONS.ai} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                <Card title="Qualified by source" sub={selPeriod === 'all' ? 'All months Â· queued vs qualified' : selPeriod}>
+                <Card title="Qualified by source" sub={selPeriod === 'all' ? 'All months - queued vs qualified' : selPeriod}>
                   <div style={{ padding: '4px 2px' }}>
                     {monthlyBySource.map((s, i) => {
                       const maxQ = Math.max(...monthlyBySource.map(x => x.qualified), 1)
@@ -1569,7 +1598,7 @@ export default function LeadQualificationDashboard() {
                     {monthlyBySource.length === 0 && <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT, padding: 12 }}>No data for this selection.</div>}
                   </div>
                 </Card>
-                <Card title="Overall queued â QL conversion" sub={selPeriod === 'all' ? 'All months combined' : selPeriod}>
+                <Card title="Overall queued -> QL conversion" sub={selPeriod === 'all' ? 'All months combined' : selPeriod}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '28px 12px' }}>
                     <div style={{ fontSize: 48, fontWeight: 800, color: C.navy, fontFamily: FONT, lineHeight: 1 }}>{pct(monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified, monthlyTotals.floor_queued)}</div>
                     <div style={{ fontSize: 13, color: C.muted, marginTop: 8, fontFamily: FONT }}>{fmtN(monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified)} qualified of {fmtN(monthlyTotals.floor_queued)} queued</div>
@@ -1577,7 +1606,7 @@ export default function LeadQualificationDashboard() {
                 </Card>
               </div>
               {selPeriod === 'all' && (
-                <Card title="Monthly breakdown" sub="All months Â· summed across sources">
+                <Card title="Monthly breakdown" sub="All months - summed across sources">
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT, fontSize: 12.5 }}>
                       <thead>
