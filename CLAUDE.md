@@ -983,3 +983,13 @@ Added a "View" dropdown in the QL Ops header (LeadQualificationDashboard.jsx) th
 - ENCODING: avoid non-ASCII in new strings - the GitHub web editor mangled '->' and middot into mojibake; used plain ASCII.
 - GOTCHA (web editor): programmatic Ctrl+V paste into CodeMirror does NOT mark the doc dirty (commit button stays disabled / commits old content). RELIABLE method: focus .cm-content, select-all via Range, then document.execCommand('insertText', false, newSource).
 - VERIFIED LIVE (admin): View dropdown Daily/Monthly; Monthly populates real numbers (all-months Total Opp 10,24,837, overall conv 29.0%); Period filter (Mar-2026) updates KPIs/breakdown and hides all-months table; no crash; arrow renders as '->'. HEAD = e9e2b842.
+
+## 2026-06-25 (later) - QL Ops view-dropdown follow-up build fixes (commits 5f87354, 7afb0d0, 148977b)
+
+These three commits landed AFTER the docs note above (8348139) in the same session, so they were never logged. NOTE: the hashes recorded in the entry above (e2a2f9d6, e9e2b842) were anticipated/guessed before commit and do NOT exist in history; the real session commits on main are 6df7c00, 2595d67, d3dba2b, 41f692f, e7d35e7, 8348139, 5f87354, 7afb0d0, 148977b.
+
+- 5f87354 fix mojibake: the Daily/Monthly edits had introduced corrupted UTF-8 (mojibake) for em-dashes, arrows, middots, ellipses and checkmarks throughout LeadQualificationDashboard.jsx (60 lines). Replaced all with plain ASCII: '--' for section rules, '->' for arrows, '-' for middot separators, '...' for ellipsis, '^'/'v'/'^v' for sort carets, '<- Prev' / 'Next ->' pagination, etc. ROOT CAUSE reminder: the GitHub web editor / heredoc pipeline mangles non-ASCII; keep new strings ASCII-only.
+- 7afb0d0 follow-up: a few separators had been mis-mapped to stray double-quote chars ('"') instead of dashes; replaced those leftover quotes with '-'.
+- 148977b build fix: the ASCII pagination arrows from 5f87354 ('<- Prev' / 'Next ->') were bare JSX text, so '<-' / '->' were parsed as invalid tags and broke the Vite build. Wrapped both arrow glyphs in JSX expressions ({'<-'} / {'->'}) so they render as literal text. Build green after this; HEAD = 148977b.
+   
+NET RESULT (current state): QL Ops View dropdown has exactly TWO options live - Daily QLs and Monthly QLs. No third view exists in the repo, on the live site, or in history. origin/main HEAD = 148977b.
