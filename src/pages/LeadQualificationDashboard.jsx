@@ -86,6 +86,7 @@ function parseMonthlyCSV(csv) {
   const num = v => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n }
   return data.filter(r => r.length > 1 && (r[h('period')] || '').trim()).map(r => ({
     period:               (r[h('period')] || '').trim(),
+    date:                 (r[h('date')] || '').trim(),
     source:               (r[h('source')] || '').trim(),
     sub_source:           (r[h('sub_source')] || '').trim(),
     opp_count:            num(r[h('opp_count')]),
@@ -631,6 +632,11 @@ export default function LeadQualificationDashboard() {
   const [hoveredPreset, setHoveredPreset] = useState(null)
   const [exportView, setExportView]         = useState('day')
   const [monthStartMap, setMonthStartMap] = useState({})
+  const [selMonthlySource, setSelMonthlySource] = useState('All')
+  const [mDatePreset, setMDatePreset]  = useState('L30D') // 'L7D','L14D','L30D','custom'
+  const [mCustomFrom, setMCustomFrom]  = useState('')
+  const [mCustomTo, setMCustomTo]      = useState('')
+  const [showMCustom, setShowMCustom]  = useState(false)
 
   const loadData = useCallback(async (bust = false) => {
     setLoading(true)
@@ -788,14 +794,66 @@ export default function LeadQualificationDashboard() {
     })
     return Object.values(map).sort((a,b) => b.qualified - a.qualified)
   }, [monthlyFiltered])
-  const monthlyByPeriod = useMemo(() =>
-    monthlyPeriods.map(p => {
-      const rs = monthlyRows.filter(r => r.period === p)
-      const row = { period: p }
-      MQ_METRICS.forEach(m => { row[m.key] = rs.reduce((s,r) => s + mNum(r[m.key]), 0) })
-      return row
+
+  // ===== MONTHLY: day-level helpers (date column added to Monthly QLs sheet) =====
+  const mParseDate = (raw) => {
+    const str = String(raw || '').trim()
+    if (!str) return null
+    // expected formats: '25-Jun-2026' or '2026-06-25'
+    let d
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) { const [y,mo,dy] = str.split('-').map(Number); d = new Date(y,mo-1,dy) }
+    else d = new Date(str)
+    if (isNaN(d)) return null
+    d.setHours(0,0,0,0)
+    return d
+  }
+  // Source list for the monthly view (now that rows carry source + date)
+  const monthlySources = useMemo(() =>
+    ['All', ...[...new Set(monthlyRows.map(r => r.source))].filter(Boolean).sort()]
+  , [monthlyRows])
+  // Date window for the day-on-day table
+  const mDateWindow = useMemo(() => {
+    const today = new Date(); today.setHours(0,0,0,0)
+    const back = (n) => { const f = new Date(today); f.setDate(today.getDate() - (n-1)); return f }
+    if (mDatePreset === 'L7D')  return { from: back(7),  to: today, label: 'Last 7 days' }
+    if (mDatePreset === 'L14D') return { from: back(14), to: today, label: 'Last 14 days' }
+    if (mDatePreset === 'custom' && mCustomFrom && mCustomTo) {
+      const [fy,fm,fd] = mCustomFrom.split('-').map(Number)
+      const [ty,tm,td] = mCustomTo.split('-').map(Number)
+      const from = new Date(fy,fm-1,fd); from.setHours(0,0,0,0)
+      const to = new Date(ty,tm-1,td); to.setHours(0,0,0,0)
+      return { from, to, label: 'Custom' }
+    }
+    return { from: back(30), to: today, label: 'Last 30 days' }
+  }, [mDatePreset, mCustomFrom, mCustomTo])
+  // Period + source filtered set (drives month-on-month table)
+  const monthlyScoped = useMemo(() =>
+    monthlyFiltered.filter(r => selMonthlySource === 'All' || r.source === selMonthlySource)
+  , [monthlyFiltered, selMonthlySource])
+  // Month-on-month aggregation respecting source filter
+  const monthlyByPeriodScoped = useMemo(() =>
+    monthlyPeriods
+      .map(p => {
+        const rs = monthlyScoped.filter(r => r.period === p)
+        const row = { period: p }
+        MQ_METRICS.forEach(m => { row[m.key] = rs.reduce((s,r) => s + mNum(r[m.key]), 0) })
+        return row
+      })
+      .filter(row => MQ_METRICS.some(m => row[m.key] > 0) || selMonthlySource === 'All')
+  , [monthlyScoped, monthlyPeriods, MQ_METRICS, selMonthlySource])
+  // Day-on-day aggregation (period + source + date window), newest first
+  const monthlyByDate = useMemo(() => {
+    const map = {}
+    monthlyScoped.forEach(r => {
+      const d = mParseDate(r.date)
+      if (!d) return
+      if (d < mDateWindow.from || d > mDateWindow.to) return
+      const key = r.date
+      if (!map[key]) { map[key] = { date: r.date, _ts: d.getTime() }; MQ_METRICS.forEach(m => map[key][m.key] = 0) }
+      MQ_METRICS.forEach(m => { map[key][m.key] += mNum(r[m.key]) })
     })
-  , [monthlyRows, monthlyPeriods, MQ_METRICS])
+    return Object.values(map).sort((a,b) => b._ts - a._ts)
+  }, [monthlyScoped, mDateWindow, MQ_METRICS])
 
   // 4. Apply provider + source dropdowns
   const filtered = useMemo(() => dateFilteredRows.filter(r =>
@@ -1179,7 +1237,47 @@ export default function LeadQualificationDashboard() {
               )}
             </div>
             <Dropdown label="View" options={QL_VIEWS.map(v => v.label)} value={(QL_VIEWS.find(v => v.id === view) || QL_VIEWS[0]).label} minWidth={150} onChange={lbl => { const sel = QL_VIEWS.find(v => v.label === lbl); setView(sel ? sel.id : 'daily'); setSelPeriod('all'); setPage(0) }} />
-              {view === 'monthly' && <Dropdown label="Period" options={periodOptions} value={selPeriod} minWidth={140} onChange={v => setSelPeriod(v)} />}
+              {view === 'monthly' && <><Dropdown label="Period" options={periodOptions} value={selPeriod} minWidth={140} onChange={v => setSelPeriod(v)} />
+              <Dropdown label="Source" options={monthlySources} value={selMonthlySource} minWidth={120} onChange={v => setSelMonthlySource(v)} />
+              <Dropdown label="Days" options={['Last 7 days','Last 14 days','Last 30 days','Custom']} value={mDatePreset === 'custom' ? 'Custom' : mDateWindow.label} minWidth={130} onChange={v => { if (v === 'Custom') { setMDatePreset('custom'); setShowMCustom(true) } else { setMDatePreset(v === 'Last 7 days' ? 'L7D' : v === 'Last 14 days' ? 'L14D' : 'L30D'); setShowMCustom(false) } }} />
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setShowMCustom(s => !s)}
+                  style={{
+                    padding: '7px 12px', borderRadius: 8,
+                    border: `0.5px solid ${mDatePreset === 'custom' ? C.navy : C.border}`,
+                    background: mDatePreset === 'custom' ? C.navyBg : 'var(--card)',
+                    color: mDatePreset === 'custom' ? C.navy : C.sub,
+                    fontSize: 11.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    boxShadow: showMCustom ? `0 0 0 3px rgba(31,60,132,0.08)` : 'none',
+                    transition: 'all .15s',
+                  }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  {mDatePreset === 'custom' && mCustomFrom ? mCustomFrom + ' -> ' + mCustomTo : 'Custom range'}
+                </button>
+                {showMCustom && (
+                  <>
+                    <div onClick={() => setShowMCustom(false)} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
+                    <div style={{
+                      position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400,
+                      background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 14,
+                      boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)',
+                      overflow: 'hidden',
+                    }}>
+                      <DateRangePicker
+                        from={mCustomFrom ? (() => { const [y,m,d] = mCustomFrom.split('-').map(Number); return new Date(y,m-1,d) })() : null}
+                        to={mCustomTo ? (() => { const [y,m,d] = mCustomTo.split('-').map(Number); return new Date(y,m-1,d) })() : null}
+                        onChange={(f, t) => { setMCustomFrom(f); setMCustomTo(t); setMDatePreset('custom'); setShowMCustom(false) }}
+                        onClose={() => setShowMCustom(false)}
+                      />
+                    </div>
+                  </>
+                )}
+              </div></>}
               {view === 'daily' && <><Dropdown label="Provider" options={providers} value={selProvider} minWidth={100} onChange={v => { setSelProvider(v); setPage(0) }} />
             <Dropdown label="Source" options={sources} value={selSource} minWidth={100} onChange={v => { setSelSource(v); setPage(0) }} /></>}
             {lastSync && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {lastSync.toLocaleTimeString()}</span>}
@@ -1605,8 +1703,45 @@ export default function LeadQualificationDashboard() {
                   </div>
                 </Card>
               </div>
-              {selPeriod === 'all' && (
-                <Card title="Monthly breakdown" sub="All months - summed across sources">
+              <Card title="Day-on-day breakdown" sub={`${mDateWindow.label}${selPeriod === 'all' ? '' : ' · ' + selPeriod}${selMonthlySource === 'All' ? '' : ' · ' + selMonthlySource} · newest first`}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT, fontSize: 12.5 }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.06em', borderBottom: `1.5px solid ${C.border}` }}>
+                        <th style={{ padding: '10px 12px', position: 'sticky', left: 0, background: 'var(--card)' }}>Date</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Total Opp Count</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Floor Queued</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork Queued</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Superbot Queued</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork AI Queued</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork Qualified</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Superbot Qualified</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork AI Qualified</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monthlyByDate.map((row, i) => (
+                        <tr key={i} style={{ borderBottom: `0.5px solid ${C.border}`, background: i % 2 ? '#FAFBFD' : 'transparent' }}>
+                          <td style={{ padding: '9px 12px', fontWeight: 700, color: C.navy, position: 'sticky', left: 0, background: i % 2 ? '#FAFBFD' : 'var(--card)' }}>{row.date}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.opp_count)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.floor_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.superbot_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_ai_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_qualified)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_ai_qualified)}</td>
+                        </tr>
+                      ))}
+                      {monthlyByDate.length === 0 && (
+                        <tr><td colSpan={9} style={{ padding: 16, color: C.muted, fontFamily: FONT, fontSize: 13 }}>No daily data for this selection.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+              <div style={{ height: 14 }} />
+              <Card title="Monthly breakdown" sub={selMonthlySource === 'All' ? 'All months - summed across sources' : 'All months - ' + selMonthlySource}>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT, fontSize: 12.5 }}>
                       <thead>
@@ -1623,7 +1758,7 @@ export default function LeadQualificationDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {monthlyByPeriod.map((row, i) => (
+                        {monthlyByPeriodScoped.map((row, i) => (
                           <tr key={i} style={{ borderBottom: `0.5px solid ${C.border}`, background: i % 2 ? '#FAFBFD' : 'transparent' }}>
                             <td style={{ padding: '9px 12px', fontWeight: 700, color: C.navy, position: 'sticky', left: 0, background: i % 2 ? '#FAFBFD' : 'var(--card)' }}>{row.period}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.opp_count)}</td>
@@ -1640,7 +1775,6 @@ export default function LeadQualificationDashboard() {
                     </table>
                   </div>
                 </Card>
-              )}
             </>)}
             </>
           )}
