@@ -1546,7 +1546,7 @@ export default function LeadQualificationDashboard() {
                       <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
                         <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
                           style={{ padding: '5px 13px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: page === 0 ? 'not-allowed' : 'pointer', opacity: page === 0 ? 0.35 : 1, color: C.text }}>
-                          <- Prev
+                          {'<-'} Prev
                         </button>
                         {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
                           const start = Math.max(0, Math.min(page - 3, totalPages - 7)); const p = start + i
@@ -1559,7 +1559,7 @@ export default function LeadQualificationDashboard() {
                         })}
                         <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1}
                           style={{ padding: '5px 13px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', fontSize: 12, fontWeight: 600, fontFamily: FONT, cursor: page === totalPages - 1 ? 'not-allowed' : 'pointer', opacity: page === totalPages - 1 ? 0.35 : 1, color: C.text }}>
-                          Next ->
+                          Next {'->'}
                         </button>
                       </div>
                     </div>
