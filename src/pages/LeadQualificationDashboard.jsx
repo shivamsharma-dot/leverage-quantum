@@ -1036,7 +1036,7 @@ export default function LeadQualificationDashboard() {
       const res = await fetch('/api/send-report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
       const d = await res.json()
       setSendMsg(d.ok ? '" Sent' : '" Failed')
-    } catch (e) { setSendMsg('" ' + e.message) }
+    } catch (e) { setSendMsg('Error: ' + e.message) }
     finally { setSending(false); setTimeout(() => setSendMsg(''), 4000) }
   }
 
@@ -1077,7 +1077,7 @@ export default function LeadQualificationDashboard() {
                 if (key==='LD') { tipFrom=new Date(today2); tipFrom.setDate(today2.getDate()-1); tipTo=tipFrom }
                 else if (key==='L7D') { tipTo=new Date(today2); tipTo.setDate(today2.getDate()-1); tipFrom=new Date(tipTo); tipFrom.setDate(tipTo.getDate()-6) }
                 else { tipFrom=new Date(today2.getFullYear(),today2.getMonth(),1); tipTo=today2 }
-                const tipLabel = fmtShort(tipFrom) + ' " ' + fmtShort(tipTo)
+                const tipLabel = fmtShort(tipFrom) + ' - ' + fmtShort(tipTo)
                 const isHov = hoveredPreset===key
                 return (
                   <div key={key} style={{position:'relative'}}>
@@ -1541,7 +1541,7 @@ export default function LeadQualificationDashboard() {
                   {totalPages > 1 && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 12px 12px', borderTop: `0.5px solid ${C.border}` }}>
                       <span style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT }}>
-                        {page * PAGE_SIZE + 1}"{Math.min((page + 1) * PAGE_SIZE, tableRows.length)} of {tableRows.length.toLocaleString()} rows
+                        {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, tableRows.length)} of {tableRows.length.toLocaleString()} rows
                       </span>
                       <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
                         <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
