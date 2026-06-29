@@ -876,6 +876,7 @@ export default function LeadQualificationDashboard() {
 
   // CSV download helper + export row builders for the monthly tables
   const qlPctNum = (r) => { const q = mNum(r.floor_queued); return q > 0 ? +(((mNum(r.futwork_qualified) + mNum(r.superbot_qualified) + mNum(r.futwork_ai_qualified)) / q) * 100).toFixed(1) : 0 }
+  const convNum = (q, total) => { const t = mNum(total); return t > 0 ? +(((mNum(q)) / t) * 100).toFixed(1) : 0 }
   const downloadCSV = (rowsData, filename) => {
     if (!rowsData || !rowsData.length) return
     const cols = Object.keys(rowsData[0])
@@ -895,6 +896,9 @@ export default function LeadQualificationDashboard() {
     futwork_queued: r.futwork_queued, superbot_queued: r.superbot_queued, futwork_ai_queued: r.futwork_ai_queued,
     futwork_qualified: r.futwork_qualified, superbot_qualified: r.superbot_qualified, futwork_ai_qualified: r.futwork_ai_qualified,
     queued_to_ql_pct: qlPctNum(r),
+    futwork_q_to_ql_pct: convNum(r.futwork_qualified, r.futwork_queued),
+    superbot_q_to_ql_pct: convNum(r.superbot_qualified, r.superbot_queued),
+    futwork_ai_q_to_ql_pct: convNum(r.futwork_ai_qualified, r.futwork_ai_queued),
   })), [monthlyByDate])
   const monthExportRows = useMemo(() => monthlyByPeriodScoped.map(r => ({
     period: r.period,
@@ -902,6 +906,9 @@ export default function LeadQualificationDashboard() {
     futwork_queued: r.futwork_queued, superbot_queued: r.superbot_queued, futwork_ai_queued: r.futwork_ai_queued,
     futwork_qualified: r.futwork_qualified, superbot_qualified: r.superbot_qualified, futwork_ai_qualified: r.futwork_ai_qualified,
     queued_to_ql_pct: qlPctNum(r),
+    futwork_q_to_ql_pct: convNum(r.futwork_qualified, r.futwork_queued),
+    superbot_q_to_ql_pct: convNum(r.superbot_qualified, r.superbot_queued),
+    futwork_ai_q_to_ql_pct: convNum(r.futwork_ai_qualified, r.futwork_ai_queued),
   })), [monthlyByPeriodScoped])
 
   // 4. Apply provider + source dropdowns
@@ -1767,6 +1774,9 @@ export default function LeadQualificationDashboard() {
                         <th style={{ padding: '10px 12px', textAlign: 'right' }}>Superbot Qualified</th>
                         <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork AI Qualified</th>
                         <th style={{ padding: '10px 12px', textAlign: 'right' }}>Queued -> QL %</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork Q -> QL %</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Superbot Q -> QL %</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork AI Q -> QL %</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1782,10 +1792,13 @@ export default function LeadQualificationDashboard() {
                           <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_ai_qualified)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 600, color: C.navy }}>{pct(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{pct(row.futwork_qualified, row.futwork_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{pct(row.superbot_qualified, row.superbot_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{pct(row.futwork_ai_qualified, row.futwork_ai_queued)}</td>
                         </tr>
                       ))}
                       {monthlyByDate.length === 0 && (
-                        <tr><td colSpan={10} style={{ padding: 16, color: C.muted, fontFamily: FONT, fontSize: 13 }}>No daily data for this selection.</td></tr>
+                        <tr><td colSpan={13} style={{ padding: 16, color: C.muted, fontFamily: FONT, fontSize: 13 }}>No daily data for this selection.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -1807,6 +1820,9 @@ export default function LeadQualificationDashboard() {
                           <th style={{ padding: '10px 12px', textAlign: 'right' }}>Superbot Qualified</th>
                           <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork AI Qualified</th>
                         <th style={{ padding: '10px 12px', textAlign: 'right' }}>Queued -> QL %</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork Q -> QL %</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Superbot Q -> QL %</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork AI Q -> QL %</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1822,6 +1838,9 @@ export default function LeadQualificationDashboard() {
                             <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_ai_qualified)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 600, color: C.navy }}>{pct(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{pct(row.futwork_qualified, row.futwork_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{pct(row.superbot_qualified, row.superbot_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{pct(row.futwork_ai_qualified, row.futwork_ai_queued)}</td>
                           </tr>
                         ))}
                       </tbody>
