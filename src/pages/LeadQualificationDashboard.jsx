@@ -605,6 +605,25 @@ const BrandTooltip = ({ active, payload, label, fmt }) => {
   )
 }
 
+// Small export button used in monthly table card headers
+const MTableExportBtn = ({ onClick, disabled, C, FONT }) => (
+  <button onClick={onClick} disabled={disabled}
+    style={{
+      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+      borderRadius: 8, background: 'var(--card)', border: `0.5px solid ${C.border}`,
+      color: disabled ? C.muted : '#374151', fontSize: 12, fontWeight: 600,
+      cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: FONT,
+      opacity: disabled ? 0.55 : 1, transition: 'all .15s',
+    }}>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+    Export CSV
+  </button>
+)
+
 export default function LeadQualificationDashboard() {
   const [rows, setRows]             = useState([])
   const [monthlyRows, setMonthlyRows] = useState([])
@@ -854,6 +873,36 @@ export default function LeadQualificationDashboard() {
     })
     return Object.values(map).sort((a,b) => b._ts - a._ts)
   }, [monthlyScoped, mDateWindow, MQ_METRICS])
+
+  // CSV download helper + export row builders for the monthly tables
+  const qlPctNum = (r) => { const q = mNum(r.floor_queued); return q > 0 ? +(((mNum(r.futwork_qualified) + mNum(r.superbot_qualified) + mNum(r.futwork_ai_qualified)) / q) * 100).toFixed(1) : 0 }
+  const downloadCSV = (rowsData, filename) => {
+    if (!rowsData || !rowsData.length) return
+    const cols = Object.keys(rowsData[0])
+    const esc = (v) => { const x = v == null ? '' : v; return (typeof x === 'string' && (x.includes(',') || x.includes('"'))) ? '"' + x.replace(/"/g, '""') + '"' : x }
+    const body = rowsData.map(r => cols.map(c => esc(r[c])).join(','))
+    const content = [cols.join(','), ...body].join('\n')
+    const blob = new Blob([content], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+  const dayExportRows = useMemo(() => monthlyByDate.map(r => ({
+    date: r.date,
+    total_opp_count: r.opp_count, floor_queued: r.floor_queued,
+    futwork_queued: r.futwork_queued, superbot_queued: r.superbot_queued, futwork_ai_queued: r.futwork_ai_queued,
+    futwork_qualified: r.futwork_qualified, superbot_qualified: r.superbot_qualified, futwork_ai_qualified: r.futwork_ai_qualified,
+    queued_to_ql_pct: qlPctNum(r),
+  })), [monthlyByDate])
+  const monthExportRows = useMemo(() => monthlyByPeriodScoped.map(r => ({
+    period: r.period,
+    total_opp_count: r.opp_count, floor_queued: r.floor_queued,
+    futwork_queued: r.futwork_queued, superbot_queued: r.superbot_queued, futwork_ai_queued: r.futwork_ai_queued,
+    futwork_qualified: r.futwork_qualified, superbot_qualified: r.superbot_qualified, futwork_ai_qualified: r.futwork_ai_qualified,
+    queued_to_ql_pct: qlPctNum(r),
+  })), [monthlyByPeriodScoped])
 
   // 4. Apply provider + source dropdowns
   const filtered = useMemo(() => dateFilteredRows.filter(r =>
@@ -1703,7 +1752,7 @@ export default function LeadQualificationDashboard() {
                   </div>
                 </Card>
               </div>
-              <Card title="Day-on-day breakdown" sub={`${mDateWindow.label}${selPeriod === 'all' ? '' : ' · ' + selPeriod}${selMonthlySource === 'All' ? '' : ' · ' + selMonthlySource} · newest first`}>
+              <Card title="Day-on-day breakdown" sub={`${mDateWindow.label}${selPeriod === 'all' ? '' : ' · ' + selPeriod}${selMonthlySource === 'All' ? '' : ' · ' + selMonthlySource} · newest first`} action={<MTableExportBtn onClick={() => downloadCSV(dayExportRows, `ql_ops_day_on_day_${new Date().toISOString().slice(0,10)}.csv`)} disabled={!dayExportRows.length} C={C} FONT={FONT} />}>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT, fontSize: 12.5 }}>
                     <thead>
@@ -1717,6 +1766,7 @@ export default function LeadQualificationDashboard() {
                         <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork Qualified</th>
                         <th style={{ padding: '10px 12px', textAlign: 'right' }}>Superbot Qualified</th>
                         <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork AI Qualified</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Queued -> QL %</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1731,17 +1781,18 @@ export default function LeadQualificationDashboard() {
                           <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_qualified)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_ai_qualified)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 600, color: C.navy }}>{pct(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)}</td>
                         </tr>
                       ))}
                       {monthlyByDate.length === 0 && (
-                        <tr><td colSpan={9} style={{ padding: 16, color: C.muted, fontFamily: FONT, fontSize: 13 }}>No daily data for this selection.</td></tr>
+                        <tr><td colSpan={10} style={{ padding: 16, color: C.muted, fontFamily: FONT, fontSize: 13 }}>No daily data for this selection.</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
               </Card>
               <div style={{ height: 14 }} />
-              <Card title="Monthly breakdown" sub={selMonthlySource === 'All' ? 'All months - summed across sources' : 'All months - ' + selMonthlySource}>
+              <Card title="Monthly breakdown" sub={selMonthlySource === 'All' ? 'All months - summed across sources' : 'All months - ' + selMonthlySource} action={<MTableExportBtn onClick={() => downloadCSV(monthExportRows, `ql_ops_month_on_month_${new Date().toISOString().slice(0,10)}.csv`)} disabled={!monthExportRows.length} C={C} FONT={FONT} />}>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT, fontSize: 12.5 }}>
                       <thead>
@@ -1755,6 +1806,7 @@ export default function LeadQualificationDashboard() {
                           <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork Qualified</th>
                           <th style={{ padding: '10px 12px', textAlign: 'right' }}>Superbot Qualified</th>
                           <th style={{ padding: '10px 12px', textAlign: 'right' }}>Futwork AI Qualified</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Queued -> QL %</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1769,6 +1821,7 @@ export default function LeadQualificationDashboard() {
                             <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_qualified)}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{fmtN(row.futwork_ai_qualified)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 600, color: C.navy }}>{pct(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)}</td>
                           </tr>
                         ))}
                       </tbody>
