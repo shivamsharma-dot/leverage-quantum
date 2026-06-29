@@ -1753,10 +1753,66 @@ export default function LeadQualificationDashboard() {
                   </div>
                 </Card>
                 <Card title="Overall queued -> QL conversion" sub={selPeriod === 'all' ? 'All months combined' : selPeriod}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '28px 12px' }}>
-                    <div style={{ fontSize: 48, fontWeight: 800, color: C.navy, fontFamily: FONT, lineHeight: 1 }}>{pct(monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified, monthlyTotals.floor_queued)}</div>
-                    <div style={{ fontSize: 13, color: C.muted, marginTop: 8, fontFamily: FONT }}>{fmtN(monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified)} qualified of {fmtN(monthlyTotals.floor_queued)} queued</div>
-                  </div>
+                  {(() => {
+                    const oQual = monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified
+                    const oQueued = monthlyTotals.floor_queued
+                    const oPctNum = oQueued > 0 ? (oQual / oQueued) * 100 : 0
+                    const providers = [
+                      { name: 'Futwork', q: monthlyTotals.futwork_qualified, d: monthlyTotals.futwork_queued, color: C.navy },
+                      { name: 'Superbot', q: monthlyTotals.superbot_qualified, d: monthlyTotals.superbot_queued, color: C.blue },
+                      { name: 'Futwork AI', q: monthlyTotals.futwork_ai_qualified, d: monthlyTotals.futwork_ai_queued, color: C.cyan },
+                    ]
+                    const maxSrcQ = Math.max(...monthlyBySource.map(s => s.queued), 1)
+                    return (
+                      <div style={{ padding: '4px 2px' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
+                          <div style={{ fontSize: 40, fontWeight: 800, color: C.navy, fontFamily: FONT, lineHeight: 1 }}>{oQueued > 0 ? oPctNum.toFixed(1) + '%' : '-'}</div>
+                          <div style={{ fontSize: 12.5, color: C.muted, fontFamily: FONT }}>{fmtN(oQual)} of {fmtN(oQueued)} queued</div>
+                        </div>
+                        <div style={{ height: 8, borderRadius: 6, background: C.navyBg, overflow: 'hidden', marginBottom: 16 }}>
+                          <div style={{ width: Math.min(100, oPctNum) + '%', height: '100%', background: C.navy, borderRadius: 6 }} />
+                        </div>
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, fontFamily: FONT }}>By provider</div>
+                        <div style={{ marginBottom: 16 }}>
+                          {providers.map((p, i) => {
+                            const pn = p.d > 0 ? (p.q / p.d) * 100 : 0
+                            return (
+                              <div key={i} style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 4, fontFamily: FONT }}>
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: 3, background: p.color, display: 'inline-block' }} />{p.name}</span>
+                                  <span>{p.d > 0 ? pn.toFixed(1) + '%' : '-'} <span style={{ color: C.muted, fontWeight: 500 }}>({fmtN(p.q)}/{fmtN(p.d)})</span></span>
+                                </div>
+                                <div style={{ height: 6, borderRadius: 4, background: C.border, overflow: 'hidden' }}>
+                                  <div style={{ width: Math.min(100, pn) + '%', height: '100%', background: p.color, borderRadius: 4 }} />
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        {monthlyBySource.length > 0 && (
+                          <>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, fontFamily: FONT }}>By source</div>
+                            <div>
+                              {monthlyBySource.map((s, i) => {
+                                const sn = s.queued > 0 ? (s.qualified / s.queued) * 100 : 0
+                                return (
+                                  <div key={i} style={{ marginBottom: 10 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 4, fontFamily: FONT }}>
+                                      <span>{s.source}</span>
+                                      <span>{s.queued > 0 ? sn.toFixed(1) + '%' : '-'} <span style={{ color: C.muted, fontWeight: 500 }}>({fmtN(s.qualified)}/{fmtN(s.queued)})</span></span>
+                                    </div>
+                                    <div style={{ height: 6, borderRadius: 4, background: C.greenBg, overflow: 'hidden' }}>
+                                      <div style={{ width: (s.queued / maxSrcQ * 100) + '%', height: '100%', background: C.green, borderRadius: 4 }} />
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </Card>
               </div>
               <Card title="Day-on-day breakdown" sub={`${mDateWindow.label}${selPeriod === 'all' ? '' : ' · ' + selPeriod}${selMonthlySource === 'All' ? '' : ' · ' + selMonthlySource} · newest first`} action={<MTableExportBtn onClick={() => downloadCSV(dayExportRows, `ql_ops_day_on_day_${new Date().toISOString().slice(0,10)}.csv`)} disabled={!dayExportRows.length} C={C} FONT={FONT} />}>
