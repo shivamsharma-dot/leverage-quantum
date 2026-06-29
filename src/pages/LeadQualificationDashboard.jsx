@@ -1181,7 +1181,8 @@ export default function LeadQualificationDashboard() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', overflow: 'visible', flexShrink: 1, minWidth: 0 }}>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background:'#F8FAFC', padding:'6px 10px', borderRadius:12, border:'0.5px solid #E5E7EB' }}>
+            {view !== 'monthly' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background:'#F8FAFC', padding:'6px 10px', borderRadius:12, border:'0.5px solid #E5E7EB' }}>
           {isCurrentMonth && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: '3px' }}>
               {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => {
@@ -1292,6 +1293,7 @@ export default function LeadQualificationDashboard() {
                 </>
               )}
             </div>
+            )}
             <Dropdown label="View" options={QL_VIEWS.map(v => v.label)} value={(QL_VIEWS.find(v => v.id === view) || QL_VIEWS[0]).label} minWidth={150} onChange={lbl => { const sel = QL_VIEWS.find(v => v.label === lbl); setView(sel ? sel.id : 'daily'); setSelPeriod('all'); setPage(0) }} />
               {view === 'monthly' && <><Dropdown label="Period" options={periodOptions} value={selPeriod} minWidth={140} onChange={v => setSelPeriod(v)} />
               <Dropdown label="Source" options={monthlySources} value={selMonthlySource} minWidth={120} onChange={v => setSelMonthlySource(v)} />
