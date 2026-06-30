@@ -1043,3 +1043,12 @@ USER: asked to fix the Days dropdown and Custom range on Monthly QLs. Reproduced
 - VERIFIED LIVE on /dashboard/lq-ops-monthly: Last 30 days -> Total Opp 1,83,354 / 23.7% overall; Last 7 days -> 43,226 / 13.4%; custom 2026-06-01..06-05 -> 27,357 / 34.1%. KPI cards + merged source card all rescale correctly; reset to Last 30 days default. No console errors.
 - KNOWN COSMETIC FOLLOW-UP (not fixed here): the KPI card subtitles + card subheader still read "All months" even when a day window is active; they should reflect the active window label. Flagged to user.
 - ASCII only ("--","->","/"). Edited via GitHub web editor + CodeMirror EditorView transaction (raw reads partly blocked by content-safety filter; used char-code / hair-space inspection). Not built locally (filter blocks npm build); verified via Vercel deploy + live. DashboardHome.jsx untouched; Ask AI / sidebar logic untouched.
+
+
+## 2026-06-30 -- Monthly QLs: KPI + source card subtitles reflect active day window (commit 899f693)
+USER: follow-up to the Days/custom-range fix -- the KPI card subtitles and the source-performance card subheader still read "All months" even when a day window was active, so labels did not match the (now correctly windowed) numbers.
+- FIX: added one component-scope const monthlyScopeLabel right after mDateWindow: (selPeriod === 'all' ? '' : selPeriod + ' / ') + (mDatePreset === 'custom' && mCustomFrom && mCustomTo ? mCustomFrom + ' -> ' + mCustomTo : mDateWindow.label).
+- Replaced the 8 KPI card sub props (were sub={selPeriod === 'all' ? 'All months' : selPeriod}) with sub={monthlyScopeLabel}, and the 'Source performance' Card sub with sub={monthlyScopeLabel + ' -- qualified volume and queued-to-QL conversion by source'}.
+- Labels now render: Last 30 days / Last 7 days / Last 14 days / "2026-06-01 -> 2026-06-05" for custom / "Jun 2026 / Last 30 days" when a period is also picked.
+- LEFT UNTOUCHED on purpose: the 'Monthly breakdown' month-on-month Card keeps its 'All months - summed across sources' subtitle because that table (monthlyByPeriodScoped) aggregates by period and is correctly NOT scoped by the day window.
+- ASCII only. Edited via GitHub web editor + CodeMirror EditorView transaction (10 changes in one dispatch). Net -67 chars. Brace/paren/bracket balanced; only pre-existing non-ASCII (middots) remain. Not built locally (content-safety filter blocks npm build); verified via Vercel deploy + live. monthlyFiltered fix (bb9dfa9), DashboardHome.jsx, Ask AI and sidebar logic all untouched.
