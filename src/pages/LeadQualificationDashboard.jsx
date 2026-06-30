@@ -1287,7 +1287,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               </div>
             )}
             {/* Custom range - production calendar picker */}
-            <div style={{ position: 'relative' }}>
+            {view !== 'monthly' && (<div style={{ position: 'relative' }}>
               <button onClick={() => { setShowCustom(v => !v); if (!showCustom) { setDatePreset('month') } }}
                 style={{
                   padding: '6px 11px', borderRadius: 8,
@@ -1328,10 +1328,9 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                   </div>
                 </>
               )}
-            </div>
+            </div>)}
             {!forcedView && (<Dropdown label="View" options={QL_VIEWS.map(v => v.label)} value={(QL_VIEWS.find(v => v.id === view) || QL_VIEWS[0]).label} minWidth={150} onChange={lbl => { const sel = QL_VIEWS.find(v => v.label === lbl); setView(sel ? sel.id : 'daily'); setSelPeriod('all'); setPage(0) }} />)}
-              {view === 'monthly' && <><Dropdown label="Period" options={periodOptions} value={selPeriod} minWidth={140} onChange={v => setSelPeriod(v)} />
-              <Dropdown label="Source" options={monthlySources} value={selMonthlySource} minWidth={120} onChange={v => setSelMonthlySource(v)} />
+              {view === 'monthly' && <><Dropdown label="Source" options={monthlySources} value={selMonthlySource} minWidth={120} onChange={v => setSelMonthlySource(v)} />
               <Dropdown label="Days" options={['Last 7 days','Last 14 days','Last 30 days','Custom']} value={mDatePreset === 'custom' ? 'Custom' : mDateWindow.label} minWidth={130} onChange={v => { if (v === 'Custom') { setMDatePreset('custom'); setShowMCustom(true) } else { setMDatePreset(v === 'Last 7 days' ? 'L7D' : v === 'Last 14 days' ? 'L14D' : 'L30D'); setShowMCustom(false) } }} />
               <div style={{ position: 'relative' }}>
                 <button onClick={() => setShowMCustom(s => !s)}
