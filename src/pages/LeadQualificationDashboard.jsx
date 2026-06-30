@@ -797,8 +797,9 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   , [monthlyRows])
   const periodOptions = useMemo(() => ['all', ...monthlyPeriods], [monthlyPeriods])
   const monthlyFiltered = useMemo(() =>
-    selPeriod === 'all' ? monthlyRows : monthlyRows.filter(r => r.period === selPeriod)
-  , [monthlyRows, selPeriod])
+    (selPeriod === 'all' ? monthlyRows : monthlyRows.filter(r => r.period === selPeriod))
+      .filter(r => selMonthlySource === 'All' || r.source === selMonthlySource)
+  , [monthlyRows, selPeriod, selMonthlySource])
   const monthlyTotals = useMemo(() => {
     const t = {}
     MQ_METRICS.forEach(m => { t[m.key] = monthlyFiltered.reduce((s,r) => s + mNum(r[m.key]), 0) })
