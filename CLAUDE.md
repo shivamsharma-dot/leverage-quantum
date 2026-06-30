@@ -1007,3 +1007,12 @@ WHAT CHANGED (4 commits on main):
 ROOT CAUSE of the original missing-toolbar bug (fixed in 88a31da): the header filter-controls wrapper div had style display: view === 'monthly' ? 'none' : 'flex'. So in monthly mode the ENTIRE toolbar (Period dropdown, Refresh, Export, info) was display:none. The daily/monthly-specific children are already individually gated by their own view=== checks, so the wrapper just needed display:'flex' always. One-char-ish fix; now Monthly QLs shows Period (all/Jan-Jun 2026) + Source + Days + Custom range + Refresh + Export + info.
 
 VERIFIED LIVE (admin): sidebar shows Daily QLs + Monthly QLs; Daily page = daily presets/Provider/Source toolbar, no View dropdown; Monthly page = Period dropdown (functional, all + Jan-Jun 2026) + Refresh/Export, no View dropdown; SPA nav Daily<->Monthly re-locks view correctly; both pages render full content. NOTE: editing was done via the GitHub web editor + CodeMirror EditorView transactions (content-safety filter blocked raw file reads); not built/verified via npm - relied on Vercel deploy + live verification.
+
+
+## 2026-06-30 — QL Ops nested sidebar menu
+- Converted the two flat sidebar items (Daily QLs, Monthly QLs) into a single collapsible "QL Ops" parent with two child sub-items, matching the Meta Ads / Google Ads accordion pattern.
+- Daily QLs -> /dashboard/lq-ops ; Monthly QLs -> /dashboard/lq-ops-monthly. Sub-items use matchType: 'route' (exact pathname match) since they are distinct routes (not ?tab= query tabs like the ad parents).
+- Added state isQlOpsParentActive + qlOpsExpanded (+ auto-expand useEffect) and extended getExpanded/setExpanded for the 'QL Ops' label.
+- Generalized the previously hardcoded parent button: parent-active is now computed per item, and the parent click navigates to item.defaultTo || item.subItems[0].to. Added defaultTo: '/dashboard/meta-ads?tab=campaigns' on the Meta Ads parent to preserve its existing default landing tab (its first sub-item is Creatives).
+- PAGE_LIST unchanged: lq_ops and lq_ops_monthly remain two real pages/routes for access control; only their sidebar presentation is now nested.
+- Verified live: QL Ops expands to Daily/Monthly children, child nav + active highlighting work, parent auto-expands on child routes, Meta Ads still defaults to Campaigns. (npm build not run locally due to content-safety filter; verified via Vercel deploy + live.)
