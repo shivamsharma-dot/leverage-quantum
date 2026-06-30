@@ -993,3 +993,17 @@ These three commits landed AFTER the docs note above (8348139) in the same sessi
 - 148977b build fix: the ASCII pagination arrows from 5f87354 ('<- Prev' / 'Next ->') were bare JSX text, so '<-' / '->' were parsed as invalid tags and broke the Vite build. Wrapped both arrow glyphs in JSX expressions ({'<-'} / {'->'}) so they render as literal text. Build green after this; HEAD = 148977b.
    
 NET RESULT (current state): QL Ops View dropdown has exactly TWO options live - Daily QLs and Monthly QLs. No third view exists in the repo, on the live site, or in history. origin/main HEAD = 148977b.
+
+
+## 2026-06-30 - QL Ops split into two sidebar pages: Daily QLs + Monthly QLs (commits dd2b2dd, 0e8cca1, fb005d9, 88a31da)
+
+USER request: the single QL Ops page's View dropdown (Daily/Monthly) header + filters did not render in Monthly mode, leaving users stuck. Decided to split QL Ops into two separate sidebar pages instead of fixing the dropdown UX.
+
+WHAT CHANGED (4 commits on main):
+- App.jsx: added route /dashboard/lq-ops-monthly. Both routes render the SAME LeadQualificationDashboard with a new forcedView prop (forcedView="daily" on /dashboard/lq-ops, forcedView="monthly" on /dashboard/lq-ops-monthly). PAGE_TITLES: /dashboard/lq-ops -> 'Daily QLs', /dashboard/lq-ops-monthly -> 'Monthly QLs'.
+- LeadQualificationDashboard.jsx: signature now ({ forcedView } = {}); view state inits useState(forcedView || 'daily'); added React.useEffect syncing view to forcedView on prop change (so SPA nav between the two routes re-locks the view since the component instance is reused). The View Dropdown is now wrapped {!forcedView && (<Dropdown ... />)} so it is hidden on both split pages (each page has a fixed view).
+- Sidebar.jsx: replaced the single QL Ops entry with TWO in all three places - NAV array (Daily QLs -> PeopleIcon /dashboard/lq-ops, Monthly QLs -> MTDIcon /dashboard/lq-ops-monthly), PAGE_LIST (id lq_ops 'Daily QLs', id lq_ops_monthly 'Monthly QLs'), and ICON_MAP. NOTE: kept id lq_ops for the daily route so existing access configs/bookmarks keep working.
+
+ROOT CAUSE of the original missing-toolbar bug (fixed in 88a31da): the header filter-controls wrapper div had style display: view === 'monthly' ? 'none' : 'flex'. So in monthly mode the ENTIRE toolbar (Period dropdown, Refresh, Export, info) was display:none. The daily/monthly-specific children are already individually gated by their own view=== checks, so the wrapper just needed display:'flex' always. One-char-ish fix; now Monthly QLs shows Period (all/Jan-Jun 2026) + Source + Days + Custom range + Refresh + Export + info.
+
+VERIFIED LIVE (admin): sidebar shows Daily QLs + Monthly QLs; Daily page = daily presets/Provider/Source toolbar, no View dropdown; Monthly page = Period dropdown (functional, all + Jan-Jun 2026) + Refresh/Export, no View dropdown; SPA nav Daily<->Monthly re-locks view correctly; both pages render full content. NOTE: editing was done via the GitHub web editor + CodeMirror EditorView transactions (content-safety filter blocked raw file reads); not built/verified via npm - relied on Vercel deploy + live verification.
