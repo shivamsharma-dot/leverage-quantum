@@ -1733,89 +1733,79 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                 <PremKPI label="Superbot Qualified" value={fmtN(monthlyTotals.superbot_qualified)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#29B9C3" accentBg="#E4F7F8" icon={KPI_ICONS.bot} />
                 <PremKPI label="Futwork AI Qualified" value={fmtN(monthlyTotals.futwork_ai_qualified)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#4CAE6F" accentBg="#E8F6EE" icon={KPI_ICONS.ai} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                <Card title="Qualified by source" sub={selPeriod === 'all' ? 'All months - queued vs qualified' : selPeriod}>
-                  <div style={{ padding: '4px 2px' }}>
-                    {monthlyBySource.map((s, i) => {
-                      const maxQ = Math.max(...monthlyBySource.map(x => x.qualified), 1)
-                      return (
-                        <div key={i} style={{ marginBottom: 12 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 4, fontFamily: FONT }}>
-                            <span>{s.source}</span>
-                            <span>{fmtN(s.qualified)} <span style={{ color: C.muted, fontWeight: 500 }}>({pct(s.qualified, s.queued)} conv)</span></span>
-                          </div>
-                          <div style={{ height: 8, background: '#EEF2FB', borderRadius: 6, overflow: 'hidden' }}>
-                            <div style={{ width: (s.qualified / maxQ * 100) + '%', height: '100%', background: 'linear-gradient(90deg,#1F3C84,#29B9C3)', borderRadius: 6 }} />
-                          </div>
+              <Card title="Source performance: volume vs. conversion" sub={selPeriod === 'all' ? 'All months -- qualified volume and queued-to-QL conversion by source' : selPeriod} style={{ marginBottom: 14 }}>
+                {(() => {
+                  const oQual = monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified
+                  const oQueued = monthlyTotals.floor_queued
+                  const oPctNum = oQueued > 0 ? (oQual / oQueued) * 100 : 0
+                  const providers = [
+                    { name: 'Futwork', q: monthlyTotals.futwork_qualified, d: monthlyTotals.futwork_queued, color: C.navy },
+                    { name: 'Superbot', q: monthlyTotals.superbot_qualified, d: monthlyTotals.superbot_queued, color: C.blue },
+                    { name: 'Futwork AI', q: monthlyTotals.futwork_ai_qualified, d: monthlyTotals.futwork_ai_queued, color: C.cyan },
+                  ]
+                  const totalQual = monthlyBySource.reduce((s, x) => s + x.qualified, 0) || 1
+                  const maxQ = Math.max(...monthlyBySource.map(x => x.qualified), 1)
+                  const convOf = (s) => s.queued > 0 ? (s.qualified / s.queued) * 100 : null
+                  const convColor = (c) => c == null ? C.muted : c >= 50 ? C.green : c >= 25 ? C.cyan : c >= 10 ? C.blue : C.navy
+                  return (
+                    <div style={{ padding: '4px 2px', fontFamily: FONT }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', gap: 12, padding: '14px 16px', background: C.navyBg, borderRadius: 12, marginBottom: 18 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingRight: 16, borderRight: '1px solid #E2E8F0', minWidth: 150 }}>
+                          <div style={{ fontSize: 32, fontWeight: 800, color: C.navy, lineHeight: 1 }}>{oQueued > 0 ? oPctNum.toFixed(1) + '%' : '-'}</div>
+                          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>overall QL conversion</div>
+                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{fmtN(oQual)} of {fmtN(oQueued)} queued</div>
                         </div>
-                      )
-                    })}
-                    {monthlyBySource.length === 0 && <div style={{ color: C.muted, fontSize: 13, fontFamily: FONT, padding: 12 }}>No data for this selection.</div>}
-                  </div>
-                </Card>
-                <Card title="Overall queued -> QL conversion" sub={selPeriod === 'all' ? 'All months combined' : selPeriod}>
-                  {(() => {
-                    const oQual = monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified
-                    const oQueued = monthlyTotals.floor_queued
-                    const oPctNum = oQueued > 0 ? (oQual / oQueued) * 100 : 0
-                    const providers = [
-                      { name: 'Futwork', q: monthlyTotals.futwork_qualified, d: monthlyTotals.futwork_queued, color: C.navy },
-                      { name: 'Superbot', q: monthlyTotals.superbot_qualified, d: monthlyTotals.superbot_queued, color: C.blue },
-                      { name: 'Futwork AI', q: monthlyTotals.futwork_ai_qualified, d: monthlyTotals.futwork_ai_queued, color: C.cyan },
-                    ]
-                    const maxSrcQ = Math.max(...monthlyBySource.map(s => s.queued), 1)
-                    return (
-                      <div style={{ padding: '4px 2px' }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
-                          <div style={{ fontSize: 40, fontWeight: 800, color: C.navy, fontFamily: FONT, lineHeight: 1 }}>{oQueued > 0 ? oPctNum.toFixed(1) + '%' : '-'}</div>
-                          <div style={{ fontSize: 12.5, color: C.muted, fontFamily: FONT }}>{fmtN(oQual)} of {fmtN(oQueued)} queued</div>
-                        </div>
-                        <div style={{ height: 8, borderRadius: 6, background: C.navyBg, overflow: 'hidden', marginBottom: 16 }}>
-                          <div style={{ width: Math.min(100, oPctNum) + '%', height: '100%', background: C.navy, borderRadius: 6 }} />
-                        </div>
-                        <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, fontFamily: FONT }}>By provider</div>
-                        <div style={{ marginBottom: 16 }}>
+                        <div style={{ display: 'flex', flex: 1, flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
                           {providers.map((p, i) => {
                             const pn = p.d > 0 ? (p.q / p.d) * 100 : 0
                             return (
-                              <div key={i} style={{ marginBottom: 10 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 4, fontFamily: FONT }}>
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: 3, background: p.color, display: 'inline-block' }} />{p.name}</span>
-                                  <span>{p.d > 0 ? pn.toFixed(1) + '%' : '-'} <span style={{ color: C.muted, fontWeight: 500 }}>({fmtN(p.q)}/{fmtN(p.d)})</span></span>
+                              <div key={i} style={{ minWidth: 96 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 3 }}>
+                                  <span style={{ width: 8, height: 8, borderRadius: 3, background: p.color }} />{p.name}
                                 </div>
-                                <div style={{ height: 6, borderRadius: 4, background: C.border, overflow: 'hidden' }}>
-                                  <div style={{ width: Math.min(100, pn) + '%', height: '100%', background: p.color, borderRadius: 4 }} />
-                                </div>
+                                <div style={{ fontSize: 18, fontWeight: 800, color: p.color }}>{p.d > 0 ? pn.toFixed(1) + '%' : '-'}</div>
+                                <div style={{ fontSize: 10.5, color: C.muted }}>{fmtN(p.q)} / {fmtN(p.d)}</div>
                               </div>
                             )
                           })}
                         </div>
-                        {monthlyBySource.length > 0 && (
-                          <>
-                            <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, fontFamily: FONT }}>By source</div>
-                            <div>
-                              {monthlyBySource.map((s, i) => {
-                                const sn = s.queued > 0 ? (s.qualified / s.queued) * 100 : 0
-                                return (
-                                  <div key={i} style={{ marginBottom: 10 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 600, color: C.navy, marginBottom: 4, fontFamily: FONT }}>
-                                      <span>{s.source}</span>
-                                      <span>{s.queued > 0 ? sn.toFixed(1) + '%' : '-'} <span style={{ color: C.muted, fontWeight: 500 }}>({fmtN(s.qualified)}/{fmtN(s.queued)})</span></span>
-                                    </div>
-                                    <div style={{ height: 6, borderRadius: 4, background: C.greenBg, overflow: 'hidden' }}>
-                                      <div style={{ width: (s.queued / maxSrcQ * 100) + '%', height: '100%', background: C.green, borderRadius: 4 }} />
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </>
-                        )}
                       </div>
-                    )
-                  })()}
-                </Card>
-              </div>
+                      <div style={{ display: 'flex', alignItems: 'center', fontSize: 10, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: C.muted, padding: '0 2px 8px' }}>
+                        <span style={{ flex: 1 }}>Source</span>
+                        <span style={{ width: 200, textAlign: 'right' }}>Qualified (share of QLs)</span>
+                        <span style={{ width: 110, textAlign: 'right' }}>Conversion</span>
+                      </div>
+                      {monthlyBySource.length === 0 && <div style={{ color: C.muted, fontSize: 13, padding: 12 }}>No data for this selection.</div>}
+                      {monthlyBySource.map((s, i) => {
+                        const c = convOf(s)
+                        const share = (s.qualified / totalQual) * 100
+                        const barW = (s.qualified / maxQ) * 100
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '9px 2px', borderBottom: '1px solid #F1F5F9' }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: C.navy, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.source}</div>
+                              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 1 }}>{fmtN(s.queued)} queued</div>
+                            </div>
+                            <div style={{ width: 200, display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ flex: 1, height: 8, background: '#EEF2FB', borderRadius: 6, overflow: 'hidden' }}>
+                                <div style={{ width: barW + '%', height: '100%', background: 'linear-gradient(90deg,#1F3C84,#29B9C3)', borderRadius: 6 }} />
+                              </div>
+                              <div style={{ width: 64, textAlign: 'right' }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.navy }}>{fmtN(s.qualified)}</div>
+                                <div style={{ fontSize: 10, color: C.muted }}>{share.toFixed(1)}%</div>
+                              </div>
+                            </div>
+                            <div style={{ width: 110, textAlign: 'right' }}>
+                              <span style={{ display: 'inline-block', minWidth: 56, padding: '4px 8px', borderRadius: 7, fontSize: 12, fontWeight: 700, color: '#fff', background: convColor(c) }}>{c == null ? '-' : c.toFixed(1) + '%'}</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      <div style={{ fontSize: 10.5, color: C.muted, marginTop: 10, padding: '0 2px' }}>Bar = qualified volume (share of total QLs). Conversion = qualified / queued; values above 100% mean qualified leads were recorded against a different queued period.</div>
+                    </div>
+                  )
+                })()}
+              </Card>
               <Card title="Day-on-day breakdown" sub={`${mDateWindow.label}${selPeriod === 'all' ? '' : ' · ' + selPeriod}${selMonthlySource === 'All' ? '' : ' · ' + selMonthlySource} · newest first`} action={<MTableExportBtn onClick={() => downloadCSV(dayExportRows, `ql_ops_day_on_day_${new Date().toISOString().slice(0,10)}.csv`)} disabled={!dayExportRows.length} C={C} FONT={FONT} />}>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT, fontSize: 12.5 }}>
