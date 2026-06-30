@@ -24,6 +24,7 @@ const NAV = [
         to: '/dashboard/meta-ads',
         icon: <MetaIcon />,
         label: 'Meta Ads',
+        defaultTo: '/dashboard/meta-ads?tab=campaigns',
         end: false,
         subItems: [
           { to: '/dashboard/meta-ads?tab=creatives', label: 'Creatives', matchType: 'query', tabKey: 'creatives' },
@@ -47,8 +48,16 @@ const NAV = [
       { to: '/dashboard/lead-quality', icon: <FunnelIcon />,   label: 'Lead Quality', end: false },
       { to: '/dashboard/channel-mix',  icon: <MixIcon />,      label: 'Channel Mix',  end: false },
       { to: '/dashboard/revenue',      icon: <RevenueIcon />,  label: 'Revenue',      end: false },
-      { to: '/dashboard/lq-ops',         icon: <PeopleIcon />,   label: 'Daily QLs',     end: false },
-      { to: '/dashboard/lq-ops-monthly', icon: <MTDIcon />,      label: 'Monthly QLs',   end: false },
+      {
+        to: '/dashboard/lq-ops',
+        icon: <PeopleIcon />,
+        label: 'QL Ops',
+        end: false,
+        subItems: [
+          { to: '/dashboard/lq-ops',         label: 'Daily QLs',   matchType: 'route' },
+          { to: '/dashboard/lq-ops-monthly', label: 'Monthly QLs', matchType: 'route' },
+        ]
+      },
       { to: '/dashboard/whatsapp',     icon: <WhatsAppIcon />, label: 'WhatsApp',     end: false },
       { to: '/dashboard/referral', icon: <ReferralIcon />, label: 'Referral', end: false },
       { to: '/dashboard/leads-assigned', icon: <LeadsAssignedIcon />, label: 'Leads Assigned', end: false },
@@ -167,6 +176,7 @@ export default function Sidebar() {
 
   const isMetaParentActive = location.pathname.startsWith('/dashboard/meta-ads')
   const isGoogleParentActive = location.pathname.startsWith('/dashboard/google-ads')
+  const isQlOpsParentActive = location.pathname === '/dashboard/lq-ops' || location.pathname === '/dashboard/lq-ops-monthly'
 
   const [metaExpanded, setMetaExpanded] = React.useState(isMetaParentActive)
   React.useEffect(() => { if (isMetaParentActive) setMetaExpanded(true) }, [isMetaParentActive])
@@ -174,8 +184,11 @@ export default function Sidebar() {
   const [googleExpanded, setGoogleExpanded] = React.useState(isGoogleParentActive)
   React.useEffect(() => { if (isGoogleParentActive) setGoogleExpanded(true) }, [isGoogleParentActive])
 
-  const getExpanded = (label) => label === 'Meta Ads' ? metaExpanded : label === 'Google Ads' ? googleExpanded : false
-  const setExpanded = (label) => label === 'Meta Ads' ? setMetaExpanded : label === 'Google Ads' ? setGoogleExpanded : () => {}
+  const [qlOpsExpanded, setQlOpsExpanded] = React.useState(isQlOpsParentActive)
+  React.useEffect(() => { if (isQlOpsParentActive) setQlOpsExpanded(true) }, [isQlOpsParentActive])
+
+  const getExpanded = (label) => label === 'Meta Ads' ? metaExpanded : label === 'Google Ads' ? googleExpanded : label === 'QL Ops' ? qlOpsExpanded : false
+  const setExpanded = (label) => label === 'Meta Ads' ? setMetaExpanded : label === 'Google Ads' ? setGoogleExpanded : label === 'QL Ops' ? setQlOpsExpanded : () => {}
 
   const toggle = () => {
     const next = !collapsed
@@ -316,11 +329,12 @@ export default function Sidebar() {
             {group.label !== 'Intelligence' && <p className={styles.groupLabel}>{group.label}</p>}
             {group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item => {
               if (item.subItems) {
+                const parentActive = item.label === 'Meta Ads' ? isMetaParentActive : item.label === 'Google Ads' ? isGoogleParentActive : item.label === 'QL Ops' ? isQlOpsParentActive : false
                 return (
                   <div key={item.label}>
                     <button
-                      className={`${styles.navItem} ${(item.label === 'Meta Ads' ? isMetaParentActive : isGoogleParentActive) ? styles.active : ''}`}
-                      onClick={() => { setExpanded(item.label)(e => !e); if (!isMetaParentActive) navigate(item.to + '?tab=campaigns') }}
+                      className={`${styles.navItem} ${parentActive ? styles.active : ''}`}
+                      onClick={() => { setExpanded(item.label)(e => !e); if (!parentActive) navigate(item.defaultTo || item.subItems[0].to) }}
                       style={{width:'100%',textAlign:'left',background:'none',border:'none',cursor:'pointer',font:'inherit'}}>
                       <span className={styles.navIcon}>{item.icon}</span>
                       <span style={{flex:1}}>{item.label}</span>
