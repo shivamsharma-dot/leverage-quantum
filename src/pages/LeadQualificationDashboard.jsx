@@ -796,10 +796,44 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
     [...new Set(monthlyRows.map(r => r.period))].filter(Boolean).sort((a,b) => periodKey(a) - periodKey(b))
   , [monthlyRows])
   const periodOptions = useMemo(() => ['all', ...monthlyPeriods], [monthlyPeriods])
-  const monthlyFiltered = useMemo(() =>
-    (selPeriod === 'all' ? monthlyRows : monthlyRows.filter(r => r.period === selPeriod))
-      .filter(r => selMonthlySource === 'All' || r.source === selMonthlySource)
-  , [monthlyRows, selPeriod, selMonthlySource])
+  const mWin = (() => {
+    const today = new Date(); today.setHours(0,0,0,0)
+    const back = (n) => { const f = new Date(today); f.setDate(today.getDate() - (n-1)); return f }
+    if (mDatePreset === 'L7D')  return { from: back(7),  to: today, label: 'Last 7 days' }
+    if (mDatePreset === 'L14D') return { from: back(14), to: today, label: 'Last 14 days' }
+    if (mDatePreset === 'custom' && mCustomFrom && mCustomTo) {
+      const [fy,fm,fd] = mCustomFrom.split('-').map(Number)
+      const [ty,tm,td] = mCustomTo.split('-').map(Number)
+      const from = new Date(fy,fm-1,fd); from.setHours(0,0,0,0)
+      const to = new Date(ty,tm-1,td); to.setHours(0,0,0,0)
+      return { from, to, label: 'Custom' }
+    }
+    return { from: back(30), to: today, label: 'Last 30 days' }
+  })()
+    const mPD = (raw) => {
+    const str = String(raw || '').trim()
+    if (!str) return null
+    // expected formats: '25-Jun-2026' or '2026-06-25'
+    let d
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) { const [y,mo,dy] = str.split('-').map(Number); d = new Date(y,mo-1,dy) }
+    else d = new Date(str)
+    if (isNaN(d)) return null
+    d.setHours(0,0,0,0)
+    return d
+  }
+    const monthlyFiltered = useMemo(() => {
+      const base = (selPeriod === 'all' ? monthlyRows : monthlyRows.filter(r => r.period === selPeriod))
+        .filter(r => selMonthlySource === 'All' || r.source === selMonthlySource)
+      // Apply the Days / custom-range window. Rows carry a per-day date on the Monthly QLs sheet.
+      // If no row in the current scope has a parseable date, fall back to the full set (all months).
+      const anyDated = base.some(r => mPD(r.date))
+      if (!anyDated) return base
+      return base.filter(r => {
+        const d = mPD(r.date)
+        if (!d) return false
+        return d >= mWin.from && d <= mWin.to
+      })
+    }, [monthlyRows, selPeriod, selMonthlySource, mDatePreset, mCustomFrom, mCustomTo])
   const monthlyTotals = useMemo(() => {
     const t = {}
     MQ_METRICS.forEach(m => { t[m.key] = monthlyFiltered.reduce((s,r) => s + mNum(r[m.key]), 0) })
