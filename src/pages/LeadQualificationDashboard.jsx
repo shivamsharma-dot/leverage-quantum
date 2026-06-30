@@ -881,6 +881,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
     }
     return { from: back(30), to: today, label: 'Last 30 days' }
   }, [mDatePreset, mCustomFrom, mCustomTo])
+    const monthlyScopeLabel = (selPeriod === 'all' ? '' : selPeriod + ' / ') + (mDatePreset === 'custom' && mCustomFrom && mCustomTo ? mCustomFrom + ' -> ' + mCustomTo : mDateWindow.label)
   // Period + source filtered set (drives month-on-month table)
   const monthlyScoped = useMemo(() =>
     monthlyFiltered.filter(r => selMonthlySource === 'All' || r.source === selMonthlySource)
@@ -1759,16 +1760,16 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
             </>)}
             {view === 'monthly' && (<>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 14, marginBottom: 14 }}>
-                <PremKPI label="Total Opp Count" value={fmtN(monthlyTotals.opp_count)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
-                <PremKPI label="Floor Queued" value={fmtN(monthlyTotals.floor_queued)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#1C9FD4" accentBg="#E3F4FB" icon={KPI_ICONS.total} />
-                <PremKPI label="Futwork Queued" value={fmtN(monthlyTotals.futwork_queued)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
-                <PremKPI label="Superbot Queued" value={fmtN(monthlyTotals.superbot_queued)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#29B9C3" accentBg="#E4F7F8" icon={KPI_ICONS.bot} />
-                <PremKPI label="Futwork AI Queued" value={fmtN(monthlyTotals.futwork_ai_queued)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#4CAE6F" accentBg="#E8F6EE" icon={KPI_ICONS.ai} />
-                <PremKPI label="Futwork Qualified" value={fmtN(monthlyTotals.futwork_qualified)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
-                <PremKPI label="Superbot Qualified" value={fmtN(monthlyTotals.superbot_qualified)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#29B9C3" accentBg="#E4F7F8" icon={KPI_ICONS.bot} />
-                <PremKPI label="Futwork AI Qualified" value={fmtN(monthlyTotals.futwork_ai_qualified)} sub={selPeriod === 'all' ? 'All months' : selPeriod} accent="#4CAE6F" accentBg="#E8F6EE" icon={KPI_ICONS.ai} />
+                <PremKPI label="Total Opp Count" value={fmtN(monthlyTotals.opp_count)} sub={monthlyScopeLabel} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
+                <PremKPI label="Floor Queued" value={fmtN(monthlyTotals.floor_queued)} sub={monthlyScopeLabel} accent="#1C9FD4" accentBg="#E3F4FB" icon={KPI_ICONS.total} />
+                <PremKPI label="Futwork Queued" value={fmtN(monthlyTotals.futwork_queued)} sub={monthlyScopeLabel} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
+                <PremKPI label="Superbot Queued" value={fmtN(monthlyTotals.superbot_queued)} sub={monthlyScopeLabel} accent="#29B9C3" accentBg="#E4F7F8" icon={KPI_ICONS.bot} />
+                <PremKPI label="Futwork AI Queued" value={fmtN(monthlyTotals.futwork_ai_queued)} sub={monthlyScopeLabel} accent="#4CAE6F" accentBg="#E8F6EE" icon={KPI_ICONS.ai} />
+                <PremKPI label="Futwork Qualified" value={fmtN(monthlyTotals.futwork_qualified)} sub={monthlyScopeLabel} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
+                <PremKPI label="Superbot Qualified" value={fmtN(monthlyTotals.superbot_qualified)} sub={monthlyScopeLabel} accent="#29B9C3" accentBg="#E4F7F8" icon={KPI_ICONS.bot} />
+                <PremKPI label="Futwork AI Qualified" value={fmtN(monthlyTotals.futwork_ai_qualified)} sub={monthlyScopeLabel} accent="#4CAE6F" accentBg="#E8F6EE" icon={KPI_ICONS.ai} />
               </div>
-              <Card title="Source performance: volume vs. conversion" sub={selPeriod === 'all' ? 'All months -- qualified volume and queued-to-QL conversion by source' : selPeriod} style={{ marginBottom: 14 }}>
+              <Card title="Source performance: volume vs. conversion" sub={monthlyScopeLabel + ' -- qualified volume and queued-to-QL conversion by source'} style={{ marginBottom: 14 }}>
                 {(() => {
                   const oQual = monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified
                   const oQueued = monthlyTotals.floor_queued
