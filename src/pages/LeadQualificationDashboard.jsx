@@ -1182,7 +1182,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', overflow: 'visible', flexShrink: 1, minWidth: 0 }}>
 
-            <div style={{ display: view === 'monthly' ? 'none' : 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background:'#F8FAFC', padding:'6px 10px', borderRadius:12, border:'0.5px solid #E5E7EB' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background:'#F8FAFC', padding:'6px 10px', borderRadius:12, border:'0.5px solid #E5E7EB' }}>
           {isCurrentMonth && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: '3px' }}>
               {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => {
