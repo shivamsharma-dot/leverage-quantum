@@ -32,7 +32,8 @@ const PAGE_TITLES = {
   '/dashboard/lead-quality': 'Lead Quality',
   '/dashboard/channel-mix': 'Channel Mix',
   '/dashboard/revenue': 'Revenue',
-  '/dashboard/lq-ops': 'QL Ops',
+  '/dashboard/lq-ops': 'Daily QLs',
+  '/dashboard/lq-ops-monthly': 'Monthly QLs',
   '/dashboard/whatsapp': 'WhatsApp',
   '/dashboard/referral': 'Referral',
   '/dashboard/leads-assigned': 'Leads Assigned',
@@ -170,7 +171,8 @@ export default function App() {
           <Route path="/dashboard/lead-quality" element={<ProtectedRoute dashboardId="lead_quality"><LeadQualityDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/channel-mix" element={<ProtectedRoute dashboardId="channel_mix"><ChannelMixDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/revenue" element={<ProtectedRoute dashboardId="revenue"> <RevenueDashboard /></ProtectedRoute>} />
-          <Route path="/dashboard/lq-ops" element={<ProtectedRoute dashboardId="lq_ops"> <LeadQualificationDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/lq-ops" element={<ProtectedRoute dashboardId="lq_ops"> <LeadQualificationDashboard forcedView="daily" /></ProtectedRoute>} />
+          <Route path="/dashboard/lq-ops-monthly" element={<ProtectedRoute dashboardId="lq_ops_monthly"> <LeadQualificationDashboard forcedView="monthly" /></ProtectedRoute>} />
           <Route path="/dashboard/referral" element={<ProtectedRoute dashboardId="referral"><ReferralDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/leads-assigned" element={<ProtectedRoute dashboardId="leads_assigned"><LeadsAssignedDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/whatsapp" element={<ProtectedRoute dashboardId="whatsapp"> <WhatsAppDashboard /></ProtectedRoute>} />
