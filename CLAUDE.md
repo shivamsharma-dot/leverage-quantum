@@ -1074,3 +1074,20 @@ USER: follow-up to the Days/custom-range fix -- the KPI card subtitles and the s
 - VERIFIED LIVE (Monthly QLs, Last 30 days): DATE + PERIOD render on one line; all figures centered; headers single-line no overlap; both tables' conversion-% columns show color+tint heatmap (e.g. day-on-day 35.2%/38.7% cyan, low single-digits navy; monthly Jun-2026 23.7%/8.8%/1.7%/3.3% tinted, zero months show '-' muted). No console errors. Source card unaffected.
 - BUILD NOTE: not built locally (content-safety filter blocks npm build); verified via Vercel deploy + live page.
 - Constraints honored: brand colors only (navy/blue/cyan/green + grey for null); DashboardHome.jsx, Ask AI wiring, sidebar logic untouched.
+
+## 2026-07-01 -- Monthly QLs: Source performance card converted to a chart
+
+**Request:** User asked (with annotated screenshots) to "turn this into chart" / "this is still not converted to chart" for the "Source performance: volume vs. conversion" card on Monthly QLs.
+
+**Change (LeadQualificationDashboard.jsx):**
+- Replaced the old list-style rows (column header + row map + footer caption) inside the "Source performance: volume vs. conversion" Card with a proper horizontal bar chart.
+- Kept the existing summary header block (overall QL conversion % + per-provider Futwork/Superbot/Futwork AI stats) untouched.
+- Chart per source: source name + queued count (left), a horizontal bar whose length = qualified volume (bar width = qualified / maxQ, gradient navy->blue->cyan #1F3C84->#1C9FD4->#29B9C3), the qualified count + share-of-QLs %, and a conversion marker (colored dot + %) using the existing convColor heat scale (>=50 green / >=25 cyan / >=10 blue / else navy / null-queued -> grey "--").
+- Added a compact legend row (Bar length = qualified volume; dot color key 50%+/25-50%/10-25%/<10%).
+- Bug fix during verification: initial commit used {s.name} which is undefined (monthlyBySource items key the label as `source`, not `name`); source labels rendered blank. Fixed to {s.source}.
+
+**Commits:** c096086 (chart), 528c556 (label fix). Both committed directly to main and deployed via Vercel.
+
+**Verification:** Live at /dashboard/lq-ops-monthly (Source=All, Last 30 days). Chart renders: Facebook 7,604 (58.5%) 20.1%, Google 2,953 (22.7%) 50.5% green, Affiliate 1,396 (10.7%) 93.3% green, Content+Brand 637 10.0% blue, Unknown 289 "--" grey (0 queued), Remarketing 101 9.6% navy, Affiliate Partner 12 133.3% green, etc. Bars scale to qualified volume; conversion dots color-coded per brand palette. A transient "Failed to fetch dynamically imported module" chunk error appeared right after deploy (stale cached chunk hash) and cleared on reload -- not a code error. No console errors after reload.
+
+**Notes:** local `npm run build` remains blocked by the content-safety filter; verified via Vercel deploy + live page. Constraints honored: brand colors only (navy/blue/cyan/green + grey for null); scope limited to Monthly QLs Source card; DashboardHome.jsx, Ask AI wiring, sidebar logic untouched.
