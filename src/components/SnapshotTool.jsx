@@ -409,6 +409,7 @@ export default function SnapshotTool() {
           onMouseDown={onCropDown}
           onMouseMove={onCropMove}
           onMouseUp={onCropUp}
+          onWheel={(e) => { const r = getContentRoot(); if (r) { r.scrollBy(e.deltaX, e.deltaY); } }}
           style={{ position: 'fixed', inset: 0, zIndex: 10000, cursor: 'crosshair', background: 'rgba(15,31,75,0.30)', fontFamily: FONT }}
         >
           <div style={{ position: 'absolute', top: 18, left: '50%', transform: 'translateX(-50%)', background: '#fff', borderRadius: 10, padding: '8px 16px', fontSize: 13, fontWeight: 700, color: INK, boxShadow: '0 8px 24px rgba(15,31,75,0.25)' }}>
