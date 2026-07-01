@@ -1823,7 +1823,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                           return (
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0' }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 12.5, fontWeight: 600, color: C.navy, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</div>
+                                <div style={{ fontSize: 12.5, fontWeight: 600, color: C.navy, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.source}</div>
                                 <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{fmtN(s.queued)} queued</div>
                               </div>
                               <div style={{ width: 320, display: 'flex', alignItems: 'center', gap: 10 }}>
