@@ -880,6 +880,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
       const to = new Date(ty,tm-1,td); to.setHours(0,0,0,0)
       return { from, to, label: 'Custom' }
     }
+    if (mDatePreset === 'ALL') return { from: new Date(2000, 0, 1), to: today, label: 'All time' }
     return { from: back(30), to: today, label: 'Last 30 days' }
   }, [mDatePreset, mCustomFrom, mCustomTo])
     const monthlyScopeLabel = (selPeriod === 'all' ? '' : selPeriod + ' / ') + (mDatePreset === 'custom' && mCustomFrom && mCustomTo ? mCustomFrom + ' -> ' + mCustomTo : mDateWindow.label)
