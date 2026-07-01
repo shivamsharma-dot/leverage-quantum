@@ -1123,3 +1123,10 @@ USER: follow-up to the Days/custom-range fix -- the KPI card subtitles and the s
 ## 2026-07-01 -- Monthly QLs: Day-on-day breakdown scrollable window
 > **Request:** Make the day-on-day breakdown scrollable with only ~7 days visible in its window (so All time / wide ranges don't create a huge table that pushes the Monthly breakdown far down).
 > **Change:** Capped the day-on-day table container (the `overflowX: 'auto'` div ~line 1849 in src/pages/LeadQualificationDashboard.jsx) to `maxHeight: 336` with `overflowY: 'auto'` + `position: 'relative'` (~7 rows + header). Made all 13 header cells sticky: each `<th>` got `position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2`; the first Date `<th>` (already sticky left) got `top: 0, zIndex: 3` (corner cell). Scoped edits to lines 1849-1890 only to avoid touching the identical Monthly breakdown table below. `npm run build` passed (8.16s). Commit 676e6e0, pushed to main. Verified live: table shows ~7 rows with an internal vertical scrollbar, header stays pinned while scrolling days, Monthly breakdown sits right below.
+
+## 2026-07-01 -- Snapshot tool: allow scroll during Select region
+- Fix (commit 38b3e25): SnapshotTool.jsx crop overlay (position:fixed, inset:0, zIndex:10000) blocked scrolling, so below-fold content (e.g. Monthly breakdown) was unreachable while in "Select region" mode.
+- Added onWheel handler on the crop overlay div: onWheel={(e) => { const r = getContentRoot(); if (r) { r.scrollBy(e.deltaX, e.deltaY); } }} -- forwards wheel scroll to the scrollable content root during crop mode.
+- Capture math in onCropUp already scroll-aware (translates selection by root.scrollTop), so a region drawn after scrolling crops correctly.
+- Verified live: entered Select region, wheeled down, Monthly breakdown now fully reachable; JS test confirmed dispatched wheel event scrolls content root 0 -> max.
+- NOTE: SnapshotTool.jsx is a SHARED component (affects all dashboard pages); edit made with user approval.
