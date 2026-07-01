@@ -1808,38 +1808,50 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                           })}
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', fontSize: 10, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: C.muted, padding: '0 2px 8px' }}>
+                      {/* -- CHART: qualified volume (bars) + conversion (markers) by source -- */}
+                      <div style={{ display: 'flex', alignItems: 'center', fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: C.muted, textTransform: 'uppercase', padding: '0 2px 8px', borderBottom: '1px solid #EEF2FB' }}>
                         <span style={{ flex: 1 }}>Source</span>
-                        <span style={{ width: 200, textAlign: 'right' }}>Qualified (share of QLs)</span>
-                        <span style={{ width: 110, textAlign: 'right' }}>Conversion</span>
+                        <span style={{ width: 320, textAlign: 'center' }}>Qualified volume (share)</span>
+                        <span style={{ width: 84, textAlign: 'center' }}>Conversion</span>
                       </div>
-                      {monthlyBySource.length === 0 && <div style={{ color: C.muted, fontSize: 13, padding: 12 }}>No data for this selection.</div>}
-                      {monthlyBySource.map((s, i) => {
-                        const c = convOf(s)
-                        const share = (s.qualified / totalQual) * 100
-                        const barW = (s.qualified / maxQ) * 100
-                        return (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '9px 2px', borderBottom: '1px solid #F1F5F9' }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 600, color: C.navy, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.source}</div>
-                              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 1 }}>{fmtN(s.queued)} queued</div>
-                            </div>
-                            <div style={{ width: 200, display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <div style={{ flex: 1, height: 8, background: '#EEF2FB', borderRadius: 6, overflow: 'hidden' }}>
-                                <div style={{ width: barW + '%', height: '100%', background: 'linear-gradient(90deg,#1F3C84,#29B9C3)', borderRadius: 6 }} />
+                      <div style={{ padding: '10px 2px 2px' }}>
+                        {monthlyBySource.map((s, i) => {
+                          const c = convOf(s)
+                          const share = totalQual > 0 ? (s.qualified / totalQual) * 100 : 0
+                          const barW = maxQ > 0 ? (s.qualified / maxQ) * 100 : 0
+                          const cc = convColor(c)
+                          return (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '7px 0' }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 600, color: C.navy, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</div>
+                                <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>{fmtN(s.queued)} queued</div>
                               </div>
-                              <div style={{ width: 64, textAlign: 'right' }}>
-                                <div style={{ fontSize: 12.5, fontWeight: 700, color: C.navy }}>{fmtN(s.qualified)}</div>
-                                <div style={{ fontSize: 10, color: C.muted }}>{share.toFixed(1)}%</div>
+                              <div style={{ width: 320, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ flex: 1, height: 22, background: '#F3F6FC', borderRadius: 5, overflow: 'hidden', position: 'relative' }}>
+                                  <div style={{ width: Math.max(barW, s.qualified > 0 ? 2 : 0) + '%', height: '100%', background: 'linear-gradient(90deg,#1F3C84,#1C9FD4,#29B9C3)', borderRadius: 5, transition: 'width .3s' }} />
+                                </div>
+                                <div style={{ width: 78, textAlign: 'right', flexShrink: 0 }}>
+                                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.navy }}>{fmtN(s.qualified)}</div>
+                                  <div style={{ fontSize: 9.5, color: C.muted }}>{share.toFixed(1)}%</div>
+                                </div>
+                              </div>
+                              <div style={{ width: 84, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: cc }}>
+                                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: cc, flexShrink: 0 }} />
+                                  {c == null ? '--' : c.toFixed(1) + '%'}
+                                </span>
                               </div>
                             </div>
-                            <div style={{ width: 110, textAlign: 'right' }}>
-                              <span style={{ display: 'inline-block', minWidth: 56, padding: '4px 8px', borderRadius: 7, fontSize: 12, fontWeight: 700, color: '#fff', background: convColor(c) }}>{c == null ? '-' : c.toFixed(1) + '%'}</span>
-                            </div>
-                          </div>
-                        )
-                      })}
-                      <div style={{ fontSize: 10.5, color: C.muted, marginTop: 10, padding: '0 2px' }}>Bar = qualified volume (share of total QLs). Conversion = qualified / queued; values above 100% mean qualified leads were recorded against a different queued period.</div>
+                          )
+                        })}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 10, color: C.muted, marginTop: 8, padding: '8px 2px 0', borderTop: '1px solid #EEF2FB' }}>
+                        <span>Bar length = qualified volume.</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: C.green }} />50%+</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: C.cyan }} />25-50%</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: C.blue }} />10-25%</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: C.navy }} />&lt;10%</span>
+                      </div>
                     </div>
                   )
                 })()}
