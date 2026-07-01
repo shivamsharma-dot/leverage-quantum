@@ -1111,3 +1111,7 @@ USER: follow-up to the Days/custom-range fix -- the KPI card subtitles and the s
 **Verification:** Live at /dashboard/lq-ops-monthly (Source=All, Last 30 days, 22.7% overall). Chart renders correctly: X-axis 0-8,000 with gridlines, source labels on Y-axis, bars color-coded by conversion (Facebook blue, Google/Affiliate green, Content+Brand blue, Unknown grey null, Remarketing navy), value labels on each bar. No app console errors (only unrelated VS Code webview internal errors from the Codespace tab).
 
 **Notes:** User instruction going forward -- always push directly to main. Constraints honored: brand colors only; scope = Monthly QLs Source card only; DashboardHome.jsx, Ask AI wiring, sidebar untouched.
+
+## 2026-07-01 -- Monthly QLs: Source performance summary header cleanup + alignment
+> **Request:** User said the summary header strip (22.7% overall + Futwork/Superbot/Futwork AI) looked messy and misaligned with the chart -- provider stats clustered left with empty space on the right.
+> **Change:** Rebuilt the header so the three provider columns each take equal flex (flex:1) and fill the full width; larger overall % (34px), consistent vertical centering, cleaner padding/gaps. Brand colors only. `npm run build` passed. Commit 581118e, pushed to main. Verified live on quantum.leverageedu.com.
