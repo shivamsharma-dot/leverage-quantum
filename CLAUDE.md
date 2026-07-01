@@ -1115,3 +1115,7 @@ USER: follow-up to the Days/custom-range fix -- the KPI card subtitles and the s
 ## 2026-07-01 -- Monthly QLs: Source performance summary header cleanup + alignment
 > **Request:** User said the summary header strip (22.7% overall + Futwork/Superbot/Futwork AI) looked messy and misaligned with the chart -- provider stats clustered left with empty space on the right.
 > **Change:** Rebuilt the header so the three provider columns each take equal flex (flex:1) and fill the full width; larger overall % (34px), consistent vertical centering, cleaner padding/gaps. Brand colors only. `npm run build` passed. Commit 581118e, pushed to main. Verified live on quantum.leverageedu.com.
+
+## 2026-07-01 -- Monthly QLs: Add 'All time' Days filter option
+> **Request:** User wanted a clear filter option so all-time data shows in the dashboard below.
+> **Change:** Added 'All time' to the Days dropdown (between 'Last 30 days' and 'Custom'), mapped to preset 'ALL'. Added ALL branch to BOTH date windows -- mWin (KPI totals/source card, commit 544cde6) and mDateWindow (day-on-day table + all labels, this commit) -- returning {from: 2000-01-01, to: today, label: 'All time'} so nothing is filtered out and the Days button + KPI sublabels read 'All time'. `npm run build` passed. Commits 544cde6 + follow-up, pushed to main. Verified live (Total Opp jumps to 9.43L, X-axis to 40k).
