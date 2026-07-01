@@ -1091,3 +1091,23 @@ USER: follow-up to the Days/custom-range fix -- the KPI card subtitles and the s
 **Verification:** Live at /dashboard/lq-ops-monthly (Source=All, Last 30 days). Chart renders: Facebook 7,604 (58.5%) 20.1%, Google 2,953 (22.7%) 50.5% green, Affiliate 1,396 (10.7%) 93.3% green, Content+Brand 637 10.0% blue, Unknown 289 "--" grey (0 queued), Remarketing 101 9.6% navy, Affiliate Partner 12 133.3% green, etc. Bars scale to qualified volume; conversion dots color-coded per brand palette. A transient "Failed to fetch dynamically imported module" chunk error appeared right after deploy (stale cached chunk hash) and cleared on reload -- not a code error. No console errors after reload.
 
 **Notes:** local `npm run build` remains blocked by the content-safety filter; verified via Vercel deploy + live page. Constraints honored: brand colors only (navy/blue/cyan/green + grey for null); scope limited to Monthly QLs Source card; DashboardHome.jsx, Ask AI wiring, sidebar logic untouched.
+
+## 2026-07-01 -- Monthly QLs: Source performance card -> REAL recharts chart (via Codespace)
+
+**Request:** User wanted a proper chart (not the styled-div bar list) for the Monthly QLs "Source performance: volume vs. conversion" card. Work done in a GitHub Codespace.
+
+**Change (src/pages/LeadQualificationDashboard.jsx):**
+- Replaced the custom flex/div bar rows with a genuine recharts BarChart (already an app dependency; recharts primitives used elsewhere in this file).
+- Horizontal bar chart (layout="vertical"): X-axis = qualified volume (numeric, gridlines, fmtN ticks), Y-axis = source name. Top 12 sources with qualified/queued > 0.
+- Each Bar Cell colored by queued-to-QL conversion via convColor heat scale (>=50 green / >=25 cyan / >=10 blue / else navy / null -> muted grey). Value label (qualified count) at bar end.
+- Custom-styled Tooltip (source, qualified + share%, queued, conversion% in heat color).
+- Preserved the summary header (overall QL conversion + Futwork/Superbot/Futwork AI provider stats).
+- Added a color legend row under the chart.
+
+**Workflow:** Codespace -> reset local main to origin/main -> spliced new card (lines 1774-1858) via a Node build script -> `npm run build` PASSED (built cleanly, no errors -- first time local build verification was possible) -> committed 398fc9b -> pushed to main -> Vercel auto-deploy -> verified live.
+
+**Commit:** 398fc9b (code). This CLAUDE.md entry committed separately.
+
+**Verification:** Live at /dashboard/lq-ops-monthly (Source=All, Last 30 days, 22.7% overall). Chart renders correctly: X-axis 0-8,000 with gridlines, source labels on Y-axis, bars color-coded by conversion (Facebook blue, Google/Affiliate green, Content+Brand blue, Unknown grey null, Remarketing navy), value labels on each bar. No app console errors (only unrelated VS Code webview internal errors from the Codespace tab).
+
+**Notes:** User instruction going forward -- always push directly to main. Constraints honored: brand colors only; scope = Monthly QLs Source card only; DashboardHome.jsx, Ask AI wiring, sidebar untouched.
