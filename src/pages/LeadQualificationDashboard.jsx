@@ -1796,29 +1796,29 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                       </div>
                     )
                   }
-                  return (
-                    <div style={{ padding: '4px 2px', fontFamily: FONT }}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', gap: 12, padding: '14px 16px', marginBottom: 8, background: '#EEF3FB', borderRadius: 12 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingRight: 18, borderRight: '1px solid #DCE5F4' }}>
-                          <div style={{ fontSize: 32, fontWeight: 800, color: C.navy, lineHeight: 1 }}>{oQueued > 0 ? oPctNum.toFixed(1) + '%' : '--'}</div>
-                          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>overall QL conversion</div>
-                          <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{fmtN(oQual)} of {fmtN(oQueued)} queued</div>
-                        </div>
-                        <div style={{ display: 'flex', flex: 1, flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
-                          {providers.map((p, i) => {
-                            const pn = p.d > 0 ? (p.q / p.d) * 100 : 0
-                            return (
-                              <div key={i} style={{ minWidth: 96 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: C.muted }}>
-                                  <span style={{ width: 8, height: 8, borderRadius: 3, background: p.color }} />{p.name}
-                                </div>
-                                <div style={{ fontSize: 18, fontWeight: 800, color: p.color }}>{p.d > 0 ? pn.toFixed(1) + '%' : '--'}</div>
-                                <div style={{ fontSize: 10.5, color: C.muted }}>{fmtN(p.q)} / {fmtN(p.d)}</div>
-                              </div>
-                            )
-                          })}
-                        </div>
+                return (
+                  <div style={{ padding: '4px 2px', fontFamily: FONT }}>
+                    <div style={{ display: 'flex', alignItems: 'stretch', gap: 16, padding: '16px 20px', marginBottom: 8, background: '#EEF3FB', borderRadius: 12 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingRight: 20, borderRight: '1px solid #DCE5F4', flex: '0 0 auto' }}>
+                        <div style={{ fontSize: 34, fontWeight: 800, color: C.navy, lineHeight: 1 }}>{oQueued > 0 ? oPctNum.toFixed(1) + '%' : '--'}</div>
+                        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 5 }}>overall QL conversion</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{fmtN(oQual)} of {fmtN(oQueued)} queued</div>
                       </div>
+                      <div style={{ display: 'flex', flex: 1, gap: 12, alignItems: 'stretch' }}>
+                        {providers.map((p, i) => {
+                          const pn = p.d > 0 ? (p.q / p.d) * 100 : 0
+                          return (
+                            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 4px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 3 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: 3, background: p.color, flex: '0 0 auto' }} />{p.name}
+                              </div>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: p.color, lineHeight: 1 }}>{p.d > 0 ? pn.toFixed(1) + '%' : '--'}</div>
+                              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>{fmtN(p.q)} / {fmtN(p.d)}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
                       <div style={{ width: '100%', height: Math.max(260, chartData.length * 34 + 60) }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 54, left: 8, bottom: 8 }} barCategoryGap={'28%'}>
