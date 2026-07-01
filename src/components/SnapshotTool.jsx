@@ -380,7 +380,9 @@ export default function SnapshotTool() {
     if (!cropping) return
     const onKey = (e) => { if (e.key === 'Escape') { dragRef.current = null; setCropping(false); setSel(null) } }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    const onWheelWin = (e) => { const r = getContentRoot(); if (r) { e.preventDefault(); r.scrollBy(e.deltaX, e.deltaY); } }
+    window.addEventListener('wheel', onWheelWin, { passive: false })
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('wheel', onWheelWin) }
   }, [cropping])
 
   const download = () => {
