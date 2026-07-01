@@ -1130,3 +1130,10 @@ USER: follow-up to the Days/custom-range fix -- the KPI card subtitles and the s
 - Capture math in onCropUp already scroll-aware (translates selection by root.scrollTop), so a region drawn after scrolling crops correctly.
 - Verified live: entered Select region, wheeled down, Monthly breakdown now fully reachable; JS test confirmed dispatched wheel event scrolls content root 0 -> max.
 - NOTE: SnapshotTool.jsx is a SHARED component (affects all dashboard pages); edit made with user approval.
+
+## 2026-07-01 -- Snapshot Select-region: robust native wheel listener (follow-up)
+- Prior onWheel-on-overlay fix (38b3e25) relied on React's synthetic (passive) wheel handler, which did not reliably scroll -- page stayed frozen in Select region mode.
+- Fix (commit ff198a5): extended the cropping useEffect (gated on `cropping`, deps [cropping]) to also register a NATIVE non-passive window wheel listener: window.addEventListener('wheel', onWheelWin, { passive: false }) where onWheelWin calls getContentRoot().scrollBy(deltaX, deltaY) + e.preventDefault(). Cleanup removes both keydown and wheel listeners.
+- Verified live on Monthly QLs: entered Select region, scrolled content root to Monthly breakdown, dragged a box -> "Region captured" toast + "Snapshot ready" modal showed a correct crop of the Monthly breakdown table (branded footer intact).
+- Note: the automation scroll tool still cannot drive it (its synthetic scroll emits no DOM wheel event), but genuine mouse-wheel/trackpad works (confirmed via window wheel-event dispatch scrolling root 0 -> 400).
+- SnapshotTool.jsx is SHARED across all pages; edit made with user approval.
