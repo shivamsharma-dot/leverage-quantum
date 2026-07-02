@@ -728,6 +728,13 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 ---
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
+## 2026-07-02 -- Meta Ads Campaigns: move i-button to END of header (after Disconnect) (commit 7ca057d)
+- Per follow-up, relocated the metrics-info "i" button block from FIRST child of headerRight to
+  the LAST element -- placed immediately after the Disconnect button. Order is now:
+  account picker > date range > synced > Refresh > Disconnect > i.
+- Block ({activeTab===campaigns && (...i-button+backdrop+popover...)}) moved intact (31 lines).
+  Build OK (6.84s). Verified live: i-button sits at far right end; popover opens right-aligned.
+
 ## 2026-07-02 -- Meta Ads Campaigns: KPI cards redesign + remove Send Report + i-button to header (commit 047a3d8)
 - CampaignsTab top KPI cards (IMPRESSIONS/PERIOD SPEND/TOTAL LEADS/AVG CPL/FATIGUED) previously
   used the flat shared <KPICard> style. Rebuilt them inline to match the CreativesTab design
