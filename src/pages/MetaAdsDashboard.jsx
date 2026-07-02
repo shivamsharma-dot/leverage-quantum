@@ -600,17 +600,17 @@ function CreativesTab({ data }) {
         </div>
       ):(
         <div style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden' }}>
-          <div style={{ display:'grid',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 80px 90px 90px 80px 80px',padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
-            {['','Creative','Type','Health','Spend','Leads','CTR','CPL','Freq','Score','WoW CTR'].map(h=><div key={h} style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>{h}</div>)}
+          <div style={{ display:'grid',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 72px 72px 80px 90px 90px 80px 80px',padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
+            {['','Creative','Type','Health','Spend','Leads','CRM','Δ','CTR','CPL','Freq','Score','WoW CTR'].map(h=><div key={h} style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>{h}</div>)}
           </div>
           {pageItems.map((ad,i)=>(
-            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 80px 90px 90px 80px 80px',padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
+            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 72px 72px 80px 90px 90px 80px 80px',padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
               <div style={{ width:32,height:32,borderRadius:6,background:'#F3F4F6',overflow:'hidden',flexShrink:0 }}>{ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div>
               <div style={{ overflow:'hidden' }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }} title={ad.name}>{ad.name}</div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
               <span style={{ background:tBg[ad.type]||'#F3F4F6',color:tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span>
               <span style={{ background:hBg[ad.fatigueLabel]||'#E9F8EF',color:hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span>
               <div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div>
-              <div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div>
+              <div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div><div style={{ fontSize:12,color:'#374151' }}>{ad.crmLeads==null?'—':ad.crmLeads.toLocaleString('en-IN')}</div><div style={{ fontSize:12,fontWeight:600,color:(ad.crmLeads==null?'#9CA3AF':((ad.crmLeads-(ad.leads||0))>=0?'#4CAE6F':'#1C9FD4')) }}>{ad.crmLeads==null?'—':((ad.crmLeads-(ad.leads||0))>=0?'+':'')+(ad.crmLeads-(ad.leads||0)).toLocaleString('en-IN')}</div>
               <div style={{ fontSize:12,color:ad.ctr<accCTRpct*0.6&&ad.ctr>0?'#DC2626':'#374151',fontWeight:ad.ctr<accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div>
               <div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div>
               <div style={{ fontSize:12,color:ad.frequency>4.5?'#DC2626':ad.frequency>3?'#D97706':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div>
@@ -895,6 +895,16 @@ export default function MetaAdsDashboard() {
   const [pageLoad, setPageLoad]     = useState(true)
   const [error, setError]           = useState('')
   const [data, setData] = useState(() => { try { const c = localStorage.getItem('meta_cache'); if (!c) return null; const pp = JSON.parse(c); return pp && pp.d ? pp.d : null; } catch (e) { return null; } })
+  const [crmMap, setCrmMap] = useState(null); // { byName:{adName:leads}, total, ts }
+  useEffect(() => { let ok=true; (async()=>{ try { const r=await fetch('/api/crm-leads'); if(!r.ok) return; const j=await r.json(); if(ok && j && j.byName) setCrmMap(j); } catch(e){} })(); return ()=>{ ok=false; }; }, []);
+  const crmData = useMemo(() => {
+    if(!data) return data;
+    const byName = (crmMap && crmMap.byName) || {};
+    const ads = (data.ads||[]).map(a => { const crm = byName[a.name]; return { ...a, crmLeads: (crm==null?null:crm) }; });
+    const byCamp = {}; ads.forEach(a => { const cid = a.campaign && a.campaign.id; if(cid==null) return; if(a.crmLeads!=null) byCamp[cid]=(byCamp[cid]||0)+a.crmLeads; });
+    const campaigns = (data.campaigns||[]).map(c => { const v = byCamp[c.id]; return { ...c, crmLeads: (v==null?null:v) }; });
+    return { ...data, ads, campaigns };
+  }, [data, crmMap]);
   const [cacheTs, setCacheTs] = useState(() => { try { const c = localStorage.getItem('meta_cache'); if (!c) return null; const pp = JSON.parse(c); return pp && pp.t ? pp.t : null; } catch (e) { return null; } })
   const [tokenExpired, setTokenExpired] = useState(false)
   const [tokenCreatedAt, setTokenCreatedAt] = useState(null)
@@ -1013,7 +1023,7 @@ export default function MetaAdsDashboard() {
         // Ads + creatives - fetch ALL ads (paginated, progressive)
         // We pass a placeholder promise that resolves on first page, then continues in background
         graphGet(`${AD_ACCOUNT_ID}/ads`, t, {
-          fields: 'name,status,effective_status,creative{id,name,video_id,object_story_id,instagram_permalink_url,effective_object_story_id}',
+          fields: 'name,status,effective_status,creative{id,name,video_id,object_story_id,instagram_permalink_url,effective_object_story_id},campaign{id,name}',
           limit: 200,
         }),
         graphGet(`${AD_ACCOUNT_ID}/adspixels`, t, { fields: 'id,name,last_fired_time' })
@@ -1437,8 +1447,8 @@ export default function MetaAdsDashboard() {
           </div>
         ) : data ? (
           <div style={{padding:'18px 28px'}}>
-            {activeTab === 'campaigns' && <CampaignsTab data={data}/>}
-            {activeTab === 'creatives' && <CreativesTab data={data}/>}
+            {activeTab === 'campaigns' && <CampaignsTab data={crmData}/>}
+            {activeTab === 'creatives' && <CreativesTab data={crmData}/>}
             {activeTab === 'ask_ai'      && null}
           </div>
         ) : null}
