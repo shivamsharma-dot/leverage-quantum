@@ -3,7 +3,7 @@
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const MODEL         = 'claude-sonnet-4-5'
-const TOOL_MODEL = 'claude-3-5-haiku-latest' // fast model for intermediate tool-decision rounds; final answer stays on MODEL
+const TOOL_MODEL = MODEL // NOTE: intermediate rounds must call the Meta tool reliably; Haiku returned text without tool_use (leaked model name to user). Keep on MODEL.
 const SB_URL        = process.env.SUPABASE_URL        || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SB_KEY        = process.env.SUPABASE_SERVICE_ROLE_KEY
 
