@@ -729,6 +729,22 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-03 -- Ask AI Haiku change REVERTED (regression) -- commit 2f2f11d
+Live test of 15706b4 FAILED: routing intermediate tool-decision rounds to Haiku
+(claude-3-5-haiku-latest) caused Haiku to respond WITHOUT calling the Meta tool;
+it emitted plain text that got streamed verbatim as the answer -- user saw the literal
+string "model: claude-3-5-haiku-latest" instead of campaign data. Root cause: the
+no-tool-call branch (toolUseBlocks.length===0) streams the intermediate response text
+directly, so a weaker model that declines to call the tool leaks its text to the user.
+FIX (2f2f11d): set const TOOL_MODEL = MODEL (intermediate rounds back on Sonnet 4.5).
+KEPT: intermediate max_tokens: 1024 (safe, harmless optimization).
+Final streaming answer untouched throughout (Sonnet 4.5, 8192, stream:true).
+Live re-test after Vercel deploy: fresh query "top 3 campaigns by spend + CPL" now returns
+a correct table (UK 41.5L/CPL74, Germany 22.3L/CPL45, Italy 14.4L/CPL118) + analysis. OK.
+LESSON: do NOT swap the tool-decision model to a weaker one unless the no-tool-call branch
+is hardened (e.g. force tool_choice or discard/ignore intermediate text). Net perf change
+now = just the max_tokens cap on intermediate rounds.
+
 ## 2026-07-03 -- Ask AI latency reduction (commit 15706b4)
 Goal: reduce Ask AI response time WITHOUT changing output. Profiled api/ask-ai.js:
 agentic tool-use loop, MAX_TOOL_ROUNDS=5; each round = a NON-streaming (stream:false)
