@@ -293,7 +293,6 @@ function CampaignsTab({ data }) {
   const [sortDir, setSortDir] = useState('desc')
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
-  const [showInfo, setShowInfo] = useState(false)
   const [expanded, setExpanded] = useState(null)
   const accSpend = parseFloat(account.spend || 0)
   const accImpr = parseInt(account.impressions || 0)
@@ -339,15 +338,26 @@ function CampaignsTab({ data }) {
   const cols = '2.4fr 90px 80px 110px 110px 90px 80px 90px 90px 80px'
   return (
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
-      <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16 }}>
-        {[
-          { label:'IMPRESSIONS',value:accImpr.toLocaleString('en-IN'),sub:accClicks.toLocaleString('en-IN')+' clicks',accent:'#1F3C84',accentBg:'#E8EFF9' },
-          { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:totActive+' active · '+pausedCampaignCount+' paused',accent:'#1C9FD4',accentBg:'#E3F5FD' },
-          { label:'TOTAL LEADS',value:accLeads.toLocaleString('en-IN'),sub:'Current period',accent:'#4CAE6F',accentBg:'#E9F8EF' },
-          { label:'AVG CPL',value:accCPL>0?'₹'+accCPL.toLocaleString('en-IN'):'—',sub:'CTR '+accCTRpct.toFixed(2)+'% · CPM ₹'+accCPM,accent:'#D97706',accentBg:'#FEF9C3' },
-          { label:'FATIGUED',value:totFatigue,sub:'Campaigns freq >4.5',accent:totFatigue>0?'#DC2626':'#4CAE6F',accentBg:totFatigue>0?'#FEF2F2':'#E9F8EF' },
-        ].map(k => <KPICard key={k.label} label={k.label} value={k.value} sub={k.sub} />)}
-      </div>
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16 }}>
+          {[
+            { label:'IMPRESSIONS',value:accImpr.toLocaleString('en-IN'),sub:accClicks.toLocaleString('en-IN')+' clicks',c1:'#1F3C84',c2:'#1C9FD4',icon:'◐' },
+            { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:totActive+' active · '+pausedCampaignCount+' paused',c1:'#1C9FD4',c2:'#29B9C3',icon:'₹' },
+            { label:'TOTAL LEADS',value:accLeads.toLocaleString('en-IN'),sub:'Current period',c1:'#4CAE6F',c2:'#29B9C3',icon:'◉' },
+            { label:'AVG CPL',value:accCPL>0?'₹'+accCPL.toLocaleString('en-IN'):'—',sub:'CTR '+accCTRpct.toFixed(2)+'% · CPM ₹'+accCPM,c1:'#1F3C84',c2:'#29B9C3',icon:'▲' },
+            { label:'FATIGUED',value:totFatigue,sub:'Campaigns freq >4.5',c1:'#29B9C3',c2:'#1C9FD4',icon:'⚡' },
+          ].map(k => (
+            <div key={k.label} style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'16px 18px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)' }}>
+              <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:'linear-gradient(90deg,'+k.c1+','+k.c2+')' }} />
+              <div style={{ position:'absolute', top:-28, right:-28, width:96, height:96, borderRadius:'50%', background:'linear-gradient(135deg,'+k.c1+'14,'+k.c2+'05)' }} />
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12, position:'relative' }}>
+                <div style={{ width:30, height:30, borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, color:'#fff', background:'linear-gradient(135deg,'+k.c1+','+k.c2+')', boxShadow:'0 4px 10px -2px '+k.c1+'66' }}>{k.icon}</div>
+                <span style={{ fontSize:10.5, fontWeight:700, letterSpacing:'0.07em', color:'#64748B', textTransform:'uppercase' }}>{k.label}</span>
+              </div>
+              <div style={{ fontSize:26, fontWeight:800, letterSpacing:'-0.6px', color:'#0F1B33', lineHeight:1.05, position:'relative' }}>{k.value}</div>
+              <div style={{ fontSize:11.5, color:'#8A94A6', marginTop:5, position:'relative' }}>{k.sub}</div>
+            </div>
+          ))}
+        </div>
       <div style={{ display:'flex',gap:8,marginBottom:14,alignItems:'center',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 14px',flexWrap:'wrap' }}>
         <input type="text" placeholder="Search campaigns..." value={search} onChange={e=>setSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:220,background:'#FAFAFA' }}/>
         <div style={{ display:'flex',gap:3 }}>
@@ -355,33 +365,6 @@ function CampaignsTab({ data }) {
         </div>
         <div style={{ marginLeft:'auto',display:'flex',alignItems:'center',gap:10,position:'relative' }}>
             <div style={{ fontSize:12,color:'#9CA3AF' }}>{filtered.length} campaigns · avg CTR {accCTRpct.toFixed(2)}% · lifetime CPC ₹{Math.round(lifetimeCPC)}</div>
-            <button onClick={()=>setShowInfo(v=>!v)} title='How these metrics are calculated' style={{ width:26,height:26,borderRadius:7,border:'0.5px solid #E5E7EB',background:showInfo?'#E8EFF9':'#fff',color:'#1F3C84',fontSize:13,fontWeight:700,fontStyle:'italic',fontFamily:'Georgia,serif',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>i</button>
-            {showInfo&&<div onClick={()=>setShowInfo(false)} style={{ position:'fixed',inset:0,zIndex:150 }}/>}
-            {showInfo&&<div style={{ position:'absolute',right:0,top:'calc(100% + 8px)',zIndex:200,width:360,maxHeight:'70vh',overflowY:'auto',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,boxShadow:'0 14px 40px rgba(15,23,42,0.16)',padding:'16px 18px',textAlign:'left',fontFamily:'"Plus Jakarta Sans",sans-serif' }}>
-              <div style={{ fontSize:13,fontWeight:700,color:'#0F172A',marginBottom:3 }}>How these metrics are calculated</div>
-              <div style={{ fontSize:11,color:'#9CA3AF',marginBottom:12 }}>Per campaign, for the selected date range. Source: Meta Marketing API insights.</div>
-              {[
-                ['Spend','Amount spent, straight from Meta (ins.spend).'],
-                ['Impressions','Times the ad was shown (ins.impressions).'],
-                ['Clicks','All clicks on the ad (ins.clicks).'],
-                ['CTR','Click-through rate = Clicks / Impressions × 100. Shown as reported by Meta (ins.ctr).'],
-                ['CPM','Cost per 1,000 impressions = Spend / Impressions × 1000.'],
-                ['CPC','Cost per click = Spend / Clicks.'],
-                ['Reach','Unique people who saw the ad (ins.reach). Frequency = Impressions / Reach.'],
-                ['Frequency','Avg times each person saw the ad (ins.frequency = Impressions / Reach).'],
-                ['Leads','Lead actions from Meta (actions where type = "lead").'],
-                ['CPL','Cost per lead = Spend / Leads.'],
-                ['Conv. Rate','Leads / Clicks × 100.'],
-                ['Spend Share','This campaign’s Spend / total account Spend × 100.'],
-                ['Signal','Heuristic: "top" if CTR > 1.2× account avg; "low" if CTR < 0.6× avg or (Frequency > 4 and below-avg CTR); else "average".'],
-              ].map(([k,v])=>(
-                <div key={k} style={{ marginBottom:9 }}>
-                  <div style={{ fontSize:11.5,fontWeight:700,color:'#1F3C84' }}>{k}</div>
-                  <div style={{ fontSize:11.5,color:'#475569',lineHeight:1.45 }}>{v}</div>
-                </div>
-              ))}
-              <div style={{ fontSize:10.5,color:'#9CA3AF',marginTop:8,paddingTop:8,borderTop:'0.5px solid #F1F5F9',lineHeight:1.45 }}>Note: header totals (Impressions, Clicks, Spend, Leads) use Meta’s account-level figures, which can differ by a tiny margin from the sum of individual campaigns due to Meta’s cross-level de-duplication.</div>
-            </div>}
           </div>
       </div>
       <div style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden' }}>
@@ -907,6 +890,7 @@ export default function MetaAdsDashboard() {
   const [adAccounts, setAdAccounts]     = useState([])
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [loading, setLoading]       = useState(false)
+  const [showInfo, setShowInfo] = useState(false);
   const [pageLoad, setPageLoad]     = useState(true)
   const [error, setError]           = useState('')
   const [data, setData] = useState(() => { try { const c = localStorage.getItem('meta_cache'); if (!c) return null; const pp = JSON.parse(c); return pp && pp.d ? pp.d : null; } catch (e) { return null; } })
@@ -1305,6 +1289,37 @@ export default function MetaAdsDashboard() {
             <h1 className={styles.pageTitle}>{activeTab === 'creatives' ? 'Meta Creatives' : 'Meta Ads'}</h1>
           </div>
           <div className={styles.headerRight}>
+            {activeTab === 'campaigns' && (
+              <div style={{ position:'relative' }}>
+                <button onClick={()=>setShowInfo(v=>!v)} title='How these metrics are calculated' style={{ width:26,height:26,borderRadius:7,border:'0.5px solid #E5E7EB',background:showInfo?'#E8EFF9':'#fff',color:'#1F3C84',fontSize:13,fontWeight:700,fontStyle:'italic',fontFamily:'Georgia,serif',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>i</button>
+                {showInfo&&<div onClick={()=>setShowInfo(false)} style={{ position:'fixed',inset:0,zIndex:150 }}/>}
+                {showInfo&&<div style={{ position:'absolute',right:0,top:'calc(100% + 8px)',zIndex:200,width:360,maxHeight:'70vh',overflowY:'auto',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,boxShadow:'0 14px 40px rgba(15,23,42,0.16)',padding:'16px 18px',textAlign:'left',fontFamily:'"Plus Jakarta Sans",sans-serif' }}>
+                  <div style={{ fontSize:13,fontWeight:700,color:'#0F172A',marginBottom:3 }}>How these metrics are calculated</div>
+                  <div style={{ fontSize:11,color:'#9CA3AF',marginBottom:12 }}>Per campaign, for the selected date range. Source: Meta Marketing API insights.</div>
+                  {[
+                    ['Spend','Amount spent, straight from Meta (ins.spend).'],
+                    ['Impressions','Times the ad was shown (ins.impressions).'],
+                    ['Clicks','All clicks on the ad (ins.clicks).'],
+                    ['CTR','Click-through rate = Clicks / Impressions × 100. Shown as reported by Meta (ins.ctr).'],
+                    ['CPM','Cost per 1,000 impressions = Spend / Impressions × 1000.'],
+                    ['CPC','Cost per click = Spend / Clicks.'],
+                    ['Reach','Unique people who saw the ad (ins.reach). Frequency = Impressions / Reach.'],
+                    ['Frequency','Avg times each person saw the ad (ins.frequency = Impressions / Reach).'],
+                    ['Leads','Lead actions from Meta (actions where type = "lead").'],
+                    ['CPL','Cost per lead = Spend / Leads.'],
+                    ['Conv. Rate','Leads / Clicks × 100.'],
+                    ['Spend Share','This campaign’s Spend / total account Spend × 100.'],
+                    ['Signal','Heuristic: "top" if CTR > 1.2× account avg; "low" if CTR < 0.6× avg or (Frequency > 4 and below-avg CTR); else "average".'],
+                  ].map(([k,v])=>(
+                    <div key={k} style={{ marginBottom:9 }}>
+                      <div style={{ fontSize:11.5,fontWeight:700,color:'#1F3C84' }}>{k}</div>
+                      <div style={{ fontSize:11.5,color:'#475569',lineHeight:1.45 }}>{v}</div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize:10.5,color:'#9CA3AF',marginTop:8,paddingTop:8,borderTop:'0.5px solid #F1F5F9',lineHeight:1.45 }}>Note: header totals (Impressions, Clicks, Spend, Leads) use Meta’s account-level figures, which can differ by a tiny margin from the sum of individual campaigns due to Meta’s cross-level de-duplication.</div>
+                </div>}
+              </div>
+            )}
             {/* Active users */}
             {activeUsers.length > 0 && (
               <div style={{display:'flex',alignItems:'center',gap:6,marginRight:4}}>
@@ -1383,9 +1398,6 @@ export default function MetaAdsDashboard() {
             )}
             {lastSync && <span className={styles.syncTag}>Synced {lastSync.toLocaleTimeString()}</span>}
             {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#4CAE6F':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
-            <button className={styles.sendReportBtn} onClick={sendReport} disabled={sending||loading||!data}>
-              {sending ? '⏳ Sending…' : '✉ Send Report'}
-            </button>
             <button className={styles.refreshBtn} onClick={() => loadAllData(token, datePreset)} disabled={loading}
               style={{opacity: loading ? 0.7 : 1}}>
               <span style={{display:'inline-flex', animation: loading ? 'spin .7s linear infinite' : 'none'}}>
