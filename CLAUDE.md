@@ -729,6 +729,22 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-03 -- Ask AI latency reduction (commit 15706b4)
+Goal: reduce Ask AI response time WITHOUT changing output. Profiled api/ask-ai.js:
+agentic tool-use loop, MAX_TOOL_ROUNDS=5; each round = a NON-streaming (stream:false)
+model call at max_tokens 8192; only the FINAL response streams. Latency dominated by
+buffered intermediate rounds on full Sonnet 4.5.
+CHANGE (approach 1): added const TOOL_MODEL = claude-3-5-haiku-latest (line 6).
+Intermediate tool-decision call now uses model: TOOL_MODEL + max_tokens: 1024
+(the block with stream:false + tools:[META_TOOL]).
+FINAL streaming call UNCHANGED: model: MODEL (claude-sonnet-4-5), max_tokens: 8192, stream:true
+-> user-facing answer still written by Sonnet 4.5, so output content/length unchanged;
+only the internal "which Meta query to run" step is faster + first-token latency lower.
+NOT touched: system prompt, META_TOOL logic, executeMetaQuery, final model/tokens.
+Verified: node --check api/ask-ai.js OK; git diff confirms only intermediate block changed.
+Note: api/ask-ai.js is a serverless fn (not in Vite bundle) so npm run build does not compile it.
+Deploys via Vercel. Committed 15706b4, pushed 5708d83..15706b4.
+
 ## 2026-07-03 -- Meta Ads live refresh failure: DIAGNOSIS ONLY (no code change)
 User asked why Meta live refresh keeps failing ("not usual"). Investigated live network + Graph API responses.
 FINDINGS:
