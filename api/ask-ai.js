@@ -3,6 +3,7 @@
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const MODEL         = 'claude-sonnet-4-5'
+const TOOL_MODEL = 'claude-3-5-haiku-latest' // fast model for intermediate tool-decision rounds; final answer stays on MODEL
 const SB_URL        = process.env.SUPABASE_URL        || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SB_KEY        = process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -504,8 +505,8 @@ export default async function handler(req, res) {
           'anthropic-beta': 'prompt-caching-2024-07-31',
         },
         body: JSON.stringify({
-          model: MODEL,
-          max_tokens: 8192,
+          model: TOOL_MODEL,
+          max_tokens: 1024,
           // On last round, stream. Otherwise collect tool calls.
           stream: false,
           tools: [META_TOOL],
