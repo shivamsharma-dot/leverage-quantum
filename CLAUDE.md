@@ -729,6 +729,18 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-03 -- CRM integration: NEXT STEPS / OPEN QUESTIONS (deferred, do later)
+STATUS: ad-level (Creatives LIST) + campaign-level CRM leads + Delta are LIVE (commits 015a99b, ddfcc06, 025e123). The items below are NOT done yet -- pick up here.
+TODO 1 (date-range alignment): CRM leads are currently ALL-TIME by ad name and ignore the dashboard date filter, so Delta vs a short Meta window (e.g. Last 7 days) is inflated. Decide: keep all-time, OR make api/crm-leads.js accept a range and aggregate using the sheet's lead_created_date / lead_created_month columns so CRM matches the selected Meta window like-for-like. (Q for user: which window semantics -- match Meta preset exactly, or a fixed month view?)
+TODO 2 (Grid view creative cards): only the Creatives LIST view has CRM+Delta. The GRID card view (ad.previewLink card, ~L582) is NOT augmented. Add a small CRM/Delta line to each grid card if wanted.
+TODO 3 (CRM_SHEET_URL env var): URL is hardcoded as fallback in api/crm-leads.js. User to decide whether to set CRM_SHEET_URL in Vercel env (cleaner) -- USER sets env var themselves; do NOT enter secrets.
+TODO 4 (unattributed leads): 504 CSV rows have BLANK opp_first_campaign_name (currently skipped). Decide whether to surface these as an 'Unattributed CRM leads' total somewhere (e.g. a header stat), since they are real leads not tied to any ad.
+TODO 5 (KPI header stat): consider a top-level 'Total CRM leads vs Meta leads' summary card so the overall gap is visible without scanning the table. (User earlier said NO dedicated CRM section -- confirm whether a single header stat is OK vs out of scope.)
+TODO 6 (name-match coverage): matching is EXACT on ad name (per user decision). Worth a one-off audit: how many Meta ads have NO CRM match and how many CRM ad-names have NO Meta ad (orphans on both sides), to gauge coverage. Non-blocking.
+OPEN QUESTIONS FOR USER: (a) date-range semantics for CRM (TODO 1); (b) augment grid cards? (TODO 2); (c) header summary card acceptable? (TODO 5); (d) show unattributed total? (TODO 4).
+KEY ANCHORS for resume: api/crm-leads.js (byName map); MetaAdsDashboard.jsx -> crmMap state + fetch + crmData useMemo (~L897-907), ads fields +campaign{id,name} (~L1016), CreativesTab grid/header/cells (603/604/607/613), CampaignsTab leads cell (L391). Backup of pre-CRM file was /tmp/mad.bak (gone after restart). Standing rule: always commit+push to main, log CLAUDE.md separately, never touch DashboardHome.jsx.
+
+
 ## 2026-07-03 -- CRM leads integration into Meta Ads (commits 015a99b, ddfcc06)
 - NEW api/crm-leads.js: serverless fn fetches published Google Sheet CSV (env CRM_SHEET_URL || hardcoded pub URL), parses w/ RFC4180-ish splitter, aggregates 'leads' by EXACT 'opp_first_campaign_name' (= Meta ad name). Returns { byName:{adName:leads}, total, rows, distinct, ts }. Skips blank/unattributed rows. Cache-Control s-maxage=600.
 - CSV verified: 4 cols (lead_created_date, lead_created_month, opp_first_campaign_name, leads); 2553 distinct ad names; 24496 attributed rows; 504 blank; 488,436 total leads.
