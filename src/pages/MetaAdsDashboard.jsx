@@ -388,7 +388,7 @@ function CampaignsTab({ data }) {
               <div style={{ fontSize:13,color:'#374151' }}>{fmtN(c.clicks)}</div>
               <div><div style={{ fontSize:13,color:c.ctr<accCTRpct*0.6?'#DC2626':'#374151',fontWeight:c.ctr<accCTRpct*0.6?600:400 }}>{c.ctr.toFixed(2)}%</div><div style={{ fontSize:10,color:'#9CA3AF' }}>CPM ₹{Math.round(c.cpm)}</div></div>
               <div style={{ fontSize:13,fontWeight:600,color:cplCol(c.cpl) }}>{c.cpl>0?'₹'+c.cpl.toLocaleString('en-IN'):'—'}</div>
-              <div style={{ fontSize:13,color:'#374151',fontWeight:500 }}>{c.leads>0?c.leads.toLocaleString('en-IN'):'—'}</div>
+              <div style={{ fontSize:13,color:'#374151',fontWeight:500 }}>{c.leads>0?c.leads.toLocaleString('en-IN'):'—'}{c.crmLeads!=null&&(<div style={{ fontSize:10,fontWeight:600,marginTop:2,lineHeight:1.3 }}><span style={{ color:'#1C9FD4' }}>CRM {c.crmLeads.toLocaleString('en-IN')}</span> <span style={{ color:((c.crmLeads-(c.leads||0))>=0?'#4CAE6F':'#1C9FD4') }}>({(c.crmLeads-(c.leads||0))>=0?'+':''}{(c.crmLeads-(c.leads||0)).toLocaleString('en-IN')})</span></div>)}</div>
               <div>{fBadge(c.fatigueLevel)}</div>
             </div>
             {expanded===c.id&&(
