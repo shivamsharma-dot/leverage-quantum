@@ -729,6 +729,17 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-03 -- CRM leads integration into Meta Ads (commits 015a99b, ddfcc06)
+- NEW api/crm-leads.js: serverless fn fetches published Google Sheet CSV (env CRM_SHEET_URL || hardcoded pub URL), parses w/ RFC4180-ish splitter, aggregates 'leads' by EXACT 'opp_first_campaign_name' (= Meta ad name). Returns { byName:{adName:leads}, total, rows, distinct, ts }. Skips blank/unattributed rows. Cache-Control s-maxage=600.
+- CSV verified: 4 cols (lead_created_date, lead_created_month, opp_first_campaign_name, leads); 2553 distinct ad names; 24496 attributed rows; 504 blank; 488,436 total leads.
+- MetaAdsDashboard.jsx: added campaign{id,name} to the /ads Graph fetch fields (~line 1016) so ads carry parent campaign (needed for campaign rollup; requires FRESH fetch, cached data won't have it).
+- Added crmMap state + useEffect fetch('/api/crm-leads') + crmData useMemo (after data useState ~L897): ad.crmLeads = byName[ad.name] (EXACT match, decision: strictly on ad name); campaign.crmLeads = sum of matched ads' crmLeads by campaign.id. Pass crmData (not data) to <CreativesTab/> + <CampaignsTab/>.
+- CreativesTab LIST view (grid 603/607, header 604, leads cell 613): added 2 columns CRM + Delta after Leads (grid 11->13 tracks, two 72px). Delta color: green #4CAE6F if CRM>=Meta else blue #1C9FD4; null-> em-dash.
+- CampaignsTab (sortable SH grid): to avoid grid-track risk, put CRM into the EXISTING Leads cell (L391) as a compact stacked sub-line 'CRM <n> (+/-delta)'. No grid/cols/SH change.
+- LIVE VERIFIED both tabs: e.g. ad Ger_Ad2 Meta 3604 / CRM 2498; campaign Ger_NAS_10June2026 Meta 11948 / CRM 9277 (-2671); UK +6172; Nigeria +35121. Build OK (6.3s), no CRM console errors.
+- NOTE: campaign sub-line only appears after a fresh Meta refresh (ad.campaign field). Grid-view creative cards NOT yet augmented (only list view). CRM leads are all-time by ad name, independent of the date-range filter -- so Delta vs a short Meta window can be large (expected).
+
+
 ## 2026-07-03 -- Ask AI Haiku change REVERTED (regression) -- commit 2f2f11d
 Live test of 15706b4 FAILED: routing intermediate tool-decision rounds to Haiku
 (claude-3-5-haiku-latest) caused Haiku to respond WITHOUT calling the Meta tool;
