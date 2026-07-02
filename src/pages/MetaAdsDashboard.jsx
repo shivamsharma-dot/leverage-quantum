@@ -462,13 +462,15 @@ function CreativesTab({ data }) {
       if ((a.effective_status||a.status)==='ACTIVE') active++;
       if (parseFloat(a.frequency||0)>0 && im>0) { freqSum += parseFloat(a.frequency)*im; freqW += im; }
     }
+    const noFilter = adTypeFilter==='all' && statusFilter==='all' && healthFilter==='all' && !adNameSearch;
+    if (noFilter) { spend = accSpend; impressions = accImpr; clicks = accClicks; leads = accLeads; }
     const cpl = leads>0 ? Math.round(spend/leads) : 0;
     const ctr = impressions>0 ? (clicks/impressions*100) : 0;
     const cpm = impressions>0 ? (spend/impressions*1000) : 0;
     const cpc = clicks>0 ? (spend/clicks) : 0;
     const frequency = freqW>0 ? (freqSum/freqW) : 0;
     return { spend, impressions, clicks, leads, cpl, ctr, reach, cpm, cpc, frequency, active };
-  }, [filtered])
+  }, [filtered, adTypeFilter, statusFilter, healthFilter, adNameSearch, accSpend, accImpr, accClicks, accLeads])
   const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   useEffect(() => { setPage(1) }, [adTypeFilter,healthFilter,adNameSearch,sortBy,viewMode,filtered.length])
   const safePage = Math.min(page, pageCount)
@@ -483,13 +485,13 @@ function CreativesTab({ data }) {
   const avgCPL=summary.totalLeads>0?Math.round(accSpend/summary.totalLeads):0
   const kpiStats = useMemo(() => {
     const list = processed || []
-    const spendSum = list.reduce((s,a)=>s+(a.spend||0),0)
-    const leadsSum = list.reduce((s,a)=>s+(a.leads||0),0)
-    const imprSum = list.reduce((s,a)=>s+(a.impressions||0),0)
-    const clicksSum = list.reduce((s,a)=>s+(a.clicks||0),0)
+    const spendSum = accSpend // account-level headline (matches Campaigns tab)
+    const leadsSum = accLeads
+    const imprSum = accImpr
+    const clicksSum = accClicks
     const activeCount = list.filter(a=>(a.spend||0)>0||(a.impressions||0)>0).length
-    const cpl = leadsSum>0?Math.round(spendSum/leadsSum):0
-    const ctr = imprSum>0?(clicksSum/imprSum*100):0
+    const cpl = accCPL
+    const ctr = accCTRpct
     return { spendSum, leadsSum, imprSum, clicksSum, activeCount, cpl, ctr, total:list.length }
   }, [processed])
   const hColor={'Healthy':'#166534','Moderate':'#854D0E','High Fatigue':'#991B1B'}
