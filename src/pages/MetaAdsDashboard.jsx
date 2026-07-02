@@ -1289,37 +1289,6 @@ export default function MetaAdsDashboard() {
             <h1 className={styles.pageTitle}>{activeTab === 'creatives' ? 'Meta Creatives' : 'Meta Ads'}</h1>
           </div>
           <div className={styles.headerRight}>
-            {activeTab === 'campaigns' && (
-              <div style={{ position:'relative' }}>
-                <button onClick={()=>setShowInfo(v=>!v)} title='How these metrics are calculated' style={{ width:26,height:26,borderRadius:7,border:'0.5px solid #E5E7EB',background:showInfo?'#E8EFF9':'#fff',color:'#1F3C84',fontSize:13,fontWeight:700,fontStyle:'italic',fontFamily:'Georgia,serif',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>i</button>
-                {showInfo&&<div onClick={()=>setShowInfo(false)} style={{ position:'fixed',inset:0,zIndex:150 }}/>}
-                {showInfo&&<div style={{ position:'absolute',right:0,top:'calc(100% + 8px)',zIndex:200,width:360,maxHeight:'70vh',overflowY:'auto',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,boxShadow:'0 14px 40px rgba(15,23,42,0.16)',padding:'16px 18px',textAlign:'left',fontFamily:'"Plus Jakarta Sans",sans-serif' }}>
-                  <div style={{ fontSize:13,fontWeight:700,color:'#0F172A',marginBottom:3 }}>How these metrics are calculated</div>
-                  <div style={{ fontSize:11,color:'#9CA3AF',marginBottom:12 }}>Per campaign, for the selected date range. Source: Meta Marketing API insights.</div>
-                  {[
-                    ['Spend','Amount spent, straight from Meta (ins.spend).'],
-                    ['Impressions','Times the ad was shown (ins.impressions).'],
-                    ['Clicks','All clicks on the ad (ins.clicks).'],
-                    ['CTR','Click-through rate = Clicks / Impressions × 100. Shown as reported by Meta (ins.ctr).'],
-                    ['CPM','Cost per 1,000 impressions = Spend / Impressions × 1000.'],
-                    ['CPC','Cost per click = Spend / Clicks.'],
-                    ['Reach','Unique people who saw the ad (ins.reach). Frequency = Impressions / Reach.'],
-                    ['Frequency','Avg times each person saw the ad (ins.frequency = Impressions / Reach).'],
-                    ['Leads','Lead actions from Meta (actions where type = "lead").'],
-                    ['CPL','Cost per lead = Spend / Leads.'],
-                    ['Conv. Rate','Leads / Clicks × 100.'],
-                    ['Spend Share','This campaign’s Spend / total account Spend × 100.'],
-                    ['Signal','Heuristic: "top" if CTR > 1.2× account avg; "low" if CTR < 0.6× avg or (Frequency > 4 and below-avg CTR); else "average".'],
-                  ].map(([k,v])=>(
-                    <div key={k} style={{ marginBottom:9 }}>
-                      <div style={{ fontSize:11.5,fontWeight:700,color:'#1F3C84' }}>{k}</div>
-                      <div style={{ fontSize:11.5,color:'#475569',lineHeight:1.45 }}>{v}</div>
-                    </div>
-                  ))}
-                  <div style={{ fontSize:10.5,color:'#9CA3AF',marginTop:8,paddingTop:8,borderTop:'0.5px solid #F1F5F9',lineHeight:1.45 }}>Note: header totals (Impressions, Clicks, Spend, Leads) use Meta’s account-level figures, which can differ by a tiny margin from the sum of individual campaigns due to Meta’s cross-level de-duplication.</div>
-                </div>}
-              </div>
-            )}
             {/* Active users */}
             {activeUsers.length > 0 && (
               <div style={{display:'flex',alignItems:'center',gap:6,marginRight:4}}>
@@ -1406,6 +1375,37 @@ export default function MetaAdsDashboard() {
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
             {!isViewerRole && <button className={styles.disconnectBtn} onClick={disconnect}>Disconnect</button>}
+            {activeTab === 'campaigns' && (
+              <div style={{ position:'relative' }}>
+                <button onClick={()=>setShowInfo(v=>!v)} title='How these metrics are calculated' style={{ width:26,height:26,borderRadius:7,border:'0.5px solid #E5E7EB',background:showInfo?'#E8EFF9':'#fff',color:'#1F3C84',fontSize:13,fontWeight:700,fontStyle:'italic',fontFamily:'Georgia,serif',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>i</button>
+                {showInfo&&<div onClick={()=>setShowInfo(false)} style={{ position:'fixed',inset:0,zIndex:150 }}/>}
+                {showInfo&&<div style={{ position:'absolute',right:0,top:'calc(100% + 8px)',zIndex:200,width:360,maxHeight:'70vh',overflowY:'auto',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,boxShadow:'0 14px 40px rgba(15,23,42,0.16)',padding:'16px 18px',textAlign:'left',fontFamily:'"Plus Jakarta Sans",sans-serif' }}>
+                  <div style={{ fontSize:13,fontWeight:700,color:'#0F172A',marginBottom:3 }}>How these metrics are calculated</div>
+                  <div style={{ fontSize:11,color:'#9CA3AF',marginBottom:12 }}>Per campaign, for the selected date range. Source: Meta Marketing API insights.</div>
+                  {[
+                    ['Spend','Amount spent, straight from Meta (ins.spend).'],
+                    ['Impressions','Times the ad was shown (ins.impressions).'],
+                    ['Clicks','All clicks on the ad (ins.clicks).'],
+                    ['CTR','Click-through rate = Clicks / Impressions × 100. Shown as reported by Meta (ins.ctr).'],
+                    ['CPM','Cost per 1,000 impressions = Spend / Impressions × 1000.'],
+                    ['CPC','Cost per click = Spend / Clicks.'],
+                    ['Reach','Unique people who saw the ad (ins.reach). Frequency = Impressions / Reach.'],
+                    ['Frequency','Avg times each person saw the ad (ins.frequency = Impressions / Reach).'],
+                    ['Leads','Lead actions from Meta (actions where type = "lead").'],
+                    ['CPL','Cost per lead = Spend / Leads.'],
+                    ['Conv. Rate','Leads / Clicks × 100.'],
+                    ['Spend Share','This campaign’s Spend / total account Spend × 100.'],
+                    ['Signal','Heuristic: "top" if CTR > 1.2× account avg; "low" if CTR < 0.6× avg or (Frequency > 4 and below-avg CTR); else "average".'],
+                  ].map(([k,v])=>(
+                    <div key={k} style={{ marginBottom:9 }}>
+                      <div style={{ fontSize:11.5,fontWeight:700,color:'#1F3C84' }}>{k}</div>
+                      <div style={{ fontSize:11.5,color:'#475569',lineHeight:1.45 }}>{v}</div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize:10.5,color:'#9CA3AF',marginTop:8,paddingTop:8,borderTop:'0.5px solid #F1F5F9',lineHeight:1.45 }}>Note: header totals (Impressions, Clicks, Spend, Leads) use Meta’s account-level figures, which can differ by a tiny margin from the sum of individual campaigns due to Meta’s cross-level de-duplication.</div>
+                </div>}
+              </div>
+            )}
           </div>
         </div>
 
