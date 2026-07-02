@@ -728,6 +728,23 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 ---
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
+## 2026-07-02 -- Meta Ads Campaigns: KPI cards redesign + remove Send Report + i-button to header (commit 047a3d8)
+- CampaignsTab top KPI cards (IMPRESSIONS/PERIOD SPEND/TOTAL LEADS/AVG CPL/FATIGUED) previously
+  used the flat shared <KPICard> style. Rebuilt them inline to match the CreativesTab design
+  language: colored gradient top bar, gradient icon chip, uppercase label, big value, sub.
+  Per-card c1/c2 use ONLY brand palette (navy #1F3C84, blue #1C9FD4, cyan #29B9C3, green #4CAE6F).
+  Removed prior off-brand amber (#D97706 on AVG CPL) and red (#DC2626 on FATIGUED).
+- Removed the header "Send Report" button (was styles.sendReportBtn). The sendReport/sending/
+  sendMsg logic remains defined but is now unused (harmless; left in place, no behavior change).
+- Moved the metrics-info "i" button + popover ("How these metrics are calculated") OUT of the
+  CampaignsTab filter/summary bar and INTO the main page header (headerRight), mirroring the MTD
+  page header pattern. Gated with {activeTab === "campaigns" && ...} so it only shows on Campaigns.
+  showInfo/setShowInfo state moved from CampaignsTab to the main MetaAdsDashboard component.
+- Build OK (7.01s). Verified live: cards render on-brand with icon chips; Send Report gone;
+  header i-button opens the metrics popover; filter bar now shows only the summary text.
+- Edit note: after splicing the old KPICard block one leftover </div> remained (orig grid close)
+  causing an esbuild "Expected ) but found style" error; removed the duplicate </div> and rebuilt.
+
 _Last updated: 2026-06-17_
 
 ## How to restart with the Claude browser extension
