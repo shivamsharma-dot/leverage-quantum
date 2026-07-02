@@ -891,6 +891,7 @@ export default function MetaAdsDashboard() {
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [loading, setLoading]       = useState(false)
   const [showInfo, setShowInfo] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
   const [pageLoad, setPageLoad]     = useState(true)
   const [error, setError]           = useState('')
   const [data, setData] = useState(() => { try { const c = localStorage.getItem('meta_cache'); if (!c) return null; const pp = JSON.parse(c); return pp && pp.d ? pp.d : null; } catch (e) { return null; } })
@@ -1349,9 +1350,27 @@ export default function MetaAdsDashboard() {
                 )}
               </div>
             )}
-            <select value={datePreset} onChange={e => handleDateChange(e.target.value)} className={styles.dateSelect} disabled={loading}>
-              {PRESETS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-            </select>
+          <div style={{ position:'relative' }}>
+            <button type="button" onClick={()=>!loading && setDateOpen(o=>!o)} disabled={loading}
+              style={{ display:'flex',alignItems:'center',gap:8,padding:'6px 10px',borderRadius:8,border:'1px solid '+(dateOpen?'#1C9FD4':'#E5E7EB'),background:'#fff',cursor:loading?'not-allowed':'pointer',minWidth:130,justifyContent:'space-between',fontSize:12,fontWeight:600,color:'#0F172A',fontFamily:'inherit',transition:'border .15s' }}>
+              <span>{(PRESETS.find(p=>p.id===datePreset)||{}).label || 'Select range'}</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink:0,transform:dateOpen?'rotate(180deg)':'rotate(0deg)',transition:'transform .2s' }}><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            {dateOpen && <div onClick={()=>setDateOpen(false)} style={{ position:'fixed',inset:0,zIndex:150 }}/>}
+            {dateOpen && (
+              <div style={{ position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:200,minWidth:160,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)',padding:4,overflow:'hidden' }}>
+                {PRESETS.map(p => (
+                  <button key={p.id} type="button" onClick={()=>{ handleDateChange(p.id); setDateOpen(false); }}
+                    style={{ display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',textAlign:'left',padding:'8px 10px',border:'none',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:datePreset===p.id?700:500,fontFamily:'inherit',color:datePreset===p.id?'#1F3C84':'#374151',background:datePreset===p.id?'#E8EFF9':'transparent',transition:'background .12s' }}
+                    onMouseEnter={e=>{ if(datePreset!==p.id) e.currentTarget.style.background='#F3F4F6'; }}
+                    onMouseLeave={e=>{ if(datePreset!==p.id) e.currentTarget.style.background='transparent'; }}>
+                    <span>{p.label}</span>
+                    {datePreset===p.id && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
             {datePreset === 'custom_range' && (
               <div style={{display:'flex',alignItems:'center',gap:6}}>
                 <DatePicker value={customFrom} onChange={setCustomFrom} placeholder="From date" maxDate={customTo || new Date().toISOString().slice(0,10)}/>
