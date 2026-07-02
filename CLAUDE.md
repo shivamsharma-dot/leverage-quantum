@@ -728,6 +728,16 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 ---
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
+## 2026-07-02 -- Meta Ads header: replace native date-range <select> with custom dropdown (commit 0ba45c5)
+- The "Last 7 days" date-range control in the shared Meta Ads header (Campaigns + Creatives tabs)
+  was a native HTML <select> (styles.dateSelect). Replaced it with a custom production dropdown:
+  a styled toggle button (label + rotating chevron) and an absolutely-positioned menu listing the
+  PRESETS, each with hover state and a cyan check on the active item. Uses brand highlight
+  (#E8EFF9 bg / #1F3C84 text / #1C9FD4 check). Backdrop closes on outside click.
+- Added const [dateOpen,setDateOpen]=useState(false) to the main MetaAdsDashboard component.
+  Options unchanged (PRESETS). Selecting an item calls handleDateChange(id) then closes.
+  Build OK (6.82s). Verified live on BOTH tabs: menu opens/selects, label updates, data reloads.
+
 ## 2026-07-02 -- Meta Ads Campaigns: move i-button to END of header (after Disconnect) (commit 7ca057d)
 - Per follow-up, relocated the metrics-info "i" button block from FIRST child of headerRight to
   the LAST element -- placed immediately after the Disconnect button. Order is now:
