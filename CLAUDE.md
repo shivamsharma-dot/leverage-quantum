@@ -728,6 +728,27 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 ---
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
+
+## 2026-07-03 -- Meta Ads live refresh failure: DIAGNOSIS ONLY (no code change)
+User asked why Meta live refresh keeps failing ("not usual"). Investigated live network + Graph API responses.
+FINDINGS:
+- Root cause is a GENUINE Meta ad-account rate limit, NOT a bug/expired token.
+  Graph API error body: type=OAuthException, code=80004, error_subcode=2446079
+  ("too many calls to this ad-account"). 80004 is the per-AD-ACCOUNT (Ads Management) throttle.
+- Token is HEALTHY: account-level /insights calls return 200 (lifetime spend 466516411.08 confirmed).
+  Only the heavy calls fail 400: /campaigns (nested insights, limit=300), /ads (nested creative, limit=200), /adspixels.
+- Account is large (thousands of creatives) so each Refresh burns a big chunk of the call budget at once.
+- /adspixels is fired MULTIPLE times per refresh cycle (redundant) -> wasted budget.
+- Auto-retry ("Retrying shortly") re-fires the SAME burst with no backoff -> keeps the account pinned to the limit.
+DAY FILTER BEHAVIOR (tested live): the custom date dropdown UI works, but changing a preset re-fires the
+  same throttled burst. Account-level KPI can update (200) but per-campaign/per-creative breakdowns fail (400),
+  so the page keeps showing CACHED data. Switching presets repeatedly makes the throttle WORSE, not a workaround.
+SECURITY NOTE: full Meta access_token is currently exposed in client-side URLs (browser).
+PROPOSED FIXES (NOT yet done, awaiting user): (1) dedupe redundant /adspixels calls; (2) exponential backoff on retry;
+  (3) bigger refactor -> split nested-insights campaign call into /campaigns + /insights?level=campaign.
+SUPABASE IDEA (discussed, NOT started): move Meta fetch server-side into a Supabase Edge Function + cache table,
+  dashboard reads from Supabase (fixes root cause + hides token). Project already uses supabase (tsyekthwthxszmsgqfej).
+NO CODE CHANGES MADE THIS SESSION. Working tree clean at ebb06f5.
 ## 2026-07-02 -- Meta Ads header: replace native date-range <select> with custom dropdown (commit 0ba45c5)
 - The "Last 7 days" date-range control in the shared Meta Ads header (Campaigns + Creatives tabs)
   was a native HTML <select> (styles.dateSelect). Replaced it with a custom production dropdown:
