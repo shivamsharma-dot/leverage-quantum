@@ -1852,18 +1852,18 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                       <tr style={{ textAlign: 'left', color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.06em', borderBottom: `1.5px solid ${C.border}` }}>
                         <th style={{ padding: '10px 12px', position: 'sticky', left: 0, top: 0, background: 'var(--card)', whiteSpace: 'nowrap', zIndex: 3 }}>Date</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Total Opp Count</th>
+                            <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Total QL</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Floor Queued</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork Queued</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Queued</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork AI Queued</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork Qualified</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Qualified</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork AI Queued</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork AI Qualified</th>
-                            <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Total QL</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Queued</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Qualified</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Queued -> QL %</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork Q -> QL %</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Q -> QL %</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Futwork AI Q -> QL %</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 2 }}>Superbot Q -> QL %</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1871,18 +1871,18 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                         <tr key={i} style={{ borderBottom: `0.5px solid ${C.border}`, background: i % 2 ? '#FAFBFD' : 'transparent' }}>
                           <td style={{ padding: '9px 12px', fontWeight: 700, color: C.navy, position: 'sticky', left: 0, background: i % 2 ? '#FAFBFD' : 'var(--card)', whiteSpace: 'nowrap' }}>{row.date}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.opp_count)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: C.navy }}>{fmtN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.floor_queued)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_queued)}</td>
-                          <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_queued)}</td>
-                          <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_queued)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_qualified)}</td>
-                          <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_queued)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_qualified)}</td>
-                            <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: C.navy }}>{fmtN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 600, color: heatColor(pctN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)), background: heatBg(pctN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)) }}>{pct(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.futwork_qualified, row.futwork_queued)), background: heatBg(pctN(row.futwork_qualified, row.futwork_queued)) }}>{pct(row.futwork_qualified, row.futwork_queued)}</td>
-                          <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.superbot_qualified, row.superbot_queued)), background: heatBg(pctN(row.superbot_qualified, row.superbot_queued)) }}>{pct(row.superbot_qualified, row.superbot_queued)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.futwork_ai_qualified, row.futwork_ai_queued)), background: heatBg(pctN(row.futwork_ai_qualified, row.futwork_ai_queued)) }}>{pct(row.futwork_ai_qualified, row.futwork_ai_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.superbot_qualified, row.superbot_queued)), background: heatBg(pctN(row.superbot_qualified, row.superbot_queued)) }}>{pct(row.superbot_qualified, row.superbot_queued)}</td>
                         </tr>
                       ))}
                       {monthlyByDate.length === 0 && (
@@ -1900,18 +1900,18 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                         <tr style={{ textAlign: 'left', color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.06em', borderBottom: `1.5px solid ${C.border}` }}>
                           <th style={{ padding: '10px 12px', position: 'sticky', left: 0, background: 'var(--card)', whiteSpace: 'nowrap' }}>Period</th>
                           <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Total Opp Count</th>
+                            <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Total QL</th>
                           <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Floor Queued</th>
                           <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork Queued</th>
-                          <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Queued</th>
-                          <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork AI Queued</th>
                           <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork Qualified</th>
-                          <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Qualified</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork AI Queued</th>
                           <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork AI Qualified</th>
-                            <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Total QL</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Queued</th>
+                          <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Qualified</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Queued -> QL %</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork Q -> QL %</th>
-                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Q -> QL %</th>
                         <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Futwork AI Q -> QL %</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>Superbot Q -> QL %</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1919,18 +1919,18 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                           <tr key={i} style={{ borderBottom: `0.5px solid ${C.border}`, background: i % 2 ? '#FAFBFD' : 'transparent' }}>
                             <td style={{ padding: '9px 12px', fontWeight: 700, color: C.navy, position: 'sticky', left: 0, background: i % 2 ? '#FAFBFD' : 'var(--card)', whiteSpace: 'nowrap' }}>{row.period}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.opp_count)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: C.navy }}>{fmtN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified)}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.floor_queued)}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_queued)}</td>
-                            <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_queued)}</td>
-                            <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_queued)}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_qualified)}</td>
-                            <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_queued)}</td>
                             <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.futwork_ai_qualified)}</td>
-                            <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 700, color: C.navy }}>{fmtN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_queued)}</td>
+                            <td style={{ padding: '9px 12px', textAlign: 'center', color: '#374151' }}>{fmtN(row.superbot_qualified)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', fontWeight: 600, color: heatColor(pctN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)), background: heatBg(pctN(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)) }}>{pct(row.futwork_qualified + row.superbot_qualified + row.futwork_ai_qualified, row.floor_queued)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.futwork_qualified, row.futwork_queued)), background: heatBg(pctN(row.futwork_qualified, row.futwork_queued)) }}>{pct(row.futwork_qualified, row.futwork_queued)}</td>
-                          <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.superbot_qualified, row.superbot_queued)), background: heatBg(pctN(row.superbot_qualified, row.superbot_queued)) }}>{pct(row.superbot_qualified, row.superbot_queued)}</td>
                           <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.futwork_ai_qualified, row.futwork_ai_queued)), background: heatBg(pctN(row.futwork_ai_qualified, row.futwork_ai_queued)) }}>{pct(row.futwork_ai_qualified, row.futwork_ai_queued)}</td>
+                          <td style={{ padding: '9px 12px', textAlign: 'center', color: heatColor(pctN(row.superbot_qualified, row.superbot_queued)), background: heatBg(pctN(row.superbot_qualified, row.superbot_queued)) }}>{pct(row.superbot_qualified, row.superbot_queued)}</td>
                           </tr>
                         ))}
                       </tbody>
