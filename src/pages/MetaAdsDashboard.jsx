@@ -916,7 +916,7 @@ export default function MetaAdsDashboard() {
   const [tokenCreatedAt, setTokenCreatedAt] = useState(null)
   const [sdkReady, setSdkReady] = useState(false)
   const [lastSync, setLastSync] = useState(null)
-  const [datePreset, setDatePreset] = useState('last_7d')
+  const [datePreset, setDatePreset] = useState('this_month')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo]     = useState('')
 
