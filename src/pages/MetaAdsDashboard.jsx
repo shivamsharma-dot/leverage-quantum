@@ -1008,7 +1008,19 @@ export default function MetaAdsDashboard() {
                        : preset === 'last_30d'  ? 'last_30d'
                        : 'last_7d'  // last_month/this_month/custom use time_range instead
 
-      const [accIns, lifetimeIns, campaignsSummary, campaigns, adsRaw, pixels] = await Promise.all([
+      // Fetch top-200-by-spend ad IDs directly via sorted insights (fixes: default /ads page
+    // order could omit high-spend ads from the 200-item window, causing missing/mismatched
+    // lead numbers for specific high-spend ads). Falls back to unsorted /ads if this fails.
+    const topAdsIns = await graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
+      fields: 'ad_id,spend',
+      level: 'ad',
+      time_range: timeRange,
+      sort: 'spend_descending',
+      limit: 200,
+    }).catch(() => ({ data: [] }))
+    const topAdIds = (topAdsIns.data || []).map(x => x.ad_id).filter(Boolean)
+
+    const [accIns, lifetimeIns, campaignsSummary, campaigns, adsRaw, pixels] = await Promise.all([
         // Account-level insights for selected period
         graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
           fields: 'spend,impressions,clicks,ctr,cpm,reach,frequency,actions',
@@ -1032,6 +1044,7 @@ export default function MetaAdsDashboard() {
         // We pass a placeholder promise that resolves on first page, then continues in background
         graphGet(`${AD_ACCOUNT_ID}/ads`, t, {
           fields: 'name,status,effective_status,creative{id,name,video_id,object_story_id,instagram_permalink_url,effective_object_story_id},campaign{id,name}',
+          ...(topAdIds.length > 0 ? { filtering: JSON.stringify([{ field: 'id', operator: 'IN', value: topAdIds }]) } : {}),
           limit: 200,
         }),
         graphGet(`${AD_ACCOUNT_ID}/adspixels`, t, { fields: 'id,name,last_fired_time' })
