@@ -51,7 +51,26 @@ const FADE_STYLE = `
   animation: qFadeIn 0.42s cubic-bezier(0.22,0.61,0.36,1) both;
   will-change: opacity, transform;
 }
+@keyframes qSpin { to { transform: rotate(360deg); } }
+.q-loader-wrap {
+  min-height: 60vh;
+  display: flex; align-items: center; justify-content: center;
+  animation: qFadeIn 0.3s ease both;
+}
+.q-loader {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 3px solid #E3E8F0; border-top-color: #1C9FD4;
+  animation: qSpin 0.7s linear infinite;
+}
 `
+
+function PageLoader() {
+  return (
+    <div className="q-loader-wrap" role="status" aria-label="Loading">
+      <div className="q-loader" />
+    </div>
+  )
+}
 
 function getAllowedDashboards(role) {
   if (!role || role === 'admin' || role === 'viewer') return 'all'
@@ -162,7 +181,7 @@ export default function App() {
       <style>{FADE_STYLE}</style>
       <CommandPalette />
       <ToastHost />
-      <Suspense fallback={<div style={{minHeight:"60vh"}} />}>
+      <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute dashboardId="home"> <DashboardHome /></ProtectedRoute>} />
