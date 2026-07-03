@@ -896,7 +896,7 @@ export default function MetaAdsDashboard() {
   const [error, setError]           = useState('')
   const [data, setData] = useState(() => { try { const c = localStorage.getItem('meta_cache'); if (!c) return null; const pp = JSON.parse(c); return pp && pp.d ? pp.d : null; } catch (e) { return null; } })
   const [crmMap, setCrmMap] = useState(null); // { byName:{adName:leads}, total, ts }
-  useEffect(() => { let ok=true; const since=data&&data.range&&data.range.since; const until=data&&data.range&&data.range.until; const qs=(since&&until)?('?since='+since+'&until='+until):''; (async()=>{ try { const r=await fetch('/api/crm-leads'+qs); if(!r.ok) return; const j=await r.json(); if(ok && j && j.byName) setCrmMap(j); } catch(e){} })(); return ()=>{ ok=false; }; }, [data&&data.range&&data.range.since, data&&data.range&&data.range.until]);
+  useEffect(() => { let ok=true; const since=data&&data.range&&data.range.since; const until=data&&data.range&&data.range.until; const qs=(since&&until)?('?start='+since+'&end='+until):''; (async()=>{ try { const r=await fetch('/api/crm-leads'+qs); if(!r.ok) return; const j=await r.json(); if(ok && j && j.byName) setCrmMap(j); } catch(e){} })(); return ()=>{ ok=false; }; }, [data&&data.range&&data.range.since, data&&data.range&&data.range.until]);
   const crmData = useMemo(() => {
     if(!data) return data;
     const byName = (crmMap && crmMap.byName) || {};
