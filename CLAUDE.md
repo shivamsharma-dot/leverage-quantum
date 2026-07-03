@@ -729,6 +729,17 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-03 — CRM Leads: date-range alignment + UI polish (commit e0caa40, verified live)
+- api/crm-leads.js now accepts ?since=YYYY-MM-DD&until=YYYY-MM-DD; parses lead_created_date (DD-Mon-YYYY via toIso/MONTHS map), filters rows in-window, returns {byName,total,rows,distinct,since,until,ts}. No params = all-time.
+- Frontend fetch is range-aware, keyed on data.range.since/until (the same window Meta uses). CRM follows Meta's selected date range.
+- Renamed column "CRM" -> "CRM Leads". Centered CRM Leads + Delta data cells AND their header labels.
+- CreativesTab List view is now the DEFAULT (viewMode useState 'list').
+- Added 6th KPI card "CRM LEADS" (window total + vs-Meta delta); KPI grid repeat(5->6,1fr).
+- crmSummary coverage stats computed in crmData memo (crmTotal, matchedCrm, metaLeadsSum, adsMatched, adsUnmatched, crmNamesNoMeta, since, until, hasCrm).
+- VERIFIED LIVE against deployed /api/crm-leads: all-time total=490946 rows=24511 distinct=2547; Jun-2026 total=39681 rows=798 distinct=197; Jun27-Jul03 total=12293 rows=255 distinct=120. Range filtering confirmed working end-to-end.
+- NOTE: on verification day Meta panel was rate-limited (serving cached data, fixed range), so switching presets did not change Meta's range and CRM correctly mirrored the frozen window. When Meta refreshes, CRM re-fetches per data.range.
+
+
 ## 2026-07-03 -- CRM integration: NEXT STEPS / OPEN QUESTIONS (deferred, do later)
 STATUS: ad-level (Creatives LIST) + campaign-level CRM leads + Delta are LIVE (commits 015a99b, ddfcc06, 025e123). The items below are NOT done yet -- pick up here.
 TODO 1 (date-range alignment): CRM leads are currently ALL-TIME by ad name and ignore the dashboard date filter, so Delta vs a short Meta window (e.g. Last 7 days) is inflated. Decide: keep all-time, OR make api/crm-leads.js accept a range and aggregate using the sheet's lead_created_date / lead_created_month columns so CRM matches the selected Meta window like-for-like. (Q for user: which window semantics -- match Meta preset exactly, or a fixed month view?)
