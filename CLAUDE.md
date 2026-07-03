@@ -729,6 +729,14 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-03 -- Meta Ads Creatives: CRM Leads column was empty (commit b1cb4f0)
+USER: "crm leads in meta ads panel not visible" -- CreativesTab CRM Leads column + KPI card all showed "-" / "no CRM match".
+- ROOT CAUSE: the crm fetch useEffect (MetaAdsDashboard.jsx ~L899) sent query params ?since=&until= but /api/crm-leads expects ?start=&end=. With since/until the API returned a wrong/partial set (total 9286, 97 names) instead of the correct all/range data (total 391031, 836 names) -> byName[a.name] mismatched -> every ad crmLeads=null -> "-".
+- Data logic was fine: 169/200 ad names matched the correct byName map. Bug was purely the param name mismatch on the fetch URL.
+- FIX: single-char-anchor edit: '?since='+since+'&until='+until  ->  '?start='+since+'&end='+until (kept var names). Build OK 7.24s.
+- VERIFIED LIVE: CRM LEADS KPI = 3,91,031 (was -); per-ad CRM Leads column + Delta column now populated (6280/9041/13273...). Only benign extension :0:0 console noise.
+
+
 ## 2026-07-03 — Fix blank-screen flash on page navigation (commit 64cebc2, verified live)
 - SYMPTOM: clicking any sidebar page briefly showed a fully blank white content area.
 - ROOT CAUSE: src/App.jsx uses React.lazy() for every page (code-splitting) wrapped in <Suspense>, and the fallback was an EMPTY div: fallback={<div style={{minHeight:"60vh"}} />}. While the lazy JS chunk downloaded, users saw blank white.
