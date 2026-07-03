@@ -729,6 +729,15 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-03 -- Meta Ads Creatives: CRM leads not honoring date range -- REVERTED prev param change (commit e8477d0)
+USER: "crm leads not showing up according to date range". CRM KPI/column showed the same ~3,91,031 all-time total for every range.
+- ROOT CAUSE: the EARLIER same-day fix (b1cb4f0) that switched the fetch to ?start=&end= was WRONG. api/crm-leads.js (L40-41,57-61) reads req.query.SINCE / req.query.UNTIL and filters lead_created_date by those. start/end are ignored -> API returns all-time (391031) for every window.
+- VERIFIED via API: ?since/&until DOES filter (Jul1-3=9911, Jun=85047, May=73043); ?start/&end always=391031. So since/until is correct.
+- FIX: reverted L899 fetch back to '?since='+since+'&until='+until. Build OK 8.03s.
+- VERIFIED LIVE (This Month): CRM LEADS KPI now 14,436 (was 3,91,031); per-ad values range-scoped (2066/642/1635...). Correct.
+- NOTE: switching dropdown to Last Month did NOT change CRM numbers live because Meta live refresh is currently RATE-LIMITED (amber banner "Showing cached data ... Meta rate limit"); app falls back to cached meta_cache whose range is still this_month (since 2026-06-30 until 2026-07-03, preset this_month). CRM fetch derives dates from data.range, so it correctly follows the (stale) cached July range. Once Meta rate limit clears + range actually updates, CRM will follow to June. This is the pre-existing 80004 rate-limit issue, NOT the CRM param bug.
+
+
 ## 2026-07-03 -- Meta Ads Creatives: CRM Leads column was empty (commit b1cb4f0)
 USER: "crm leads in meta ads panel not visible" -- CreativesTab CRM Leads column + KPI card all showed "-" / "no CRM match".
 - ROOT CAUSE: the crm fetch useEffect (MetaAdsDashboard.jsx ~L899) sent query params ?since=&until= but /api/crm-leads expects ?start=&end=. With since/until the API returned a wrong/partial set (total 9286, 97 names) instead of the correct all/range data (total 391031, 836 names) -> byName[a.name] mismatched -> every ad crmLeads=null -> "-".
