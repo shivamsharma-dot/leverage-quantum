@@ -729,6 +729,14 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-03 — Meta Ads: default date range = current month (commit 66e9e19, verified live)
+- Changed datePreset useState default from 'last_7d' to 'this_month' (line ~919 in MetaAdsDashboard.jsx). Single-line change.
+- 'this_month' preset already computed in getDateRange(): { since: 1st of current month, until: today } and uses Meta time_range (not date_preset), so it updates live to today.
+- Effect: on load, Meta Ads shows current-month-to-date (e.g. Jul 1 -> Jul 3) instead of last 7 days. Re-fetches from Meta on every range change; manual Refresh button unchanged.
+- Verified live: date selector now defaults to "This Month"; page synced fresh data for the current-month window.
+- Context: user considered a morning-sync/stored-data architecture (Supabase + Vercel Cron) to avoid Meta rate-limit 80004 (OAuthException subcode 2446079 "too many calls to this ad-account") but DECIDED NOT to build it. Root cause of earlier "wrong creative metrics" was that Meta rate-limit made ads/campaigns/insights 400, and the app silently fell back to the single localStorage meta_cache blob (built at MetaAdsDashboard ~L1156-1159, read ~L897/914). Not fixed; documented only.
+
+
 ## 2026-07-03 — CRM Leads: date-range alignment + UI polish (commit e0caa40, verified live)
 - api/crm-leads.js now accepts ?since=YYYY-MM-DD&until=YYYY-MM-DD; parses lead_created_date (DD-Mon-YYYY via toIso/MONTHS map), filters rows in-window, returns {byName,total,rows,distinct,since,until,ts}. No params = all-time.
 - Frontend fetch is range-aware, keyed on data.range.since/until (the same window Meta uses). CRM follows Meta's selected date range.
