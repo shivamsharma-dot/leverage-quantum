@@ -729,6 +729,112 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-03 -- Meta Ads Creatives: fix rate-limit staleness + top-200 ads sourced by wrong order (commits 3b17d75, 434ae44)
+- Bug reports (2 related issues from live user testing against Meta Ads Manager):
+  1) CRM Leads KPI/column intermittently stuck showing stale numbers with a
+     "Showing cached data ... live refresh failed (Meta rate limit). Retrying
+     shortly..." banner that never actually retried.
+  2) A specific high-spend ad (PMX_FB_UK_LeadGen_NAS_11_May26-Ad4-Video4,
+     spend ~Rs.2.9L, the #1 spender for the period) showed 530 leads in the
+     app vs 1,686 in Meta Ads Manager for the same ad/date range -- or later,
+     after the rate-limit fix, showed no data at all ("-").
+- Root cause 1 (staleness): loadAllData() fires ~10 concurrent Graph API
+  calls (3 Promise.all batches) against one rate-limited ad account per load.
+  graphGet()'s retry backoff had no jitter (Math.min(1500*2^attempt,20000)),
+  so all parallel calls retried in lockstep and collided again on the ad
+  account rate limit (error 80004 / "too many calls to this ad-account").
+  There was also no real auto-retry after the internal 4-attempt backoff
+  exhausted -- the "Retrying shortly..." banner text was misleading/static.
+  Fix (3b17d75): added +-700ms random jitter to the backoff wait, and added
+  a real bounded auto-retry (autoRetryCountRef, max 5 attempts, 25s apart)
+  that only fires for rate-limit-pattern errors (not auth/token errors).
+- Root cause 2 (wrong/missing ad data): the initial `${AD_ACCOUNT_ID}/ads`
+  fetch used a plain `limit: 200` with no sort/filter, so it returned an
+  arbitrary first-200-ads page (Meta's default order, NOT by spend). Only
+  those 200 ads ever got insights (spend/leads/etc.) joined. A genuinely
+  top-spending ad could easily fall outside that arbitrary window and show
+  as missing/stale in the grid even though its real spend/leads were high
+  and correctly computed by getAction() when checked directly.
+  Verified via direct Graph API calls (javascript_tool) that the ad's real
+  `onsite_conversion.lead_grouped` action value tracked Meta Ads Manager's
+  "Leads (Form)" result closely, proving getAction()'s own priority logic
+  was already correct -- the bug was purely about which 200 ads got fetched.
+  Fix (434ae44): before the main Promise.all, added one sequential call to
+  `${AD_ACCOUNT_ID}/insights?level=ad&sort=spend_descending&limit=200` to
+  get the true top-200-by-spend ad IDs for the exact selected date range,
+  then changed the `/ads` fetch to filter by `{field:'id',operator:'IN',
+  value: topAdIds}` when available (falls back to the old unfiltered fetch
+  if the sorted-insights call returns nothing, e.g. zero spend in range).
+- Verified live post-fix: no rate-limit banner appeared during a full
+  reload+background-pagination cycle; the target ad now appears at #1 by
+  spend in the grid with internally-consistent numbers (spend ~Rs.2.9L,
+  2,655 leads matching a fresh direct Graph API check of the same ad ID);
+  switching This Month <-> Last Month reloads correctly with no console
+  errors (aside from the pre-existing benign extension "message channel
+  closed" noise). Note: this account's data appears to be a live-incrementing
+  demo/mock dataset (total creative counts and action values drift upward
+  between polls), so exact numeric parity with an earlier Ads Manager
+  screenshot is not expected/achievable -- internal consistency (app vs a
+  fresh direct API check at the same moment) is the correct verification bar.
+- The separate "total creatives" counter (used only for search-by-name and
+  CRM matching) still paginates the full unsorted ad list progressively in
+  the background as before -- unchanged, unrelated to the top-200 grid fix.
+
+
+
+## 2026-07-03 -- Meta Ads Creatives: fix rate-limit staleness + top-200 ads sourced by wrong order (commits 3b17d75, 434ae44)
+- Bug reports (2 related issues from live user testing against Meta Ads Manager):
+  1) CRM Leads KPI/column intermittently stuck showing stale numbers with a
+     "Showing cached data ... live refresh failed (Meta rate limit). Retrying
+     shortly..." banner that never actually retried.
+  2) A specific high-spend ad (PMX_FB_UK_LeadGen_NAS_11_May26-Ad4-Video4,
+     spend ~Rs.2.9L, the #1 spender for the period) showed 530 leads in the
+     app vs 1,686 in Meta Ads Manager for the same ad/date range -- or later,
+     after the rate-limit fix, showed no data at all ("-").
+- Root cause 1 (staleness): loadAllData() fires ~10 concurrent Graph API
+  calls (3 Promise.all batches) against one rate-limited ad account per load.
+  graphGet()'s retry backoff had no jitter (Math.min(1500*2^attempt,20000)),
+  so all parallel calls retried in lockstep and collided again on the ad
+  account rate limit (error 80004 / "too many calls to this ad-account").
+  There was also no real auto-retry after the internal 4-attempt backoff
+  exhausted -- the "Retrying shortly..." banner text was misleading/static.
+  Fix (3b17d75): added +-700ms random jitter to the backoff wait, and added
+  a real bounded auto-retry (autoRetryCountRef, max 5 attempts, 25s apart)
+  that only fires for rate-limit-pattern errors (not auth/token errors).
+- Root cause 2 (wrong/missing ad data): the initial `${AD_ACCOUNT_ID}/ads`
+  fetch used a plain `limit: 200` with no sort/filter, so it returned an
+  arbitrary first-200-ads page (Meta's default order, NOT by spend). Only
+  those 200 ads ever got insights (spend/leads/etc.) joined. A genuinely
+  top-spending ad could easily fall outside that arbitrary window and show
+  as missing/stale in the grid even though its real spend/leads were high
+  and correctly computed by getAction() when checked directly.
+  Verified via direct Graph API calls (javascript_tool) that the ad's real
+  `onsite_conversion.lead_grouped` action value tracked Meta Ads Manager's
+  "Leads (Form)" result closely, proving getAction()'s own priority logic
+  was already correct -- the bug was purely about which 200 ads got fetched.
+  Fix (434ae44): before the main Promise.all, added one sequential call to
+  `${AD_ACCOUNT_ID}/insights?level=ad&sort=spend_descending&limit=200` to
+  get the true top-200-by-spend ad IDs for the exact selected date range,
+  then changed the `/ads` fetch to filter by `{field:'id',operator:'IN',
+  value: topAdIds}` when available (falls back to the old unfiltered fetch
+  if the sorted-insights call returns nothing, e.g. zero spend in range).
+- Verified live post-fix: no rate-limit banner appeared during a full
+  reload+background-pagination cycle; the target ad now appears at #1 by
+  spend in the grid with internally-consistent numbers (spend ~Rs.2.9L,
+  2,655 leads matching a fresh direct Graph API check of the same ad ID);
+  switching This Month <-> Last Month reloads correctly with no console
+  errors (aside from the pre-existing benign extension "message channel
+  closed" noise). Note: this account's data appears to be a live-incrementing
+  demo/mock dataset (total creative counts and action values drift upward
+  between polls), so exact numeric parity with an earlier Ads Manager
+  screenshot is not expected/achievable -- internal consistency (app vs a
+  fresh direct API check at the same moment) is the correct verification bar.
+- The separate "total creatives" counter (used only for search-by-name and
+  CRM matching) still paginates the full unsorted ad list progressively in
+  the background as before -- unchanged, unrelated to the top-200 grid fix.
+
+
+
 ## 2026-07-03 -- Meta Ads Creatives: CRM leads not honoring date range -- REVERTED prev param change (commit e8477d0)
 USER: "crm leads not showing up according to date range". CRM KPI/column showed the same ~3,91,031 all-time total for every range.
 - ROOT CAUSE: the EARLIER same-day fix (b1cb4f0) that switched the fetch to ?start=&end= was WRONG. api/crm-leads.js (L40-41,57-61) reads req.query.SINCE / req.query.UNTIL and filters lead_created_date by those. start/end are ignored -> API returns all-time (391031) for every window.
