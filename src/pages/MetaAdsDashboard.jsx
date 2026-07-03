@@ -68,7 +68,7 @@ async function graphGet(path, token, params = {}, retries = 4) {
     const rateLimited = RATE_CODES.includes(d.error.code) || msg.includes('reduce') || msg.includes('too large') || msg.includes('too many')
     if (retries > 0 && rateLimited) {
       const attempt = 4 - retries
-      const wait = Math.min(1500 * Math.pow(2, attempt), 20000)
+      const wait = Math.min(1500 * Math.pow(2, attempt), 20000) + Math.floor(Math.random() * 700)
       await new Promise(r => setTimeout(r, wait))
       return graphGet(path, token, params, retries - 1)
     }
@@ -987,7 +987,9 @@ export default function MetaAdsDashboard() {
     setTokenCreatedAt(new Date().toISOString())
   }
 
-  const loadAllData = async (t, preset = datePreset, fromDate = null, toDate = null, accountOverride = null) => {
+  const autoRetryCountRef = useRef(0)
+  const loadAllData = async (t, preset = datePreset, fromDate = null, toDate = null, accountOverride = null, isAutoRetry = false) => {
+    if (!isAutoRetry) autoRetryCountRef.current = 0
     setLoading(true); setError('')
     try {
       const AD_ACCOUNT_ID = accountOverride || adAccount || DEFAULT_AD_ACCOUNT
@@ -1226,6 +1228,9 @@ export default function MetaAdsDashboard() {
       setError(e.message)
       if (e.message?.includes('190') || e.message?.includes('token') || e.message?.includes('OAuth')) {
         setToken('')
+      } else if ((e.message?.includes('too many') || e.message?.includes('reduce') || e.message?.includes('too large')) && autoRetryCountRef.current < 5) {
+        autoRetryCountRef.current += 1
+        setTimeout(() => { loadAllData(t, preset, fromDate, toDate, accountOverride, true) }, 25000)
       }
     } finally { setLoading(false) }
   }
