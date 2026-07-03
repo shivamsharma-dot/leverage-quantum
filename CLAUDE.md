@@ -729,6 +729,14 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-03 — Fix blank-screen flash on page navigation (commit 64cebc2, verified live)
+- SYMPTOM: clicking any sidebar page briefly showed a fully blank white content area.
+- ROOT CAUSE: src/App.jsx uses React.lazy() for every page (code-splitting) wrapped in <Suspense>, and the fallback was an EMPTY div: fallback={<div style={{minHeight:"60vh"}} />}. While the lazy JS chunk downloaded, users saw blank white.
+- FIX (src/App.jsx only): (1) added @keyframes qSpin + .q-loader-wrap/.q-loader styles into the existing FADE_STYLE template string; (2) added a PageLoader() component (centered spinner, brand blue #1C9FD4 on #E3E8F0 track, 60vh min-height, fades in via qFadeIn); (3) replaced the Suspense fallback with <PageLoader />.
+- Now navigation shows a clean centered spinner instead of blank; resolves into the page. Only shows on first load of each chunk (cached after).
+- Verified live: clicking into QL Ops/Meta Ads shows spinner then the page. Build OK (6.58s). DashboardHome.jsx untouched.
+
+
 ## 2026-07-03 — Meta Ads: default date range = current month (commit 66e9e19, verified live)
 - Changed datePreset useState default from 'last_7d' to 'this_month' (line ~919 in MetaAdsDashboard.jsx). Single-line change.
 - 'this_month' preset already computed in getDateRange(): { since: 1st of current month, until: today } and uses Meta time_range (not date_preset), so it updates live to today.
