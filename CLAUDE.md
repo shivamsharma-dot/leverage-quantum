@@ -729,6 +729,11 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-04 -- Monthly QLs: updated published sheet CSV link (commit ecfda73)
+- User provided a new published-sheet CSV URL for the Monthly QLs page (same doc key 2PACX-1vRVF7R3Me4QPVaRS..., new gid=455680381, was gid=2053851581).
+- Updated MONTHLY_CSV constant in src/pages/LeadQualificationDashboard.jsx (route /dashboard/lq-ops-monthly renders <LeadQualificationDashboard forcedView="monthly"/>). Did not touch SHEET_CSV (daily, gid=0) or any other dashboard's sheet link.
+- Verified live: reloaded /dashboard/lq-ops-monthly, confirmed via network tab the page now fetches gid=455680381 (200 OK). No console errors beyond pre-existing benign extension noise.
+
 ## 2026-07-04 -- Meta Ads: fix Period Spend/Leads inflated vs Ads Manager (timezone off-by-one in date-range calc) (commit 3029573)
 - BUG REPORT: "meta ads metric is not correct - spend is 19L from 1st of july till 3rd of july and quantum showing 28L".
 - ROOT CAUSE: getDateRange(preset) built this_month/last_month boundary dates via `new Date(year, month, day)` (constructs LOCAL midnight), then formatted them with `d.toISOString().slice(0,10)` (which reads UTC fields). When the codespace/browser's local TZ offset is positive (ahead of UTC), local midnight of e.g. July 1 converts to June 30 evening UTC, so toISOString() returns "2026-06-30" instead of "2026-07-01". Confirmed via network tab: the account-level insights call was firing with time_range={since:"2026-06-30",until:"2026-07-04"} for the "This Month" preset -- an extra full day of spend (June 30) was being included in every this_month/last_month total (Period Spend, Leads, CPL, CRM Leads comparison, and the top-200-by-spend ads sourcing added in the previous fix, since they all share the same timeRange). yesterday/last_7d/last_14d/last_30d were NOT affected the same way since those derive from a live `new Date()` instant shifted via setDate() rather than a locally-constructed midnight Date.
