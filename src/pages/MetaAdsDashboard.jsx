@@ -753,7 +753,7 @@ Guidelines: Be concise, lead with the number, always give a specific action. Rea
 
 // Date preset helper
 function getDateRange(preset) {
-  const f = d => d.toISOString().slice(0, 10)
+  const f = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` // local calendar date (avoids UTC off-by-one when local TZ is ahead of UTC)
   const today = new Date()
   const yesterday = new Date(); yesterday.setDate(today.getDate() - 1)
   const s = new Date(yesterday)
