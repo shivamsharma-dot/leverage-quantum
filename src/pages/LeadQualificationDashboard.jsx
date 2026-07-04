@@ -13,7 +13,7 @@ import { usePresence } from '../hooks/usePresence'
 import { useAuth } from '../hooks/useAuth'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=0&single=true&output=csv'
-const MONTHLY_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=2053851581&single=true&output=csv'
+const MONTHLY_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=455680381&single=true&output=csv'
 const QL_VIEWS = [
   { id: 'daily', label: 'Daily QLs', csv: SHEET_CSV },
   { id: 'monthly', label: 'Monthly QLs', csv: MONTHLY_CSV },
