@@ -412,15 +412,20 @@ function copyAdName(e, name) {
   const btn = e.currentTarget
   const prevColor = btn.style.color
   btn.style.color = '#4CAE6F'
-  const wrap = btn.parentElement
-  wrap.style.position = 'relative'
-  wrap.querySelectorAll('[data-copy-toast]').forEach(n=>n.remove())
-  const msg = document.createElement('div')
-  msg.setAttribute('data-copy-toast','1')
-  msg.textContent = 'Ad name copied to clipboard'
-  msg.style.cssText = 'position:absolute;top:100%;left:0;margin-top:4px;background:#1F3C84;color:#fff;font-size:10px;font-weight:600;padding:3px 8px;border-radius:6px;white-space:nowrap;z-index:30;box-shadow:0 2px 6px rgba(15,23,42,0.18);pointer-events:none;'
-  wrap.appendChild(msg)
-  setTimeout(()=>{ btn.style.color = prevColor; msg.remove() }, 1400)
+  setTimeout(()=>{ btn.style.color = prevColor }, 1200)
+  let toast = document.getElementById('lq-copy-toast')
+  if (!toast) {
+    toast = document.createElement('div')
+    toast.id = 'lq-copy-toast'
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1F3C84;color:#fff;font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;white-space:nowrap;z-index:9999;box-shadow:0 6px 20px rgba(15,23,42,0.25);pointer-events:none;opacity:0;transform:translateY(6px);transition:opacity .18s ease,transform .18s ease;'
+    document.body.appendChild(toast)
+  }
+  toast.textContent = 'Ad name copied to clipboard'
+  clearTimeout(toast._hideT)
+  clearTimeout(toast._removeT)
+  requestAnimationFrame(()=>{ toast.style.opacity='1'; toast.style.transform='translateY(0)' })
+  toast._hideT = setTimeout(()=>{ toast.style.opacity='0'; toast.style.transform='translateY(6px)' }, 1400)
+  toast._removeT = setTimeout(()=>{ toast.remove() }, 1700)
 }
 function CreativesTab({ data }) {
   const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, prevInsightsMap = {}, crmSummary = {} } = data
