@@ -29,6 +29,8 @@ const NAV = [
         subItems: [
           { to: '/dashboard/meta-ads?tab=creatives', label: 'Creatives', matchType: 'query', tabKey: 'creatives' },
           { to: '/dashboard/meta-ads?tab=campaigns', label: 'Campaigns', matchType: 'query', tabKey: 'campaigns' },
+          { to: '/dashboard/meta-ads?tab=mom', label: 'Month on Month', matchType: 'query', tabKey: 'mom' },
+          { to: '/dashboard/meta-ads?tab=dod', label: 'Day on Day', matchType: 'query', tabKey: 'dod' },
         ]
       },
       {
