@@ -49,23 +49,25 @@ export default async function handler(req, res) {
     const nameIdx = header.indexOf('opp_first_campaign_name');
     const leadsIdx = header.indexOf('leads');
     const byName = {};
+    const byDate = {}; // { 'YYYY-MM-DD': totalLeadsThatDay } - lets callers roll up into month/day buckets client-side
     let total = 0; let rows = 0;
     for (let i = 1; i < lines.length; i++) {
       const cols = splitCsvLine(lines[i]);
       const name = (cols[nameIdx] || '').trim();
       if (!name) continue; // skip unattributed (blank) rows
+      const iso = toIso(cols[dateIdx]);
       if (since || until) {
-        const iso = toIso(cols[dateIdx]);
         if (!iso) continue;
         if (since && iso < since) continue;
         if (until && iso > until) continue;
       }
       const n = parseInt((cols[leadsIdx] || '0').replace(/[^0-9-]/g, ''), 10) || 0;
       byName[name] = (byName[name] || 0) + n;
+      if (iso) byDate[iso] = (byDate[iso] || 0) + n;
       total += n; rows++;
     }
     res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=1800');
-    return res.status(200).json({ byName, total, rows, distinct: Object.keys(byName).length, since, until, ts: Date.now() });
+    return res.status(200).json({ byName, byDate, total, rows, distinct: Object.keys(byName).length, since, until, ts: Date.now() });
   } catch (e) {
     return res.status(500).json({ error: String(e && e.message || e) });
   }
