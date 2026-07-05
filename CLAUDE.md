@@ -729,6 +729,25 @@ Gotcha: schedule-strip line-range replace initially left orphan ')) }' + '</div>
 
 # >>> SESSION RESUME / EXTENSION HANDOFF (read this first on reconnect) <<<
 
+## 2026-07-05 -- Ad-name copy icon + toast confirmation (commits 438db47, f41384f)
+- Creatives tab (grid+list): added a dedicated copy-to-clipboard button next to each ad name via new copyAdName() helper in MetaAdsDashboard.jsx (stopPropagation, so it no longer risks opening the ad preview link).
+- Iterated the icon same day: first shipped as a clipboard emoji with a brief checkmark swap, then replaced with an outline SVG copy icon (muted grey #94A3B8, turns brand green #4CAE6F on click) plus a floating navy (#1F3C84) "Ad name copied to clipboard" toast shown under the button for ~1.4s.
+
+## 2026-07-05 -- Month on Month / Day on Day trend tabs (commits 519d361, 0ed4367, 617ea59)
+- New TrendTab component in MetaAdsDashboard.jsx + two nav sub-items under Meta Ads in Sidebar.jsx: "Month on Month" (?tab=mom, Jan 2026-present, monthly buckets) and "Day on Day" (?tab=dod, 1st-of-this-month-to-today, daily buckets). Both use Meta's time_increment insights param for one efficient account-level call each, and are independent of the Campaigns/Creatives date-range filter (hidden on these two tabs).
+- Each row shows Spend, Impressions, Clicks, CTR, Leads (Meta), CPL (Meta), CRM Leads, CPL (CRM), plus a totals row and summary KPI cards.
+- api/crm-leads.js: added a byDate map ({'YYYY-MM-DD': totalLeadsThatDay}) alongside the existing byName breakdown, computed from the same filtered rows, so the new trend tabs can compute CRM Leads/CPL (CRM) per month or day bucket. No change to existing byName/total behavior.
+- Same batch also stopped clicks on the ad-name text itself from opening the preview link (grid+list Creatives), so the name can be double/triple-clicked and copied normally.
+
+## 2026-07-05 -- CRM-based CPL columns + CRM Conv. Rate (commit 9c5d525)
+- Added CRM-lead-based metrics alongside existing Meta-lead-based metrics, using CRM leads already synced via /api/crm-leads (Google Sheet, matched by ad name).
+- Campaigns table: split CPL into CPL (Meta) and CPL (CRM) columns; promoted CRM Leads into its own column (was an inline sub-line under Leads); added CRM Conv. Rate to the expanded campaign detail panel.
+- Creatives table (list + grid card views): split CPL into CPL (Meta) and CPL (CRM). KPI row gained a CPL (CRM) summary card next to the existing CRM Leads card. "Totals for these N creatives" strip gained CRM Leads and CPL (CRM) totals.
+
+## 2026-07-05 -- Brand-color alignment pass (commit e2b7712)
+- Design-language audit vs DESIGN_SYSTEM.md/CLAUDE.md brand rules (navy/blue/cyan/green only, no violet) across MetaAdsDashboard.jsx: CPL heat-color, CTR low-value color, and frequency warning (Campaigns + Creatives) changed red/amber -> navy/blue; metric-panel warning flag (m.w) red -> navy; WoW CTR delta down-arrow red -> navy (up arrow stays green); "Low" signal badge pill red -> navy tint; Carousel ad-type badge violet/lavender -> cyan.
+
+
 ## 2026-07-04 -- Monthly QLs: updated published sheet CSV link (commit ecfda73)
 - User provided a new published-sheet CSV URL for the Monthly QLs page (same doc key 2PACX-1vRVF7R3Me4QPVaRS..., new gid=455680381, was gid=2053851581).
 - Updated MONTHLY_CSV constant in src/pages/LeadQualificationDashboard.jsx (route /dashboard/lq-ops-monthly renders <LeadQualificationDashboard forcedView="monthly"/>). Did not touch SHEET_CSV (daily, gid=0) or any other dashboard's sheet link.
