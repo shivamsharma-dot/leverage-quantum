@@ -331,9 +331,9 @@ function CampaignsTab({ data }) {
   const handleSort = col => { if (sortBy === col) setSortDir(d => d==='desc'?'asc':'desc'); else { setSortBy(col); setSortDir('desc') } }
   const fmtN = n => n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':String(Math.round(n||0))
   const sBadge = s => { const a=s==='ACTIVE'; return <span style={{ display:'inline-flex',alignItems:'center',gap:4,background:a?'#E9F8EF':'#F3F4F6',color:a?'#166534':'#6B7280',fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap' }}><span style={{ width:5,height:5,borderRadius:'50%',background:a?'#4CAE6F':'#9CA3AF',display:'inline-block' }}/>{a?'Active':'Paused'}</span> }
-  const sigBadge = sig => { const m={top:{bg:'#E9F8EF',c:'#166534',t:'▲ Top'},average:{bg:'#F3F4F6',c:'#6B7280',t:'→ Avg'},low:{bg:'#FEF2F2',c:'#991B1B',t:'▼ Low'}}[sig]||{bg:'#F3F4F6',c:'#6B7280',t:'→ Avg'}; return <span style={{ background:m.bg,color:m.c,fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap' }}>{m.t}</span> }
+  const sigBadge = sig => { const m={top:{bg:'#E9F8EF',c:'#166534',t:'▲ Top'},average:{bg:'#F3F4F6',c:'#6B7280',t:'→ Avg'},low:{bg:'#EEF1FB',c:'#1F3C84',t:'▼ Low'}}[sig]||{bg:'#F3F4F6',c:'#6B7280',t:'→ Avg'}; return <span style={{ background:m.bg,color:m.c,fontSize:10,fontWeight:600,padding:'2px 8px',borderRadius:10,whiteSpace:'nowrap' }}>{m.t}</span> }
   const fBadge = lv => { const m={healthy:{bg:'#E9F8EF',c:'#166534'},watch:{bg:'#FEF9C3',c:'#854D0E'},fatigue:{bg:'#FEF2F2',c:'#991B1B'}}[lv]||{bg:'#E9F8EF',c:'#166534'}; return <span style={{ background:m.bg,color:m.c,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:10,textTransform:'capitalize',whiteSpace:'nowrap' }}>{lv}</span> }
-  const cplCol = v => v>300?'#DC2626':v>150?'#D97706':v>0?'#4CAE6F':'#6B7280'
+  const cplCol = v => v>300?'#1F3C84':v>150?'#1C9FD4':v>0?'#4CAE6F':'#6B7280'
   const SH = ({ col, lbl }) => <div onClick={()=>handleSort(col)} style={{ fontSize:11,fontWeight:600,color:sortBy===col?'#1F3C84':'#6B7280',cursor:'pointer',userSelect:'none',display:'flex',alignItems:'center',gap:2 }}>{lbl}<span style={{ opacity:sortBy===col?1:0.3,fontSize:9 }}>{sortBy===col?(sortDir==='desc'?'↓':'↑'):'↕'}</span></div>
   const cols = '2.4fr 90px 80px 110px 110px 90px 80px 90px 90px 80px'
   return (
@@ -386,7 +386,7 @@ function CampaignsTab({ data }) {
               <div><div style={{ fontSize:13,fontWeight:600,color:'#111827' }}>{fmtINR(c.spend)}</div><div style={{ fontSize:10,color:'#9CA3AF' }}>{c.spendShare.toFixed(1)}% of total</div></div>
               <div style={{ fontSize:13,color:'#374151' }}>{fmtN(c.impressions)}</div>
               <div style={{ fontSize:13,color:'#374151' }}>{fmtN(c.clicks)}</div>
-              <div><div style={{ fontSize:13,color:c.ctr<accCTRpct*0.6?'#DC2626':'#374151',fontWeight:c.ctr<accCTRpct*0.6?600:400 }}>{c.ctr.toFixed(2)}%</div><div style={{ fontSize:10,color:'#9CA3AF' }}>CPM ₹{Math.round(c.cpm)}</div></div>
+              <div><div style={{ fontSize:13,color:c.ctr<accCTRpct*0.6?'#1F3C84':'#374151',fontWeight:c.ctr<accCTRpct*0.6?600:400 }}>{c.ctr.toFixed(2)}%</div><div style={{ fontSize:10,color:'#9CA3AF' }}>CPM ₹{Math.round(c.cpm)}</div></div>
               <div style={{ fontSize:13,fontWeight:600,color:cplCol(c.cpl) }}>{c.cpl>0?'₹'+c.cpl.toLocaleString('en-IN'):'—'}</div>
               <div style={{ fontSize:13,color:'#374151',fontWeight:500 }}>{c.leads>0?c.leads.toLocaleString('en-IN'):'—'}{c.crmLeads!=null&&(<div style={{ fontSize:10,fontWeight:600,marginTop:2,lineHeight:1.3 }}><span style={{ color:'#1C9FD4' }}>CRM {c.crmLeads.toLocaleString('en-IN')}</span> <span style={{ color:((c.crmLeads-(c.leads||0))>=0?'#4CAE6F':'#1C9FD4') }}>({(c.crmLeads-(c.leads||0))>=0?'+':''}{(c.crmLeads-(c.leads||0)).toLocaleString('en-IN')})</span></div>)}</div>
               <div>{fBadge(c.fatigueLevel)}</div>
@@ -394,7 +394,7 @@ function CampaignsTab({ data }) {
             {expanded===c.id&&(
               <div style={{ padding:'16px 16px 16px 32px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB' }}>
                 <div style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:10,marginBottom:10 }}>
-                  {[{l:'Reach',v:fmtN(c.reach)},{l:'CPC',v:c.cpc>0?'₹'+Math.round(c.cpc):'—'},{l:'CPM',v:c.cpm>0?'₹'+Math.round(c.cpm):'—'},{l:'Conv. Rate',v:c.convRate>0?c.convRate.toFixed(2)+'%':'—'},{l:'Frequency',v:c.frequency>0?c.frequency.toFixed(2):'—',w:c.frequency>3},{l:'Spend Share',v:c.spendShare.toFixed(1)+'%'}].map(m=><div key={m.l} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:8,padding:'10px 14px' }}><div style={{ fontSize:10,color:'#9CA3AF',fontWeight:600,marginBottom:4 }}>{m.l}</div><div style={{ fontSize:16,fontWeight:700,color:m.w?'#DC2626':'#111827' }}>{m.v}</div></div>)}
+                  {[{l:'Reach',v:fmtN(c.reach)},{l:'CPC',v:c.cpc>0?'₹'+Math.round(c.cpc):'—'},{l:'CPM',v:c.cpm>0?'₹'+Math.round(c.cpm):'—'},{l:'Conv. Rate',v:c.convRate>0?c.convRate.toFixed(2)+'%':'—'},{l:'Frequency',v:c.frequency>0?c.frequency.toFixed(2):'—',w:c.frequency>3},{l:'Spend Share',v:c.spendShare.toFixed(1)+'%'}].map(m=><div key={m.l} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:8,padding:'10px 14px' }}><div style={{ fontSize:10,color:'#9CA3AF',fontWeight:600,marginBottom:4 }}>{m.l}</div><div style={{ fontSize:16,fontWeight:700,color:m.w?'#1F3C84':'#111827' }}>{m.v}</div></div>)}
                 </div>
                 {c.fatigueLevel!=='healthy'&&<div style={{ padding:'10px 14px',background:c.fatigueLevel==='fatigue'?'#FEF2F2':'#FEF9C3',borderRadius:8,fontSize:12,color:c.fatigueLevel==='fatigue'?'#991B1B':'#854D0E',fontWeight:500 }}>{c.fatigueLevel==='fatigue'?'⚠ High frequency ('+c.frequency.toFixed(1)+') — audience fatigued. Refresh creatives or expand targeting.':'⚡ Frequency '+c.frequency.toFixed(1)+' approaching fatigue. Monitor CTR closely.'}</div>}
               </div>
@@ -509,9 +509,9 @@ function CreativesTab({ data }) {
   }, [processed])
   const hColor={'Healthy':'#166534','Moderate':'#854D0E','High Fatigue':'#991B1B'}
   const hBg={'Healthy':'#E9F8EF','Moderate':'#FEF9C3','High Fatigue':'#FEF2F2'}
-  const tColor={video:'#1D4ED8',image:'#374151',carousel:'#7C3AED'}
-  const tBg={video:'#EFF6FF',image:'#F3F4F6',carousel:'#F5F3FF'}
-  const cplCol=v=>v>300?'#DC2626':v>150?'#D97706':v>0?'#4CAE6F':'#9CA3AF'
+  const tColor={video:'#1D4ED8',image:'#374151',carousel:'#0E93A6'}
+  const tBg={video:'#EFF6FF',image:'#F3F4F6',carousel:'#E6FBFC'}
+  const cplCol=v=>v>300?'#1F3C84':v>150?'#1C9FD4':v>0?'#4CAE6F':'#9CA3AF'
   const fmtN=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':String(Math.round(n||0))
   const SB=({score})=>(<div style={{ display:'flex',alignItems:'center',gap:5 }}><div style={{ flex:1,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:score+'%',background:score>65?'#4CAE6F':score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,fontWeight:700,color:'#6B7280',minWidth:22 }}>{score}</span></div>)
   return (
@@ -555,8 +555,8 @@ function CreativesTab({ data }) {
         </div>
       </div>
       <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · showing {filtered.length===0?0:((safePage-1)*PER_PAGE+1)}–{Math.min(safePage*PER_PAGE, filtered.length)} · account avg CTR {accCTRpct.toFixed(2)}%</div>
-        <div style={{ marginBottom:16,padding:'16px 18px',background:'#FFFFFF',border:'1px solid #E5E7EB',borderRadius:14,boxShadow:'0 1px 2px rgba(16,24,40,0.04)' }}>
-          <div style={{ fontSize:11,fontWeight:700,color:'#6B7280',textTransform:'uppercase',letterSpacing:0.5,marginBottom:12 }}>Totals for these {filteredTotals && filtered.length} creatives</div><div style={{ display:'grid',gridTemplateColumns:'repeat(10, minmax(0, 1fr))',gap:6 }}>
+        <div style={{ marginBottom:16,padding:'16px 18px',background:'#FFFFFF',border:'1px solid #EEF1F6',borderRadius:16,boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 12px 24px -16px rgba(15,23,42,0.10)' }}>
+          <div style={{ fontSize:13,fontWeight:800,color:'#0F1B33',letterSpacing:0,marginBottom:14 }}>Totals for these <span style={{color:'#1C9FD4'}}>{filteredTotals && filtered.length}</span> creatives</div><div style={{ display:'grid',gridTemplateColumns:'repeat(10, minmax(0, 1fr))',gap:6 }}>
           {[
             { label:'SPEND', value:fmtINR(filteredTotals.spend), accent:'#1C9FD4' },
             { label:'LEADS', value:filteredTotals.leads.toLocaleString('en-IN'), accent:'#4CAE6F' },
@@ -569,9 +569,9 @@ function CreativesTab({ data }) {
             { label:'REACH', value:filteredTotals.reach.toLocaleString('en-IN'), accent:'#4CAE6F' },
             { label:'AVG FREQ', value:filteredTotals.frequency.toFixed(2), accent:'#6B7280' },
           ].map(m => (
-            <div key={m.label} style={{ display:'flex',flexDirection:'column',gap:6,minWidth:0,padding:'11px 8px',background:'#FFFFFF',border:'1px solid #ECEEF2',borderRadius:12,boxShadow:'0 1px 2px rgba(16,24,40,0.05)' }}>
-              <span style={{ display:'flex',alignItems:'center',gap:4,minWidth:0 }}><span style={{ width:6,height:6,borderRadius:'50%',background:m.accent,flexShrink:0 }}></span><span style={{ fontSize:9,fontWeight:700,color:'#98A2B3',letterSpacing:0.2,textTransform:'uppercase',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{m.label}</span></span>
-              <span style={{ fontSize:13,fontWeight:700,color:'#101828',whiteSpace:'nowrap',fontVariantNumeric:'tabular-nums',letterSpacing:'-0.02em' }}>{m.value}</span>
+            <div key={m.label} style={{ position:'relative',display:'flex',flexDirection:'column',gap:6,minWidth:0,padding:'13px 8px 11px',background:'#FFFFFF',border:'1px solid #ECEEF2',borderRadius:12,boxShadow:'0 1px 2px rgba(16,24,40,0.05)',overflow:'hidden' }}><div style={{ position:'absolute',top:0,left:0,right:0,height:3,background:m.accent }}/>
+              <span style={{ display:'flex',alignItems:'center',gap:4,minWidth:0 }}><span style={{ fontSize:9,fontWeight:700,color:'#98A2B3',letterSpacing:0.2,textTransform:'uppercase',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{m.label}</span></span>
+              <span style={{ fontSize:14,fontWeight:800,color:'#101828',whiteSpace:'nowrap',fontVariantNumeric:'tabular-nums',letterSpacing:'-0.02em' }}>{m.value}</span>
             </div>
           ))}
         </div>
@@ -589,9 +589,9 @@ function CreativesTab({ data }) {
               <div style={{ padding:'12px 14px' }}>
                 <div style={{ fontSize:12,fontWeight:600,color:'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:10 }} title={ad.name}>{ad.name}</div>
                 <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8 }}>
-                  {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'—',w:ad.cpl>300},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:ad.leads>0?ad.leads.toLocaleString('en-IN'):'\u2014'},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'—',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'—'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#DC2626':'#111827' }}>{m.v}</div></div>)}
+                  {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'—',w:ad.cpl>300},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:ad.leads>0?ad.leads.toLocaleString('en-IN'):'\u2014'},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'—',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'—'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#1F3C84':'#111827' }}>{m.v}</div></div>)}
                 </div>
-                {ad.ctrDelta!==null&&<div style={{ fontSize:11,color:ad.ctrDelta>=0?'#4CAE6F':'#DC2626',marginBottom:6,fontWeight:500 }}>{ad.ctrDelta>=0?'▲':'▼'} CTR {Math.abs(ad.ctrDelta).toFixed(1)}% vs last week</div>}
+                {ad.ctrDelta!==null&&<div style={{ fontSize:11,color:ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',marginBottom:6,fontWeight:500 }}>{ad.ctrDelta>=0?'▲':'▼'} CTR {Math.abs(ad.ctrDelta).toFixed(1)}% vs last week</div>}
                 <div style={{ padding:'7px 10px',background:'#EFF6FF',borderRadius:7,marginBottom:6 }}><div style={{ fontSize:9,color:'#1D4ED8',fontWeight:600,textTransform:'uppercase',marginBottom:2,letterSpacing:'0.05em' }}>Hook Rate</div><div style={{ fontSize:14,fontWeight:700,color:'#1D4ED8' }}>{ad.hookRate>0?ad.hookRate.toFixed(1)+'%':'\u2014'}</div></div>
                 {ad.fatigueLabel!=='Healthy'&&<div style={{ padding:'6px 8px',background:hBg[ad.fatigueLabel],borderRadius:6,fontSize:10,color:hColor[ad.fatigueLabel],lineHeight:1.4 }}>{ad.fatigueLabel==='High Fatigue'?'⚠ Freq '+ad.frequency.toFixed(1)+' — needs refresh':'⚡ Freq '+ad.frequency.toFixed(1)+' — watch closely'}</div>}
               </div>
@@ -611,11 +611,11 @@ function CreativesTab({ data }) {
               <span style={{ background:hBg[ad.fatigueLabel]||'#E9F8EF',color:hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span>
               <div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div>
               <div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.crmLeads==null?'—':ad.crmLeads.toLocaleString('en-IN')}</div><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:(ad.crmLeads==null?'#9CA3AF':((ad.crmLeads-(ad.leads||0))>=0?'#4CAE6F':'#1C9FD4')) }}>{ad.crmLeads==null?'—':((ad.crmLeads-(ad.leads||0))>=0?'+':'')+(ad.crmLeads-(ad.leads||0)).toLocaleString('en-IN')}</div>
-              <div style={{ fontSize:12,color:ad.ctr<accCTRpct*0.6&&ad.ctr>0?'#DC2626':'#374151',fontWeight:ad.ctr<accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div>
+              <div style={{ fontSize:12,color:ad.ctr<accCTRpct*0.6&&ad.ctr>0?'#1F3C84':'#374151',fontWeight:ad.ctr<accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div>
               <div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div>
-              <div style={{ fontSize:12,color:ad.frequency>4.5?'#DC2626':ad.frequency>3?'#D97706':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div>
+              <div style={{ fontSize:12,color:ad.frequency>4.5?'#1F3C84':ad.frequency>3?'#1C9FD4':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div>
               <div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div>
-              <div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#4CAE6F':'#DC2626',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div>
+              <div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div>
             </div>
           ))}
         </div>
