@@ -594,7 +594,7 @@ function CreativesTab({ data }) {
                 <div style={{ position:'absolute',bottom:8,left:8,right:8 }}><SB score={ad.score}/></div>
               </div>
               <div style={{ padding:'12px 14px' }}>
-                <div style={{ fontSize:12,fontWeight:600,color:'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:10 }} title={ad.name}>{ad.name}</div>
+                <div style={{ fontSize:12,fontWeight:600,color:'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:10,cursor:'text' }} title={ad.name} onClick={e=>e.stopPropagation()}>{ad.name}</div>
                 <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8 }}>
                   {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL (Meta)',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'—',w:ad.cpl>300},{l:'CPL (CRM)',v:ad.cplCrm>0?'₹'+ad.cplCrm.toLocaleString('en-IN'):'—'},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:ad.leads>0?ad.leads.toLocaleString('en-IN'):'\u2014'},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'—',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'—'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#1F3C84':'#111827' }}>{m.v}</div></div>)}
                 </div>
@@ -613,7 +613,7 @@ function CreativesTab({ data }) {
           {pageItems.map((ad,i)=>(
             <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 72px 72px 80px 90px 80px 90px 80px 80px',padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
               <div style={{ width:32,height:32,borderRadius:6,background:'#F3F4F6',overflow:'hidden',flexShrink:0 }}>{ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div>
-              <div style={{ overflow:'hidden' }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }} title={ad.name}>{ad.name}</div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
+              <div style={{ overflow:'hidden' }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'text' }} title={ad.name} onClick={e=>e.stopPropagation()}>{ad.name}</div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
               <span style={{ background:tBg[ad.type]||'#F3F4F6',color:tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span>
               <span style={{ background:hBg[ad.fatigueLabel]||'#E9F8EF',color:hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span>
               <div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div>
@@ -754,6 +754,147 @@ Guidelines: Be concise, lead with the number, always give a specific action. Rea
       <button onClick={scrollToTop} className={`${styles.backToTop} ${showBackToTop ? '' : styles.backToTopHidden}`} title="Back to top">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="18 15 12 9 6 15"/></svg>
       </button>
+    </div>
+  )
+}
+
+
+// ─── TREND TAB (Month on Month / Day on Day) ─ fixed range, ignores global date filter ────
+function TrendTab({ token, adAccount, mode }) {
+  const [rows, setRows] = useState(null)
+  const [trendError, setTrendError] = useState('')
+  const [trendLoading, setTrendLoading] = useState(true)
+  useEffect(() => {
+    let ok = true
+    setTrendLoading(true); setTrendError('')
+    const f = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    const today = new Date()
+    const since = mode === 'month' ? `${today.getFullYear()}-01-01` : f(new Date(today.getFullYear(), today.getMonth(), 1))
+    const until = f(today)
+    const timeIncrement = mode === 'month' ? 'monthly' : 1
+    ;(async () => {
+      try {
+        const AD_ACCOUNT_ID = adAccount || DEFAULT_AD_ACCOUNT
+        const [ins, crm] = await Promise.all([
+          graphGet(`${AD_ACCOUNT_ID}/insights`, token, {
+            fields: 'spend,impressions,clicks,ctr,actions',
+            time_range: JSON.stringify({ since, until }),
+            time_increment: timeIncrement,
+            level: 'account'
+          }),
+          fetch(`/api/crm-leads?since=${since}&until=${until}`).then(r=>r.json()).catch(()=>({byDate:{}}))
+        ])
+        const byDate = (crm && crm.byDate) || {}
+        const bucketCrm = {}
+        Object.entries(byDate).forEach(([d,n]) => {
+          const key = mode === 'month' ? d.slice(0,7) : d
+          bucketCrm[key] = (bucketCrm[key]||0) + n
+        })
+        const list = (ins.data || []).map(row => {
+          const dateStart = row.date_start || ''
+          const key = mode === 'month' ? dateStart.slice(0,7) : dateStart
+          const label = mode === 'month'
+            ? new Date(dateStart + 'T00:00:00').toLocaleDateString('en-IN', { month:'long', year:'numeric' })
+            : new Date(dateStart + 'T00:00:00').toLocaleDateString('en-IN', { day:'2-digit', month:'short', weekday:'short' })
+          const spend = parseFloat(row.spend) || 0
+          const impressions = parseInt(row.impressions) || 0
+          const clicks = parseInt(row.clicks) || 0
+          const ctr = parseFloat(row.ctr) || 0
+          const leads = getAction(row.actions, 'lead')
+          const cpl = leads > 0 ? Math.round(spend / leads) : 0
+          const crmLeads = bucketCrm[key] != null ? bucketCrm[key] : null
+          const cplCrm = crmLeads > 0 ? Math.round(spend / crmLeads) : 0
+          return { key, label, spend, impressions, clicks, ctr, leads, cpl, crmLeads, cplCrm }
+        }).sort((a,b) => a.key < b.key ? 1 : -1)
+        if (ok) setRows(list)
+      } catch (e) { if (ok) setTrendError(e.message || 'Failed to load') }
+      finally { if (ok) setTrendLoading(false) }
+    })()
+    return () => { ok = false }
+  }, [token, adAccount, mode])
+
+  const totals = useMemo(() => {
+    if (!rows) return null
+    let spend=0, impressions=0, clicks=0, leads=0, crmLeads=0, hasCrm=false
+    rows.forEach(r => {
+      spend += r.spend; impressions += r.impressions; clicks += r.clicks; leads += r.leads
+      if (r.crmLeads != null) { crmLeads += r.crmLeads; hasCrm = true }
+    })
+    const ctr = impressions > 0 ? (clicks/impressions*100) : 0
+    const cpl = leads > 0 ? Math.round(spend/leads) : 0
+    const cplCrm = crmLeads > 0 ? Math.round(spend/crmLeads) : 0
+    return { spend, impressions, clicks, leads, ctr, cpl, crmLeads: hasCrm?crmLeads:null, cplCrm }
+  }, [rows])
+
+  const cplCol = v => v>300?'#1F3C84':v>150?'#1C9FD4':v>0?'#4CAE6F':'#6B7280'
+  const fmtN = n => n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':String(Math.round(n||0))
+  const title = mode === 'month' ? 'Month on Month' : 'Day on Day'
+  const rangeLabel = mode === 'month' ? ('Jan '+new Date().getFullYear()+' – present') : 'This month, 1st – today'
+  const gridCols = '1.4fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1fr 1fr'
+
+  if (trendError) return <div style={{ padding:40, textAlign:'center', color:'#DC2626', fontSize:13 }}>{trendError}</div>
+  if (trendLoading || !rows) return (
+    <div style={{ textAlign:'center', padding:60, color:'#9CA3AF' }}>
+      <div className={styles.bigSpinner}/>
+      <p style={{ marginTop:16, fontSize:13 }}>Loading {title.toLowerCase()} data…</p>
+    </div>
+  )
+
+  return (
+    <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
+      <div style={{ fontSize:12, color:'#9CA3AF', marginBottom:14 }}>{rangeLabel} · fixed range, not affected by the date filter on other tabs</div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(6,1fr)', gap:12, marginBottom:16 }}>
+        {[
+          { label:'TOTAL SPEND', value:fmtINR(totals.spend), c1:'#1C9FD4', c2:'#29B9C3', icon:'₹' },
+          { label:'LEADS (META)', value:totals.leads.toLocaleString('en-IN'), c1:'#4CAE6F', c2:'#34D399', icon:'◉' },
+          { label:'CPL (META)', value:totals.cpl>0?'₹'+totals.cpl.toLocaleString('en-IN'):'—', c1:'#1F3C84', c2:'#3D5BB8', icon:'▲' },
+          { label:'CRM LEADS', value:totals.crmLeads!=null?totals.crmLeads.toLocaleString('en-IN'):'—', c1:'#1C9FD4', c2:'#29B9C3', icon:'↻' },
+          { label:'CPL (CRM)', value:totals.cplCrm>0?'₹'+totals.cplCrm.toLocaleString('en-IN'):'—', c1:'#1F3C84', c2:'#1C9FD4', icon:'◈' },
+          { label:'AVG CTR', value:totals.ctr.toFixed(2)+'%', c1:'#2563A8', c2:'#1C9FD4', icon:'↗' },
+        ].map(k => (
+          <div key={k.label} style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'16px 18px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:'linear-gradient(90deg,'+k.c1+','+k.c2+')' }} />
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+              <div style={{ width:26, height:26, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, color:'#fff', background:'linear-gradient(135deg,'+k.c1+','+k.c2+')' }}>{k.icon}</div>
+              <span style={{ fontSize:10, fontWeight:700, letterSpacing:'0.06em', color:'#64748B', textTransform:'uppercase' }}>{k.label}</span>
+            </div>
+            <div style={{ fontSize:22, fontWeight:800, letterSpacing:'-0.5px', color:'#0F1B33' }}>{k.value}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, overflow:'hidden' }}>
+        <div style={{ display:'grid', gridTemplateColumns:gridCols, padding:'10px 16px', background:'#F9FAFB', borderBottom:'0.5px solid #E5E7EB', gap:8 }}>
+          {[mode==='month'?'Month':'Day','Spend','Impressions','Clicks','CTR','Leads (Meta)','CPL (Meta)','CRM Leads','CPL (CRM)'].map(h => (
+            <div key={h} style={{ fontSize:11, fontWeight:600, color:'#6B7280' }}>{h}</div>
+          ))}
+        </div>
+        {rows.length===0 ? <div style={{ padding:'40px', textAlign:'center', color:'#9CA3AF', fontSize:13 }}>No data yet</div> : rows.map(r => (
+          <div key={r.key} style={{ display:'grid', gridTemplateColumns:gridCols, padding:'11px 16px', borderBottom:'0.5px solid #F3F4F6', gap:8, alignItems:'center' }}>
+            <div style={{ fontSize:13, fontWeight:600, color:'#111827' }}>{r.label}</div>
+            <div style={{ fontSize:13, color:'#374151' }}>{fmtINR(r.spend)}</div>
+            <div style={{ fontSize:13, color:'#374151' }}>{fmtN(r.impressions)}</div>
+            <div style={{ fontSize:13, color:'#374151' }}>{fmtN(r.clicks)}</div>
+            <div style={{ fontSize:13, color:'#374151' }}>{r.ctr.toFixed(2)}%</div>
+            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.leads>0?r.leads.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, fontWeight:600, color:cplCol(r.cpl) }}>{r.cpl>0?'₹'+r.cpl.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.crmLeads!=null?r.crmLeads.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, fontWeight:600, color:cplCol(r.cplCrm) }}>{r.cplCrm>0?'₹'+r.cplCrm.toLocaleString('en-IN'):'—'}</div>
+          </div>
+        ))}
+        {rows.length>0 && totals && (
+          <div style={{ display:'grid', gridTemplateColumns:gridCols, padding:'12px 16px', background:'#F9FAFB', gap:8, alignItems:'center', borderTop:'1px solid #E5E7EB' }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>Total</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{fmtINR(totals.spend)}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{fmtN(totals.impressions)}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{fmtN(totals.clicks)}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.ctr.toFixed(2)}%</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.leads.toLocaleString('en-IN')}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:cplCol(totals.cpl) }}>{totals.cpl>0?'₹'+totals.cpl.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.crmLeads!=null?totals.crmLeads.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:cplCol(totals.cplCrm) }}>{totals.cplCrm>0?'₹'+totals.cplCrm.toLocaleString('en-IN'):'—'}</div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1328,7 +1469,7 @@ export default function MetaAdsDashboard() {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / Meta Ads</p>
-            <h1 className={styles.pageTitle}>{activeTab === 'creatives' ? 'Meta Creatives' : 'Meta Ads'}</h1>
+            <h1 className={styles.pageTitle}>{activeTab === 'creatives' ? 'Meta Creatives' : activeTab === 'mom' ? 'Month on Month' : activeTab === 'dod' ? 'Day on Day' : 'Meta Ads'}</h1>
           </div>
           <div className={styles.headerRight}>
             {/* Active users */}
@@ -1391,7 +1532,8 @@ export default function MetaAdsDashboard() {
                 )}
               </div>
             )}
-          <div style={{ position:'relative' }}>
+          {activeTab!=='mom' && activeTab!=='dod' && (
+<div style={{ position:'relative' }}>
             <button type="button" onClick={()=>!loading && setDateOpen(o=>!o)} disabled={loading}
               style={{ display:'flex',alignItems:'center',gap:8,padding:'6px 10px',borderRadius:8,border:'1px solid '+(dateOpen?'#1C9FD4':'#E5E7EB'),background:'#fff',cursor:loading?'not-allowed':'pointer',minWidth:130,justifyContent:'space-between',fontSize:12,fontWeight:600,color:'#0F172A',fontFamily:'inherit',transition:'border .15s' }}>
               <span>{(PRESETS.find(p=>p.id===datePreset)||{}).label || 'Select range'}</span>
@@ -1412,7 +1554,8 @@ export default function MetaAdsDashboard() {
               </div>
             )}
           </div>
-            {datePreset === 'custom_range' && (
+)}
+            {datePreset === 'custom_range' && activeTab!=='mom' && activeTab!=='dod' && (
               <div style={{display:'flex',alignItems:'center',gap:6}}>
                 <DatePicker value={customFrom} onChange={setCustomFrom} placeholder="From date" maxDate={customTo || new Date().toISOString().slice(0,10)}/>
                 <span style={{fontSize:12,color:'#9CA3AF'}}>to</span>
@@ -1483,6 +1626,8 @@ export default function MetaAdsDashboard() {
           <div style={{padding:'18px 28px'}}>
             {activeTab === 'campaigns' && <CampaignsTab data={crmData}/>}
             {activeTab === 'creatives' && <CreativesTab data={crmData}/>}
+            {activeTab === 'mom' && <TrendTab token={token} adAccount={adAccount} mode="month"/>}
+            {activeTab === 'dod' && <TrendTab token={token} adAccount={adAccount} mode="day"/>}
             {activeTab === 'ask_ai'      && null}
           </div>
         ) : null}
