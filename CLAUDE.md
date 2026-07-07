@@ -56,8 +56,11 @@ Aggregates Meta Ads performance, cross-channel metrics, lead qualification data,
 | **Supabase Anon Key** | `[SUPABASE_ANON_KEY — check Vercel env or Supabase dashboard]` |
 | **Meta Ad Account** | `act_641914389215638` |
 | **Resend API Key** | `re_[REDACTED — check Resend dashboard]` |
-| **Google Sheets (QL Ops gid=0)** | `https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=0&single=true&output=csv` |
+| **Google Sheets (Referral gid=1233447443)** | `https://docs.google.com/spreadsheets/d/e/2PACX-1vSv_Z1HpHSLWC_1kBrC4p8SatqHIVqhjSCnct21ImMEkOiwwg1N3KTuswsZP8kTbfxRfbs_LSLew7c4/pub?gid=1233447443&single=true&output=csv` |
+| **Google Sheets (QL Ops daily gid=0)** | Same spreadsheet, `gid=0` |
 | **Google Sheets (WhatsApp gid=1222628502)** | Same spreadsheet, `gid=1222628502` |
+| **Google Sheets (FB Leads gid=422958036)** | Same spreadsheet, `gid=422958036` (used by `api/crm-leads.js`) |
+| **Google Sheets (QL Snapshot / Monthly QLs gid=455680381)** | Same spreadsheet, `gid=455680381`
 
 **Note:** GitHub token lacks `workflow` scope — cannot push `.github/workflows/` via API. Use GitHub web UI for workflow files.
 
