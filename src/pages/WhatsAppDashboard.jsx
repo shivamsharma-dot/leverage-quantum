@@ -9,7 +9,7 @@ import { fetchCSV } from '../lib/sheetCache'
 import { toast } from '../components/ToastHost'
 import { getSession, setSession } from '../lib/sessionLoad'
 
-const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSv_Z1HpHSLWC_1kBrC4p8SatqHIVqhjSCnct21ImMEkOiwwg1N3KTuswsZP8kTbfxRfbs_LSLew7c4/pub?gid=1222628502&single=true&output=csv'
+const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=whatsapp';
 const C = {
   navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', amber:'#F59E0B',
   red:'#DC2626', navyBg:'#E8EFF9', blueBg:'#E3F5FD', cyanBg:'#E4F8F9',
