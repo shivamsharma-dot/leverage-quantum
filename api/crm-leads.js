@@ -2,7 +2,22 @@
 // Optional ?since=YYYY-MM-DD&until=YYYY-MM-DD filters rows by lead_created_date so CRM matches the
 // same window Meta is showing. Without params it aggregates all-time.
 // Returns { byName: { <adName>: leads }, total, rows, distinct, since, until, ts }.
-const SHEET_URL = process.env.CRM_SHEET_URL || 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSv_Z1HpHSLWC_1kBrC4p8SatqHIVqhjSCnct21ImMEkOiwwg1N3KTuswsZP8kTbfxRfbs_LSLew7c4/pub?gid=422958036&single=true&output=csv';
+import { supabaseAdmin } from '../lib/auth.mjs';
+
+const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=FBleads';
+
+async function getSheetUrl() {
+  if (process.env.CRM_SHEET_URL) return process.env.CRM_SHEET_URL;
+  try {
+    const r = await supabaseAdmin('app_preferences?select=value&key=eq.sheet_url_fbleads&limit=1');
+    if (r.ok) {
+      const rows = await r.json();
+      const v = rows[0] && rows[0].value;
+      if (v && String(v).trim()) return String(v).trim();
+    }
+  } catch (_) {}
+  return DEFAULT_SHEET_URL;
+}
 const MONTHS = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
 
 // Parse 'DD-Mon-YYYY' (e.g. 02-Jul-2026) -> 'YYYY-MM-DD'. Returns null if unparseable.
@@ -38,8 +53,9 @@ export default async function handler(req, res) {
   try {
     const since = (req.query && req.query.since) || null; // 'YYYY-MM-DD'
     const until = (req.query && req.query.until) || null;
+    const SHEET_URL = await getSheetUrl();
     const r = await fetch(SHEET_URL, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!r.ok) return res.status(502).json({ error: 'sheet fetch failed', status: r.status });
+      if (!r.ok) return res.status(502).json({ error: 'sheet fetch failed', status: r.status });
     const text = await r.text();
     const lines = text.split(/\r?\n/).filter(l => l.length > 0);
     if (lines.length < 2) return res.status(200).json({ byName: {}, total: 0, rows: 0, distinct: 0, since, until, ts: Date.now() });
