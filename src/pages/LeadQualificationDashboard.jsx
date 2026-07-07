@@ -12,9 +12,9 @@ import { getSession, setSession } from '../lib/sessionLoad'
 import { usePresence } from '../hooks/usePresence'
 import { useAuth } from '../hooks/useAuth'
 
-const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSv_Z1HpHSLWC_1kBrC4p8SatqHIVqhjSCnct21ImMEkOiwwg1N3KTuswsZP8kTbfxRfbs_LSLew7c4/pub?gid=0&single=true&output=csv'
-const MONTHLY_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSv_Z1HpHSLWC_1kBrC4p8SatqHIVqhjSCnct21ImMEkOiwwg1N3KTuswsZP8kTbfxRfbs_LSLew7c4/pub?gid=455680381&single=true&output=csv'
-  const QL_VIEWS = [
+const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Qlops';
+const MONTHLY_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=QLSnapshot';
+const QL_VIEWS = [
   { id: 'daily', label: 'Daily QLs', csv: SHEET_CSV },
   { id: 'monthly', label: 'Monthly QLs', csv: MONTHLY_CSV },
 ]
