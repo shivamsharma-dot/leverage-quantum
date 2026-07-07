@@ -19,10 +19,14 @@ const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings')
 
 const DATA_SOURCES = [
   { name: 'Meta Graph API',       src: 'act_641914389215638', rows: 'live' },
-  { name: 'QL Ops Sheet',         src: 'Google Sheets CSV',   rows: 'live' },
-  { name: 'WhatsApp Sheet',       src: 'Google Sheets CSV',   rows: 'live' },
+  { name: 'Referral Sheet',       editKey: 'sheet_url_referral', rows: 'live' },
+  { name: 'QL Ops Sheet (Daily)', editKey: 'sheet_url_qlops_daily', rows: 'live' },
+  { name: 'QL Snapshot Sheet (Monthly)', editKey: 'sheet_url_qlops_monthly', rows: 'live' },
+  { name: 'WhatsApp Sheet',       editKey: 'sheet_url_whatsapp', rows: 'live' },
+  { name: 'FB Leads / CRM Sheet', editKey: 'sheet_url_fbleads', rows: 'live' },
+  { name: 'Leads Assigned Sheet', editKey: 'sheet_url_leads_assigned', rows: 'live' },
   { name: 'Cross-Channel Sheet',  src: 'aiContext.js',        rows: 'live' },
-]
+    ]
 
 // Mini SVG icon renderer for KPI icon picker
 function KpiIconPreview({ name, color = '#94A3B8' }) {
@@ -89,7 +93,13 @@ export default function SettingsPage() {
     setActivityLog(await getActivityLog(500))
     setActivityLoading(false)
   }
+// Published-sheet connector (admin-configurable CSV URLs)
+    const [sheetUrls, setSheetUrls] = useState({})
+    const [sheetInputs, setSheetInputs] = useState({})
+    const [sheetSaving, setSheetSaving] = useState({})
+    const [sheetMsg, setSheetMsg] = useState({})
 
+  
   // SR Fee
   const [srFeeInput, setSrFeeInput] = useState(() => localStorage.getItem('lq_sr_fee') || '90000')
 
@@ -119,6 +129,10 @@ export default function SettingsPage() {
         // Also sync to localStorage so Sidebar gets it immediately
         localStorage.setItem('lq_hidden_pages', JSON.stringify(hp))
         window.dispatchEvent(new CustomEvent('lq:hidden-pages-changed', { detail: hp }))
+                  const su = {}
+                  ;['sheet_url_referral','sheet_url_qlops_daily','sheet_url_qlops_monthly','sheet_url_whatsapp','sheet_url_fbleads','sheet_url_leads_assigned'].forEach(k => { if (pf[k]) su[k] = pf[k] })
+                  setSheetUrls(su)
+                  setSheetInputs(su)
       })
       .catch(() => {})
       .finally(() => setPrefLoading(false))
@@ -156,6 +170,28 @@ export default function SettingsPage() {
       setPrefSaving(false)
     }
   }
+
+      const saveSheetUrl = async (key) => {
+              const url = (sheetInputs[key] || '').trim()
+              setSheetSaving(prev => ({ ...prev, [key]: true }))
+              setSheetMsg(prev => ({ ...prev, [key]: null }))
+              try {
+                        const r = await fetch('/api/preferences', {
+                                    method: 'POST',
+                                    credentials: 'include',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ key, value: url }),
+                        })
+                        const data = await r.json()
+                        if (!r.ok) throw new Error(data.error || 'Failed')
+                        setSheetUrls(prev => ({ ...prev, [key]: url }))
+                        setSheetMsg(prev => ({ ...prev, [key]: { type: 'ok', text: 'Saved' } }))
+              } catch (e) {
+                        setSheetMsg(prev => ({ ...prev, [key]: { type: 'err', text: e.message } }))
+              } finally {
+                        setSheetSaving(prev => ({ ...prev, [key]: false }))
+              }
+      }
 
   const [activeTheme, setActiveTheme] = useState(() => localStorage.getItem('lq_theme') || 'light')
   const applyTheme = (themeId) => {
@@ -509,9 +545,9 @@ export default function SettingsPage() {
                     </span>
                     <div className={styles.dsBody}>
                       <div className={styles.dsName}>{s.name}</div>
-                      <div className={styles.dsMeta}>{s.src} — {s.rows} rows</div>
+                      <div className={styles.dsMeta}>{s.editKey ? (sheetUrls[s.editKey] || 'Using default link') : (s.src + ' — ' + s.rows + ' rows')}</div>
                     </div>
-                    <span className={styles.dsStatus}>Connected</span>
+                    <span className={styles.dsStatus}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Connected'}</span>{s.editKey && userIsAdmin && (<div className={styles.inputGroup} style={{ marginTop: 8 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} /><button className={styles.primaryBtn} onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}
                   </div>
                 ))}
               </div>
