@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getSession, setSession } from '../lib/sessionLoad';
+import { resolveSheetUrl } from '../lib/dataSources';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area, CartesianGrid, Legend,
@@ -86,8 +87,9 @@ export default function LeadsAssignedDashboard() {
       if (!bust && cached) {
         txt = cached.data;
       } else {
-        const u = bust ? CSV_URL + (CSV_URL.includes('?') ? '&' : '?') + '_=' + Date.now() : CSV_URL;
-        const res = await fetch(u);
+const base = await resolveSheetUrl('leadsAssigned', CSV_URL);
+                  const u = bust ? base + (base.includes('?') ? '&' : '?') + '_=' + Date.now() : base;
+                    const res = await fetch(u);
         txt = await res.text();
         setSession('leads_assigned', txt);
       }
