@@ -12,8 +12,9 @@ import {
   fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
 } from '../ui/dashboardKit';
 
-const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSv_Z1HpHSLWC_1kBrC4p8SatqHIVqhjSCnct21ImMEkOiwwg1N3KTuswsZP8kTbfxRfbs_LSLew7c4/pub?gid=1233447443&single=true&output=csv';
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Referral';
 function parseCSV(t) {
+  
   const rows = []; let i = 0, field = '', row = [], inq = false;
   while (i < t.length) {
     const c = t[i];
