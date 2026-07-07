@@ -11,7 +11,7 @@ import {
   fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
 } from '../ui/dashboardKit';
 
-const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=1262736672&single=true&output=csv';
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Leadassigned';
 
 function parseCSV(t) {
   const rows = []; let i = 0, field = '', row = [], inq = false;
