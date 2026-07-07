@@ -150,7 +150,7 @@ function ProtectedRoute({ children, dashboardId }) {
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null } }
   static getDerivedStateFromError(error) { return { hasError: true, error } }
-  componentDidCatch(error, info) { console.error('Quantum error:', error, info) }
+  componentDidCatch(error, info) { console.error('Quantum error:', error, info); try { const msg = String(error && error.message || ''); if (/fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i.test(msg)) { const key = 'lq_chunk_reload_at'; const last = Number(sessionStorage.getItem(key) || 0); if (Date.now() - last > 10000) { sessionStorage.setItem(key, String(Date.now())); window.location.reload() } } } catch (e) {} }
   render() {
     if (!this.state.hasError) return this.props.children
     return (
