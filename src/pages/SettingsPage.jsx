@@ -97,7 +97,7 @@ export default function SettingsPage() {
     const [sheetUrls, setSheetUrls] = useState({})
     const [sheetInputs, setSheetInputs] = useState({})
     const [sheetSaving, setSheetSaving] = useState({})
-    const [sheetMsg, setSheetMsg] = useState({})
+    const [sheetMsg, setSheetMsg] = useState({}); const [editingSheet, setEditingSheet] = useState(null)
 
   
   // SR Fee
@@ -539,7 +539,7 @@ export default function SettingsPage() {
                 <h3 className={styles.cardTitle}>Data Sources</h3>
                 <div className={styles.dsList}>
                 {DATA_SOURCES.map(s => (
-                  <div key={s.name} className={styles.dsRow}>
+                  <div key={s.name} className={styles.dsRow} style={{ flexWrap: 'wrap', rowGap: 10 }}>
                     <span className={styles.dsIcon}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
                     </span>
@@ -547,7 +547,7 @@ export default function SettingsPage() {
                       <div className={styles.dsName}>{s.name}</div>
                       <div className={styles.dsMeta}>{s.editKey ? (sheetUrls[s.editKey] || 'Using default link') : (s.src + ' — ' + s.rows + ' rows')}</div>
                     </div>
-                    <span className={styles.dsStatus}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Connected'}</span>{s.editKey && userIsAdmin && (<div className={styles.inputGroup} style={{ marginTop: 8 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} /><button className={styles.primaryBtn} onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}
+                    <span className={styles.dsStatus}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Connected'}</span>{s.editKey && userIsAdmin && (<button className={styles.primaryBtn} style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => setEditingSheet(editingSheet === s.editKey ? null : s.editKey)}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><button className={styles.primaryBtn} onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}
                   </div>
                 ))}
               </div>
