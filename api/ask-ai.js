@@ -7,9 +7,9 @@ const TOOL_MODEL = MODEL // NOTE: intermediate rounds must call the Meta tool re
 const SB_URL        = process.env.SUPABASE_URL        || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SB_KEY        = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-const QLOPS_SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=0&single=true&output=csv'
-const WA_SHEET    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=1222628502&single=true&output=csv'
-const AD_ACCOUNT  = 'act_641914389215638'
+const QLOPS_SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSv_Z1HpHSLWC_1kBrC4p8SatqHIVqhjSCnct21ImMEkOiwwg1N3KTuswsZP8kTbfxRfbs_LSLew7c4/pub?gid=0&single=true&output=csv'
+const WA_SHEET    = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSv_Z1HpHSLWC_1kBrC4p8SatqHIVqhjSCnct21ImMEkOiwwg1N3KTuswsZP8kTbfxRfbs_LSLew7c4/pub?gid=1222628502&single=true&output=csv'
+  const AD_ACCOUNT  = 'act_641914389215638'
 const MONTHS      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 // ── helpers ───────────────────────────────────────────────────────────────────
