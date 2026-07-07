@@ -1,253 +1,327 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import Sidebar from '../components/Sidebar'
-import styles from './DashboardHome.module.css'
-import { fetchCSV } from '../lib/sheetCache'
-import { getSession, setSession } from '../lib/sessionLoad'
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
+} from 'recharts'
+import { loadSummaryAnalysis } from '../lib/summaryData'
 
 const FONT = "'Plus Jakarta Sans',-apple-system,sans-serif"
-const C = { navy:'#1F3C84', blue:'#1C9FD4', green:'#4CAE6F', cyan:'#29B9C3', amber:'#F59E0B', border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8', bg:'#F4F6F9' }
+const C = { navy:'#1F3C84', blue:'#1C9FD4', green:'#4CAE6F', cyan:'#29B9C3', amber:'#F59E0B', red:'#EF4444', border:'#E5E7EB', text:'#0F172A', muted:'#94A3B8', bg:'#F4F6F9' }
 
-const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
-const AD_ACCOUNT  = 'act_641914389215638'
-const QLOPS_SHEET = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRVF7R3Me4QPVaRS_n_OufcMrrgYvCt3Rs7yJUG0u4gEMd0cVL9IyP2aV6J8HDjOZrvWzcemgHwZaHs/pub?gid=0&single=true&output=csv'
+function fmtN(n){ if(!n && n!==0) return '\u2014'; if(n>=1e7) return (n/1e7).toFixed(1)+'Cr'; if(n>=1e5) return (n/1e5).toFixed(1)+'L'; if(n>=1e3) return Math.round(n/1e3)+'K'; return Math.round(n).toLocaleString('en-IN') }
+function fmtC(n){ if(!n && n!==0) return '\u2014'; if(n>=1e7) return '\u20b9'+(n/1e7).toFixed(2)+' Cr'; if(n>=1e5) return '\u20b9'+(n/1e5).toFixed(1)+'L'; if(n>=1e3) return '\u20b9'+Math.round(n/1e3)+'K'; return '\u20b9'+Math.round(n) }
+function fmtShortDate(dateStr){ const d = new Date(dateStr+'T00:00:00'); return d.toLocaleDateString('en-IN',{ day:'numeric', month:'short' }) }
+function fmtShortMonth(monthStr){ const parts = monthStr.split('-'); const d = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, 1); return d.toLocaleDateString('en-IN',{ month:'short', year:'2-digit' }) }
 
-function fmtN(n){ if(!n&&n!==0)return '—'; if(n>=1e7)return(n/1e7).toFixed(1)+'Cr'; if(n>=1e5)return(n/1e5).toFixed(1)+'L'; if(n>=1e3)return Math.round(n/1e3)+'K'; return Math.round(n).toLocaleString('en-IN') }
-function fmtC(n){ if(!n&&n!==0)return '—'; if(n>=1e7)return'₹'+(n/1e7).toFixed(2)+' Cr'; if(n>=1e5)return'₹'+(n/1e5).toFixed(1)+'L'; if(n>=1e3)return'₹'+Math.round(n/1e3)+'K'; return'₹'+Math.round(n) }
-
-// Countup hook — only animates when real data arrives, shows — until then
+// Countup hook -- only animates when real data arrives, shows placeholder until then
 function useCountUp(target, duration=900) {
   const [val, setVal] = useState(null)
   useEffect(()=>{
-    if(target === null || target === undefined || target === 0) return
+    if(target === null || target === undefined) { setVal(null); return }
+    if (target === 0) { setVal(0); return }
     let start=null
+    let raf = null
     const step = ts => {
       if(!start) start=ts
       const progress=Math.min((ts-start)/duration,1)
       const ease=1-Math.pow(1-progress,3)
       setVal(Math.round(target*ease))
-      if(progress<1) requestAnimationFrame(step)
+      if(progress<1) raf = requestAnimationFrame(step)
       else setVal(target)
     }
-    requestAnimationFrame(step)
+    raf = requestAnimationFrame(step)
+    return () => { if (raf) cancelAnimationFrame(raf) }
   },[target,duration])
   return val
 }
 
-const DASHBOARDS = [
-  { id:'meta_ads',      to:'/dashboard/meta-ads',     label:'Meta Ads',     desc:'Campaign performance, creatives, CTR, CPL, fatigue signals.', tags:['Creatives','Campaigns','Spend','ROAS'], live:true,   color:C.blue,   icon:'meta'   },
-  { id:'google_ads',    to:'/dashboard/google-ads',   label:'Google Ads',   desc:'Search and Performance Max: spend, clicks, conversions, keywords.', tags:['Campaigns','Keywords','Clicks','Conv.'], live:true,   color:C.green,  icon:'google' },
-  { id:'roas',          to:'/dashboard/roas',         label:'ROAS',         desc:'Campaign-level spend, leads, STUs, revenue and return on ad spend.', tags:['Facebook','Google','LinkedIn','Bing'],   live:false,  color:C.navy,   icon:'roas'   },
-  { id:'mtd',           to:'/dashboard/mtd',          label:'MTD',          desc:'Month-to-date CPL and CPQL with AI-generated insights.', tags:['CPL','CPQL','QLs','Spend'],                           live:true,   color:C.cyan,   icon:'calendar'},
-  { id:'lead_quality',  to:'/dashboard/lead-quality', label:'Lead Quality', desc:'L→QL→STU funnel conversion rates by source, campaign, geography.', tags:['OPPs','QLs','STUs','L→Q%'],               live:false,  color:C.green,  icon:'funnel' },
-  { id:'channel_mix',   to:'/dashboard/channel-mix',  label:'Channel Mix',  desc:'Spend allocation and performance across paid, organic and affiliate.', tags:['Paid','Organic','Affiliate','Referral'], live:false,  color:C.navy,   icon:'mix'    },
-  { id:'revenue',       to:'/dashboard/revenue',      label:'Revenue',      desc:'AC and VAS revenue tracking with projected vs actual comparison.', tags:['AC','VAS','Projected','Actual'],           live:false,  color:C.amber,  icon:'revenue'},
-  { id:'lq_ops',        to:'/dashboard/lq-ops',       label:'QL Ops',       desc:'Futwork and Superbot qualification performance by source and campaign.', tags:['Futwork','Superbot','QL%','By source'], live:true,   color:C.green,  icon:'qlops'  },
-  { id:'whatsapp',      to:'/dashboard/whatsapp',     label:'WhatsApp',     desc:'Message delivery, read rates, engagement and spend breakdown.', tags:['Delivered','Read','CTR','Spend'],            live:true,   color:C.green,  icon:'wa'     },
-]
-
-function DashIcon({ id, color }) {
-  const icons = {
-    meta:     <><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></>,
-    google:   <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>,
-    roas:     <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></>,
-    calendar: <><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
-    funnel:   <><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></>,
-    mix:      <><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></>,
-    revenue:  <><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></>,
-    qlops:    <><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></>,
-    wa:       <><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></>,
-  }
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      {icons[id]||icons.meta}
-    </svg>
-  )
-}
-
-// Skeleton shimmer component
 function Skeleton({ w='100%', h=20, r=6 }) {
   return <div style={{ width:w, height:h, borderRadius:r, background:'linear-gradient(90deg,#F0F2F5 25%,#E8EBF0 50%,#F0F2F5 75%)', backgroundSize:'200% 100%', animation:'shimmer 1.4s infinite' }}/>
 }
 
-// Live stat card
-function StatCard({ label, value, sub, accent, loading, icon }) {
+function StatCard({ label, value, sub, loading, icon }) {
   const numVal = parseFloat((value||'').toString().replace(/[^0-9.]/g,''))||0
   const display = useCountUp(loading ? null : numVal, 900)
-  const formatted = loading ? null : display === null ? '—' : (value||'—').toString().replace(/[\d.]+/, display.toString())
-
+  const formatted = loading ? null : display === null ? '\u2014' : (value||'\u2014').toString().replace(/[\d.]+/, display.toString())
   return (
-    <div style={{ background:'#fff', border:'0.5px solid #E2E8F0', borderRadius:12, padding:'16px 20px 14px', boxShadow:'0 1px 4px rgba(15,23,42,0.04)', fontFamily:FONT }}>
+    <div style={{ background:'#fff', border:'0.5px solid '+C.border, borderRadius:12, padding:'16px 20px 14px', boxShadow:'0 1px 4px rgba(15,23,42,0.04)', fontFamily:FONT }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
         <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase' }}>{label}</div>
         <div style={{ width:20, height:20, display:'flex', alignItems:'center', justifyContent:'center', color:'#CBD5E1', opacity:0.7 }}>{icon}</div>
       </div>
       {loading ? <Skeleton h={28} r={6}/> : <div style={{ fontSize:26, fontWeight:800, color:C.text, letterSpacing:'-1px', lineHeight:1, marginBottom:6 }}>{formatted}</div>}
-      {loading ? <div style={{ marginTop:6 }}><Skeleton w="60%" h={14} r={4}/></div> : sub && <div style={{ fontSize:11.5, color:C.muted, marginTop:0 }}>{sub}</div>}
+      {loading ? <div style={{ marginTop:6 }}><Skeleton w='60%' h={14} r={4}/></div> : sub && <div style={{ fontSize:11.5, color:C.muted, marginTop:0 }}>{sub}</div>}
     </div>
   )
 }
 
+function Delta({ pct }) {
+  if (pct === null || pct === undefined || !isFinite(pct)) return null
+  const up = pct >= 0
+  const flat = Math.abs(pct) < 1.5
+  const color = flat ? C.muted : up ? C.green : C.red
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:3, fontSize:11.5, fontWeight:700, color:color, background:color+'16', padding:'2px 7px', borderRadius:20 }}>
+      {flat ? '\u2013' : up ? '\u25b2' : '\u25bc'} {Math.abs(pct).toFixed(1)}%
+    </span>
+  )
+}
+
+function HeadlineStat({ label, value, deltaPct, deltaLabel, loading }) {
+  return (
+    <div style={{ flex:1, minWidth:120 }}>
+      <div style={{ fontSize:10.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:6 }}>{label}</div>
+      {loading ? <Skeleton h={30} r={6}/> : (
+        <div style={{ display:'flex', alignItems:'baseline', gap:8, flexWrap:'wrap' }}>
+          <div style={{ fontSize:23, fontWeight:800, color:C.text, letterSpacing:'-0.02em' }}>{value}</div>
+          <Delta pct={deltaPct}/>
+        </div>
+      )}
+      {!loading && deltaLabel && <div style={{ fontSize:11, color:C.muted, marginTop:3 }}>{deltaLabel}</div>}
+    </div>
+  )
+}
+
+function ChartPanel({ title, data, xKey, yKey, color, valueFmt, chartType }) {
+  const gid = 'g-' + title.replace(/[^a-zA-Z0-9]/g,'') + '-' + yKey
+  const fmt = valueFmt || (v => v)
+  return (
+    <div style={{ flex:1, minWidth:0 }}>
+      <div style={{ fontSize:11, fontWeight:700, color:C.muted, marginBottom:8, textTransform:'uppercase', letterSpacing:'0.05em' }}>{title}</div>
+      <div style={{ height:150 }}>
+        <ResponsiveContainer width='100%' height='100%'>
+          {chartType === 'bar' ? (
+            <BarChart data={data} margin={{ top:6, right:4, left:-22, bottom:0 }}>
+              <defs>
+                <linearGradient id={gid} x1='0' y1='0' x2='0' y2='1'>
+                  <stop offset='0%' stopColor={color} stopOpacity={0.95}/>
+                  <stop offset='100%' stopColor={color} stopOpacity={0.55}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke='#EEF1F5'/>
+              <XAxis dataKey={xKey} tick={{ fontSize:10, fill:C.muted }} axisLine={false} tickLine={false} interval={data.length>10?1:0}/>
+              <YAxis hide/>
+              <Tooltip formatter={fmt} labelStyle={{ fontSize:11, fontWeight:700, color:C.text }} contentStyle={{ fontSize:11, borderRadius:10, border:'0.5px solid '+C.border, boxShadow:'0 4px 14px rgba(15,23,42,0.08)' }}/>
+              <Bar dataKey={yKey} fill={'url(#'+gid+')'} radius={[5,5,0,0]} maxBarSize={26}/>
+            </BarChart>
+          ) : (
+            <AreaChart data={data} margin={{ top:6, right:4, left:-22, bottom:0 }}>
+              <defs>
+                <linearGradient id={gid} x1='0' y1='0' x2='0' y2='1'>
+                  <stop offset='0%' stopColor={color} stopOpacity={0.4}/>
+                  <stop offset='100%' stopColor={color} stopOpacity={0.02}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke='#EEF1F5'/>
+              <XAxis dataKey={xKey} tick={{ fontSize:10, fill:C.muted }} axisLine={false} tickLine={false} interval={data.length>10?1:0}/>
+              <YAxis hide/>
+              <Tooltip formatter={fmt} labelStyle={{ fontSize:11, fontWeight:700, color:C.text }} contentStyle={{ fontSize:11, borderRadius:10, border:'0.5px solid '+C.border, boxShadow:'0 4px 14px rgba(15,23,42,0.08)' }}/>
+              <Area type='monotone' dataKey={yKey} stroke={color} strokeWidth={2.5} fill={'url(#'+gid+')'}/>
+            </AreaChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+function SectionIcon({ id, color }) {
+  const icons = {
+    meta: <><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z'/></>,
+    qlops: <><path d='M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M23 21v-2a4 4 0 00-3-3.87'/><path d='M16 3.13a4 4 0 010 7.75'/></>,
+    calendar: <><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></>,
+  }
+  return (
+    <svg width='19' height='19' viewBox='0 0 24 24' fill='none' stroke={color} strokeWidth='1.8' strokeLinecap='round' strokeLinejoin='round'>
+      {icons[id]||icons.meta}
+    </svg>
+  )
+}
+
+function AnalysisSection({ icon, color, title, tagline, insight, stats, dod, mom, loading }) {
+  return (
+    <div className='qcard' style={{ background:'#fff', border:'0.5px solid '+C.border, borderRadius:18, padding:'22px 24px 22px', boxShadow:'0 2px 10px rgba(15,23,42,0.05)', marginBottom:18 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, flexWrap:'wrap', gap:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ width:40, height:40, borderRadius:12, background:color+'18', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <SectionIcon id={icon} color={color}/>
+          </div>
+          <div>
+            <div style={{ fontSize:16.5, fontWeight:800, color:C.text, letterSpacing:'-0.01em' }}>{title}</div>
+            <div style={{ fontSize:11.5, color:C.muted, marginTop:1 }}>{tagline}</div>
+          </div>
+        </div>
+        <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:10.5, fontWeight:700, color:C.green, background:C.green+'14', padding:'3px 10px', borderRadius:20 }}>
+          <span style={{ width:5, height:5, borderRadius:'50%', background:C.green, animation:'pulse 2s infinite' }}/>LIVE
+        </span>
+      </div>
+
+      <div style={{ display:'flex', gap:28, marginBottom:22, paddingBottom:20, borderBottom:'0.5px solid '+C.border, flexWrap:'wrap' }}>
+        {stats.map((s,i) => <HeadlineStat key={i} {...s} loading={loading}/>)}
+      </div>
+
+      <div style={{ display:'flex', gap:28, marginBottom:20, flexWrap:'wrap' }}>
+        <ChartPanel title={'Day on Day \u00b7 last 14 days'} data={dod.data} xKey='label' yKey={dod.key} color={color} valueFmt={dod.fmt} chartType={dod.type||'area'}/>
+        <ChartPanel title={'Month on Month \u00b7 last 6 months'} data={mom.data} xKey='label' yKey={mom.key} color={color} valueFmt={mom.fmt} chartType={mom.type||'bar'}/>
+      </div>
+
+      <div style={{ display:'flex', gap:10, alignItems:'flex-start', background:color+'0C', border:'0.5px solid '+color+'22', borderRadius:12, padding:'12px 15px' }}>
+        <svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke={color} strokeWidth='2' style={{ flexShrink:0, marginTop:2 }}><path d='M9 18h6M10 22h4M15 2a6 6 0 00-4 10.65V15h2v-2.35A6 6 0 0015 2z'/></svg>
+        <div style={{ fontSize:12.5, color:C.text, lineHeight:1.55, fontFamily:FONT }}>{loading ? 'Crunching the latest numbers\u2026' : insight}</div>
+      </div>
+    </div>
+  )
+}
+
+function metaAnalystLine(M) {
+  if (!M.lastDay) return 'Meta Ads performance will appear here as soon as spend data starts flowing in for this account.'
+  const sp = M.spendDeltaPct, ld = M.leadsDeltaPct
+  const spendVerb = (sp === null || Math.abs(sp) < 3) ? 'held roughly flat' : sp > 0 ? ('climbed ' + Math.abs(sp).toFixed(0) + '% day-on-day') : ('eased ' + Math.abs(sp).toFixed(0) + '% day-on-day')
+  const leadNote = (ld === null) ? '' : (Math.abs(ld) < 3) ? ', with lead volume holding steady' : ld > 0 ? (', and leads rose ' + Math.abs(ld).toFixed(0) + '% alongside it') : (', even as leads dipped ' + Math.abs(ld).toFixed(0) + '%')
+  let read = 'Overall, performance is tracking within a normal band.'
+  if (sp !== null && ld !== null && sp <= -3 && ld >= 0) read = 'A healthy sign of improving efficiency.'
+  else if (sp !== null && ld !== null && sp >= 3 && ld < 0) read = "Worth a creative or audience refresh before spend scales further -- efficiency is slipping."
+  return 'Spend ' + spendVerb + ' to ' + fmtC(M.lastDay.spend) + leadNote + '. ' + read
+}
+
+function qlAnalystLine(M) {
+  if (!M.lastDay) return 'Qualified lead data will appear here once the QL Ops sheet starts reporting for this period.'
+  const q = M.qlDeltaPct
+  const qlVerb = (q === null || Math.abs(q) < 3) ? 'held roughly flat' : q > 0 ? ('climbed ' + Math.abs(q).toFixed(0) + '% day-on-day') : ('slipped ' + Math.abs(q).toFixed(0) + '% day-on-day')
+  const share = M.futworkSharePct
+  const mixNote = (share === null || share === undefined) ? '' : (' Futwork is driving ' + share.toFixed(0) + '% of this month\u2019s qualified volume, with Superbot contributing the remaining ' + (100-share).toFixed(0) + '%.')
+  return 'Qualified leads ' + qlVerb + ' to ' + fmtN(M.lastDay.ql) + ' yesterday.' + mixNote
+}
+
+function mtdAnalystLine(M) {
+  if (!M.curMonthRow || !M.curMonthRow.ql) return 'CPL and CPQL trends will appear here once this month starts accumulating qualified leads.'
+  const cur = M.mtdCPQL, prev = M.prevMonthCPQL, d = M.mtdCPQLDeltaPct
+  const verb = (d === null || Math.abs(d) < 3) ? 'is tracking in line with' : d > 0 ? ('is running ' + Math.abs(d).toFixed(0) + '% above') : ('is running ' + Math.abs(d).toFixed(0) + '% below')
+  let read = "last month's pace."
+  if (d !== null && d <= -5) read = 'a meaningful improvement in lead quality economics this month.'
+  else if (d !== null && d >= 15) read = 'a notable rise worth investigating by source and campaign.'
+  const prevPart = prev ? ("last month's " + fmtC(prev)) : 'last month'
+  return 'Blended CPQL this month is ' + fmtC(cur) + ', which ' + verb + ' ' + prevPart + ' -- ' + read
+}
+
 export default function DashboardHome() {
-  const navigate   = useNavigate()
-  const { user }   = useAuth()
-  const [search, setSearch]     = useState('')
-  const [liveStats, setLiveStats] = useState(null)
-  const [statsLoading, setStatsLoading] = useState(true)
+  const { user } = useAuth()
+  const [analysis, setAnalysis] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   const firstName = (user?.name||'there').split(' ')[0]
-  const greeting  = (() => { const h=new Date().getHours(); return h<12?'Good morning':h<17?'Good afternoon':h<21?'Good evening':'Good evening' })()
+  const greeting = (() => { const h=new Date().getHours(); return h<12?'Good morning':h<17?'Good afternoon':'Good evening' })()
 
-  // Fetch live stats: Meta spend + QL today
-  const fetchStats = useCallback(async (bust = false) => {
-    setStatsLoading(true)
-    const cachedHome = getSession('home')
-    if (!bust && cachedHome) { setLiveStats(cachedHome.data); setStatsLoading(false); return }
+  const load = useCallback(async (bust=false) => {
+    setLoading(true)
     try {
-      const [sbRes, qlRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/meta_tokens?select=token&order=created_at.desc&limit=1`, {
-          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
-        }),
-        fetch(QLOPS_SHEET).catch(()=>null)
-      ])
-
-      let metaStats = null
-      if (sbRes.ok) {
-        const tkData = await sbRes.json()
-        const token = tkData?.[0]?.token
-        if (token) {
-          const metaRes = await fetch(`https://graph.facebook.com/v19.0/${AD_ACCOUNT}/insights?fields=spend,impressions,clicks,ctr,actions&date_preset=last_30d&level=account&access_token=${token}`)
-          if (metaRes.ok) {
-            const md = await metaRes.json()
-            const acc = md.data?.[0]||{}
-            const findAct = (t) => parseInt(acc.actions?.find(a=>a.action_type===t)?.value||0)
-        const leads = findAct('onsite_conversion.lead_grouped') || findAct('onsite_web_lead') || findAct('offsite_complete_registration_add_meta_leads') || findAct('lead') || 0
-            metaStats = { spend: parseFloat(acc.spend||0), leads, ctr: parseFloat(acc.ctr||0) }
-          }
-        }
-      }
-
-      let qlStats = null
-      if (qlRes?.ok) {
-        const csv = await qlRes.text()
-        const lines = csv.trim().split('\n')
-        const hdr = lines[0].split(',').map(s=>s.trim().toLowerCase())
-        const h = k => hdr.indexOf(k)
-        const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-        const now = new Date(); const curMonth = MONTHS[now.getMonth()]+' '+now.getFullYear()
-        let total=0, futwork=0, superbot=0
-        lines.slice(1).forEach(l => {
-          const r=l.split(',')
-          if(r[h('qualified_month')]?.includes(curMonth.split(' ')[0])) {
-            const c=parseInt(r[h('qualified_count')])||0
-            total+=c
-            if((r[h('provider')]||'').toLowerCase().includes('fut')) futwork+=c
-            else superbot+=c
-          }
-        })
-        qlStats = { total, futwork, superbot }
-      }
-
-      const _stats = { meta: metaStats, ql: qlStats, ts: new Date() }
-    setSession('home', _stats)
-    setLiveStats(_stats)
-    } catch(e) { console.error('stats fetch:', e) }
-    setStatsLoading(false)
+      const data = await loadSummaryAnalysis(bust)
+      setAnalysis(data)
+    } catch(e) { console.error('DashboardHome load:', e) }
+    setLoading(false)
   }, [])
 
-  useEffect(() => { fetchStats() }, [fetchStats])
+  useEffect(() => { load() }, [load])
 
-  const filtered = DASHBOARDS.filter(d => !search || d.label.toLowerCase().includes(search.toLowerCase()) || d.desc.toLowerCase().includes(search.toLowerCase()))
-
-  const cpl = liveStats?.meta?.spend && liveStats?.meta?.leads ? liveStats.meta.spend / liveStats.meta.leads : 0
+  const M = useMemo(() => {
+    const dayRows = analysis?.dayRows || []
+    const monthRows = analysis?.monthRows || []
+    const todayStr = new Date().toISOString().slice(0,10)
+    const completeDays = dayRows.filter(d => d.date < todayStr)
+    const lastDay = completeDays[completeDays.length-1] || null
+    const prevDay = completeDays[completeDays.length-2] || null
+    const dod = completeDays.slice(-14).map(d => ({ ...d, label: fmtShortDate(d.date), cpql: d.ql ? d.spend/d.ql : 0, cpl: d.metaLeads ? d.spend/d.metaLeads : 0 }))
+    const curMonthKey = todayStr.slice(0,7)
+    const curMonthRow = monthRows.find(m => m.month === curMonthKey) || { spend:0, ql:0, futwork:0, superbot:0, metaLeads:0 }
+    const prevMonthRow = monthRows.filter(m => m.month < curMonthKey).slice(-1)[0] || null
+    const mom = monthRows.slice(-6).map(m => ({ ...m, label: fmtShortMonth(m.month), cpql: m.ql ? m.spend/m.ql : 0, cpl: m.metaLeads ? m.spend/m.metaLeads : 0 }))
+    const pct = (cur, prev) => (prev ? ((cur-prev)/prev)*100 : null)
+    const mtdCPQL = curMonthRow.ql ? curMonthRow.spend/curMonthRow.ql : 0
+    const prevMonthCPQL = (prevMonthRow && prevMonthRow.ql) ? prevMonthRow.spend/prevMonthRow.ql : 0
+    return {
+      lastDay, prevDay, dod, mom, curMonthRow, prevMonthRow, mtdCPQL, prevMonthCPQL,
+      spendDeltaPct: pct(lastDay?.spend||0, prevDay?.spend||0),
+      leadsDeltaPct: pct(lastDay?.metaLeads||0, prevDay?.metaLeads||0),
+      qlDeltaPct: pct(lastDay?.ql||0, prevDay?.ql||0),
+      mtdCPQLDeltaPct: prevMonthCPQL ? pct(mtdCPQL, prevMonthCPQL) : null,
+      futworkSharePct: curMonthRow.ql ? (curMonthRow.futwork/curMonthRow.ql*100) : null,
+    }
+  }, [analysis])
 
   return (
-    <div className="lq-page-shell" style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
+    <div className='lq-page-shell' style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
       <style>{`
-        
-        @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-        @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-        .dhcard:hover{transform:translateY(-2px)!important;box-shadow:0 8px 24px rgba(15,23,42,0.10)!important;border-color:#D1D9E8!important}
-        .dhcard{transition:all .2s cubic-bezier(0.4,0,0.2,1)!important}
-        .dhtag{transition:all .15s}
-        .dhtag:hover{background:#E8EFF9!important;color:#1F3C84!important}
-      `}</style>
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.35}}
+.qcard{transition:all .2s cubic-bezier(0.4,0,0.2,1)!important}
+.qcard:hover{box-shadow:0 8px 26px rgba(15,23,42,0.09)!important;border-color:#D1D9E8!important}
+`}</style>
       <Sidebar/>
-      <main style={{ flex:1, overflowY:'auto', padding:'28px 28px' }}>
+      <main style={{ flex:1, overflowY:'auto', padding:'28px 28px 40px' }}>
 
-        {/* Header */}
-        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:28, animation:'fadeUp .4s ease' }}>
+        <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:26, animation:'fadeUp .4s ease' }}>
           <div>
             <p style={{ fontSize:11, color:C.muted, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', margin:'0 0 4px', fontFamily:FONT }}>HOME</p>
             <h1 style={{ fontSize:28, fontWeight:800, color:C.text, margin:0, letterSpacing:'-0.03em', fontFamily:FONT }}>{greeting}, {firstName} 👋</h1>
             <p style={{ fontSize:13.5, color:C.muted, margin:'4px 0 0', fontFamily:FONT }}>
-              {liveStats?.ts ? `Last updated ${liveStats.ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}` : 'Loading live data…'}
+              {analysis?.ts ? ('Last updated ' + new Date(analysis.ts).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})) : 'Loading live analysis\u2026'}
             </p>
           </div>
-          <div style={{ display:'flex', gap:10 }}>
-          <button onClick={() => fetchStats(true)} disabled={statsLoading} title="Refresh data"
-            style={{ paddingLeft:16, paddingRight:16, paddingTop:8, paddingBottom:8, borderRadius:10, border: `0.5px solid ${C.border}`, fontSize:13, fontWeight:600, fontFamily:FONT, background:'#fff', color:C.text, cursor: statsLoading ? 'wait' : 'pointer', boxShadow:'0 1px 3px rgba(15,23,42,0.05)', opacity: statsLoading ? 0.65 : 1 }}>
-            {statsLoading ? 'Refreshing…' : 'Refresh'}
+          <button onClick={() => load(true)} disabled={loading} title='Refresh data'
+            style={{ paddingLeft:16, paddingRight:16, paddingTop:9, paddingBottom:9, borderRadius:10, border:'none', fontSize:12.5, fontWeight:700, fontFamily:FONT, background:'linear-gradient(135deg, #1F3C84, #1C9FD4)', color:'#fff', cursor: loading ? 'wait' : 'pointer', boxShadow:'0 4px 10px -3px rgba(31,60,132,0.5)', opacity: loading ? 0.7 : 1 }}>
+            {loading ? 'Refreshing\u2026' : 'Refresh'}
           </button>
-            <div style={{ position:'relative' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search dashboards…"
-                style={{ paddingLeft:32, paddingRight:12, paddingTop:8, paddingBottom:8, borderRadius:10, border:`0.5px solid ${C.border}`, fontSize:13, fontFamily:FONT, outline:'none', color:C.text, background:'#fff', width:220, boxShadow:'0 1px 3px rgba(15,23,42,0.05)' }}/>
-            </div>
-          </div>
         </div>
 
-        {/* Live stats bar */}
-        <div className="lq-stagger" style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:12, marginBottom:32, animation:'fadeUp .4s ease .05s both' }}>
-          <StatCard label="Meta Spend · 30D"  value={fmtC(liveStats?.meta?.spend||0)}      sub="Last 30 days" accent={C.blue}  loading={statsLoading}
-            icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>}/>
-          <StatCard label="Meta Leads · 30D"  value={fmtN(liveStats?.meta?.leads||0)}      sub="Last 30 days" accent={C.navy}  loading={statsLoading}
-            icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>}/>
-          <StatCard label="CPL · 30D"         value={fmtC(cpl)}                            sub="Cost per lead" accent={C.amber} loading={statsLoading}
-            icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>}/>
-          <StatCard label="QL This Month"     value={fmtN(liveStats?.ql?.total||0)}         sub={`Futwork ${fmtN(liveStats?.ql?.futwork||0)} · Superbot ${fmtN(liveStats?.ql?.superbot||0)}`} accent={C.green} loading={statsLoading}
-            icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>}/>
-          <StatCard label="Meta CTR · 30D"    value={`${(liveStats?.meta?.ctr||0).toFixed(2)}%`} sub="Click-through rate" accent={C.cyan} loading={statsLoading}
-            icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>}/>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:28, animation:'fadeUp .4s ease .05s both' }}>
+          <StatCard label='MTD Spend' value={fmtC(M.curMonthRow.spend||0)} sub='Meta Ads, month to date' loading={loading}
+            icon={<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'><circle cx='12' cy='12' r='10'/></svg>}/>
+          <StatCard label='MTD Qualified Leads' value={fmtN(M.curMonthRow.ql||0)} sub={'Futwork '+fmtN(M.curMonthRow.futwork||0)+' \u00b7 Superbot '+fmtN(M.curMonthRow.superbot||0)} loading={loading}
+            icon={<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'><polyline points='20 6 9 17 4 12'/></svg>}/>
+          <StatCard label='Blended CPQL (MTD)' value={fmtC(M.mtdCPQL||0)} sub={M.prevMonthCPQL ? ('vs '+fmtC(M.prevMonthCPQL)+' last month') : 'Cost per qualified lead'} loading={loading}
+            icon={<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'><line x1='12' y1='1' x2='12' y2='23'/><path d='M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6'/></svg>}/>
+          <StatCard label="Yesterday's Meta Spend" value={fmtC(M.lastDay?.spend||0)} sub={M.spendDeltaPct!==null ? ((M.spendDeltaPct>=0?'+':'')+M.spendDeltaPct.toFixed(1)+'% vs day before') : 'Last complete day'} loading={loading}
+            icon={<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'/></svg>}/>
         </div>
 
-        {/* Dashboard grid */}
         <div style={{ animation:'fadeUp .4s ease .1s both' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
-            <h2 style={{ fontSize:14, fontWeight:700, color:C.text, margin:0, letterSpacing:'-0.01em', fontFamily:FONT }}>All Dashboards</h2>
-            <span style={{ fontSize:12, color:C.muted, fontFamily:FONT }}>{filtered.length} dashboards</span>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
-            {filtered.map((d,i) => (
-              <div key={d.id} className="dhcard" onClick={()=>navigate(d.to)}
-                style={{ background:'#fff', border:`0.5px solid ${C.border}`, borderRadius:14, padding:'18px 18px 16px', cursor:'pointer', boxShadow:'0 1px 3px rgba(15,23,42,0.04)', animation:`fadeUp .35s ease ${i*0.03}s both` }}>
-                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:12 }}>
-                  <div style={{ width:40, height:40, borderRadius:11, background:d.color+'18', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <DashIcon id={d.icon} color={d.color}/>
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                    {d.live && <span style={{ display:'flex', alignItems:'center', gap:4, fontSize:10.5, fontWeight:700, color:C.green, background:C.green+'14', padding:'3px 8px', borderRadius:20 }}>
-                      <span style={{ width:5, height:5, borderRadius:'50%', background:C.green, animation:'pulse 2s infinite' }}/>LIVE
-                    </span>}
-                    {!d.live && <span style={{ fontSize:10.5, fontWeight:600, color:C.muted, background:'#F3F4F6', padding:'3px 8px', borderRadius:20 }}>BIGQUERY</span>}
-                  </div>
-                </div>
-                <div style={{ fontSize:15, fontWeight:700, color:C.text, marginBottom:5, fontFamily:FONT }}>{d.label}</div>
-                <div style={{ fontSize:12, color:C.muted, lineHeight:1.55, marginBottom:12, minHeight:36, fontFamily:FONT }}>{d.desc}</div>
-                <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-                  {d.tags.map(t=>(
-                    <span key={t} className="dhtag" style={{ fontSize:10.5, fontWeight:500, color:'#6B7280', background:'#F3F4F6', padding:'3px 8px', borderRadius:20, fontFamily:FONT }}>{t}</span>
-                  ))}
-                </div>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', marginTop:12, paddingTop:10, borderTop:`0.5px solid ${C.border}` }}>
-                  <span style={{ fontSize:12, fontWeight:700, color:d.color, fontFamily:FONT }}>Open →</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          {filtered.length===0&&<div style={{ padding:'60px 0', textAlign:'center', color:C.muted, fontSize:13, fontFamily:FONT }}>No dashboards found for "{search}"</div>}
+          <AnalysisSection
+            icon='meta' color={C.blue} title='Meta Ads' tagline='Spend, leads and click-through -- last day, day-on-day, month-on-month'
+            insight={metaAnalystLine(M)} loading={loading}
+            stats={[
+              { label:'Yesterday Spend', value: fmtC(M.lastDay?.spend||0), deltaPct: M.spendDeltaPct, deltaLabel:'vs day before' },
+              { label:'Yesterday Leads', value: fmtN(M.lastDay?.metaLeads||0), deltaPct: M.leadsDeltaPct, deltaLabel:'vs day before' },
+              { label:'Yesterday CTR', value: (M.lastDay && M.lastDay.impressions ? ((M.lastDay.clicks/M.lastDay.impressions)*100).toFixed(2) : '0.00')+'%', deltaLabel:'Click-through rate' },
+            ]}
+            dod={{ data:M.dod, key:'spend', fmt:(v)=>fmtC(v), type:'area' }}
+            mom={{ data:M.mom, key:'spend', fmt:(v)=>fmtC(v), type:'bar' }}
+          />
+
+          <AnalysisSection
+            icon='qlops' color={C.green} title='QL Ops' tagline='Qualified lead volume by Futwork and Superbot -- last day, day-on-day, month-on-month'
+            insight={qlAnalystLine(M)} loading={loading}
+            stats={[
+              { label:'Yesterday QLs', value: fmtN(M.lastDay?.ql||0), deltaPct: M.qlDeltaPct, deltaLabel:'vs day before' },
+              { label:'Futwork (MTD)', value: fmtN(M.curMonthRow.futwork||0), deltaLabel: M.futworkSharePct!==null ? (M.futworkSharePct.toFixed(0)+'% of month total') : 'Month to date' },
+              { label:'Superbot (MTD)', value: fmtN(M.curMonthRow.superbot||0), deltaLabel: M.futworkSharePct!==null ? ((100-M.futworkSharePct).toFixed(0)+'% of month total') : 'Month to date' },
+            ]}
+            dod={{ data:M.dod, key:'ql', fmt:(v)=>fmtN(v), type:'bar' }}
+            mom={{ data:M.mom, key:'ql', fmt:(v)=>fmtN(v), type:'bar' }}
+          />
+
+          <AnalysisSection
+            icon='calendar' color={C.navy} title='MTD Performance' tagline='Blended CPL and CPQL economics -- last day, day-on-day, month-on-month'
+            insight={mtdAnalystLine(M)} loading={loading}
+            stats={[
+              { label:'MTD CPQL', value: fmtC(M.mtdCPQL||0), deltaPct: M.mtdCPQLDeltaPct, deltaLabel:'vs last month' },
+              { label:'Yesterday CPQL', value: fmtC(M.lastDay && M.lastDay.ql ? M.lastDay.spend/M.lastDay.ql : 0), deltaLabel:'Spend / qualified leads' },
+              { label:'Yesterday CPL', value: fmtC(M.lastDay && M.lastDay.metaLeads ? M.lastDay.spend/M.lastDay.metaLeads : 0), deltaLabel:'Spend / raw leads' },
+            ]}
+            dod={{ data:M.dod, key:'cpql', fmt:(v)=>fmtC(v), type:'area' }}
+            mom={{ data:M.mom, key:'cpql', fmt:(v)=>fmtC(v), type:'bar' }}
+          />
         </div>
       </main>
     </div>
