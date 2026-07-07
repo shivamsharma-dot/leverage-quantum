@@ -8,6 +8,7 @@ import { PremKPI } from '../ui/dashboardKit'
 import { fetchCSV } from '../lib/sheetCache'
 import { toast } from '../components/ToastHost'
 import { getSession, setSession } from '../lib/sessionLoad'
+import { resolveSheetUrl } from '../lib/dataSources'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=whatsapp';
 const C = {
@@ -271,8 +272,9 @@ export default function WhatsAppDashboard() {
       if (!bust && cached) {
         csv = cached.data
       } else {
-        const res = await fetch(bust ? SHEET_CSV+'&_='+Date.now() : SHEET_CSV)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const base = await resolveSheetUrl('whatsapp', SHEET_CSV)
+                    const res = await fetch(bust ? base+'&_='+Date.now() : base)
+                                          if  (!res.ok) throw new Error(`HTTP ${res.status}`)
         csv = await res.text()
         setSession('whatsapp', csv)
       }
