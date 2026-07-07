@@ -2,15 +2,15 @@
 // Optional ?since=YYYY-MM-DD&until=YYYY-MM-DD filters rows by lead_created_date so CRM matches the
 // same window Meta is showing. Without params it aggregates all-time.
 // Returns { byName: { <adName>: leads }, total, rows, distinct, since, until, ts }.
-import { supabaseAdmin } from '../lib/auth.mjs';
 
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=FBleads';
 
 async function getSheetUrl() {
   if (process.env.CRM_SHEET_URL) return process.env.CRM_SHEET_URL;
   try {
-    const r = await supabaseAdmin('app_preferences?select=value&key=eq.sheet_url_fbleads&limit=1');
-    if (r.ok) {
+    const { supabaseAdmin } = await import('../lib/auth.mjs');
+            const r = await supabaseAdmin('app_preferences?select=value&key=eq.sheet_url_fbleads&limit=1');
+          if (r.ok) {
       const rows = await r.json();
       const v = rows[0] && rows[0].value;
       if (v && String(v).trim()) return String(v).trim();
