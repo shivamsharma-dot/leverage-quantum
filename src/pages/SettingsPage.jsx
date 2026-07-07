@@ -19,12 +19,12 @@ const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings')
 
 const DATA_SOURCES = [
   { name: 'Meta Graph API',       src: 'act_641914389215638', rows: 'live' },
-  { name: 'Referral Sheet',       editKey: 'sheet_url_referral', rows: 'live' },
-  { name: 'QL Ops Sheet (Daily)', editKey: 'sheet_url_qlops_daily', rows: 'live' },
-  { name: 'QL Snapshot Sheet (Monthly)', editKey: 'sheet_url_qlops_monthly', rows: 'live' },
-  { name: 'WhatsApp Sheet',       editKey: 'sheet_url_whatsapp', rows: 'live' },
-  { name: 'FB Leads / CRM Sheet', editKey: 'sheet_url_fbleads', rows: 'live' },
-  { name: 'Leads Assigned Sheet', editKey: 'sheet_url_leads_assigned', rows: 'live' },
+  { name: 'Referral Sheet',       editKey: 'sheet_url_referral', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Referral' },
+  { name: 'QL Ops Sheet (Daily)', editKey: 'sheet_url_qlops_daily', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Qlops' },
+  { name: 'QL Snapshot Sheet (Monthly)', editKey: 'sheet_url_qlops_monthly', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=QLSnapshot' },
+  { name: 'WhatsApp Sheet',       editKey: 'sheet_url_whatsapp', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=whatsapp' },
+  { name: 'FB Leads / CRM Sheet', editKey: 'sheet_url_fbleads', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=FBleads' },
+  { name: 'Leads Assigned Sheet', editKey: 'sheet_url_leads_assigned', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Leadassigned' },
   { name: 'Cross-Channel Sheet',  src: 'aiContext.js',        rows: 'live' },
     ]
 
@@ -545,9 +545,9 @@ export default function SettingsPage() {
                     </span>
                     <div className={styles.dsBody}>
                       <div className={styles.dsName}>{s.name}</div>
-                      <div className={styles.dsMeta}>{s.editKey ? (sheetUrls[s.editKey] || 'Using default link') : (s.src + ' — ' + s.rows + ' rows')}</div>
+                      <div className={styles.dsMeta} title={s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || '') : ''} style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || 'No default set') : (s.src + ' — ' + s.rows + ' rows')}</div>
                     </div>
-                    <span className={styles.dsStatus}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Connected'}</span>{s.editKey && userIsAdmin && (<button className={styles.primaryBtn} style={{ padding: '4px 12px', fontSize: 12, background: '#1F3C84', color: '#fff' }} onClick={() => setEditingSheet(editingSheet === s.editKey ? null : s.editKey)}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><button className={styles.primaryBtn} style={{ background: '#1F3C84', color: '#fff' }} onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}
+                    <span className={styles.dsStatus}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Connected'}</span>{s.editKey && userIsAdmin && (<button className={styles.primaryBtn} style={{ padding: '4px 12px', fontSize: 12, background: '#1F3C84', color: '#fff' }} onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><button className={styles.primaryBtn} style={{ background: '#1F3C84', color: '#fff' }} onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}
                   </div>
                 ))}
               </div>
