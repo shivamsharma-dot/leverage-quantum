@@ -20,6 +20,20 @@ async function safeFetch(url) {
   } catch { return null }
 }
 
+async function getSheetOverride(key) {
+      if (!SB_URL || !SB_KEY) return null
+      try {
+              const r = await fetch(`${SB_URL}/rest/v1/app_preferences?select=value&key=eq.${key}&limit=1`, {
+                        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+                        signal: AbortSignal.timeout(5000)
+              })
+              if (!r.ok) return null
+              const d = await r.json()
+              const v = d && d[0] && d[0].value
+              return (v && String(v).trim()) || null
+      } catch { return null }
+}
+
 function parseCSV(csv) {
   if (!csv?.trim()) return { h: () => -1, rows: [] }
   const lines = csv.trim().split('\n').map(line => {
@@ -197,8 +211,9 @@ Nested insights fields: use "insights{field1,field2}" syntax within campaigns/ad
 // ── data fetchers (for initial context) ─────────────────────────────────────
 async function getQLOpsData() {
   try {
-    const r = await safeFetch(QLOPS_SHEET)
-    if (!r) return 'QL Ops: UNAVAILABLE (sheet fetch failed)'
+        const qlopsUrl = (await getSheetOverride('sheet_url_qlops_daily')) || QLOPS_SHEET
+          const r = await safeFetch(qlopsUrl)
+      if (!r) return 'QL Ops: UNAVAILABLE (sheet fetch failed)'
     const { h, rows } = parseCSV(await r.text())
     const map = {}
     rows.forEach(row => {
@@ -228,8 +243,9 @@ async function getQLOpsData() {
 
 async function getWhatsAppData() {
   try {
-    const r = await safeFetch(WA_SHEET)
-    if (!r) return 'WhatsApp: UNAVAILABLE (sheet fetch failed)'
+    const waUrl = (await getSheetOverride('sheet_url_whatsapp')) || WA_SHEET
+            const r = await safeFetch(waUrl)
+                if (!r) return 'WhatsApp: UNAVAILABLE (sheet fetch failed)'
     const { h, rows } = parseCSV(await r.text())
     const map = {}
     rows.forEach(row => {
