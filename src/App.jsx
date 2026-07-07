@@ -4,7 +4,7 @@ import CommandPalette from './components/CommandPalette'
 import ToastHost from './components/ToastHost'
 import { useAuth } from './hooks/useAuth'
 import { logActivity, pageLabel, installActivityTracker } from './components/ActivityLogger'
-import LoginPage from './pages/LoginPage'
+import LoginPage from './pages/LoginPage'; import { prefetchSummaryAnalysis } from './lib/summaryData'
 const DashboardHome = lazy(() => import('./pages/DashboardHome'))
 const ROASDashboard = lazy(() => import('./pages/ROASDashboard'))
 const LeadQualityDashboard = lazy(() => import('./pages/LeadQualityDashboard'))
@@ -87,7 +87,7 @@ function canAccess(role, dashboardId) {
 
 function ProtectedRoute({ children, dashboardId }) {
   const { user, loading } = useAuth()
-  const location = useLocation()
+  const location = useLocation(); /* warm the Summary page cache once per session, as soon as we know who is logged in */ useEffect(() => { if (user && user.email) prefetchSummaryAnalysis() }, [user && user.email])
 
   // Dynamic page title
   useEffect(() => {
