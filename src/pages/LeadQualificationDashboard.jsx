@@ -11,6 +11,7 @@ import { fetchCSV } from '../lib/sheetCache'
 import { getSession, setSession } from '../lib/sessionLoad'
 import { usePresence } from '../hooks/usePresence'
 import { useAuth } from '../hooks/useAuth'
+import { resolveSheetUrl } from '../lib/dataSources'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Qlops';
 const MONTHLY_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=QLSnapshot';
@@ -669,8 +670,9 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
       if (!bust && cached) {
         csv = cached.data
       } else {
-        const url = bust ? cfg.csv + '&_=' + Date.now() : cfg.csv
-        const res = await fetch(url)
+const baseCsv = await resolveSheetUrl(cfg.id === 'daily' ? 'qlopsDaily' : 'qlopsMonthly', cfg.csv)
+            const url = bust ? baseCsv + (baseCsv.includes('?') ? '&' : '?') + '_=' + Date.now() : baseCsv
+              const res = await fetch(url)
         csv = await res.text()
         setSession(cacheKey, csv)
       }
