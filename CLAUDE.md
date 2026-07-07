@@ -56,11 +56,13 @@ Aggregates Meta Ads performance, cross-channel metrics, lead qualification data,
 | **Supabase Anon Key** | `[SUPABASE_ANON_KEY — check Vercel env or Supabase dashboard]` |
 | **Meta Ad Account** | `act_641914389215638` |
 | **Resend API Key** | `re_[REDACTED — check Resend dashboard]` |
-| **Google Sheets (Referral gid=1233447443)** | `https://docs.google.com/spreadsheets/d/e/2PACX-1vSv_Z1HpHSLWC_1kBrC4p8SatqHIVqhjSCnct21ImMEkOiwwg1N3KTuswsZP8kTbfxRfbs_LSLew7c4/pub?gid=1233447443&single=true&output=csv` |
-| **Google Sheets (QL Ops daily gid=0)** | Same spreadsheet, `gid=0` |
-| **Google Sheets (WhatsApp gid=1222628502)** | Same spreadsheet, `gid=1222628502` |
-| **Google Sheets (FB Leads gid=422958036)** | Same spreadsheet, `gid=422958036` (used by `api/crm-leads.js`) |
-| **Google Sheets (QL Snapshot / Monthly QLs gid=455680381)** | Same spreadsheet, `gid=455680381`
+| **Google Sheets (Referral)** | `https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Referral` |
+| **Google Sheets (QL Ops daily)** | Same spreadsheet, `sheet=Qlops` |
+| **Google Sheets (WhatsApp)** | Same spreadsheet, `sheet=whatsapp` |
+| **Google Sheets (FB Leads)** | Same spreadsheet, `sheet=FBleads` (used by `api/crm-leads.js`) |
+| **Google Sheets (QL Snapshot / Monthly QLs)** | Same spreadsheet, `sheet=QLSnapshot` |
+| **Google Sheets (Leads Assigned)** | Same spreadsheet, `sheet=Leadassigned` (used by `LeadsAssignedDashboard.jsx`) |
+| **Google Sheets base doc ID (all above)** | `1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew` (gviz/tq CSV export, per-sheet via `sheet=` name, not "publish to web") |
 
 **Note:** GitHub token lacks `workflow` scope — cannot push `.github/workflows/` via API. Use GitHub web UI for workflow files.
 
