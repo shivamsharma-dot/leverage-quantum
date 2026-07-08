@@ -5,7 +5,7 @@ import Sidebar from '../components/Sidebar'
 import { InlineLoader } from '../components/SkeletonLoader'
 import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'
 
-const DATE_RANGES=[{id:'TODAY',label:'Today'},{id:'LAST_7_DAYS',label:'Last 7 days'},{id:'LAST_30_DAYS',label:'Last 30 days'},{id:'LAST_90_DAYS',label:'Last 90 days'},{id:'THIS_MONTH',label:'This month'},{id:'LAST_MONTH',label:'Last month'}]
+const DATE_RANGES=[{id:'TODAY',label:'Today'},{id:'LAST_7_DAYS',label:'Last 7 days'},{id:'LAST_30_DAYS',label:'Last 30 days'},{id:'LAST_90_DAYS',label:'Last 90 days'},{id:'THIS_MONTH',label:'This month'},{id:'LAST_MONTH',label:'Last month'},{id:'CUSTOM',label:'Custom'}]
 const TABS=[{id:'campaigns',label:'Campaigns'},{id:'keywords',label:'Keywords'},{id:'searchTerms',label:'Search terms'},{id:'adGroups',label:'Ad groups'}]
 
 const fmt=n=>n==null?'—':n>=1e7?'₹'+(n/1e7).toFixed(2)+' Cr':n>=1e5?'₹'+(n/1e5).toFixed(1)+'L':n>=1000?'₹'+(n/1000).toFixed(1)+'K':'₹'+Math.round(n).toLocaleString('en-IN')
@@ -256,21 +256,21 @@ return <>
 export default function GoogleAdsDashboard(){
 const [searchParams,setSearchParams]=useSearchParams()
 const activeTab=searchParams.get('tab')||'campaigns'
-const [dateRange,setDateRange]=useState('LAST_30_DAYS')
+const [dateRange,setDateRange]=useState('LAST_30_DAYS');const [customFrom,setCustomFrom]=useState('');const [customTo,setCustomTo]=useState('')
 const [data,setData]=useState({})
 const [loading,setLoading]=useState({})
 const [error,setError]=useState(null)
 const [notConnected,setNotConnected]=useState(false)
 const loaded=useRef({})
 
-const loadTab=useCallback(async(tab,dr)=>{
-const k=tab+'_'+dr
-if(loaded.current[k])return
+const loadTab=useCallback(async(tab,dr,cFrom,cTo)=>{
+const custom=dr==='CUSTOM'&&cFrom&&cTo;const k=tab+'_'+dr+(custom?('_'+cFrom+'_'+cTo):'')
+if(loaded.current[k])return;if(dr==='CUSTOM'&&!custom)return
 setLoading(p=>({...p,[tab]:true}))
 try{
 const token=localStorage.getItem('quantum_token')
 const apiTab=tab==='searchTerms'?'search_terms':tab==='adGroups'?'ad_groups':tab
-const res=await fetch('/api/google-ads'+'?tab='+apiTab+'&dateRange='+dr,{headers:{'Authorization':'Bearer '+(token||'')}})
+const q=custom?('from='+cFrom+'&to='+cTo):('dateRange='+dr);const res=await fetch('/api/google-ads'+'?tab='+apiTab+'&'+q,{headers:{'Authorization':'Bearer '+(token||'')}})
 if(res.status===503||res.status===401){setNotConnected(true);return}
 if(!res.ok)throw new Error('API error '+res.status)
 const json=await res.json()
@@ -280,10 +280,10 @@ loaded.current[k]=true
 setError(null)
 }catch(e){setError(e.message)}
 finally{setLoading(p=>({...p,[tab]:false}))}
-},[dateRange])
+},[dateRange,customFrom,customTo])
 
-useEffect(()=>{ loaded.current={}; setData({}); },[dateRange])
-useEffect(()=>{ loadTab(activeTab,dateRange) },[activeTab,dateRange,loadTab])
+useEffect(()=>{ loaded.current={}; setData({}); },[dateRange,customFrom,customTo])
+useEffect(()=>{ loadTab(activeTab,dateRange,customFrom,customTo) },[activeTab,dateRange,customFrom,customTo,loadTab])
 
 const setTab=t=>setSearchParams({tab:t})
 
@@ -297,10 +297,10 @@ return(
 <h1 style={{fontSize:18,fontWeight:800,color:C.text,margin:'2px 0 0',letterSpacing:'-0.4px',fontFamily:FONT}}>Google Ads</h1>
 </div>
 <div style={{display:'flex',alignItems:'center',gap:8}}>
-<button onClick={()=>{loaded.current={};setData({});loadTab(activeTab,dateRange)}} style={{padding:'6px 14px',borderRadius:8,border:'1px solid #e5e7eb',fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:FONT,background:'#fff',color:'#374151',display:'flex',alignItems:'center',gap:6}}>
+<button onClick={()=>{loaded.current={};setData({});loadTab(activeTab,dateRange,customFrom,customTo)}} style={{padding:'6px 14px',borderRadius:8,border:'1px solid #e5e7eb',fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:FONT,background:'#fff',color:'#374151',display:'flex',alignItems:'center',gap:6}}>
 Refresh
 </button>
-{DATE_RANGES.map(d=><div key={d.id} style={pillStyle(dateRange===d.id)} onClick={()=>setDateRange(d.id)}>{d.label}</div>)}
+{DATE_RANGES.map(d=><div key={d.id} style={pillStyle(dateRange===d.id)} onClick={()=>setDateRange(d.id)}>{d.label}</div>)}{dateRange==='CUSTOM'&&<><input type='date' value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{padding:'5px 10px',borderRadius:8,border:'0.5px solid '+C.border,fontSize:12,fontFamily:FONT,background:'var(--card)',color:C.text}}/><input type='date' value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{padding:'5px 10px',borderRadius:8,border:'0.5px solid '+C.border,fontSize:12,fontFamily:FONT,background:'var(--card)',color:C.text}}/></>}
 </div>
 </div>
 <div style={{display:'flex',gap:8,padding:'14px 28px 0',flexShrink:0}}>
