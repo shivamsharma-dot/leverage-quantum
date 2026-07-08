@@ -274,7 +274,8 @@ export default function GoogleAdsDashboard(){
     setLoading(p=>({...p,[tab]:true}))
     try{
       const token=localStorage.getItem('quantum_token')
-      const res=await fetch('/api/google-ads?tab='+tab+'&dateRange='+dr,{headers:{'Authorization':'Bearer '+(token||'')}})
+      const apiTab=tab==='searchTerms'?'search_terms':tab==='adGroups'?'ad_groups':tab
+const res=await fetch('/api/google-ads?tab='+apiTab+'&dateRange='+dr,{headers:{'Authorization':'Bearer '+(token||'')}})
       if(res.status===503||res.status===401){setNotConnected(true);return}
       if(!res.ok)throw new Error('API error '+res.status)
       const json=await res.json()
