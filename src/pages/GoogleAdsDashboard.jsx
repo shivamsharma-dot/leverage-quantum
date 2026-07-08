@@ -227,8 +227,7 @@ return <>
 <div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='AD GROUPS' value={fmtN(adGroups.length)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='TOTAL SPEND' value={fmt(total?.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
-<PremKPI label='IMPRESSIONS' value={fmtN(total?.impressions)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/>
-<PremKPI label='CLICKS' value={fmtN(total?.clicks)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
+<div style={{display:(activeTab==='mom'||activeTab==='dod')?'none':'flex',alignItems:'center',gap:8}}><PremKPI label='CLICKS' value={fmtN(total?.clicks)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
 <PremKPI label='CONVERSIONS' value={total?.conversions?fmtN(total.conversions):'—'} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai}/>
 </div>
 <Card title='Ad groups' sub={adGroups.length+' total'}>
@@ -253,7 +252,7 @@ return <>
 </>
 }
 
-export default function GoogleAdsDashboard(){
+function TrendTab({mode}){const [rows,setRows]=useState([]);const [total,setTotal]=useState({});const [loading,setLoading]=useState(true);const [err,setErr]=useState(null);useEffect(()=>{const now=new Date();const pad=n=>String(n).padStart(2,'0');const until=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());const since=mode==='month'?(now.getFullYear()+'-01-01'):(now.getFullYear()+'-'+pad(now.getMonth()+1)+'-01');setLoading(true);const token=localStorage.getItem('quantum_token');fetch('/api/google-ads?tab=trend&mode='+mode+'&from='+since+'&to='+until,{headers:{'Authorization':'Bearer '+(token||'')}}).then(r=>r.json()).then(json=>{if(json.error){setErr(json.error);return}setRows(json.points||[]);setTotal(json.total||{})}).catch(e=>setErr(e.message)).finally(()=>setLoading(false))},[mode]);if(loading)return <Loader/>;const fmtPeriod=p=>mode==='month'?new Date(p+'-01').toLocaleDateString('en-US',{month:'short',year:'numeric'}):new Date(p).toLocaleDateString('en-US',{day:'2-digit',month:'short'});const thS={padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'};const thL={...thS,textAlign:'left'};const tdR={padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5};const tdL={padding:'8px 12px',fontSize:12.5,color:C.text,fontWeight:600};return <><div style={{fontSize:12,color:C.muted,marginBottom:14,fontFamily:FONT}}>{mode==='month'?'Fixed range: Jan 1 to today (not affected by the date filter)':'Fixed range: 1st of this month to today (not affected by the date filter)'}</div>{err&&<div style={{padding:'10px 14px',borderRadius:10,background:'#FEF2F2',color:'#DC2626',fontSize:12.5,fontWeight:600,marginBottom:16}}>{err}</div>}<div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}><PremKPI label='Total Spend' value={fmt(total.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/><PremKPI label='Impressions' value={fmtN(total.impressions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/><PremKPI label='Clicks' value={fmtN(total.clicks)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai}/><PremKPI label='CTR' value={fmtPct(total.ctr)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/><PremKPI label='Conversions' value={fmtN(total.conversions)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent}/></div><Card title={mode==='month'?'Month on month':'Day on day'} sub={rows.length+' periods'}><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}><thead><tr><th style={thL}>Period</th><th style={thS}>Spend</th><th style={thS}>Impr.</th><th style={thS}>Clicks</th><th style={thS}>CTR</th><th style={thS}>Avg CPC</th><th style={thS}>Conv.</th><th style={thS}>CPA</th></tr></thead><tbody>{rows.map((r,i)=>(<tr key={i} style={{borderBottom:'0.5px solid '+C.border}}><td style={tdL}>{fmtPeriod(r.period)}</td><td style={{...tdR,fontWeight:700,color:C.text}}>{fmt(r.spend)}</td><td style={tdR}>{fmtN(r.impressions)}</td><td style={tdR}>{fmtN(r.clicks)}</td><td style={tdR}>{fmtPct(r.ctr)}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmtCpc(r.avgCpc)}</td><td style={{...tdR,color:'#7C3AED',fontWeight:700}}>{r.conversions?.toFixed(1)||'—'}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmt(r.costPerConv)}</td></tr>))}<tr style={{background:'#F8FAFC',fontWeight:800}}><td style={{...tdL,fontWeight:800}}>Total</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmt(total.spend)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.impressions)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.clicks)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtPct(total.ctr)}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmtCpc(total.avgCpc)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{total.conversions?(+total.conversions).toFixed(1):'—'}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmt(total.costPerConv)}</td></tr></tbody></table></div></Card></>}export default function GoogleAdsDashboard(){
 const [searchParams,setSearchParams]=useSearchParams()
 const activeTab=searchParams.get('tab')||'campaigns'
 const [dateRange,setDateRange]=useState('LAST_30_DAYS');const [customFrom,setCustomFrom]=useState('');const [customTo,setCustomTo]=useState('')
@@ -294,16 +293,16 @@ return(
 <div style={{background:'var(--card)',borderBottom:'0.5px solid '+C.border,padding:'0 28px',minHeight:56,height:'auto',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexShrink:0,overflow:'visible'}}>
 <div>
 <p style={{fontSize:10.5,color:C.muted,margin:0,letterSpacing:'0.05em',textTransform:'uppercase',fontFamily:FONT}}>Analytics / Google Ads</p>
-<h1 style={{fontSize:18,fontWeight:800,color:C.text,margin:'2px 0 0',letterSpacing:'-0.4px',fontFamily:FONT}}>Google Ads</h1>
+<h1 style={{fontSize:18,fontWeight:800,color:C.text,margin:'2px 0 0',letterSpacing:'-0.4px',fontFamily:FONT}}>{activeTab==='mom'?'Month on Month':activeTab==='dod'?'Day on Day':'Google Ads'}</h1>
 </div>
-<div style={{display:'flex',alignItems:'center',gap:8}}>
+<div style={{display:(activeTab==='mom'||activeTab==='dod')?'none':'flex',alignItems:'center',gap:8}}>
 <button onClick={()=>{loaded.current={};setData({});loadTab(activeTab,dateRange,customFrom,customTo)}} style={{padding:'6px 14px',borderRadius:8,border:'1px solid #e5e7eb',fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:FONT,background:'#fff',color:'#374151',display:'flex',alignItems:'center',gap:6}}>
 Refresh
 </button>
 {DATE_RANGES.map(d=><div key={d.id} style={pillStyle(dateRange===d.id)} onClick={()=>setDateRange(d.id)}>{d.label}</div>)}{dateRange==='CUSTOM'&&<><input type='date' value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{padding:'5px 10px',borderRadius:8,border:'0.5px solid '+C.border,fontSize:12,fontFamily:FONT,background:'var(--card)',color:C.text}}/><input type='date' value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{padding:'5px 10px',borderRadius:8,border:'0.5px solid '+C.border,fontSize:12,fontFamily:FONT,background:'var(--card)',color:C.text}}/></>}
 </div>
 </div>
-<div style={{display:'flex',gap:8,padding:'14px 28px 0',flexShrink:0}}>
+<div style={{display:(activeTab==='mom'||activeTab==='dod')?'none':'flex',gap:8,padding:'14px 28px 0',flexShrink:0}}>
 {TABS.map(t=><div key={t.id} style={tabBtn(activeTab===t.id)} onClick={()=>setTab(t.id)}>{t.label}</div>)}
 </div>
 <div style={{flex:1,overflowY:'auto',padding:'16px 28px 28px'}}>
@@ -312,7 +311,7 @@ Refresh
 activeTab==='campaigns' ? <CampaignsTab data={data.campaigns} loading={!!loading.campaigns}/> :
 activeTab==='keywords' ? <KeywordsTab data={data.keywords} loading={!!loading.keywords}/> :
 activeTab==='searchTerms'?<SearchTermsTab data={data.searchTerms} loading={!!loading.searchTerms}/>:
-<AdGroupsTab data={data.adGroups} loading={!!loading.adGroups}/>
+activeTab==='mom'?<TrendTab mode='month'/>:activeTab==='dod'?<TrendTab mode='day'/>:<AdGroupsTab data={data.adGroups} loading={!!loading.adGroups}/>
 )}
 </div>
 </div>
