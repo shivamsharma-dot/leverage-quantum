@@ -4,7 +4,7 @@ import { getSessionUser } from '../lib/auth.mjs'
 // GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REFRESH_TOKEN, GOOGLE_ADS_CUSTOMER_ID
 
 const TOKEN_URL='https://oauth2.googleapis.com/token'
-const ADS_BASE='https://googleads.googleapis.com/v17'
+const ADS_BASE='https://googleads.googleapis.com/v24'
 
 async function getAccessToken(){
   const r=await fetch(TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:process.env.GOOGLE_ADS_CLIENT_ID,client_secret:process.env.GOOGLE_ADS_CLIENT_SECRET,refresh_token:process.env.GOOGLE_ADS_REFRESH_TOKEN,grant_type:'refresh_token'})})
