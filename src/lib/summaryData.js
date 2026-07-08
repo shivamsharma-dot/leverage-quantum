@@ -41,7 +41,6 @@ function normalizeDate(raw) {
   const d = new Date(s)
   return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
 }
-
 async function fetchMetaDaily() {
   try {
     const tk = await fetch(SUPABASE_URL + '/rest/v1/meta_tokens?select=token&order=created_at.desc&limit=1', {
@@ -53,12 +52,20 @@ async function fetchMetaDaily() {
     const since = new Date()
     since.setDate(since.getDate() - 210)
     const fmt = (d) => d.toISOString().slice(0, 10)
-    const url = 'https://graph.facebook.com/v19.0/' + AD_ACCOUNT + '/insights?fields=spend,impressions,clicks,ctr,actions&time_increment=1&since=' + fmt(since) + '&until=' + fmt(until) + '&level=account&access_token=' + token
-    const res = await fetch(url)
-    if (!res.ok) return []
-    const json = await res.json()
+    const timeRange = encodeURIComponent(JSON.stringify({ since: fmt(since), until: fmt(until) }))
+    let url = 'https://graph.facebook.com/v19.0/' + AD_ACCOUNT + '/insights?fields=spend,impressions,clicks,ctr,actions&time_increment=1&time_range=' + timeRange + '&level=account&limit=100&access_token=' + token
+    let all = []
+    let pages = 0
+    while (url && pages < 10) {
+      const res = await fetch(url)
+      if (!res.ok) break
+      const json = await res.json()
+      all = all.concat(json.data || [])
+      url = json.paging && json.paging.next ? json.paging.next : null
+      pages++
+    }
     const findAct = (acc, t) => parseInt((acc.actions && acc.actions.find(a => a.action_type === t) || {}).value || 0, 10)
-    return (json.data || []).map((d) => {
+    return all.map((d) => {
       const leads = findAct(d, 'onsite_conversion.lead_grouped') || findAct(d, 'onsite_web_lead') || findAct(d, 'offsite_complete_registration_add_meta_leads') || findAct(d, 'lead') || 0
       return {
         date: d.date_start,
