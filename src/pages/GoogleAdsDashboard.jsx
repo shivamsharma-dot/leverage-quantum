@@ -1,6 +1,6 @@
 import React,{useState,useEffect,useCallback,useRef} from 'react'
 import{useSearchParams}from 'react-router-dom'
-import{BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,Cell,CartesianGrid,ComposedChart,Line,ReferenceLine}from 'recharts'
+import{BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,Cell,CartesianGrid,ComposedChart,Line,ReferenceLine,LabelList}from 'recharts'
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 
