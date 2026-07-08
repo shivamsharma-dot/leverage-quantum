@@ -1519,3 +1519,25 @@ CORRECTION to the "OPEN BUG" note in the entry above: the search_terms "0 of 0" 
 **All four Google Ads tabs (Campaigns/Keywords/Search terms/Ad groups) now confirmed fully live with real production data as of this entry.**
 
 **Lesson for future API integrations on this project:** when wiring a new tab/resource to an existing dashboard, explicitly diff the backend's `res.json({...})` keys against every `data.xxx` / `row.xxx` reference in the corresponding frontend Tab component before considering it done -- these three bugs would all have been caught by that check alone, no live API calls needed.
+
+
+## 2026-07-08 (continued 2) -- Google Ads dashboard: brand-consistency redesign + Match column repurposed (commit 931d1ce)
+
+USER FEEDBACK: after the property-mismatch fix above (commit 2f2423b) got all four tabs showing real data, user pointed out the page itself looked visually inconsistent with the rest of the app -- "doesnt not follow our brand language at all, buttons gradient etc" -- and asked for a thorough audit + fix, plus asked to repurpose the blank Search-terms "Match" column into something useful.
+
+**Audit (against src/ui/dashboardKit.jsx canonical primitives + ReferralDashboard.jsx / WhatsAppDashboard.jsx as reference pages):** GoogleAdsDashboard.jsx predated the shared design system and had drifted in four concrete ways:
+- KPI cards: flat cards with a plain colored top border, no icon -- vs. the rest of the app's PremKPI (gradient icon badge, gradient top accent strip, soft glow circle).
+- Filters/tabs: boxy grey segmented-button strip for date range + plain underline tabs -- vs. the rounded pill selectors (solid navy fill when active) used everywhere else.
+- Page shell: header rendered in its own bordered box with content floating below it on a hardcoded #F4F5F7 background -- vs. the Referral/WhatsApp pattern of one continuous rounded card wrapping header + tab nav + scrollable content together, using theme-aware C.bg/var(--card).
+- Table headers: different caps/weight/color convention than the established uppercase, letter-spaced, muted-gray sortable header style.
+
+**Fix (GoogleAdsDashboard.jsx only, full rewrite; api/google-ads.mjs untouched):**
+- Now imports C, FONT, fmtN, Card, PremKPI, KPI_ICONS from ../ui/dashboardKit and uses PremKPI for every KPI row across all four tabs (Campaigns 7-card row, Keywords 6-card row incl. Avg Quality Score, Search terms 5-card row, Ad groups 5-card row), each with brand accents (navy/blue/cyan/green/amber plus a couple of one-off accents for Conversions/CPA matching the existing Meta Ads convention).
+- Added local pillStyle/tabBtn helpers (copied verbatim from Referral/WhatsApp) and replaced the old segmented date-range buttons and underline tabs with them.
+- Rebuilt the page shell to the Referral/WhatsApp single-card pattern: Sidebar + one rounded card containing the header bar (breadcrumb + title + Refresh + pill date-range group), a pill/tab-nav row, and a scrollable content area -- replacing the old two-separate-boxes layout.
+- Restyled StatusBadge/TypeTag and the sortable Th header component to use the shared color tokens instead of hardcoded hex, matching the rest of the app's table convention.
+- Restyled all four tab tables to use the shared Card wrapper (title/sub/action header) instead of a hand-rolled bordered div.
+
+**Match column repurposed (Search terms tab):** now shows the Ad Group name (s.adGroup) instead of the always-blank match type -- using a field commit 2f2423b's backend fix already fetches (ad_group.name in the search_term_view GAQL query) but the old frontend never displayed. This supersedes the "left as-is" note in the entry above; match-type is still not a real field on search_term_view, so Ad Group was chosen as the more useful column instead.
+
+**Verified live (quantum.leverageedu.com/dashboard/google-ads), all four tabs:** Campaigns, Keywords, Search terms (Ad Group column populated, e.g. IN_Com_Adgroup10, Neet_Rank_Predictor), and Ad groups all render with the new PremKPI cards, pill/tab styling, and unified card shell; expandable campaign-row detail panel (Campaign ID / Channel type / Impression Share / CPC) still works after the rewrite.
