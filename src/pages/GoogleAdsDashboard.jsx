@@ -82,7 +82,7 @@ return <>
 <PremKPI label='Conversions' value={fmtN(total.conversions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total}/>
 <PremKPI label='Cost / Conv' value={fmt(total.costPerConv)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/>
 </div>
-<div style={{display:'grid',gridTemplateColumns:'minmax(360px,1fr) 2fr',gap:16,marginBottom:16}}>
+<div style={{display:'grid',gridTemplateColumns:'minmax(360px,1fr) 2fr',gap:16,marginBottom:16,alignItems:'start'}}>
 <Card title='Spend by campaign' sub='Top 8 by spend (₹K)'>
 <ResponsiveContainer width='100%' height={220}>
 <BarChart data={chartData} layout='vertical' margin={{top:0,right:50,left:0,bottom:0}} barSize={13}>
