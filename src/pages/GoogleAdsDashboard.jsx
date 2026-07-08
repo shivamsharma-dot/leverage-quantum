@@ -73,16 +73,16 @@ if(!campaigns.length&&!loading)return <NotConnected/>
 const sorted=sort(campaigns)
 const chartData=campaigns.filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend).slice(0,8).map(c=>({name:c.name.length>18?c.name.slice(0,18)+'...':c.name,spend:Math.round(c.spend/1000)}))
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='Total Spend' value={fmt(total.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='Impressions' value={fmtN(total.impressions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/>
 <PremKPI label='Clicks' value={fmtN(total.clicks)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai}/>
 <PremKPI label='CTR' value={fmtPct(total.ctr)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
-<PremKPI label='Avg CPC' value={fmtCpc(total.avgCpc)} accent={C.amber} icon={KPI_ICONS.agent}/>
-<PremKPI label='Conversions' value={total.conversions?.toFixed(1)||'—'} accent='#7C3AED' icon={KPI_ICONS.total}/>
-<PremKPI label='Cost / Conv' value={fmt(total.costPerConv)} accent='#EF4444' icon={KPI_ICONS.globe}/>
+<PremKPI label='Avg CPC' value={fmtCpc(total.avgCpc)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent}/>
+<PremKPI label='Conversions' value={fmtN(total.conversions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total}/>
+<PremKPI label='Cost / Conv' value={fmt(total.costPerConv)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/>
 </div>
-<div style={{display:'grid',gridTemplateColumns:'320px 1fr',gap:16,marginBottom:16}}>
+<div style={{display:'grid',gridTemplateColumns:'minmax(360px,1fr) 2fr',gap:16,marginBottom:16}}>
 <Card title='Spend by campaign' sub='Top 8 by spend (₹K)'>
 <ResponsiveContainer width='100%' height={220}>
 <BarChart data={chartData} layout='vertical' margin={{top:0,right:50,left:0,bottom:0}} barSize={13}>
@@ -146,8 +146,8 @@ return <>
 <PremKPI label='TOTAL SPEND' value={fmt(total?.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
 <PremKPI label='IMPRESSIONS' value={fmtN(total?.impressions)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/>
 <PremKPI label='AVG CTR' value={fmtPct(total?.ctr)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
-<PremKPI label='AVG CPC' value={fmtCpc(total?.avgCpc)} accent={C.amber} icon={KPI_ICONS.ai}/>
-<PremKPI label='AVG QUALITY SCORE' value={avgQS?avgQS.toFixed(1):'—'} accent='#7C3AED' icon={KPI_ICONS.total}/>
+<PremKPI label='AVG CPC' value={fmtCpc(total?.avgCpc)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai}/>
+<PremKPI label='AVG QUALITY SCORE' value={avgQS?avgQS.toFixed(1):'—'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total}/>
 </div>
 <Card title='Keywords' sub={filtered.length+' of '+keywords.length} action={
 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder='Search keywords...' style={{padding:'6px 10px',border:'0.5px solid '+C.border,borderRadius:8,fontSize:12,fontFamily:FONT,outline:'none',width:220,background:'var(--card)',color:C.text}}/>
@@ -192,7 +192,7 @@ return <>
 <PremKPI label='TOTAL SPEND' value={fmt(totalSpend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
 <PremKPI label='IMPRESSIONS' value={fmtN(totalImpr)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/>
 <PremKPI label='CLICKS' value={fmtN(totalClicks)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
-<PremKPI label='CONVERSIONS' value={totalConv?totalConv.toFixed(1):'—'} accent='#7C3AED' icon={KPI_ICONS.ai}/>
+<PremKPI label='CONVERSIONS' value={totalConv?fmtN(totalConv):'—'} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai}/>
 </div>
 <Card title='Search terms' sub={filtered.length+' of '+searchTerms.length+' · actual search queries that triggered your ads'} action={
 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder='Search terms...' style={{padding:'6px 10px',border:'0.5px solid '+C.border,borderRadius:8,fontSize:12,fontFamily:FONT,outline:'none',width:220,background:'var(--card)',color:C.text}}/>
@@ -229,7 +229,7 @@ return <>
 <PremKPI label='TOTAL SPEND' value={fmt(total?.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
 <PremKPI label='IMPRESSIONS' value={fmtN(total?.impressions)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/>
 <PremKPI label='CLICKS' value={fmtN(total?.clicks)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
-<PremKPI label='CONVERSIONS' value={total?.conversions?.toFixed(1)||'—'} accent='#7C3AED' icon={KPI_ICONS.ai}/>
+<PremKPI label='CONVERSIONS' value={total?.conversions?fmtN(total.conversions):'—'} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai}/>
 </div>
 <Card title='Ad groups' sub={adGroups.length+' total'}>
 <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}>
