@@ -1496,3 +1496,26 @@ NOTE: client secret + refresh token were briefly visible in plaintext in chat du
 | GOOGLE_ADS_CUSTOMER_ID | 7467760576 |
 | GOOGLE_ADS_MANAGER_ID (unset, on hand if needed) | 5755011699 |
 | Google Ads API version in use | v24 (bump again before ~2027, monthly-cadence majors now sunset ~6-12mo after release) |
+
+## 2026-07-08 (continued) -- Google Ads: Keywords/Search terms/Ad groups fixed (commit 2f2423b)
+
+CORRECTION to the "OPEN BUG" note in the entry above: the search_terms "0 of 0" was NOT a developer-token access-tier restriction as first theorized. Root cause was much simpler -- confirmed via raw network inspection (HTTP 200 with a genuinely empty/mismatched payload, not an error) and direct source review.
+
+**Actual root cause: property-name mismatches between api/google-ads.mjs responses and what GoogleAdsDashboard.jsx's tab components read.** Same class of bug in all three, distinct from the earlier v17/LabelList/tab-id fixes:
+
+- **Keywords:** backend mapped the keyword text to a `keyword` property, but the frontend table reads `k.text` -- column was always blank. `ad_group_criterion.status` was used in the GAQL WHERE clause but never SELECTed or mapped into the row, so `k.status` was always undefined -> rendered as "Unknown" via StatusBadge's fallback. Backend also never computed/returned a `total` object at all, so all four header KPI cards (Total Spend, Impressions, Avg CTR, Avg CPC) read `total?.field` -> always undefined -> "--".
+- **Search terms:** backend returned the array under the key `terms`, but the frontend destructures `data.searchTerms` -- guaranteed empty regardless of how many rows Google actually returned. This alone was the entire "0 of 0" mystery (Google's API was returning real data the whole time; the frontend was just reading the wrong key). Per-row text also had the same `term` vs `text` mismatch as Keywords.
+- **Ad groups:** row-level fields (`name`, `status`, `campaign`, etc.) were already correctly named and working; only the `total` aggregate was missing, same as Keywords.
+
+**Fix (api/google-ads.mjs only, GoogleAdsDashboard.jsx untouched):** added `ad_group_criterion.status` to the keywords GAQL SELECT + mapped to `status`; renamed `keyword`->`text` and `term`->`text` in their respective row mappers; renamed the search_terms response key `terms`->`searchTerms`; added a computed `total` (spend/impressions/clicks/ctr/avgCpc rollup, same pattern as the working campaigns handler) to both the keywords and ad_groups responses.
+
+**Verified live (quantum.leverageedu.com):**
+- Keywords: 200 of 200, real keyword text + Active status badges + quality scores; header KPIs populated (Total Spend Rs61.8L, Impressions 19.3L, Avg CTR 9.67%, Avg CPC Rs33.08).
+- Search terms: 500 of 500 (was 0 of 0), real queries/campaigns/metrics per row.
+- Ad groups: 200 total, header KPIs now populated (Total Spend Rs81.8L, Impressions 231.3L, Clicks 3.9L, Conversions 21145.5).
+
+**Known, expected, NOT a bug:** Search terms "Match" column renders blank -- `search_term_view` has no match-type field in the Google Ads API (only `keyword_view` does), so there's nothing to map. Left as-is; can revisit if a match-type-like signal is wanted here later (e.g. via `segments.search_term_match_type`, not yet added).
+
+**All four Google Ads tabs (Campaigns/Keywords/Search terms/Ad groups) now confirmed fully live with real production data as of this entry.**
+
+**Lesson for future API integrations on this project:** when wiring a new tab/resource to an existing dashboard, explicitly diff the backend's `res.json({...})` keys against every `data.xxx` / `row.xxx` reference in the corresponding frontend Tab component before considering it done -- these three bugs would all have been caught by that check alone, no live API calls needed.
