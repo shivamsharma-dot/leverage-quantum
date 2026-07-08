@@ -1461,3 +1461,38 @@ USER: follow-up to the Days/custom-range fix -- the KPI card subtitles and the s
 - Metric formulas (CampaignsTab processed map, ~line 307): cpm = impressions>0 ? spend/impressions*1000 : 0; cpc = clicks>0 ? spend/clicks : 0; cpl = leads>0 ? round(spend/leads) : 0; convRate = clicks>0 ? leads/clicks*100 : 0; ctr from ins.ctr; frequency from ins.frequency; reach from ins.reach; spendShare = spend/accSpend*100; signal heuristic uses accCTRpct thresholds.
 - Added metrics info (i) button in the Campaigns filter bar (mirrors MTD header pattern: showInfo useState + fixed backdrop + absolute popover, navy italic 'i'). Popover documents Spend/Impressions/Clicks/CTR/CPM/CPC/Reach/Frequency/Leads/CPL/Conv.Rate/Spend Share/Signal, plus a note that header totals use account-level figures.
 - Build OK (6.83s). Only benign "message channel closed" extension console errors. Live verified: i-button opens popover; Reach populated.
+
+  
+## 2026-07-08 -- Google Ads API connected (first-time setup)
+
+USER GOAL: wire up real Google Ads data (previously showed "Google Ads not connected" placeholder). No prior GOOGLE_ADS_* env vars existed.
+
+**Infra created (Google side, not code):**
+- New Google Ads manager account "Leverage Quantum API", MCC ID 575-501-1699 (5755011699), created solely to hold the developer token -- not for ongoing account management.
+- Link request sent from the manager account to the real Leverage Edu Google Ads account (746-776-0576 / 7467760576). Status as of this entry: pending approval (not yet confirmed accepted).
+- Developer token obtained at Explorer/Test access level. Basic Access application submitted 2026-07-08 (design doc PDF prepared and attached covering architecture, GAQL resources queried, access control -- see Leverage_Quantum_Google_Ads_API_Design_Document.pdf, not committed to repo, exists only as a local deliverable shared with the user). Campaign types declared: Search, Display, Video, App, Demand Gen, Performance Max (matches real account's Total-by-type breakdown). Capabilities declared: Reporting only (tool is 100% read-only GAQL search, no mutate calls anywhere). Review typically ~3 business days.
+- OAuth: existing GCP project "Leverage Quantum" (already had a "Quantum Web" OAuth client used for the app's own login, untouched). Created a Desktop-type client "Leverage Quantum Ads API" first -- turned out unusable for OAuth Playground since Desktop clients no longer support custom redirect URIs (redirect_uri_mismatch). Created a second, Web-type client "Leverage Quantum Ads API (Playground)" with authorized redirect URI https://developers.google.com/oauthplayground -- this is the one actually used to generate the refresh token via OAuth Playground (scope: https://www.googleapis.com/auth/adwords, access_type=offline).
+
+**Env vars added to Vercel (Production/Preview/Dev):**
+GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REFRESH_TOKEN, GOOGLE_ADS_CUSTOMER_ID=7467760576.
+GOOGLE_ADS_MANAGER_ID NOT set (left unset intentionally) -- api/google-ads.mjs falls back to using GOOGLE_ADS_CUSTOMER_ID as login-customer-id when this is absent, and that has worked fine so far. Manager ID value on hand if ever needed: 5755011699.
+NOTE: client secret + refresh token were briefly visible in plaintext in chat during setup (OAuth Playground response screenshot). Flagged to user as worth rotating later; not yet done as of this entry.
+
+**Bugs found + fixed this session:**
+1. api/google-ads.mjs: ADS_BASE was hardcoded to https://googleads.googleapis.com/v17 -- v17 sunset long ago (Google moved to monthly major releases in 2026; v20 sunset 2026-06-10). Every real request 404'd (returned an HTML sunset page, not JSON), which the code's JSON.parse choked on -> surfaced as a generic "API error 500" with no useful detail. FIXED: bumped to v24.
+2. src/pages/GoogleAdsDashboard.jsx: uses `<LabelList>` (recharts) in a chart around line 99 but never imported it -- `import{BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,Cell,CartesianGrid,ComposedChart,Line,ReferenceLine}from 'recharts'` was missing LabelList. This was a pre-existing latent bug that only surfaced once real API data started flowing far enough to render that chart (previously the "not connected" screen short-circuited before that JSX ever ran) -- caused a full app-level ErrorBoundary crash ("LabelList is not defined"), not scoped to the Google Ads page. FIXED: added LabelList to the import.
+3. Tab-name mismatch between frontend and backend: frontend tab ids are camelCase (campaigns, keywords, searchTerms, adGroups) and are sent as-is in the fetch URL (`/api/google-ads?tab=`+tab). Backend switches on snake_case (tab==='search_terms', tab==='ad_groups'). campaigns/keywords happen to match in both cases so those two tabs worked; searchTerms/adGroups always fell through to the backend's `unknown tab` 400 response. FIXED in GoogleAdsDashboard.jsx loadTab(): added `const apiTab=tab==='searchTerms'?'search_terms':tab==='adGroups'?'ad_groups':tab` and fetch that instead of the raw tab id. Internal state (activeTab, data[tab], loading[tab]) still keys off the original camelCase tab, unchanged.
+
+**Verified live:** Campaigns tab loads real data (~Rs86.4L spend / 30d, ~100 campaigns) matching the real Google Ads account's order of magnitude. Keywords tab presumed working (shares matching tab id in both FE/BE) but not explicitly screenshotted/confirmed yet.
+
+**OPEN BUG (unresolved as of this entry):** Search terms tab (and likely Ad groups, untested) shows "0 of 0" with NO error banner, despite the real Google Ads UI showing abundant search_term_view rows for the identical Jun 8 - Jul 7 window (confirmed via side-by-side screenshot). No thrown error means the backend most likely returned HTTP 200 with a genuinely empty `terms:[]` array -- but root cause not yet confirmed. Two live theories, not yet distinguished:
+   (a) search_term_view may behave differently at Explorer/Test developer-token access level even though campaign/keyword_view aggregates work fine at that tier -- worth re-testing once Basic Access clears review.
+   (b) Possible frontend bug: the error-check `if(json.error&&json.error.includes('credential')||json.notConnected){setNotConnected(true);return}` in loadTab() only special-cases errors containing the literal word "credential". Any other backend-thrown error shape would NOT match this check and would fall through to `setData(p=>({...p,[tab]:json}))`, silently treating an error payload as if it were valid (empty) data -- rendering as "0 of 0" with no visible error at all.
+   NEXT STEP: inspect the raw Network-tab response body for GET /api/google-ads?tab=search_terms (and tab=ad_groups) to see the actual JSON payload and settle which theory is correct. Not yet done as of this entry.
+
+**Env var reference for future sessions:**
+| Var | Value |
+|---|---|
+| GOOGLE_ADS_CUSTOMER_ID | 7467760576 |
+| GOOGLE_ADS_MANAGER_ID (unset, on hand if needed) | 5755011699 |
+| Google Ads API version in use | v24 (bump again before ~2027, monthly-cadence majors now sunset ~6-12mo after release) |
