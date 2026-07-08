@@ -41,8 +41,8 @@ const NAV = [
         subItems: [
           { to: '/dashboard/google-ads?tab=campaigns',   label: 'Campaigns',    matchType: 'query', tabKey: 'campaigns' },
           { to: '/dashboard/google-ads?tab=keywords',    label: 'Keywords',     matchType: 'query', tabKey: 'keywords' },
-          { to: '/dashboard/google-ads?tab=search_terms',label: 'Search Terms', matchType: 'query', tabKey: 'search_terms' },
-          { to: '/dashboard/google-ads?tab=ad_groups',   label: 'Ad Groups',    matchType: 'query', tabKey: 'ad_groups' },
+          { to: '/dashboard/google-ads?tab=searchTerms', label: 'Search Terms', matchType: 'query', tabKey: 'searchTerms' },
+          { to: '/dashboard/google-ads?tab=adGroups',   label: 'Ad Groups',    matchType: 'query', tabKey: 'adGroups' },{ to: '/dashboard/google-ads?tab=mom', label: 'Month on Month', matchType: 'query', tabKey: 'mom' },{ to: '/dashboard/google-ads?tab=dod', label: 'Day on Day', matchType: 'query', tabKey: 'dod' },
         ]
       },
       { to: '/dashboard/roas',         icon: <ChartIcon />,    label: 'ROAS',         end: false },
@@ -232,7 +232,7 @@ export default function Sidebar() {
 
   const isSubActive = (sub) => {
     if (sub.matchType === 'route') return location.pathname === sub.to
-    return location.pathname.startsWith('/dashboard/meta-ads') && currentTab === sub.tabKey
+    return location.pathname.startsWith(sub.to.split('?')[0]) && currentTab === sub.tabKey
   }
 
   if (collapsed) {
