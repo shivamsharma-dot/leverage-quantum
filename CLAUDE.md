@@ -14,6 +14,12 @@
 - Registered two new Settings > Data Sources connectors: `Google Ads CRM Leads Sheet` (editable sheet URL, key `googleLeads`) and `Google Ads API` (read-only, env-configured, same pattern as Meta Graph API).
 - MANDATORY going forward: after every code change/commit, append a dated entry to this Recent Work section summarizing the change.
 
+**Ask AI — Google Ads full integration (July 9, 2026)** — commit `5c3fd43` on `main`.
+- Added `getGoogleAdsData()` baseline context (last 30 days campaign summary) wired into `buildSystemPrompt()`, alongside existing Meta/QLOps/WhatsApp context.
+- Added `query_google_ads` tool (mirrors `query_meta_ads`) — lets Claude fetch live campaigns/ad_groups/keywords/search_terms/trend data via GAQL mid-chat, same agentic pattern as Meta tool use.
+- Wired `tools: [META_TOOL, GOOGLE_ADS_TOOL]`; added dispatch branch calling `executeGoogleAdsQuery(...)`; added a "GOOGLE ADS TOOL ACCESS" section to the system prompt mirroring the Meta one.
+- Note: committed directly to main by shivamsharma-dot via GitHub's web editor (concurrent-edit race with this session's in-progress draft); verified structurally correct and passes a full JS syntax check.
+
 **Settings premium polish + Activity Log user search (June 20, 2026)** — branch `settings-premium-polish`, PR #4 (open, not yet merged; needs `npm run build` + live verify before merge).
 - Refactored Settings page inline styles into CSS-module classes: Data Sources rows (`ds*`), page-visibility cards on User Access tab (`pv*`), and Activity Log table (`al*`). Appearance-tab duplicate visibility grid left on inline styles intentionally.
 - Cleaned Activity Log status color map to brand colors only (navy/blue/cyan/green); no amber/orange/red.
