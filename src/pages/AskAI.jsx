@@ -797,7 +797,6 @@ export default function AskAI() {
             <div style={{width:7,height:7,borderRadius:'50%',background:GREEN,boxShadow:'0 0 0 3px rgba(76,174,111,0.18)',animation:'qGlow 2.4s infinite'}}/>
             <span style={{fontSize:11,fontWeight:700,letterSpacing:'.01em',color:GREEN}}>Google Ads connected</span>
           </div>
-            </div>
 
           </div>
 
