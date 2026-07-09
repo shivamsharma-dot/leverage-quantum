@@ -793,6 +793,12 @@ export default function AskAI() {
               <div style={{width:7,height:7,borderRadius:'50%',background:connected?GREEN:'rgba(255,255,255,0.2)',boxShadow:connected?`0 0 0 3px rgba(76,174,111,0.18)`:'none',animation:connected?'qGlow 2.4s infinite':''}}/>              <span style={{fontSize:11,fontWeight:700,letterSpacing:'.01em',color:connected?GREEN:'rgba(255,255,255,0.3)'}}>{connected?'Meta Ads connected':'Meta not connected'}</span>
             </div>
 
+          <div style={{display:'flex',alignItems:'center',gap:7,padding:'5px 12px',borderRadius:20,background:'linear-gradient(135deg,rgba(76,174,111,0.14),rgba(41,185,195,0.10))',border:'1px solid rgba(76,174,111,0.35)',boxShadow:'0 2px 10px -4px rgba(76,174,111,0.5)',marginLeft:8}}>
+            <div style={{width:7,height:7,borderRadius:'50%',background:GREEN,boxShadow:'0 0 0 3px rgba(76,174,111,0.18)',animation:'qGlow 2.4s infinite'}}/>
+            <span style={{fontSize:11,fontWeight:700,letterSpacing:'.01em',color:GREEN}}>Google Ads connected</span>
+          </div>
+            </div>
+
           </div>
 
           {/* Messages */}
@@ -811,7 +817,7 @@ export default function AskAI() {
                   <span className="qShine">{greeting()}</span>, {firstName}
                 </div>
                 <div style={{fontSize:14,color:'#94A3B8',textAlign:'center',maxWidth:440,lineHeight:1.6,marginBottom:28,animation:'fadeUp .5s ease .15s both'}}>
-                  Your marketing intelligence layer. Ask anything about Meta Ads, QL Ops, or WhatsApp — or generate a full report.
+                  Your marketing intelligence layer. Ask anything about Meta Ads, Google Ads, QL Ops, or WhatsApp — or generate a full report.
                 </div>
                 {/* quick prompts */}
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',maxWidth:620,animation:'fadeUp .5s ease .2s both'}}>
