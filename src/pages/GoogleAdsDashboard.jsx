@@ -1,12 +1,12 @@
-import React,{useState,useEffect,useCallback,useRef} from 'react'
+import React,{useState,useEffect,useCallback,useRef,useMemo} from 'react'
 import{useSearchParams}from 'react-router-dom'
 import{BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,LabelList}from 'recharts'
 import Sidebar from '../components/Sidebar'
 import { InlineLoader } from '../components/SkeletonLoader'
-import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'
+import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'; import { resolveSheetUrl } from '../lib/dataSources'
 
 const DATE_RANGES=[{id:'TODAY',label:'Today'},{id:'LAST_7_DAYS',label:'Last 7 days'},{id:'LAST_30_DAYS',label:'Last 30 days'},{id:'LAST_90_DAYS',label:'Last 90 days'},{id:'THIS_MONTH',label:'This month'},{id:'LAST_MONTH',label:'Last month'},{id:'CUSTOM',label:'Custom'}]
-const TABS=[{id:'campaigns',label:'Campaigns'},{id:'keywords',label:'Keywords'},{id:'searchTerms',label:'Search terms'},{id:'adGroups',label:'Ad groups'}]
+const TABS=[{id:'campaigns',label:'Campaigns'},{id:'keywords',label:'Keywords'},{id:'searchTerms',label:'Search terms'},{id:'adGroups',label:'Ad groups'}];const LEADS_CSV_DEFAULT='https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=googleleads';function parseLeadsCSV(t){const rows=[];let i=0,field='',row=[],inq=false;while(i<t.length){const c=t[i];const cc=t.charCodeAt(i);if(inq){if(c==='"'){if(t[i+1]==='"'){field+='"';i+=2;continue}inq=false;i++;continue}field+=c;i++;continue}else{if(c==='"'){inq=true;i++;continue}if(c===','){row.push(field);field='';i++;continue}if(cc===13){i++;continue}if(cc===10){row.push(field);rows.push(row);row=[];field='';i++;continue}field+=c;i++;continue}}if(field.length||row.length){row.push(field);rows.push(row)}const h=rows[0]||[];return rows.slice(1).filter(r=>r.length>1).map(r=>Object.fromEntries(h.map((k,idx)=>[k,(r[idx]||'')])))};function parseLeadDate(s){const m=String(s||'').trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);if(!m)return null;const MN={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};const mi=MN[m[2]];if(mi==null)return null;return new Date(+m[3],mi,+m[1])};function resolveDateRangeBounds(dr,cFrom,cTo){const today=new Date();const d0=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(dr==='CUSTOM'&&cFrom&&cTo){const p=cFrom.split('-'),q=cTo.split('-');return{start:new Date(+p[0],+p[1]-1,+p[2]),end:new Date(+q[0],+q[1]-1,+q[2])}}if(dr==='TODAY')return{start:d0,end:d0};if(dr==='LAST_7_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-7);return{start:s,end:e}}if(dr==='LAST_30_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-30);return{start:s,end:e}}if(dr==='LAST_90_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-90);return{start:s,end:e}}if(dr==='THIS_MONTH')return{start:new Date(d0.getFullYear(),d0.getMonth(),1),end:d0};if(dr==='LAST_MONTH'){const s=new Date(d0.getFullYear(),d0.getMonth()-1,1);const e=new Date(d0.getFullYear(),d0.getMonth(),0);return{start:s,end:e}}return{start:new Date(d0.getFullYear(),d0.getMonth(),1),end:d0}}
 
 const fmt=n=>n==null?'—':n>=1e7?'₹'+(n/1e7).toFixed(2)+' Cr':n>=1e5?'₹'+(n/1e5).toFixed(1)+'L':n>=1000?'₹'+(n/1000).toFixed(1)+'K':'₹'+Math.round(n).toLocaleString('en-IN')
 const fmtPct=n=>n==null?'—':(n*100).toFixed(2)+'%'
@@ -63,7 +63,7 @@ const NotConnected=()=>(
 )
 
 const Loader=()=><InlineLoader label='Loading from Google Ads' height={300}/>
-function CampaignsTab({data,loading}){
+function CampaignsTab({data,loading,leadsByCampaign={},totalLeads=0}){
 const {sort,Th}=useSort('spend')
 const [exp,setExp]=useState(null)
 if(loading)return <Loader/>
@@ -73,7 +73,7 @@ if(!campaigns.length&&!loading)return <NotConnected/>
 const sorted=sort(campaigns)
 const chartData=campaigns.filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend).slice(0,8).map(c=>({name:c.name.length>18?c.name.slice(0,18)+'...':c.name,spend:Math.round(c.spend/1000)}))
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:14,marginBottom:20}}><PremKPI label='Leads' value={fmtN(totalLeads)} sub='From CRM sheet' accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
 <PremKPI label='Total Spend' value={fmt(total.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='Impressions' value={fmtN(total.impressions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/>
 <PremKPI label='Clicks' value={fmtN(total.clicks)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai}/>
@@ -97,13 +97,13 @@ return <>
 </Card>
 <Card title='All campaigns' sub={campaigns.length+' campaigns'}>
 <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}>
-<thead><tr><Th k='name'>Campaign</Th><Th k='status'>Status</Th><Th k='type'>Type</Th><Th k='spend' right>Spend</Th><Th k='impressions' right>Impr.</Th><Th k='clicks' right>Clicks</Th><Th k='ctr' right>CTR</Th><Th k='avgCpc' right>Avg CPC</Th><Th k='conversions' right>Conv.</Th><Th k='costPerConv' right>CPA</Th><Th k='impressionShare' right>Imp Share</Th></tr></thead>
+<thead><tr><Th k='name'>Campaign</Th><Th k='status'>Status</Th><Th k='type'>Type</Th><th style={{padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',whiteSpace:'nowrap',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9',fontFamily:FONT}}>Leads</th><Th k='spend' right>Spend</Th><Th k='impressions' right>Impr.</Th><Th k='clicks' right>Clicks</Th><Th k='ctr' right>CTR</Th><Th k='avgCpc' right>Avg CPC</Th><Th k='conversions' right>Conv.</Th><Th k='costPerConv' right>CPA</Th><Th k='impressionShare' right>Imp Share</Th></tr></thead>
 <tbody>{sorted.map(c=>(
 <React.Fragment key={c.id}>
 <tr onClick={()=>setExp(exp===c.id?null:c.id)} style={{borderBottom:'1px solid #F8FAFC',cursor:'pointer',background:exp===c.id?'#F0F7FF':'transparent'}}>
 <td style={{padding:'9px 12px',fontSize:12.5,color:C.text,fontWeight:600,maxWidth:220,overflow:'hidden'}}><div style={{display:'flex',alignItems:'center',gap:6,overflow:'hidden'}}><span style={{fontSize:11,color:C.muted,flexShrink:0}}>{exp===c.id?'▼':'►'}</span><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={c.name}>{c.name}</span></div></td>
 <td style={{padding:'9px 12px'}}><StatusBadge s={c.status}/></td>
-<td style={{padding:'9px 12px'}}><TypeTag t={c.type}/></td>
+<td style={{padding:'9px 12px'}}><TypeTag t={c.type}/></td><td style={{padding:'9px 12px',textAlign:'right',fontWeight:800,color:C.green,fontSize:12.5,whiteSpace:'nowrap'}}>{(leadsByCampaign[c.name]??leadsByCampaign[(c.name||'').toLowerCase()])?fmtN(leadsByCampaign[c.name]??leadsByCampaign[(c.name||'').toLowerCase()]):'—'}</td>
 <td style={{padding:'9px 12px',textAlign:'right',fontWeight:800,color:C.text,fontSize:12.5,whiteSpace:'nowrap'}}>{fmt(c.spend)}</td>
 <td style={{padding:'9px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtN(c.impressions)}</td>
 <td style={{padding:'9px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtN(c.clicks)}</td>
@@ -113,7 +113,7 @@ return <>
 <td style={{padding:'9px 12px',textAlign:'right',color:C.sub,fontSize:12.5,whiteSpace:'nowrap'}}>{fmt(c.costPerConv)}</td>
 <td style={{padding:'9px 12px',textAlign:'right',fontSize:12.5,color:c.impressionShare>0.8?C.green:c.impressionShare>0.5?'#D97706':'#DC2626'}}>{fmtPct(c.impressionShare)}</td>
 </tr>
-{exp===c.id&&<tr style={{borderBottom:'1px solid #F8FAFC',background:'#F8FAFF'}}><td colSpan={11} style={{padding:'12px 24px'}}>
+{exp===c.id&&<tr style={{borderBottom:'1px solid #F8FAFC',background:'#F8FAFF'}}><td colSpan={12} style={{padding:'12px 24px'}}>
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,fontSize:12}}>
 {[{l:'Campaign ID',v:c.id},{l:'Channel type',v:c.type},{l:'Impression Share',v:fmtPct(c.impressionShare)},{l:'Cost per click',v:fmtCpc(c.avgCpc)}].map(({l,v})=>(
 <div key={l}><div style={{fontSize:10,color:C.muted,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:3}}>{l}</div><div style={{fontWeight:700,color:C.text}}>{v}</div></div>
@@ -260,7 +260,7 @@ const [data,setData]=useState({})
 const [loading,setLoading]=useState({})
 const [error,setError]=useState(null)
 const [notConnected,setNotConnected]=useState(false)
-const loaded=useRef({})
+const loaded=useRef({});const [leadsRows,setLeadsRows]=useState([]);useEffect(()=>{(async()=>{try{const url=await resolveSheetUrl('googleLeads',LEADS_CSV_DEFAULT);const res=await fetch(url);const txt=await res.text();setLeadsRows(parseLeadsCSV(txt))}catch(e){console.error('leads csv fetch',e)}})()},[]);const leadsAgg=useMemo(()=>{const{start,end}=resolveDateRangeBounds(dateRange,customFrom,customTo);const byCampaign={};let total=0;leadsRows.forEach(r=>{const d=parseLeadDate(r.lead_created_date);if(!d)return;if(d<start||d>end)return;const n=parseFloat(String(r.leads||'0').replace(/[^0-9.-]/g,''))||0;const camp=(r.opp_first_campaign_name||'').trim();if(camp){byCampaign[camp]=(byCampaign[camp]||0)+n;byCampaign[camp.toLowerCase()]=(byCampaign[camp.toLowerCase()]||0)+n}total+=n});return{byCampaign,total}},[leadsRows,dateRange,customFrom,customTo])
 
 const loadTab=useCallback(async(tab,dr,cFrom,cTo)=>{
 const custom=dr==='CUSTOM'&&cFrom&&cTo;const k=tab+'_'+dr+(custom?('_'+cFrom+'_'+cTo):'')
@@ -308,7 +308,7 @@ Refresh
 <div style={{flex:1,overflowY:'auto',padding:'16px 28px 28px'}}>
 {error&&<div style={{padding:'10px 14px',borderRadius:10,background:'#FEF2F2',color:'#DC2626',fontSize:12.5,fontWeight:600,marginBottom:16}}>{error}</div>}
 {notConnected ? <NotConnected/> : (
-activeTab==='campaigns' ? <CampaignsTab data={data.campaigns} loading={!!loading.campaigns}/> :
+activeTab==='campaigns' ? <CampaignsTab data={data.campaigns} loading={!!loading.campaigns} leadsByCampaign={leadsAgg.byCampaign} totalLeads={leadsAgg.total}/> :
 activeTab==='keywords' ? <KeywordsTab data={data.keywords} loading={!!loading.keywords}/> :
 activeTab==='searchTerms'?<SearchTermsTab data={data.searchTerms} loading={!!loading.searchTerms}/>:
 activeTab==='mom'?<TrendTab mode='month'/>:activeTab==='dod'?<TrendTab mode='day'/>:<AdGroupsTab data={data.adGroups} loading={!!loading.adGroups}/>
