@@ -11,6 +11,7 @@ export const SHEET_PREF_KEYS = {
     whatsapp: 'sheet_url_whatsapp',
     fbleads: 'sheet_url_fbleads',
     leadsAssigned: 'sheet_url_leads_assigned',
+    googleLeads: 'sheet_url_googleleads',
 }
 
 let cached = null
