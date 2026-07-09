@@ -227,7 +227,7 @@ return <>
 <div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='AD GROUPS' value={fmtN(adGroups.length)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='TOTAL SPEND' value={fmt(total?.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
-<div style={{display:(activeTab==='mom'||activeTab==='dod')?'none':'flex',alignItems:'center',gap:8}}><PremKPI label='CLICKS' value={fmtN(total?.clicks)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
+<PremKPI label='IMPRESSIONS' value={fmtN(total?.impressions)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/><PremKPI label='CLICKS' value={fmtN(total?.clicks)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
 <PremKPI label='CONVERSIONS' value={total?.conversions?fmtN(total.conversions):'—'} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai}/>
 </div>
 <Card title='Ad groups' sub={adGroups.length+' total'}>
