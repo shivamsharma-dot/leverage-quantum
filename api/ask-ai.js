@@ -209,6 +209,122 @@ Nested insights fields: use "insights{field1,field2}" syntax within campaigns/ad
 }
 
 // ── data fetchers (for initial context) ─────────────────────────────────────
+const GOOGLE_ADS_TOOL = {
+      name: 'query_google_ads',
+      description: `Query Google Ads for live campaign, ad group, keyword, search term, or trend data. Use this when the initial 30-day summary does not answer the question: specific date ranges, ad group/keyword/search-term detail, or day-by-day/month-by-month trends. Call multiple times if needed. Always prefer live data over estimates.`,
+      input_schema: {
+              type: 'object',
+              properties: {
+                        tab: { type: 'string', enum: ['campaigns','ad_groups','keywords','search_terms','trend'], description: 'Which Google Ads report to fetch.' },
+                        dateRange: { type: 'string', enum: ['TODAY','LAST_7_DAYS','LAST_30_DAYS','LAST_90_DAYS','THIS_MONTH','LAST_MONTH'], description: 'Preset date range. Omit and use from/to for a custom range.' },
+                        from: { type: 'string', description: 'Custom range start date, YYYY-MM-DD. Use with to.' },
+                        to: { type: 'string', description: 'Custom range end date, YYYY-MM-DD. Use with from.' },
+                        trendMode: { type: 'string', enum: ['day','month'], description: 'Only for tab=trend: group by day or month. Default day.' }
+              },
+              required: ['tab']
+      }
+}
+    
+async function getGoogleAdsToken() {
+      const r = await fetch('https://oauth2.googleapis.com/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ client_id: process.env.GOOGLE_ADS_CLIENT_ID, client_secret: process.env.GOOGLE_ADS_CLIENT_SECRET, refresh_token: process.env.GOOGLE_ADS_REFRESH_TOKEN, grant_type: 'refresh_token' }),
+              signal: AbortSignal.timeout(9000)
+      })
+            const d = await r.json()
+                  if (!d.access_token) throw new Error('Google Ads token error: ' + JSON.stringify(d))
+                        return d.access_token
+}
+
+async function gaqlAsk(token, cid, query) {
+      const r = await fetch(`https://googleads.googleapis.com/v24/customers/${cid}/googleAds:search`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'developer-token': process.env.GOOGLE_ADS_DEVELOPER_TOKEN, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query }),
+              signal: AbortSignal.timeout(9000)
+      })
+            if (!r.ok) { const e = await r.text(); throw new Error(`Google Ads API ${r.status}: ${e.slice(0,300)}`) }
+      const d = await r.json()
+            return d.results || []
+}
+
+async function executeGoogleAdsQuery({ tab, dateRange, from, to, trendMode }) {
+      const miss = ['GOOGLE_ADS_DEVELOPER_TOKEN','GOOGLE_ADS_CLIENT_ID','GOOGLE_ADS_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN','GOOGLE_ADS_CUSTOMER_ID'].filter(k => !process.env[k])
+            if (miss.length) return { error: 'Google Ads is not configured on the server (missing credentials).' }
+                  try {
+                          const cid = process.env.GOOGLE_ADS_CUSTOMER_ID.replace(/-/g, '')
+                                  const token = await getGoogleAdsToken()
+                                          const dc = (from && to) ? `segments.date BETWEEN '${from}' AND '${to}'` : `segments.date DURING ${dateRange || 'LAST_30_DAYS'}`
+                                                  const mic = v => v ? Math.round(Number(v) / 1e6) : 0
+                                                          const pct = v => v ? +Number(v).toFixed(4) : 0
+                                                                  if (tab === 'campaigns') {
+                                                                            const rows = await gaqlAsk(token, cid, `SELECT campaign.id,campaign.name,campaign.status,campaign.advertising_channel_type,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion,metrics.search_impression_share FROM campaign WHERE ${dc} AND campaign.status != 'REMOVED' ORDER BY metrics.cost_micros DESC LIMIT 100`)
+                                                                                      const campaigns = rows.map(r => ({ id: r.campaign.id, name: r.campaign.name, status: r.campaign.status, type: r.campaign.advertisingChannelType, spend: mic(r.metrics.costMicros), impressions: +r.metrics.impressions || 0, clicks: +r.metrics.clicks || 0, ctr: pct(r.metrics.ctr), avgCpc: mic(r.metrics.averageCpc), conversions: +Number(r.metrics.conversions || 0).toFixed(1), costPerConv: mic(r.metrics.costPerConversion), impressionShare: pct(r.metrics.searchImpressionShare) }))
+                                                                                                return { campaigns, tab: 'campaigns' }
+                                                                      }
+                      
+                          if (tab === 'ad_groups') {
+                                    const rows = await gaqlAsk(token, cid, `SELECT ad_group.id,ad_group.name,ad_group.status,campaign.name,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion FROM ad_group WHERE ${dc} AND ad_group.status != 'REMOVED' ORDER BY metrics.cost_micros DESC LIMIT 200`)
+                                              const adGroups = rows.map(r => ({ id: r.adGroup.id, name: r.adGroup.name, status: r.adGroup.status, campaign: r.campaign.name, spend: mic(r.metrics.costMicros), impressions: +r.metrics.impressions || 0, clicks: +r.metrics.clicks || 0, ctr: pct(r.metrics.ctr), avgCpc: mic(r.metrics.averageCpc), conversions: +Number(r.metrics.conversions || 0).toFixed(1), costPerConv: mic(r.metrics.costPerConversion) }))
+                                                        return { adGroups, tab: 'ad_groups' }
+                          }
+                          if (tab === 'keywords') {
+                                    const rows = await gaqlAsk(token, cid, `SELECT ad_group_criterion.keyword.text,ad_group_criterion.keyword.match_type,ad_group_criterion.quality_info.quality_score,ad_group_criterion.status,campaign.name,ad_group.name,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion,metrics.search_impression_share FROM keyword_view WHERE ${dc} AND ad_group_criterion.status != 'REMOVED' ORDER BY metrics.cost_micros DESC LIMIT 200`)
+                                              const keywords = rows.map(r => ({ text: r.adGroupCriterion.keyword.text, matchType: r.adGroupCriterion.keyword.matchType, status: r.adGroupCriterion.status, qualityScore: (r.adGroupCriterion.qualityInfo && r.adGroupCriterion.qualityInfo.qualityScore) || null, campaign: r.campaign.name, adGroup: r.adGroup.name, spend: mic(r.metrics.costMicros), impressions: +r.metrics.impressions || 0, clicks: +r.metrics.clicks || 0, ctr: pct(r.metrics.ctr), avgCpc: mic(r.metrics.averageCpc), conversions: +Number(r.metrics.conversions || 0).toFixed(1), costPerConv: mic(r.metrics.costPerConversion), impressionShare: pct(r.metrics.searchImpressionShare) }))
+                                                        return { keywords, tab: 'keywords' }
+                          }
+                      
+                          if (tab === 'search_terms') {
+                                    const rows = await gaqlAsk(token, cid, `SELECT search_term_view.search_term,search_term_view.status,campaign.name,ad_group.name,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions FROM search_term_view WHERE ${dc} ORDER BY metrics.cost_micros DESC LIMIT 200`)
+                                              const searchTerms = rows.map(r => ({ term: r.searchTermView.searchTerm, status: r.searchTermView.status, campaign: r.campaign.name, adGroup: r.adGroup.name, spend: mic(r.metrics.costMicros), impressions: +r.metrics.impressions || 0, clicks: +r.metrics.clicks || 0, ctr: pct(r.metrics.ctr), avgCpc: mic(r.metrics.averageCpc), conversions: +Number(r.metrics.conversions || 0).toFixed(1) }))
+                                                        return { searchTerms, tab: 'search_terms' }
+                          }
+                      
+                          if (tab === 'trend') {
+                                    const mode = trendMode === 'month' ? 'month' : 'day'
+                                              const seg = mode === 'month' ? 'segments.month' : 'segments.date'
+                                                        const rows = await gaqlAsk(token, cid, `SELECT ${seg},metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion FROM customer WHERE ${dc} ORDER BY ${seg} ASC`)
+                                                                  const points = rows.map(r => ({ period: mode === 'month' ? r.segments.month : r.segments.date, spend: mic(r.metrics.costMicros), impressions: +r.metrics.impressions || 0, clicks: +r.metrics.clicks || 0, ctr: pct(r.metrics.ctr), avgCpc: mic(r.metrics.averageCpc), conversions: +Number(r.metrics.conversions || 0).toFixed(1), costPerConv: mic(r.metrics.costPerConversion) }))
+                                                                            return { points, tab: 'trend', mode }
+                          }
+                          return { error: 'unknown tab: ' + tab }
+                  } catch (e) {
+                          return { error: 'Google Ads query failed: ' + e.message }
+                  }
+}
+
+async function getGoogleAdsData() {
+      const miss = ['GOOGLE_ADS_DEVELOPER_TOKEN','GOOGLE_ADS_CLIENT_ID','GOOGLE_ADS_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN','GOOGLE_ADS_CUSTOMER_ID'].filter(k => !process.env[k])
+            if (miss.length) return 'GOOGLE ADS: NOT CONFIGURED — server credentials missing.'
+                  try {
+                          const cid = process.env.GOOGLE_ADS_CUSTOMER_ID.replace(/-/g, '')
+                                  const token = await getGoogleAdsToken()
+                                          const mic = v => v ? Math.round(Number(v) / 1e6) : 0
+                                                  const rows = await gaqlAsk(token, cid, `SELECT campaign.id,campaign.name,campaign.status,campaign.advertising_channel_type,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion FROM campaign WHERE segments.date DURING LAST_30_DAYS AND campaign.status != 'REMOVED' ORDER BY metrics.cost_micros DESC LIMIT 20`)
+                                                          const camps = rows.map(r => ({ name: r.campaign.name, status: r.campaign.status, type: r.campaign.advertisingChannelType, spend: mic(r.metrics.costMicros), impressions: +r.metrics.impressions || 0, clicks: +r.metrics.clicks || 0, ctr: r.metrics.ctr ? +Number(r.metrics.ctr).toFixed(4) : 0, conversions: +Number(r.metrics.conversions || 0).toFixed(1), costPerConv: mic(r.metrics.costPerConversion) }))
+                                                                  const total = camps.reduce((t, c) => ({ spend: t.spend + c.spend, impressions: t.impressions + c.impressions, clicks: t.clicks + c.clicks, conversions: t.conversions + c.conversions }), { spend: 0, impressions: 0, clicks: 0, conversions: 0 })
+                                                                          const ctr = total.impressions ? total.clicks / total.impressions : 0
+                                                                                  const cpl = total.conversions ? total.spend / total.conversions : 0
+                                                                                      
+                          const lines = [
+                                    'GOOGLE ADS DATA (last 30 days):',
+                                    `  ACCOUNT OVERVIEW:`,
+                                    `    Spend: ${fmtINR(total.spend)} | Impressions: ${total.impressions.toLocaleString()} | Clicks: ${total.clicks.toLocaleString()}`,
+                                    `    CTR: ${(ctr*100).toFixed(2)}% | Conversions: ${total.conversions.toLocaleString()} | Cost/Conversion: ${cpl ? fmtINR(cpl) : 'N/A'}`,
+                                  ]
+                                  if (camps.length) {
+                                            lines.push(`  CAMPAIGN BREAKDOWN (top ${camps.length} by spend):`)
+                                                      camps.forEach(c => {
+                                                                  lines.push(`    - ${c.name} [${c.status}, ${c.type}]: Spend ${fmtINR(c.spend)}, Clicks ${c.clicks.toLocaleString()}, CTR ${(c.ctr*100).toFixed(2)}%, Conversions ${c.conversions}, Cost/Conv ${c.costPerConv ? fmtINR(c.costPerConv) : 'N/A'}`)
+                                                      })
+                                  }
+                          return lines.join('\n')
+                  } catch (e) {
+                          return `GOOGLE ADS ERROR: ${e.message}`
+                  }
+}
+
 async function getQLOpsData() {
   try {
         const qlopsUrl = (await getSheetOverride('sheet_url_qlops_daily')) || QLOPS_SHEET
@@ -371,10 +487,11 @@ async function getMetaData(token) {
 
 // ── SYSTEM PROMPT ─────────────────────────────────────────────────────────────
 async function buildSystemPrompt(metaToken, memories) {
-  const [qlops, whatsapp, meta] = await Promise.all([
+  const [qlops, whatsapp, meta, googleAds] = await Promise.all([
     getQLOpsData(),
     getWhatsAppData(),
     getMetaData(metaToken),
+          getGoogleAdsData(),
   ])
   const today = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
   const memoriesSection = memories?.length
@@ -400,6 +517,8 @@ LIVE DATA — LEVERAGE EDU MARKETING
 
 ${meta}
 
+${googleAds}
+
 ${qlops}
 
 ${whatsapp}
@@ -415,6 +534,20 @@ You have the query_meta_ads tool for LIVE Meta Graph API access. Use it proactiv
 • The user asks for week-over-week or month-over-month comparisons
 • You need more campaigns (above 20 shown), adsets, or ad-level data
 • Any question where the initial context may not have the answer
+
+Always call the tool rather than saying "I don't have that data." If the tool returns an error, report it clearly.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GOOGLE ADS TOOL ACCESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You have the query_google_ads tool for LIVE Google Ads API access. Use it proactively when:
+• The user asks about a specific date range not covered above (last 7 days, specific month, custom range, etc.)
+• The user asks about ad group, keyword, or search term level performance
+• The user asks about quality score, match type, or search term detail
+• The user asks for day-by-day or month-by-month trend data
+• You need more campaigns (above 20 shown) or a different breakdown
+• Any Google Ads question where the initial context may not have the answer
 
 Always call the tool rather than saying "I don't have that data." If the tool returns an error, report it clearly.
 
@@ -525,7 +658,7 @@ export default async function handler(req, res) {
           max_tokens: 1024,
           // On last round, stream. Otherwise collect tool calls.
           stream: false,
-          tools: [META_TOOL],
+          tools: [META_TOOL, GOOGLE_ADS_TOOL],
           tool_choice: { type: 'auto' },
           system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
           messages: currentMessages,
@@ -586,6 +719,13 @@ export default async function handler(req, res) {
             tool_use_id: toolUse.id,
             content: JSON.stringify(result)
           })
+        } else if (toolUse.name === 'query_google_ads') {
+                    const gResult = await executeGoogleAdsQuery(toolUse.input || {})
+                    toolResults.push({
+                                  type: 'tool_result',
+                                  tool_use_id: toolUse.id,
+                                  content: JSON.stringify(gResult)
+                    })
         }
       }
 
