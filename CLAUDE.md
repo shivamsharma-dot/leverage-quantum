@@ -20,6 +20,14 @@
 - Wired `tools: [META_TOOL, GOOGLE_ADS_TOOL]`; added dispatch branch calling `executeGoogleAdsQuery(...)`; added a "GOOGLE ADS TOOL ACCESS" section to the system prompt mirroring the Meta one.
 - Note: committed directly to main by shivamsharma-dot via GitHub's web editor (concurrent-edit race with this session's in-progress draft); verified structurally correct and passes a full JS syntax check.
 
+**Ask AI — Google Ads badge/UI fix (July 9, 2026)** — commits `6ee4fab` (broken) + `4667ea5` (fix) on `main`.
+- User reported Ask AI chat header/welcome text only mentioned Meta Ads despite Google Ads backend integration (5c3fd43) being live.
+- `6ee4fab`: updated welcome text to mention Google Ads + added a static green "Google Ads connected" badge next to the Meta badge in `AskAI.jsx`.
+- `6ee4fab` build FAILED on Vercel (Error, 5s) — a Find/Replace edit left a duplicate `</div>` (original unmatched remainder still had its own closing div), unbalancing JSX; bundler reported it as a misleading "Unterminated regular expression" many lines downstream.
+- `4667ea5`: removed the stray duplicate `</div>`; verified via div-count-delta heuristic against the pre-edit baseline; Vercel build now Ready (24s), confirmed live — both "Meta Ads connected" and "Google Ads connected" badges now show correctly.
+- Lesson: when inserting via Find/Replace, never let both my own Replace-text closing tags AND the original file's remaining closing tags survive — always verify the exact text immediately after the Find match before adding closing structure.
+
+
 **Settings premium polish + Activity Log user search (June 20, 2026)** — branch `settings-premium-polish`, PR #4 (open, not yet merged; needs `npm run build` + live verify before merge).
 - Refactored Settings page inline styles into CSS-module classes: Data Sources rows (`ds*`), page-visibility cards on User Access tab (`pv*`), and Activity Log table (`al*`). Appearance-tab duplicate visibility grid left on inline styles intentionally.
 - Cleaned Activity Log status color map to brand colors only (navy/blue/cyan/green); no amber/orange/red.
