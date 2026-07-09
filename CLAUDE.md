@@ -6,6 +6,14 @@
 
 ## Recent Work (June 2026 — latest session)
 
+**Google Ads dashboard overhaul + CRM leads integration (July 9, 2026)** — commits `2969b68`..`506f0de` on `main`.
+- Removed odd-looking duplicate/overlapping spend-by-campaign chart; added header custom date-range filter (Today/Last 7/30/90 days, This Month, Last Month, Custom) shared across Campaigns/Ad Groups/Keywords/Search Terms tabs.
+- Added Day-on-Day (`?tab=dod`) and Month-on-Month (`?tab=mom`) sub-pages below Google Ads, linked from the sidebar submenu.
+- Fixed brand-color violations (violet replaced with navy/blue/cyan/green) and fixed campaign name/status column overlap in all Google Ads tables.
+- Added Leads KPI card + per-campaign Leads column on Campaigns tab, sourced from the CRM Google Sheet (`googleleads` sheet), matched by campaign name (case-insensitive fallback).
+- Registered two new Settings > Data Sources connectors: `Google Ads CRM Leads Sheet` (editable sheet URL, key `googleLeads`) and `Google Ads API` (read-only, env-configured, same pattern as Meta Graph API).
+- MANDATORY going forward: after every code change/commit, append a dated entry to this Recent Work section summarizing the change.
+
 **Settings premium polish + Activity Log user search (June 20, 2026)** — branch `settings-premium-polish`, PR #4 (open, not yet merged; needs `npm run build` + live verify before merge).
 - Refactored Settings page inline styles into CSS-module classes: Data Sources rows (`ds*`), page-visibility cards on User Access tab (`pv*`), and Activity Log table (`al*`). Appearance-tab duplicate visibility grid left on inline styles intentionally.
 - Cleaned Activity Log status color map to brand colors only (navy/blue/cyan/green); no amber/orange/red.
