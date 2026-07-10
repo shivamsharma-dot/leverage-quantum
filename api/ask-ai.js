@@ -448,13 +448,32 @@ async function getMetaData(token) {
 }
 
 // -- SYSTEM PROMPT -------------------------------------------------------------
-async function buildSystemPrompt(metaToken, memories) {
+// Baseline Meta/Google/CRM data changes slowly — cache it in-memory for a short
+// window so back-to-back messages in the same warm serverless instance don't
+// re-fetch all 4 sources on every single message (was adding several seconds
+// of pure fetch latency before the model even started thinking).
+let _baselineCache = null // { data: {meta, googleAds, metaCrm, googleCrm}, key, ts }
+const BASELINE_CACHE_TTL_MS = 75_000
+
+async function getBaselineData(metaToken) {
+  const now = Date.now()
+  const key = metaToken || ''
+  if (_baselineCache && _baselineCache.key === key && (now - _baselineCache.ts) < BASELINE_CACHE_TTL_MS) {
+    return _baselineCache.data
+  }
   const [meta, googleAds, metaCrm, googleCrm] = await Promise.all([
     getMetaData(metaToken),
     getGoogleAdsData(),
     getMetaCrmLeads(),
     getGoogleCrmLeads(),
   ])
+  const data = { meta, googleAds, metaCrm, googleCrm }
+  _baselineCache = { data, key, ts: now }
+  return data
+}
+
+async function buildSystemPrompt(metaToken, memories) {
+  const { meta, googleAds, metaCrm, googleCrm } = await getBaselineData(metaToken)
   const today = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
   const memoriesSection = memories?.length
     ? `\n=== REMEMBERED CONTEXT (from previous sessions) ===\n${memories.map(m=>`- ${m}`).join('\n')}`
@@ -679,12 +698,13 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'x-api-key': ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 8192,
         stream: true,
-        system: [{ type: 'text', text: system }],
+        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
         messages: currentMessages,
       }),
     })

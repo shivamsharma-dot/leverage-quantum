@@ -472,11 +472,9 @@ export default function AskAI() {
         @keyframes qGlow{0%,100%{box-shadow:0 8px 30px -6px rgba(28,159,212,0.45),0 0 0 0 rgba(28,159,212,0.30)}50%{box-shadow:0 12px 44px -4px rgba(41,185,195,0.60),0 0 0 10px rgba(28,159,212,0.06)}}
         @keyframes qTextShine{0%{background-position:0% 50%}100%{background-position:200% 50%}}
         @keyframes qScan{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
-        @keyframes qSpark{0%,100%{opacity:.25;transform:scale(.7)}50%{opacity:1;transform:scale(1.1)}}
         @keyframes qRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
         .qShine{background:linear-gradient(100deg,#1F3C84 0%,#1C9FD4 28%,#29B9C3 52%,#1C9FD4 74%,#1F3C84 100%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:qTextShine 4.5s linear infinite}
-        .qOrb{position:relative;border-radius:22px;background:#fff;box-shadow:0 2px 10px rgba(15,23,42,0.07),0 0 0 1.5px rgba(28,159,212,0.20);animation:qRing 3.4s ease-in-out infinite;overflow:hidden}
-        @keyframes qRing{0%,100%{box-shadow:0 2px 10px rgba(15,23,42,0.07),0 0 0 1.5px rgba(28,159,212,0.20)}50%{box-shadow:0 8px 22px -4px rgba(28,159,212,0.28),0 0 0 1.5px rgba(41,185,195,0.38)}}
+        .qOrb{position:relative;border-radius:22px;background:#fff;box-shadow:0 2px 10px rgba(15,23,42,0.07);overflow:hidden}
         @keyframes qBarGrow{0%,100%{transform:scaleY(0.8)}50%{transform:scaleY(1)}}
         .qBar{transform-origin:bottom;animation:qBarGrow 2.2s ease-in-out infinite}
         .qChip{transition:all .2s ease;position:relative;overflow:hidden}
@@ -799,8 +797,6 @@ export default function AskAI() {
               <div className="qOrb" style={{width:78,height:78,display:'flex',alignItems:'center',justifyContent:'center'}}>
                 <div style={{display:'flex'}}><AnimatedLogo size={34}/></div>
               </div>
-              <div style={{position:'absolute',top:-3,right:-3,width:9,height:9,borderRadius:'50%',background:'#29B9C3',boxShadow:'0 0 10px 2px rgba(41,185,195,0.8)',animation:'qSpark 2.4s ease-in-out infinite'}}/>
-              <div style={{position:'absolute',bottom:2,left:-5,width:6,height:6,borderRadius:'50%',background:'#1C9FD4',boxShadow:'0 0 8px 1px rgba(28,159,212,0.8)',animation:'qSpark 2.4s ease-in-out infinite .8s'}}/>
             </div>
                 <div style={{fontSize:26,fontWeight:800,color:'#0F172A',marginBottom:6,letterSpacing:'-0.03em',textAlign:'center',animation:'fadeUp .5s ease .1s both'}}>
                   <span className="qShine">{greeting()}</span>, {firstName}
