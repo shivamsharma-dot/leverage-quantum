@@ -4,6 +4,18 @@ import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole
 import { getActivityLog } from '../components/ActivityLogger.js'
 import styles from './SettingsPage.module.css'
 
+const RL_SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
+const RL_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
+async function getReportLogs(limit = 200) {
+  try {
+    const res = await fetch(
+      `${RL_SB_URL}/rest/v1/report_logs?select=*&order=sent_at.desc&limit=${limit}`,
+      { headers: { apikey: RL_SB_KEY, Authorization: `Bearer ${RL_SB_KEY}` } }
+    )
+    if (!res.ok) return []
+    return await res.json()
+  } catch { return [] }
+}
 
 const getRoleMeta = (role) => {
   if (role === 'admin') return { label: 'Admin', color: '#1F3C84', bg: '#E8EFF9' }
@@ -93,6 +105,19 @@ export default function SettingsPage() {
     setActivityLoading(true)
     setActivityLog(await getActivityLog(500))
     setActivityLoading(false)
+  }
+
+  // Report Activity Log (send history — sent/skipped/failed, incl. cron + GitHub Actions triggers)
+  const _rlRef = useRef(false)
+  useEffect(() => {
+    if (activeTab === 'reports' && userIsAdmin && !_rlRef.current) { _rlRef.current=true; loadReportLogs() }
+  }, [activeTab, userIsAdmin])
+  const [reportLogsList, setReportLogsList] = useState([])
+  const [reportLogsLoading, setReportLogsLoading] = useState(false)
+  const loadReportLogs = async () => {
+    setReportLogsLoading(true)
+    setReportLogsList(await getReportLogs(200))
+    setReportLogsLoading(false)
   }
 // Published-sheet connector (admin-configurable CSV URLs)
     const [sheetUrls, setSheetUrls] = useState({})
@@ -945,6 +970,66 @@ export default function SettingsPage() {
                 <button className={styles.primaryBtn} onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving\u2026' : 'Save report settings'}</button>
                 <button className={styles.ghostBtn} onClick={sendTestReport} disabled={rcTesting}>{rcTesting ? 'Sending\u2026' : 'Send test to me only'}</button>
                 {rcMsg && <span style={{ fontSize: 13, fontWeight: 600, color: rcMsg.charAt(0) === '\u2715' ? '#b4413c' : '#4CAE6F' }}>{rcMsg}</span>}
+              </div>
+
+              <div className={styles.card}>
+                <div className={styles.activityHeader}>
+                  <div>
+                    <h3 className={styles.cardTitle}>Report Activity</h3>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>Every send attempt \u2014 scheduled (GitHub Actions cron), manual, and test \u2014 with the real outcome. A skipped run (auto-reports disabled) is logged here even though GitHub Actions itself shows it as a green "success".</p>
+                  </div>
+                  <button className={styles.ghostBtn} onClick={loadReportLogs}>
+                    {reportLogsLoading ? 'Loading\u2026' : '\u21bb Refresh'}
+                  </button>
+                </div>
+
+                {reportLogsList.length === 0 && !reportLogsLoading && (
+                  <div className={styles.empty}>No report activity yet.</div>
+                )}
+
+                {reportLogsList.length > 0 && (
+                  <div className={styles.alCard}>
+                    <div className={styles.tableWrap}>
+                    <table className={styles.alTable}>
+                      <thead className={styles.alHead}>
+                        <tr>
+                          {['TYPE','STATUS','TRIGGERED BY','RECIPIENTS','SENT AT','DETAIL'].map(h=>(
+                            <th key={h}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportLogsList.map((log,idx)=>{
+                          const STATUS = {
+                            sent:    { c:'#2E7D4F', bg:'#E9F8EF', label:'Sent' },
+                            skipped: { c:'#1577A0', bg:'#E3F5FD', label:'Skipped' },
+                            failed:  { c:'#1F3C84', bg:'#E8EFF9', label:'Failed' },
+                          }
+                          const s = STATUS[log.status] || { c:'#64748B', bg:'#F1F5F9', label: log.status||'Unknown' }
+                          const triggeredLabel = log.triggered_by === 'cron' ? 'Cron (GitHub Actions)' : log.triggered_by === 'test' ? 'Test' : (log.triggered_by || 'Manual')
+                          const dt = log.sent_at ? new Date(log.sent_at) : null
+                          const dateStr = dt ? dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '\u2014'
+                          const timeStr = dt ? dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}) : ''
+                          const rcptCount = Array.isArray(log.recipients) ? log.recipients.length : 0
+                          return (
+                            <tr key={log.id||idx} className={styles.alRow}>
+                              <td className={`${styles.alTd} ${styles.alPage}`} style={{textTransform:'capitalize'}}>{log.report_type||'\u2014'}</td>
+                              <td className={styles.alTd}>
+                                <span className={styles.alTag} style={{background:s.bg,color:s.c}}>{s.label}</span>
+                              </td>
+                              <td className={styles.alTd}>{triggeredLabel}</td>
+                              <td className={styles.alTd}>{rcptCount > 0 ? `${rcptCount} recipient${rcptCount!==1?'s':''}` : '\u2014'}</td>
+                              <td className={styles.alTd}>{dateStr}{timeStr ? ` \u00b7 ${timeStr}` : ''}</td>
+                              <td className={`${styles.alTd} ${styles.alDetail}`} title={log.error||''}>{log.error || '\u2014'}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                    </div>
+                    <div className={styles.alFoot}>Showing {reportLogsList.length} {reportLogsList.length===1?'entry':'entries'}</div>
+                  </div>
+                )}
               </div>
             </>
           )}

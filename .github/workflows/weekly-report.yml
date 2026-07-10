@@ -11,7 +11,14 @@ jobs:
     steps:
       - name: Trigger weekly report
         run: |
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://quantum.leverageedu.com/api/send-report" -H "Content-Type: application/json" -d '{"type":"weekly","triggered_by":"cron"}')
-          echo "HTTP Status: $RESPONSE"
-          if [ "$RESPONSE" != "200" ]; then echo "Failed with status $RESPONSE"; exit 1; fi
-          echo "Weekly Meta Report sent!"
+          BODY=$(curl -s -w "\n%{http_code}" -X POST "https://quantum.leverageedu.com/api/send-report" -H "Content-Type: application/json" -d '{"type":"weekly","triggered_by":"cron"}')
+          STATUS=$(echo "$BODY" | tail -n1)
+          JSON=$(echo "$BODY" | sed '$d')
+          echo "HTTP Status: $STATUS"
+          echo "Response: $JSON"
+          if [ "$STATUS" != "200" ]; then echo "Failed with status $STATUS"; exit 1; fi
+          if echo "$JSON" | grep -q '"skipped":true'; then
+            echo "::warning::Weekly report SKIPPED — Automatic Reports is disabled in Settings"
+          else
+            echo "Weekly Meta Report sent!"
+          fi

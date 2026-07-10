@@ -449,6 +449,7 @@ export default async function handler(req, res) {
   const cfg = await getReportConfig()
   // Auto-reports master switch: skip scheduled sends when disabled
   if (triggered_by === 'cron' && cfg.auto_reports_enabled === false) {
+    await logReport({ report_type, recipients: [], status: 'skipped', error: 'Auto-reports disabled in Settings', triggered_by })
     return res.status(200).json({ ok: true, skipped: true, reason: 'auto_reports_disabled' })
   }
   const fromAddr = cfg.report_from_email

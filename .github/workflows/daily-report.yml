@@ -11,7 +11,14 @@ jobs:
     steps:
       - name: Trigger daily report
         run: |
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://quantum.leverageedu.com/api/send-report" -H "Content-Type: application/json" -d '{}')
-          echo "HTTP Status: $RESPONSE"
-          if [ "$RESPONSE" != "200" ]; then echo "Failed with status $RESPONSE"; exit 1; fi
-          echo "Meta Campaign Report sent successfully!"
+          BODY=$(curl -s -w "\n%{http_code}" -X POST "https://quantum.leverageedu.com/api/send-report" -H "Content-Type: application/json" -d '{}')
+          STATUS=$(echo "$BODY" | tail -n1)
+          JSON=$(echo "$BODY" | sed '$d')
+          echo "HTTP Status: $STATUS"
+          echo "Response: $JSON"
+          if [ "$STATUS" != "200" ]; then echo "Failed with status $STATUS"; exit 1; fi
+          if echo "$JSON" | grep -q '"skipped":true'; then
+            echo "::warning::Daily report SKIPPED — Automatic Reports is disabled in Settings"
+          else
+            echo "Meta Campaign Report sent successfully!"
+          fi
