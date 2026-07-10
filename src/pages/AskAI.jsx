@@ -213,7 +213,7 @@ export default function AskAI() {
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
   const [rail, setRail]           = useState('history') // 'history' | 'prompts' | 'memories' | 'logs' — always one active (Claude-style unified sidebar)
-  const [inputFocused, setInputFocused] = useState(false) // auto-hide internal rail while typing
+  const [inputFocused, setInputFocused] = useState(false) // auto-hide internal rail while typing  const [mobileRailOpen, setMobileRailOpen] = useState(false) // mobile drawer open state
   const [metaToken, setMetaToken] = useState('')
   const [connected, setConnected] = useState(false)
   const [memories, setMemories]   = useState([])
@@ -494,7 +494,7 @@ export default function AskAI() {
         .qChip{transition:all .2s ease;position:relative;overflow:hidden}
         .qChip:hover{transform:translateY(-2px);border-color:rgba(28,159,212,0.55)!important;box-shadow:0 10px 22px -10px rgba(28,159,212,0.55)!important;color:#1F3C84!important}
         .rb{transition:background .18s ease,border-radius .18s ease}
-@media (max-width:768px){ .askai-rail{ position:absolute!important; z-index:60; top:0; bottom:0; left:0; box-shadow:0 0 40px rgba(15,23,42,0.18); } }
+@media (max-width:768px){ .askai-rail{ position:absolute!important; z-index:60; top:0; bottom:0; left:0; width:86vw!important; max-width:340px; opacity:1!important; pointer-events:auto!important; transform:translateX(-102%); transition:transform .28s ease!important; box-shadow:0 0 40px rgba(15,23,42,0.22); } .askai-rail.rail-open{ transform:translateX(0); } .askai-backdrop{ display:block!important; } .askai-menu-btn{ display:inline-flex!important; } }
       `}</style>
 
       {/* Quantum sidebar */}
@@ -503,8 +503,10 @@ export default function AskAI() {
       {/* Ask AI shell */}
       <div style={{flex:1,display:'flex',minWidth:0,position:'relative',background:askAiBg}}>
 
-        {/* Left sidebar — Claude-style unified (always visible) */}
-        <div className="askai-rail" style={{
+{mobileRailOpen&&(<div className="askai-backdrop" onClick={()=>setMobileRailOpen(false)} style={{display:'none',position:'absolute',inset:0,zIndex:55,background:'rgba(15,23,42,0.34)'}}/>)}
+
+        {/* Left sidebar - Claude-style unified (always visible) */}
+        <div className={"askai-rail"+(mobileRailOpen?" rail-open":"")} style={{
               width: inputFocused?0:RAIL_W, minWidth:0, opacity: inputFocused?0:1, pointerEvents: inputFocused?'none':'auto', transition:'width .28s ease, opacity .22s ease',
           overflow:'hidden', background:panelBg, borderRight:'1px solid #E8ECF2',
           display:'flex', flexDirection:'column', flexShrink:0, alignSelf:'stretch',
@@ -780,7 +782,8 @@ export default function AskAI() {
 
           {/* Ask AI header */}
           <div style={{padding:'12px 20px',borderBottom:`1px solid ${borderColor}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,background:'#fff',borderBottom:'0.5px solid #E5E7EB'}}>
-            <Logo size={16}/>
+            <button className="askai-menu-btn" onClick={()=>setMobileRailOpen(v=>!v)} title="Menu" style={{display:'none',width:30,height:30,alignItems:'center',justifyContent:'center',border:'0.5px solid #E5E7EB',background:'#fff',borderRadius:8,cursor:'pointer',marginRight:2,flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+        <Logo size={16}/>
             <span style={{fontSize:14,fontWeight:700,color:'rgba(255,255,255,0.9)',letterSpacing:'-0.01em'}}>Ask AI</span>
             <span style={{fontSize:11,color:'#94A3B8',background:'#F1F5F9',padding:'2px 8px',borderRadius:20,fontWeight:500}}>Claude Sonnet 4.5</span>
             <button onClick={newConv} title="New conversation" className="ibtn"
