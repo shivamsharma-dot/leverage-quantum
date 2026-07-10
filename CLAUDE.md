@@ -5,6 +5,13 @@
 ---
 
 ## Recent Work (June 2026 — latest session)
+
+**Bing Ads page scaffold (July 11, 2026)** commit `7532742` on `main`.
+- Added `src/pages/BingAdsDashboard.jsx`: mirrors the Google Ads shell (header + 4 tabs: Campaigns/Keywords/Search terms/Ad groups) using dashboardKit primitives (C, FONT, Card) + Sidebar. Tab state via `?tab=` URL param. Each tab shows a "Bing Ads integration in progress" empty state - NO data fetch yet.
+- Wired in 3 files: App.jsx (lazy import + PAGE_TITLES `/dashboard/bing-ads` + Route dashboardId `bing_ads`); Sidebar.jsx (NAV entry after Google Ads + PAGE_LIST `{id:'bing_ads'}` + ICON_MAP + BingAdsIcon fn).
+- FRONTEND ONLY - adds ZERO serverless functions, still at 12/12 Vercel Hobby cap. Did NOT add api/bing-ads.mjs (would be #13 and break deploy - see below). Verified green on Vercel + live at /dashboard/bing-ads (renders, tabs switch, no console errors).
+- Blocker note: OAuth still blocked. shivam.sharma has NO Entra directory role (cannot provision the Microsoft Advertising service principal or grant admin consent); Microsoft Advertising role is Standard User. Needs a tenant Global Admin / Cloud App Admin. Ads IDs captured: Account 138085796, Customer 252179673. Developer Token: user has it (kept out of repo/chat - goes into Vercel env by user).
+
 **Ask AI backend crash + mobile header fix (July 10, 2026)** commits `4139826`, `dab58e9` on `main`.
 - CRITICAL BACKEND FIX (`4139826`): `/api/ask-ai` was returning HTTP 500 `FUNCTION_INVOCATION_FAILED` (ERR_REQUIRE_ESM) on every message - the file was `api/ask-ai.js` (bundled as CommonJS) but statically imported the ESM `lib/auth.mjs`, so Node could not `require()` it. Frontend showed a bare "Error" bubble because the 500 body was plain text, not JSON. FIX: replaced the top-level `import {...} from '../lib/auth.mjs'` with `const {...} = await import('../lib/auth.mjs')` inside the async handler (Vercel's own recommended remedy). Verified live: endpoint now 200 + streams; chat answers correctly. NOTE: sibling endpoints that work (meta-token, preferences, etc.) are all `.mjs` - keep new API files that import auth as `.mjs`, or use dynamic import.
 - MOBILE HEADER FIX (`dab58e9`): on <=768px the model pill ("Claude Sonnet 4.5") and the two "connected" badges overflowed/clipped off the right edge. Added classes `askai-model-pill` (pill) and `askai-conn` (both badge divs); media rules hide the pill and shrink the badges (padding 4px 8px, gap 5px, span font 9.5px). Desktop unchanged.
