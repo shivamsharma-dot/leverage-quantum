@@ -482,7 +482,7 @@ export default function AskAI() {
 .askai-rail{ position:absolute; z-index:56; top:12px; bottom:12px; left:12px; width:322px; border-radius:16px; opacity:1; pointer-events:auto; transform:translateX(-115%); transition:transform .28s ease; box-shadow:0 12px 34px -10px rgba(15,23,42,0.20); }
 .askai-rail.rail-open{ transform:translateX(0); }
 .askai-backdrop{ display:none; }
-.askai-toggle-btn{ position:absolute; z-index:57; top:16px; left:16px; width:34px; height:34px; border-radius:10px; border:0.5px solid #E5E7EB; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 10px rgba(15,23,42,0.08); transition:all .15s ease; }
+.askai-toggle-btn{ position:absolute; z-index:54; top:16px; width:34px; height:34px; border-radius:10px; border:0.5px solid #E5E7EB; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 10px rgba(15,23,42,0.08); transition:left .28s ease, background .15s ease; }
 .askai-toggle-btn:hover{ background:#F8FAFC; }
 @media (max-width:768px){ .askai-rail{ width:86vw!important; max-width:340px; top:0; bottom:0; left:0; border-radius:0; box-shadow:0 0 40px rgba(15,23,42,0.22); } .askai-backdrop{ display:block!important; } }
       `}</style>
@@ -495,8 +495,8 @@ export default function AskAI() {
 
 {railOpen&&(<div className="askai-backdrop" onClick={()=>setRailOpen(false)} style={{position:'absolute',inset:0,zIndex:55,background:'rgba(15,23,42,0.34)'}}/>)}
 
-        {/* Floating toggle — always visible, opens/closes the rail */}
-        <button className="askai-toggle-btn" onClick={()=>setRailOpen(v=>!v)} title={railOpen?'Hide sidebar':'Show sidebar'}>
+        {/* Floating toggle — always visible, opens/closes the rail. Sits clear of the rail's own edge when open so it never overlaps the "New chat" button. */}
+        <button className="askai-toggle-btn" onClick={e=>{e.stopPropagation();setRailOpen(v=>!v)}} title={railOpen?'Hide sidebar':'Show sidebar'} style={{left:railOpen?346:16}}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
 
