@@ -213,7 +213,8 @@ export default function AskAI() {
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
   const [rail, setRail]           = useState('history') // 'history' | 'prompts' | 'memories' | 'logs' — always one active (Claude-style unified sidebar)
-  const [inputFocused, setInputFocused] = useState(false) // auto-hide internal rail while typing  const [mobileRailOpen, setMobileRailOpen] = useState(false) // mobile drawer open state
+  const [inputFocused, setInputFocused] = useState(false) // auto-hide internal rail while typing  
+  const [mobileRailOpen, setMobileRailOpen] = useState(false) // mobile drawer open state
   const [metaToken, setMetaToken] = useState('')
   const [connected, setConnected] = useState(false)
   const [memories, setMemories]   = useState([])
