@@ -966,7 +966,7 @@ export default function SettingsPage() {
             })}
           </div>
               </div>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
                 <button className={styles.primaryBtn} onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving\u2026' : 'Save report settings'}</button>
                 <button className={styles.ghostBtn} onClick={sendTestReport} disabled={rcTesting}>{rcTesting ? 'Sending\u2026' : 'Send test to me only'}</button>
                 {rcMsg && <span style={{ fontSize: 13, fontWeight: 600, color: rcMsg.charAt(0) === '\u2715' ? '#b4413c' : '#4CAE6F' }}>{rcMsg}</span>}
