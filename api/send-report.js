@@ -52,7 +52,7 @@ function delta(cur, prev, higherIsBetter = true) {
 async function getStoredToken() {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/meta_tokens?select=token&order=created_at.desc&limit=1`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
     })
     return (await res.json())?.[0]?.token || null
   } catch { return null }
@@ -61,7 +61,7 @@ async function getStoredToken() {
 async function getRecipients(reportType) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?receive_reports=eq.true&select=email,report_types`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
     })
     const rows = (await res.json()) || []
     return rows.filter(r => {
@@ -78,7 +78,7 @@ async function getReportConfig() {
   const out = {}
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled)`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
     })
     const rows = (await res.json()) || []
     for (const r of rows) out[r.key] = r.value

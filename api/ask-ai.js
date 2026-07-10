@@ -1,5 +1,7 @@
 // api/ask-ai.js -- Ask AI - Production - Claude-powered - SSE streaming - Meta/Google/CRM Tool Use
 
+import { getSessionUser, canAccessDashboard } from '../lib/auth.mjs'
+
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const MODEL = 'claude-sonnet-4-5'
@@ -556,6 +558,10 @@ export default async function handler(req, res) {
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' })
+
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (!canAccessDashboard(me.role, 'ask_ai')) return res.status(403).json({ error: 'Forbidden' })
 
   const { messages=[], history=[], metaToken: clientToken='', memories=[] } = req.body||{}
   if (!messages.length) return res.status(400).json({ error: 'No messages' })

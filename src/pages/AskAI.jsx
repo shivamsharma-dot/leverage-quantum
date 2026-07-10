@@ -26,8 +26,9 @@ async function fetchMetaToken() {
   try {
     const cached = localStorage.getItem(TK_KEY)
     if (cached) return cached
-    const d = await sbGet('meta_tokens','?select=token&order=created_at.desc&limit=1')
-    const tk = d?.[0]?.token||null
+    const r = await fetch('/api/meta-token', { credentials: 'include' })
+    const d = r.ok ? await r.json() : {}
+    const tk = d?.token || null
     if (tk) localStorage.setItem(TK_KEY, tk)
     return tk
   } catch { return null }

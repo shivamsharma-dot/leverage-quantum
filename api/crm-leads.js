@@ -3,6 +3,8 @@
 // same window Meta is showing. Without params it aggregates all-time.
 // Returns { byName: { <adName>: leads }, total, rows, distinct, since, until, ts }.
 
+import { getSessionUser, canAccessDashboard } from '../lib/auth.mjs'
+
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=FBleads';
 
 async function getSheetUrl() {
@@ -50,6 +52,11 @@ function splitCsvLine(line) {
 }
 
 export default async function handler(req, res) {
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
   try {
     const since = (req.query && req.query.since) || null; // 'YYYY-MM-DD'
     const until = (req.query && req.query.until) || null;

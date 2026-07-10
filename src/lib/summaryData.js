@@ -7,8 +7,6 @@
 import { getSession, setSession, hasLoaded } from './sessionLoad'
 import { resolveSheetUrl } from './dataSources'
 
-const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 const AD_ACCOUNT = 'act_641914389215638'
 const QLOPS_DAILY_DEFAULT = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Qlops'
 
@@ -43,10 +41,8 @@ function normalizeDate(raw) {
 }
 async function fetchMetaDaily() {
   try {
-    const tk = await fetch(SUPABASE_URL + '/rest/v1/meta_tokens?select=token&order=created_at.desc&limit=1', {
-      headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY }
-    }).then(r => (r.ok ? r.json() : []))
-    const token = tk && tk[0] && tk[0].token
+    const tk = await fetch('/api/meta-token', { credentials: 'include' }).then(r => (r.ok ? r.json() : {}))
+    const token = tk && tk.token
     if (!token) return []
     const until = new Date()
     const since = new Date()

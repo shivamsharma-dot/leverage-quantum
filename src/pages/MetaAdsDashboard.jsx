@@ -16,30 +16,23 @@ const GROQ_KEY   = import.meta.env.VITE_GROQ_API_KEY
 
 const proxyImg = url => url ? `/api/img-proxy?url=${encodeURIComponent(url)}` : null
 
-const SUPABASE_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
-
 async function storeTokenInSupabase(token) {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/meta_tokens`, {
+    await fetch('/api/meta-token', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        Prefer: 'resolution=merge-duplicates,return=minimal'
-      },
-      body: JSON.stringify({ token, email: 'shivam.sharma@leverageedu.com' })
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
     })
   } catch {}
 }
 
 async function loadTokenFromSupabase() {
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/meta_tokens?select=token,created_at&order=created_at.desc&limit=1`,
-      { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } })
+    const res = await fetch('/api/meta-token', { credentials: 'include' })
+    if (!res.ok) return null
     const data = await res.json()
-    return data?.[0] ? { token: data[0].token, createdAt: data[0].created_at } : null
+    return data?.token ? { token: data.token, createdAt: data.createdAt } : null
   } catch { return null }
 }
 const TOKEN_EXPIRED_EVENT = 'lq:meta_token_expired'

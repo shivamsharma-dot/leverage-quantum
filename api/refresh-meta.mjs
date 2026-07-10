@@ -1,4 +1,4 @@
-import { getSessionUser } from '../lib/auth.mjs'
+import { getSessionUser, canAccessDashboard } from '../lib/auth.mjs'
 const GRAPH = 'https://graph.facebook.com/v19.0'
 
 async function graphGet(path, token, params = {}) {
@@ -13,6 +13,7 @@ async function graphGet(path, token, params = {}) {
 export default async function handler(req, res) {
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (!canAccessDashboard(me.role, 'meta_ads')) return res.status(403).json({ error: 'Forbidden' })
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-meta-token')
