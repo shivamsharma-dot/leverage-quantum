@@ -72,18 +72,31 @@ function PageLoader() {
   )
 }
 
-function getAllowedDashboards(role) {
-  if (!role || role === 'admin' || role === 'viewer') return 'all'
-  if (role === 'roas_only') return ['roas']
-  if (role?.startsWith('custom:')) return role.replace('custom:', '').split(',')
-  return 'all'
+// Mirrors Sidebar.jsx's canSee() exactly — this is the REAL access gate (nav
+// visibility alone is cosmetic; this is what actually blocks direct URL access).
+function canAccess(role, dashboardId) {
+  const userRole = role || 'viewer'
+  if (dashboardId === 'settings') return userRole === 'admin'
+  if (userRole === 'admin') return true
+  if (userRole === 'viewer') return dashboardId !== 'ask_ai'
+  if (userRole.startsWith('viewer:')) {
+    const granted = userRole.replace('viewer:', '').split(',').filter(Boolean)
+    return granted.includes(dashboardId)
+  }
+  if (userRole === 'roas_only') return dashboardId === 'roas'
+  if (userRole.startsWith('custom:')) {
+    return userRole.replace('custom:', '').split(',').filter(Boolean).includes(dashboardId)
+  }
+  // Unknown/malformed role — fail safe (no ask-ai, no settings), not fail-open
+  return dashboardId !== 'ask_ai'
 }
 
-function canAccess(role, dashboardId) {
-  const allowed = getAllowedDashboards(role)
-  if (allowed === 'all') return true
-  return allowed.includes(dashboardId)
-}
+// Ordered fallback for a denied route — first entry the role can actually access
+const DASHBOARD_FALLBACK_ORDER = [
+  { id: 'home', path: '/' },
+  { id: 'roas', path: '/dashboard/roas' },
+  { id: 'meta_ads', path: '/dashboard/meta-ads' },
+]
 
 function ProtectedRoute({ children, dashboardId }) {
   const { user, loading } = useAuth()
@@ -132,10 +145,8 @@ function ProtectedRoute({ children, dashboardId }) {
   if (loading) return null
   if (!user) return <Navigate to="/login" replace />
   if (dashboardId && !canAccess(user.role, dashboardId)) {
-    const allowed = getAllowedDashboards(user.role)
-    if (allowed === 'all') return children
-    if (allowed.includes('roas')) return <Navigate to="/dashboard/roas" replace />
-    return <Navigate to="/" replace />
+    const fallback = DASHBOARD_FALLBACK_ORDER.find(f => canAccess(user.role, f.id))
+    return <Navigate to={fallback ? fallback.path : '/login'} replace />
   }
 
   // Wrap in fade div
