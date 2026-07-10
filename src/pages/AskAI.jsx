@@ -494,16 +494,17 @@ export default function AskAI() {
         .qChip{transition:all .2s ease;position:relative;overflow:hidden}
         .qChip:hover{transform:translateY(-2px);border-color:rgba(28,159,212,0.55)!important;box-shadow:0 10px 22px -10px rgba(28,159,212,0.55)!important;color:#1F3C84!important}
         .rb{transition:background .18s ease,border-radius .18s ease}
+@media (max-width:768px){ .askai-rail{ position:absolute!important; z-index:60; top:0; bottom:0; left:0; box-shadow:0 0 40px rgba(15,23,42,0.18); } }
       `}</style>
 
       {/* Quantum sidebar */}
       <Sidebar/>
 
       {/* Ask AI shell */}
-      <div style={{flex:1,display:'flex',minWidth:0,background:askAiBg}}>
+      <div style={{flex:1,display:'flex',minWidth:0,position:'relative',background:askAiBg}}>
 
         {/* Left sidebar — Claude-style unified (always visible) */}
-        <div style={{
+        <div className="askai-rail" style={{
               width: inputFocused?0:RAIL_W, minWidth:0, opacity: inputFocused?0:1, pointerEvents: inputFocused?'none':'auto', transition:'width .28s ease, opacity .22s ease',
           overflow:'hidden', background:panelBg, borderRight:'1px solid #E8ECF2',
           display:'flex', flexDirection:'column', flexShrink:0, alignSelf:'stretch',
