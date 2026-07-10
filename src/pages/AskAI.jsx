@@ -482,6 +482,7 @@ export default function AskAI() {
         .sendbtn:hover:not(:disabled){transform:scale(1.05);background:${BLUE}!important}
         input::placeholder,textarea::placeholder{color:#9AA7B8!important}
         input,textarea{caret-color:#1C9FD4;}
+        .composerInput,.composerInput:focus,.composerInput:focus-visible{outline:none!important;box-shadow:none!important;-webkit-appearance:none;appearance:none}
         /* ===== PREMIUM AI MOTION TOOLKIT (brand: navy/blue/cyan/green) ===== */
         @keyframes qSwoosh{0%{transform:translateX(-120%) skewX(-18deg)}60%,100%{transform:translateX(220%) skewX(-18deg)}}
         @keyframes qAurora{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
@@ -930,7 +931,7 @@ export default function AskAI() {
               <div style={{position:'relative',background:'#fff',border:'none',borderRadius:16, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding:'14px 14px 12px',transition:'all .2s',boxShadow:input?'0 6px 24px -6px rgba(28,159,212,0.28), 0 1px 3px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)',overflow:'hidden'}}>
                 {/* QL Ops-style brand gradient top accent bar */}
                 <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:input?1:0.85,transition:'opacity .2s'}}/>
-                <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…"
+                <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…" className="composerInput"
                   onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
                   onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
 onFocus={()=>setInputFocused(true)}
