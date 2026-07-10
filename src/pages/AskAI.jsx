@@ -69,9 +69,9 @@ const PROMPTS = [
 const CATS = ['All','META','LEAD GEN','WHATSAPP','REPORTS','ANALYSIS','QL OPS']
 
 /* ─── SSE ask ─────────────────────────────────────────────────── */
-async function askClaude(messages, metaToken, memories, onChunk) {
+async function askClaude(messages, metaToken, memories, onChunk, signal) {
   const res = await fetch('/api/ask-ai', {
-    method:'POST', headers:{'Content-Type':'application/json'},
+    method:'POST', headers:{'Content-Type':'application/json'}, signal,
     body: JSON.stringify({ messages:messages.slice(-1).map(m=>({role:m.role||'user',content:m.content})), history:messages.slice(0,-1).map(m=>({role:m.role,content:m.content})), metaToken, memories:memories.map(m=>m.content) })
   })
   if (!res.ok) { const e=await res.json().catch(()=>({error:'Error'})); throw new Error(e.error||`HTTP ${res.status}`) }
@@ -238,6 +238,7 @@ export default function AskAI() {
 
   const bottomRef   = useRef(null)
   const textRef     = useRef(null)
+  const abortRef  = useRef(null)
 
   // persist convs
   useEffect(()=>{try{localStorage.setItem(CV_KEY,JSON.stringify(convs.slice(0,500)))}catch{}},[convs])
@@ -358,13 +359,15 @@ export default function AskAI() {
     const updated=[...messages,{role:'user',content:q}]
     setMessages([...updated,{role:'assistant',content:'',streaming:true}])
     setLoading(true)
+        const ac=new AbortController(); abortRef.current=ac
     try{
       const reply=await askClaude(updated,metaToken,memories,partial=>{
         setMessages(m=>{const c=[...m];c[c.length-1]={role:'assistant',content:partial,streaming:true};return c})
-      })
+      },ac.signal)
       const final=[...updated,{role:'assistant',content:reply}]
       setMessages(final); saveMessages(cid,final)
     }catch(e){
+        if(e.name==='AbortError'){ setMessages(m=>{const c=[...m];if(c.length)c[c.length-1]={...c[c.length-1],streaming:false};return c}); return }
       const final=[...updated,{role:'assistant',content:`⚠️ ${e.message}`}]
       setMessages(final); saveMessages(cid,final)
     }finally{setLoading(false)}
@@ -942,9 +945,9 @@ onBlur={()=>setInputFocused(false)}
                       </button>
                     ))}
                   </div>
-                  <button onClick={()=>send()} disabled={!input.trim()||loading} className="sendbtn"
-                    style={{width:36,height:36,borderRadius:10,border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:input.trim()&&!loading?'pointer':'not-allowed',background:input.trim()&&!loading?'linear-gradient(135deg,#1F3C84,#1C9FD4 60%,#29B9C3)':'#E5E7EB',boxShadow:input.trim()&&!loading?'0 6px 16px -4px rgba(28,159,212,0.6)':'none',transition:'all .2s'}}>
-                    <span style={loading?{display:'flex',animation:'spin 0.9s linear infinite'}:{display:'flex'}}><Ico n={loading?'refresh':'send'} s={15} c="#fff" sw={2}/></span>
+                  <button onClick={()=>{ if(loading){abortRef.current?.abort()} else {send()} }} disabled={!loading&&!input.trim()} title={loading?'Stop generating':'Send'} className="sendbtn"
+style={{width:36,height:36,borderRadius:10,border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:(loading||input.trim())?'pointer':'not-allowed',background:(loading||input.trim())?'linear-gradient(135deg,#1F3C84,#1C9FD4 60%,#29B9C3)':'#E5E7EB',boxShadow:(loading||input.trim())?'0 6px 16px -4px rgba(28,159,212,0.6)':'none',transition:'all .2s'}}>
+<span style={{display:'flex'}}><Ico n={loading?'close':'send'} s={15} c="#fff" sw={2}/></span>
                   </button>
                 </div>
               </div>
