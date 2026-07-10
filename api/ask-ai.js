@@ -1,6 +1,6 @@
 // api/ask-ai.js -- Ask AI - Production - Claude-powered - SSE streaming - Meta/Google/CRM Tool Use
 
-import { getSessionUser, canAccessDashboard } from '../lib/auth.mjs'
+// auth helpers are loaded via dynamic import() inside handler (ask-ai.js is bundled as CommonJS; static import of the .mjs ESM file crashes with ERR_REQUIRE_ESM)
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
@@ -551,6 +551,7 @@ FORMAT RULES:
 
 // -- handler -------------------------------------------------------------------
 export default async function handler(req, res) {
+  const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
