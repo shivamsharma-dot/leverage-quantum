@@ -919,7 +919,7 @@ export default function SettingsPage() {
                     <input value={rcEmail} onChange={e => setRcEmail(e.target.value)} placeholder="quantum@platform.leverageedu.com" style={{ padding: '8px 12px', border: '1px solid #d8dded', borderRadius: 8, fontSize: 14, fontWeight: 400 }} />
                   </label>
                 </div>
-                {rcEmail && !rcEmail.endsWith('@platform.leverageedu.com') && (<p style={{ color: '#8a6d1f', fontSize: 12, marginTop: 8 }}>Note: this address is not on the verified domain platform.leverageedu.com \u2014 Resend may reject it.</p>)}
+                {rcEmail && !rcEmail.endsWith('@platform.leverageedu.com') && (<p style={{ color: '#8a6d1f', fontSize: 12, marginTop: 8 }}>Note: this address is not on the verified domain platform.leverageedu.com — Resend may reject it.</p>)}
               </div>
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>Subject Lines</h3>
@@ -942,7 +942,7 @@ export default function SettingsPage() {
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>Recipients</h3>
                 <p className={styles.cardDesc}>People who currently receive reports (toggled per user in the User Access tab):</p>
-                <p style={{ fontSize: 13, color: '#1F3C84', fontWeight: 600, marginTop: 8, lineHeight: 1.6 }}>{accessList.filter(u => u.receive_reports).map(u => u.email).join(', ') || 'No one selected \u2014 reports fall back to ' + (user?.email || 'admin')}</p>
+                <p style={{ fontSize: 13, color: '#1F3C84', fontWeight: 600, marginTop: 8, lineHeight: 1.6 }}>{accessList.filter(u => u.receive_reports).map(u => u.email).join(', ') || 'No one selected — reports fall back to ' + (user?.email || 'admin')}</p>
           <div style={{ marginTop: 14, borderTop: '0.5px solid #E2E8F0', paddingTop: 12 }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: '#64748B', margin: '0 0 8px', letterSpacing: '0.02em' }}>Per-recipient report types</p>
             <p style={{ fontSize: 11.5, color: '#94A3B8', margin: '0 0 10px', lineHeight: 1.5 }}>Choose which scheduled reports each person receives. Unchecking all three is the same as receiving all.</p>
@@ -976,7 +976,7 @@ export default function SettingsPage() {
                 <div className={styles.activityHeader}>
                   <div>
                     <h3 className={styles.cardTitle}>Report Activity</h3>
-                    <p className={styles.cardDesc} style={{ margin: 0 }}>Every send attempt \u2014 scheduled (GitHub Actions cron), manual, and test \u2014 with the real outcome. A skipped run (auto-reports disabled) is logged here even though GitHub Actions itself shows it as a green "success".</p>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>Every send attempt — scheduled (GitHub Actions cron), manual, and test — with the real outcome. A skipped run (auto-reports disabled) is logged here even though GitHub Actions itself shows it as a green "success".</p>
                   </div>
                   <button className={styles.ghostBtn} onClick={loadReportLogs}>
                     {reportLogsLoading ? 'Loading\u2026' : '\u21bb Refresh'}
@@ -1008,19 +1008,19 @@ export default function SettingsPage() {
                           const s = STATUS[log.status] || { c:'#64748B', bg:'#F1F5F9', label: log.status||'Unknown' }
                           const triggeredLabel = log.triggered_by === 'cron' ? 'Cron (GitHub Actions)' : log.triggered_by === 'test' ? 'Test' : (log.triggered_by || 'Manual')
                           const dt = log.sent_at ? new Date(log.sent_at) : null
-                          const dateStr = dt ? dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '\u2014'
+                          const dateStr = dt ? dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'
                           const timeStr = dt ? dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}) : ''
                           const rcptCount = Array.isArray(log.recipients) ? log.recipients.length : 0
                           return (
                             <tr key={log.id||idx} className={styles.alRow}>
-                              <td className={`${styles.alTd} ${styles.alPage}`} style={{textTransform:'capitalize'}}>{log.report_type||'\u2014'}</td>
+                              <td className={`${styles.alTd} ${styles.alPage}`} style={{textTransform:'capitalize'}}>{log.report_type||'—'}</td>
                               <td className={styles.alTd}>
                                 <span className={styles.alTag} style={{background:s.bg,color:s.c}}>{s.label}</span>
                               </td>
                               <td className={styles.alTd}>{triggeredLabel}</td>
-                              <td className={styles.alTd}>{rcptCount > 0 ? `${rcptCount} recipient${rcptCount!==1?'s':''}` : '\u2014'}</td>
+                              <td className={styles.alTd}>{rcptCount > 0 ? `${rcptCount} recipient${rcptCount!==1?'s':''}` : '—'}</td>
                               <td className={styles.alTd}>{dateStr}{timeStr ? ` \u00b7 ${timeStr}` : ''}</td>
-                              <td className={`${styles.alTd} ${styles.alDetail}`} title={log.error||''}>{log.error || '\u2014'}</td>
+                              <td className={`${styles.alTd} ${styles.alDetail}`} title={log.error||''}>{log.error || '—'}</td>
                             </tr>
                           )
                         })}
@@ -1346,8 +1346,8 @@ export default function SettingsPage() {
                   <h3 className={styles.cardTitle}>Account details</h3>
                   <p className={styles.cardDesc}>Your profile is managed through your Leverage Edu Google account.</p>
                   <div className={styles.pxDetailGrid}>
-                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Full name</span><span className={styles.pxDetailVal}>{user?.name || '\u2014'}</span></div>
-                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Email address</span><span className={styles.pxDetailVal}>{user?.email || '\u2014'}</span></div>
+                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Full name</span><span className={styles.pxDetailVal}>{user?.name || '—'}</span></div>
+                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Email address</span><span className={styles.pxDetailVal}>{user?.email || '—'}</span></div>
                     <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Role</span><span className={styles.pxDetailVal}>{user?.role === 'admin' ? 'Administrator' : 'Viewer'}</span></div>
                     <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Theme</span><span className={styles.pxDetailVal} style={{textTransform:'capitalize'}}>{activeTheme || 'light'}</span></div>
                   </div>
