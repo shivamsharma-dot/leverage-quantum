@@ -15,6 +15,7 @@ const WhatsAppDashboard = lazy(() => import('./pages/WhatsAppDashboard'))
 const MTDDashboard = lazy(() => import('./pages/MTDDashboard'))
 const MetaAdsDashboard = lazy(() => import('./pages/MetaAdsDashboard'))
 const GoogleAdsDashboard = lazy(() => import('./pages/GoogleAdsDashboard'))
+const BingAdsDashboard = lazy(() => import('./pages/BingAdsDashboard'))
 const ReferralDashboard = lazy(() => import('./pages/ReferralDashboard'))
 const LeadsAssignedDashboard = lazy(() => import('./pages/LeadsAssignedDashboard'))
 const AskAI = lazy(() => import('./pages/AskAI'))
@@ -27,6 +28,7 @@ const PAGE_TITLES = {
   '/': 'Summary',
   '/dashboard/meta-ads': 'Meta Ads',
   '/dashboard/google-ads': 'Google Ads',
+  '/dashboard/bing-ads': 'Bing Ads',
   '/dashboard/roas': 'ROAS',
   '/dashboard/mtd': 'MTD',
   '/dashboard/lead-quality': 'Lead Quality',
@@ -208,6 +210,7 @@ export default function App() {
           <Route path="/dashboard/whatsapp" element={<ProtectedRoute dashboardId="whatsapp"> <WhatsAppDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/meta-ads" element={<ProtectedRoute dashboardId="meta_ads"> <MetaAdsDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/google-ads" element={<ProtectedRoute dashboardId="google_ads"> <GoogleAdsDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/bing-ads" element={<ProtectedRoute dashboardId="bing_ads"> <BingAdsDashboard /></ProtectedRoute>} />
           <Route path="/ask-ai" element={<ProtectedRoute dashboardId="ask_ai"> <AskAI /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute dashboardId="settings"> <SettingsPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />

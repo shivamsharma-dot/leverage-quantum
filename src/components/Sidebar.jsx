@@ -45,6 +45,7 @@ const NAV = [
           { to: '/dashboard/google-ads?tab=adGroups',   label: 'Ad Groups',    matchType: 'query', tabKey: 'adGroups' },{ to: '/dashboard/google-ads?tab=mom', label: 'Month on Month', matchType: 'query', tabKey: 'mom' },{ to: '/dashboard/google-ads?tab=dod', label: 'Day on Day', matchType: 'query', tabKey: 'dod' },
         ]
       },
+      { to: '/dashboard/bing-ads', icon: <BingAdsIcon />, label: 'Bing Ads', end: false },
       { to: '/dashboard/roas',         icon: <ChartIcon />,    label: 'ROAS',         end: false },
       { to: '/dashboard/mtd',          icon: <MTDIcon />,      label: 'MTD',          end: false },
       { to: '/dashboard/lead-quality', icon: <FunnelIcon />,   label: 'Lead Quality', end: false },
@@ -74,6 +75,7 @@ export const PAGE_LIST = [
   { id:'home',         label:'Summary',      path:'/',                      adminOnly:false },
   { id:'meta_ads',     label:'Meta Ads',     path:'/dashboard/meta-ads',    adminOnly:false },
   { id:'google_ads',   label:'Google Ads',   path:'/dashboard/google-ads',  adminOnly:false },
+  { id:'bing_ads',     label:'Bing Ads',     path:'/dashboard/bing-ads',   adminOnly:false },
   { id:'roas',         label:'ROAS',         path:'/dashboard/roas',        adminOnly:false },
   { id:'mtd',          label:'MTD',          path:'/dashboard/mtd',         adminOnly:false },
   { id:'lead_quality', label:'Lead Quality', path:'/dashboard/lead-quality',adminOnly:false },
@@ -107,12 +109,16 @@ const ICON_MAP = {
   'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
   'Revenue': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>,
   'Google Ads': <GoogleAdsIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
+  'Bing Ads': <BingAdsIcon/>,
   'Referral': <ReferralIcon/>, 'Leads Assigned': <LeadsAssignedIcon/>,
   'WhatsApp': <WhatsAppIcon/>,
   'Ask AI': <AskAIIcon/>, 'Settings': <SettingsIcon/>
 }
 function GoogleAdsIcon(){
   return <svg width='16' height='16' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M21.35 11.1H12.18V13.83H18.69C18.36 17.64 15.19 19.27 12.19 19.27C8.36 19.27 5 16.25 5 12C5 7.9 8.2 4.73 12.2 4.73C15.29 4.73 17.1 6.7 17.1 6.7L19 4.72C19 4.72 16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12C2.03 17.05 6.16 22 12.25 22C17.6 22 21.5 18.33 21.5 12.91C21.5 11.76 21.35 11.1 21.35 11.1Z' fill='currentColor'/></svg>
+}
+function BingAdsIcon(){
+  return <svg width='16' height='16' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M6 3l4 1.4V16l4.2-2.4-1.9-.8-1.3-3.3L16 11l3 1.7-9 5.3-4-2.3V3z' fill='currentColor'/></svg>
 }
 
 export default function Sidebar() {
