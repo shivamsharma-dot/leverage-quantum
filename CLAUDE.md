@@ -6,6 +6,14 @@
 
 ## Recent Work (June 2026 — latest session)
 
+**Ask AI -> CRM leads wiring + UI polish (July 10, 2026)** commits `7164c12`, `99616a2`, `6c3c045`, `e702924`, `a13feb7`, `2913934` on `main`.
+- Backend (`api/ask-ai.js`): wired CRM leads into Ask AI context + added live query tools for CRM leads; updated the cross-channel principle to Meta <-> Google <-> CRM leads. Removed QL Ops/WhatsApp from ask-ai.js ONLY (dashboard pages/endpoints left intact).
+- UI (`AskAI.jsx`): removed the History count pill; internal rail (History/Prompts/Memory/Logs) now auto-hides on input focus and reappears on blur with a mild animation; added reactive-while-streaming glow around the chat console.
+- Added a stop-generating button (AbortController wired into `askClaude`/`send`, AbortError handled cleanly).
+- Stripped QL Ops/WhatsApp prompt chips + categories from the prompt library; reworked PROMPTS to Meta/Google/CRM-leads set; updated CATS, QUICK chips, MagicLoader phases, and hero subtitle.
+- Styling (`AskAI.module.css`): unified `.layout` base font to Plus Jakarta Sans; changed `.metaBadge` color to brand blue (#1C9FD4).
+- Note: `ih()` inline-markdown already HTML-escapes input, so no extra sanitization needed. Hardcoded Supabase key at AskAI.jsx:15 left untouched (flagged to owner to rotate).
+
 **Google Ads dashboard overhaul + CRM leads integration (July 9, 2026)** — commits `2969b68`..`506f0de` on `main`.
 - Removed odd-looking duplicate/overlapping spend-by-campaign chart; added header custom date-range filter (Today/Last 7/30/90 days, This Month, Last Month, Custom) shared across Campaigns/Ad Groups/Keywords/Search Terms tabs.
 - Added Day-on-Day (`?tab=dod`) and Month-on-Month (`?tab=mom`) sub-pages below Google Ads, linked from the sidebar submenu.
