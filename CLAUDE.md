@@ -6,6 +6,11 @@
 
 ## Recent Work (June 2026 — latest session)
 
+**Moved Send Report + Auto-send scheduler from Ask AI to Summary (July 11, 2026)** commit `8cc9f5f` on `main`.
+- Removed the Schedule Strip (Auto-send Daily/Weekly/Monthly) + Send Report Bar JSX from `src/pages/AskAI.jsx` (kept the message input intact). Also removed the now-unused state (sendingReport, sendReportType, sendDropOpen, sendMsg) + the `sendReport` handler. KEPT reportLogs/logsLoading/loadLogs (still used by the Logs view).
+- Added the same block to `src/pages/DashboardHome.jsx` (the Summary/OVERVIEW landing page), placed right below the header and above the MTD StatCard grid. Re-added the 4 state vars + sendReport handler (dropped the loadLogs() call; used C.blue/green/navy + FONT; ASCII-only). Calls existing `/api/send-report`.
+- FRONTEND ONLY, zero new functions (still 12/12 cap). Verified green on Vercel (8cc9f5f Ready) + live: Summary page shows the block (dropdown Daily/Weekly/30-Day works, no console errors); Ask AI page is clean with the block gone (no console errors). Rationale: report scheduling belongs on the reporting hub, not the chat page.
+
 **Bing Ads page scaffold (July 11, 2026)** commit `7532742` on `main`.
 - Added `src/pages/BingAdsDashboard.jsx`: mirrors the Google Ads shell (header + 4 tabs: Campaigns/Keywords/Search terms/Ad groups) using dashboardKit primitives (C, FONT, Card) + Sidebar. Tab state via `?tab=` URL param. Each tab shows a "Bing Ads integration in progress" empty state - NO data fetch yet.
 - Wired in 3 files: App.jsx (lazy import + PAGE_TITLES `/dashboard/bing-ads` + Route dashboardId `bing_ads`); Sidebar.jsx (NAV entry after Google Ads + PAGE_LIST `{id:'bing_ads'}` + ICON_MAP + BingAdsIcon fn).
