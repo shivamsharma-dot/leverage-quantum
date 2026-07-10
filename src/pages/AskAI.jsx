@@ -634,7 +634,7 @@ export default function AskAI() {
                         <div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 12px',cursor:'pointer'}} onClick={()=>setExpandedPrompt(v=>v===p.id?null:p.id)}>
                           <span style={{fontSize:9.5,fontWeight:700,padding:'2px 6px',borderRadius:20,background:'#EFF6FF',color:BLUE,flexShrink:0,fontFamily:FONT}}>{p.cat}</span>
                           <span style={{flex:1,fontSize:12.5,fontWeight:600,color:'#1E293B',fontFamily:FONT,lineHeight:1.35}}>{p.title}</span>
-                          <Ico n="chevR" s={12} c="rgba(255,255,255,0.3)"/>
+                          <Ico n="chevR" s={12} c="#94A3B8"/>
                         </div>
                         {expandedPrompt===p.id&&(
                           <div style={{padding:'0 12px 12px',animation:'fadeIn .2s ease'}}>
@@ -770,15 +770,15 @@ export default function AskAI() {
           <div style={{padding:'12px 20px',borderBottom:`1px solid ${borderColor}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,background:'#fff',borderBottom:'0.5px solid #E5E7EB'}}>
             <button className="askai-menu-btn" onClick={()=>setMobileRailOpen(v=>!v)} title="Menu" style={{display:'none',width:30,height:30,alignItems:'center',justifyContent:'center',border:'0.5px solid #E5E7EB',background:'#fff',borderRadius:8,cursor:'pointer',marginRight:2,flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
         <Logo size={16}/>
-            <span style={{fontSize:14,fontWeight:700,color:'rgba(255,255,255,0.9)',letterSpacing:'-0.01em'}}>Ask AI</span>
+            <span style={{fontSize:14,fontWeight:700,color:'#1F3C84',letterSpacing:'-0.01em'}}>Ask AI</span>
             <span className="askai-model-pill" style={{fontSize:11,color:'#94A3B8',background:'#F1F5F9',padding:'2px 8px',borderRadius:20,fontWeight:500}}>Claude Sonnet 4.5</span>
             <button onClick={newConv} title="New conversation" className="ibtn"
               style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:`0.5px solid #E5E7EB`,background:'#fff',borderRadius:7,cursor:'pointer',marginLeft:2}}>
               <Ico n="new" s={13} c="#9CA3AF"/>
             </button>
             <div style={{flex:1}}/>
-            <div className="askai-conn" style={{display:'flex',alignItems:'center',gap:7,padding:'5px 12px',borderRadius:20,background:connected?'linear-gradient(135deg,rgba(76,174,111,0.14),rgba(41,185,195,0.10))':'rgba(255,255,255,0.06)',border:`1px solid ${connected?'rgba(76,174,111,0.35)':borderColor}`,boxShadow:connected?'0 2px 10px -4px rgba(76,174,111,0.5)':'none'}}>
-              <div style={{width:7,height:7,borderRadius:'50%',background:connected?GREEN:'rgba(255,255,255,0.2)',boxShadow:connected?`0 0 0 3px rgba(76,174,111,0.18)`:'none',animation:connected?'qGlow 2.4s infinite':''}}/>              <span style={{fontSize:11,fontWeight:700,letterSpacing:'.01em',color:connected?GREEN:'rgba(255,255,255,0.3)'}}>{connected?'Meta Ads connected':'Meta not connected'}</span>
+            <div className="askai-conn" style={{display:'flex',alignItems:'center',gap:7,padding:'5px 12px',borderRadius:20,background:connected?'linear-gradient(135deg,rgba(76,174,111,0.14),rgba(41,185,195,0.10))':'#F1F5F9',border:`1px solid ${connected?'rgba(76,174,111,0.35)':borderColor}`,boxShadow:connected?'0 2px 10px -4px rgba(76,174,111,0.5)':'none'}}>
+              <div style={{width:7,height:7,borderRadius:'50%',background:connected?GREEN:'#CBD5E1',boxShadow:connected?`0 0 0 3px rgba(76,174,111,0.18)`:'none',animation:connected?'qGlow 2.4s infinite':''}}/>              <span style={{fontSize:11,fontWeight:700,letterSpacing:'.01em',color:connected?GREEN:'#94A3B8'}}>{connected?'Meta Ads connected':'Meta not connected'}</span>
             </div>
 
           <div className="askai-conn" style={{display:'flex',alignItems:'center',gap:7,padding:'5px 12px',borderRadius:20,background:'linear-gradient(135deg,rgba(76,174,111,0.14),rgba(41,185,195,0.10))',border:'1px solid rgba(76,174,111,0.35)',boxShadow:'0 2px 10px -4px rgba(76,174,111,0.5)',marginLeft:8}}>
@@ -841,7 +841,7 @@ export default function AskAI() {
                                     <button key={ic} title={lbl} className="mabtn"
                                       style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',border:`1px solid ${borderColor}`,background:'transparent',borderRadius:6,cursor:'pointer',color:'#CBD5E1',fontSize:11,fontFamily:FONT,transition:'all .15s'}}
                                       onClick={()=>{if(ic==='copy'){navigator.clipboard?.writeText(m.content);setCopied(k);setTimeout(()=>setCopied(null),1500)}}}>
-                                      <Ico n={copied===k&&ic==='copy'?'check':'copy'} s={11} c={copied===k&&ic==='copy'?GREEN:'rgba(255,255,255,0.3)'}/>{lbl}
+                                      <Ico n={copied===k&&ic==='copy'?'check':'copy'} s={11} c={copied===k&&ic==='copy'?GREEN:'#CBD5E1'}/>{lbl}
                                     </button>
                                   ))}
                                 </div>
@@ -878,7 +878,7 @@ onBlur={()=>setInputFocused(false)}
                     {[['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
                       <button key={id} onClick={()=>toggleRail(id)} className="mabtn"
                         style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${rail===id?BLUE:borderColor}`,background:rail===id?'#E3F5FD':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id?BLUE:'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
-                        <Ico n={ic} s={12} c={rail===id?BLUE:'rgba(255,255,255,0.35)'}/>{lbl}
+                        <Ico n={ic} s={12} c={rail===id?BLUE:'#94A3B8'}/>{lbl}
                       </button>
                     ))}
                   </div>
