@@ -209,6 +209,25 @@ export default function DashboardHome() {
   const { user } = useAuth()
   const [analysis, setAnalysis] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [sendingReport, setSendingReport] = useState(false)
+  const [sendReportType, setSendReportType] = useState('daily')
+  const [sendDropOpen, setSendDropOpen] = useState(false)
+  const [sendMsg, setSendMsg] = useState('')
+  const sendReport = async () => {
+  if (!window.confirm('Send this report by email to ALL configured recipients now? Manage recipients in Settings -> Reports.')) return
+  setSendingReport(true); setSendMsg('')
+  try {
+  const res = await fetch('/api/send-report', {
+  method: 'POST', headers: {'Content-Type':'application/json'},
+  body: JSON.stringify({ type: sendReportType, triggered_by: user?.email || 'manual' })
+  })
+  const d = await res.json()
+  if (!res.ok) throw new Error(d.error || 'Failed')
+  setSendMsg('Sent to ' + (d.recipients?.length || 0) + ' recipients')
+  } catch(e) { setSendMsg('Error: ' + e.message) }
+  finally { setSendingReport(false); setTimeout(()=>setSendMsg(''), 5000) }
+  }
+
 
   const firstName = (user?.name||'there').split(' ')[0]
   const greeting = (() => { const h=new Date().getHours(); return h<12?'Good morning':h<17?'Good afternoon':'Good evening' })()
@@ -272,6 +291,44 @@ export default function DashboardHome() {
           <button onClick={() => load(true)} disabled={loading} title='Refresh data'
             style={{ paddingLeft:16, paddingRight:16, paddingTop:9, paddingBottom:9, borderRadius:10, border:'none', fontSize:12.5, fontWeight:700, fontFamily:FONT, background:'linear-gradient(135deg, #1F3C84, #1C9FD4)', color:'#fff', cursor: loading ? 'wait' : 'pointer', boxShadow:'0 4px 10px -3px rgba(31,60,132,0.5)', opacity: loading ? 0.7 : 1 }}>
             {loading ? 'Refreshing\u2026' : 'Refresh'}
+          </button>
+        </div>
+
+        {/* Report scheduling + send */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:18, marginBottom:12, padding:'7px 14px', background:'linear-gradient(135deg,rgba(31,60,132,0.04),rgba(28,159,212,0.04))', border:'0.5px solid #EEF2F6', borderRadius:10, flexWrap:'wrap' }}>
+          <span style={{ fontSize:9.5, fontWeight:800, letterSpacing:'.1em', color:'#94A3B8', textTransform:'uppercase', fontFamily:FONT }}>Auto-send</span>
+          {[{color:C.blue,label:'Daily',desc:'Every day - 9:30 AM'},{color:C.green,label:'Weekly',desc:'Mondays - 9:30 AM'},{color:C.navy,label:'Monthly',desc:'1st - 9:30 AM'}].map(({color,label,desc}) => (
+            <div key={label} style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ width:7, height:7, borderRadius:'50%', background:color, flexShrink:0 }}/>
+              <span style={{ fontSize:11.5, fontWeight:700, color:'#475569', fontFamily:FONT }}>{label}</span>
+              <span style={{ fontSize:10.5, color:'#94A3B8', fontFamily:FONT }}>{desc}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:24, padding:'9px 13px', background:'linear-gradient(135deg,#FFFFFF,#F7FBFE)', border:'0.5px solid #EEF2F6', borderRadius:12, boxShadow:'0 6px 18px -10px rgba(31,60,132,0.18)' }}>
+          <span style={{ width:24, height:24, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', background:'linear-gradient(135deg,#1F3C84,#1C9FD4)', flexShrink:0 }}><svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='#fff' strokeWidth='2' strokeLinecap='round'><line x1='22' y1='2' x2='11' y2='13'/><polygon points='22 2 15 22 11 13 2 9 22 2'/></svg></span>
+          <span style={{ fontSize:12.5, fontWeight:700, color:'#1F3C84', fontFamily:FONT, flex:1 }}>Send Report</span>
+          {sendMsg && <span style={{ fontSize:11.5, fontWeight:600, color:sendMsg.indexOf('Error')===0?'#DC2626':'#059669', fontFamily:FONT }}>{sendMsg}</span>}
+          <div style={{ position:'relative' }}>
+            <button onClick={() => setSendDropOpen(v => !v)} style={{ padding:'5px 12px', border:'0.5px solid #E2E8F0', borderRadius:7, background:'#F8FAFC', cursor:'pointer', fontSize:12, fontWeight:600, color:'#374151', fontFamily:FONT, display:'flex', alignItems:'center', gap:5 }}>
+              {sendReportType==='daily'?'Daily':sendReportType==='weekly'?'Weekly':'30-Day'}
+              <svg width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='#9CA3AF' strokeWidth='2.5'><polyline points='6 9 12 15 18 9'/></svg>
+            </button>
+            {sendDropOpen && (
+              <>
+                <div onClick={() => setSendDropOpen(false)} style={{ position:'fixed', inset:0, zIndex:200 }}/>
+                <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:201, background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:10, boxShadow:'0 8px 24px rgba(15,23,42,0.12)', minWidth:150, overflow:'hidden' }}>
+                  {[['daily','Daily Report'],['weekly','Weekly WoW'],['monthly','30-Day Report']].map(([val,label]) => (
+                    <button key={val} onClick={() => { setSendReportType(val); setSendDropOpen(false) }} style={{ width:'100%', padding:'9px 14px', border:'none', background:sendReportType===val?'#E3F5FD':'#fff', color:sendReportType===val?C.blue:'#374151', fontSize:12.5, fontWeight:sendReportType===val?700:500, textAlign:'left', cursor:'pointer', fontFamily:FONT, borderBottom:'0.5px solid #F3F4F6', display:'block' }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <button onClick={sendReport} disabled={sendingReport} style={{ padding:'5px 16px', border:'none', background:sendingReport?'#94A3B8':C.navy, color:'#fff', borderRadius:7, cursor:sendingReport?'wait':'pointer', fontSize:12, fontWeight:700, fontFamily:FONT }}>
+            {sendingReport?'Sending...':'Send'}
           </button>
         </div>
 
