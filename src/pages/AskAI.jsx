@@ -495,7 +495,7 @@ export default function AskAI() {
         .qChip{transition:all .2s ease;position:relative;overflow:hidden}
         .qChip:hover{transform:translateY(-2px);border-color:rgba(28,159,212,0.55)!important;box-shadow:0 10px 22px -10px rgba(28,159,212,0.55)!important;color:#1F3C84!important}
         .rb{transition:background .18s ease,border-radius .18s ease}
-@media (max-width:768px){ .askai-rail{ position:absolute!important; z-index:60; top:0; bottom:0; left:0; width:86vw!important; max-width:340px; opacity:1!important; pointer-events:auto!important; transform:translateX(-102%); transition:transform .28s ease!important; box-shadow:0 0 40px rgba(15,23,42,0.22); } .askai-rail.rail-open{ transform:translateX(0); } .askai-backdrop{ display:block!important; } .askai-menu-btn{ display:inline-flex!important; } }
+@media (max-width:768px){ .askai-rail{ position:absolute!important; z-index:60; top:0; bottom:0; left:0; width:86vw!important; max-width:340px; opacity:1!important; pointer-events:auto!important; transform:translateX(-102%); transition:transform .28s ease!important; box-shadow:0 0 40px rgba(15,23,42,0.22); } .askai-rail.rail-open{ transform:translateX(0); } .askai-backdrop{ display:block!important; } .askai-menu-btn{ display:inline-flex!important; } .askai-model-pill{ display:none!important; } .askai-conn{ padding:4px 8px!important; gap:5px!important; } .askai-conn span{ font-size:9.5px!important; } }
       `}</style>
 
       {/* Quantum sidebar */}
@@ -786,17 +786,17 @@ export default function AskAI() {
             <button className="askai-menu-btn" onClick={()=>setMobileRailOpen(v=>!v)} title="Menu" style={{display:'none',width:30,height:30,alignItems:'center',justifyContent:'center',border:'0.5px solid #E5E7EB',background:'#fff',borderRadius:8,cursor:'pointer',marginRight:2,flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
         <Logo size={16}/>
             <span style={{fontSize:14,fontWeight:700,color:'rgba(255,255,255,0.9)',letterSpacing:'-0.01em'}}>Ask AI</span>
-            <span style={{fontSize:11,color:'#94A3B8',background:'#F1F5F9',padding:'2px 8px',borderRadius:20,fontWeight:500}}>Claude Sonnet 4.5</span>
+            <span className="askai-model-pill" style={{fontSize:11,color:'#94A3B8',background:'#F1F5F9',padding:'2px 8px',borderRadius:20,fontWeight:500}}>Claude Sonnet 4.5</span>
             <button onClick={newConv} title="New conversation" className="ibtn"
               style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:`0.5px solid #E5E7EB`,background:'#fff',borderRadius:7,cursor:'pointer',marginLeft:2}}>
               <Ico n="new" s={13} c="#9CA3AF"/>
             </button>
             <div style={{flex:1}}/>
-            <div style={{display:'flex',alignItems:'center',gap:7,padding:'5px 12px',borderRadius:20,background:connected?'linear-gradient(135deg,rgba(76,174,111,0.14),rgba(41,185,195,0.10))':'rgba(255,255,255,0.06)',border:`1px solid ${connected?'rgba(76,174,111,0.35)':borderColor}`,boxShadow:connected?'0 2px 10px -4px rgba(76,174,111,0.5)':'none'}}>
+            <div className="askai-conn" style={{display:'flex',alignItems:'center',gap:7,padding:'5px 12px',borderRadius:20,background:connected?'linear-gradient(135deg,rgba(76,174,111,0.14),rgba(41,185,195,0.10))':'rgba(255,255,255,0.06)',border:`1px solid ${connected?'rgba(76,174,111,0.35)':borderColor}`,boxShadow:connected?'0 2px 10px -4px rgba(76,174,111,0.5)':'none'}}>
               <div style={{width:7,height:7,borderRadius:'50%',background:connected?GREEN:'rgba(255,255,255,0.2)',boxShadow:connected?`0 0 0 3px rgba(76,174,111,0.18)`:'none',animation:connected?'qGlow 2.4s infinite':''}}/>              <span style={{fontSize:11,fontWeight:700,letterSpacing:'.01em',color:connected?GREEN:'rgba(255,255,255,0.3)'}}>{connected?'Meta Ads connected':'Meta not connected'}</span>
             </div>
 
-          <div style={{display:'flex',alignItems:'center',gap:7,padding:'5px 12px',borderRadius:20,background:'linear-gradient(135deg,rgba(76,174,111,0.14),rgba(41,185,195,0.10))',border:'1px solid rgba(76,174,111,0.35)',boxShadow:'0 2px 10px -4px rgba(76,174,111,0.5)',marginLeft:8}}>
+          <div className="askai-conn" style={{display:'flex',alignItems:'center',gap:7,padding:'5px 12px',borderRadius:20,background:'linear-gradient(135deg,rgba(76,174,111,0.14),rgba(41,185,195,0.10))',border:'1px solid rgba(76,174,111,0.35)',boxShadow:'0 2px 10px -4px rgba(76,174,111,0.5)',marginLeft:8}}>
             <div style={{width:7,height:7,borderRadius:'50%',background:GREEN,boxShadow:'0 0 0 3px rgba(76,174,111,0.18)',animation:'qGlow 2.4s infinite'}}/>
             <span style={{fontSize:11,fontWeight:700,letterSpacing:'.01em',color:GREEN}}>Google Ads connected</span>
           </div>
