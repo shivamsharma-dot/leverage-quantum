@@ -359,6 +359,8 @@ export default function SettingsPage() {
   const [rcSaving, setRcSaving] = useState(false)
   const [rcMsg, setRcMsg] = useState('')
   const [rcTesting, setRcTesting] = useState(false)
+  const [rcSendType, setRcSendType] = useState('daily')
+  const [rcSending, setRcSending] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [editIds, setEditIds] = useState([])
   const [editIsAdmin, setEditIsAdmin] = useState(false)
@@ -514,6 +516,22 @@ export default function SettingsPage() {
     } catch (e) { setRcMsg('\u2715 ' + e.message) }
     finally { setRcTesting(false); setTimeout(() => setRcMsg(''), 6000) }
   }
+
+  const sendReportNow = async () => {
+  if (!window.confirm('Send the ' + rcSendType + ' report now to ALL configured recipients?')) return
+setRcSending(true); setRcMsg('')
+try {
+  const r = await fetch('/api/send-report', {
+  method: 'POST', credentials: 'include',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ type: rcSendType, triggered_by: user?.email || 'manual' })
+})
+const d = await r.json()
+if (!r.ok) throw new Error(d.error || 'Failed')
+setRcMsg('Sent to ' + (d.recipients?.length || 0) + ' recipients')
+} catch (e) { setRcMsg('\u2715 ' + e.message) }
+finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
+}
 
   const TABS = [
     ...(userIsAdmin ? [{ id: 'data', label: 'Data', icon: 'layers' }] : []),
@@ -969,6 +987,12 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
                 <button className={styles.primaryBtn} onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving\u2026' : 'Save report settings'}</button>
                 <button className={styles.ghostBtn} onClick={sendTestReport} disabled={rcTesting}>{rcTesting ? 'Sending\u2026' : 'Send test to me only'}</button>
+<select value={rcSendType} onChange={e => setRcSendType(e.target.value)} disabled={rcSending} style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #E2E8F0', fontSize: 13, fontWeight: 600, color: '#1F3C84', background: '#fff', cursor: 'pointer' }}>
+  <option value="daily">Daily report</option>
+<option value="weekly">Weekly report</option>
+<option value="monthly">Monthly report</option>
+</select>
+<button onClick={sendReportNow} disabled={rcSending} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: rcSending ? '#94A3B8' : '#1F3C84', color: '#fff', fontSize: 13, fontWeight: 700, cursor: rcSending ? 'default' : 'pointer' }}>{rcSending ? 'Sending...' : 'Send now'}</button>
                 {rcMsg && <span style={{ fontSize: 13, fontWeight: 600, color: rcMsg.charAt(0) === '\u2715' ? '#b4413c' : '#4CAE6F' }}>{rcMsg}</span>}
               </div>
 
