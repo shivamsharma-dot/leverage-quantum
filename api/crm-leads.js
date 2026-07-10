@@ -3,7 +3,8 @@
 // same window Meta is showing. Without params it aggregates all-time.
 // Returns { byName: { <adName>: leads }, total, rows, distinct, since, until, ts }.
 
-import { getSessionUser, canAccessDashboard } from '../lib/auth.mjs'
+// auth helpers loaded via dynamic import() inside handler (this file is bundled as
+// CommonJS; a static import of the .mjs ESM file crashes with ERR_REQUIRE_ESM)
 
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=FBleads';
 
@@ -52,6 +53,7 @@ function splitCsvLine(line) {
 }
 
 export default async function handler(req, res) {
+  const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })
   if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
