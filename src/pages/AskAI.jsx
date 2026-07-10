@@ -219,6 +219,7 @@ export default function AskAI() {
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
   const [rail, setRail]           = useState('history') // 'history' | 'prompts' | 'memories' | 'logs' — always one active (Claude-style unified sidebar)
+  const [inputFocused, setInputFocused] = useState(false) // auto-hide internal rail while typing
   const [metaToken, setMetaToken] = useState('')
   const [connected, setConnected] = useState(false)
   const [memories, setMemories]   = useState([])
@@ -505,7 +506,7 @@ export default function AskAI() {
 
         {/* Left sidebar — Claude-style unified (always visible) */}
         <div style={{
-          width:RAIL_W, minWidth:0,
+              width: inputFocused?0:RAIL_W, minWidth:0, opacity: inputFocused?0:1, pointerEvents: inputFocused?'none':'auto', transition:'width .28s ease, opacity .22s ease',
           overflow:'hidden', background:panelBg, borderRight:'1px solid #E8ECF2',
           display:'flex', flexDirection:'column', flexShrink:0, alignSelf:'stretch',
         }}>
@@ -535,7 +536,6 @@ export default function AskAI() {
                       onMouseLeave={e=>{if(!on){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#6B7280'}}}>
                       <Ico n={t.icon} s={16} c={on?'#1F3C84':'#9CA3AF'}/>
                       <span style={{flex:1}}>{t.label}</span>
-                      {t.id==='history'&&convs.length>0&&<span style={{fontSize:11,fontWeight:700,padding:'1px 7px',borderRadius:20,background:on?'#1C9FD4':'#E3F5FD',color:on?'#fff':'#1C9FD4'}}>{convs.length}</span>}
                     </button>
                   })}
                 </div>
@@ -924,12 +924,14 @@ export default function AskAI() {
                 {sendingReport?'Sending…':'Send'}
               </button>
             </div>
-              <div style={{position:'relative',background:'#fff',border:'none',borderRadius:16,padding:'14px 14px 12px',transition:'all .2s',boxShadow:input?'0 6px 24px -6px rgba(28,159,212,0.28), 0 1px 3px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)',overflow:'hidden'}}>
+              <div style={{position:'relative',background:'#fff',border:'none',borderRadius:16, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding:'14px 14px 12px',transition:'all .2s',boxShadow:input?'0 6px 24px -6px rgba(28,159,212,0.28), 0 1px 3px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)',overflow:'hidden'}}>
                 {/* QL Ops-style brand gradient top accent bar */}
                 <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:input?1:0.85,transition:'opacity .2s'}}/>
                 <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…"
                   onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
                   onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
+onFocus={()=>setInputFocused(true)}
+onBlur={()=>setInputFocused(false)}
                   style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:10}}>
                   <div style={{display:'flex',alignItems:'center',gap:6}}>
