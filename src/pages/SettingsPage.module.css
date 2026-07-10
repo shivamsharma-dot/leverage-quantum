@@ -5,11 +5,8 @@
    ============================================================ */
 
 .layout {
-  --bg:          var(--bg);
-  --card:        var(--card);
   --border:      var(--card-border);
   --border-2:    var(--card-border);
-  --text:        var(--text);
   --text-2:      var(--text2);
   --text-3:      var(--text3);
   --accent:      #1C9FD4;
