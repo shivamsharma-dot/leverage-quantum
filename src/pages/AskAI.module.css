@@ -94,7 +94,7 @@
 }
 .metaBadge {
   display:flex; align-items:center; gap:5px;
-  font-size:11.5px; font-weight:600; color:#1877F2;
+  font-size:11.5px; font-weight:600; color:#1C9FD4;
   background:#EEF3FF; border:1px solid #C7D2FE;
   border-radius:20px; padding:4px 10px;
 }
