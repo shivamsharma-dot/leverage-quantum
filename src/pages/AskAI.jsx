@@ -63,10 +63,10 @@ const PROMPTS = [
 const CATS = ['All','META','LEAD GEN','REPORTS','ANALYSIS']
 
 /* ─── SSE ask ─────────────────────────────────────────────────── */
-async function askClaude(messages, metaToken, memories, onChunk, signal) {
+async function askClaude(messages, metaToken, memories, onChunk, signal, platformScope='all') {
   const res = await fetch('/api/ask-ai', {
     method:'POST', headers:{'Content-Type':'application/json'}, signal,
-    body: JSON.stringify({ messages:messages.slice(-1).map(m=>({role:m.role||'user',content:m.content})), history:messages.slice(0,-1).map(m=>({role:m.role,content:m.content})), metaToken, memories:memories.map(m=>m.content) })
+    body: JSON.stringify({ messages:messages.slice(-1).map(m=>({role:m.role||'user',content:m.content})), history:messages.slice(0,-1).map(m=>({role:m.role,content:m.content})), metaToken, memories:memories.map(m=>m.content), platformScope })
   })
   if (!res.ok) { const e=await res.json().catch(()=>({error:'Error'})); throw new Error(e.error||`HTTP ${res.status}`) }
   const reader=res.body.getReader(); const dec=new TextDecoder()
@@ -141,8 +141,6 @@ function Ico({n,s=16,c='currentColor',sw=2}){
   }
   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d[n]}</svg>
 }
-
-function Logo({size=20}){return <svg width={size} height={size} viewBox="0 0 22 22" fill="none"><rect x="1" y="12" width="4" height="9" rx="1.5" fill={GREEN}/><rect x="7" y="7" width="4" height="14" rx="1.5" fill={CYAN}/><rect x="13" y="4" width="4" height="17" rx="1.5" fill={BLUE}/></svg>}
 
 /* Quantum mark with each bar breathing on its own stagger — used inside .qOrb instead of a flattened white silhouette */
 function AnimatedLogo({size=20}){return <svg width={size} height={size} viewBox="0 0 22 22" fill="none">
@@ -220,8 +218,9 @@ export default function AskAI() {
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
   const [rail, setRail]           = useState('history') // 'history' | 'prompts' | 'memories' | 'logs' — always one active (Claude-style unified sidebar)
-  const [inputFocused, setInputFocused] = useState(false) // auto-hide internal rail while typing  
-  const [mobileRailOpen, setMobileRailOpen] = useState(false) // mobile drawer open state
+  const [railOpen, setRailOpen]   = useState(true) // unified floating-rail visibility (desktop + mobile) — visible by default, auto-closes on any click within the chat area, reopened via the persistent toggle
+  const [platformScope, setPlatformScope] = useState('all') // 'all' | 'meta' | 'google' — scopes which tools the model can call
+  const [scopeOpen, setScopeOpen] = useState(false)
   const [metaToken, setMetaToken] = useState('')
   const [connected, setConnected] = useState(false)
   const [memories, setMemories]   = useState([])
@@ -365,7 +364,7 @@ export default function AskAI() {
     try{
       const reply=await askClaude(updated,metaToken,memories,partial=>{
         setMessages(m=>{const c=[...m];c[c.length-1]={role:'assistant',content:partial,streaming:true};return c})
-      },ac.signal)
+      },ac.signal,platformScope)
       const final=[...updated,{role:'assistant',content:reply}]
       setMessages(final); saveMessages(cid,final)
     }catch(e){
@@ -373,7 +372,7 @@ export default function AskAI() {
       const final=[...updated,{role:'assistant',content:`⚠️ ${e.message}`}]
       setMessages(final); saveMessages(cid,final)
     }finally{setLoading(false)}
-  },[input,loading,messages,activeId,metaToken,memories,saveMessages])
+  },[input,loading,messages,activeId,metaToken,memories,saveMessages,platformScope])
 
   /* report logs */
   const [reportLogs, setReportLogs]       = useState([])
@@ -429,7 +428,7 @@ export default function AskAI() {
   const initials=(user?.name||'U').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
 
   /* rail toggle */
-  const toggleRail=id=>{setRail(r=>r===id?null:id)}
+  const toggleRail=id=>{setRail(r=>r===id?null:id);setRailOpen(true)}
 
   const panelOpen = true // Claude-style: sidebar always visible
   const RAIL_W = 322
@@ -480,7 +479,12 @@ export default function AskAI() {
         .qChip{transition:all .2s ease;position:relative;overflow:hidden}
         .qChip:hover{transform:translateY(-2px);border-color:rgba(28,159,212,0.55)!important;box-shadow:0 10px 22px -10px rgba(28,159,212,0.55)!important;color:#1F3C84!important}
         .rb{transition:background .18s ease,border-radius .18s ease}
-@media (max-width:768px){ .askai-rail{ position:absolute!important; z-index:60; top:0; bottom:0; left:0; width:86vw!important; max-width:340px; opacity:1!important; pointer-events:auto!important; transform:translateX(-102%); transition:transform .28s ease!important; box-shadow:0 0 40px rgba(15,23,42,0.22); } .askai-rail.rail-open{ transform:translateX(0); } .askai-backdrop{ display:block!important; } .askai-menu-btn{ display:inline-flex!important; } .askai-model-pill{ display:none!important; } .askai-conn{ padding:4px 8px!important; gap:5px!important; } .askai-conn span{ font-size:9.5px!important; } }
+.askai-rail{ position:absolute; z-index:56; top:12px; bottom:12px; left:12px; width:322px; border-radius:16px; opacity:1; pointer-events:auto; transform:translateX(-115%); transition:transform .28s ease; box-shadow:0 12px 34px -10px rgba(15,23,42,0.20); }
+.askai-rail.rail-open{ transform:translateX(0); }
+.askai-backdrop{ display:none; }
+.askai-toggle-btn{ position:absolute; z-index:57; top:16px; left:16px; width:34px; height:34px; border-radius:10px; border:0.5px solid #E5E7EB; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 10px rgba(15,23,42,0.08); transition:all .15s ease; }
+.askai-toggle-btn:hover{ background:#F8FAFC; }
+@media (max-width:768px){ .askai-rail{ width:86vw!important; max-width:340px; top:0; bottom:0; left:0; border-radius:0; box-shadow:0 0 40px rgba(15,23,42,0.22); } .askai-backdrop{ display:block!important; } }
       `}</style>
 
       {/* Quantum sidebar */}
@@ -489,13 +493,17 @@ export default function AskAI() {
       {/* Ask AI shell */}
       <div style={{flex:1,display:'flex',minWidth:0,position:'relative',background:askAiBg}}>
 
-{mobileRailOpen&&(<div className="askai-backdrop" onClick={()=>setMobileRailOpen(false)} style={{display:'none',position:'absolute',inset:0,zIndex:55,background:'rgba(15,23,42,0.34)'}}/>)}
+{railOpen&&(<div className="askai-backdrop" onClick={()=>setRailOpen(false)} style={{position:'absolute',inset:0,zIndex:55,background:'rgba(15,23,42,0.34)'}}/>)}
 
-        {/* Left sidebar - Claude-style unified (always visible) */}
-        <div className={"askai-rail"+(mobileRailOpen?" rail-open":"")} style={{
-              width: inputFocused?0:RAIL_W, minWidth:0, opacity: inputFocused?0:1, pointerEvents: inputFocused?'none':'auto', transition:'width .28s ease, opacity .22s ease',
-          overflow:'hidden', background:panelBg, borderRight:'1px solid #E8ECF2',
-          display:'flex', flexDirection:'column', flexShrink:0, alignSelf:'stretch',
+        {/* Floating toggle — always visible, opens/closes the rail */}
+        <button className="askai-toggle-btn" onClick={()=>setRailOpen(v=>!v)} title={railOpen?'Hide sidebar':'Show sidebar'}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+
+        {/* Left sidebar - Claude-style unified, floating overlay */}
+        <div className={"askai-rail"+(railOpen?" rail-open":"")} style={{
+          overflow:'hidden', background:panelBg,
+          display:'flex', flexDirection:'column',
         }}>
           {panelOpen&&(
             <div style={{width:RAIL_W,flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
@@ -764,29 +772,7 @@ export default function AskAI() {
         </div>
 
         {/* Ask AI area */}
-        <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0,position:'relative'}}>
-
-          {/* Ask AI header */}
-          <div style={{padding:'12px 20px',borderBottom:`1px solid ${borderColor}`,display:'flex',alignItems:'center',gap:10,flexShrink:0,background:'#fff',borderBottom:'0.5px solid #E5E7EB'}}>
-            <button className="askai-menu-btn" onClick={()=>setMobileRailOpen(v=>!v)} title="Menu" style={{display:'none',width:30,height:30,alignItems:'center',justifyContent:'center',border:'0.5px solid #E5E7EB',background:'#fff',borderRadius:8,cursor:'pointer',marginRight:2,flexShrink:0}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
-        <Logo size={16}/>
-            <span style={{fontSize:14,fontWeight:700,color:'#1F3C84',letterSpacing:'-0.01em'}}>Ask AI</span>
-            <span className="askai-model-pill" style={{fontSize:11,color:'#94A3B8',background:'#F1F5F9',padding:'2px 8px',borderRadius:20,fontWeight:500}}>Claude Sonnet 4.5</span>
-            <button onClick={newConv} title="New conversation" className="ibtn"
-              style={{width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',border:`0.5px solid #E5E7EB`,background:'#fff',borderRadius:7,cursor:'pointer',marginLeft:2}}>
-              <Ico n="new" s={13} c="#9CA3AF"/>
-            </button>
-            <div style={{flex:1}}/>
-            <div className="askai-conn" style={{display:'flex',alignItems:'center',gap:7,padding:'5px 12px',borderRadius:20,background:connected?'linear-gradient(135deg,rgba(76,174,111,0.14),rgba(41,185,195,0.10))':'#F1F5F9',border:`1px solid ${connected?'rgba(76,174,111,0.35)':borderColor}`,boxShadow:connected?'0 2px 10px -4px rgba(76,174,111,0.5)':'none'}}>
-              <div style={{width:7,height:7,borderRadius:'50%',background:connected?GREEN:'#CBD5E1',boxShadow:connected?`0 0 0 3px rgba(76,174,111,0.18)`:'none',animation:connected?'qGlow 2.4s infinite':''}}/>              <span style={{fontSize:11,fontWeight:700,letterSpacing:'.01em',color:connected?GREEN:'#94A3B8'}}>{connected?'Meta Ads connected':'Meta not connected'}</span>
-            </div>
-
-          <div className="askai-conn" style={{display:'flex',alignItems:'center',gap:7,padding:'5px 12px',borderRadius:20,background:'linear-gradient(135deg,rgba(76,174,111,0.14),rgba(41,185,195,0.10))',border:'1px solid rgba(76,174,111,0.35)',boxShadow:'0 2px 10px -4px rgba(76,174,111,0.5)',marginLeft:8}}>
-            <div style={{width:7,height:7,borderRadius:'50%',background:GREEN,boxShadow:'0 0 0 3px rgba(76,174,111,0.18)',animation:'qGlow 2.4s infinite'}}/>
-            <span style={{fontSize:11,fontWeight:700,letterSpacing:'.01em',color:GREEN}}>Google Ads connected</span>
-          </div>
-
-          </div>
+        <div onClick={()=>setRailOpen(false)} style={{flex:1,display:'flex',flexDirection:'column',minWidth:0,position:'relative'}}>
 
           {/* Messages */}
           <div className="cs" style={{flex:1,overflowY:'auto',padding:'20px 0'}}>
@@ -870,13 +856,35 @@ export default function AskAI() {
                 <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…" className="composerInput"
                   onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
                   onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
-onFocus={()=>setInputFocused(true)}
-onBlur={()=>setInputFocused(false)}
+onFocus={()=>setRailOpen(false)}
                   style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:10}}>
                   <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <div style={{position:'relative'}}>
+                      <button onClick={e=>{e.stopPropagation();setScopeOpen(v=>!v)}} className="mabtn"
+                        style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${scopeOpen?BLUE:borderColor}`,background:scopeOpen?'#E3F5FD':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:scopeOpen?BLUE:'#475569',fontFamily:FONT,transition:'all .15s'}}>
+                        <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,background:platformScope==='meta'?(connected?GREEN:'#CBD5E1'):platformScope==='google'?GREEN:'#94A3B8'}}/>
+                        {platformScope==='meta'?'Meta Ads':platformScope==='google'?'Google Ads':'All sources'}
+                        <span style={{display:'flex',transform:'rotate(90deg)'}}><Ico n="chevR" s={10} c={scopeOpen?BLUE:'#94A3B8'}/></span>
+                      </button>
+                      {scopeOpen&&(
+                        <div onClick={e=>e.stopPropagation()} style={{position:'absolute',bottom:'calc(100% + 6px)',left:0,minWidth:170,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 10px 30px -8px rgba(15,23,42,0.18)',padding:6,zIndex:20}}>
+                          {[
+                            {id:'all',label:'All sources',dot:'#94A3B8'},
+                            {id:'meta',label:'Meta Ads',dot:connected?GREEN:'#CBD5E1'},
+                            {id:'google',label:'Google Ads',dot:GREEN},
+                          ].map(opt=>(
+                            <button key={opt.id} onClick={()=>{setPlatformScope(opt.id);setScopeOpen(false)}}
+                              style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',border:'none',background:platformScope===opt.id?'#F1F5F9':'transparent',borderRadius:7,cursor:'pointer',fontSize:12.5,fontWeight:platformScope===opt.id?700:500,color:'#1E293B',fontFamily:FONT,textAlign:'left'}}>
+                              <div style={{width:7,height:7,borderRadius:'50%',background:opt.dot,flexShrink:0}}/>
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                     {[['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
-                      <button key={id} onClick={()=>toggleRail(id)} className="mabtn"
+                      <button key={id} onClick={e=>{e.stopPropagation();toggleRail(id)}} className="mabtn"
                         style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${rail===id?BLUE:borderColor}`,background:rail===id?'#E3F5FD':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id?BLUE:'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
                         <Ico n={ic} s={12} c={rail===id?BLUE:'#94A3B8'}/>{lbl}
                       </button>

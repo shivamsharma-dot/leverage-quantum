@@ -583,7 +583,7 @@ export default async function handler(req, res) {
   if (!me) return res.status(401).json({ error: 'Not signed in' })
   if (!canAccessDashboard(me.role, 'ask_ai')) return res.status(403).json({ error: 'Forbidden' })
 
-  const { messages=[], history=[], metaToken: clientToken='', memories=[] } = req.body||{}
+  const { messages=[], history=[], metaToken: clientToken='', memories=[], platformScope='all' } = req.body||{}
   if (!messages.length) return res.status(400).json({ error: 'No messages' })
 
   const metaToken = clientToken || await getTokenFromSupabase() || ''
@@ -609,7 +609,12 @@ export default async function handler(req, res) {
 
     let currentMessages = [...merged]
     const MAX_TOOL_ROUNDS = 5
-    const ALL_TOOLS = [META_TOOL, META_CRM_TOOL, GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL]
+    // User can scope the platform via the composer dropdown — restrict which
+    // tools the model even sees, instead of relying on it to infer scope from
+    // the question text (faster + more accurate tool decisions).
+    const ALL_TOOLS = platformScope === 'meta' ? [META_TOOL, META_CRM_TOOL]
+      : platformScope === 'google' ? [GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL]
+      : [META_TOOL, META_CRM_TOOL, GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL]
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const anthropicRes = await fetch(ANTHROPIC_URL, {
