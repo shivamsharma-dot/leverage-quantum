@@ -6,6 +6,12 @@
 
 ## Recent Work (June 2026 — latest session)
 
+**Ask AI mobile polish (July 10, 2026)** commits `d0385b6`, `14456f3`, `1763e87` on `main`.
+- Font: Replace-All swapped 3 remaining `'Inter'` -> `'Plus Jakarta Sans'` in `AskAI.module.css` (`d0385b6`).
+- Mobile rail v1 (`14456f3`): made the internal rail an overlay on <=768px, but it defaulted open and covered the composer with no way to close - unusable on phone.
+- Mobile rail fix (`1763e87`): converted the internal rail into a proper mobile drawer. New `mobileRailOpen` state; hamburger button (`.askai-menu-btn`, shown only <=768px) in the Ask AI header toggles it; rail slides in via `.rail-open` transform; tap-on-backdrop (`.askai-backdrop`) closes it. Desktop behaviour (focus-hide) unchanged.
+- Next: app-wide mobile pass starting with the global shell (header/status-bar overlap, main sidebar -> hamburger/overlay) then Home KPI grid, then page-by-page.
+
 **Ask AI -> CRM leads wiring + UI polish (July 10, 2026)** commits `7164c12`, `99616a2`, `6c3c045`, `e702924`, `a13feb7`, `2913934` on `main`.
 - Backend (`api/ask-ai.js`): wired CRM leads into Ask AI context + added live query tools for CRM leads; updated the cross-channel principle to Meta <-> Google <-> CRM leads. Removed QL Ops/WhatsApp from ask-ai.js ONLY (dashboard pages/endpoints left intact).
 - UI (`AskAI.jsx`): removed the History count pill; internal rail (History/Prompts/Memory/Logs) now auto-hides on input focus and reappears on blur with a mild animation; added reactive-while-streaming glow around the chat console.
