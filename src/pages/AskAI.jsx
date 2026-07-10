@@ -144,6 +144,13 @@ function Ico({n,s=16,c='currentColor',sw=2}){
 
 function Logo({size=20}){return <svg width={size} height={size} viewBox="0 0 22 22" fill="none"><rect x="1" y="12" width="4" height="9" rx="1.5" fill={GREEN}/><rect x="7" y="7" width="4" height="14" rx="1.5" fill={CYAN}/><rect x="13" y="4" width="4" height="17" rx="1.5" fill={BLUE}/></svg>}
 
+/* Quantum mark with each bar breathing on its own stagger — used inside .qOrb instead of a flattened white silhouette */
+function AnimatedLogo({size=20}){return <svg width={size} height={size} viewBox="0 0 22 22" fill="none">
+  <rect className="qBar" style={{animationDelay:'0s'}}   x="1"  y="12" width="4" height="9"  rx="1.5" fill={GREEN}/>
+  <rect className="qBar" style={{animationDelay:'.22s'}} x="7"  y="7"  width="4" height="14" rx="1.5" fill={CYAN}/>
+  <rect className="qBar" style={{animationDelay:'.44s'}} x="13" y="4"  width="4" height="17" rx="1.5" fill={BLUE}/>
+</svg>}
+
 /* ─── quick prompts ───────────────────────────────────────────── */
 const QUICK = [
   { label:'Weekly digest',           text:'Generate my weekly performance digest' },
@@ -163,7 +170,7 @@ function MagicLoader(){
     <div style={{display:'flex',alignItems:'center',gap:14,padding:'8px 2px',animation:'qRise .4s ease'}}>
       <div style={{position:'relative',width:40,height:40,flexShrink:0}}>
         <div className="qOrb" style={{width:40,height:40,borderRadius:13,display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <div style={{filter:'brightness(0) invert(1)',display:'flex'}}><Logo size={18}/></div>
+          <div style={{display:'flex'}}><AnimatedLogo size={18}/></div>
         </div>
         <div style={{position:'absolute',inset:-5,borderRadius:18,border:'1.5px solid transparent',borderTopColor:'#1C9FD4',borderRightColor:'#29B9C3',animation:'qOrbit 1.1s linear infinite'}}/>
         <div style={{position:'absolute',inset:-9,borderRadius:22,border:'1px solid transparent',borderBottomColor:'rgba(28,159,212,0.5)',animation:'qOrbitR 1.8s linear infinite'}}/>
@@ -460,19 +467,18 @@ export default function AskAI() {
         input,textarea{caret-color:#1C9FD4;}
         .composerInput,.composerInput:focus,.composerInput:focus-visible{outline:none!important;box-shadow:none!important;-webkit-appearance:none;appearance:none}
         /* ===== PREMIUM AI MOTION TOOLKIT (brand: navy/blue/cyan/green) ===== */
-        @keyframes qSwoosh{0%{transform:translateX(-120%) skewX(-18deg)}60%,100%{transform:translateX(220%) skewX(-18deg)}}
-        @keyframes qAurora{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
         @keyframes qOrbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes qOrbitR{from{transform:rotate(360deg)}to{transform:rotate(0deg)}}
-        @keyframes qFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
         @keyframes qGlow{0%,100%{box-shadow:0 8px 30px -6px rgba(28,159,212,0.45),0 0 0 0 rgba(28,159,212,0.30)}50%{box-shadow:0 12px 44px -4px rgba(41,185,195,0.60),0 0 0 10px rgba(28,159,212,0.06)}}
         @keyframes qTextShine{0%{background-position:0% 50%}100%{background-position:200% 50%}}
         @keyframes qScan{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
         @keyframes qSpark{0%,100%{opacity:.25;transform:scale(.7)}50%{opacity:1;transform:scale(1.1)}}
         @keyframes qRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
         .qShine{background:linear-gradient(100deg,#1F3C84 0%,#1C9FD4 28%,#29B9C3 52%,#1C9FD4 74%,#1F3C84 100%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:qTextShine 4.5s linear infinite}
-        .qOrb{position:relative;border-radius:22px;background:linear-gradient(135deg,#1F3C84,#1C9FD4 45%,#29B9C3);background-size:200% 200%;animation:qAurora 6s ease infinite,qGlow 3.4s ease-in-out infinite,qFloat 5s ease-in-out infinite;overflow:hidden}
-        .qOrb::after{content:'';position:absolute;top:0;left:0;width:40%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent);animation:qSwoosh 3.6s ease-in-out infinite}
+        .qOrb{position:relative;border-radius:22px;background:#fff;box-shadow:0 2px 10px rgba(15,23,42,0.07),0 0 0 1.5px rgba(28,159,212,0.20);animation:qRing 3.4s ease-in-out infinite;overflow:hidden}
+        @keyframes qRing{0%,100%{box-shadow:0 2px 10px rgba(15,23,42,0.07),0 0 0 1.5px rgba(28,159,212,0.20)}50%{box-shadow:0 8px 22px -4px rgba(28,159,212,0.28),0 0 0 1.5px rgba(41,185,195,0.38)}}
+        @keyframes qBarGrow{0%,100%{transform:scaleY(0.8)}50%{transform:scaleY(1)}}
+        .qBar{transform-origin:bottom;animation:qBarGrow 2.2s ease-in-out infinite}
         .qChip{transition:all .2s ease;position:relative;overflow:hidden}
         .qChip:hover{transform:translateY(-2px);border-color:rgba(28,159,212,0.55)!important;box-shadow:0 10px 22px -10px rgba(28,159,212,0.55)!important;color:#1F3C84!important}
         .rb{transition:background .18s ease,border-radius .18s ease}
@@ -791,7 +797,7 @@ export default function AskAI() {
                 {/* Logo orb */}
             <div style={{position:'relative',marginBottom:22,animation:'scaleIn .5s ease'}}>
               <div className="qOrb" style={{width:78,height:78,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                <div style={{filter:'brightness(0) invert(1)',display:'flex'}}><Logo size={34}/></div>
+                <div style={{display:'flex'}}><AnimatedLogo size={34}/></div>
               </div>
               <div style={{position:'absolute',top:-3,right:-3,width:9,height:9,borderRadius:'50%',background:'#29B9C3',boxShadow:'0 0 10px 2px rgba(41,185,195,0.8)',animation:'qSpark 2.4s ease-in-out infinite'}}/>
               <div style={{position:'absolute',bottom:2,left:-5,width:6,height:6,borderRadius:'50%',background:'#1C9FD4',boxShadow:'0 0 8px 1px rgba(28,159,212,0.8)',animation:'qSpark 2.4s ease-in-out infinite .8s'}}/>
@@ -826,7 +832,7 @@ export default function AskAI() {
                       <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
                         {m.content&&(
                         <div className="qOrb" style={{width:30,height:30,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>
-                          <div style={{filter:'brightness(0) invert(1)',display:'flex'}}><Logo size={15}/></div>
+                          <div style={{display:'flex'}}><AnimatedLogo size={15}/></div>
                         </div>
                         )}
                         <div style={{flex:1,minWidth:0}}>
