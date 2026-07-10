@@ -5,6 +5,10 @@
 ---
 
 ## Recent Work (June 2026 — latest session)
+**Ask AI backend crash + mobile header fix (July 10, 2026)** commits `4139826`, `dab58e9` on `main`.
+- CRITICAL BACKEND FIX (`4139826`): `/api/ask-ai` was returning HTTP 500 `FUNCTION_INVOCATION_FAILED` (ERR_REQUIRE_ESM) on every message - the file was `api/ask-ai.js` (bundled as CommonJS) but statically imported the ESM `lib/auth.mjs`, so Node could not `require()` it. Frontend showed a bare "Error" bubble because the 500 body was plain text, not JSON. FIX: replaced the top-level `import {...} from '../lib/auth.mjs'` with `const {...} = await import('../lib/auth.mjs')` inside the async handler (Vercel's own recommended remedy). Verified live: endpoint now 200 + streams; chat answers correctly. NOTE: sibling endpoints that work (meta-token, preferences, etc.) are all `.mjs` - keep new API files that import auth as `.mjs`, or use dynamic import.
+- MOBILE HEADER FIX (`dab58e9`): on <=768px the model pill ("Claude Sonnet 4.5") and the two "connected" badges overflowed/clipped off the right edge. Added classes `askai-model-pill` (pill) and `askai-conn` (both badge divs); media rules hide the pill and shrink the badges (padding 4px 8px, gap 5px, span font 9.5px). Desktop unchanged.
+- Reminder: build-green does NOT catch runtime crashes (both the earlier `mobileRailOpen` crash and this ERR_REQUIRE_ESM were green builds). Always test the live page after each commit.
 
 **Ask AI mobile polish (July 10, 2026)** commits `d0385b6`, `14456f3`, `1763e87` on `main`.
 - Font: Replace-All swapped 3 remaining `'Inter'` -> `'Plus Jakarta Sans'` in `AskAI.module.css` (`d0385b6`).
