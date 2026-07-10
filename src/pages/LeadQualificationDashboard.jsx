@@ -1777,14 +1777,6 @@ const baseCsv = await resolveSheetUrl(cfg.id === 'daily' ? 'qlopsDaily' : 'qlops
               </div>
               <Card title="Source performance: volume vs. conversion" sub={monthlyScopeLabel + ' -- qualified volume and queued-to-QL conversion by source'} style={{ marginBottom: 14 }}>
                 {(() => {
-                  const oQual = monthlyTotals.futwork_qualified + monthlyTotals.superbot_qualified + monthlyTotals.futwork_ai_qualified
-                  const oQueued = monthlyTotals.floor_queued
-                  const oPctNum = oQueued > 0 ? (oQual / oQueued) * 100 : 0
-                  const providers = [
-                    { name: 'Futwork', q: monthlyTotals.futwork_qualified, d: monthlyTotals.futwork_queued, color: C.navy },
-                    { name: 'Superbot', q: monthlyTotals.superbot_qualified, d: monthlyTotals.superbot_queued, color: C.blue },
-                    { name: 'Futwork AI', q: monthlyTotals.futwork_ai_qualified, d: monthlyTotals.futwork_ai_queued, color: C.cyan },
-                  ]
                   const totalQual = monthlyBySource.reduce((s, x) => s + x.qualified, 0) || 1
                   const chartData = monthlyBySource.filter(s => s.qualified > 0 || s.queued > 0).slice(0, 12).map(s => ({ source: s.source, qualified: s.qualified, queued: s.queued, share: totalQual > 0 ? (s.qualified / totalQual) * 100 : 0, conv: s.queued > 0 ? (s.qualified / s.queued) * 100 : null }))
                   const convColor = (c) => c == null ? C.muted : c >= 50 ? C.green : c >= 25 ? C.cyan : c >= 10 ? C.blue : C.navy
@@ -1802,27 +1794,6 @@ const baseCsv = await resolveSheetUrl(cfg.id === 'daily' ? 'qlopsDaily' : 'qlops
                   }
                 return (
                   <div style={{ padding: '4px 2px', fontFamily: FONT }}>
-                    <div style={{ display: 'flex', alignItems: 'stretch', gap: 16, padding: '16px 20px', marginBottom: 8, background: '#EEF3FB', borderRadius: 12 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingRight: 20, borderRight: '1px solid #DCE5F4', flex: '0 0 auto' }}>
-                        <div style={{ fontSize: 34, fontWeight: 800, color: C.navy, lineHeight: 1 }}>{oQueued > 0 ? oPctNum.toFixed(1) + '%' : '--'}</div>
-                        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 5 }}>overall QL conversion</div>
-                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{fmtN(oQual)} of {fmtN(oQueued)} queued</div>
-                      </div>
-                      <div style={{ display: 'flex', flex: 1, gap: 12, alignItems: 'stretch' }}>
-                        {providers.map((p, i) => {
-                          const pn = p.d > 0 ? (p.q / p.d) * 100 : 0
-                          return (
-                            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 4px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 3 }}>
-                                <span style={{ width: 8, height: 8, borderRadius: 3, background: p.color, flex: '0 0 auto' }} />{p.name}
-                              </div>
-                              <div style={{ fontSize: 20, fontWeight: 800, color: p.color, lineHeight: 1 }}>{p.d > 0 ? pn.toFixed(1) + '%' : '--'}</div>
-                              <div style={{ fontSize: 10.5, color: C.muted, marginTop: 3 }}>{fmtN(p.q)} / {fmtN(p.d)}</div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
                       <div style={{ width: '100%', height: Math.max(260, chartData.length * 34 + 60) }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 54, left: 8, bottom: 8 }} barCategoryGap={'28%'}>
