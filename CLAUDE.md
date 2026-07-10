@@ -6,6 +6,11 @@
 
 ## Recent Work (June 2026 — latest session)
 
+**Moved manual Send Report + cadence into Settings > Reports (July 11, 2026)** commit `b6d6436` on `main`.
+- Removed the Auto-send strip + Send Report bar from `src/pages/DashboardHome.jsx` (Summary): deleted the 4 state vars (sendingReport/sendReportType/sendDropOpen/sendMsg), the sendReport handler, and the JSX block. Summary header now flows straight into the MTD StatCard grid.
+- Added to `src/pages/SettingsPage.jsx` Reports tab: a cadence <select> (Daily/Weekly/Monthly) + `Send now` button in the existing Save/Test button row (next to sendTestReport). New state rcSendType/rcSending + sendReportNow handler; posts to existing `/api/send-report` with { type: rcSendType, triggered_by }. Sends to ALL configured recipients (test button still sends to self only).
+- Rationale: Settings already IS the reports hub (sender, subjects, auto-send master switch, recipients, activity log) and already called /api/send-report. FRONTEND ONLY, zero new functions (still 12/12 cap). Verified green on Vercel (b6d6436 Ready) + live: Settings > Reports shows Daily-report dropdown + Send now (no console errors); Summary block gone (no console errors).
+
 **Moved Send Report + Auto-send scheduler from Ask AI to Summary (July 11, 2026)** commit `8cc9f5f` on `main`.
 - Removed the Schedule Strip (Auto-send Daily/Weekly/Monthly) + Send Report Bar JSX from `src/pages/AskAI.jsx` (kept the message input intact). Also removed the now-unused state (sendingReport, sendReportType, sendDropOpen, sendMsg) + the `sendReport` handler. KEPT reportLogs/logsLoading/loadLogs (still used by the Logs view).
 - Added the same block to `src/pages/DashboardHome.jsx` (the Summary/OVERVIEW landing page), placed right below the header and above the MTD StatCard grid. Re-added the 4 state vars + sendReport handler (dropped the loadLogs() call; used C.blue/green/navy + FONT; ASCII-only). Calls existing `/api/send-report`.
