@@ -82,12 +82,12 @@ return <>
 <PremKPI label='Conversions' value={fmtN(total.conversions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total}/>
 <PremKPI label='Cost / Conv' value={fmt(total.costPerConv)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/>
 </div>
-<div style={{display:'grid',gridTemplateColumns:'minmax(360px,1fr) 2fr',gap:16,marginBottom:16,alignItems:'start'}}>
+<div style={{marginBottom:16}}>
 <Card title='Spend by campaign' sub='Top 8 by spend (₹K)'>
-<ResponsiveContainer width='100%' height={220}>
-<BarChart data={chartData} layout='vertical' margin={{top:0,right:50,left:0,bottom:0}} barSize={13}>
+<ResponsiveContainer width='100%' height={280}>
+<BarChart data={chartData} layout='vertical' margin={{top:0,right:60,left:0,bottom:0}} barSize={20}>
 <XAxis type='number' hide/>
-<YAxis type='category' dataKey='name' width={110} tick={{fontSize:10,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false}/>
+<YAxis type='category' dataKey='name' width={190} tick={{fontSize:11,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false}/>
 <Tooltip formatter={v=>'₹'+v+'K'} contentStyle={{fontSize:11,border:'0.5px solid #E5E7EB',borderRadius:8,fontFamily:FONT}}/>
 <Bar dataKey='spend' radius={[0,5,5,0]} fill={C.navy}>
 <LabelList dataKey='spend' position='right' formatter={v=>'₹'+v+'K'} style={{fontSize:10,fontWeight:700,fill:'#374151'}}/>
@@ -95,6 +95,7 @@ return <>
 </BarChart>
 </ResponsiveContainer>
 </Card>
+</div>
 <Card title='All campaigns' sub={campaigns.length+' campaigns'}>
 <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}>
 <thead><tr><Th k='name'>Campaign</Th><Th k='status'>Status</Th><Th k='type'>Type</Th><th style={{padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',whiteSpace:'nowrap',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9',fontFamily:FONT}}>Leads</th><Th k='spend' right>Spend</Th><Th k='impressions' right>Impr.</Th><Th k='clicks' right>Clicks</Th><Th k='ctr' right>CTR</Th><Th k='avgCpc' right>Avg CPC</Th><Th k='conversions' right>Conv.</Th><Th k='costPerConv' right>CPA</Th><Th k='impressionShare' right>Imp Share</Th></tr></thead>
@@ -124,7 +125,6 @@ return <>
 ))}</tbody>
 </table></div>
 </Card>
-</div>
 </>
 }
 
