@@ -132,8 +132,8 @@ button:active:not(:disabled) {
 }
 input:focus, textarea:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(28,159,212,0.12) !important;
-  border-color: var(--blue) !important;
+  box-shadow: none !important;
+  border-color: #CBD5E1 !important;
 }
 .page-enter {
   animation: fadeUp .2s ease both;
