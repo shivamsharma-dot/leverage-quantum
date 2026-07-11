@@ -234,6 +234,7 @@ export default function AskAI() {
   const [platformScope, setPlatformScope] = useState('all') // 'all' | 'meta' | 'google' — scopes which tools the model can call
   const [scopeOpen, setScopeOpen] = useState(false)
   const [listening, setListening] = useState(false) // dictation mic — Web Speech API, browser-native, no backend
+  const [composerFocused, setComposerFocused] = useState(false) // composer expands while actively typing, settles back when idle
   const [metaToken, setMetaToken] = useState('')
   const [connected, setConnected] = useState(false)
   const [memories, setMemories]   = useState([])
@@ -524,17 +525,19 @@ export default function AskAI() {
   const borderColor='#E5E7EB'
 
   /* composer — shared between the centered landing state and the docked-to-bottom conversation state */
+  const composerActive = composerFocused || !!input
   const composer = (
-    <div style={{maxWidth:'min(880px, 94%)',margin:'0 auto',width:'100%'}}>
-      <div style={{position:'relative',background:'#fff',border:'none',borderRadius:14, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding:'8px 14px 9px',transition:'all .2s',boxShadow:input?'0 6px 24px -6px rgba(28,159,212,0.28), 0 1px 3px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)'}}>
+    <div style={{maxWidth: composerActive ? 'min(920px, 96%)' : 'min(880px, 94%)',margin:'0 auto',width:'100%',transition:'max-width .28s cubic-bezier(.4,0,.2,1)'}}>
+      <div style={{position:'relative',background:'#fff',border:'none',borderRadius:14, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding: composerActive ? '12px 16px 11px' : '8px 14px 9px',transform: composerActive?'scale(1.008)':'scale(1)',transition:'padding .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), box-shadow .28s ease',boxShadow:composerActive?'0 10px 32px -8px rgba(28,159,212,0.32), 0 2px 6px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)'}}>
         {/* brand gradient top accent bar — clipped by a full-size overlay (not the bar's own radius, which can't express a 16px arc at 3px tall) so its corners follow the container's actual curve; the overlay is a sibling of the dropdown-bearing content, not an ancestor, so dropdowns still render unclipped */}
         <div style={{position:'absolute',inset:0,borderRadius:14,overflow:'hidden',pointerEvents:'none'}}>
-          <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:input?1:0.85,transition:'opacity .2s'}}/>
+          <div style={{position:'absolute',top:0,left:0,right:0,height:composerActive?4:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:composerActive?1:0.85,transition:'opacity .25s ease, height .25s ease'}}/>
         </div>
         <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Ask anything…" className="composerInput"
           onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
           onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
-          onFocus={()=>setRailOpen(false)}
+          onFocus={()=>{setRailOpen(false);setComposerFocused(true)}}
+          onBlur={()=>setComposerFocused(false)}
           style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:8}}>
           <div style={{display:'flex',alignItems:'center',gap:6}}>
