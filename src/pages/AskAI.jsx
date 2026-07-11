@@ -554,6 +554,8 @@ export default function AskAI() {
       <style>{`
         
         * { box-sizing: border-box; }
+        button{outline:none}
+        button:focus-visible{outline:2px solid #CBD5E1;outline-offset:1px}
         .cs::-webkit-scrollbar{width:4px} .cs::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px}
         @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
