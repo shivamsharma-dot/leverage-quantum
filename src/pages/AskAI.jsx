@@ -615,9 +615,10 @@ export default function AskAI() {
                   ].map(t=>{
                     const on=rail===t.id
                     return <button key={t.id} onClick={()=>{setRail(t.id);if(t.id==='logs')loadLogs()}}
-                      style={{display:'flex',alignItems:'center',gap:11,padding:'9px 11px 9px 9px',borderRadius:10,border:'none',borderLeft:on?'3px solid #1C9FD4':'3px solid transparent',cursor:'pointer',width:'100%',textAlign:'left',background:on?'#EEF6FE':'transparent',color:on?'#1F3C84':'#6B7280',fontFamily:FONT,fontSize:13,fontWeight:on?700:500,transition:'all .15s'}}
+                      style={{display:'flex',alignItems:'center',gap:11,padding:'9px 11px',borderRadius:10,border:'none',position:'relative',cursor:'pointer',width:'100%',textAlign:'left',background:on?'#EEF6FE':'transparent',color:on?'#1F3C84':'#6B7280',fontFamily:FONT,fontSize:13,fontWeight:on?700:500,transition:'all .15s'}}
                       onMouseEnter={e=>{if(!on){e.currentTarget.style.background='#F4F6F9';e.currentTarget.style.color='#1F3C84'}}}
                       onMouseLeave={e=>{if(!on){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#6B7280'}}}>
+                      {on&&<span style={{position:'absolute',left:0,top:'22%',bottom:'22%',width:3,borderRadius:2,background:'#1C9FD4'}}/>}
                       <Ico n={t.icon} s={16} c={on?'#1C9FD4':'#9CA3AF'}/>
                       <span style={{flex:1}}>{t.label}</span>
                     </button>
@@ -669,20 +670,21 @@ export default function AskAI() {
                           const initial=(c.user_id&&c.user_id!=='default')?(c.user_id.split('@')[0][0]||'?').toUpperCase():'AI'
                           return (
                           <div key={c.id} className="cv" onClick={()=>!editing&&selectConv(c)}
-                            style={{display:'flex',alignItems:'center',gap:10,borderRadius:12,margin:'3px 0',cursor:editing?'default':'pointer',padding:'10px 11px 10px 9px',position:'relative',overflow:'hidden',background:on?'#EEF6FE':'#fff',borderLeft:on?'3px solid #1C9FD4':'3px solid transparent',border:on?'1px solid transparent':`1px solid ${c.pinned?'rgba(28,159,212,0.3)':'#EDF0F5'}`,boxShadow:'0 1px 3px rgba(15,23,42,0.04)',transition:'all .18s cubic-bezier(.4,0,.2,1)'}}>
-                            <div style={{width:30,height:30,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,fontFamily:FONT,color:'#fff',background:'linear-gradient(145deg,#1F3C84,#29B9C3)',boxShadow:'0 2px 6px -2px rgba(31,60,132,0.5)'}}>{initial}</div>
+                            style={{display:'flex',alignItems:'center',gap:8,borderRadius:9,margin:'1px 0',cursor:editing?'default':'pointer',padding:'7px 9px',position:'relative',overflow:'hidden',background:on?'#EEF6FE':'transparent',border:'1px solid transparent',transition:'all .15s ease'}}>
+                            {on&&<span style={{position:'absolute',left:0,top:'22%',bottom:'22%',width:3,borderRadius:2,background:'#1C9FD4'}}/>}
+                            <div style={{width:24,height:24,borderRadius:7,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,fontFamily:FONT,color:'#fff',background:'linear-gradient(145deg,#1F3C84,#29B9C3)'}}>{initial}</div>
                             <div style={{flex:1,minWidth:0}}>
                               {editing?(
                                 <input autoFocus value={editTitle} onChange={e=>setEditTitle(e.target.value)} onClick={e=>e.stopPropagation()}
                                   onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();commitRename()}if(e.key==='Escape')setEditingId(null)}}
                                   onBlur={commitRename}
-                                  style={{width:'100%',border:'1px solid #1C9FD4',borderRadius:7,padding:'4px 8px',fontSize:12.5,fontWeight:600,color:'#1E293B',outline:'none',fontFamily:FONT,background:'#fff'}}/>
+                                  style={{width:'100%',border:'1px solid #1C9FD4',borderRadius:6,padding:'3px 7px',fontSize:12,fontWeight:600,color:'#1E293B',outline:'none',fontFamily:FONT,background:'#fff'}}/>
                               ):(<>
                                 <div style={{display:'flex',alignItems:'center',gap:5}}>
-                                  {c.pinned&&<Ico n="pin" s={10} c="#1C9FD4"/>}
-                                  <div style={{flex:1,fontSize:12.5,color:on?'#1F3C84':'#1E293B',fontWeight:on?700:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.01em'}}>{c.title}</div>
+                                  {c.pinned&&<Ico n="pin" s={9} c="#1C9FD4"/>}
+                                  <div style={{flex:1,fontSize:12,color:on?'#1F3C84':'#1E293B',fontWeight:on?700:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.01em',lineHeight:1.3}}>{c.title}</div>
                                 </div>
-                                <div style={{fontSize:10.5,color:'#94A3B8',marginTop:2,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',fontWeight:500}}>
+                                <div style={{fontSize:10,color:'#94A3B8',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',fontWeight:500,lineHeight:1.3}}>
                                   {c.user_id && c.user_id!=='default' ? c.user_id.split('@')[0] : 'You'}<span style={{opacity:0.6}}> · {c.message_count||0} msg</span>
                                 </div>
                               </>)}
@@ -690,16 +692,16 @@ export default function AskAI() {
                             {!editing&&(
                               <div className="cvact" style={{display:'flex',alignItems:'center',gap:1,opacity:0,transition:'opacity .15s',flexShrink:0}}>
                                 <button title={c.pinned?'Unpin':'Pin'} onClick={e=>{e.stopPropagation();togglePin(c.id,c.pinned)}}
-                                  style={{padding:'5px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
-                                  <Ico n="pin" s={12} c={c.pinned?'#1C9FD4':'#94A3B8'}/>
+                                  style={{padding:'4px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
+                                  <Ico n="pin" s={11} c={c.pinned?'#1C9FD4':'#94A3B8'}/>
                                 </button>
                                 <button title="Rename" onClick={e=>{e.stopPropagation();startRename(c.id,c.title)}}
-                                  style={{padding:'5px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
-                                  <Ico n="edit" s={12} c="#94A3B8"/>
+                                  style={{padding:'4px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
+                                  <Ico n="edit" s={11} c="#94A3B8"/>
                                 </button>
                                 <button title="Delete" onClick={e=>{e.stopPropagation();deleteConv(c.id)}}
-                                  style={{padding:'5px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
-                                  <Ico n="trash" s={12} c="#94A3B8"/>
+                                  style={{padding:'4px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
+                                  <Ico n="trash" s={11} c="#94A3B8"/>
                                 </button>
                               </div>
                             )}
