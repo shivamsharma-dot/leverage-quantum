@@ -742,15 +742,15 @@ export default function AskAI() {
               {/* Prompts */}
               {rail==='prompts'&&(
                 <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                  <div style={{padding:'10px 12px 8px',flexShrink:0}}>
-                    <div style={{position:'relative',marginBottom:8}}>
-                      <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={12} c="#CBD5E1"/></span>
+                  <div style={{padding:'12px 14px 10px',flexShrink:0}}>
+                    <div style={{position:'relative',marginBottom:10}}>
+                      <span style={{position:'absolute',left:2,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={13} c="#94A3B8"/></span>
                       <input value={promptSearch} onChange={e=>setPromptSearch(e.target.value)} placeholder="Search prompts…"
-                        style={{width:'100%',background:'#F8FAFC',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px 7px 30px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
+                        style={{width:'100%',background:'transparent',border:'none',borderBottom:'0.5px solid #EEF1F6',borderRadius:0,padding:'6px 4px 6px 22px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
                     </div>
-                    <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                    <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
                       {CATS.map(c=><button key={c} onClick={()=>setPromptCat(c)}
-                        style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${promptCat===c?'#1F3C84':'#CBD5E1'}`,background:promptCat===c?'#F1F4F8':'#F8FAFC',fontSize:10.5,fontWeight:promptCat===c?700:500,color:promptCat===c?'#1F3C84':'#475569',cursor:'pointer',fontFamily:FONT,transition:'all .15s'}}>
+                        style={{padding:'4px 11px',borderRadius:20,border:'none',background:promptCat===c?'#F1F4F8':'transparent',fontSize:10.5,fontWeight:promptCat===c?700:500,color:promptCat===c?'#1F3C84':'#94A3B8',cursor:'pointer',fontFamily:FONT,transition:'all .15s'}}>
                         {c}
                       </button>)}
                     </div>
@@ -759,16 +759,16 @@ export default function AskAI() {
                     {filteredPrompts.length===0&&<div style={{padding:'30px 0',textAlign:'center',color:'#CBD5E1',fontSize:12.5}}>No prompts found</div>}
                     {filteredPrompts.map((p,idx)=>(
                       <div key={p.id} style={{borderTop:idx>0?'0.5px solid #F1F4F8':'none'}}>
-                        <div style={{display:'flex',alignItems:'center',gap:8,padding:'9px 0',cursor:'pointer'}} onClick={()=>setExpandedPrompt(v=>v===p.id?null:p.id)}>
-                          <span style={{fontSize:9.5,fontWeight:700,color:BLUE,flexShrink:0,fontFamily:FONT}}>{p.cat}</span>
-                          <span style={{flex:1,fontSize:12.5,fontWeight:500,color:'#1E293B',fontFamily:FONT,lineHeight:1.35}}>{p.title}</span>
-                          <Ico n="chevR" s={12} c="#94A3B8"/>
+                        <div style={{display:'flex',alignItems:'center',gap:9,padding:'10px 0',cursor:'pointer'}} onClick={()=>setExpandedPrompt(v=>v===p.id?null:p.id)}>
+                          <span style={{fontSize:9.5,fontWeight:700,letterSpacing:'0.03em',color:'#1F3C84',flexShrink:0,fontFamily:FONT}}>{p.cat}</span>
+                          <span style={{flex:1,fontSize:12.5,fontWeight:500,color:'#1E293B',fontFamily:FONT,lineHeight:1.4}}>{p.title}</span>
+                          <span style={{display:'flex',transform:expandedPrompt===p.id?'rotate(90deg)':'none',transition:'transform .15s'}}><Ico n="chevR" s={12} c="#94A3B8"/></span>
                         </div>
                         {expandedPrompt===p.id&&(
-                          <div style={{padding:'0 0 12px',animation:'fadeIn .2s ease'}}>
-                            <div style={{fontSize:11.5,color:'#9CA3AF',lineHeight:1.6,marginBottom:10,maxHeight:100,overflowY:'auto'}}>{p.text.slice(0,200)}{p.text.length>200?'…':''}</div>
+                          <div style={{padding:'0 0 14px',animation:'fadeIn .2s ease'}}>
+                            <div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.6,marginBottom:10,maxHeight:100,overflowY:'auto'}}>{p.text.slice(0,200)}{p.text.length>200?'…':''}</div>
                             <button onClick={()=>{setInput(p.text);textRef.current?.focus()}}
-                              style={{width:'100%',padding:'8px',borderRadius:8,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:12.5,fontWeight:700,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+                              style={{width:'100%',padding:'9px',borderRadius:9,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:12.5,fontWeight:700,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,boxShadow:'0 4px 12px -4px rgba(28,159,212,0.45)'}}>
                               <Ico n="spark" s={12} c="#fff"/> Use this prompt
                             </button>
                           </div>
