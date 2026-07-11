@@ -601,78 +601,67 @@ export default function AskAI() {
         }}>
           {panelOpen&&(
             <div style={{width:RAIL_W,flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
-              {/* Unified sidebar header — Claude-style (matches main Quantum sidebar) */}
-              <div style={{padding:'14px 12px 8px',flexShrink:0,background:'#fff'}}>
-                {/* Section eyebrow — matches main Quantum sidebar's uppercase group labels (OVERVIEW/ANALYTICS) */}
-                <div style={{fontSize:10,fontWeight:800,letterSpacing:'0.08em',textTransform:'uppercase',color:'#A8B2C2',padding:'2px 6px 10px'}}>Workspace</div>
-                {/* Tab nav — gradient active pill matches main sidebar's active-nav treatment */}
-                <div style={{display:'flex',flexDirection:'column',gap:2}}>
-                  {[
-                    {id:'history', icon:'history', label:'History'},
-                    {id:'prompts', icon:'prompts', label:'Prompts'},
-                    {id:'memories',icon:'brain',   label:'Memory'},
-                    {id:'logs',    icon:'logs',    label:'Logs'},
-                  ].map(t=>{
-                    const on=rail===t.id
-                    return <button key={t.id} onClick={()=>{setRail(t.id);if(t.id==='logs')loadLogs()}}
-                      style={{display:'flex',alignItems:'center',gap:11,padding:'9px 11px',borderRadius:10,border:'none',position:'relative',cursor:'pointer',width:'100%',textAlign:'left',background:on?'#EEF6FE':'transparent',color:on?'#1F3C84':'#6B7280',fontFamily:FONT,fontSize:13,fontWeight:on?700:500,transition:'all .15s'}}
-                      onMouseEnter={e=>{if(!on){e.currentTarget.style.background='#F4F6F9';e.currentTarget.style.color='#1F3C84'}}}
-                      onMouseLeave={e=>{if(!on){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#6B7280'}}}>
-                      {on&&<span style={{position:'absolute',left:0,top:'22%',bottom:'22%',width:3,borderRadius:2,background:'#1C9FD4'}}/>}
-                      <Ico n={t.icon} s={16} c={on?'#1C9FD4':'#9CA3AF'}/>
-                      <span style={{flex:1}}>{t.label}</span>
-                    </button>
-                  })}
-                </div>
-                <div style={{height:1,background:'#EEF1F6',margin:'12px 2px 0'}}/>
+              {/* Unified sidebar header — flat underline tabs, no cards/pills, minimal chrome */}
+              <div style={{padding:'14px 14px 0',flexShrink:0,background:'#fff',display:'flex',gap:18,borderBottom:'0.5px solid #EEF1F6'}}>
+                {[
+                  {id:'history', label:'History'},
+                  {id:'prompts', label:'Prompts'},
+                  {id:'memories',label:'Memory'},
+                  {id:'logs',    label:'Logs'},
+                ].map(t=>{
+                  const on=rail===t.id
+                  return <button key={t.id} onClick={()=>{setRail(t.id);if(t.id==='logs')loadLogs()}}
+                    style={{background:'none',border:'none',borderBottom:on?'2px solid #1C9FD4':'2px solid transparent',padding:'0 0 9px',cursor:'pointer',fontFamily:FONT,fontSize:13,fontWeight:on?700:500,color:on?'#1F3C84':'#94A3B8',transition:'color .15s'}}
+                    onMouseEnter={e=>{if(!on)e.currentTarget.style.color='#475569'}}
+                    onMouseLeave={e=>{if(!on)e.currentTarget.style.color='#94A3B8'}}>
+                    {t.label}
+                  </button>
+                })}
               </div>
 
               {/* History */}
               {rail==='history'&&(
-                <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',background:'linear-gradient(180deg,#FAFBFD,#F5F7FA)'}}>
-                  <div style={{padding:'12px 12px 8px',flexShrink:0}}>
-                    <div style={{position:'relative',marginBottom:8}}>
-                      <span style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={13} c="#94A3B8"/></span>
+                <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                  <div style={{padding:'12px 14px 8px',flexShrink:0}}>
+                    <div style={{position:'relative',marginBottom:10}}>
+                      <span style={{position:'absolute',left:2,top:'50%',transform:'translateY(-50%)'}}><Ico n="search" s={13} c="#94A3B8"/></span>
                       <input value={convSearch} onChange={e=>setConvSearch(e.target.value)} placeholder="Search conversations or person…"
-                        style={{width:'100%',background:'#fff',border:'1px solid #E8ECF2',borderRadius:11,padding:'9px 12px 9px 34px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT,boxShadow:'0 1px 3px rgba(15,23,42,0.04)'}}/>
+                        style={{width:'100%',background:'transparent',border:'none',borderBottom:'0.5px solid #EEF1F6',borderRadius:0,padding:'6px 4px 6px 22px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
                     </div>
-                    {/* Everyone / Just me — segmented control, light tint (kept minimal, no dark fill) */}
+                    {/* Everyone / Just me — plain text toggle, no track/pill */}
                     {people.length>0&&(
-                      <div>
-                        <div style={{display:'flex',background:'#F4F6F9',borderRadius:9,padding:2,gap:2}}>
-                          {[['all','Everyone'],['mine','Just me']].map(([val,lbl])=>{
-                            const on=personFilter===val
-                            return <button key={val} onClick={()=>setPersonFilter(val)}
-                              style={{flex:1,padding:'6px 0',borderRadius:7,border:'none',background:on?'#fff':'transparent',fontSize:11.5,fontWeight:on?700:600,color:on?'#1F3C84':'#94A3B8',cursor:'pointer',fontFamily:FONT,transition:'all .18s',boxShadow:on?'0 1px 3px rgba(15,23,42,0.10)':'none'}}>{lbl}</button>
-                          })}
-                        </div>
-                        {people.filter(p=>p!==uid).length>0&&(
-                          <div style={{display:'flex',gap:5,flexWrap:'wrap',marginTop:6}}>
-                            {people.filter(p=>p!==uid).map(p=>{
-                              const on=personFilter===p
-                              return <button key={p} onClick={()=>setPersonFilter(p)}
-                                style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${on?'#1C9FD4':'#E8ECF2'}`,background:on?'#E3F5FD':'#fff',fontSize:10,fontWeight:on?700:500,color:on?'#1C9FD4':'#94A3B8',cursor:'pointer',fontFamily:FONT,whiteSpace:'nowrap'}}>{p.split('@')[0]}</button>
-                            })}
-                          </div>
-                        )}
+                      <div style={{display:'flex',alignItems:'center',flexWrap:'wrap',gap:0,fontSize:12}}>
+                        {[['all','Everyone'],['mine','Just me']].map(([val,lbl],i)=>{
+                          const on=personFilter===val
+                          return <span key={val} style={{display:'flex',alignItems:'center'}}>
+                            {i>0&&<span style={{color:'#CBD5E1',margin:'0 8px'}}>·</span>}
+                            <button onClick={()=>setPersonFilter(val)}
+                              style={{background:'none',border:'none',padding:0,cursor:'pointer',fontFamily:FONT,fontSize:12,fontWeight:on?700:500,color:on?'#1F3C84':'#94A3B8'}}>{lbl}</button>
+                          </span>
+                        })}
+                        {people.filter(p=>p!==uid).map(p=>{
+                          const on=personFilter===p
+                          return <span key={p} style={{display:'flex',alignItems:'center'}}>
+                            <span style={{color:'#CBD5E1',margin:'0 8px'}}>·</span>
+                            <button onClick={()=>setPersonFilter(p)}
+                              style={{background:'none',border:'none',padding:0,cursor:'pointer',fontFamily:FONT,fontSize:12,fontWeight:on?700:500,color:on?'#1C9FD4':'#94A3B8',whiteSpace:'nowrap'}}>{p.split('@')[0]}</button>
+                          </span>
+                        })}
                       </div>
                     )}
                   </div>
-                  <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 10px 10px'}}>
+                  <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 14px 10px'}}>
                     {Object.entries(grouped).map(([label,items])=>items.length>0&&(
-                      <div key={label} style={{marginBottom:6}}>
-                        <div style={{padding:'10px 6px 6px',fontSize:9.5,fontWeight:800,color:label==='Pinned'?'#1C9FD4':'#A8B2C2',letterSpacing:'0.1em',textTransform:'uppercase',display:'flex',alignItems:'center',gap:6}}>
-                          {label==='Pinned'&&<Ico n="pin" s={11} c="#1C9FD4"/>}{label}<div style={{flex:1,height:1,background:`linear-gradient(90deg,${label==='Pinned'?'rgba(28,159,212,0.3)':'#E8ECF2'},transparent)`}}/>
+                      <div key={label} style={{marginBottom:4}}>
+                        <div style={{padding:'12px 0 5px',fontSize:9.5,fontWeight:800,color:label==='Pinned'?'#1C9FD4':'#A8B2C2',letterSpacing:'0.1em',textTransform:'uppercase',display:'flex',alignItems:'center',gap:6}}>
+                          {label==='Pinned'&&<Ico n="pin" s={11} c="#1C9FD4"/>}{label}
                         </div>
-                        {items.map(c=>{
+                        {items.map((c,idx)=>{
                           const on=c.id===activeId
                           const editing=editingId===c.id
-                          const initial=(c.user_id&&c.user_id!=='default')?(c.user_id.split('@')[0][0]||'?').toUpperCase():'AI'
                           return (
                           <div key={c.id} className="cv" onClick={()=>!editing&&selectConv(c)}
-                            style={{display:'flex',alignItems:'center',gap:8,borderRadius:9,margin:'1px 0',cursor:editing?'default':'pointer',padding:'7px 9px',position:'relative',overflow:'hidden',background:on?'#EEF6FE':'transparent',border:'1px solid transparent',transition:'all .15s ease'}}>
-                            {on&&<span style={{position:'absolute',left:0,top:'22%',bottom:'22%',width:3,borderRadius:2,background:'#1C9FD4'}}/>}
-                            <div style={{width:24,height:24,borderRadius:7,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,fontFamily:FONT,color:'#fff',background:'linear-gradient(145deg,#1F3C84,#29B9C3)'}}>{initial}</div>
+                            style={{display:'flex',alignItems:'center',gap:6,cursor:editing?'default':'pointer',padding:'8px 0',borderTop:idx>0?'0.5px solid #F1F4F8':'none',transition:'background .1s ease'}}>
                             <div style={{flex:1,minWidth:0}}>
                               {editing?(
                                 <input autoFocus value={editTitle} onChange={e=>setEditTitle(e.target.value)} onClick={e=>e.stopPropagation()}
@@ -682,9 +671,9 @@ export default function AskAI() {
                               ):(<>
                                 <div style={{display:'flex',alignItems:'center',gap:5}}>
                                   {c.pinned&&<Ico n="pin" s={9} c="#1C9FD4"/>}
-                                  <div style={{flex:1,fontSize:12,color:on?'#1F3C84':'#1E293B',fontWeight:on?700:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.01em',lineHeight:1.3}}>{c.title}</div>
+                                  <div style={{flex:1,fontSize:12.5,color:on?'#1F3C84':'#1E293B',fontWeight:on?700:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.01em',lineHeight:1.4}}>{c.title}</div>
                                 </div>
-                                <div style={{fontSize:10,color:'#94A3B8',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',fontWeight:500,lineHeight:1.3}}>
+                                <div style={{fontSize:10.5,color:'#94A3B8',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',fontWeight:500,lineHeight:1.3}}>
                                   {c.user_id && c.user_id!=='default' ? c.user_id.split('@')[0] : 'You'}<span style={{opacity:0.6}}> · {c.message_count||0} msg</span>
                                 </div>
                               </>)}
@@ -737,18 +726,18 @@ export default function AskAI() {
                       </button>)}
                     </div>
                   </div>
-                  <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 8px 8px'}}>
+                  <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 14px 8px'}}>
                     {filteredPrompts.length===0&&<div style={{padding:'30px 0',textAlign:'center',color:'#CBD5E1',fontSize:12.5}}>No prompts found</div>}
-                    {filteredPrompts.map(p=>(
-                      <div key={p.id} style={{marginBottom:4,borderRadius:10,border:`1px solid ${expandedPrompt===p.id?'rgba(28,159,212,0.4)':borderColor}`,background:expandedPrompt===p.id?'rgba(28,159,212,0.06)':'rgba(255,255,255,0.02)',overflow:'hidden',transition:'all .2s'}}>
-                        <div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 12px',cursor:'pointer'}} onClick={()=>setExpandedPrompt(v=>v===p.id?null:p.id)}>
-                          <span style={{fontSize:9.5,fontWeight:700,padding:'2px 6px',borderRadius:20,background:'#EFF6FF',color:BLUE,flexShrink:0,fontFamily:FONT}}>{p.cat}</span>
-                          <span style={{flex:1,fontSize:12.5,fontWeight:600,color:'#1E293B',fontFamily:FONT,lineHeight:1.35}}>{p.title}</span>
+                    {filteredPrompts.map((p,idx)=>(
+                      <div key={p.id} style={{borderTop:idx>0?'0.5px solid #F1F4F8':'none'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:8,padding:'9px 0',cursor:'pointer'}} onClick={()=>setExpandedPrompt(v=>v===p.id?null:p.id)}>
+                          <span style={{fontSize:9.5,fontWeight:700,color:BLUE,flexShrink:0,fontFamily:FONT}}>{p.cat}</span>
+                          <span style={{flex:1,fontSize:12.5,fontWeight:500,color:'#1E293B',fontFamily:FONT,lineHeight:1.35}}>{p.title}</span>
                           <Ico n="chevR" s={12} c="#94A3B8"/>
                         </div>
                         {expandedPrompt===p.id&&(
-                          <div style={{padding:'0 12px 12px',animation:'fadeIn .2s ease'}}>
-                            <div style={{fontSize:11.5,color:'#9CA3AF',lineHeight:1.6,marginBottom:10,maxHeight:100,overflowY:'auto',background:'#F8FAFC',padding:8,borderRadius:6}}>{p.text.slice(0,200)}{p.text.length>200?'…':''}</div>
+                          <div style={{padding:'0 0 12px',animation:'fadeIn .2s ease'}}>
+                            <div style={{fontSize:11.5,color:'#9CA3AF',lineHeight:1.6,marginBottom:10,maxHeight:100,overflowY:'auto'}}>{p.text.slice(0,200)}{p.text.length>200?'…':''}</div>
                             <button onClick={()=>{setInput(p.text);textRef.current?.focus()}}
                               style={{width:'100%',padding:'8px',borderRadius:8,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:12.5,fontWeight:700,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
                               <Ico n="spark" s={12} c="#fff"/> Use this prompt
@@ -775,11 +764,11 @@ export default function AskAI() {
                       </button>
                     </div>
                   </div>
-                  <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 12px 8px'}}>
+                  <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 14px 8px'}}>
                     {memLoading&&<div style={{padding:20,textAlign:'center',color:'#CBD5E1',fontSize:12}}>Loading…</div>}
                     {!memLoading&&memories.length===0&&<div style={{padding:'34px 16px',textAlign:'center'}}><div style={{width:44,height:44,margin:'0 auto 12px',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(145deg,rgba(31,60,132,0.08),rgba(28,159,212,0.08))',border:`1px solid ${borderColor}`}}><Ico n='brain' s={20} c={BLUE}/></div><div style={{fontSize:13,fontWeight:700,color:'#1F3C84',marginBottom:4,fontFamily:FONT}}>No memories yet</div><div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.5}}>Add a fact above — it stays with the assistant across every conversation.</div></div>}
                     {memories.map((m,i)=>(
-                      <div key={m.id||i} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'9px 10px',borderRadius:8,marginBottom:4,background:'#FAFAFA',border:'0.5px solid #E5E7EB'}}>
+                      <div key={m.id||i} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'8px 0',borderTop:i>0?'0.5px solid #F1F4F8':'none'}}>
                         <div style={{width:5,height:5,borderRadius:'50%',background:BLUE,flexShrink:0,marginTop:6}}/>
                         <span style={{flex:1,fontSize:12.5,color:'#374151',lineHeight:1.5}}>{m.content}</span>
                         <button onClick={()=>delMem(m.id)} title="Remove" style={{background:'transparent',border:'none',cursor:'pointer',padding:2,borderRadius:4,color:'#94A3B8',flexShrink:0}}>
