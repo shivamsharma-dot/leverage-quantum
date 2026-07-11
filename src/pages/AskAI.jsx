@@ -138,6 +138,7 @@ function Ico({n,s=16,c='currentColor',sw=2}){
     logs:     <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></>,
     pin:      <><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.5-2.5V8l1.5-2H5l1.5 2v6.5z"/></>,
     edit:     <><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4z"/></>,
+    mic:      <><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></>,
   }
   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d[n]}</svg>
 }
@@ -232,6 +233,7 @@ export default function AskAI() {
   const [railOpen, setRailOpen]   = useState(true) // unified floating-rail visibility (desktop + mobile) — visible by default, auto-closes on any click within the chat area, reopened via the persistent toggle
   const [platformScope, setPlatformScope] = useState('all') // 'all' | 'meta' | 'google' — scopes which tools the model can call
   const [scopeOpen, setScopeOpen] = useState(false)
+  const [listening, setListening] = useState(false) // dictation mic — Web Speech API, browser-native, no backend
   const [metaToken, setMetaToken] = useState('')
   const [connected, setConnected] = useState(false)
   const [memories, setMemories]   = useState([])
@@ -251,6 +253,29 @@ export default function AskAI() {
   const bottomRef   = useRef(null)
   const textRef     = useRef(null)
   const abortRef  = useRef(null)
+  const recognitionRef = useRef(null)
+
+  /* dictation mic — Web Speech API. Feature-detected; button only renders where supported. */
+  const micSupported = typeof window!=='undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
+  const toggleMic = useCallback(()=>{
+    if (!micSupported) return
+    if (listening) { recognitionRef.current?.stop(); return }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    const rec = new SR()
+    rec.lang = 'en-IN'
+    rec.interimResults = false
+    rec.continuous = false
+    rec.onresult = e => {
+      const transcript = Array.from(e.results).map(r=>r[0].transcript).join(' ')
+      setInput(prev => (prev ? prev.trim()+' ' : '') + transcript)
+      textRef.current?.focus()
+    }
+    rec.onerror = () => setListening(false)
+    rec.onend = () => setListening(false)
+    recognitionRef.current = rec
+    setListening(true)
+    rec.start()
+  },[listening,micSupported])
 
   // persist convs
   useEffect(()=>{try{localStorage.setItem(CV_KEY,JSON.stringify(convs.slice(0,500)))}catch{}},[convs])
@@ -506,10 +531,18 @@ export default function AskAI() {
               </button>
             ))}
           </div>
-          <button onClick={()=>{ if(loading){abortRef.current?.abort()} else {send()} }} disabled={!loading&&!input.trim()} title={loading?'Stop generating':'Send'} className="sendbtn"
+          <div style={{display:'flex',alignItems:'center',gap:6}}>
+            {micSupported&&(
+              <button onClick={toggleMic} title={listening?'Stop dictation':'Dictate your question'} className={listening?'micbtn micbtn-on':'micbtn'}
+                style={{width:34,height:34,borderRadius:9,border:`0.5px solid ${listening?'#CDEBD8':borderColor}`,background:listening?'#F0F9F4':'transparent',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',transition:'all .15s'}}>
+                <Ico n="mic" s={15} c={listening?GREEN:'#94A3B8'}/>
+              </button>
+            )}
+            <button onClick={()=>{ if(loading){abortRef.current?.abort()} else {send()} }} disabled={!loading&&!input.trim()} title={loading?'Stop generating':'Send'} className="sendbtn"
             style={{width:36,height:36,borderRadius:10,border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:(loading||input.trim())?'pointer':'not-allowed',background:(loading||input.trim())?'linear-gradient(135deg,#1F3C84,#1C9FD4 60%,#29B9C3)':'#E5E7EB',boxShadow:(loading||input.trim())?'0 6px 16px -4px rgba(28,159,212,0.6)':'none',transition:'all .2s'}}>
             <span style={{display:'flex'}}><Ico n={loading?'close':'send'} s={15} c="#fff" sw={2}/></span>
           </button>
+          </div>
         </div>
       </div>
       <div style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Powered by Claude Sonnet 4.5 — can make mistakes, always verify important numbers.</div>
@@ -538,6 +571,9 @@ export default function AskAI() {
         .ibtn:hover{background:#F3F4F6!important}
         .mabtn:hover{background:#F3F4F6!important}
         .sendbtn:hover:not(:disabled){transform:scale(1.05);background:${BLUE}!important}
+        .micbtn:hover{background:#F4F6F9}
+        @keyframes micPulse{0%,100%{box-shadow:0 0 0 0 rgba(76,174,111,0.35)}50%{box-shadow:0 0 0 5px rgba(76,174,111,0)}}
+        .micbtn-on{animation:micPulse 1.4s ease-in-out infinite}
         input::placeholder,textarea::placeholder{color:#9AA7B8!important}
         input,textarea{caret-color:#1C9FD4;}
         .composerInput,.composerInput:focus,.composerInput:focus-visible{outline:none!important;box-shadow:none!important;-webkit-appearance:none;appearance:none}
