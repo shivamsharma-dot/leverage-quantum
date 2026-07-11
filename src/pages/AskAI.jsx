@@ -228,7 +228,7 @@ export default function AskAI() {
   const [messages, setMessages]   = useState([])
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
-  const [rail, setRail]           = useState('history') // 'history' | 'prompts' | 'memories' | 'logs' — always one active (Claude-style unified sidebar)
+  const [rail, setRail]           = useState('history') // 'history' | 'prompts' | 'memories' — always one active (Claude-style unified sidebar)
   const [railOpen, setRailOpen]   = useState(true) // unified floating-rail visibility (desktop + mobile) — visible by default, auto-closes on any click within the chat area, reopened via the persistent toggle
   const [platformScope, setPlatformScope] = useState('all') // 'all' | 'meta' | 'google' — scopes which tools the model can call
   const [scopeOpen, setScopeOpen] = useState(false)
@@ -407,16 +407,6 @@ export default function AskAI() {
     }finally{setLoading(false)}
   },[messages,loading,metaToken,memories,platformScope,activeId,saveMessages])
 
-  /* report logs */
-  const [reportLogs, setReportLogs]       = useState([])
-  const [logsLoading, setLogsLoading]     = useState(false)
-  
-  const loadLogs = async () => {
-    setLogsLoading(true)
-    const d = await sbGet('report_logs','?order=sent_at.desc&limit=50')
-    setReportLogs(Array.isArray(d) ? d : [])
-    setLogsLoading(false)
-  }
 
 
   /* memories */
@@ -488,10 +478,10 @@ export default function AskAI() {
           <div style={{display:'flex',alignItems:'center',gap:6}}>
             <div style={{position:'relative'}}>
               <button onClick={e=>{e.stopPropagation();setScopeOpen(v=>!v)}} className="mabtn"
-                style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${scopeOpen?BLUE:borderColor}`,background:scopeOpen?'#E3F5FD':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:scopeOpen?BLUE:'#475569',fontFamily:FONT,transition:'all .15s'}}>
+                style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${scopeOpen?'#CBD5E1':borderColor}`,background:scopeOpen?'#F1F4F8':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:scopeOpen?'#1F3C84':'#475569',fontFamily:FONT,transition:'all .15s'}}>
                 <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,background:platformScope==='meta'?(connected?GREEN:'#CBD5E1'):platformScope==='google'?GREEN:'#94A3B8'}}/>
                 {platformScope==='meta'?'Meta Ads':platformScope==='google'?'Google Ads':'All sources'}
-                <span style={{display:'flex',transform:'rotate(90deg)'}}><Ico n="chevR" s={10} c={scopeOpen?BLUE:'#94A3B8'}/></span>
+                <span style={{display:'flex',transform:'rotate(90deg)'}}><Ico n="chevR" s={10} c={scopeOpen?'#1F3C84':'#94A3B8'}/></span>
               </button>
               {scopeOpen&&(
                 <div onClick={e=>e.stopPropagation()} style={{position:'absolute',bottom:'calc(100% + 6px)',left:0,minWidth:170,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 10px 30px -8px rgba(15,23,42,0.18)',padding:6,zIndex:20}}>
@@ -511,8 +501,8 @@ export default function AskAI() {
             </div>
             {[['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
               <button key={id} onClick={e=>{e.stopPropagation();toggleRail(id)}} className="mabtn"
-                style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${rail===id?BLUE:borderColor}`,background:rail===id?'#E3F5FD':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id?BLUE:'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
-                <Ico n={ic} s={12} c={rail===id?BLUE:'#94A3B8'}/>{lbl}
+                style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${rail===id?'#CBD5E1':borderColor}`,background:rail===id?'#F1F4F8':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id?'#1F3C84':'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
+                <Ico n={ic} s={12} c={rail===id?'#1F3C84':'#94A3B8'}/>{lbl}
               </button>
             ))}
           </div>
@@ -522,7 +512,7 @@ export default function AskAI() {
           </button>
         </div>
       </div>
-      <div style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Ask AI can make mistakes. Always verify important numbers.</div>
+      <div style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Powered by Claude Sonnet 4.5 — can make mistakes, always verify important numbers.</div>
     </div>
   )
 
@@ -540,7 +530,7 @@ export default function AskAI() {
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
         @keyframes scaleIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
         .rb:not(.rb-active):hover{background:rgba(28,159,212,0.10)!important;border-radius:14px!important}
-        .qp:hover{background:rgba(28,159,212,0.15)!important;border-color:rgba(28,159,212,0.4)!important;color:#fff!important;transform:translateY(-1px)!important;transition:all .2s!important}
+        .qp:hover{background:#F1F4F8!important;border-color:#CBD5E1!important;color:#1F3C84!important;transform:translateY(-1px)!important;transition:all .2s!important}
         .cv:hover .cvact{opacity:1!important}
         .cv:hover .delbtn{opacity:1!important}
         .cvact button:hover{background:rgba(0,0,0,0.06)!important}
@@ -563,7 +553,7 @@ export default function AskAI() {
         @keyframes qBarGrow{0%,100%{transform:scaleY(0.8)}50%{transform:scaleY(1)}}
         .qBar{transform-origin:bottom;animation:qBarGrow 2.2s ease-in-out infinite}
         .qChip{transition:all .2s ease;position:relative;overflow:hidden}
-        .qChip:hover{transform:translateY(-2px);border-color:rgba(28,159,212,0.55)!important;box-shadow:0 10px 22px -10px rgba(28,159,212,0.55)!important;color:#1F3C84!important}
+        .qChip:hover{transform:translateY(-2px);border-color:#CBD5E1!important;box-shadow:0 6px 16px -8px rgba(15,23,42,0.18)!important;color:#1F3C84!important}
         .rb{transition:background .18s ease,border-radius .18s ease}
 .askai-rail{ position:absolute; z-index:56; top:12px; bottom:12px; left:12px; width:322px; border-radius:16px; opacity:1; pointer-events:auto; transform:translateX(-115%); transition:transform .28s ease; box-shadow:0 12px 34px -10px rgba(15,23,42,0.20); }
 .askai-rail.rail-open{ transform:translateX(0); }
@@ -607,10 +597,9 @@ export default function AskAI() {
                   {id:'history', label:'History'},
                   {id:'prompts', label:'Prompts'},
                   {id:'memories',label:'Memory'},
-                  {id:'logs',    label:'Logs'},
                 ].map(t=>{
                   const on=rail===t.id
-                  return <button key={t.id} onClick={()=>{setRail(t.id);if(t.id==='logs')loadLogs()}}
+                  return <button key={t.id} onClick={()=>setRail(t.id)}
                     style={{background:'none',border:'none',borderBottom:on?'2px solid #1C9FD4':'2px solid transparent',padding:'0 0 9px',cursor:'pointer',fontFamily:FONT,fontSize:13,fontWeight:on?700:500,color:on?'#1F3C84':'#94A3B8',transition:'color .15s'}}
                     onMouseEnter={e=>{if(!on)e.currentTarget.style.color='#475569'}}
                     onMouseLeave={e=>{if(!on)e.currentTarget.style.color='#94A3B8'}}>
@@ -721,7 +710,7 @@ export default function AskAI() {
                     </div>
                     <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                       {CATS.map(c=><button key={c} onClick={()=>setPromptCat(c)}
-                        style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${promptCat===c?BLUE:'#CBD5E1'}`,background:promptCat===c?'rgba(28,159,212,0.12)':'#F8FAFC',fontSize:10.5,fontWeight:promptCat===c?700:500,color:promptCat===c?BLUE:'#475569',cursor:'pointer',fontFamily:FONT,transition:'all .15s'}}>
+                        style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${promptCat===c?'#1F3C84':'#CBD5E1'}`,background:promptCat===c?'#F1F4F8':'#F8FAFC',fontSize:10.5,fontWeight:promptCat===c?700:500,color:promptCat===c?'#1F3C84':'#475569',cursor:'pointer',fontFamily:FONT,transition:'all .15s'}}>
                         {c}
                       </button>)}
                     </div>
@@ -779,84 +768,6 @@ export default function AskAI() {
                   </div>
                 </div>
               )}
-          {/* Report Logs */}
-          {rail==='logs'&&(
-            <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden',background:'#F8FAFC'}}>
-              <div style={{padding:'10px 14px 8px',flexShrink:0,borderBottom:'0.5px solid #E5E7EB',background:'#fff',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                <div>
-                  <div style={{fontSize:10.5,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'#94A3B8'}}>Send History</div>
-                  <div style={{fontSize:12,color:'#64748B',marginTop:1,fontWeight:500}}>{reportLogs.length} record{reportLogs.length!==1?'s':''}</div>
-                </div>
-                <button onClick={loadLogs} title="Refresh"
-                  style={{width:30,height:30,borderRadius:8,border:'0.5px solid #E5E7EB',background:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.background='#F1F5F9'}
-                  onMouseLeave={e=>e.currentTarget.style.background='#fff'}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                </button>
-              </div>
-              <div className="cs" style={{flex:1,minHeight:0,overflowY:'auto',padding:'10px 10px 12px'}}>
-                {logsLoading&&[1,2,3].map(i=>(
-                  <div key={i} style={{height:84,borderRadius:12,background:'#F1F5F9',marginBottom:8}}/>
-                ))}
-                {!logsLoading&&reportLogs.length===0&&(
-                  <div style={{padding:'40px 16px',textAlign:'center'}}>
-                    <div style={{width:40,height:40,borderRadius:12,background:'#F1F5F9',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                    </div>
-                    <div style={{fontSize:13,fontWeight:600,color:'#94A3B8',marginBottom:4}}>No reports sent yet</div>
-                    <div style={{fontSize:11.5,color:'#CBD5E1'}}>Use Send Report to trigger one</div>
-                  </div>
-                )}
-                {reportLogs.map((log,idx)=>{
-                  const dt=new Date(log.sent_at)
-                  const dateStr=dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
-                  const timeStr=dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})
-                  const isOk=log.status==='sent'
-                  const typeLabel=log.report_type==='daily'?'Daily':log.report_type==='weekly'?'Weekly':'Monthly'
-                  const typeColor=log.report_type==='daily'?BLUE:log.report_type==='weekly'?GREEN:NAVY
-                  const typeBg=log.report_type==='daily'?'#EFF8FF':log.report_type==='weekly'?'#F0FDF4':'#EFF2FF'
-                  const triggeredShort=(log.triggered_by||'cron')==='cron'?'Cron':(log.triggered_by||'').split('@')[0]
-                  const rcptCount=log.recipients?.length||0
-                  return (
-                    <div key={log.id||idx} style={{
-                      marginBottom:8,borderRadius:12,border:`0.5px solid ${isOk?'#DCFCE7':'#FEE2E2'}`,
-                      background:'#fff',overflow:'hidden',boxShadow:'0 1px 4px rgba(15,23,42,0.05)',
-                      borderLeft:`3px solid ${isOk?'#22C55E':'#EF4444'}`
-                    }}>
-                      <div style={{padding:'9px 12px 7px',display:'flex',alignItems:'center',gap:6,borderBottom:'0.5px solid #F8FAFC'}}>
-                        <span style={{fontSize:10,fontWeight:800,padding:'2px 8px',borderRadius:20,background:typeBg,color:typeColor,letterSpacing:'.04em',textTransform:'uppercase'}}>{typeLabel}</span>
-                        <div style={{flex:1}}/>
-                        <div style={{display:'flex',alignItems:'center',gap:4}}>
-                          <div style={{width:6,height:6,borderRadius:'50%',background:isOk?'#22C55E':'#EF4444'}}/>
-                          <span style={{fontSize:11,fontWeight:700,color:isOk?'#16A34A':'#DC2626'}}>{isOk?'Sent':'Failed'}</span>
-                        </div>
-                      </div>
-                      <div style={{padding:'8px 12px 10px'}}>
-                        <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:5}}>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                          <span style={{fontSize:12,fontWeight:600,color:'#0F172A'}}>{dateStr}</span>
-                          <span style={{fontSize:11,color:'#CBD5E1'}}>·</span>
-                          <span style={{fontSize:11.5,color:'#64748B'}}>{timeStr}</span>
-                        </div>
-                        <div style={{display:'flex',alignItems:'center',gap:5}}>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                          <span style={{fontSize:11.5,color:'#64748B'}}>{triggeredShort}</span>
-                          {rcptCount>0&&<><span style={{fontSize:11,color:'#CBD5E1'}}>·</span>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-                          <span style={{fontSize:11.5,color:'#64748B'}}>{rcptCount} rcpt</span></>}
-                        </div>
-                        {!isOk&&log.error&&(
-                          <div style={{marginTop:6,padding:'6px 8px',borderRadius:6,background:'#FFF5F5',border:'0.5px solid #FEE2E2'}}>
-                            <div style={{fontSize:10.5,color:'#DC2626',lineHeight:1.5,wordBreak:'break-word'}}>{log.error.length>90?log.error.slice(0,90)+'…':log.error}</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
             </div>
           )}
 
@@ -899,7 +810,7 @@ export default function AskAI() {
                   <div key={k} style={{marginBottom:24,animation:k===messages.length-1||k===messages.length-2?'fadeUp .3s ease':'none'}}>
                     {m.role==='user'?(
                       <div style={{display:'flex',justifyContent:'flex-end'}}>
-                        <div style={{maxWidth:'74%',background:'#EEF3FC',border:'0.5px solid #E1E9F7',borderRadius:'18px 18px 5px 18px',padding:'11px 16px'}}>
+                        <div style={{maxWidth:'74%',background:'#F1F4F8',border:'0.5px solid #E2E6EC',borderRadius:'18px 18px 5px 18px',padding:'11px 16px'}}>
                           <div style={{fontSize:14,color:'#1E293B',lineHeight:1.65,whiteSpace:'pre-wrap'}}>{m.content}</div>
                         </div>
                       </div>
