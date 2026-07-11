@@ -257,6 +257,15 @@ export default function AskAI() {
   const textRef     = useRef(null)
   const abortRef  = useRef(null)
   const recognitionRef = useRef(null)
+  const scopeRef = useRef(null)
+
+  // close the scope dropdown on any click outside it — previously only closed via its own toggle or picking an option, so clicking anywhere else on the page left it open indefinitely
+  useEffect(()=>{
+    if(!scopeOpen) return
+    const onDocClick = e=>{ if(scopeRef.current && !scopeRef.current.contains(e.target)) setScopeOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return ()=>document.removeEventListener('mousedown', onDocClick)
+  },[scopeOpen])
 
   /* dictation mic — Web Speech API. Feature-detected; button only renders where supported. */
   const micSupported = typeof window!=='undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -529,7 +538,7 @@ export default function AskAI() {
           style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:8}}>
           <div style={{display:'flex',alignItems:'center',gap:6}}>
-            <div style={{position:'relative'}}>
+            <div ref={scopeRef} style={{position:'relative'}}>
               <button onClick={e=>{e.stopPropagation();setScopeOpen(v=>!v)}} className="mabtn"
                 style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${scopeOpen?'#CBD5E1':borderColor}`,background:scopeOpen?'#F1F4F8':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:scopeOpen?'#1F3C84':'#475569',fontFamily:FONT,transition:'all .15s'}}>
                 <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,background:platformScope==='meta'?(connected?GREEN:'#CBD5E1'):platformScope==='google'?GREEN:'#94A3B8'}}/>
