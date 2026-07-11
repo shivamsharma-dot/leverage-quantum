@@ -492,8 +492,10 @@ export default function AskAI() {
   const composer = (
     <div style={{maxWidth:820,margin:'0 auto',width:'100%'}}>
       <div style={{position:'relative',background:'#fff',border:'none',borderRadius:16, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding:'14px 14px 12px',transition:'all .2s',boxShadow:input?'0 6px 24px -6px rgba(28,159,212,0.28), 0 1px 3px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)'}}>
-        {/* brand gradient top accent bar — radius set directly (not via container overflow:hidden) so dropdowns can still render above the composer without being clipped */}
-        <div style={{position:'absolute',top:0,left:0,right:0,height:3,borderRadius:'16px 16px 0 0',background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:input?1:0.85,transition:'opacity .2s'}}/>
+        {/* brand gradient top accent bar — clipped by a full-size overlay (not the bar's own radius, which can't express a 16px arc at 3px tall) so its corners follow the container's actual curve; the overlay is a sibling of the dropdown-bearing content, not an ancestor, so dropdowns still render unclipped */}
+        <div style={{position:'absolute',inset:0,borderRadius:16,overflow:'hidden',pointerEvents:'none'}}>
+          <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:input?1:0.85,transition:'opacity .2s'}}/>
+        </div>
         {/* Data-source selector — promoted above the input as its own row, since this is the single most consequential choice per message (what the model is even allowed to look at), not a minor utility on par with Prompts/Memories. */}
         <div style={{display:'flex',alignItems:'center',marginBottom:10,paddingBottom:10,borderBottom:'0.5px solid #EEF1F6'}}>
           <div style={{position:'relative'}}>
