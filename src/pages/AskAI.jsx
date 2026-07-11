@@ -491,7 +491,7 @@ export default function AskAI() {
       <Sidebar/>
 
       {/* Ask AI shell */}
-      <div style={{flex:1,display:'flex',minWidth:0,position:'relative',background:askAiBg}}>
+      <div style={{flex:1,display:'flex',minWidth:0,position:'relative',background:askAiBg,overflow:'hidden'}}>
 
 {railOpen&&(<div className="askai-backdrop" onClick={()=>setRailOpen(false)} style={{position:'absolute',inset:0,zIndex:55,background:'rgba(15,23,42,0.34)'}}/>)}
 
