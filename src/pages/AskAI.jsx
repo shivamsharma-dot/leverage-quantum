@@ -250,7 +250,7 @@ export default function AskAI() {
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
   const [rail, setRail]           = useState('history') // 'history' | 'prompts' | 'memories' — always one active (Claude-style unified sidebar)
-  const [railOpen, setRailOpen]   = useState(true) // unified floating-rail visibility (desktop + mobile) — visible by default, auto-closes on any click within the chat area, reopened via the persistent toggle
+  const [railOpen, setRailOpen]   = useState(() => typeof window !== 'undefined' ? window.innerWidth > 768 : true) // unified floating-rail visibility — open by default on desktop; on mobile it defaulted open too and covered the whole chat with History before the user asked for it, so it now starts closed there (still reachable via the reopen strip or the Prompts/Memories composer buttons)
   const [platformScope, setPlatformScope] = useState('all') // 'all' | 'meta' | 'google' — scopes which tools the model can call
   const [scopeOpen, setScopeOpen] = useState(false)
   const [listening, setListening] = useState(false) // dictation mic — Web Speech API, browser-native, no backend
