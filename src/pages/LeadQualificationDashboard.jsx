@@ -936,6 +936,7 @@ const baseCsv = await resolveSheetUrl(cfg.id === 'daily' ? 'qlopsDaily' : 'qlops
   }
   const dayExportRows = useMemo(() => monthlyByDate.map(r => ({
     date: r.date,
+    total_ql: mNum(r.futwork_qualified) + mNum(r.superbot_qualified) + mNum(r.futwork_ai_qualified),
     total_opp_count: r.opp_count, floor_queued: r.floor_queued,
     futwork_queued: r.futwork_queued, superbot_queued: r.superbot_queued, futwork_ai_queued: r.futwork_ai_queued,
     futwork_qualified: r.futwork_qualified, superbot_qualified: r.superbot_qualified, futwork_ai_qualified: r.futwork_ai_qualified,
@@ -946,6 +947,7 @@ const baseCsv = await resolveSheetUrl(cfg.id === 'daily' ? 'qlopsDaily' : 'qlops
   })), [monthlyByDate])
   const monthExportRows = useMemo(() => monthlyByPeriodScoped.map(r => ({
     period: r.period,
+    total_ql: mNum(r.futwork_qualified) + mNum(r.superbot_qualified) + mNum(r.futwork_ai_qualified),
     total_opp_count: r.opp_count, floor_queued: r.floor_queued,
     futwork_queued: r.futwork_queued, superbot_queued: r.superbot_queued, futwork_ai_queued: r.futwork_ai_queued,
     futwork_qualified: r.futwork_qualified, superbot_qualified: r.superbot_qualified, futwork_ai_qualified: r.futwork_ai_qualified,
