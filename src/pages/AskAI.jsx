@@ -598,6 +598,7 @@ export default function AskAI() {
 .askai-backdrop{ display:none; }
 .askai-toolbar-btn{ border:none; background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s ease; }
 .askai-toolbar-btn:hover{ background:#F4F6F9; }
+.askai-reopen-strip:hover{ background:linear-gradient(90deg,rgba(15,23,42,0.05),transparent); }
 @media (max-width:768px){ .askai-rail{ width:86vw!important; max-width:340px; top:0; bottom:0; left:0; border-radius:0; box-shadow:0 0 40px rgba(15,23,42,0.22); } .askai-backdrop{ display:block!important; } }
       `}</style>
 
@@ -608,6 +609,12 @@ export default function AskAI() {
       <div style={{flex:1,display:'flex',minWidth:0,position:'relative',background:askAiBg,overflow:'hidden'}}>
 
 {railOpen&&(<div className="askai-backdrop" onClick={()=>setRailOpen(false)} style={{position:'absolute',inset:0,zIndex:55,background:'rgba(15,23,42,0.34)'}}/>)}
+
+        {/* Reopen strip — with no dedicated toggle button, this is what brings the rail back once it's auto-hidden. Only present while closed; the rail itself covers this same edge once open. */}
+        {!railOpen&&(
+          <div className="askai-reopen-strip" onClick={e=>{e.stopPropagation();setRailOpen(true)}} title="Show sidebar"
+            style={{position:'absolute',left:0,top:0,bottom:0,width:20,zIndex:54,cursor:'pointer'}}/>
+        )}
 
         {/* Left sidebar - Claude-style unified, floating overlay */}
         <div className={"askai-rail"+(railOpen?" rail-open":"")} style={{
