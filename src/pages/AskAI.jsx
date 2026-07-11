@@ -185,21 +185,12 @@ function MagicLoader({question='',platformScope='all'}){
   const [i,setI]=useState(0);
   useEffect(()=>{setI(0);const t=setInterval(()=>setI(p=>(p+1)%phases.length),1500);return ()=>clearInterval(t)},[phases]);
   return (
-    <div style={{display:'flex',alignItems:'center',gap:14,padding:'8px 2px',animation:'qRise .4s ease'}}>
-      <div style={{position:'relative',width:40,height:40,flexShrink:0}}>
-        <div className="qOrb" style={{width:40,height:40,borderRadius:13,display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <div style={{display:'flex'}}><AnimatedLogo size={18}/></div>
-        </div>
-        <div style={{position:'absolute',inset:-5,borderRadius:18,border:'1.5px solid transparent',borderTopColor:'#1C9FD4',borderRightColor:'#29B9C3',animation:'qOrbit 1.1s linear infinite'}}/>
-        <div style={{position:'absolute',inset:-9,borderRadius:22,border:'1px solid transparent',borderBottomColor:'rgba(28,159,212,0.5)',animation:'qOrbitR 1.8s linear infinite'}}/>
+    <div style={{display:'flex',alignItems:'center',gap:10,padding:'6px 2px',animation:'qRise .4s ease'}}>
+      <div className="qPulse" style={{width:26,height:26,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:'#F4F6F9'}}>
+        <div style={{display:'flex'}}><AnimatedLogo size={13}/></div>
       </div>
-      <div style={{minWidth:0}}>
-        <div style={{position:'relative',width:170,height:7,borderRadius:6,background:'#E8EFF9',overflow:'hidden',marginBottom:8}}>
-          <div style={{position:'absolute',top:0,left:0,height:'100%',width:'45%',borderRadius:6,background:'linear-gradient(90deg,transparent,#1C9FD4,#29B9C3,transparent)',animation:'qScan 1.3s ease-in-out infinite'}}/>
-        </div>
-        <div key={i} style={{fontSize:13,fontWeight:600,color:'#475569',animation:'qRise .45s ease'}}>
-          <span className="qShine">{phases[i]}</span>
-        </div>
+      <div key={i} style={{fontSize:13,fontWeight:500,color:'#94A3B8',animation:'qFadeText .5s ease'}}>
+        {phases[i]}
       </div>
     </div>
   );
@@ -561,12 +552,12 @@ export default function AskAI() {
         input,textarea{caret-color:#1C9FD4;}
         .composerInput,.composerInput:focus,.composerInput:focus-visible{outline:none!important;box-shadow:none!important;-webkit-appearance:none;appearance:none}
         /* ===== PREMIUM AI MOTION TOOLKIT (brand: navy/blue/cyan/green) ===== */
-        @keyframes qOrbit{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-        @keyframes qOrbitR{from{transform:rotate(360deg)}to{transform:rotate(0deg)}}
-        @keyframes qGlow{0%,100%{box-shadow:0 8px 30px -6px rgba(28,159,212,0.45),0 0 0 0 rgba(28,159,212,0.30)}50%{box-shadow:0 12px 44px -4px rgba(41,185,195,0.60),0 0 0 10px rgba(28,159,212,0.06)}}
+        @keyframes qGlow{0%,100%{box-shadow:0 4px 16px -6px rgba(28,159,212,0.25)}50%{box-shadow:0 6px 22px -4px rgba(28,159,212,0.35)}}
         @keyframes qTextShine{0%{background-position:0% 50%}100%{background-position:200% 50%}}
-        @keyframes qScan{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
         @keyframes qRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes qFadeText{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes qPulseBg{0%,100%{opacity:1}50%{opacity:0.55}}
+        .qPulse{animation:qPulseBg 2s ease-in-out infinite}
         .qShine{background:linear-gradient(100deg,#1F3C84 0%,#1C9FD4 28%,#29B9C3 52%,#1C9FD4 74%,#1F3C84 100%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:qTextShine 4.5s linear infinite}
         .qOrb{position:relative;border-radius:22px;background:#fff;box-shadow:0 2px 10px rgba(15,23,42,0.07);overflow:hidden}
         @keyframes qBarGrow{0%,100%{transform:scaleY(0.8)}50%{transform:scaleY(1)}}
@@ -577,8 +568,10 @@ export default function AskAI() {
 .askai-rail{ position:absolute; z-index:56; top:12px; bottom:12px; left:12px; width:322px; border-radius:16px; opacity:1; pointer-events:auto; transform:translateX(-115%); transition:transform .28s ease; box-shadow:0 12px 34px -10px rgba(15,23,42,0.20); }
 .askai-rail.rail-open{ transform:translateX(0); }
 .askai-backdrop{ display:none; }
-.askai-toggle-btn{ position:absolute; z-index:54; top:16px; width:34px; height:34px; border-radius:10px; border:0.5px solid #E5E7EB; background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 10px rgba(15,23,42,0.08); transition:left .28s ease, background .15s ease; }
-.askai-toggle-btn:hover{ background:#F8FAFC; }
+.askai-toolbar{ position:absolute; z-index:54; top:16px; display:flex; align-items:stretch; background:#fff; border-radius:12px; border:0.5px solid #E5E7EB; box-shadow:0 2px 10px rgba(15,23,42,0.06); transition:left .28s ease; overflow:hidden; }
+.askai-toolbar-btn{ width:38px; height:36px; border:none; background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s ease; }
+.askai-toolbar-btn:hover{ background:#F4F6F9; }
+.askai-toolbar-divider{ width:1px; margin:7px 0; background:#EEF1F6; flex-shrink:0; }
 @media (max-width:768px){ .askai-rail{ width:86vw!important; max-width:340px; top:0; bottom:0; left:0; border-radius:0; box-shadow:0 0 40px rgba(15,23,42,0.22); } .askai-backdrop{ display:block!important; } }
       `}</style>
 
@@ -590,15 +583,16 @@ export default function AskAI() {
 
 {railOpen&&(<div className="askai-backdrop" onClick={()=>setRailOpen(false)} style={{position:'absolute',inset:0,zIndex:55,background:'rgba(15,23,42,0.34)'}}/>)}
 
-        {/* Floating toggle — always visible, opens/closes the rail. Sits clear of the rail's own edge when open so it never overlaps the New-chat icon. */}
-        <button className="askai-toggle-btn" onClick={e=>{e.stopPropagation();setRailOpen(v=>!v)}} title={railOpen?'Hide sidebar':'Show sidebar'} style={{left:railOpen?346:16}}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        </button>
-
-        {/* Floating New-chat icon — always visible regardless of rail state (the rail's own New chat button was removed; this is now the single, reachable entry point). */}
-        <button className="askai-toggle-btn" onClick={e=>{e.stopPropagation();newConv()}} title="New chat" style={{left:railOpen?388:58}}>
-          <Ico n="new" s={16} c="#1F3C84"/>
-        </button>
+        {/* Floating toolbar — toggle + New chat grouped into one control so they read as a single unit, not two separate floating buttons. Shifts clear of the rail's own edge when open. */}
+        <div className="askai-toolbar" style={{left:railOpen?346:16}}>
+          <button className="askai-toolbar-btn" onClick={e=>{e.stopPropagation();setRailOpen(v=>!v)}} title={railOpen?'Hide sidebar':'Show sidebar'}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div className="askai-toolbar-divider"/>
+          <button className="askai-toolbar-btn" onClick={e=>{e.stopPropagation();newConv()}} title="New chat">
+            <Ico n="new" s={16} c="#1F3C84"/>
+          </button>
+        </div>
 
         {/* Left sidebar - Claude-style unified, floating overlay */}
         <div className={"askai-rail"+(railOpen?" rail-open":"")} style={{
@@ -621,10 +615,10 @@ export default function AskAI() {
                   ].map(t=>{
                     const on=rail===t.id
                     return <button key={t.id} onClick={()=>{setRail(t.id);if(t.id==='logs')loadLogs()}}
-                      style={{display:'flex',alignItems:'center',gap:11,padding:'9px 11px',borderRadius:11,border:'1px solid transparent',cursor:'pointer',width:'100%',textAlign:'left',background:on?'linear-gradient(135deg,#1F3C84,#1C9FD4)':'transparent',color:on?'#fff':'#6B7280',fontFamily:FONT,fontSize:13,fontWeight:on?700:500,boxShadow:on?'0 8px 18px -8px rgba(28,159,212,0.55)':'none',transition:'all .15s'}}
+                      style={{display:'flex',alignItems:'center',gap:11,padding:'9px 11px 9px 9px',borderRadius:10,border:'none',borderLeft:on?'3px solid #1C9FD4':'3px solid transparent',cursor:'pointer',width:'100%',textAlign:'left',background:on?'#EEF6FE':'transparent',color:on?'#1F3C84':'#6B7280',fontFamily:FONT,fontSize:13,fontWeight:on?700:500,transition:'all .15s'}}
                       onMouseEnter={e=>{if(!on){e.currentTarget.style.background='#F4F6F9';e.currentTarget.style.color='#1F3C84'}}}
                       onMouseLeave={e=>{if(!on){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#6B7280'}}}>
-                      <Ico n={t.icon} s={16} c={on?'#fff':'#9CA3AF'}/>
+                      <Ico n={t.icon} s={16} c={on?'#1C9FD4':'#9CA3AF'}/>
                       <span style={{flex:1}}>{t.label}</span>
                     </button>
                   })}
@@ -641,14 +635,14 @@ export default function AskAI() {
                       <input value={convSearch} onChange={e=>setConvSearch(e.target.value)} placeholder="Search conversations or person…"
                         style={{width:'100%',background:'#fff',border:'1px solid #E8ECF2',borderRadius:11,padding:'9px 12px 9px 34px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT,boxShadow:'0 1px 3px rgba(15,23,42,0.04)'}}/>
                     </div>
-                    {/* Everyone / Just me — segmented control (matches the gradient-pill language used elsewhere on this page) */}
+                    {/* Everyone / Just me — segmented control, light tint (kept minimal, no dark fill) */}
                     {people.length>0&&(
                       <div>
-                        <div style={{display:'flex',background:'#EEF1F6',borderRadius:10,padding:2,gap:2}}>
+                        <div style={{display:'flex',background:'#F4F6F9',borderRadius:9,padding:2,gap:2}}>
                           {[['all','Everyone'],['mine','Just me']].map(([val,lbl])=>{
                             const on=personFilter===val
                             return <button key={val} onClick={()=>setPersonFilter(val)}
-                              style={{flex:1,padding:'6px 0',borderRadius:8,border:'none',background:on?'linear-gradient(135deg,#1F3C84,#1C9FD4)':'transparent',fontSize:11.5,fontWeight:on?700:600,color:on?'#fff':'#64748B',cursor:'pointer',fontFamily:FONT,transition:'all .18s',boxShadow:on?'0 4px 10px -4px rgba(28,159,212,0.55)':'none'}}>{lbl}</button>
+                              style={{flex:1,padding:'6px 0',borderRadius:7,border:'none',background:on?'#fff':'transparent',fontSize:11.5,fontWeight:on?700:600,color:on?'#1F3C84':'#94A3B8',cursor:'pointer',fontFamily:FONT,transition:'all .18s',boxShadow:on?'0 1px 3px rgba(15,23,42,0.10)':'none'}}>{lbl}</button>
                           })}
                         </div>
                         {people.filter(p=>p!==uid).length>0&&(
@@ -675,8 +669,8 @@ export default function AskAI() {
                           const initial=(c.user_id&&c.user_id!=='default')?(c.user_id.split('@')[0][0]||'?').toUpperCase():'AI'
                           return (
                           <div key={c.id} className="cv" onClick={()=>!editing&&selectConv(c)}
-                            style={{display:'flex',alignItems:'center',gap:10,borderRadius:13,margin:'3px 0',cursor:editing?'default':'pointer',padding:'10px 11px',position:'relative',overflow:'hidden',background:on?'linear-gradient(135deg,#1F3C84,#1C9FD4)':'#fff',border:on?'1px solid transparent':`1px solid ${c.pinned?'rgba(28,159,212,0.3)':'#EDF0F5'}`,boxShadow:on?'0 8px 22px -8px rgba(28,159,212,0.55)':'0 1px 3px rgba(15,23,42,0.05)',transition:'all .18s cubic-bezier(.4,0,.2,1)'}}>
-                            <div style={{width:30,height:30,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,fontFamily:FONT,color:on?'#1F3C84':'#fff',background:on?'rgba(255,255,255,0.9)':'linear-gradient(145deg,#1F3C84,#29B9C3)',boxShadow:on?'none':'0 2px 6px -2px rgba(31,60,132,0.5)'}}>{initial}</div>
+                            style={{display:'flex',alignItems:'center',gap:10,borderRadius:12,margin:'3px 0',cursor:editing?'default':'pointer',padding:'10px 11px 10px 9px',position:'relative',overflow:'hidden',background:on?'#EEF6FE':'#fff',borderLeft:on?'3px solid #1C9FD4':'3px solid transparent',border:on?'1px solid transparent':`1px solid ${c.pinned?'rgba(28,159,212,0.3)':'#EDF0F5'}`,boxShadow:'0 1px 3px rgba(15,23,42,0.04)',transition:'all .18s cubic-bezier(.4,0,.2,1)'}}>
+                            <div style={{width:30,height:30,borderRadius:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,fontFamily:FONT,color:'#fff',background:'linear-gradient(145deg,#1F3C84,#29B9C3)',boxShadow:'0 2px 6px -2px rgba(31,60,132,0.5)'}}>{initial}</div>
                             <div style={{flex:1,minWidth:0}}>
                               {editing?(
                                 <input autoFocus value={editTitle} onChange={e=>setEditTitle(e.target.value)} onClick={e=>e.stopPropagation()}
@@ -685,10 +679,10 @@ export default function AskAI() {
                                   style={{width:'100%',border:'1px solid #1C9FD4',borderRadius:7,padding:'4px 8px',fontSize:12.5,fontWeight:600,color:'#1E293B',outline:'none',fontFamily:FONT,background:'#fff'}}/>
                               ):(<>
                                 <div style={{display:'flex',alignItems:'center',gap:5}}>
-                                  {c.pinned&&!on&&<Ico n="pin" s={10} c="#1C9FD4"/>}
-                                  <div style={{flex:1,fontSize:12.5,color:on?'#fff':'#1E293B',fontWeight:on?700:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.01em'}}>{c.title}</div>
+                                  {c.pinned&&<Ico n="pin" s={10} c="#1C9FD4"/>}
+                                  <div style={{flex:1,fontSize:12.5,color:on?'#1F3C84':'#1E293B',fontWeight:on?700:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'-0.01em'}}>{c.title}</div>
                                 </div>
-                                <div style={{fontSize:10.5,color:on?'rgba(255,255,255,0.8)':'#94A3B8',marginTop:2,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',fontWeight:500}}>
+                                <div style={{fontSize:10.5,color:'#94A3B8',marginTop:2,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',fontWeight:500}}>
                                   {c.user_id && c.user_id!=='default' ? c.user_id.split('@')[0] : 'You'}<span style={{opacity:0.6}}> · {c.message_count||0} msg</span>
                                 </div>
                               </>)}
@@ -697,15 +691,15 @@ export default function AskAI() {
                               <div className="cvact" style={{display:'flex',alignItems:'center',gap:1,opacity:0,transition:'opacity .15s',flexShrink:0}}>
                                 <button title={c.pinned?'Unpin':'Pin'} onClick={e=>{e.stopPropagation();togglePin(c.id,c.pinned)}}
                                   style={{padding:'5px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
-                                  <Ico n="pin" s={12} c={c.pinned?'#1C9FD4':(on?'rgba(255,255,255,0.85)':'#CBD5E1')}/>
+                                  <Ico n="pin" s={12} c={c.pinned?'#1C9FD4':'#94A3B8'}/>
                                 </button>
                                 <button title="Rename" onClick={e=>{e.stopPropagation();startRename(c.id,c.title)}}
                                   style={{padding:'5px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
-                                  <Ico n="edit" s={12} c={on?'rgba(255,255,255,0.85)':'#CBD5E1'}/>
+                                  <Ico n="edit" s={12} c="#94A3B8"/>
                                 </button>
                                 <button title="Delete" onClick={e=>{e.stopPropagation();deleteConv(c.id)}}
                                   style={{padding:'5px',background:'transparent',border:'none',cursor:'pointer',borderRadius:6,display:'flex'}}>
-                                  <Ico n="trash" s={12} c={on?'rgba(255,255,255,0.85)':'#CBD5E1'}/>
+                                  <Ico n="trash" s={12} c="#94A3B8"/>
                                 </button>
                               </div>
                             )}
@@ -914,8 +908,8 @@ export default function AskAI() {
                   <div key={k} style={{marginBottom:24,animation:k===messages.length-1||k===messages.length-2?'fadeUp .3s ease':'none'}}>
                     {m.role==='user'?(
                       <div style={{display:'flex',justifyContent:'flex-end'}}>
-                        <div style={{maxWidth:'74%',background:'linear-gradient(135deg,#1F3C84,#2456B8)',border:'none',borderRadius:'18px 18px 5px 18px',padding:'11px 16px',boxShadow:'0 6px 18px -6px rgba(31,60,132,0.55)'}}>
-                          <div style={{fontSize:14,color:'#fff',lineHeight:1.65,whiteSpace:'pre-wrap'}}>{m.content}</div>
+                        <div style={{maxWidth:'74%',background:'#EEF3FC',border:'0.5px solid #E1E9F7',borderRadius:'18px 18px 5px 18px',padding:'11px 16px'}}>
+                          <div style={{fontSize:14,color:'#1E293B',lineHeight:1.65,whiteSpace:'pre-wrap'}}>{m.content}</div>
                         </div>
                       </div>
                     ):(
@@ -933,9 +927,9 @@ export default function AskAI() {
                                 <div style={{display:'flex',gap:4,marginTop:8}}>
                                   {[['copy','Copy'],['refresh','Retry']].map(([ic,lbl])=>(
                                     <button key={ic} title={lbl} className="mabtn" disabled={ic==='refresh'&&loading}
-                                      style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',border:`1px solid ${borderColor}`,background:'transparent',borderRadius:6,cursor:(ic==='refresh'&&loading)?'default':'pointer',color:'#CBD5E1',fontSize:11,fontFamily:FONT,transition:'all .15s',opacity:(ic==='refresh'&&loading)?0.5:1}}
+                                      style={{display:'flex',alignItems:'center',gap:5,padding:'5px 9px',border:`1px solid ${borderColor}`,background:'transparent',borderRadius:7,cursor:(ic==='refresh'&&loading)?'default':'pointer',color:'#64748B',fontSize:11.5,fontWeight:500,fontFamily:FONT,transition:'all .15s',opacity:(ic==='refresh'&&loading)?0.5:1}}
                                       onClick={()=>{if(ic==='copy'){navigator.clipboard?.writeText(m.content);setCopied(k);setTimeout(()=>setCopied(null),1500)}else if(ic==='refresh'){regenerate(k)}}}>
-                                      <Ico n={copied===k&&ic==='copy'?'check':ic==='refresh'?'refresh':'copy'} s={11} c={copied===k&&ic==='copy'?GREEN:'#CBD5E1'}/>{lbl}
+                                      <Ico n={copied===k&&ic==='copy'?'check':ic==='refresh'?'refresh':'copy'} s={12} c={copied===k&&ic==='copy'?GREEN:'#64748B'}/>{lbl}
                                     </button>
                                   ))}
                                 </div>
