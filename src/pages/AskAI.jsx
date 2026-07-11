@@ -522,32 +522,6 @@ export default function AskAI() {
         <div style={{position:'absolute',inset:0,borderRadius:14,overflow:'hidden',pointerEvents:'none'}}>
           <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:input?1:0.85,transition:'opacity .2s'}}/>
         </div>
-        {/* Data-source selector — promoted above the input as its own row, since this is the single most consequential choice per message (what the model is even allowed to look at), not a minor utility on par with Prompts/Memories. */}
-        <div style={{display:'flex',alignItems:'center',marginBottom:6,paddingBottom:6,borderBottom:'0.5px solid #EEF1F6'}}>
-          <div style={{position:'relative'}}>
-            <button onClick={e=>{e.stopPropagation();setScopeOpen(v=>!v)}} className="mabtn"
-              style={{display:'flex',alignItems:'center',gap:5,padding:'4px 10px',border:'1px solid #CBD5E1',background:scopeOpen?'#F1F4F8':'#fff',borderRadius:7,cursor:'pointer',fontSize:12.5,fontWeight:700,color:'#1F3C84',fontFamily:FONT,transition:'all .15s'}}>
-              <div style={{width:7,height:7,borderRadius:'50%',flexShrink:0,background:platformScope==='meta'?(connected?GREEN:'#CBD5E1'):platformScope==='google'?GREEN:'#94A3B8'}}/>
-              {platformScope==='meta'?'Meta Ads':platformScope==='google'?'Google Ads':'All sources'}
-              <span style={{display:'flex',transform:'rotate(90deg)'}}><Ico n="chevR" s={11} c="#1F3C84"/></span>
-            </button>
-            {scopeOpen&&(
-              <div onClick={e=>e.stopPropagation()} style={{position:'absolute',top:'calc(100% + 6px)',left:0,minWidth:180,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 10px 30px -8px rgba(15,23,42,0.18)',padding:6,zIndex:20}}>
-                {[
-                  {id:'all',label:'All sources',dot:'#94A3B8'},
-                  {id:'meta',label:'Meta Ads',dot:connected?GREEN:'#CBD5E1'},
-                  {id:'google',label:'Google Ads',dot:GREEN},
-                ].map(opt=>(
-                  <button key={opt.id} onClick={()=>{setPlatformScope(opt.id);setScopeOpen(false)}}
-                    style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',border:'none',background:platformScope===opt.id?'#F1F5F9':'transparent',borderRadius:7,cursor:'pointer',fontSize:12.5,fontWeight:platformScope===opt.id?700:500,color:'#1E293B',fontFamily:FONT,textAlign:'left'}}>
-                    <div style={{width:7,height:7,borderRadius:'50%',background:opt.dot,flexShrink:0}}/>
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
         <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…" className="composerInput"
           onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
           onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
@@ -555,6 +529,29 @@ export default function AskAI() {
           style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:8}}>
           <div style={{display:'flex',alignItems:'center',gap:6}}>
+            <div style={{position:'relative'}}>
+              <button onClick={e=>{e.stopPropagation();setScopeOpen(v=>!v)}} className="mabtn"
+                style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${scopeOpen?'#CBD5E1':borderColor}`,background:scopeOpen?'#F1F4F8':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:scopeOpen?'#1F3C84':'#475569',fontFamily:FONT,transition:'all .15s'}}>
+                <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,background:platformScope==='meta'?(connected?GREEN:'#CBD5E1'):platformScope==='google'?GREEN:'#94A3B8'}}/>
+                {platformScope==='meta'?'Meta Ads':platformScope==='google'?'Google Ads':'All sources'}
+                <span style={{display:'flex',transform:'rotate(90deg)'}}><Ico n="chevR" s={10} c={scopeOpen?'#1F3C84':'#94A3B8'}/></span>
+              </button>
+              {scopeOpen&&(
+                <div onClick={e=>e.stopPropagation()} style={{position:'absolute',bottom:'calc(100% + 6px)',left:0,minWidth:170,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 10px 30px -8px rgba(15,23,42,0.18)',padding:6,zIndex:20}}>
+                  {[
+                    {id:'all',label:'All sources',dot:'#94A3B8'},
+                    {id:'meta',label:'Meta Ads',dot:connected?GREEN:'#CBD5E1'},
+                    {id:'google',label:'Google Ads',dot:GREEN},
+                  ].map(opt=>(
+                    <button key={opt.id} onClick={()=>{setPlatformScope(opt.id);setScopeOpen(false)}}
+                      style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',border:'none',background:platformScope===opt.id?'#F1F5F9':'transparent',borderRadius:7,cursor:'pointer',fontSize:12.5,fontWeight:platformScope===opt.id?700:500,color:'#1E293B',fontFamily:FONT,textAlign:'left'}}>
+                      <div style={{width:7,height:7,borderRadius:'50%',background:opt.dot,flexShrink:0}}/>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             {[['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
               <button key={id} onClick={e=>{e.stopPropagation();toggleRail(id)}} className="mabtn"
                 style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${rail===id?'#CBD5E1':borderColor}`,background:rail===id?'#F1F4F8':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id?'#1F3C84':'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
