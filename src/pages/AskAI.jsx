@@ -516,17 +516,17 @@ export default function AskAI() {
 
   /* composer — shared between the centered landing state and the docked-to-bottom conversation state */
   const composer = (
-    <div style={{maxWidth:820,margin:'0 auto',width:'100%'}}>
-      <div style={{position:'relative',background:'#fff',border:'none',borderRadius:16, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding:'14px 14px 12px',transition:'all .2s',boxShadow:input?'0 6px 24px -6px rgba(28,159,212,0.28), 0 1px 3px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)'}}>
+    <div style={{maxWidth:'min(880px, 94%)',margin:'0 auto',width:'100%'}}>
+      <div style={{position:'relative',background:'#fff',border:'none',borderRadius:14, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding:'11px 14px 9px',transition:'all .2s',boxShadow:input?'0 6px 24px -6px rgba(28,159,212,0.28), 0 1px 3px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)'}}>
         {/* brand gradient top accent bar — clipped by a full-size overlay (not the bar's own radius, which can't express a 16px arc at 3px tall) so its corners follow the container's actual curve; the overlay is a sibling of the dropdown-bearing content, not an ancestor, so dropdowns still render unclipped */}
-        <div style={{position:'absolute',inset:0,borderRadius:16,overflow:'hidden',pointerEvents:'none'}}>
+        <div style={{position:'absolute',inset:0,borderRadius:14,overflow:'hidden',pointerEvents:'none'}}>
           <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:input?1:0.85,transition:'opacity .2s'}}/>
         </div>
         {/* Data-source selector — promoted above the input as its own row, since this is the single most consequential choice per message (what the model is even allowed to look at), not a minor utility on par with Prompts/Memories. */}
-        <div style={{display:'flex',alignItems:'center',marginBottom:10,paddingBottom:10,borderBottom:'0.5px solid #EEF1F6'}}>
+        <div style={{display:'flex',alignItems:'center',marginBottom:8,paddingBottom:8,borderBottom:'0.5px solid #EEF1F6'}}>
           <div style={{position:'relative'}}>
             <button onClick={e=>{e.stopPropagation();setScopeOpen(v=>!v)}} className="mabtn"
-              style={{display:'flex',alignItems:'center',gap:7,padding:'7px 13px',border:'1px solid #CBD5E1',background:scopeOpen?'#F1F4F8':'#fff',borderRadius:9,cursor:'pointer',fontSize:13.5,fontWeight:700,color:'#1F3C84',fontFamily:FONT,transition:'all .15s'}}>
+              style={{display:'flex',alignItems:'center',gap:6,padding:'6px 12px',border:'1px solid #CBD5E1',background:scopeOpen?'#F1F4F8':'#fff',borderRadius:8,cursor:'pointer',fontSize:13,fontWeight:700,color:'#1F3C84',fontFamily:FONT,transition:'all .15s'}}>
               <div style={{width:7,height:7,borderRadius:'50%',flexShrink:0,background:platformScope==='meta'?(connected?GREEN:'#CBD5E1'):platformScope==='google'?GREEN:'#94A3B8'}}/>
               {platformScope==='meta'?'Meta Ads':platformScope==='google'?'Google Ads':'All sources'}
               <span style={{display:'flex',transform:'rotate(90deg)'}}><Ico n="chevR" s={11} c="#1F3C84"/></span>
@@ -553,7 +553,7 @@ export default function AskAI() {
           onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
           onFocus={()=>setRailOpen(false)}
           style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:10}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:8}}>
           <div style={{display:'flex',alignItems:'center',gap:6}}>
             {[['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
               <button key={id} onClick={e=>{e.stopPropagation();toggleRail(id)}} className="mabtn"
@@ -883,10 +883,10 @@ export default function AskAI() {
                   ))}
                 </div>
                 {/* composer lives here on the landing state — centered as one unit with the greeting, Claude.ai/ChatGPT-style; docks to the bottom only once a conversation starts */}
-                <div style={{width:'100%',maxWidth:680,marginTop:28,animation:'fadeUp .5s ease .25s both'}}>{composer}</div>
+                <div style={{width:'100%',maxWidth:'min(880px, 94%)',marginTop:28,animation:'fadeUp .5s ease .25s both'}}>{composer}</div>
               </div>
             ):(
-              <div style={{maxWidth:820,margin:'0 auto',padding:'0 20px'}}>
+              <div style={{maxWidth:'min(880px, 94%)',margin:'0 auto',padding:'0 20px'}}>
                 {messages.map((m,k)=>(
                   <div key={k} style={{marginBottom:24,animation:k===messages.length-1||k===messages.length-2?'fadeUp .3s ease':'none'}}>
                     {m.role==='user'?(
