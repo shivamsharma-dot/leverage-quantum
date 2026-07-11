@@ -62,6 +62,15 @@ const PROMPTS = [
 
 const CATS = ['All','META','LEAD GEN','REPORTS','ANALYSIS']
 
+function pickRandom(pool, n){
+  const arr = [...pool]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr.slice(0, n)
+}
+
 /* ─── SSE ask ─────────────────────────────────────────────────── */
 async function askClaude(messages, metaToken, memories, onChunk, signal, platformScope='all') {
   const res = await fetch('/api/ask-ai', {
@@ -151,13 +160,23 @@ function AnimatedLogo({size=20}){return <svg width={size} height={size} viewBox=
 </svg>}
 
 /* ─── quick prompts ───────────────────────────────────────────── */
-const QUICK = [
+const QUICK_POOL = [
   { label:'Weekly digest',           text:'Generate my weekly performance digest' },
   { label:'Scale or pause campaigns',text:'Which Meta campaigns should I scale or pause?' },
-  { label:'CRM leads overview',  text:'Give me an overview of my CRM leads: total, qualified, and cost per qualified lead by source' },
+  { label:'CRM leads overview',      text:'Give me an overview of my CRM leads: total, qualified, and cost per qualified lead by source' },
   { label:'Underperforming ads',     text:'Identify my underperforming Meta campaigns and diagnose them' },
-  { label:'Lead source quality',    text:'Rank my lead sources by qualification quality and cost per qualified lead' },
+  { label:'Lead source quality',     text:'Rank my lead sources by qualification quality and cost per qualified lead' },
   { label:'Risk flags',              text:'Scan all data and flag everything needing immediate attention' },
+  { label:'Today vs yesterday',      text:'Give me a quick snapshot of today vs yesterday across Meta and Google: spend, leads, CPL, and any anomalies' },
+  { label:'Cross-channel review',    text:'Run a cross-channel performance review connecting Meta Ads, Google Ads, and CRM leads' },
+  { label:'Budget reallocation',     text:'Analyze my current budget allocation and tell me how to redistribute spend to maximize ROAS' },
+  { label:'ROAS deep dive',          text:'Analyze ROAS across all my campaigns -- which are above 3x, and which are below 1x and losing money' },
+  { label:'Fatigue check',           text:'Identify which Meta campaigns and ad sets are showing creative fatigue' },
+  { label:'Monthly summary',         text:'Generate a monthly executive summary of my marketing performance with a month-over-month comparison' },
+  { label:'Top campaigns',           text:'Show me my top 5 best and worst performing campaigns this month' },
+  { label:'Cost per qualified lead', text:'Analyse cost per qualified lead across my Meta and Google campaigns using CRM leads data' },
+  { label:'Week-on-week summary',    text:'Give me a summary of my ad performance this week vs last week, flag anything over 20% change' },
+  { label:'Full account audit',      text:'Run a full audit of my Meta Ads account for the last 30 days' },
 ]
 
 /* ─── main ────────────────────────────────────────────────────── */
@@ -226,6 +245,7 @@ export default function AskAI() {
       }).catch(()=>{})
   },[uid])
   const [activeId, setActiveId]   = useState(null)
+  const [QUICK]                   = useState(() => pickRandom(QUICK_POOL, 6))
   const [messages, setMessages]   = useState([])
   const [input, setInput]         = useState('')
   const [loading, setLoading]     = useState(false)
