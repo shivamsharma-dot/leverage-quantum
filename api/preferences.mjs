@@ -11,12 +11,13 @@ export default async function handler(req, res) {
   // GET — global flag: anyone can read the global hidden_pages (needed for Sidebar)
   if (req.method === 'GET') {
     const r = await supabaseAdmin(
-      'app_preferences?select=key,value&limit=50',
+      'app_preferences?select=key,value,updated_at&limit=50',
     )
     if (!r.ok) return res.status(500).json({ error: 'Failed to read preferences' })
     const rows = await r.json()
     const prefs = Object.fromEntries(rows.map(row => [row.key, row.value]))
-    return res.status(200).json({ prefs })
+    const meta = Object.fromEntries(rows.map(row => [row.key, row.updated_at]))
+    return res.status(200).json({ prefs, meta })
   }
 
   // POST/PATCH — admin only

@@ -568,6 +568,90 @@ FORMAT RULES:
 - Use [!] for warnings, [OK] for positive signals, [UP] for growth, [DOWN] for decline`
 }
 
+// -- project memory synthesis (on-demand "Regenerate" button, not a nightly job) ----
+// Reuses ask-ai.js (no new serverless function -- Vercel Hobby is already at the 12-function cap)
+// and app_preferences (no new table) to store the single shared team-wide memory doc.
+async function fetchRecentConversationText(limit = 8) {
+  if (!SB_KEY) return ''
+  try {
+    const cr = await fetch(`${SB_URL}/rest/v1/ask_ai_conversations?select=id,title,updated_at&order=updated_at.desc&limit=${limit}`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, signal: AbortSignal.timeout(8000)
+    })
+    if (!cr.ok) return ''
+    const convs = await cr.json()
+    const chunks = []
+    for (const c of convs) {
+      const mr = await fetch(`${SB_URL}/rest/v1/ask_ai_messages?conv_id=eq.${c.id}&select=messages&order=updated_at.desc&limit=1`, {
+        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, signal: AbortSignal.timeout(8000)
+      })
+      if (!mr.ok) continue
+      const rows = await mr.json()
+      const raw = rows?.[0]?.messages
+      if (!raw) continue
+      let msgs
+      try { msgs = typeof raw === 'string' ? JSON.parse(raw) : raw } catch { continue }
+      if (!Array.isArray(msgs) || !msgs.length) continue
+      const text = msgs.map(m => `${m.role}: ${String(m.content || '').slice(0, 300)}`).join('\n')
+      chunks.push(`### ${c.title}\n${text.slice(0, 1200)}`)
+    }
+    return chunks.join('\n\n')
+  } catch { return '' }
+}
+
+async function getAutoMemory() {
+  if (!SB_KEY) return ''
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/app_preferences?select=value&key=eq.ask_ai_auto_memory&limit=1`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, signal: AbortSignal.timeout(5000)
+    })
+    if (!r.ok) return ''
+    const d = await r.json()
+    return d?.[0]?.value || ''
+  } catch { return '' }
+}
+
+async function saveAutoMemory(text, updatedBy) {
+  try {
+    await fetch(`${SB_URL}/rest/v1/app_preferences`, {
+      method: 'POST',
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ key: 'ask_ai_auto_memory', value: text, updated_by: updatedBy, updated_at: new Date().toISOString() })
+    })
+  } catch {}
+}
+
+async function handleRegenerateMemory(res, me) {
+  try {
+    const [recentText, existing] = await Promise.all([fetchRecentConversationText(8), getAutoMemory()])
+    if (!recentText.trim() && !existing.trim()) {
+      return res.status(200).json({ memory: '', message: 'No conversation history yet to summarize.' })
+    }
+    const prompt = `You maintain a short internal "project memory" for Leverage Quantum's Ask AI assistant -- a running cheat sheet of what the team has decided, asked about, and prefers, so future conversations don't start from zero.
+${existing ? `\nCURRENT MEMORY (update this, keep facts that are still true):\n${existing}\n` : ''}
+RECENT CONVERSATIONS TO INCORPORATE:
+${recentText || '(none)'}
+
+Write an UPDATED project memory with these sections:
+- Recent decisions (campaign scale/pause calls, budget moves, specific numbers actually decided)
+- Preferences & patterns (how the user likes answers formatted, recurring focus areas)
+- Open items (anything flagged as needing follow-up)
+
+Keep it under 180 words total. Plain text with short section headers, no markdown tables. Only include real decisions/preferences/facts -- skip generic chit-chat. If nothing meaningful changed, keep the existing memory mostly as-is.`
+    const r = await fetch(ANTHROPIC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: MODEL, max_tokens: 500, messages: [{ role: 'user', content: prompt }] })
+    })
+    if (!r.ok) { const e = await r.json().catch(() => ({})); return res.status(r.status).json({ error: e?.error?.message || 'Anthropic error' }) }
+    const data = await r.json()
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim()
+    await saveAutoMemory(text, me.email)
+    return res.status(200).json({ memory: text, updated_at: new Date().toISOString() })
+  } catch (e) {
+    return res.status(500).json({ error: e.message || 'Failed to regenerate memory' })
+  }
+}
+
 // -- handler -------------------------------------------------------------------
 export default async function handler(req, res) {
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
@@ -582,6 +666,10 @@ export default async function handler(req, res) {
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })
   if (!canAccessDashboard(me.role, 'ask_ai')) return res.status(403).json({ error: 'Forbidden' })
+
+  if (req.body && req.body.action === 'regenerate_memory') {
+    return handleRegenerateMemory(res, me)
+  }
 
   const { messages=[], history=[], metaToken: clientToken='', memories=[], platformScope='all' } = req.body||{}
   if (!messages.length) return res.status(400).json({ error: 'No messages' })

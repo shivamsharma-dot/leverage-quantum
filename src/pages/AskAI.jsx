@@ -240,6 +240,9 @@ export default function AskAI() {
   const [newMem, setNewMem]       = useState('')
   const [savingMem, setSavingMem] = useState(false)
   const [memLoading, setMemLoading]= useState(false)
+  const [autoMemory, setAutoMemory] = useState('') // auto-synthesized "project memory" — regenerated on demand from recent chats, shared team-wide like the conversations themselves
+  const [autoMemoryUpdatedAt, setAutoMemoryUpdatedAt] = useState(null)
+  const [regenLoading, setRegenLoading] = useState(false)
   const [promptCat, setPromptCat] = useState('All')
   const [promptSearch, setPromptSearch] = useState('')
   const [expandedPrompt, setExpandedPrompt] = useState(null)
@@ -293,6 +296,26 @@ export default function AskAI() {
       .then(d=>{setMemories(Array.isArray(d)?d:[]);setMemLoading(false)})
       .catch(()=>setMemLoading(false))
   },[uid])
+
+  // load auto-synthesized project memory (shared team-wide, stored in app_preferences)
+  useEffect(()=>{
+    fetch('/api/preferences',{credentials:'include'}).then(r=>r.ok?r.json():null).then(d=>{
+      if(!d) return
+      if(d.prefs?.ask_ai_auto_memory) setAutoMemory(d.prefs.ask_ai_auto_memory)
+      if(d.meta?.ask_ai_auto_memory) setAutoMemoryUpdatedAt(d.meta.ask_ai_auto_memory)
+    }).catch(()=>{})
+  },[])
+
+  const regenerateMemory = useCallback(async()=>{
+    if(regenLoading) return
+    setRegenLoading(true)
+    try{
+      const r = await fetch('/api/ask-ai',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({action:'regenerate_memory'})})
+      const d = await r.json()
+      if(r.ok && d.memory!==undefined && d.memory!==''){ setAutoMemory(d.memory); setAutoMemoryUpdatedAt(d.updated_at||new Date().toISOString()) }
+    }catch(e){ console.warn('regenerate memory failed',e) }
+    setRegenLoading(false)
+  },[regenLoading])
 
   // welcome animation
   useEffect(()=>{ const t=setTimeout(()=>setShowWelcomeAnim(false),2000); return ()=>clearTimeout(t) },[activeId])
@@ -382,6 +405,9 @@ export default function AskAI() {
     } catch(e){ console.warn('rename failed',e) }
   },[editingId, editTitle])
 
+  // manual memories + the auto-synthesized project memory, merged into one list for the system prompt
+  const combinedMemories = useMemo(()=> autoMemory ? [{content:'PROJECT MEMORY (auto-generated from recent chats):\n'+autoMemory}, ...memories] : memories, [autoMemory, memories])
+
   /* send */
   const send = useCallback(async(text)=>{
     const q=(text||input).trim(); if(!q||loading) return
@@ -398,7 +424,7 @@ export default function AskAI() {
     setLoading(true)
         const ac=new AbortController(); abortRef.current=ac
     try{
-      const reply=await askClaude(updated,metaToken,memories,partial=>{
+      const reply=await askClaude(updated,metaToken,combinedMemories,partial=>{
         setMessages(m=>{const c=[...m];c[c.length-1]={role:'assistant',content:partial,streaming:true};return c})
       },ac.signal,platformScope)
       const final=[...updated,{role:'assistant',content:reply}]
@@ -408,7 +434,7 @@ export default function AskAI() {
       const final=[...updated,{role:'assistant',content:`⚠️ ${e.message}`}]
       setMessages(final); saveMessages(cid,final)
     }finally{setLoading(false)}
-  },[input,loading,messages,activeId,metaToken,memories,saveMessages,platformScope])
+  },[input,loading,messages,activeId,metaToken,combinedMemories,saveMessages,platformScope])
 
   /* regenerate — truncates to just before the assistant reply at idx and resends the preceding user turn */
   const regenerate = useCallback(async(idx)=>{
@@ -420,7 +446,7 @@ export default function AskAI() {
     setLoading(true)
     const ac=new AbortController(); abortRef.current=ac
     try{
-      const reply=await askClaude(truncated,metaToken,memories,partial=>{
+      const reply=await askClaude(truncated,metaToken,combinedMemories,partial=>{
         setMessages(m=>{const c=[...m];c[c.length-1]={role:'assistant',content:partial,streaming:true};return c})
       },ac.signal,platformScope)
       const final=[...truncated,{role:'assistant',content:reply}]
@@ -430,7 +456,7 @@ export default function AskAI() {
       const final=[...truncated,{role:'assistant',content:`⚠️ ${e.message}`}]
       setMessages(final); if(activeId) saveMessages(activeId,final)
     }finally{setLoading(false)}
-  },[messages,loading,metaToken,memories,platformScope,activeId,saveMessages])
+  },[messages,loading,metaToken,combinedMemories,platformScope,activeId,saveMessages])
 
 
 
@@ -782,9 +808,26 @@ export default function AskAI() {
               {/* Memories */}
               {rail==='memories'&&(
                 <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-                  <div style={{padding:'10px 12px 8px',flexShrink:0}}>
-                    <div style={{fontSize:11.5,color:'#CBD5E1',marginBottom:10,lineHeight:1.5}}>Facts Claude remembers across all conversations</div>
-                    <div style={{display:'flex',gap:6}}>
+                  <div className="cs" style={{flex:1,overflowY:'auto',padding:'12px 14px 8px'}}>
+                    {/* Auto-synthesized project memory — regenerated on demand from recent chats, shared team-wide */}
+                    <div style={{marginBottom:16}}>
+                      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+                        <span style={{fontSize:11,fontWeight:700,color:'#1F3C84',letterSpacing:'0.02em'}}>Project memory</span>
+                        <button onClick={regenerateMemory} disabled={regenLoading}
+                          style={{display:'flex',alignItems:'center',gap:5,padding:'4px 9px',border:'none',background:'#F1F4F8',borderRadius:7,cursor:regenLoading?'default':'pointer',fontSize:11,fontWeight:600,color:'#1F3C84',fontFamily:FONT,opacity:regenLoading?0.6:1}}>
+                          <Ico n="refresh" s={11} c="#1F3C84"/>{regenLoading?'Updating…':'Regenerate'}
+                        </button>
+                      </div>
+                      {autoMemory?(
+                        <div style={{fontSize:12,color:'#374151',lineHeight:1.65,whiteSpace:'pre-wrap',padding:'11px 12px',background:'#F8FAFC',borderRadius:9,border:'0.5px solid #EEF1F6'}}>{autoMemory}</div>
+                      ):(
+                        <div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.5,padding:'2px 0'}}>No project memory yet — click Regenerate to build one from recent chats.</div>
+                      )}
+                      {autoMemoryUpdatedAt&&<div style={{fontSize:10,color:'#CBD5E1',marginTop:6}}>Updated {new Date(autoMemoryUpdatedAt).toLocaleString()}</div>}
+                    </div>
+                    <div style={{height:1,background:'#EEF1F6',marginBottom:14}}/>
+                    <div style={{fontSize:11,fontWeight:700,color:'#1F3C84',letterSpacing:'0.02em',marginBottom:8}}>Your notes</div>
+                    <div style={{display:'flex',gap:6,marginBottom:12}}>
                       <input value={newMem} onChange={e=>setNewMem(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addMem()}}} placeholder="Add a memory…"
                         style={{flex:1,background:'#F8FAFC',border:`1px solid ${borderColor}`,borderRadius:8,padding:'7px 10px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT}}/>
                       <button onClick={addMem} disabled={!newMem.trim()||savingMem}
@@ -792,8 +835,6 @@ export default function AskAI() {
                         <Ico n="plus" s={14} c="#fff"/>
                       </button>
                     </div>
-                  </div>
-                  <div className="cs" style={{flex:1,overflowY:'auto',padding:'0 14px 8px'}}>
                     {memLoading&&<div style={{padding:20,textAlign:'center',color:'#CBD5E1',fontSize:12}}>Loading…</div>}
                     {!memLoading&&memories.length===0&&<div style={{padding:'34px 16px',textAlign:'center'}}><div style={{width:44,height:44,margin:'0 auto 12px',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(145deg,rgba(31,60,132,0.08),rgba(28,159,212,0.08))',border:`1px solid ${borderColor}`}}><Ico n='brain' s={20} c={BLUE}/></div><div style={{fontSize:13,fontWeight:700,color:'#1F3C84',marginBottom:4,fontFamily:FONT}}>No memories yet</div><div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.5}}>Add a fact above — it stays with the assistant across every conversation.</div></div>}
                     {memories.map((m,i)=>(
