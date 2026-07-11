@@ -660,6 +660,15 @@ export default function AskAI() {
 .askai-toolbar-btn:hover{ background:#F4F6F9; }
 .askai-reopen-strip:hover{ background:linear-gradient(90deg,rgba(15,23,42,0.05),transparent); }
 @media (max-width:768px){ .askai-rail{ width:86vw!important; max-width:340px; top:0; bottom:0; left:0; border-radius:0; box-shadow:0 0 40px rgba(15,23,42,0.22); } .askai-backdrop{ display:block!important; } }
+@media (max-width:640px){
+  .qHeroOrb{ width:56px!important; height:56px!important; margin-bottom:14px!important; }
+  .qHeroOrb svg{ width:26px!important; height:26px!important; }
+  .qHeroTitle{ font-size:20px!important; margin-bottom:4px!important; }
+  .qHeroSub{ font-size:13px!important; margin-bottom:18px!important; }
+  .qChipsRow{ flex-wrap:nowrap!important; justify-content:flex-start!important; overflow-x:auto!important; max-width:100vw!important; width:100vw!important; margin:0 -20px!important; padding:0 20px 6px!important; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  .qChipsRow::-webkit-scrollbar{ display:none; }
+  .qChipsRow button{ flex:0 0 auto!important; }
+}
       `}</style>
 
       {/* Quantum sidebar */}
@@ -891,19 +900,19 @@ export default function AskAI() {
             {messages.length===0?(
               <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'20px',animation:'fadeUp .5s ease'}}>
                 {/* Logo orb */}
-            <div style={{position:'relative',marginBottom:22,animation:'scaleIn .5s ease'}}>
-              <div className="qOrb" style={{width:78,height:78,display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <div className="qHeroOrb" style={{position:'relative',marginBottom:22,animation:'scaleIn .5s ease',width:78,height:78,display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <div className="qOrb" style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center'}}>
                 <div style={{display:'flex'}}><AnimatedLogo size={34}/></div>
               </div>
             </div>
-                <div style={{fontSize:26,fontWeight:800,color:'#0F172A',marginBottom:6,letterSpacing:'-0.03em',textAlign:'center',animation:'fadeUp .5s ease .1s both'}}>
+                <div className="qHeroTitle" style={{fontSize:26,fontWeight:800,color:'#0F172A',marginBottom:6,letterSpacing:'-0.03em',textAlign:'center',animation:'fadeUp .5s ease .1s both'}}>
                   <span className="qShine">{greeting()}</span>, {firstName}
                 </div>
-                <div style={{fontSize:14,color:'#94A3B8',textAlign:'center',maxWidth:440,lineHeight:1.6,marginBottom:28,animation:'fadeUp .5s ease .15s both'}}>
+                <div className="qHeroSub" style={{fontSize:14,color:'#94A3B8',textAlign:'center',maxWidth:440,lineHeight:1.6,marginBottom:28,animation:'fadeUp .5s ease .15s both'}}>
                   Your marketing intelligence layer. Ask anything, from a quick number to a full performance report.
                 </div>
                 {/* quick prompts */}
-                <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',maxWidth:620,animation:'fadeUp .5s ease .2s both'}}>
+                <div className="qChipsRow" style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',maxWidth:620,animation:'fadeUp .5s ease .2s both'}}>
                   {QUICK.map((q,i)=>(
                     <button key={i} onClick={()=>send(q.text)} className="qp qChip"
                       style={{padding:'8px 14px',borderRadius:20,border:`0.5px solid #E5E7EB`,background:'#fff',color:'#475569',fontSize:12.5,fontWeight:500,cursor:'pointer',fontFamily:FONT,transition:'all .2s',whiteSpace:'nowrap'}}>
