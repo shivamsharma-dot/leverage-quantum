@@ -160,10 +160,30 @@ const QUICK = [
 ]
 
 /* ─── main ────────────────────────────────────────────────────── */
-function MagicLoader(){
-    const phases=['Reading your Meta Ads data...','Pulling Google Ads data...','Checking your CRM leads...','Crunching the numbers...','Spotting trends & risks...','Composing your answer...'];
+function buildLoaderPhases(question,scope){
+  const s=(question||'').toLowerCase()
+  const has=(...words)=>words.some(w=>s.includes(w))
+  const phases=[]
+  if(scope==='meta') phases.push('Reading your Meta Ads data...')
+  else if(scope==='google') phases.push('Reading your Google Ads data...')
+  else phases.push('Reading your Meta + Google Ads data...')
+  if(has('crm','lead')) phases.push('Pulling your CRM leads...')
+  if(has('creative','fatigue','frequency')) phases.push('Checking creative fatigue signals...')
+  if(has('campaign','ad set','adset','ad group')) phases.push('Reviewing campaign performance...')
+  if(has('spend','budget','cost','cpl','cpc','cpm','roas')) phases.push('Crunching spend numbers...')
+  if(has('scale','pause')) phases.push('Weighing scale vs pause calls...')
+  if(has('risk','flag','attention','anomal')) phases.push('Scanning for risk flags...')
+  if(has('report','summary','digest','weekly','monthly')) phases.push('Assembling your report...')
+  if(has('trend','compare','week on week','month on month')) phases.push('Comparing trends...')
+  if(has('quality','qualif')) phases.push('Assessing lead quality...')
+  if(phases.length<2) phases.push('Crunching the numbers...')
+  phases.push('Composing your answer...')
+  return Array.from(new Set(phases)).slice(0,4)
+}
+function MagicLoader({question='',platformScope='all'}){
+  const phases=useMemo(()=>buildLoaderPhases(question,platformScope),[question,platformScope])
   const [i,setI]=useState(0);
-  useEffect(()=>{const t=setInterval(()=>setI(p=>(p+1)%phases.length),1700);return ()=>clearInterval(t)},[]);
+  useEffect(()=>{setI(0);const t=setInterval(()=>setI(p=>(p+1)%phases.length),1500);return ()=>clearInterval(t)},[phases]);
   return (
     <div style={{display:'flex',alignItems:'center',gap:14,padding:'8px 2px',animation:'qRise .4s ease'}}>
       <div style={{position:'relative',width:40,height:40,flexShrink:0}}>
@@ -374,6 +394,28 @@ export default function AskAI() {
     }finally{setLoading(false)}
   },[input,loading,messages,activeId,metaToken,memories,saveMessages,platformScope])
 
+  /* regenerate — truncates to just before the assistant reply at idx and resends the preceding user turn */
+  const regenerate = useCallback(async(idx)=>{
+    if(loading) return
+    const priorUser = messages.slice(0,idx).reverse().find(m=>m.role==='user')
+    if(!priorUser) return
+    const truncated = messages.slice(0,idx)
+    setMessages([...truncated,{role:'assistant',content:'',streaming:true}])
+    setLoading(true)
+    const ac=new AbortController(); abortRef.current=ac
+    try{
+      const reply=await askClaude(truncated,metaToken,memories,partial=>{
+        setMessages(m=>{const c=[...m];c[c.length-1]={role:'assistant',content:partial,streaming:true};return c})
+      },ac.signal,platformScope)
+      const final=[...truncated,{role:'assistant',content:reply}]
+      setMessages(final); if(activeId) saveMessages(activeId,final)
+    }catch(e){
+      if(e.name==='AbortError'){ setMessages(m=>{const c=[...m];if(c.length)c[c.length-1]={...c[c.length-1],streaming:false};return c}); return }
+      const final=[...truncated,{role:'assistant',content:`⚠️ ${e.message}`}]
+      setMessages(final); if(activeId) saveMessages(activeId,final)
+    }finally{setLoading(false)}
+  },[messages,loading,metaToken,memories,platformScope,activeId,saveMessages])
+
   /* report logs */
   const [reportLogs, setReportLogs]       = useState([])
   const [logsLoading, setLogsLoading]     = useState(false)
@@ -440,6 +482,59 @@ export default function AskAI() {
   const inputBg='#fff'
   const borderColor='#E5E7EB'
 
+  /* composer — shared between the centered landing state and the docked-to-bottom conversation state */
+  const composer = (
+    <div style={{maxWidth:820,margin:'0 auto',width:'100%'}}>
+      <div style={{position:'relative',background:'#fff',border:'none',borderRadius:16, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding:'14px 14px 12px',transition:'all .2s',boxShadow:input?'0 6px 24px -6px rgba(28,159,212,0.28), 0 1px 3px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)',overflow:'hidden'}}>
+        {/* brand gradient top accent bar */}
+        <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:input?1:0.85,transition:'opacity .2s'}}/>
+        <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…" className="composerInput"
+          onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
+          onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
+          onFocus={()=>setRailOpen(false)}
+          style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:6}}>
+            <div style={{position:'relative'}}>
+              <button onClick={e=>{e.stopPropagation();setScopeOpen(v=>!v)}} className="mabtn"
+                style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${scopeOpen?BLUE:borderColor}`,background:scopeOpen?'#E3F5FD':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:scopeOpen?BLUE:'#475569',fontFamily:FONT,transition:'all .15s'}}>
+                <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,background:platformScope==='meta'?(connected?GREEN:'#CBD5E1'):platformScope==='google'?GREEN:'#94A3B8'}}/>
+                {platformScope==='meta'?'Meta Ads':platformScope==='google'?'Google Ads':'All sources'}
+                <span style={{display:'flex',transform:'rotate(90deg)'}}><Ico n="chevR" s={10} c={scopeOpen?BLUE:'#94A3B8'}/></span>
+              </button>
+              {scopeOpen&&(
+                <div onClick={e=>e.stopPropagation()} style={{position:'absolute',bottom:'calc(100% + 6px)',left:0,minWidth:170,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 10px 30px -8px rgba(15,23,42,0.18)',padding:6,zIndex:20}}>
+                  {[
+                    {id:'all',label:'All sources',dot:'#94A3B8'},
+                    {id:'meta',label:'Meta Ads',dot:connected?GREEN:'#CBD5E1'},
+                    {id:'google',label:'Google Ads',dot:GREEN},
+                  ].map(opt=>(
+                    <button key={opt.id} onClick={()=>{setPlatformScope(opt.id);setScopeOpen(false)}}
+                      style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',border:'none',background:platformScope===opt.id?'#F1F5F9':'transparent',borderRadius:7,cursor:'pointer',fontSize:12.5,fontWeight:platformScope===opt.id?700:500,color:'#1E293B',fontFamily:FONT,textAlign:'left'}}>
+                      <div style={{width:7,height:7,borderRadius:'50%',background:opt.dot,flexShrink:0}}/>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {[['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
+              <button key={id} onClick={e=>{e.stopPropagation();toggleRail(id)}} className="mabtn"
+                style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${rail===id?BLUE:borderColor}`,background:rail===id?'#E3F5FD':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id?BLUE:'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
+                <Ico n={ic} s={12} c={rail===id?BLUE:'#94A3B8'}/>{lbl}
+              </button>
+            ))}
+          </div>
+          <button onClick={()=>{ if(loading){abortRef.current?.abort()} else {send()} }} disabled={!loading&&!input.trim()} title={loading?'Stop generating':'Send'} className="sendbtn"
+            style={{width:36,height:36,borderRadius:10,border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:(loading||input.trim())?'pointer':'not-allowed',background:(loading||input.trim())?'linear-gradient(135deg,#1F3C84,#1C9FD4 60%,#29B9C3)':'#E5E7EB',boxShadow:(loading||input.trim())?'0 6px 16px -4px rgba(28,159,212,0.6)':'none',transition:'all .2s'}}>
+            <span style={{display:'flex'}}><Ico n={loading?'close':'send'} s={15} c="#fff" sw={2}/></span>
+          </button>
+        </div>
+      </div>
+      <div style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Ask AI can make mistakes. Always verify important numbers.</div>
+    </div>
+  )
+
   return (
     <div style={{display:'flex',height:'100vh',fontFamily:FONT,overflow:'hidden'}}>
       <style>{`
@@ -495,9 +590,14 @@ export default function AskAI() {
 
 {railOpen&&(<div className="askai-backdrop" onClick={()=>setRailOpen(false)} style={{position:'absolute',inset:0,zIndex:55,background:'rgba(15,23,42,0.34)'}}/>)}
 
-        {/* Floating toggle — always visible, opens/closes the rail. Sits clear of the rail's own edge when open so it never overlaps the "New chat" button. */}
+        {/* Floating toggle — always visible, opens/closes the rail. Sits clear of the rail's own edge when open so it never overlaps the New-chat icon. */}
         <button className="askai-toggle-btn" onClick={e=>{e.stopPropagation();setRailOpen(v=>!v)}} title={railOpen?'Hide sidebar':'Show sidebar'} style={{left:railOpen?346:16}}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+
+        {/* Floating New-chat icon — always visible regardless of rail state (the rail's own New chat button was removed; this is now the single, reachable entry point). */}
+        <button className="askai-toggle-btn" onClick={e=>{e.stopPropagation();newConv()}} title="New chat" style={{left:railOpen?388:58}}>
+          <Ico n="new" s={16} c="#1F3C84"/>
         </button>
 
         {/* Left sidebar - Claude-style unified, floating overlay */}
@@ -509,14 +609,9 @@ export default function AskAI() {
             <div style={{width:RAIL_W,flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
               {/* Unified sidebar header — Claude-style (matches main Quantum sidebar) */}
               <div style={{padding:'14px 12px 8px',flexShrink:0,background:'#fff'}}>
-                {/* New chat button */}
-                <button onClick={newConv}
-                  style={{width:'100%',display:'flex',alignItems:'center',gap:9,padding:'10px 12px',borderRadius:10,border:'1px solid #E8EFF9',cursor:'pointer',background:'linear-gradient(135deg,#1F3C84,#1C9FD4 70%,#29B9C3)',color:'#fff',fontFamily:FONT,fontSize:13,fontWeight:700,boxShadow:'0 6px 16px -8px rgba(28,159,212,0.6)',transition:'all .18s',marginBottom:12}}
-                  onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow='0 10px 22px -8px rgba(28,159,212,0.7)'}}
-                  onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='0 6px 16px -8px rgba(28,159,212,0.6)'}}>
-                  <Ico n="new" s={15} c="#fff"/> New chat
-                </button>
-                {/* Tab nav — matches main sidebar nav item styling */}
+                {/* Section eyebrow — matches main Quantum sidebar's uppercase group labels (OVERVIEW/ANALYTICS) */}
+                <div style={{fontSize:10,fontWeight:800,letterSpacing:'0.08em',textTransform:'uppercase',color:'#A8B2C2',padding:'2px 6px 10px'}}>Workspace</div>
+                {/* Tab nav — gradient active pill matches main sidebar's active-nav treatment */}
                 <div style={{display:'flex',flexDirection:'column',gap:2}}>
                   {[
                     {id:'history', icon:'history', label:'History'},
@@ -526,10 +621,10 @@ export default function AskAI() {
                   ].map(t=>{
                     const on=rail===t.id
                     return <button key={t.id} onClick={()=>{setRail(t.id);if(t.id==='logs')loadLogs()}}
-                      style={{display:'flex',alignItems:'center',gap:11,padding:'9px 11px',borderRadius:9,border:'1px solid transparent',cursor:'pointer',width:'100%',textAlign:'left',background:on?'#E8EFF9':'transparent',color:on?'#1F3C84':'#6B7280',fontFamily:FONT,fontSize:13,fontWeight:on?700:500,transition:'all .15s'}}
+                      style={{display:'flex',alignItems:'center',gap:11,padding:'9px 11px',borderRadius:11,border:'1px solid transparent',cursor:'pointer',width:'100%',textAlign:'left',background:on?'linear-gradient(135deg,#1F3C84,#1C9FD4)':'transparent',color:on?'#fff':'#6B7280',fontFamily:FONT,fontSize:13,fontWeight:on?700:500,boxShadow:on?'0 8px 18px -8px rgba(28,159,212,0.55)':'none',transition:'all .15s'}}
                       onMouseEnter={e=>{if(!on){e.currentTarget.style.background='#F4F6F9';e.currentTarget.style.color='#1F3C84'}}}
                       onMouseLeave={e=>{if(!on){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#6B7280'}}}>
-                      <Ico n={t.icon} s={16} c={on?'#1F3C84':'#9CA3AF'}/>
+                      <Ico n={t.icon} s={16} c={on?'#fff':'#9CA3AF'}/>
                       <span style={{flex:1}}>{t.label}</span>
                     </button>
                   })}
@@ -546,14 +641,25 @@ export default function AskAI() {
                       <input value={convSearch} onChange={e=>setConvSearch(e.target.value)} placeholder="Search conversations or person…"
                         style={{width:'100%',background:'#fff',border:'1px solid #E8ECF2',borderRadius:11,padding:'9px 12px 9px 34px',fontSize:12.5,color:'#374151',outline:'none',fontFamily:FONT,boxShadow:'0 1px 3px rgba(15,23,42,0.04)'}}/>
                     </div>
-                    {/* person filter pills */}
+                    {/* Everyone / Just me — segmented control (matches the gradient-pill language used elsewhere on this page) */}
                     {people.length>0&&(
-                      <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-                        {[['all','Everyone'],['mine','Just me']].concat(people.filter(p=>p!==uid).map(p=>[p,p.split('@')[0]])).map(([val,lbl])=>{
-                          const on=personFilter===val
-                          return <button key={val} onClick={()=>setPersonFilter(val)}
-                            style={{padding:'3px 10px',borderRadius:20,border:`1px solid ${on?'#1C9FD4':'#E8ECF2'}`,background:on?'#E3F5FD':'#fff',fontSize:10.5,fontWeight:on?700:500,color:on?'#1C9FD4':'#64748B',cursor:'pointer',fontFamily:FONT,transition:'all .15s',whiteSpace:'nowrap'}}>{lbl}</button>
-                        })}
+                      <div>
+                        <div style={{display:'flex',background:'#EEF1F6',borderRadius:10,padding:2,gap:2}}>
+                          {[['all','Everyone'],['mine','Just me']].map(([val,lbl])=>{
+                            const on=personFilter===val
+                            return <button key={val} onClick={()=>setPersonFilter(val)}
+                              style={{flex:1,padding:'6px 0',borderRadius:8,border:'none',background:on?'linear-gradient(135deg,#1F3C84,#1C9FD4)':'transparent',fontSize:11.5,fontWeight:on?700:600,color:on?'#fff':'#64748B',cursor:'pointer',fontFamily:FONT,transition:'all .18s',boxShadow:on?'0 4px 10px -4px rgba(28,159,212,0.55)':'none'}}>{lbl}</button>
+                          })}
+                        </div>
+                        {people.filter(p=>p!==uid).length>0&&(
+                          <div style={{display:'flex',gap:5,flexWrap:'wrap',marginTop:6}}>
+                            {people.filter(p=>p!==uid).map(p=>{
+                              const on=personFilter===p
+                              return <button key={p} onClick={()=>setPersonFilter(p)}
+                                style={{padding:'3px 9px',borderRadius:20,border:`1px solid ${on?'#1C9FD4':'#E8ECF2'}`,background:on?'#E3F5FD':'#fff',fontSize:10,fontWeight:on?700:500,color:on?'#1C9FD4':'#94A3B8',cursor:'pointer',fontFamily:FONT,whiteSpace:'nowrap'}}>{p.split('@')[0]}</button>
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -775,7 +881,7 @@ export default function AskAI() {
         <div onClick={()=>setRailOpen(false)} style={{flex:1,display:'flex',flexDirection:'column',minWidth:0,position:'relative'}}>
 
           {/* Messages */}
-          <div className="cs" style={{flex:1,overflowY:'auto',padding:'20px 0'}}>
+          <div className="cs" style={{flex:1,overflowY:'auto',padding: messages.length===0 ? '20px 20px 40px' : '20px 0'}}>
             {messages.length===0?(
               <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'20px',animation:'fadeUp .5s ease'}}>
                 {/* Logo orb */}
@@ -799,6 +905,8 @@ export default function AskAI() {
                     </button>
                   ))}
                 </div>
+                {/* composer lives here on the landing state — centered as one unit with the greeting, Claude.ai/ChatGPT-style; docks to the bottom only once a conversation starts */}
+                <div style={{width:'100%',maxWidth:680,marginTop:28,animation:'fadeUp .5s ease .25s both'}}>{composer}</div>
               </div>
             ):(
               <div style={{maxWidth:820,margin:'0 auto',padding:'0 20px'}}>
@@ -824,18 +932,18 @@ export default function AskAI() {
                               {!m.streaming&&(
                                 <div style={{display:'flex',gap:4,marginTop:8}}>
                                   {[['copy','Copy'],['refresh','Retry']].map(([ic,lbl])=>(
-                                    <button key={ic} title={lbl} className="mabtn"
-                                      style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',border:`1px solid ${borderColor}`,background:'transparent',borderRadius:6,cursor:'pointer',color:'#CBD5E1',fontSize:11,fontFamily:FONT,transition:'all .15s'}}
-                                      onClick={()=>{if(ic==='copy'){navigator.clipboard?.writeText(m.content);setCopied(k);setTimeout(()=>setCopied(null),1500)}}}>
-                                      <Ico n={copied===k&&ic==='copy'?'check':'copy'} s={11} c={copied===k&&ic==='copy'?GREEN:'#CBD5E1'}/>{lbl}
+                                    <button key={ic} title={lbl} className="mabtn" disabled={ic==='refresh'&&loading}
+                                      style={{display:'flex',alignItems:'center',gap:4,padding:'4px 8px',border:`1px solid ${borderColor}`,background:'transparent',borderRadius:6,cursor:(ic==='refresh'&&loading)?'default':'pointer',color:'#CBD5E1',fontSize:11,fontFamily:FONT,transition:'all .15s',opacity:(ic==='refresh'&&loading)?0.5:1}}
+                                      onClick={()=>{if(ic==='copy'){navigator.clipboard?.writeText(m.content);setCopied(k);setTimeout(()=>setCopied(null),1500)}else if(ic==='refresh'){regenerate(k)}}}>
+                                      <Ico n={copied===k&&ic==='copy'?'check':ic==='refresh'?'refresh':'copy'} s={11} c={copied===k&&ic==='copy'?GREEN:'#CBD5E1'}/>{lbl}
                                     </button>
                                   ))}
                                 </div>
                               )}
                             </>
                           ):(
-                            /* magic loader */
-                            <MagicLoader/>
+                            /* magic loader — liners are derived from the question just asked, not static */
+                            <MagicLoader question={messages[k-1]?.content||''} platformScope={platformScope}/>
                           )}
                         </div>
                       </div>
@@ -847,58 +955,12 @@ export default function AskAI() {
             )}
           </div>
 
-          {/* Input */}
-          <div style={{padding:'12px 20px 16px',flexShrink:0}}>
-            <div style={{maxWidth:820,margin:'0 auto'}}>
-              <div style={{position:'relative',background:'#fff',border:'none',borderRadius:16, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding:'14px 14px 12px',transition:'all .2s',boxShadow:input?'0 6px 24px -6px rgba(28,159,212,0.28), 0 1px 3px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)',overflow:'hidden'}}>
-                {/* brand gradient top accent bar */}
-                <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:input?1:0.85,transition:'opacity .2s'}}/>
-                <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…" className="composerInput"
-                  onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
-                  onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
-onFocus={()=>setRailOpen(false)}
-                  style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:10}}>
-                  <div style={{display:'flex',alignItems:'center',gap:6}}>
-                    <div style={{position:'relative'}}>
-                      <button onClick={e=>{e.stopPropagation();setScopeOpen(v=>!v)}} className="mabtn"
-                        style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${scopeOpen?BLUE:borderColor}`,background:scopeOpen?'#E3F5FD':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:scopeOpen?BLUE:'#475569',fontFamily:FONT,transition:'all .15s'}}>
-                        <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,background:platformScope==='meta'?(connected?GREEN:'#CBD5E1'):platformScope==='google'?GREEN:'#94A3B8'}}/>
-                        {platformScope==='meta'?'Meta Ads':platformScope==='google'?'Google Ads':'All sources'}
-                        <span style={{display:'flex',transform:'rotate(90deg)'}}><Ico n="chevR" s={10} c={scopeOpen?BLUE:'#94A3B8'}/></span>
-                      </button>
-                      {scopeOpen&&(
-                        <div onClick={e=>e.stopPropagation()} style={{position:'absolute',bottom:'calc(100% + 6px)',left:0,minWidth:170,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 10px 30px -8px rgba(15,23,42,0.18)',padding:6,zIndex:20}}>
-                          {[
-                            {id:'all',label:'All sources',dot:'#94A3B8'},
-                            {id:'meta',label:'Meta Ads',dot:connected?GREEN:'#CBD5E1'},
-                            {id:'google',label:'Google Ads',dot:GREEN},
-                          ].map(opt=>(
-                            <button key={opt.id} onClick={()=>{setPlatformScope(opt.id);setScopeOpen(false)}}
-                              style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 10px',border:'none',background:platformScope===opt.id?'#F1F5F9':'transparent',borderRadius:7,cursor:'pointer',fontSize:12.5,fontWeight:platformScope===opt.id?700:500,color:'#1E293B',fontFamily:FONT,textAlign:'left'}}>
-                              <div style={{width:7,height:7,borderRadius:'50%',background:opt.dot,flexShrink:0}}/>
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {[['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
-                      <button key={id} onClick={e=>{e.stopPropagation();toggleRail(id)}} className="mabtn"
-                        style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${rail===id?BLUE:borderColor}`,background:rail===id?'#E3F5FD':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id?BLUE:'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
-                        <Ico n={ic} s={12} c={rail===id?BLUE:'#94A3B8'}/>{lbl}
-                      </button>
-                    ))}
-                  </div>
-                  <button onClick={()=>{ if(loading){abortRef.current?.abort()} else {send()} }} disabled={!loading&&!input.trim()} title={loading?'Stop generating':'Send'} className="sendbtn"
-style={{width:36,height:36,borderRadius:10,border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:(loading||input.trim())?'pointer':'not-allowed',background:(loading||input.trim())?'linear-gradient(135deg,#1F3C84,#1C9FD4 60%,#29B9C3)':'#E5E7EB',boxShadow:(loading||input.trim())?'0 6px 16px -4px rgba(28,159,212,0.6)':'none',transition:'all .2s'}}>
-<span style={{display:'flex'}}><Ico n={loading?'close':'send'} s={15} c="#fff" sw={2}/></span>
-                  </button>
-                </div>
-              </div>
-              <div style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Ask AI can make mistakes. Always verify important numbers.</div>
+          {/* Input — docked to the bottom only once a conversation has started; on the landing state the composer renders centered above, inside the empty-state block */}
+          {messages.length>0&&(
+            <div style={{padding:'12px 20px 16px',flexShrink:0}}>
+              {composer}
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
