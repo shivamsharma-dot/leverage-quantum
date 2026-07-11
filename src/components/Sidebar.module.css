@@ -355,13 +355,16 @@
 @media (max-width: 768px) {
   :global(.lq-mobile-topbar) {
     display: flex !important;
+    height: calc(52px + env(safe-area-inset-top)) !important;
+    padding-top: env(safe-area-inset-top) !important;
+    box-sizing: border-box !important;
   }
 }
 
-/* Push page content down on mobile to clear fixed top bar */
+/* Push page content down on mobile to clear fixed top bar (+ notch/status-bar inset in standalone PWA mode) */
 @media (max-width: 768px) {
   :global(.lq-page-shell) {
-    padding-top: 52px !important;
+    padding-top: calc(52px + env(safe-area-inset-top)) !important;
   }
 }
 

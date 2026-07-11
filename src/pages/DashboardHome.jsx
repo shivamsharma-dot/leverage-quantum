@@ -259,7 +259,7 @@ export default function DashboardHome() {
 .qcard:hover{box-shadow:0 8px 26px rgba(15,23,42,0.09)!important;border-color:#D1D9E8!important}
 `}</style>
       <Sidebar/>
-      <main style={{ flex:1, overflowY:'auto', padding:'28px 28px 40px' }}>
+      <main style={{ flex:1, overflowY:'auto', overflowX:'hidden', padding:'28px 28px 40px' }}>
 
         <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:26, animation:'fadeUp .4s ease' }}>
           <div>
@@ -274,7 +274,7 @@ export default function DashboardHome() {
             {loading ? 'Refreshing\u2026' : 'Refresh'}
           </button>
         </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:28, animation:'fadeUp .4s ease .05s both' }}>
+        <div className='lq-kpi-grid' style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:28, animation:'fadeUp .4s ease .05s both' }}>
           <StatCard label='MTD Spend' value={fmtC(M.curMonthRow.spend||0)} sub='Meta Ads, month to date' loading={loading}
             icon={<svg width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'><circle cx='12' cy='12' r='10'/></svg>}/>
           <StatCard label='MTD Qualified Leads' value={fmtN(M.curMonthRow.ql||0)} sub={'Futwork '+fmtN(M.curMonthRow.futwork||0)+' \u00b7 Superbot '+fmtN(M.curMonthRow.superbot||0)} loading={loading}

@@ -151,10 +151,13 @@ input:focus, textarea:focus {
 @media (max-width: 768px) {
   .lq-mobile-topbar {
     display: flex !important;
+    height: calc(52px + env(safe-area-inset-top)) !important;
+    padding-top: env(safe-area-inset-top) !important;
+    box-sizing: border-box !important;
   }
-  /* Page shells: push content below fixed 52px top bar */
+  /* Page shells: push content below fixed top bar (+ notch/status-bar inset in standalone PWA mode) */
   .lq-page-shell {
-    padding-top: 52px !important;
+    padding-top: calc(52px + env(safe-area-inset-top)) !important;
     height: calc(100vh - 0px) !important;
   }
   /* KPI cards: 2-column grid instead of horizontal scroll */
