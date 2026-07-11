@@ -531,7 +531,7 @@ export default function AskAI() {
         <div style={{position:'absolute',inset:0,borderRadius:14,overflow:'hidden',pointerEvents:'none'}}>
           <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:input?1:0.85,transition:'opacity .2s'}}/>
         </div>
-        <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Message Ask AI…" className="composerInput"
+        <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Ask anything…" className="composerInput"
           onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,180)+'px'}}
           onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
           onFocus={()=>setRailOpen(false)}
@@ -877,7 +877,7 @@ export default function AskAI() {
                   <span className="qShine">{greeting()}</span>, {firstName}
                 </div>
                 <div style={{fontSize:14,color:'#94A3B8',textAlign:'center',maxWidth:440,lineHeight:1.6,marginBottom:28,animation:'fadeUp .5s ease .15s both'}}>
-                  Your marketing intelligence layer. Ask anything about Meta Ads, Google Ads, or CRM leads, or generate a full report.
+                  Your marketing intelligence layer. Ask anything, from a quick number to a full performance report.
                 </div>
                 {/* quick prompts */}
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',maxWidth:620,animation:'fadeUp .5s ease .2s both'}}>
