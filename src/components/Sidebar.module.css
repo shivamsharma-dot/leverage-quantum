@@ -299,12 +299,13 @@
 }
 
 .collapsedItem {
-  width: 36px; height: 36px;
+  width: 40px; height: 40px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 8px; color: #6B7280;
+  border-radius: 9px; color: #6B7280;
   text-decoration: none; transition: all .15s;
   border: 1px solid transparent; position: relative;
 }
+.collapsedItem svg { width: 19px; height: 19px; }
 .collapsedItem:hover { background: var(--bg3); color: #1F3C84; }
 .collapsedItem:hover { background: var(--bg3); color: #374151; }
 .collapsedActive {
