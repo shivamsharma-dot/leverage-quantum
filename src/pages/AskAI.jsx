@@ -594,10 +594,8 @@ export default function AskAI() {
 .askai-rail{ position:absolute; z-index:56; top:12px; bottom:12px; left:12px; width:322px; border-radius:16px; opacity:1; pointer-events:auto; transform:translateX(-115%); transition:transform .28s ease; box-shadow:0 12px 34px -10px rgba(15,23,42,0.20); }
 .askai-rail.rail-open{ transform:translateX(0); }
 .askai-backdrop{ display:none; }
-.askai-toolbar{ position:absolute; z-index:54; top:16px; display:flex; align-items:stretch; background:#fff; border-radius:12px; border:0.5px solid #E5E7EB; box-shadow:0 2px 10px rgba(15,23,42,0.06); transition:left .28s ease; overflow:hidden; }
-.askai-toolbar-btn{ width:38px; height:36px; border:none; background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s ease; }
+.askai-toolbar-btn{ border:none; background:transparent; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background .15s ease; }
 .askai-toolbar-btn:hover{ background:#F4F6F9; }
-.askai-toolbar-divider{ width:1px; margin:7px 0; background:#EEF1F6; flex-shrink:0; }
 @media (max-width:768px){ .askai-rail{ width:86vw!important; max-width:340px; top:0; bottom:0; left:0; border-radius:0; box-shadow:0 0 40px rgba(15,23,42,0.22); } .askai-backdrop{ display:block!important; } }
       `}</style>
 
@@ -609,17 +607,6 @@ export default function AskAI() {
 
 {railOpen&&(<div className="askai-backdrop" onClick={()=>setRailOpen(false)} style={{position:'absolute',inset:0,zIndex:55,background:'rgba(15,23,42,0.34)'}}/>)}
 
-        {/* Floating toolbar — toggle + New chat grouped into one control so they read as a single unit, not two separate floating buttons. Shifts clear of the rail's own edge when open. */}
-        <div className="askai-toolbar" style={{left:railOpen?346:16}}>
-          <button className="askai-toolbar-btn" onClick={e=>{e.stopPropagation();setRailOpen(v=>!v)}} title={railOpen?'Hide sidebar':'Show sidebar'}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-          </button>
-          <div className="askai-toolbar-divider"/>
-          <button className="askai-toolbar-btn" onClick={e=>{e.stopPropagation();newConv()}} title="New chat">
-            <Ico n="new" s={16} c="#1F3C84"/>
-          </button>
-        </div>
-
         {/* Left sidebar - Claude-style unified, floating overlay */}
         <div className={"askai-rail"+(railOpen?" rail-open":"")} style={{
           overflow:'hidden', background:panelBg,
@@ -628,7 +615,7 @@ export default function AskAI() {
           {panelOpen&&(
             <div style={{width:RAIL_W,flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
               {/* Unified sidebar header — flat underline tabs, no cards/pills, minimal chrome */}
-              <div style={{padding:'14px 14px 0',flexShrink:0,background:'#fff',display:'flex',gap:18,borderBottom:'0.5px solid #EEF1F6'}}>
+              <div style={{padding:'14px 14px 0',flexShrink:0,background:'#fff',display:'flex',alignItems:'center',gap:18,borderBottom:'0.5px solid #EEF1F6'}}>
                 {[
                   {id:'history', label:'History'},
                   {id:'prompts', label:'Prompts'},
@@ -642,6 +629,9 @@ export default function AskAI() {
                     {t.label}
                   </button>
                 })}
+                <button onClick={newConv} title="New chat" className="askai-toolbar-btn" style={{marginLeft:'auto',marginBottom:9,width:28,height:28,borderRadius:7}}>
+                  <Ico n="new" s={15} c="#1F3C84"/>
+                </button>
               </div>
 
               {/* History */}

@@ -108,7 +108,7 @@ const ICON_MAP = {
   'Summary': <HomeIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
   'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
   'Revenue': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>,
-  'Google Ads': <GoogleAdsIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
+  'Google Ads': <GoogleAdsIcon/>, 'QL Ops': <PeopleIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
   'Bing Ads': <BingAdsIcon/>,
   'Referral': <ReferralIcon/>, 'Leads Assigned': <LeadsAssignedIcon/>,
   'WhatsApp': <WhatsAppIcon/>,
