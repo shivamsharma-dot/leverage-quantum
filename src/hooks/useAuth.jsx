@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, createContext, useContext } from 'react'
+import { useState, useEffect, createContext, useContext } from 'react'
 
 const AuthContext = createContext(null)
 const ALLOWED_DOMAIN = 'leverageedu.com'
@@ -86,28 +86,29 @@ export function AuthProvider({ children }) {
   // an empty default -- a stale, unauthenticated non-answer that then never got refetched
   // after loginWithGoogle's client-side setUser (no page reload happens on login, so the
   // mount-only effect never re-ran). Every hidden page would show up right after login,
-  // permanently for that session, because the app believed it already had the real
-  // answer. Fixed: gotRealAnswerRef tracks whether we've ever gotten a genuinely
-  // authenticated (200) response; the effect re-fires on every `user` transition but
-  // skips refetching once that's true -- so the common reload-with-valid-cookie case
-  // still resolves once, in parallel with auth as before, while the fresh-login case
-  // correctly retries once `user` actually becomes non-null.
-  const gotRealAnswerRef = useRef(false)
-  useEffect(() => {
-    if (gotRealAnswerRef.current) return
+  // permanently for that session.
+  //
+  // Fix is tied to the login *event* itself (fetchHiddenPages called again at the end of
+  // loginWithGoogle below), not to reactively watching `user` state: an earlier attempt
+  // keyed off a `[user]`-dependent effect, gated by a "did we ever get a real answer" ref
+  // -- but /api/auth/me routinely resolves faster than /api/preferences in practice, so
+  // `user` would flip to non-null WHILE the first preferences fetch was still in flight
+  // (before the ref got set), and the effect fired a second, genuinely redundant request
+  // on every plain reload, not just on fresh logins.
+  const fetchHiddenPages = () => {
     setPrefsReady(false)
     fetch('/api/preferences', { credentials: 'include' })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data) return // unauthenticated attempt -- leave hiddenPages/localStorage untouched
-        gotRealAnswerRef.current = true
         const hp = data.prefs?.hidden_pages || []
         setHiddenPages(hp)
         localStorage.setItem('lq_hidden_pages', JSON.stringify(hp))
       })
       .catch(() => {}) // fail silently — localStorage fallback stays
       .finally(() => setPrefsReady(true))
-  }, [user])
+  }
+  useEffect(() => { fetchHiddenPages() }, [])
 
   // Real-time sync within session (from Settings page Save button) and across tabs.
   useEffect(() => {
@@ -136,6 +137,7 @@ export function AuthProvider({ children }) {
       const data = await r.json()
       if (!r.ok) return { success: false, error: data.error || 'Sign-in failed.' }
       setUser(data.user)
+      fetchHiddenPages() // the mount-time attempt 401'd (not signed in yet) -- now we actually are
       return { success: true }
     } catch {
       return { success: false, error: 'Network error. Please try again.' }
