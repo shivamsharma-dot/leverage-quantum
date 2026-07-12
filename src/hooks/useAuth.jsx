@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect, useRef, createContext, useContext } from 'react'
 
 const AuthContext = createContext(null)
 const ALLOWED_DOMAIN = 'leverageedu.com'
@@ -78,17 +78,36 @@ export function AuthProvider({ children }) {
   // each lazy-loaded page), so a fetch started from Sidebar's own mount effect was
   // serialized behind the auth check instead of overlapping it, roughly doubling the
   // wait before the sidebar could show anything.
+  //
+  // /api/preferences requires a valid session same as every other API here, so firing
+  // it on mount -- i.e. before the user has necessarily logged in -- 401s whenever this
+  // is a fresh sign-in (not a reload of an already-authenticated session). That 401 was
+  // being silently swallowed and prefsReady marked true anyway with hiddenPages stuck at
+  // an empty default -- a stale, unauthenticated non-answer that then never got refetched
+  // after loginWithGoogle's client-side setUser (no page reload happens on login, so the
+  // mount-only effect never re-ran). Every hidden page would show up right after login,
+  // permanently for that session, because the app believed it already had the real
+  // answer. Fixed: gotRealAnswerRef tracks whether we've ever gotten a genuinely
+  // authenticated (200) response; the effect re-fires on every `user` transition but
+  // skips refetching once that's true -- so the common reload-with-valid-cookie case
+  // still resolves once, in parallel with auth as before, while the fresh-login case
+  // correctly retries once `user` actually becomes non-null.
+  const gotRealAnswerRef = useRef(false)
   useEffect(() => {
+    if (gotRealAnswerRef.current) return
+    setPrefsReady(false)
     fetch('/api/preferences', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : { prefs: {} })
+      .then(r => r.ok ? r.json() : null)
       .then(data => {
+        if (!data) return // unauthenticated attempt -- leave hiddenPages/localStorage untouched
+        gotRealAnswerRef.current = true
         const hp = data.prefs?.hidden_pages || []
         setHiddenPages(hp)
         localStorage.setItem('lq_hidden_pages', JSON.stringify(hp))
       })
       .catch(() => {}) // fail silently — localStorage fallback stays
       .finally(() => setPrefsReady(true))
-  }, [])
+  }, [user])
 
   // Real-time sync within session (from Settings page Save button) and across tabs.
   useEffect(() => {
