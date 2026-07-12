@@ -211,6 +211,7 @@
 .userName { font-size: 13.5px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
 .userHandle { font-size: 12px; color: var(--text-3); margin-left: 6px; }
 .youTag { font-size: 10px; font-weight: 700; color: #1577A0; background: #E3F5FD; border-radius: 5px; padding: 1px 6px; margin-left: 6px; letter-spacing: .03em; }
+.superadminTag { font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg,#1C9FD4,#29B9C3 55%,#4CAE6F); border-radius: 5px; padding: 1px 6px; margin-left: 6px; letter-spacing: .03em; }
 
 .roleBadge { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
 .roleAdmin  { color: #1F3C84; background: #E8EFF9; }
@@ -353,6 +354,7 @@
 .pxHeroEmail { font-size:13.5px; color:rgba(255,255,255,0.82); margin-top:3px; }
 .pxHeroBadges { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
 .pxRoleBadge { font-size:11.5px; font-weight:700; color:#1F3C84; background:#fff; padding:5px 11px; border-radius:999px; letter-spacing:0.3px; }
+.pxRoleBadgeSuperadmin { color:#fff; background:linear-gradient(135deg,#1C9FD4,#29B9C3 55%,#4CAE6F); box-shadow:0 2px 10px -2px rgba(41,185,195,0.7); }
 .pxStatusBadge { font-size:11.5px; font-weight:600; color:#fff; background:rgba(255,255,255,0.16); padding:5px 11px; border-radius:999px; display:inline-flex; align-items:center; gap:6px; border:1px solid rgba(255,255,255,0.25); }
 .pxDot { width:7px; height:7px; border-radius:50%; background:#4CAE6F; display:inline-block; box-shadow:0 0 0 3px rgba(76,174,111,0.35); }
 .pxCopyBtn { align-self:flex-start; background:rgba(255,255,255,0.16); color:#fff; border:1px solid rgba(255,255,255,0.35);

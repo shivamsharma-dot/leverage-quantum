@@ -576,6 +576,12 @@
   box-shadow: inset 0 0 0 1px rgba(91,101,119,0.12);
 }
 .roleBadgeViewer::before { background: #9CA3AF; }
+.roleBadgeSuperadmin {
+  color: #fff;
+  background: linear-gradient(135deg, #1F3C84, #1C9FD4 55%, #29B9C3);
+  box-shadow: 0 2px 6px -1px rgba(28,159,212,0.55);
+}
+.roleBadgeSuperadmin::before { background: #fff; box-shadow: 0 0 4px rgba(255,255,255,0.9); }
 .gearBtn, .logoutBtn {
   grid-row: 1 / span 2;
   align-self: center;

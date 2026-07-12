@@ -393,9 +393,9 @@ export default function Sidebar() {
             <NavLink
               to="/settings?tab=profile"
               title="View profile"
-              className={`${styles.roleBadge} ${userRole==='admin' ? styles.roleBadgeAdmin : styles.roleBadgeViewer}`}
+              className={`${styles.roleBadge} ${user?.isSuperadmin ? styles.roleBadgeSuperadmin : userRole==='admin' ? styles.roleBadgeAdmin : styles.roleBadgeViewer}`}
             >
-              {userRole==='admin' ? 'Admin' : 'Viewer'}
+              {user?.isSuperadmin ? 'Superadmin' : userRole==='admin' ? 'Admin' : 'Viewer'}
             </NavLink>
           </div>
           <p className={styles.userEmail}>{user?.email}</p>

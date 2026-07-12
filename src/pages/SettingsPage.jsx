@@ -4,6 +4,9 @@ import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole
 import { getActivityLog } from '../components/ActivityLogger.js'
 import styles from './SettingsPage.module.css'
 
+// Mirrors lib/auth.mjs SUPERADMINS -- display-only, keep in sync
+const SUPERADMIN_EMAILS = ['shivam.sharma@leverageedu.com']
+
 const RL_SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const RL_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 async function getReportLogs(limit = 200) {
@@ -723,6 +726,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   const rm = getRoleMeta(u.role)
                   const isEditing = editingUser === u.email
                   const isYou = u.email === user?.email
+                  const isSuperadminRow = SUPERADMIN_EMAILS.includes((u.email||'').toLowerCase())
                   return (
                     <div key={u.email}>
                       <div className={`${styles.uRow} ${isEditing ? styles.uRowEdit : ''}`}>
@@ -735,7 +739,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             {u.email.split('@')[0].slice(0,2).toUpperCase()}
                           </div>
                           <div className={styles.uUserText}>
-                            <span className={styles.userName}>{u.email.split('@')[0]}{isYou && <span className={styles.youTag}>YOU</span>}</span>
+                            <span className={styles.userName}>{u.email.split('@')[0]}{isYou && <span className={styles.youTag}>YOU</span>}{isSuperadminRow && <span className={styles.superadminTag} title="Owner-level access, cannot be revoked">SUPERADMIN</span>}</span>
                             <span className={styles.uEmail}>{u.email}</span>
                             {(u.job_title||u.department)&&<span style={{fontSize:10.5,color:'#94A3B8',fontWeight:500,marginTop:1}}>{[u.job_title,u.department].filter(Boolean).join(' · ')}</span>}
                           </div>
@@ -1338,7 +1342,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div className={styles.pxHeroName}>{user?.name || 'User'}</div>
                       <div className={styles.pxHeroEmail}>{user?.email}</div>
                       <div className={styles.pxHeroBadges}>
-                        <span className={styles.pxRoleBadge}>{user?.role === 'admin' ? 'Administrator' : 'Viewer'}</span>
+                        <span className={`${styles.pxRoleBadge}${user?.isSuperadmin ? ' '+styles.pxRoleBadgeSuperadmin : ''}`}>{user?.isSuperadmin ? 'Superadmin' : user?.role === 'admin' ? 'Administrator' : 'Viewer'}</span>
                         <span className={styles.pxStatusBadge}><i className={styles.pxDot}/> Active session</span>
                       </div>
                     </div>
@@ -1351,8 +1355,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <div className={styles.pxStatRow}>
                   <div className={styles.pxStatCard}>
                     <div className={styles.pxStatLabel}>Access level</div>
-                    <div className={styles.pxStatValue}>{user?.role === 'admin' ? 'Full' : 'Standard'}</div>
-                    <div className={styles.pxStatSub}>{user?.role === 'admin' ? 'All dashboards & settings' : 'Assigned dashboards'}</div>
+                    <div className={styles.pxStatValue}>{user?.isSuperadmin ? 'Superadmin' : user?.role === 'admin' ? 'Full' : 'Standard'}</div>
+                    <div className={styles.pxStatSub}>{user?.isSuperadmin ? 'Owner-level, cannot be revoked' : user?.role === 'admin' ? 'All dashboards & settings' : 'Assigned dashboards'}</div>
                   </div>
                   <div className={styles.pxStatCard}>
                     <div className={styles.pxStatLabel}>Sign-in method</div>
@@ -1372,7 +1376,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <div className={styles.pxDetailGrid}>
                     <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Full name</span><span className={styles.pxDetailVal}>{user?.name || '—'}</span></div>
                     <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Email address</span><span className={styles.pxDetailVal}>{user?.email || '—'}</span></div>
-                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Role</span><span className={styles.pxDetailVal}>{user?.role === 'admin' ? 'Administrator' : 'Viewer'}</span></div>
+                    <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Role</span><span className={styles.pxDetailVal}>{user?.isSuperadmin ? 'Superadmin' : user?.role === 'admin' ? 'Administrator' : 'Viewer'}</span></div>
                     <div className={styles.pxDetailItem}><span className={styles.pxDetailKey}>Theme</span><span className={styles.pxDetailVal} style={{textTransform:'capitalize'}}>{activeTheme || 'light'}</span></div>
                   </div>
                 </div>
