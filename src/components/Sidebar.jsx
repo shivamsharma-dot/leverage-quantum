@@ -122,7 +122,7 @@ function BingAdsIcon(){
 }
 
 export default function Sidebar() {
-  const { user, logout } = useAuth()
+  const { user, logout, hiddenPages, prefsReady } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -131,51 +131,21 @@ export default function Sidebar() {
     try { return localStorage.getItem('lq_sidebar_collapsed') === 'true' } catch { return false }
   })
   const [mobileOpen, setMobileOpen] = React.useState(false)
-  const [hiddenPages, setHiddenPages] = React.useState(() => {
-    // Start with localStorage as a best-effort value; not rendered until prefsReady is true.
-    try { return JSON.parse(localStorage.getItem('lq_hidden_pages') || '[]') } catch { return [] }
-  })
-  // Nav items are only rendered once we KNOW the real visibility list -- never render
-  // permissively while this is still loading (that was the flash-of-hidden-pages bug:
-  // a page an admin hid, or a page outside a restricted viewer's grant, would briefly
-  // show for every user on every login before this resolved).
-  const [prefsReady, setPrefsReady] = React.useState(false)
+  // hiddenPages/prefsReady now live in AuthProvider (useAuth.jsx) so the /api/preferences
+  // fetch runs in parallel with the auth check from the true app root, instead of only
+  // starting once Sidebar itself mounts (which is gated behind ProtectedRoute's auth
+  // loading gate -- serializing the two fetches and roughly doubling the wait). Nav
+  // items are still only rendered once prefsReady is true -- see isPageVisible below --
+  // that's the actual fix for the flash-of-hidden-pages bug; this just makes it fast too.
 
-  // On mount: fetch from server (source of truth), then keep in sync via events
   React.useEffect(() => {
-    fetch('/api/preferences', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : { prefs: {} })
-      .then(data => {
-        const hp = data.prefs?.hidden_pages || []
-        setHiddenPages(hp)
-        // Keep localStorage in sync so next page load is instant
-        localStorage.setItem('lq_hidden_pages', JSON.stringify(hp))
-      })
-      .catch(() => {}) // fail silently — localStorage fallback stays
-      .finally(() => setPrefsReady(true))
-  }, [])
-
-  // Real-time sync within session (from Settings page Save button)
-  React.useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === 'lq_hidden_pages') {
-        try { setHiddenPages(JSON.parse(e.newValue || '[]')) } catch { setHiddenPages([]) }
-      }
-    }
-    const onCustom = (e) => { setHiddenPages(e.detail || []) }
     const onSidebarMode = (e) => {
       if (e.detail && e.detail.collapsed !== undefined) {
         setCollapsed(e.detail.collapsed)
       }
     }
-    window.addEventListener('storage', onStorage)
-    window.addEventListener('lq:hidden-pages-changed', onCustom)
     window.addEventListener('lq:sidebar-mode-changed', onSidebarMode)
-    return () => {
-      window.removeEventListener('storage', onStorage)
-      window.removeEventListener('lq:hidden-pages-changed', onCustom)
-      window.removeEventListener('lq:sidebar-mode-changed', onSidebarMode)
-    }
+    return () => window.removeEventListener('lq:sidebar-mode-changed', onSidebarMode)
   }, [])
   const isPageVisible = (label) => {
     if (!prefsReady) return false

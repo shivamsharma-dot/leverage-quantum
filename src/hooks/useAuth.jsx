@@ -44,6 +44,10 @@ const LOGOUT_SIGNAL_KEY = 'lq_logout_signal'
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [hiddenPages, setHiddenPages] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('lq_hidden_pages') || '[]') } catch { return [] }
+  })
+  const [prefsReady, setPrefsReady] = useState(false)
 
   // Cross-tab logout sync: logging out in one tab clears localStorage, which fires a
   // 'storage' event in every OTHER open tab of this origin (never in the tab that did it).
@@ -66,6 +70,40 @@ export function AuthProvider({ children }) {
       .then(d => setUser(d.user || null))
       .catch(() => setUser(null))
       .finally(() => setLoading(false))
+  }, [])
+
+  // Hidden-pages preference, fetched here (not in Sidebar) so it runs in true parallel
+  // with the /api/auth/me check above -- both fire from this same root-level mount.
+  // Sidebar only mounts AFTER ProtectedRoute's `loading` gate clears (it lives inside
+  // each lazy-loaded page), so a fetch started from Sidebar's own mount effect was
+  // serialized behind the auth check instead of overlapping it, roughly doubling the
+  // wait before the sidebar could show anything.
+  useEffect(() => {
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { prefs: {} })
+      .then(data => {
+        const hp = data.prefs?.hidden_pages || []
+        setHiddenPages(hp)
+        localStorage.setItem('lq_hidden_pages', JSON.stringify(hp))
+      })
+      .catch(() => {}) // fail silently — localStorage fallback stays
+      .finally(() => setPrefsReady(true))
+  }, [])
+
+  // Real-time sync within session (from Settings page Save button) and across tabs.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === 'lq_hidden_pages') {
+        try { setHiddenPages(JSON.parse(e.newValue || '[]')) } catch { setHiddenPages([]) }
+      }
+    }
+    const onCustom = (e) => setHiddenPages(e.detail || [])
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('lq:hidden-pages-changed', onCustom)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('lq:hidden-pages-changed', onCustom)
+    }
   }, [])
 
   const loginWithGoogle = async (credentialResponse) => {
@@ -158,7 +196,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout, ALLOWED_DOMAIN }}>
+    <AuthContext.Provider value={{ user, loading, hiddenPages, prefsReady, loginWithGoogle, logout, ALLOWED_DOMAIN }}>
       {children}
     </AuthContext.Provider>
   )
