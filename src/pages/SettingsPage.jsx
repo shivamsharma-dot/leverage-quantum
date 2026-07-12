@@ -89,7 +89,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const requested = params.get('tab');
-    if (requested) setActiveTab(requested);
+    if (requested && ['data','users','activity','reports','appearance','profile'].includes(requested)) setActiveTab(requested);
   }, []);
 
   const _actRef = useRef(false)
@@ -426,7 +426,7 @@ export default function SettingsPage() {
 
   const addUser = async () => {
     const email = newEmail.trim().toLowerCase()
-    if (!email.includes('@leverageedu.com')) { setMsg('Only @leverageedu.com emails allowed'); return }
+    if (!email.endsWith('@leverageedu.com')) { setMsg('Only @leverageedu.com emails allowed'); return }
     if (accessList.find(u => u.email === email)) { setMsg('Already has access'); return }
     setUsersLoading(true)
     if (await addUserAccess(email, 'viewer', user?.email)) { setMsg('Added: ' + email); setNewEmail(''); await loadUsers() }

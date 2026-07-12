@@ -238,7 +238,7 @@ export default function Sidebar() {
       {mobileOpen && (
         <div style={{position:'fixed',inset:0,zIndex:999,display:'flex'}} onClick={()=>setMobileOpen(false)}>
           <div style={{width:240,height:'100%',background:'var(--sidebar-bg)',borderRight:'0.5px solid var(--card-border)',overflowY:'auto',paddingTop:60}} onClick={e=>e.stopPropagation()}>
-            {NAV.map(group=>(
+            {NAV.map(group=>(group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).length===0?null:(
               <div key={group.label} style={{marginBottom:8,padding:'0 10px'}}>
                 <div style={{fontSize:10,fontWeight:600,color:'#9CA3AF',letterSpacing:'0.08em',textTransform:'uppercase',padding:'10px 6px 4px'}}>{group.label}</div>
                 {group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item=>(
@@ -248,7 +248,7 @@ export default function Sidebar() {
                   </a>
                 ))}
               </div>
-            ))}
+            )))}
           </div>
           <div style={{flex:1,background:'rgba(0,0,0,0.3)'}}/>
         </div>
@@ -314,7 +314,7 @@ export default function Sidebar() {
       </div>
 
       <nav className={styles.nav}>
-        {NAV.map(group => (
+        {NAV.map(group => (group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).length===0?null:(
           <div key={group.label} className={styles.group}>
             {group.label !== 'Intelligence' && <p className={styles.groupLabel}>{group.label}</p>}
             {group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item => {
@@ -358,7 +358,7 @@ export default function Sidebar() {
               )
             })}
           </div>
-        ))}
+        )))}
       </nav>
 
 
