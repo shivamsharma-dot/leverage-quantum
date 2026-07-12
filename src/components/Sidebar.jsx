@@ -132,9 +132,14 @@ export default function Sidebar() {
   })
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [hiddenPages, setHiddenPages] = React.useState(() => {
-    // Start with localStorage (instant, no flicker) — server will override shortly
+    // Start with localStorage as a best-effort value; not rendered until prefsReady is true.
     try { return JSON.parse(localStorage.getItem('lq_hidden_pages') || '[]') } catch { return [] }
   })
+  // Nav items are only rendered once we KNOW the real visibility list -- never render
+  // permissively while this is still loading (that was the flash-of-hidden-pages bug:
+  // a page an admin hid, or a page outside a restricted viewer's grant, would briefly
+  // show for every user on every login before this resolved).
+  const [prefsReady, setPrefsReady] = React.useState(false)
 
   // On mount: fetch from server (source of truth), then keep in sync via events
   React.useEffect(() => {
@@ -147,6 +152,7 @@ export default function Sidebar() {
         localStorage.setItem('lq_hidden_pages', JSON.stringify(hp))
       })
       .catch(() => {}) // fail silently — localStorage fallback stays
+      .finally(() => setPrefsReady(true))
   }, [])
 
   // Real-time sync within session (from Settings page Save button)
@@ -172,6 +178,7 @@ export default function Sidebar() {
     }
   }, [])
   const isPageVisible = (label) => {
+    if (!prefsReady) return false
     const pageId = idMap[label]
     return !pageId || !hiddenPages.includes(pageId)
   }
@@ -210,6 +217,11 @@ export default function Sidebar() {
   const isViewerRole = userRole !== 'admin'
 
   function canSee(id) {
+    // Auth still loading -- show nothing rather than falling back to the permissive
+    // default 'viewer' role, which would briefly grant every dashboard (including ones
+    // a restricted custom-viewer account was never actually given) until the real
+    // role loads a moment later.
+    if (!user) return false
     // Settings is always admin-only
     if (id === 'settings') return userRole === 'admin'
     // Admin sees everything
