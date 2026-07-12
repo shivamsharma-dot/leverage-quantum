@@ -523,6 +523,7 @@
 }
 .userName {
   flex: 0 1 auto;
+  min-width: 32px;
   font-size: 13px;
   font-weight: 600;
   color: #1F2A44;
