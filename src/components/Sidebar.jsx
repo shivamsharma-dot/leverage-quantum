@@ -390,11 +390,7 @@ export default function Sidebar() {
         <div className={styles.userInfo}>
           <div className={styles.userMeta}>
             <p className={styles.userName}>{user?.name?.split(' ')[0] || 'User'}</p>
-            {user?.isSuperadmin ? (
-              <NavLink to="/settings?tab=profile" title="Superadmin" className={styles.superadminDot}>
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="#fff"><path d="M12 2l2.9 6.6L22 9.6l-5 4.9 1.2 7L12 18l-6.2 3.5L7 14.5l-5-4.9 7.1-1z"/></svg>
-              </NavLink>
-            ) : (
+            {!user?.isSuperadmin && (
               <NavLink
                 to="/settings?tab=profile"
                 title="View profile"
@@ -404,6 +400,11 @@ export default function Sidebar() {
               </NavLink>
             )}
           </div>
+          {user?.isSuperadmin && (
+            <NavLink to="/settings?tab=profile" title="View profile" className={`${styles.roleBadge} ${styles.roleBadgeSuperadmin} ${styles.roleBadgeSuperadminRow}`}>
+              Superadmin
+            </NavLink>
+          )}
           <p className={styles.userEmail}>{user?.email}</p>
         </div>
         {canSee('settings') && (
