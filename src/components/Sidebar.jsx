@@ -241,7 +241,7 @@ export default function Sidebar() {
             {NAV.map(group=>(
               <div key={group.label} style={{marginBottom:8,padding:'0 10px'}}>
                 <div style={{fontSize:10,fontWeight:600,color:'#9CA3AF',letterSpacing:'0.08em',textTransform:'uppercase',padding:'10px 6px 4px'}}>{group.label}</div>
-                {group.items.map(item=>(
+                {group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item=>(
                   <a key={item.to} href={item.to} onClick={()=>setMobileOpen(false)}
                     style={{display:'flex',alignItems:'center',gap:9,padding:'9px 10px',borderRadius:9,textDecoration:'none',color:'#374151',fontSize:13,fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
                     {item.icon}{item.label}

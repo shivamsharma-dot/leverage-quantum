@@ -564,7 +564,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           </div>
 
           {/* ---------------- DATA ---------------- */}
-          {activeTab === 'data' && (
+          {activeTab === 'data' && userIsAdmin && (
             <>
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>SR Revenue Assumptions</h3>
@@ -992,7 +992,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 <option value="weekly">Weekly report</option>
 <option value="monthly">Monthly report</option>
 </select>
-<button onClick={sendReportNow} disabled={rcSending} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: rcSending ? '#94A3B8' : '#1F3C84', color: '#fff', fontSize: 13, fontWeight: 700, cursor: rcSending ? 'default' : 'pointer' }}>{rcSending ? 'Sending...' : 'Send now'}</button>
+<button onClick={sendReportNow} disabled={rcSending} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: rcSending ? '#94A3B8' : '#1F3C84', color: '#fff', fontSize: 13, fontWeight: 700, cursor: rcSending ? 'default' : 'pointer' }}>{rcSending ? 'Sending\u2026' : 'Send now'}</button>
                 {rcMsg && <span style={{ fontSize: 13, fontWeight: 600, color: rcMsg.charAt(0) === '\u2715' ? '#b4413c' : '#4CAE6F' }}>{rcMsg}</span>}
               </div>
 
