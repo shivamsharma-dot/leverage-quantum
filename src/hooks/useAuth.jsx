@@ -39,9 +39,25 @@ export async function updateUserRole(email, newRole) {
   return r.ok
 }
 
+const LOGOUT_SIGNAL_KEY = 'lq_logout_signal'
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  // Cross-tab logout sync: logging out in one tab clears localStorage, which fires a
+  // 'storage' event in every OTHER open tab of this origin (never in the tab that did it).
+  // Any tab still showing the app should immediately follow, not keep running with stale
+  // cached state until it happens to hit a 401 on some later request.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === LOGOUT_SIGNAL_KEY && e.newValue) {
+        window.location.replace('/login')
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
 
   // On load, ask the server who we are (reads the secure cookie).
   useEffect(() => {
@@ -107,12 +123,28 @@ export function AuthProvider({ children }) {
     document.body.appendChild(overlay);
 
     // Fire the logout request but don't block the animation on it (a slow/hung
-    // request must never freeze the overlay). Race it against a max wait.
-    const logoutReq = fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+    // request must never freeze the overlay). Race it against a max wait. One retry
+    // on failure -- a transient network blip during this window would otherwise leave
+    // the session cookie uncleared server-side while the UI still shows "signed out".
+    const callLogout = () => fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    const logoutReq = callLogout().catch(() => callLogout()).catch(() => {})
     // Let the full sign-out choreography play out (~2.15s: logo flip, bars, sheen, text, line).
     await new Promise(r => setTimeout(r, 2150));
     // Ensure the server logout has at least been attempted before redirecting.
     await Promise.race([logoutReq, new Promise(r => setTimeout(r, 800))]);
+
+    // Wipe all client-side state. This app caches real, sensitive data in localStorage
+    // (the Meta Ads access token, cached ad spend/lead data, full Ask AI conversation
+    // history) that a server-side cookie clear does nothing about -- on a shared
+    // machine "signed out" must actually mean gone, not just redirected.
+    try {
+      localStorage.clear()
+      sessionStorage.clear()
+      // Broadcast to any other open tabs of this app so they redirect too, instead of
+      // continuing to run with stale cached state until they happen to hit a 401.
+      localStorage.setItem('lq_logout_signal', String(Date.now()))
+    } catch {}
+
     overlay.style.animation = 'lqOut .35s ease forwards';
     await new Promise(r => setTimeout(r, 320));
     window.location.replace('/login')
