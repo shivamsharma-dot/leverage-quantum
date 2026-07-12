@@ -2,6 +2,13 @@
 
 > Auto-read by Claude at every session start. Last updated: June 22, 2026.
 
+> !! CRITICAL KNOWN ISSUE (check FIRST if Ask AI chat shows "Error") !!
+> The Ask AI agent (`api/ask-ai.js`) calls the Anthropic API. If chat returns an "Error" bubble
+> or "Your credit balance is too low to access the Anthropic API", the ANTHROPIC ACCOUNT IS OUT OF
+> CREDITS. This is NOT a code bug -- do NOT debug the code or make changes. The owner must top up
+> credits at the Anthropic Console (Plans & Billing). Confirmed root cause July 12, 2026.
+> Any Ask AI code change cannot be live-verified until credits are refilled.
+
 ---
 
 ## Recent Work (June 2026 — latest session)
