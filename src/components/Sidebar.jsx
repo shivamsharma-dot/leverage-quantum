@@ -390,13 +390,19 @@ export default function Sidebar() {
         <div className={styles.userInfo}>
           <div className={styles.userMeta}>
             <p className={styles.userName}>{user?.name?.split(' ')[0] || 'User'}</p>
-            <NavLink
-              to="/settings?tab=profile"
-              title="View profile"
-              className={`${styles.roleBadge} ${user?.isSuperadmin ? styles.roleBadgeSuperadmin : userRole==='admin' ? styles.roleBadgeAdmin : styles.roleBadgeViewer}`}
-            >
-              {user?.isSuperadmin ? 'Super' : userRole==='admin' ? 'Admin' : 'Viewer'}
-            </NavLink>
+            {user?.isSuperadmin ? (
+              <NavLink to="/settings?tab=profile" title="Superadmin" className={styles.superadminDot}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="#fff"><path d="M12 2l2.9 6.6L22 9.6l-5 4.9 1.2 7L12 18l-6.2 3.5L7 14.5l-5-4.9 7.1-1z"/></svg>
+              </NavLink>
+            ) : (
+              <NavLink
+                to="/settings?tab=profile"
+                title="View profile"
+                className={`${styles.roleBadge} ${userRole==='admin' ? styles.roleBadgeAdmin : styles.roleBadgeViewer}`}
+              >
+                {userRole==='admin' ? 'Admin' : 'Viewer'}
+              </NavLink>
+            )}
           </div>
           <p className={styles.userEmail}>{user?.email}</p>
         </div>
