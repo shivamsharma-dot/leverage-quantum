@@ -677,7 +677,7 @@ function CreativesTab({ data }) {
         </select>
         <div style={{ marginLeft:'auto',display:'flex',gap:8,alignItems:'center',position:'relative' }}>
           {viewMode==='list' && (
-            <button type="button" onClick={()=>setColsOpen(v=>!v)} style={{ padding:'5px 10px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:colsOpen?'#1F3C84':'#fff',color:colsOpen?'#fff':'#6B7280' }}>⚙ Columns</button>
+            <button type="button" onClick={()=>setColsOpen(v=>!v)} style={{ display:'inline-flex',alignItems:'center',gap:5,padding:'5px 10px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:colsOpen?'#1F3C84':'#fff',color:colsOpen?'#fff':'#6B7280' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>Columns</button>
           )}
           {colsOpen && (
             <>
@@ -707,10 +707,10 @@ function CreativesTab({ data }) {
                       onDrop={e=>{ e.preventDefault(); if (dragListKey) reorderTo(dragListKey, key); setDragListKey(null) }}
                       onDragEnd={()=>setDragListKey(null)}
                       style={{ display:'flex',alignItems:'center',gap:6,padding:'5px 10px',opacity:isHidden?0.45:1,cursor:'grab',background:dragListKey===key?'#F3F4F6':'transparent',borderRadius:6 }}>
-                      <span style={{ fontSize:13,color:'#9CA3AF',flexShrink:0 }}>⠿</span>
+                      <span style={{ color:'#9CA3AF',flexShrink:0,display:'flex' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="7" cy="5" r="1.5"/><circle cx="7" cy="12" r="1.5"/><circle cx="7" cy="19" r="1.5"/><circle cx="14" cy="5" r="1.5"/><circle cx="14" cy="12" r="1.5"/><circle cx="14" cy="19" r="1.5"/></svg></span>
                       <span style={{ flex:1,fontSize:12.5,color:'#374151',fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{c?c.label:key}</span>
-                      <button type="button" onClick={()=>togglePin(key)} title={isPinned?'Unpin':'Pin column'} style={{ width:22,height:22,borderRadius:5,border:'0.5px solid #E5E7EB',background:isPinned?'#EEF1FB':'#fff',color:isPinned?'#1F3C84':'#9CA3AF',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center' }}>📌</button>
-                      <button type="button" onClick={()=>toggleHidden(key)} title={isHidden?'Show column':'Hide column'} style={{ width:22,height:22,borderRadius:5,border:'0.5px solid #E5E7EB',background:'#fff',color:isHidden?'#9CA3AF':'#374151',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center' }}>{isHidden?'⊘':'👁'}</button>
+                      <button type="button" onClick={()=>togglePin(key)} title={isPinned?'Unpin':'Pin column'} style={{ width:22,height:22,borderRadius:5,border:'0.5px solid #E5E7EB',background:isPinned?'#EEF1FB':'#fff',color:isPinned?'#1F3C84':'#9CA3AF',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.4-6.6A2 2 0 0015.6 9H8.4a2 2 0 00-2 1.4L5 17z"/><path d="M9 9V4h6v5"/></svg></button>
+                      <button type="button" onClick={()=>toggleHidden(key)} title={isHidden?'Show column':'Hide column'} style={{ width:22,height:22,borderRadius:5,border:'0.5px solid #E5E7EB',background:'#fff',color:isHidden?'#9CA3AF':'#374151',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}>{isHidden?<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>:<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}</button>
                     </div>
                   )
                 })}
