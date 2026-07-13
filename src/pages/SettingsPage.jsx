@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import Sidebar, { PAGE_LIST } from '../components/Sidebar'
 import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole } from '../hooks/useAuth'
 import { getActivityLog } from '../components/ActivityLogger.js'
+import { toast } from '../components/ToastHost'
 import styles from './SettingsPage.module.css'
 
 const RL_SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
@@ -204,6 +205,7 @@ export default function SettingsPage() {
     const [savingSchedule, setSavingSchedule] = useState(false)
     const [scheduleMsg, setScheduleMsg] = useState(null)
     const saveHealthSchedule = async (next) => {
+      const prev = healthSchedule
       setHealthSchedule(next)
       setSavingSchedule(true)
       setScheduleMsg(null)
@@ -212,6 +214,7 @@ export default function SettingsPage() {
         if (!r.ok) throw new Error('Save failed')
         setScheduleMsg({ type: 'ok', text: 'Saved' })
       } catch (e) {
+        setHealthSchedule(prev) // revert -- otherwise the UI shows a schedule that was never actually persisted
         setScheduleMsg({ type: 'err', text: e.message })
       } finally {
         setSavingSchedule(false)
@@ -243,7 +246,13 @@ export default function SettingsPage() {
     const addCustomSource = async () => {
       const name = newSourceForm.name.trim(), url = newSourceForm.url.trim()
       if (!name || !url) { setAddSourceMsg({ type: 'err', text: 'Name and URL are both required' }); return }
+      const allNames = [...DATA_SOURCES.map(d => d.name), ...customSources.map(s => s.name)]
+      if (allNames.some(n => n.toLowerCase() === name.toLowerCase())) {
+        setAddSourceMsg({ type: 'err', text: 'A source named "' + name + '" already exists -- pick a different name' })
+        return
+      }
       const editKey = 'custom_' + Date.now()
+      const prev = customSources
       const next = [...customSources, { name, editKey, defaultUrl: url, rows: 'live', custom: true }]
       setCustomSources(next)
       setNewSourceForm({ name: '', url: '' })
@@ -253,13 +262,21 @@ export default function SettingsPage() {
         if (!r.ok) throw new Error('Save failed')
         setAddSourceMsg({ type: 'ok', text: 'Added' })
       } catch (e) {
+        setCustomSources(prev) // revert -- otherwise it stays visible (even testable) despite never being persisted, and vanishes on next reload with no explanation
         setAddSourceMsg({ type: 'err', text: e.message })
       }
     }
     const removeCustomSource = async (editKey) => {
+      const prev = customSources
       const next = customSources.filter(s => s.editKey !== editKey)
       setCustomSources(next)
-      try { await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'custom_data_sources', value: next }) }) } catch {}
+      try {
+        const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'custom_data_sources', value: next }) })
+        if (!r.ok) throw new Error('Save failed')
+      } catch (e) {
+        setCustomSources(prev) // revert -- otherwise it looks deleted but reappears on next reload with no error shown
+        toast('Could not remove source: ' + e.message, { type: 'muted' })
+      }
     }
 
   
