@@ -425,22 +425,22 @@ function copyAdName(e, name) {
 }
 const CREATIVE_COL_ORDER_KEY = 'lq_meta_creatives_col_order'
 const CREATIVE_COLS = [
-  { key:'leads', label:'Leads', width:90, align:'left', render:(ad)=><div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div> },
+  { key:'leads', label:'Leads', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div> },
   { key:'crmLeads', label:'CRM Leads', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.crmLeads==null?'—':ad.crmLeads.toLocaleString('en-IN')}</div> },
   { key:'delta', label:'Δ', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:(ad.crmLeads==null?'#9CA3AF':((ad.crmLeads-(ad.leads||0))>=0?'#4CAE6F':'#1C9FD4')) }}>{ad.crmLeads==null?'—':((ad.crmLeads-(ad.leads||0))>=0?'+':'')+(ad.crmLeads-(ad.leads||0)).toLocaleString('en-IN')}</div> },
   { key:'totalQL', label:'Total QLs', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:'#111827' }}>{ad.totalQL!=null?ad.totalQL.toLocaleString('en-IN'):'—'}</div> },
   { key:'humanQL', label:'Human QL', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'—'}</div> },
   { key:'aiQL', label:'AI QL', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'—'}</div> },
-  { key:'cpl', label:'CPL (Meta)', width:100, align:'left', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div> },
-  { key:'cplCrm', label:'CPL (CRM)', width:100, align:'left', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cplCrm) }}>{ad.cplCrm>0?'₹'+ad.cplCrm:'—'}</div> },
-  { key:'cpql', label:'CPQL', width:100, align:'left', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cpql) }}>{ad.cpql>0?'₹'+ad.cpql:'—'}</div> },
-  { key:'type', label:'Type', width:90, align:'left', render:(ad,ctx)=><span style={{ background:ctx.tBg[ad.type]||'#F3F4F6',color:ctx.tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span> },
-  { key:'health', label:'Health', width:100, align:'left', render:(ad,ctx)=><span style={{ background:ctx.hBg[ad.fatigueLabel]||'#E9F8EF',color:ctx.hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span> },
-  { key:'spend', label:'Spend', width:100, align:'left', render:(ad)=><div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div> },
-  { key:'ctr', label:'CTR', width:90, align:'left', render:(ad,ctx)=><div style={{ fontSize:12,color:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?'#1F3C84':'#374151',fontWeight:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div> },
-  { key:'freq', label:'Freq', width:80, align:'left', render:(ad)=><div style={{ fontSize:12,color:ad.frequency>4.5?'#1F3C84':ad.frequency>3?'#1C9FD4':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div> },
-  { key:'score', label:'Score', width:100, align:'left', render:(ad)=><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div> },
-  { key:'wowCtr', label:'WoW CTR', width:100, align:'left', render:(ad)=><div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div> },
+  { key:'cpl', label:'CPL (Meta)', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div> },
+  { key:'cplCrm', label:'CPL (CRM)', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cplCrm) }}>{ad.cplCrm>0?'₹'+ad.cplCrm:'—'}</div> },
+  { key:'cpql', label:'CPQL', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cpql) }}>{ad.cpql>0?'₹'+ad.cpql:'—'}</div> },
+  { key:'type', label:'Type', width:90, align:'center', render:(ad,ctx)=><span style={{ background:ctx.tBg[ad.type]||'#F3F4F6',color:ctx.tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span> },
+  { key:'health', label:'Health', width:100, align:'center', render:(ad,ctx)=><span style={{ background:ctx.hBg[ad.fatigueLabel]||'#E9F8EF',color:ctx.hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span> },
+  { key:'spend', label:'Spend', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div> },
+  { key:'ctr', label:'CTR', width:90, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,color:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?'#1F3C84':'#374151',fontWeight:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div> },
+  { key:'freq', label:'Freq', width:80, align:'center', render:(ad)=><div style={{ fontSize:12,color:ad.frequency>4.5?'#1F3C84':ad.frequency>3?'#1C9FD4':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div> },
+  { key:'score', label:'Score', width:100, align:'center', render:(ad)=><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div> },
+  { key:'wowCtr', label:'WoW CTR', width:100, align:'center', render:(ad)=><div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div> },
 ]
 function CreativesTab({ data }) {
   const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, prevInsightsMap = {}, crmSummary = {} } = data
@@ -763,7 +763,7 @@ function CreativesTab({ data }) {
               </div>
               <div style={{ padding:'12px 14px' }}>
                 <div style={{ display:'flex',alignItems:'center',gap:6,marginBottom:10 }}>
-                  <div style={{ fontSize:12,fontWeight:600,color:'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'text',minWidth:0,flex:1 }} title={ad.name}>{ad.name}</div>
+                  <div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'normal',wordBreak:'break-word',cursor:'text',minWidth:0,flex:1 }} title={ad.name}>{ad.name}</div>
                   <button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:12,lineHeight:1,padding:2,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
                 </div>
                 <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8 }}>
@@ -796,7 +796,7 @@ function CreativesTab({ data }) {
                   onDragOver={e=>e.preventDefault()}
                   onDrop={e=>{ e.preventDefault(); if (dragHeaderKey) reorderTo(dragHeaderKey, k); setDragHeaderKey(null) }}
                   onDragEnd={()=>setDragHeaderKey(null)}
-                  style={{ position:isPinned?'sticky':'static',left:isPinned?pinnedLeftMap[k]:undefined,zIndex:isPinned?2:1,background:isPinned?'#F9FAFB':'transparent',borderRight:isPinned&&displayOrder.filter(x=>pinnedCols.includes(x)).slice(-1)[0]===k?'1px solid #E5E7EB':'none',fontSize:11,fontWeight:600,color:'#6B7280',textAlign:c&&c.align==='center'?'center':'left',display:'flex',alignItems:'center',gap:4,cursor:isPinned?'default':'grab',opacity:dragHeaderKey===k?0.4:1 }}>
+                  style={{ position:isPinned?'sticky':'static',left:isPinned?pinnedLeftMap[k]:undefined,zIndex:isPinned?2:1,background:isPinned?'#F9FAFB':'transparent',borderRight:isPinned&&displayOrder.filter(x=>pinnedCols.includes(x)).slice(-1)[0]===k?'1px solid #E5E7EB':'none',fontSize:11,fontWeight:600,color:'#6B7280',textAlign:c&&c.align==='center'?'center':'left',display:'flex',alignItems:'center',justifyContent:c&&c.align==='center'?'center':'flex-start',gap:4,cursor:isPinned?'default':'grab',opacity:dragHeaderKey===k?0.4:1 }}>
                   <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{c?c.label:k}</span>
                   <span onClick={e=>{ e.stopPropagation(); setHeaderMenuKey(v=>v===k?null:k) }} style={{ cursor:'pointer',color:'#9CA3AF',fontSize:12,flexShrink:0 }}>⋮</span>
                   {headerMenuKey===k && (
@@ -817,11 +817,11 @@ function CreativesTab({ data }) {
           {pageItems.map((ad,i)=>(
             <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'40px 260px '+displayOrder.map(k=>colWidthOf(k)+'px').join(' '),padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
               <div style={{ position:'sticky',left:0,zIndex:1,background:'#fff',width:32,height:32,borderRadius:6,overflow:'hidden',flexShrink:0 }}>{ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div>
-              <div style={{ position:'sticky',left:40,zIndex:1,background:'#fff',overflow:'hidden' }}><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'text',minWidth:0 }} title={ad.name}>{ad.name}</div><button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:11,lineHeight:1,padding:1,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
+              <div style={{ position:'sticky',left:40,zIndex:1,background:'#fff' }}><div style={{ display:'flex',alignItems:'flex-start',gap:4 }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'normal',wordBreak:'break-word',cursor:'text' }} title={ad.name}>{ad.name}</div><button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:11,lineHeight:1,padding:1,marginTop:2,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
               {displayOrder.map(k=>{
                 const c=CREATIVE_COLS.find(cc=>cc.key===k)
                 const isPinned = pinnedCols.includes(k)
-                const cellStyle = isPinned ? { position:'sticky',left:pinnedLeftMap[k],zIndex:1,background:'#fff',borderRight:displayOrder.filter(x=>pinnedCols.includes(x)).slice(-1)[0]===k?'1px solid #F3F4F6':'none' } : null
+                const cellStyle = { textAlign:c&&c.align==='center'?'center':'left', ...(isPinned ? { position:'sticky',left:pinnedLeftMap[k],zIndex:1,background:'#fff',borderRight:displayOrder.filter(x=>pinnedCols.includes(x)).slice(-1)[0]===k?'1px solid #F3F4F6':'none' } : {}) }
                 return c ? <div key={k} style={cellStyle}>{c.render(ad,{cplCol,tBg,tColor,hBg,hColor,accCTRpct})}</div> : null
               })}
             </div>
@@ -966,10 +966,6 @@ function TrendTab({ token, adAccount, mode }) {
   const [rows, setRows] = useState(null)
   const [trendError, setTrendError] = useState('')
   const [trendLoading, setTrendLoading] = useState(true)
-  // Futwork Human/AI QL counts ARE per-day values in the CRM sheet (summed + date-filtered
-  // server-side in api/crm-leads.js, same as leads) -- but this tab has no per-ad breakdown at
-  // all (Meta insights are fetched at level:'account'), so there is no per-ad row to attach them
-  // to. Shown as a single account-wide total for the selected range instead of per-row columns.
   const [qlTotals, setQlTotals] = useState(null)
   useEffect(() => {
     let ok = true
@@ -992,14 +988,15 @@ function TrendTab({ token, adAccount, mode }) {
           fetch(`/api/crm-leads?since=${since}&until=${until}`).then(r=>r.json()).catch(()=>({byDate:{}}))
         ])
         const byDate = (crm && crm.byDate) || {}
+        const humanQLByDate = (crm && crm.humanQLByDate) || {}
+        const aiQLByDate = (crm && crm.aiQLByDate) || {}
         const humanQLSum = Object.values((crm && crm.humanQL) || {}).reduce((s,v)=>s+(v||0),0)
         const aiQLSum = Object.values((crm && crm.aiQL) || {}).reduce((s,v)=>s+(v||0),0)
         if (ok) setQlTotals({ humanQL: humanQLSum, aiQL: aiQLSum })
-        const bucketCrm = {}
-        Object.entries(byDate).forEach(([d,n]) => {
-          const key = mode === 'month' ? d.slice(0,7) : d
-          bucketCrm[key] = (bucketCrm[key]||0) + n
-        })
+        const bucket = (src) => { const out = {}; Object.entries(src).forEach(([d,n]) => { const key = mode === 'month' ? d.slice(0,7) : d; out[key] = (out[key]||0) + n }); return out }
+        const bucketCrm = bucket(byDate)
+        const bucketHumanQL = bucket(humanQLByDate)
+        const bucketAiQL = bucket(aiQLByDate)
         const list = (ins.data || []).map(row => {
           const dateStart = row.date_start || ''
           const key = mode === 'month' ? dateStart.slice(0,7) : dateStart
@@ -1014,7 +1011,11 @@ function TrendTab({ token, adAccount, mode }) {
           const cpl = leads > 0 ? Math.round(spend / leads) : 0
           const crmLeads = bucketCrm[key] != null ? bucketCrm[key] : null
           const cplCrm = crmLeads > 0 ? Math.round(spend / crmLeads) : 0
-          return { key, label, spend, impressions, clicks, ctr, leads, cpl, crmLeads, cplCrm }
+          const humanQL = bucketHumanQL[key] != null ? bucketHumanQL[key] : null
+          const aiQL = bucketAiQL[key] != null ? bucketAiQL[key] : null
+          const totalQL = (humanQL != null || aiQL != null) ? ((humanQL||0)+(aiQL||0)) : null
+          const cpql = totalQL > 0 ? Math.round(spend / totalQL) : 0
+          return { key, label, spend, impressions, clicks, ctr, leads, cpl, crmLeads, cplCrm, humanQL, aiQL, totalQL, cpql }
         }).sort((a,b) => a.key < b.key ? 1 : -1)
         if (ok) setRows(list)
       } catch (e) { if (ok) setTrendError(e.message || 'Failed to load') }
@@ -1044,7 +1045,7 @@ function TrendTab({ token, adAccount, mode }) {
   const fmtN = n => n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':String(Math.round(n||0))
   const title = mode === 'month' ? 'Month on Month' : 'Day on Day'
   const rangeLabel = mode === 'month' ? ('Jan '+new Date().getFullYear()+' – present') : 'This month, 1st – today'
-  const gridCols = '1.4fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1fr 1fr'
+  const gridCols = '1.4fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr'
 
   if (trendError) return <div style={{ padding:40, textAlign:'center', color:'#DC2626', fontSize:13 }}>{trendError}</div>
   if (trendLoading || !rows) return (
@@ -1057,7 +1058,6 @@ function TrendTab({ token, adAccount, mode }) {
   return (
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
       <div style={{ fontSize:12, color:'#9CA3AF', marginBottom:14 }}>{rangeLabel} · fixed range, not affected by the date filter on other tabs</div>
-      <div style={{ fontSize:11, color:'#9CA3AF', marginBottom:10, fontStyle:'italic' }}>Futwork Human/AI QLs and CPQL are account-wide totals for the range above (no per-ad breakdown exists at the account level, unlike every other card here).</div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:12, marginBottom:16 }}>
         {[
           { label:'TOTAL SPEND', value:fmtINR(totals.spend), c1:'#1C9FD4', c2:'#29B9C3', icon:'₹' },
@@ -1069,6 +1069,7 @@ function TrendTab({ token, adAccount, mode }) {
           { label:'FUTWORK HUMAN QLs', value:totals.humanQL>0?totals.humanQL.toLocaleString('en-IN'):'—', c1:'#4CAE6F', c2:'#29B9C3', icon:'✓' },
           { label:'FUTWORK AI QLs', value:totals.aiQL>0?totals.aiQL.toLocaleString('en-IN'):'—', c1:'#29B9C3', c2:'#1C9FD4', icon:'✓' },
           { label:'CPQL', value:totals.cpql>0?'₹'+totals.cpql.toLocaleString('en-IN'):'—', c1:'#1F3C84', c2:'#4CAE6F', icon:'◈' },
+          { label:'TOTAL QLs', value:(totals.humanQL+totals.aiQL)>0?(totals.humanQL+totals.aiQL).toLocaleString('en-IN'):'—', c1:'#1F3C84', c2:'#29B9C3', icon:'✓' },
         ].map(k => (
           <div key={k.label} style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'16px 18px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)' }}>
             <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:'linear-gradient(90deg,'+k.c1+','+k.c2+')' }} />
@@ -1082,7 +1083,7 @@ function TrendTab({ token, adAccount, mode }) {
       </div>
       <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, overflow:'hidden' }}>
         <div style={{ display:'grid', gridTemplateColumns:gridCols, padding:'10px 16px', background:'#F9FAFB', borderBottom:'0.5px solid #E5E7EB', gap:8 }}>
-          {[mode==='month'?'Month':'Day','Spend','Impressions','Clicks','CTR','Leads (Meta)','CPL (Meta)','CRM Leads','CPL (CRM)'].map(h => (
+          {[mode==='month'?'Month':'Day','Spend','Impressions','Clicks','CTR','Leads (Meta)','CPL (Meta)','CRM Leads','CPL (CRM)','Human QL','AI QL','CPQL'].map(h => (
             <div key={h} style={{ fontSize:11, fontWeight:600, color:'#6B7280' }}>{h}</div>
           ))}
         </div>
@@ -1097,6 +1098,9 @@ function TrendTab({ token, adAccount, mode }) {
             <div style={{ fontSize:13, fontWeight:600, color:cplCol(r.cpl) }}>{r.cpl>0?'₹'+r.cpl.toLocaleString('en-IN'):'—'}</div>
             <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.crmLeads!=null?r.crmLeads.toLocaleString('en-IN'):'—'}</div>
             <div style={{ fontSize:13, fontWeight:600, color:cplCol(r.cplCrm) }}>{r.cplCrm>0?'₹'+r.cplCrm.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.humanQL!=null?r.humanQL.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, color:'#374151', fontWeight:500 }}>{r.aiQL!=null?r.aiQL.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, fontWeight:600, color:cplCol(r.cpql) }}>{r.cpql>0?'₹'+r.cpql.toLocaleString('en-IN'):'—'}</div>
           </div>
         ))}
         {rows.length>0 && totals && (
@@ -1110,6 +1114,9 @@ function TrendTab({ token, adAccount, mode }) {
             <div style={{ fontSize:13, fontWeight:700, color:cplCol(totals.cpl) }}>{totals.cpl>0?'₹'+totals.cpl.toLocaleString('en-IN'):'—'}</div>
             <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.crmLeads!=null?totals.crmLeads.toLocaleString('en-IN'):'—'}</div>
             <div style={{ fontSize:13, fontWeight:700, color:cplCol(totals.cplCrm) }}>{totals.cplCrm>0?'₹'+totals.cplCrm.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.humanQL>0?totals.humanQL.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#0F1B33' }}>{totals.aiQL>0?totals.aiQL.toLocaleString('en-IN'):'—'}</div>
+            <div style={{ fontSize:13, fontWeight:700, color:cplCol(totals.cpql) }}>{totals.cpql>0?'₹'+totals.cpql.toLocaleString('en-IN'):'—'}</div>
           </div>
         )}
       </div>

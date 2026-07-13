@@ -74,7 +74,7 @@ export default async function handler(req, res) {
       if (!r.ok) return res.status(502).json({ error: 'sheet fetch failed', status: r.status });
     const text = await r.text();
     const lines = text.split(/\r?\n/).filter(l => l.length > 0);
-    if (lines.length < 2) return res.status(200).json({ byName: {}, total: 0, rows: 0, distinct: 0, since, until, ts: Date.now() });
+    if (lines.length < 2) return res.status(200).json({ byName: {}, byDate: {}, humanQL: {}, aiQL: {}, humanQLByDate: {}, aiQLByDate: {}, total: 0, rows: 0, distinct: 0, since, until, ts: Date.now() });
     const header = splitCsvLine(lines[0]).map(h => h.trim().toLowerCase());
     const dateIdx = header.indexOf('lead_created_date');
     const nameIdx = header.indexOf('opp_first_campaign_name');
@@ -85,6 +85,8 @@ export default async function handler(req, res) {
     const byDate = {}; // { 'YYYY-MM-DD': totalLeadsThatDay } - lets callers roll up into month/day buckets client-side
     const humanQL = {}; // { <adName>: FW_Human_QL_Count } -- all-time, ad-level, see note above
     const aiQL = {};    // { <adName>: FW_AI_QL_Count } -- all-time, ad-level, see note above
+    const humanQLByDate = {}; // { 'YYYY-MM-DD': totalHumanQLThatDay } -- account-wide, for callers with no per-ad breakdown (e.g. Day-on-Day/Month-on-Month)
+    const aiQLByDate = {};
     let total = 0; let rows = 0;
     for (let i = 1; i < lines.length; i++) {
       const cols = splitCsvLine(lines[i]);
@@ -102,15 +104,21 @@ export default async function handler(req, res) {
       total += n; rows++;
       if (humanQlIdx !== -1) {
         const hq = parseInt((cols[humanQlIdx] || '').replace(/[^0-9-]/g, ''), 10);
-        if (!isNaN(hq)) humanQL[name] = (humanQL[name] || 0) + hq;
+        if (!isNaN(hq)) {
+          humanQL[name] = (humanQL[name] || 0) + hq;
+          if (iso) humanQLByDate[iso] = (humanQLByDate[iso] || 0) + hq;
+        }
       }
       if (aiQlIdx !== -1) {
         const aq = parseInt((cols[aiQlIdx] || '').replace(/[^0-9-]/g, ''), 10);
-        if (!isNaN(aq)) aiQL[name] = (aiQL[name] || 0) + aq;
+        if (!isNaN(aq)) {
+          aiQL[name] = (aiQL[name] || 0) + aq;
+          if (iso) aiQLByDate[iso] = (aiQLByDate[iso] || 0) + aq;
+        }
       }
     }
     res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=1800');
-    return res.status(200).json({ byName, byDate, humanQL, aiQL, total, rows, distinct: Object.keys(byName).length, since, until, ts: Date.now() });
+    return res.status(200).json({ byName, byDate, humanQL, aiQL, humanQLByDate, aiQLByDate, total, rows, distinct: Object.keys(byName).length, since, until, ts: Date.now() });
   } catch (e) {
     return res.status(500).json({ error: String(e && e.message || e) });
   }
