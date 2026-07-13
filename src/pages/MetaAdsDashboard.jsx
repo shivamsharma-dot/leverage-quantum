@@ -985,7 +985,7 @@ function TrendTab({ token, adAccount, mode }) {
             time_increment: timeIncrement,
             level: 'account'
           }),
-          fetch(`/api/crm-leads?since=${since}&until=${until}`).then(r=>r.json()).catch(()=>({byDate:{}}))
+          fetch(`/api/crm-leads?since=${since}&until=${until}&_=${Date.now()}`, { cache: 'no-store' }).then(r=>r.json()).catch(()=>({byDate:{}}))
         ])
         const byDate = (crm && crm.byDate) || {}
         const humanQLByDate = (crm && crm.humanQLByDate) || {}
