@@ -124,6 +124,7 @@ export default function SettingsPage() {
     const [sheetInputs, setSheetInputs] = useState({})
     const [sheetSaving, setSheetSaving] = useState({})
     const [sheetMsg, setSheetMsg] = useState({}); const [editingSheet, setEditingSheet] = useState(null)
+    const [sheetTest, setSheetTest] = useState({}) // { [key]: { loading, error, columns, columnCount, rowCount, ts } }
 
   
   // SR Fee
@@ -196,6 +197,41 @@ export default function SettingsPage() {
       setPrefSaving(false)
     }
   }
+
+      // Splits one CSV line respecting quoted commas (mirrors api/crm-leads.js's splitCsvLine).
+      const splitCsvLineClient = (line) => {
+        const out = []; let cur = ''; let q = false
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i]
+          if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++ } else { q = false } } else cur += ch }
+          else { if (ch === '"') q = true; else if (ch === ',') { out.push(cur); cur = '' } else cur += ch }
+        }
+        out.push(cur)
+        return out
+      }
+
+      // Fetches the sheet's CSV fresh and uncached (bypasses sheetCache entirely -- the
+      // whole point is to prove the connection is live *right now*, not show cached data)
+      // and reports header columns + row count so an admin can verify the connection
+      // without leaving Settings or waiting on a dashboard reload.
+      const testSheetConnection = async (s) => {
+        const key = s.editKey
+        const url = sheetUrls[key] || s.defaultUrl
+        if (!url) { setSheetTest(prev => ({ ...prev, [key]: { error: 'No sheet URL configured' } })); return }
+        setSheetTest(prev => ({ ...prev, [key]: { loading: true } }))
+        try {
+          const bust = url + (url.includes('?') ? '&' : '?') + '_=' + Date.now()
+          const r = await fetch(bust, { cache: 'no-store' })
+          if (!r.ok) throw new Error('HTTP ' + r.status)
+          const text = await r.text()
+          const lines = text.split(/\r?\n/).filter(l => l.length > 0)
+          if (lines.length < 1) throw new Error('Empty response')
+          const columns = splitCsvLineClient(lines[0]).map(h => h.trim())
+          setSheetTest(prev => ({ ...prev, [key]: { columns, columnCount: columns.length, rowCount: lines.length - 1, ts: Date.now() } }))
+        } catch (e) {
+          setSheetTest(prev => ({ ...prev, [key]: { error: e.message || 'Fetch failed' } }))
+        }
+      }
 
       const saveSheetUrl = async (key) => {
               const url = (sheetInputs[key] || '').trim()
@@ -591,7 +627,25 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div className={styles.dsName}>{s.name}</div>
                       <div className={styles.dsMeta} title={s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || '') : ''} style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || 'No default set') : (s.src + ' — ' + s.rows + ' rows')}</div>
                     </div>
-                    <span className={styles.dsStatus}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Connected'}</span>{s.editKey && userIsAdmin && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', boxShadow: '0 4px 10px -3px rgba(31,60,132,0.5)' }} onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><button className={styles.primaryBtn} style={{ padding: '5px 14px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', boxShadow: '0 4px 10px -3px rgba(31,60,132,0.5)' }} onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}
+                    <span className={styles.dsStatus}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Connected'}</span>{s.editKey && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: '1px solid #1F3C84', background: '#fff', color: '#1F3C84', boxShadow: 'none' }} onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</button>)}{s.editKey && userIsAdmin && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', boxShadow: '0 4px 10px -3px rgba(31,60,132,0.5)' }} onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><button className={styles.primaryBtn} style={{ padding: '5px 14px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', boxShadow: '0 4px 10px -3px rgba(31,60,132,0.5)' }} onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}
+                    {s.editKey && sheetTest[s.editKey] && !sheetTest[s.editKey].loading && (
+                      <div style={{ flexBasis: '100%', width: '100%', marginTop: 8, padding: '10px 12px', borderRadius: 8, border: '1px solid ' + (sheetTest[s.editKey].error ? '#FECACA' : '#DCFCE7'), background: sheetTest[s.editKey].error ? '#FEF2F2' : '#F0FDF4' }}>
+                        {sheetTest[s.editKey].error ? (
+                          <div style={{ fontSize: 12, fontWeight: 700, color: '#c0392b' }}>✕ {sheetTest[s.editKey].error}</div>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#15803D', marginBottom: 6 }}>
+                              ✓ Connected — {sheetTest[s.editKey].columnCount} columns, {sheetTest[s.editKey].rowCount.toLocaleString('en-IN')} rows
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                              {sheetTest[s.editKey].columns.map((c, i) => (
+                                <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #C7D7F5', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

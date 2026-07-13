@@ -1111,7 +1111,12 @@ export default function MetaAdsDashboard() {
   const [error, setError]           = useState('')
   const [data, setData] = useState(() => { try { const c = localStorage.getItem('meta_cache'); if (!c) return null; const pp = JSON.parse(c); return pp && pp.d ? pp.d : null; } catch (e) { return null; } })
   const [crmMap, setCrmMap] = useState(null); // { byName:{adName:leads}, total, ts }
-  useEffect(() => { let ok=true; const since=data&&data.range&&data.range.since; const until=data&&data.range&&data.range.until; const qs=(since&&until)?('?since='+since+'&until='+until):''; (async()=>{ try { const r=await fetch('/api/crm-leads'+qs); if(!r.ok) return; const j=await r.json(); if(ok && j && j.byName) setCrmMap(j); } catch(e){} })(); return ()=>{ ok=false; }; }, [data&&data.range&&data.range.since, data&&data.range&&data.range.until]);
+  // Bumped by the page's own Refresh button (see refreshBtn onClick below) so CRM data actually
+  // re-fetches on demand -- previously this effect only depended on since/until, which don't change
+  // for a fixed preset like "This Month" between clicks, so Refresh silently never touched CRM data
+  // at all and stale numbers could persist indefinitely without a full page reload.
+  const [crmRefreshNonce, setCrmRefreshNonce] = useState(0)
+  useEffect(() => { let ok=true; const since=data&&data.range&&data.range.since; const until=data&&data.range&&data.range.until; const qs=(since&&until)?('?since='+since+'&until='+until+'&_='+Date.now()):('?_='+Date.now()); (async()=>{ try { const r=await fetch('/api/crm-leads'+qs, { cache:'no-store' }); if(!r.ok) return; const j=await r.json(); if(ok && j && j.byName) setCrmMap(j); } catch(e){} })(); return ()=>{ ok=false; }; }, [data&&data.range&&data.range.since, data&&data.range&&data.range.until, crmRefreshNonce]);
   const crmData = useMemo(() => {
     if(!data) return data;
     const byName = (crmMap && crmMap.byName) || {};
@@ -1659,7 +1664,7 @@ export default function MetaAdsDashboard() {
             )}
             {lastSync && <span className={styles.syncTag}>Synced {lastSync.toLocaleTimeString()}</span>}
             {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#4CAE6F':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
-            <button className={styles.refreshBtn} onClick={() => loadAllData(token, datePreset)} disabled={loading}
+            <button className={styles.refreshBtn} onClick={() => { loadAllData(token, datePreset); setCrmRefreshNonce(n=>n+1) }} disabled={loading}
               style={{opacity: loading ? 0.7 : 1}}>
               <span style={{display:'inline-flex', animation: loading ? 'spin .7s linear infinite' : 'none'}}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
