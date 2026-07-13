@@ -175,7 +175,8 @@ Aggregates Meta Ads performance, cross-channel metrics, lead qualification data,
 ```
 /
 ├── api/                        # Vercel serverless functions
-│   ├── auth/                   # Google OAuth handlers
+│   ├── auth.mjs                 # Google OAuth + session (?action=google|logout|me) -- consolidated from api/auth/{google,logout,me}.mjs on 2026-07-13 to free a function slot
+│   ├── github-issue.mjs         # In-app "Report an issue" button -> files a GitHub Issue (needs GITHUB_ISSUE_TOKEN env var)
 │   ├── users.mjs               # User CRUD (allowed_users table)
 │   ├── preferences.mjs         # GET/POST app_preferences (hidden_pages etc)
 │   ├── send-report.js          # Email report trigger
@@ -1758,3 +1759,17 @@ ALTER TABLE public.source_health DISABLE ROW LEVEL SECURITY;
 **Also required:** add a GitHub Actions repo secret named `SUPABASE_ANON_KEY` (Settings -> Secrets and variables -> Actions -> New repository secret) with the same anon key value already shipped client-side (visible in `src/pages/SettingsPage.jsx` as `RL_SB_KEY`). The workflow reads it via `${{ secrets.SUPABASE_ANON_KEY }}` rather than a literal value hardcoded in the public YAML -- a first draft of this workflow had it inline and was correctly blocked before push (same key, just shouldn't be duplicated as a plaintext literal in a public workflow file). Without this secret set, `source-health-check.yml` runs but every Supabase call 401s and no health data is recorded.
 
 **Known v1 limitations (flagged, not fixed):** the GitHub Action checks only the 7 hardcoded default sheet URLs, not custom overrides saved in Settings, and not any admin-added custom sources (those only get checked when a human clicks "Test connection" or "Check all sources"). Also the date-format parser (`DD-Mon-YYYY` / `YYYY-MM-DD` / `M/D/YYYY`) is best-effort and may miss an unseen format on a future new source -- if a source's "Test connection" shows no date coverage section at all despite having an obvious date column, check the actual value format first.
+
+---
+
+## 2026-07-13 (later) -- Configurable source-health schedule + GitHub-powered features
+
+**Schedule config (commit `d1f066c`):** `source-health-check.yml`'s cron changed from every 30 min to hourly at `:30` UTC (lands on-the-hour IST). The script now reads `source_health_schedule` from `app_preferences` (default `{mode:'daily',hour:9}`) and only runs the real checks when the current IST hour matches, unless triggered manually (`workflow_dispatch` always runs). Settings > Data Sources has a new "Automated checks" control (Off / Once daily at [hour] / Every hour) that writes this preference via the existing `/api/preferences` endpoint -- changing it takes effect on the next hourly tick, no redeploy needed.
+
+**Recent Updates / deploy-correlation (commit `13bde6c`):** added a "Recent Updates" card at the top of Settings > Activity Log (admin-only) listing the last 15 commits, fetched directly from GitHub's public commits API (`api.github.com/repos/shivamsharma-dot/leverage-quantum/commits`) -- no token needed since the repo is public, no new Vercel function. Serves both as a lightweight changelog and lets an admin eyeball whether a reported data/behavior change lines up with a recent deploy.
+
+**Auth consolidation + in-app issue reporting:** Vercel Hobby's 12-function cap was hit again (flagged since the Bing Ads work). Consolidated `api/auth/{google,logout,me}.mjs` into a single `api/auth.mjs` routed by `?action=` (`?action=google|logout|me`), freeing a slot. All three call sites live in `src/hooks/useAuth.jsx` (`/api/auth/me` -> `/api/auth?action=me`, etc.) -- verified no other references anywhere in the repo, and confirmed `vercel.json`'s rewrite rules are a generic `/api/(.*)` passthrough unaffected by the file rename. Function count: 12 -> 10 after consolidation.
+
+Used the freed slot for `api/github-issue.mjs` (function count now 11): files a GitHub Issue from a new floating "Report an issue" button (`src/components/ReportIssueButton.jsx`, mounted in `App.jsx` bottom-left -- SnapshotTool's camera FAB already owns bottom-right) available to any signed-in user on every page. Submits a description + auto-attached page path/URL/reporter email/timestamp; requires a **new Vercel env var `GITHUB_ISSUE_TOKEN`** (a fine-grained GitHub PAT scoped to just this repo, Issues: Read and write -- not yet created/set by the user as of this entry, so the endpoint will 500 with "Issue reporting is not configured" until that's added).
+
+**Not done (explicitly asked, explicitly out of scope for now):** email alerting on source-health warnings (would need the Resend key wired into the GitHub Action -- not attempted, no key available in this session), CSV export of diagnostics (JSON export only), and a user-declared "expected columns" field on custom sources (schema drift instead uses the rolling last-check baseline already built). Ask AI does not yet have repo/commit read access (was floated as an idea, not built).

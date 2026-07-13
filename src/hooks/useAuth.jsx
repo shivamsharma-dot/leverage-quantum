@@ -65,7 +65,7 @@ export function AuthProvider({ children }) {
 
   // On load, ask the server who we are (reads the secure cookie).
   useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
+    fetch('/api/auth?action=me', { credentials: 'include' })
       .then(r => (r.ok ? r.json() : { user: null }))
       .then(d => setUser(d.user || null))
       .catch(() => setUser(null))
@@ -73,7 +73,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   // Hidden-pages preference, fetched here (not in Sidebar) so it runs in true parallel
-  // with the /api/auth/me check above -- both fire from this same root-level mount.
+  // with the /api/auth?action=me check above -- both fire from this same root-level mount.
   // Sidebar only mounts AFTER ProtectedRoute's `loading` gate clears (it lives inside
   // each lazy-loaded page), so a fetch started from Sidebar's own mount effect was
   // serialized behind the auth check instead of overlapping it, roughly doubling the
@@ -91,7 +91,7 @@ export function AuthProvider({ children }) {
   // Fix is tied to the login *event* itself (fetchHiddenPages called again at the end of
   // loginWithGoogle below), not to reactively watching `user` state: an earlier attempt
   // keyed off a `[user]`-dependent effect, gated by a "did we ever get a real answer" ref
-  // -- but /api/auth/me routinely resolves faster than /api/preferences in practice, so
+  // -- but /api/auth?action=me routinely resolves faster than /api/preferences in practice, so
   // `user` would flip to non-null WHILE the first preferences fetch was still in flight
   // (before the ref got set), and the effect fired a second, genuinely redundant request
   // on every plain reload, not just on fresh logins.
@@ -128,7 +128,7 @@ export function AuthProvider({ children }) {
 
   const loginWithGoogle = async (credentialResponse) => {
     try {
-      const r = await fetch('/api/auth/google', {
+      const r = await fetch('/api/auth?action=google', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -191,7 +191,7 @@ export function AuthProvider({ children }) {
     // request must never freeze the overlay). Race it against a max wait. One retry
     // on failure -- a transient network blip during this window would otherwise leave
     // the session cookie uncleared server-side while the UI still shows "signed out".
-    const callLogout = () => fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    const callLogout = () => fetch('/api/auth?action=logout', { method: 'POST', credentials: 'include' })
     const logoutReq = callLogout().catch(() => callLogout()).catch(() => {})
     // Let the sign-out choreography play out (~1.15s: logo flip, bars, sheen, text, line --
     // roughly half the original timing, tightened so logout feels quick, not just polished).
