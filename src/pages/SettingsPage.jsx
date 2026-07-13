@@ -32,6 +32,25 @@ async function getSourceHealth() {
   } catch { return [] }
 }
 
+// GitHub's public commit API -- no token needed since this repo is public (60 req/hr per IP
+// is plenty for an occasional Settings-tab load). Doubles as a "what's new" changelog and,
+// sitting right above Activity Log, an easy eyeball-correlation between a deploy and a
+// data/behavior change reported around the same time.
+async function getRecentCommits(limit = 15) {
+  try {
+    const res = await fetch(`https://api.github.com/repos/shivamsharma-dot/leverage-quantum/commits?per_page=${limit}`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.map(c => ({
+      sha: c.sha.slice(0, 7),
+      message: (c.commit.message || '').split('\n')[0],
+      date: c.commit.author?.date,
+      author: c.commit.author?.name,
+      url: c.html_url,
+    }))
+  } catch { return [] }
+}
+
 const getRoleMeta = (role) => {
   if (role === 'admin') return { label: 'Admin', color: '#1F3C84', bg: '#E8EFF9' }
   if (role === 'viewer') return { label: 'Viewer', color: '#1C9FD4', bg: '#E3F5FD' }
@@ -166,6 +185,24 @@ export default function SettingsPage() {
     useEffect(() => {
       if (activeTab === 'data' && userIsAdmin && !_shRef.current) { _shRef.current = true; getSourceHealth().then(setSourceHealth) }
     }, [activeTab, userIsAdmin])
+
+    const [recentCommits, setRecentCommits] = useState([])
+    const [commitsLoading, setCommitsLoading] = useState(false)
+    const _rcRef = useRef(false)
+    useEffect(() => {
+      if (activeTab === 'activity' && userIsAdmin && !_rcRef.current) {
+        _rcRef.current = true
+        setCommitsLoading(true)
+        getRecentCommits(15).then(setRecentCommits).finally(() => setCommitsLoading(false))
+      }
+    }, [activeTab, userIsAdmin])
+    const relTime = (iso) => {
+      if (!iso) return ''
+      const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+      if (mins < 60) return mins + 'm ago'
+      if (mins < 1440) return Math.round(mins / 60) + 'h ago'
+      return Math.round(mins / 1440) + 'd ago'
+    }
 
     const addCustomSource = async () => {
       const name = newSourceForm.name.trim(), url = newSourceForm.url.trim()
@@ -1147,6 +1184,34 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           )}
 
           {/* ---------------- ACTIVITY LOG ---------------- */}
+          {activeTab === 'activity' && userIsAdmin && (
+            <div className={styles.card} style={{ marginBottom: 18 }}>
+              <div className={styles.activityHeader}>
+                <div>
+                  <h3 className={styles.cardTitle}>Recent Updates</h3>
+                  <p className={styles.cardDesc} style={{ margin: 0 }}>Latest changes shipped to Quantum -- if something looks different, check here first.</p>
+                </div>
+                <button className={styles.ghostBtn} onClick={() => { setCommitsLoading(true); getRecentCommits(15).then(setRecentCommits).finally(() => setCommitsLoading(false)) }}>
+                  {commitsLoading ? 'Loading…' : '↻ Refresh'}
+                </button>
+              </div>
+              {recentCommits.length === 0 && !commitsLoading && (
+                <div className={styles.empty}>No commit history available right now.</div>
+              )}
+              {recentCommits.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {recentCommits.map(c => (
+                    <a key={c.sha} href={c.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '7px 4px', borderBottom: '0.5px solid #F3F4F6', textDecoration: 'none', color: 'inherit' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94A3B8', flexShrink: 0 }}>{c.sha}</span>
+                      <span style={{ fontSize: 12.5, color: '#1F2937', flex: 1 }}>{c.message}</span>
+                      <span style={{ fontSize: 11, color: '#94A3B8', whiteSpace: 'nowrap', flexShrink: 0 }}>{relTime(c.date)}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'activity' && userIsAdmin && (
             <div className={styles.card}>
               <div className={styles.activityHeader}>
