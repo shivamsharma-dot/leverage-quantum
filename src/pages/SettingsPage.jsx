@@ -1096,7 +1096,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         <div className={styles.uAccess}>{accessLabel(u.role)}</div>
                         <div>
                           <label className={styles.reportsToggle} title="Receive daily report">
-                            <input type="checkbox" checked={!!u.receive_reports} onChange={e => toggleReports(u, e.target.checked)} />
+                            <input type="checkbox" className={styles.premToggle} checked={!!u.receive_reports} onChange={e => toggleReports(u, e.target.checked)} />
                           </label>
                         </div>
                         <div className={styles.uAdded}>{fmtDate(u.created_at)}</div>
@@ -1333,7 +1333,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <h3 className={styles.cardTitle}>Automatic Reports</h3>
                 <p className={styles.cardDesc}>Master switch for scheduled (cron) reports. Turning this off stops all automatic sends; manual Send Report buttons still work.</p>
                 <label className={styles.reportsToggle} style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                  <input type="checkbox" checked={rcAuto} onChange={e => setRcAuto(e.target.checked)} />
+                  <input type="checkbox" className={styles.premToggle} checked={rcAuto} onChange={e => setRcAuto(e.target.checked)} />
                   <span style={{ fontSize: 14, fontWeight: 600, color: '#1F3C84' }}>{rcAuto ? 'Automatic reports enabled' : 'Automatic reports disabled'}</span>
                 </label>
               </div>
