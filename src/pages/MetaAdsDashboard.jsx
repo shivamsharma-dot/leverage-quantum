@@ -5,6 +5,7 @@ import { TrendingUp, Users, MousePointer, Eye, Target, BarChart2, Zap, Activity,
 import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import KPICard from '../components/KPICard'
+import ExportButton from '../components/ExportButton'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import styles from './MetaAdsDashboard.module.css'
 
@@ -487,6 +488,18 @@ function CreativesTab({ data }) {
     if (adNameSearch) out=out.filter(a=>a.name?.toLowerCase().includes(adNameSearch.toLowerCase()))
     return [...out].sort((a,b)=>sortBy==='score'?b.score-a.score:(b[sortBy]||0)-(a[sortBy]||0))
   }, [processed,adTypeFilter,statusFilter,healthFilter,adNameSearch,sortBy])
+  const exportRows = useMemo(() => filtered.map(ad => ({
+    Creative: ad.name || '', Type: ad.type || '', Health: ad.fatigueLabel || '',
+    Spend: Math.round(ad.spend || 0), Leads: ad.leads || 0,
+    'CRM Leads': ad.crmLeads != null ? ad.crmLeads : '',
+    Delta: ad.crmLeads != null ? (ad.crmLeads - (ad.leads || 0)) : '',
+    'CTR %': +(ad.ctr || 0).toFixed(2),
+    'CPL (Meta)': ad.cpl || 0, 'CPL (CRM)': ad.cplCrm || 0,
+    'CPQL (Human)': ad.cpqlHuman || 0, 'CPQL (AI)': ad.cpqlAI || 0,
+    'Human QL': ad.humanQL != null ? ad.humanQL : '', 'AI QL': ad.aiQL != null ? ad.aiQL : '',
+    Freq: +(ad.frequency || 0).toFixed(2), Score: ad.score || 0,
+    'WoW CTR %': ad.ctrDelta != null ? +ad.ctrDelta.toFixed(1) : '',
+  })), [filtered])
   const filteredTotals = useMemo(() => {
     let spend=0, impressions=0, clicks=0, leads=0, reach=0, active=0, freqSum=0, freqW=0, crmLeads=0, humanQL=0, aiQL=0;
     for (const a of filtered) {
@@ -593,7 +606,8 @@ function CreativesTab({ data }) {
         <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ padding:'5px 10px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:11,fontFamily:'inherit',cursor:'pointer',background:'#fff',color:'#374151',marginLeft:2 }}>
           <option value="spend">Sort: Spend</option><option value="leads">Sort: Leads</option><option value="cpl">Sort: CPL</option><option value="ctr">Sort: CTR</option><option value="frequency">Sort: Frequency</option><option value="score">Sort: Score</option><option value="impressions">Sort: Impressions</option>
         </select>
-        <div style={{ marginLeft:'auto',display:'flex',gap:4 }}>
+        <div style={{ marginLeft:'auto',display:'flex',gap:8,alignItems:'center' }}>
+          <ExportButton data={exportRows} filename="meta_ads_creatives" />
           {[{m:'grid',l:'⊞ Grid'},{m:'list',l:'☰ List'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} style={{ padding:'5px 10px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,cursor:'pointer',fontFamily:'inherit',background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
         </div>
       </div>
@@ -1141,14 +1155,13 @@ export default function MetaAdsDashboard() {
       return { ...c, crmLeads: (v==null?null:v), humanQL: (hq==null?null:hq), aiQL: (aq==null?null:aq) };
     });
     const crmTotal = (crmMap && crmMap.total) || 0;
-    // Account-wide QL totals, deduped by distinct ad name (not summed across CRM rows -- these are
-    // per-ad constants) -- used by Creatives KPI cards and the Day-on-Day/Month-on-Month tabs, which
-    // have no per-ad breakdown of their own.
-    const humanQLTotal = Object.values(humanQLByName).reduce((s,v)=>s+(v||0),0);
-    const aiQLTotal = Object.values(aiQLByName).reduce((s,v)=>s+(v||0),0);
-    let metaLeadsSum=0, matchedCrm=0, adsMatched=0, adsUnmatched=0;
+    let metaLeadsSum=0, matchedCrm=0, adsMatched=0, adsUnmatched=0, humanQLTotal=0, aiQLTotal=0;
     const metaNames = new Set();
-    ads.forEach(a => { metaLeadsSum += (a.leads||0); if(a.name) metaNames.add(a.name); if(a.crmLeads!=null){ adsMatched++; matchedCrm += a.crmLeads; } else { adsUnmatched++; } });
+    // QL totals summed ONLY over ads currently loaded/matched here (data.ads), not every distinct
+    // ad name that has ever appeared in the whole CRM sheet -- humanQLByName/aiQLByName can contain
+    // hundreds of ad names outside the current ad set (old ads, other date ranges), and summing all
+    // of them produced a KPI total with no relationship to what's actually visible in the table.
+    ads.forEach(a => { metaLeadsSum += (a.leads||0); if(a.name) metaNames.add(a.name); if(a.crmLeads!=null){ adsMatched++; matchedCrm += a.crmLeads; } else { adsUnmatched++; } if(a.humanQL!=null) humanQLTotal+=a.humanQL; if(a.aiQL!=null) aiQLTotal+=a.aiQL; });
     let crmNamesNoMeta = 0; Object.keys(byName).forEach(nm => { if(!metaNames.has(nm)) crmNamesNoMeta++; });
     const crmSummary = { crmTotal, matchedCrm, metaLeadsSum, adsMatched, adsUnmatched, crmNamesNoMeta, humanQLTotal, aiQLTotal, since:(crmMap&&crmMap.since)||null, until:(crmMap&&crmMap.until)||null, hasCrm: !!(crmMap && Object.keys(byName).length) };
     return { ...data, ads, campaigns, crmSummary };
