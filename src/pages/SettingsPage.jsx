@@ -36,7 +36,7 @@ const DATA_SOURCES = [
   { name: 'QL Ops Sheet (Daily)', editKey: 'sheet_url_qlops_daily', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Qlops' },
   { name: 'QL Snapshot Sheet (Monthly)', editKey: 'sheet_url_qlops_monthly', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=QLSnapshot' },
   { name: 'WhatsApp Sheet',       editKey: 'sheet_url_whatsapp', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=whatsapp' },
-  { name: 'FB Leads / CRM Sheet', editKey: 'sheet_url_fbleads', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=FBleads' },
+  { name: 'FB Leads / CRM Sheet', editKey: 'sheet_url_fbleads', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=FBleads', apiPath: '/api/crm-leads' },
   { name: 'Leads Assigned Sheet', editKey: 'sheet_url_leads_assigned', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Leadassigned' },  { name: 'Google Ads CRM Leads Sheet', editKey: 'sheet_url_googleleads', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=googleleads' },
   { name: 'Cross-Channel Sheet',  src: 'aiContext.js',        rows: 'live' },
     ]
@@ -210,10 +210,32 @@ export default function SettingsPage() {
         return out
       }
 
+      // Best-effort date parser covering the two formats seen across these sheets
+      // (DD-Mon-YYYY like '02-Jul-2026', and plain YYYY-MM-DD) so date-coverage
+      // diagnostics work generically without hardcoding a column format per sheet.
+      const MONTH_ABBR = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 }
+      const parseAnyDate = (str) => {
+        const s = String(str || '').trim()
+        if (!s) return null
+        let m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/)
+        if (m) { const mon = MONTH_ABBR[m[2].toLowerCase()]; return mon != null ? new Date(+m[3], mon, +m[1]) : null }
+        m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
+        if (m) return new Date(+m[1], +m[2] - 1, +m[3])
+        return null
+      }
+
       // Fetches the sheet's CSV fresh and uncached (bypasses sheetCache entirely -- the
-      // whole point is to prove the connection is live *right now*, not show cached data)
-      // and reports header columns + row count so an admin can verify the connection
-      // without leaving Settings or waiting on a dashboard reload.
+      // whole point is to prove the connection is live *right now*, not show cached data),
+      // reports header columns + row count, and -- if a date-like column is found --
+      // a month-by-month row-count breakdown. This is the self-service version of the
+      // manual diagnosis (raw curl vs our own API) that caught the FBleads sheet only
+      // publishing one month of data: a narrow date spread now shows up here directly,
+      // with a warning suggesting the likely cause (an active Filter on the sheet tab).
+      // When the source also has a backend API route (apiPath, e.g. FBleads ->
+      // /api/crm-leads), a second cache-busted call to that route is compared against
+      // the direct-sheet numbers so a stale server-side/CDN cache is visible too --
+      // exactly the Vercel edge-cache staleness that made Month-on-Month look wrong
+      // even after the sheet itself was already fixed.
       const testSheetConnection = async (s) => {
         const key = s.editKey
         const url = sheetUrls[key] || s.defaultUrl
@@ -227,7 +249,34 @@ export default function SettingsPage() {
           const lines = text.split(/\r?\n/).filter(l => l.length > 0)
           if (lines.length < 1) throw new Error('Empty response')
           const columns = splitCsvLineClient(lines[0]).map(h => h.trim())
-          setSheetTest(prev => ({ ...prev, [key]: { columns, columnCount: columns.length, rowCount: lines.length - 1, ts: Date.now() } }))
+          const dateColIdx = columns.findIndex(c => /date/i.test(c))
+          let dateCol = null, monthCounts = null, minDate = null, maxDate = null
+          if (dateColIdx !== -1) {
+            const counts = {}
+            for (let i = 1; i < lines.length; i++) {
+              const cols = splitCsvLineClient(lines[i])
+              const d = parseAnyDate(cols[dateColIdx])
+              if (!d) continue
+              const key2 = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+              counts[key2] = (counts[key2] || 0) + 1
+              if (!minDate || d < minDate) minDate = d
+              if (!maxDate || d > maxDate) maxDate = d
+            }
+            const entries = Object.entries(counts).sort((a, b) => a[0] < b[0] ? 1 : -1)
+            if (entries.length) { dateCol = columns[dateColIdx]; monthCounts = entries }
+          }
+          let apiCompare = null
+          if (s.apiPath) {
+            try {
+              const ar = await fetch(s.apiPath + '?_=' + Date.now(), { credentials: 'include', cache: 'no-store' })
+              if (ar.ok) {
+                const aj = await ar.json()
+                const apiDates = Object.keys(aj.byDate || {}).sort()
+                apiCompare = { rows: aj.rows, firstDate: apiDates[0] || null, lastDate: apiDates[apiDates.length - 1] || null, distinctDates: apiDates.length }
+              }
+            } catch {}
+          }
+          setSheetTest(prev => ({ ...prev, [key]: { columns, columnCount: columns.length, rowCount: lines.length - 1, dateCol, monthCounts, minDate, maxDate, apiCompare, ts: Date.now() } }))
         } catch (e) {
           setSheetTest(prev => ({ ...prev, [key]: { error: e.message || 'Fetch failed' } }))
         }
@@ -637,11 +686,47 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             <div style={{ fontSize: 12, fontWeight: 700, color: '#15803D', marginBottom: 6 }}>
                               ✓ Connected — {sheetTest[s.editKey].columnCount} columns, {sheetTest[s.editKey].rowCount.toLocaleString('en-IN')} rows
                             </div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sheetTest[s.editKey].monthCounts ? 10 : 0 }}>
                               {sheetTest[s.editKey].columns.map((c, i) => (
                                 <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #C7D7F5', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
                               ))}
                             </div>
+                            {sheetTest[s.editKey].monthCounts && (
+                              <div style={{ marginTop: 4 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+                                  Date coverage ({sheetTest[s.editKey].dateCol}): {sheetTest[s.editKey].minDate && sheetTest[s.editKey].minDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} — {sheetTest[s.editKey].maxDate && sheetTest[s.editKey].maxDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </div>
+                                {sheetTest[s.editKey].monthCounts.length <= 1 && sheetTest[s.editKey].rowCount > 50 && (
+                                  <div style={{ fontSize: 11.5, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: 6, padding: '6px 9px', marginBottom: 6 }}>
+                                    ⚠ Only 1 month of data is present. If you expect multi-month history, check for an active <strong>Filter</strong> (Data → Create a filter, not a Filter view) on this sheet's tab — a regular filter scopes what this live query returns for everyone, not just your own view.
+                                  </div>
+                                )}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                  {sheetTest[s.editKey].monthCounts.map(([m, n]) => (
+                                    <span key={m} style={{ fontSize: 10.5, fontWeight: 600, color: '#374151', background: '#F3F4F6', border: '0.5px solid #E5E7EB', borderRadius: 5, padding: '2px 7px' }}>{m}: {n.toLocaleString('en-IN')}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {sheetTest[s.editKey].apiCompare && (() => {
+                              const live = sheetTest[s.editKey]
+                              const api = live.apiCompare
+                              const liveLast = live.maxDate ? (live.maxDate.getFullYear() + '-' + String(live.maxDate.getMonth() + 1).padStart(2, '0') + '-' + String(live.maxDate.getDate()).padStart(2, '0')) : null
+                              const mismatch = api.lastDate && liveLast && api.lastDate !== liveLast
+                              return (
+                                <div style={{ marginTop: 10, paddingTop: 8, borderTop: '0.5px solid #E5E7EB' }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Your dashboard's live API ({s.apiPath})</div>
+                                  <div style={{ fontSize: 11.5, color: mismatch ? '#854D0E' : '#374151', marginBottom: mismatch ? 6 : 0 }}>
+                                    Reports {api.rows != null ? api.rows.toLocaleString('en-IN') : '—'} rows, {api.firstDate || '—'} to {api.lastDate || '—'} ({api.distinctDates} dates)
+                                  </div>
+                                  {mismatch && (
+                                    <div style={{ fontSize: 11.5, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: 6, padding: '6px 9px' }}>
+                                      ⚠ This doesn't match the sheet's live data above. Your dashboards may still be showing a cached snapshot. Click "Test connection" again in a few minutes to re-check.
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </>
                         )}
                       </div>
