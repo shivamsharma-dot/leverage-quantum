@@ -2,7 +2,11 @@ name: Data Source Health Check
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    # Fires hourly at :30 past the UTC hour, which lands exactly on-the-hour in IST
+    # (UTC+5:30) -- e.g. 03:30 UTC == 09:00 IST. The script below then only actually
+    # runs the checks when the current IST hour matches the schedule configured in
+    # Settings (source_health_schedule in app_preferences, default: daily at 9 AM IST).
+    - cron: '30 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -13,10 +17,11 @@ jobs:
         env:
           SB_URL: https://tsyekthwthxszmsgqfej.supabase.co
           SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
           python3 << 'PYEOF'
           import json, urllib.request, urllib.error, urllib.parse, os, re
-          from datetime import datetime
+          from datetime import datetime, timedelta
 
           SB_URL = os.environ['SB_URL']
           SB_KEY = os.environ['SB_KEY']
@@ -101,6 +106,25 @@ jobs:
                       r.read()
               except Exception as e:
                   print('activity_log write failed:', e)
+
+          # Schedule is configurable from Settings > Data Sources (stored in app_preferences,
+          # key 'source_health_schedule', e.g. {"mode":"daily","hour":9} for 9 AM IST,
+          # {"mode":"hourly"}, or {"mode":"off"}). Manual "Run workflow" always runs regardless.
+          if os.environ.get('GITHUB_EVENT_NAME') != 'workflow_dispatch':
+              schedule = {'mode': 'daily', 'hour': 9}
+              try:
+                  rows = sb_get('app_preferences?select=value&key=eq.source_health_schedule&limit=1')
+                  if rows and rows[0].get('value'):
+                      schedule = rows[0]['value']
+              except Exception as e:
+                  print('could not read schedule preference, using default:', e)
+
+              mode = schedule.get('mode', 'daily')
+              now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
+              proceed = mode == 'hourly' or (mode == 'daily' and now_ist.hour == int(schedule.get('hour', 9)))
+              if not proceed:
+                  print('Skipping this run -- schedule is', schedule, '/ IST now:', now_ist.strftime('%H:%M'))
+                  raise SystemExit(0)
 
           for src in SOURCES:
               name = src['name']

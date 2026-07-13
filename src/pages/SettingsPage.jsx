@@ -145,6 +145,23 @@ export default function SettingsPage() {
     const [addSourceMsg, setAddSourceMsg] = useState(null)
     const [sourceHealth, setSourceHealth] = useState([]) // rows from the source_health table, written by the scheduled GitHub Action
     const [checkingAll, setCheckingAll] = useState(false)
+    const [healthSchedule, setHealthSchedule] = useState({ mode: 'daily', hour: 9 }) // read by .github/workflows/source-health-check.yml
+    const [savingSchedule, setSavingSchedule] = useState(false)
+    const [scheduleMsg, setScheduleMsg] = useState(null)
+    const saveHealthSchedule = async (next) => {
+      setHealthSchedule(next)
+      setSavingSchedule(true)
+      setScheduleMsg(null)
+      try {
+        const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'source_health_schedule', value: next }) })
+        if (!r.ok) throw new Error('Save failed')
+        setScheduleMsg({ type: 'ok', text: 'Saved' })
+      } catch (e) {
+        setScheduleMsg({ type: 'err', text: e.message })
+      } finally {
+        setSavingSchedule(false)
+      }
+    }
     const _shRef = useRef(false)
     useEffect(() => {
       if (activeTab === 'data' && userIsAdmin && !_shRef.current) { _shRef.current = true; getSourceHealth().then(setSourceHealth) }
@@ -207,6 +224,7 @@ export default function SettingsPage() {
                   setSheetUrls(su)
                   setSheetInputs(su)
                   if (Array.isArray(pf.custom_data_sources)) setCustomSources(pf.custom_data_sources)
+                  if (pf.source_health_schedule) setHealthSchedule(pf.source_health_schedule)
       })
       .catch(() => {})
       .finally(() => setPrefLoading(false))
@@ -756,6 +774,23 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                   <h3 className={styles.cardTitle} style={{ marginBottom: 0 }}>Data Sources</h3>
                   <button type="button" onClick={checkAllSources} disabled={checkingAll} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: checkingAll ? '#94A3B8' : 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: checkingAll ? 'default' : 'pointer' }}>{checkingAll ? 'Checking all...' : 'Check all sources'}</button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '8px 0 2px', padding: '8px 10px', background: '#F9FAFB', borderRadius: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Automated checks</span>
+                  <select value={healthSchedule.mode} onChange={e => saveHealthSchedule({ ...healthSchedule, mode: e.target.value })} disabled={savingSchedule} style={{ padding: '4px 8px', borderRadius: 6, border: '0.5px solid #E5E7EB', fontSize: 12, background: '#fff', color: '#374151' }}>
+                    <option value="off">Off</option>
+                    <option value="daily">Once daily at</option>
+                    <option value="hourly">Every hour</option>
+                  </select>
+                  {healthSchedule.mode === 'daily' && (
+                    <select value={healthSchedule.hour} onChange={e => saveHealthSchedule({ ...healthSchedule, hour: parseInt(e.target.value, 10) })} disabled={savingSchedule} style={{ padding: '4px 8px', borderRadius: 6, border: '0.5px solid #E5E7EB', fontSize: 12, background: '#fff', color: '#374151' }}>
+                      {Array.from({ length: 24 }, (_, h) => (
+                        <option key={h} value={h}>{h === 0 ? '12 AM' : h < 12 ? h + ' AM' : h === 12 ? '12 PM' : (h - 12) + ' PM'} IST</option>
+                      ))}
+                    </select>
+                  )}
+                  <span style={{ fontSize: 11, color: '#9CA3AF' }}>Runs via GitHub Actions -- "Check all sources" above is still available anytime.</span>
+                  {scheduleMsg && <span style={{ fontSize: 11, fontWeight: 700, color: scheduleMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{scheduleMsg.type === 'err' ? '✕ ' : '✓ '}{scheduleMsg.text}</span>}
                 </div>
                 {sourceHealth.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 4px' }}>
