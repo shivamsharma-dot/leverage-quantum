@@ -18,7 +18,9 @@ export default function ReportIssueButton() {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
 
-  if (!user) return null
+  // Admin-only: the repo is public, so any filed issue is publicly visible -- limiting who
+  // can file keeps that public surface under one person's control instead of every viewer's.
+  if (!user || user.role !== 'admin') return null
 
   const submit = async () => {
     const description = text.trim()

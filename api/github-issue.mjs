@@ -9,6 +9,7 @@ const REPO = 'shivamsharma-dot/leverage-quantum'
 export default async function handler(req, res) {
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST')
     return res.status(405).json({ error: 'Method not allowed' })
