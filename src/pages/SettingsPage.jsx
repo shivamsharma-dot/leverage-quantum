@@ -54,12 +54,12 @@ async function getRecentCommits(limit = 15) {
 
 const getRoleMeta = (role) => {
   if (role === 'admin') return { label: 'Admin', color: '#1F3C84', bg: '#E8EFF9' }
-  if (role === 'viewer') return { label: 'Viewer', color: '#1C9FD4', bg: '#E3F5FD' }
+  if (role === 'viewer') return { label: 'Viewer', color: '#1F3C84', bg: '#E3F5FD' }
   // viewer:home,meta_ads,... or custom:... => Custom badge
   if (typeof role === 'string' && (role.startsWith('viewer:') || role.startsWith('custom:'))) {
-    return { label: 'Custom', color: '#29B9C3', bg: '#E4F8F9' }
+    return { label: 'Custom', color: '#1F3C84', bg: '#E4F8F9' }
   }
-  return { label: 'Viewer', color: '#1C9FD4', bg: '#E3F5FD' }
+  return { label: 'Viewer', color: '#1F3C84', bg: '#E3F5FD' }
 }
 
 const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings')
@@ -522,13 +522,13 @@ export default function SettingsPage() {
       id: 'dark',
       name: 'Dark',
       desc: 'Dark slate — easy on the eyes',
-      preview: ['#0F172A', '#1E293B', '#1C9FD4'],
+      preview: ['#0F172A', '#1E293B', '#1F3C84'],
     },
     {
       id: 'navy',
       name: 'Navy Depth',
       desc: 'Deep navy — premium dashboard look',
-      preview: ['#0D1B40', '#162155', '#29B9C3'],
+      preview: ['#0D1B40', '#162155', '#1F3C84'],
     },
     {
       id: 'stone',
@@ -1138,7 +1138,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div className={`${styles.uRow} ${isEditing ? styles.uRowEdit : ''}`}>
                         <div className={styles.uUser}>
                           <div className={styles.userAvatar} style={{
-                            background:`linear-gradient(135deg,${['#1F3C84','#1C9FD4','#4CAE6F','#29B9C3','#8B5CF6'][((u.email||'').charCodeAt(0)||65)%5]},${['#1C9FD4','#29B9C3','#4CAE6F','#1F3C84','#29B9C3'][((u.email||'').charCodeAt(1)||66)%5]})`,
+                            background:`linear-gradient(135deg,${['#1F3C84','#1F3C84','#4CAE6F','#1F3C84','#8B5CF6'][((u.email||'').charCodeAt(0)||65)%5]},${['#1F3C84','#1F3C84','#4CAE6F','#1F3C84','#1F3C84'][((u.email||'').charCodeAt(1)||66)%5]})`,
                             width:36,height:36,borderRadius:10,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
                             color:'#fff',fontSize:12,fontWeight:700,letterSpacing:'0.5px',boxShadow:'0 2px 8px rgba(15,23,42,0.18)',
                           }}>
@@ -1312,8 +1312,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       {activityLog.filter(log => { const q = actSearch.trim().toLowerCase(); if (!q) return true; const u = (log.email||'').toLowerCase(); return u.includes(q); }).map((log,idx)=>{
                         const diff = Date.now()-new Date(log.created_at)
                         const rel = diff<60000?'just now':diff<3600000?Math.round(diff/60000)+'m ago':diff<86400000?Math.round(diff/3600000)+'h ago':Math.round(diff/86400000)+'d ago'
-                        const avColor = ['#1F3C84','#1C9FD4','#4CAE6F','#29B9C3','#1C9FD4'][((log.email||'').charCodeAt(0)||65)%5]
-                        const avColor2 = ['#1C9FD4','#29B9C3','#4CAE6F','#1F3C84','#29B9C3'][((log.email||'').charCodeAt(1)||66)%5]
+                        const avColor = ['#1F3C84','#1F3C84','#4CAE6F','#1F3C84','#1F3C84'][((log.email||'').charCodeAt(0)||65)%5]
+                        const avColor2 = ['#1F3C84','#1F3C84','#4CAE6F','#1F3C84','#1F3C84'][((log.email||'').charCodeAt(1)||66)%5]
                         const pg = (log.page||'app').replace('/dashboard/','').replace('/','').split('?')[0]||'app'
                         const pgLabel = pg==='app'?'Summary':pg.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ')
                         const ACT = {
@@ -1523,14 +1523,14 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     return (
                       <div key={theme.id} onClick={() => applyTheme(theme.id)} className={styles.pxThemeCard}
                         style={{
-                          borderRadius:12,border:`1.5px solid ${isActive ? '#1C9FD4' : '#E2E8F0'}`,
+                          borderRadius:12,border:`1.5px solid ${isActive ? '#1F3C84' : '#E2E8F0'}`,
                           padding:'14px 16px',cursor:'pointer',transition:'all .15s',
                           background: isActive ? '#F0FBFF' : '#fff',
-                          boxShadow: isActive ? '0 0 0 3px rgba(28,159,212,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
+                          boxShadow: isActive ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
                           position:'relative',
                         }}>
                         {isActive && (
-                          <div style={{position:'absolute',top:10,right:10,width:18,height:18,borderRadius:9,background:'#1C9FD4',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <div style={{position:'absolute',top:10,right:10,width:18,height:18,borderRadius:9,background:'#1F3C84',display:'flex',alignItems:'center',justifyContent:'center'}}>
                             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
                           </div>
                         )}
@@ -1565,13 +1565,13 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                               <button key={icon} onClick={() => setKpiIcon(slot, icon)}
                                 title={icon}
                                 style={{
-                                  width:38,height:38,borderRadius:9,border:`1.5px solid ${isSelected ? '#1C9FD4' : '#E2E8F0'}`,
+                                  width:38,height:38,borderRadius:9,border:`1.5px solid ${isSelected ? '#1F3C84' : '#E2E8F0'}`,
                                   background: isSelected ? '#E3F5FD' : '#F8FAFC',
                                   display:'flex',alignItems:'center',justifyContent:'center',
                                   cursor:'pointer',transition:'all .15s',
-                                  boxShadow: isSelected ? '0 0 0 3px rgba(28,159,212,0.1)' : 'none',
+                                  boxShadow: isSelected ? '0 0 0 3px rgba(31,60,132,0.1)' : 'none',
                                 }}>
-                                <KpiIconPreview name={icon} color={isSelected ? '#1C9FD4' : '#94A3B8'} />
+                                <KpiIconPreview name={icon} color={isSelected ? '#1F3C84' : '#94A3B8'} />
                               </button>
                             )
                           })}
@@ -1595,8 +1595,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const isActive = sidebarMode === mode.id
                     return (
                       <div key={mode.id} onClick={() => applySidebarMode(mode.id)}
-                        style={{flex:'1 1 150px',padding:'14px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive ? '#1C9FD4' : '#E2E8F0'}`,background:isActive?'#F0FBFF':'#fff',boxShadow:isActive?'0 0 0 3px rgba(28,159,212,0.1)':'0 1px 3px rgba(15,23,42,0.04)',position:'relative'}}>
-                        {isActive && <div style={{position:'absolute',top:10,right:10,width:18,height:18,borderRadius:9,background:'#1C9FD4',display:'flex',alignItems:'center',justifyContent:'center'}}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>}
+                        style={{flex:'1 1 150px',padding:'14px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive ? '#1F3C84' : '#E2E8F0'}`,background:isActive?'#F0FBFF':'#fff',boxShadow:isActive?'0 0 0 3px rgba(31,60,132,0.1)':'0 1px 3px rgba(15,23,42,0.04)',position:'relative'}}>
+                        {isActive && <div style={{position:'absolute',top:10,right:10,width:18,height:18,borderRadius:9,background:'#1F3C84',display:'flex',alignItems:'center',justifyContent:'center'}}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>}
                         <div style={{fontSize:13,fontWeight:700,color:'#0F172A',marginBottom:3}}>{mode.label}</div>
                         <div style={{fontSize:11.5,color:'#94A3B8'}}>{mode.desc}</div>
                       </div>
@@ -1614,12 +1614,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const isActive = numberFormat === fmt.id
                     return (
                       <div key={fmt.id} onClick={() => applyNumberFormat(fmt.id)}
-                        style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1C9FD4':'#E2E8F0'}`,background:isActive?'#F0FBFF':'#fff'}}>
+                        style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1F3C84':'#E2E8F0'}`,background:isActive?'#F0FBFF':'#fff'}}>
                         <div>
                           <div style={{fontSize:13,fontWeight:600,color:'#0F172A',marginBottom:2}}>{fmt.label}</div>
                           <div style={{fontSize:11.5,color:'#94A3B8'}}>{fmt.desc}</div>
                         </div>
-                        <div style={{fontFamily:'monospace',fontSize:12,color:isActive?'#1C9FD4':'#94A3B8',fontWeight:600,textAlign:'right',flexShrink:0,marginLeft:12}}>{fmt.example}</div>
+                        <div style={{fontFamily:'monospace',fontSize:12,color:isActive?'#1F3C84':'#94A3B8',fontWeight:600,textAlign:'right',flexShrink:0,marginLeft:12}}>{fmt.example}</div>
                       </div>
                     )
                   })}
@@ -1635,8 +1635,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const isActive = defaultDateRange === range.id
                     return (
                       <div key={range.id} onClick={() => applyDefaultDate(range.id)}
-                        style={{padding:'12px 14px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1C9FD4':'#E2E8F0'}`,background:isActive?'#F0FBFF':'#fff',position:'relative'}}>
-                        {isActive && <div style={{position:'absolute',top:10,right:10,width:16,height:16,borderRadius:8,background:'#1C9FD4',display:'flex',alignItems:'center',justifyContent:'center'}}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>}
+                        style={{padding:'12px 14px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1F3C84':'#E2E8F0'}`,background:isActive?'#F0FBFF':'#fff',position:'relative'}}>
+                        {isActive && <div style={{position:'absolute',top:10,right:10,width:16,height:16,borderRadius:8,background:'#1F3C84',display:'flex',alignItems:'center',justifyContent:'center'}}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>}
                         <div style={{fontSize:13,fontWeight:600,color:'#0F172A',marginBottom:3}}>{range.label}</div>
                         <div style={{fontSize:11.5,color:'#94A3B8'}}>{range.desc}</div>
                       </div>
@@ -1654,7 +1654,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const isActive = tableDensity === den.id
                     return (
                       <div key={den.id} onClick={() => applyDensity(den.id)}
-                        style={{flex:'1 1 140px',cursor:'pointer',borderRadius:10,transition:'all .15s',overflow:'hidden',border:`1.5px solid ${isActive?'#1C9FD4':'#E2E8F0'}`,boxShadow:isActive?'0 0 0 3px rgba(28,159,212,0.1)':'none'}}>
+                        style={{flex:'1 1 140px',cursor:'pointer',borderRadius:10,transition:'all .15s',overflow:'hidden',border:`1.5px solid ${isActive?'#1F3C84':'#E2E8F0'}`,boxShadow:isActive?'0 0 0 3px rgba(31,60,132,0.1)':'none'}}>
                         <div style={{padding:'10px 12px 6px',background:isActive?'#F0FBFF':'#F8FAFC'}}>
                           {[1,2,3].map(row => (
                             <div key={row} style={{display:'flex',gap:6,padding:`${den.rowH} 0`,borderBottom:'0.5px solid #E2E8F0'}}>
@@ -1664,8 +1664,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             </div>
                           ))}
                         </div>
-                        <div style={{padding:'10px 12px',borderTop:`1.5px solid ${isActive?'#1C9FD4':'#E2E8F0'}`,background:'#fff'}}>
-                          <div style={{fontSize:12,fontWeight:700,color:isActive?'#1C9FD4':'#0F172A'}}>{den.label}</div>
+                        <div style={{padding:'10px 12px',borderTop:`1.5px solid ${isActive?'#1F3C84':'#E2E8F0'}`,background:'#fff'}}>
+                          <div style={{fontSize:12,fontWeight:700,color:isActive?'#1F3C84':'#0F172A'}}>{den.label}</div>
                           <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{den.desc}</div>
                         </div>
                       </div>
