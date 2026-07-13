@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import Sidebar, { PAGE_LIST } from '../components/Sidebar'
 import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole } from '../hooks/useAuth'
 import { getActivityLog } from '../components/ActivityLogger.js'
@@ -154,13 +155,17 @@ export default function SettingsPage() {
   const userIsAdmin = user?.role === 'admin'
   const [activeTab, setActiveTab] = useState(userIsAdmin ? 'data' : 'profile')
   const [copied, setCopied] = useState(false)
+  const location = useLocation()
 
-  // Open a specific tab when navigated with ?tab=... (e.g. role badge -> profile)
+  // Open a specific tab when navigated with ?tab=... (e.g. role badge -> profile). Depends on
+  // location.search (not a mount-only []) -- otherwise a same-page navigation while Settings is
+  // already mounted (e.g. clicking the sidebar role badge -> /settings?tab=profile while already
+  // viewing a different tab) never re-parses the URL and the tab silently fails to switch.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     const requested = params.get('tab');
     if (requested && ['data','users','activity','reports','appearance','profile'].includes(requested)) setActiveTab(requested);
-  }, []);
+  }, [location.search]);
 
   const _actRef = useRef(false)
   useEffect(() => {
@@ -891,10 +896,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       const mins = h.checked_at ? Math.round((Date.now() - new Date(h.checked_at).getTime()) / 60000) : null
                       const rel = mins == null ? '' : mins < 60 ? mins + 'm ago' : mins < 1440 ? Math.round(mins / 60) + 'h ago' : Math.round(mins / 1440) + 'd ago'
                       return (
-                        <div key={h.name} title={h.message || 'OK'} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 8 }}>
-                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                          <span style={{ fontSize: 11.5, fontWeight: 600, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</span>
-                          <span style={{ fontSize: 10.5, color: '#9CA3AF', flexShrink: 0 }}>{rel}</span>
+                        <div key={h.name} title={h.message || 'OK'} style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '7px 10px', background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0, marginTop: 4 }} />
+                            <span style={{ fontSize: 11.5, fontWeight: 600, color: '#374151', lineHeight: 1.3, whiteSpace: 'normal' }}>{h.name}</span>
+                          </div>
+                          <span style={{ fontSize: 10.5, color: '#9CA3AF', marginLeft: 13 }}>{rel}</span>
                         </div>
                       )
                     })}
