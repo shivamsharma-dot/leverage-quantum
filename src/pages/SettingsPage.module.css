@@ -410,6 +410,12 @@
 .dsStatus { flex:0 0 auto; font-size:11px; font-weight:700; color:#2E7D4F; background:#E9F8EF;
              border:0.5px solid #C5EFD6; border-radius:999px; padding:4px 11px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
 .dsStatus::before { content:''; width:7px; height:7px; border-radius:50%; background:#4CAE6F; box-shadow:0 0 0 3px rgba(76,174,111,.22); }
+.dsStatus[data-st="default"] { color:#64748B; background:#F1F5F9; border-color:#E2E8F0; }
+.dsStatus[data-st="default"]::before { background:#94A3B8; box-shadow:0 0 0 3px rgba(148,163,184,.18); }
+.dsStatus[data-st="custom"] { color:#1C7F88; background:#E4F8F9; border-color:#BEEBEF; }
+.dsStatus[data-st="custom"]::before { background:#29B9C3; box-shadow:0 0 0 3px rgba(41,185,195,.22); }
+.dsStatus[data-st="live"] { color:#2E7D4F; background:#E9F8EF; border-color:#C5EFD6; }
+.dsStatus[data-st="live"]::before { background:#4CAE6F; box-shadow:0 0 0 3px rgba(76,174,111,.22); }
 
 /* ============================================================
    Premium Page Visibility cards (pv*)
