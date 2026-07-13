@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { usePresence } from '../hooks/usePresence'
 import { TrendingUp, Users, MousePointer, Eye, Target, BarChart2, Zap, Activity, Award, Globe, Layers } from 'lucide-react'
@@ -364,10 +364,6 @@ function CampaignsTab({ data }) {
             <div style={{ fontSize:12,color:'#9CA3AF' }}>{filtered.length} campaigns · avg CTR {accCTRpct.toFixed(2)}% · lifetime CPC ₹{Math.round(lifetimeCPC)}</div>
           </div>
       </div>
-      <div style={{ display:'flex',alignItems:'center',gap:8,padding:'9px 14px',marginBottom:14,background:'#FEF9C3',border:'1px solid #FDE68A',borderRadius:10,fontSize:12,color:'#854D0E',fontWeight:500 }}>
-        <span style={{ fontSize:14 }}>⚠</span>
-        <span>Human QL / AI QL / CPQL columns aren't accurate right now — the CRM sheet source is being fixed. We'll update this note once the data is reliable again.</span>
-      </div>
       <div style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden' }}>
         <div style={{ display:'grid',gridTemplateColumns:cols,padding:'10px 16px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8,alignItems:'center' }}>
           <div style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>Campaign</div>
@@ -427,9 +423,44 @@ function copyAdName(e, name) {
   toast._hideT = setTimeout(()=>{ toast.style.opacity='0'; toast.style.transform='translateY(6px)' }, 1400)
   toast._removeT = setTimeout(()=>{ toast.remove() }, 1700)
 }
+const CREATIVE_COL_ORDER_KEY = 'lq_meta_creatives_col_order'
+const CREATIVE_COLS = [
+  { key:'leads', label:'Leads', width:90, align:'left', render:(ad)=><div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div> },
+  { key:'crmLeads', label:'CRM Leads', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.crmLeads==null?'—':ad.crmLeads.toLocaleString('en-IN')}</div> },
+  { key:'delta', label:'Δ', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:(ad.crmLeads==null?'#9CA3AF':((ad.crmLeads-(ad.leads||0))>=0?'#4CAE6F':'#1C9FD4')) }}>{ad.crmLeads==null?'—':((ad.crmLeads-(ad.leads||0))>=0?'+':'')+(ad.crmLeads-(ad.leads||0)).toLocaleString('en-IN')}</div> },
+  { key:'totalQL', label:'Total QLs', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:'#111827' }}>{ad.totalQL!=null?ad.totalQL.toLocaleString('en-IN'):'—'}</div> },
+  { key:'humanQL', label:'Human QL', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'—'}</div> },
+  { key:'aiQL', label:'AI QL', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'—'}</div> },
+  { key:'cpl', label:'CPL (Meta)', width:100, align:'left', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div> },
+  { key:'cplCrm', label:'CPL (CRM)', width:100, align:'left', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cplCrm) }}>{ad.cplCrm>0?'₹'+ad.cplCrm:'—'}</div> },
+  { key:'cpql', label:'CPQL', width:100, align:'left', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cpql) }}>{ad.cpql>0?'₹'+ad.cpql:'—'}</div> },
+  { key:'type', label:'Type', width:90, align:'left', render:(ad,ctx)=><span style={{ background:ctx.tBg[ad.type]||'#F3F4F6',color:ctx.tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span> },
+  { key:'health', label:'Health', width:100, align:'left', render:(ad,ctx)=><span style={{ background:ctx.hBg[ad.fatigueLabel]||'#E9F8EF',color:ctx.hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span> },
+  { key:'spend', label:'Spend', width:100, align:'left', render:(ad)=><div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div> },
+  { key:'ctr', label:'CTR', width:90, align:'left', render:(ad,ctx)=><div style={{ fontSize:12,color:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?'#1F3C84':'#374151',fontWeight:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div> },
+  { key:'freq', label:'Freq', width:80, align:'left', render:(ad)=><div style={{ fontSize:12,color:ad.frequency>4.5?'#1F3C84':ad.frequency>3?'#1C9FD4':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div> },
+  { key:'score', label:'Score', width:100, align:'left', render:(ad)=><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div> },
+  { key:'wowCtr', label:'WoW CTR', width:100, align:'left', render:(ad)=><div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div> },
+]
 function CreativesTab({ data }) {
   const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, prevInsightsMap = {}, crmSummary = {} } = data
   const tableScrollRef = useRef(null)
+  const [colOrder, setColOrder] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CREATIVE_COL_ORDER_KEY) || 'null')
+      if (Array.isArray(saved) && saved.length === CREATIVE_COLS.length && CREATIVE_COLS.every(c => saved.includes(c.key))) return saved
+    } catch {}
+    return CREATIVE_COLS.map(c => c.key)
+  })
+  useEffect(() => { try { localStorage.setItem(CREATIVE_COL_ORDER_KEY, JSON.stringify(colOrder)) } catch {} }, [colOrder])
+  const [colsOpen, setColsOpen] = useState(false)
+  const moveCol = (key, dir) => setColOrder(prev => {
+    const i = prev.indexOf(key), j = i + dir
+    if (j < 0 || j >= prev.length) return prev
+    const next = [...prev]; [next[i], next[j]] = [next[j], next[i]]
+    return next
+  })
+  const resetCols = () => setColOrder(CREATIVE_COLS.map(c => c.key))
   const [viewMode, setViewMode] = useState('list')
   const PER_PAGE = 12
   const [page, setPage] = useState(1)
@@ -591,10 +622,6 @@ function CreativesTab({ data }) {
             </div>
           ))}
         </div>
-        <div style={{ display:'flex',alignItems:'center',gap:8,padding:'9px 14px',marginBottom:14,background:'#FEF9C3',border:'1px solid #FDE68A',borderRadius:10,fontSize:12,color:'#854D0E',fontWeight:500 }}>
-          <span style={{ fontSize:14 }}>⚠</span>
-          <span>Human QL / AI QL / CPQL numbers aren't accurate right now — the CRM sheet source is being fixed. We'll update this note once the data is reliable again.</span>
-        </div>
       <div style={{ display:'flex',gap:6,marginBottom:14,alignItems:'center',flexWrap:'nowrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 12px' }}>
         <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:120,minWidth:70,flexShrink:1,background:'#FAFAFA' }}/>
         <div style={{ display:'flex',alignItems:'center',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:7 }}><span style={{ fontSize:10,fontWeight:600,color:'#9CA3AF',marginRight:4,whiteSpace:'nowrap' }}>Format</span>
@@ -609,7 +636,31 @@ function CreativesTab({ data }) {
         <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ padding:'5px 10px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:11,fontFamily:'inherit',cursor:'pointer',background:'#fff',color:'#374151',marginLeft:2 }}>
           <option value="spend">Sort: Spend</option><option value="leads">Sort: Leads</option><option value="cpl">Sort: CPL</option><option value="ctr">Sort: CTR</option><option value="frequency">Sort: Frequency</option><option value="score">Sort: Score</option><option value="impressions">Sort: Impressions</option>
         </select>
-        <div style={{ marginLeft:'auto',display:'flex',gap:8,alignItems:'center' }}>
+        <div style={{ marginLeft:'auto',display:'flex',gap:8,alignItems:'center',position:'relative' }}>
+          {viewMode==='list' && (
+            <button type="button" onClick={()=>setColsOpen(v=>!v)} style={{ padding:'5px 10px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:colsOpen?'#1F3C84':'#fff',color:colsOpen?'#fff':'#6B7280' }}>⚙ Columns</button>
+          )}
+          {colsOpen && (
+            <>
+              <div onClick={()=>setColsOpen(false)} style={{ position:'fixed',inset:0,zIndex:98 }} />
+              <div style={{ position:'absolute',top:'calc(100% + 6px)',right:0,zIndex:99,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,0.12)',padding:'10px 6px',minWidth:210,maxHeight:340,overflowY:'auto' }}>
+                <div style={{ fontSize:10.5,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.05em',padding:'2px 10px 8px' }}>Column order</div>
+                {colOrder.map((key,idx)=>{
+                  const c = CREATIVE_COLS.find(cc=>cc.key===key)
+                  return (
+                    <div key={key} style={{ display:'flex',alignItems:'center',gap:6,padding:'5px 10px' }}>
+                      <span style={{ flex:1,fontSize:12.5,color:'#374151',fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{c?.label || key}</span>
+                      <button type="button" disabled={idx===0} onClick={()=>moveCol(key,-1)} title="Move up" style={{ width:22,height:22,borderRadius:5,border:'0.5px solid #E5E7EB',background:'#fff',color:idx===0?'#D1D5DB':'#374151',cursor:idx===0?'default':'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center' }}>▲</button>
+                      <button type="button" disabled={idx===colOrder.length-1} onClick={()=>moveCol(key,1)} title="Move down" style={{ width:22,height:22,borderRadius:5,border:'0.5px solid #E5E7EB',background:'#fff',color:idx===colOrder.length-1?'#D1D5DB':'#374151',cursor:idx===colOrder.length-1?'default':'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center' }}>▼</button>
+                    </div>
+                  )
+                })}
+                <div style={{ borderTop:'0.5px solid #F3F4F6',marginTop:6,paddingTop:6 }}>
+                  <button type="button" onClick={resetCols} style={{ width:'100%',padding:'6px 10px',borderRadius:7,border:'none',background:'transparent',color:'#1C9FD4',fontSize:12,fontWeight:600,cursor:'pointer',textAlign:'left' }}>Reset to default order</button>
+                </div>
+              </div>
+            </>
+          )}
           <ExportButton data={exportRows} filename="meta_ads_creatives" />
           {[{m:'grid',l:'⊞ Grid'},{m:'list',l:'☰ List'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} style={{ padding:'5px 10px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,cursor:'pointer',fontFamily:'inherit',background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
         </div>
@@ -673,24 +724,16 @@ function CreativesTab({ data }) {
           <button type="button" onClick={()=>tableScrollRef.current&&tableScrollRef.current.scrollBy({left:320,behavior:'smooth'})} title="Scroll right" style={{ width:28,height:28,borderRadius:8,border:'0.5px solid #E5E7EB',background:'#fff',color:'#374151',cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center' }}>›</button>
         </div>
         <div ref={tableScrollRef} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflowX:'auto' }}>
-          <div style={{ minWidth:1820 }}>
-          <div style={{ display:'grid',gridTemplateColumns:'40px 260px 90px 100px 90px 100px 90px 90px 100px 100px 100px 90px 100px 100px 90px 80px 100px 100px',padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
-            {['','Creative','Leads','CRM Leads','Δ','Total QLs','Human QL','AI QL','CPL (Meta)','CPL (CRM)','CPQL','Type','Health','Spend','CTR','Freq','Score','WoW CTR'].map(h=><div key={h} style={{ fontSize:11,fontWeight:600,color:'#6B7280',textAlign:(h==='CRM Leads'||h==='Δ'||h==='Total QLs'||h==='Human QL'||h==='AI QL')?'center':'left' }}>{h}</div>)}
+          <div style={{ minWidth:40+260+colOrder.reduce((s,k)=>s+((CREATIVE_COLS.find(c=>c.key===k)||{}).width||100),0) }}>
+          <div style={{ display:'grid',gridTemplateColumns:'40px 260px '+colOrder.map(k=>((CREATIVE_COLS.find(c=>c.key===k)||{}).width||100)+'px').join(' '),padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
+            <div/><div style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>Creative</div>
+            {colOrder.map(k=>{ const c=CREATIVE_COLS.find(cc=>cc.key===k); return <div key={k} style={{ fontSize:11,fontWeight:600,color:'#6B7280',textAlign:c&&c.align==='center'?'center':'left' }}>{c?c.label:k}</div> })}
           </div>
           {pageItems.map((ad,i)=>(
-            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'40px 260px 90px 100px 90px 100px 90px 90px 100px 100px 100px 90px 100px 100px 90px 80px 100px 100px',padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
+            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'40px 260px '+colOrder.map(k=>((CREATIVE_COLS.find(c=>c.key===k)||{}).width||100)+'px').join(' '),padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
               <div style={{ width:32,height:32,borderRadius:6,background:'#F3F4F6',overflow:'hidden',flexShrink:0 }}>{ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div>
               <div style={{ overflow:'hidden' }}><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'text',minWidth:0 }} title={ad.name}>{ad.name}</div><button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:11,lineHeight:1,padding:1,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
-              <div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.crmLeads==null?'—':ad.crmLeads.toLocaleString('en-IN')}</div><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:(ad.crmLeads==null?'#9CA3AF':((ad.crmLeads-(ad.leads||0))>=0?'#4CAE6F':'#1C9FD4')) }}>{ad.crmLeads==null?'—':((ad.crmLeads-(ad.leads||0))>=0?'+':'')+(ad.crmLeads-(ad.leads||0)).toLocaleString('en-IN')}</div>
-              <div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:'#111827' }}>{ad.totalQL!=null?ad.totalQL.toLocaleString('en-IN'):'—'}</div><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'—'}</div><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'—'}</div>
-              <div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div><div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cplCrm) }}>{ad.cplCrm>0?'₹'+ad.cplCrm:'—'}</div><div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cpql) }}>{ad.cpql>0?'₹'+ad.cpql:'—'}</div>
-              <span style={{ background:tBg[ad.type]||'#F3F4F6',color:tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span>
-              <span style={{ background:hBg[ad.fatigueLabel]||'#E9F8EF',color:hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span>
-              <div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div>
-              <div style={{ fontSize:12,color:ad.ctr<accCTRpct*0.6&&ad.ctr>0?'#1F3C84':'#374151',fontWeight:ad.ctr<accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div>
-              <div style={{ fontSize:12,color:ad.frequency>4.5?'#1F3C84':ad.frequency>3?'#1C9FD4':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div>
-              <div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div>
-              <div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div>
+              {colOrder.map(k=>{ const c=CREATIVE_COLS.find(cc=>cc.key===k); return c ? <Fragment key={k}>{c.render(ad,{cplCol,tBg,tColor,hBg,hColor,accCTRpct})}</Fragment> : null })}
             </div>
           ))}
           </div>
@@ -925,10 +968,6 @@ function TrendTab({ token, adAccount, mode }) {
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
       <div style={{ fontSize:12, color:'#9CA3AF', marginBottom:14 }}>{rangeLabel} · fixed range, not affected by the date filter on other tabs</div>
       <div style={{ fontSize:11, color:'#9CA3AF', marginBottom:10, fontStyle:'italic' }}>Futwork Human/AI QLs and CPQL are account-wide totals for the range above (no per-ad breakdown exists at the account level, unlike every other card here).</div>
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 14px', marginBottom:14, background:'#FEF9C3', border:'1px solid #FDE68A', borderRadius:10, fontSize:12, color:'#854D0E', fontWeight:500 }}>
-        <span style={{ fontSize:14 }}>⚠</span>
-        <span>Futwork Human QLs / AI QLs / CPQL numbers aren't accurate right now — the CRM sheet source is being fixed. We'll update this note once the data is reliable again.</span>
-      </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:12, marginBottom:16 }}>
         {[
           { label:'TOTAL SPEND', value:fmtINR(totals.spend), c1:'#1C9FD4', c2:'#29B9C3', icon:'₹' },
