@@ -199,6 +199,7 @@ export default function SettingsPage() {
     const [addSourceMsg, setAddSourceMsg] = useState(null)
     const [sourceHealth, setSourceHealth] = useState([]) // rows from the source_health table, written by the scheduled GitHub Action
     const [checkingAll, setCheckingAll] = useState(false)
+    const [testDetailsOpen, setTestDetailsOpen] = useState({}) // per-source: whether columns/month-chips/sample-rows are expanded
     const [healthSchedule, setHealthSchedule] = useState({ mode: 'daily', hour: 9 }) // read by .github/workflows/source-health-check.yml
     const [savingSchedule, setSavingSchedule] = useState(false)
     const [scheduleMsg, setScheduleMsg] = useState(null)
@@ -898,40 +899,27 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#c0392b' }}>✕ {sheetTest[s.editKey].error}</div>
                         ) : (
                           <>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 10 }}>
                               <div style={{ fontSize: 12, fontWeight: 700, color: '#15803D' }}>
                                 ✓ Connected — {sheetTest[s.editKey].columnCount} columns, {sheetTest[s.editKey].rowCount.toLocaleString('en-IN')} rows
+                                {sheetTest[s.editKey].monthCounts && <span style={{ fontWeight: 500, color: '#4B7A5A' }}> · {sheetTest[s.editKey].minDate && sheetTest[s.editKey].minDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} – {sheetTest[s.editKey].maxDate && sheetTest[s.editKey].maxDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>}
                               </div>
-                              <button type="button" onClick={() => exportDiagnostics(s)} style={{ border: 'none', background: 'transparent', color: '#1F3C84', fontSize: 11, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>Export</button>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                                <button type="button" onClick={() => setTestDetailsOpen(prev => ({ ...prev, [s.editKey]: !prev[s.editKey] }))} style={{ border: 'none', background: 'transparent', color: '#1F3C84', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{testDetailsOpen[s.editKey] ? 'Hide details' : 'Show details'}</button>
+                                <button type="button" onClick={() => exportDiagnostics(s)} style={{ border: 'none', background: 'transparent', color: '#1F3C84', fontSize: 11, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>Export</button>
+                              </div>
                             </div>
                             {sheetTest[s.editKey].drift && (
-                              <div style={{ fontSize: 11.5, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: 6, padding: '6px 9px', marginBottom: 8 }}>
+                              <div style={{ fontSize: 11.5, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: 6, padding: '6px 9px', marginTop: 6 }}>
                                 ⚠ Changed since your last check{sheetTest[s.editKey].drift.sinceTs ? ' (' + Math.round((Date.now() - sheetTest[s.editKey].drift.sinceTs) / 60000) + 'm ago)' : ''}:
                                 {sheetTest[s.editKey].drift.addedCols.length > 0 && <> new columns [{sheetTest[s.editKey].drift.addedCols.join(', ')}]</>}
                                 {sheetTest[s.editKey].drift.removedCols.length > 0 && <> removed columns [{sheetTest[s.editKey].drift.removedCols.join(', ')}]</>}
                                 {sheetTest[s.editKey].drift.rowDeltaPct != null && Math.abs(sheetTest[s.editKey].drift.rowDeltaPct) >= 20 && <> row count {sheetTest[s.editKey].drift.rowDeltaPct > 0 ? '+' : ''}{sheetTest[s.editKey].drift.rowDeltaPct}%</>}
                               </div>
                             )}
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sheetTest[s.editKey].monthCounts ? 10 : 0 }}>
-                              {sheetTest[s.editKey].columns.map((c, i) => (
-                                <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #C7D7F5', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
-                              ))}
-                            </div>
-                            {sheetTest[s.editKey].monthCounts && (
-                              <div style={{ marginTop: 4 }}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
-                                  Date coverage ({sheetTest[s.editKey].dateCol}): {sheetTest[s.editKey].minDate && sheetTest[s.editKey].minDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} — {sheetTest[s.editKey].maxDate && sheetTest[s.editKey].maxDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                </div>
-                                {sheetTest[s.editKey].monthCounts.length <= 1 && sheetTest[s.editKey].rowCount > 50 && (
-                                  <div style={{ fontSize: 11.5, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: 6, padding: '6px 9px', marginBottom: 6 }}>
-                                    ⚠ Only 1 month of data is present. If you expect multi-month history, check for an active <strong>Filter</strong> (Data → Create a filter, not a Filter view) on this sheet's tab — a regular filter scopes what this live query returns for everyone, not just your own view.
-                                  </div>
-                                )}
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                  {sheetTest[s.editKey].monthCounts.map(([m, n]) => (
-                                    <span key={m} style={{ fontSize: 10.5, fontWeight: 600, color: '#374151', background: '#F3F4F6', border: '0.5px solid #E5E7EB', borderRadius: 5, padding: '2px 7px' }}>{m}: {n.toLocaleString('en-IN')}</span>
-                                  ))}
-                                </div>
+                            {sheetTest[s.editKey].monthCounts && sheetTest[s.editKey].monthCounts.length <= 1 && sheetTest[s.editKey].rowCount > 50 && (
+                              <div style={{ fontSize: 11.5, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: 6, padding: '6px 9px', marginTop: 6 }}>
+                                ⚠ Only 1 month of data is present. If you expect multi-month history, check for an active <strong>Filter</strong> (Data → Create a filter, not a Filter view) on this sheet's tab — a regular filter scopes what this live query returns for everyone, not just your own view.
                               </div>
                             )}
                             {sheetTest[s.editKey].apiCompare && (() => {
@@ -939,31 +927,44 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                               const api = live.apiCompare
                               const liveLast = live.maxDate ? (live.maxDate.getFullYear() + '-' + String(live.maxDate.getMonth() + 1).padStart(2, '0') + '-' + String(live.maxDate.getDate()).padStart(2, '0')) : null
                               const mismatch = api.lastDate && liveLast && api.lastDate !== liveLast
+                              if (!mismatch) return null
                               return (
-                                <div style={{ marginTop: 10, paddingTop: 8, borderTop: '0.5px solid #E5E7EB' }}>
-                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 4 }}>Your dashboard's live API ({s.apiPath})</div>
-                                  <div style={{ fontSize: 11.5, color: mismatch ? '#854D0E' : '#374151', marginBottom: mismatch ? 6 : 0 }}>
-                                    Reports {api.rows != null ? api.rows.toLocaleString('en-IN') : '—'} rows, {api.firstDate || '—'} to {api.lastDate || '—'} ({api.distinctDates} dates)
-                                  </div>
-                                  {mismatch && (
-                                    <div style={{ fontSize: 11.5, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: 6, padding: '6px 9px' }}>
-                                      ⚠ This doesn't match the sheet's live data above. Your dashboards may still be showing a cached snapshot. Click "Test connection" again in a few minutes to re-check.
-                                    </div>
-                                  )}
+                                <div style={{ fontSize: 11.5, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: 6, padding: '6px 9px', marginTop: 6 }}>
+                                  ⚠ Your dashboard's live API ({s.apiPath}) reports {api.rows != null ? api.rows.toLocaleString('en-IN') : '—'} rows, {api.firstDate || '—'} to {api.lastDate || '—'} — doesn't match the sheet's live data above. Dashboards may still be showing a cached snapshot; click "Test connection" again in a few minutes to re-check.
                                 </div>
                               )
                             })()}
-                            {sheetTest[s.editKey].sampleRows && sheetTest[s.editKey].sampleRows.length > 0 && (
-                              <div style={{ marginTop: 10, paddingTop: 8, borderTop: '0.5px solid #E5E7EB', overflowX: 'auto' }}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Sample rows</div>
-                                <table style={{ borderCollapse: 'collapse', fontSize: 10.5, whiteSpace: 'nowrap' }}>
-                                  <thead><tr>{sheetTest[s.editKey].columns.map((c, i) => (<th key={i} style={{ textAlign: 'left', padding: '3px 8px', color: '#9CA3AF', fontWeight: 700, borderBottom: '0.5px solid #E5E7EB' }}>{c || '(blank)'}</th>))}</tr></thead>
-                                  <tbody>
-                                    {sheetTest[s.editKey].sampleRows.map((row, ri) => (
-                                      <tr key={ri}>{row.map((v, ci) => (<td key={ci} style={{ padding: '3px 8px', color: '#374151', borderBottom: '0.5px solid #F3F4F6' }}>{v || '—'}</td>))}</tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                            {testDetailsOpen[s.editKey] && (
+                              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '0.5px solid #E5E7EB' }}>
+                                <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Columns</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sheetTest[s.editKey].monthCounts ? 12 : 0 }}>
+                                  {sheetTest[s.editKey].columns.map((c, i) => (
+                                    <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #C7D7F5', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
+                                  ))}
+                                </div>
+                                {sheetTest[s.editKey].monthCounts && (
+                                  <div style={{ marginBottom: 12 }}>
+                                    <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Rows by month ({sheetTest[s.editKey].dateCol})</div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                      {sheetTest[s.editKey].monthCounts.map(([m, n]) => (
+                                        <span key={m} style={{ fontSize: 10.5, fontWeight: 600, color: '#374151', background: '#F3F4F6', border: '0.5px solid #E5E7EB', borderRadius: 5, padding: '2px 7px' }}>{m}: {n.toLocaleString('en-IN')}</span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {sheetTest[s.editKey].sampleRows && sheetTest[s.editKey].sampleRows.length > 0 && (
+                                  <div style={{ overflowX: 'auto' }}>
+                                    <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Sample rows</div>
+                                    <table style={{ borderCollapse: 'collapse', fontSize: 10.5, whiteSpace: 'nowrap' }}>
+                                      <thead><tr>{sheetTest[s.editKey].columns.map((c, i) => (<th key={i} style={{ textAlign: 'left', padding: '3px 8px', color: '#9CA3AF', fontWeight: 700, borderBottom: '0.5px solid #E5E7EB' }}>{c || '(blank)'}</th>))}</tr></thead>
+                                      <tbody>
+                                        {sheetTest[s.editKey].sampleRows.map((row, ri) => (
+                                          <tr key={ri}>{row.map((v, ci) => (<td key={ci} style={{ padding: '3px 8px', color: '#374151', borderBottom: '0.5px solid #F3F4F6' }}>{v || '—'}</td>))}</tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </>
