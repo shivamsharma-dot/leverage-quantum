@@ -429,6 +429,7 @@ function copyAdName(e, name) {
 }
 function CreativesTab({ data }) {
   const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, prevInsightsMap = {}, crmSummary = {} } = data
+  const tableScrollRef = useRef(null)
   const [viewMode, setViewMode] = useState('list')
   const PER_PAGE = 12
   const [page, setPage] = useState(1)
@@ -457,7 +458,7 @@ function CreativesTab({ data }) {
     const actions = cur.actions||[], leads = getAction(actions,'lead')
     const cpl = leads>0?Math.round(spend/leads):0
     const cplCrm = ad.crmLeads>0 ? Math.round(spend/ad.crmLeads) : 0
-    const totalQL = (ad.humanQL||0) + (ad.aiQL||0)
+    const totalQL = (ad.humanQL!=null || ad.aiQL!=null) ? ((ad.humanQL||0)+(ad.aiQL||0)) : null
     const cpql = totalQL>0 ? Math.round(spend/totalQL) : 0
     const convRate = clicks>0?(leads/clicks*100):0
     const spendShare = accSpend>0?(spend/accSpend*100):0
@@ -475,7 +476,7 @@ function CreativesTab({ data }) {
     if (frequency>0) score-=Math.min(20,(frequency-1)*5)
     if (cpl>0&&accCPL>0) score+=Math.min(15,Math.max(-15,(accCPL-cpl)/accCPL*15))
     score=Math.round(Math.min(100,Math.max(0,score)))
-    return { ...ad, spend, impressions, clicks, reach, ctr, cpm, cpc, frequency, leads, cpl, cplCrm, cpql, convRate, spendShare, ctrDelta, videoViews, hookRate, fatigueLabel, type, score }
+    return { ...ad, spend, impressions, clicks, reach, ctr, cpm, cpc, frequency, leads, cpl, cplCrm, totalQL, cpql, convRate, spendShare, ctrDelta, videoViews, hookRate, fatigueLabel, type, score }
   }), [ads,insightsMap,prevInsightsMap,accSpend,accCTRpct,accCPL])
   const filtered = useMemo(() => {
     let out=processed
@@ -489,14 +490,17 @@ function CreativesTab({ data }) {
     return [...out].sort((a,b)=>sortBy==='score'?b.score-a.score:(b[sortBy]||0)-(a[sortBy]||0))
   }, [processed,adTypeFilter,statusFilter,healthFilter,adNameSearch,sortBy])
   const exportRows = useMemo(() => filtered.map(ad => ({
-    Creative: ad.name || '', Type: ad.type || '', Health: ad.fatigueLabel || '',
-    Spend: Math.round(ad.spend || 0), Leads: ad.leads || 0,
+    Creative: ad.name || '',
+    Leads: ad.leads || 0,
     'CRM Leads': ad.crmLeads != null ? ad.crmLeads : '',
     Delta: ad.crmLeads != null ? (ad.crmLeads - (ad.leads || 0)) : '',
-    'CTR %': +(ad.ctr || 0).toFixed(2),
+    'Total QLs': ad.totalQL != null ? ad.totalQL : '',
+    'Human QL': ad.humanQL != null ? ad.humanQL : '', 'AI QL': ad.aiQL != null ? ad.aiQL : '',
     'CPL (Meta)': ad.cpl || 0, 'CPL (CRM)': ad.cplCrm || 0,
     CPQL: ad.cpql || 0,
-    'Human QL': ad.humanQL != null ? ad.humanQL : '', 'AI QL': ad.aiQL != null ? ad.aiQL : '',
+    Type: ad.type || '', Health: ad.fatigueLabel || '',
+    Spend: Math.round(ad.spend || 0),
+    'CTR %': +(ad.ctr || 0).toFixed(2),
     Freq: +(ad.frequency || 0).toFixed(2), Score: ad.score || 0,
     'WoW CTR %': ad.ctrDelta != null ? +ad.ctrDelta.toFixed(1) : '',
   })), [filtered])
@@ -663,28 +667,36 @@ function CreativesTab({ data }) {
           ))}
         </div>
       ):(
-        <div style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden' }}>
-          <div style={{ display:'grid',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 72px 72px 80px 90px 80px 90px 80px 80px 90px 80px 80px',padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
-            {['','Creative','Type','Health','Spend','Leads','CRM Leads','Δ','CTR','CPL (Meta)','CPL (CRM)','CPQL','Human QL','AI QL','Freq','Score','WoW CTR'].map(h=><div key={h} style={{ fontSize:11,fontWeight:600,color:'#6B7280',textAlign:(h==='CRM Leads'||h==='Δ'||h==='Human QL'||h==='AI QL')?'center':'left' }}>{h}</div>)}
+        <>
+        <div style={{ display:'flex',justifyContent:'flex-end',gap:6,marginBottom:8 }}>
+          <button type="button" onClick={()=>tableScrollRef.current&&tableScrollRef.current.scrollBy({left:-320,behavior:'smooth'})} title="Scroll left" style={{ width:28,height:28,borderRadius:8,border:'0.5px solid #E5E7EB',background:'#fff',color:'#374151',cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center' }}>‹</button>
+          <button type="button" onClick={()=>tableScrollRef.current&&tableScrollRef.current.scrollBy({left:320,behavior:'smooth'})} title="Scroll right" style={{ width:28,height:28,borderRadius:8,border:'0.5px solid #E5E7EB',background:'#fff',color:'#374151',cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center' }}>›</button>
+        </div>
+        <div ref={tableScrollRef} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflowX:'auto' }}>
+          <div style={{ minWidth:1820 }}>
+          <div style={{ display:'grid',gridTemplateColumns:'40px 260px 90px 100px 90px 100px 90px 90px 100px 100px 100px 90px 100px 100px 90px 80px 100px 100px',padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
+            {['','Creative','Leads','CRM Leads','Δ','Total QLs','Human QL','AI QL','CPL (Meta)','CPL (CRM)','CPQL','Type','Health','Spend','CTR','Freq','Score','WoW CTR'].map(h=><div key={h} style={{ fontSize:11,fontWeight:600,color:'#6B7280',textAlign:(h==='CRM Leads'||h==='Δ'||h==='Total QLs'||h==='Human QL'||h==='AI QL')?'center':'left' }}>{h}</div>)}
           </div>
           {pageItems.map((ad,i)=>(
-            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'36px 2fr 70px 90px 110px 80px 72px 72px 80px 90px 80px 90px 80px 80px 90px 80px 80px',padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
+            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'40px 260px 90px 100px 90px 100px 90px 90px 100px 100px 100px 90px 100px 100px 90px 80px 100px 100px',padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
               <div style={{ width:32,height:32,borderRadius:6,background:'#F3F4F6',overflow:'hidden',flexShrink:0 }}>{ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div>
               <div style={{ overflow:'hidden' }}><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'text',minWidth:0 }} title={ad.name}>{ad.name}</div><button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:11,lineHeight:1,padding:1,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
+              <div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.crmLeads==null?'—':ad.crmLeads.toLocaleString('en-IN')}</div><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:(ad.crmLeads==null?'#9CA3AF':((ad.crmLeads-(ad.leads||0))>=0?'#4CAE6F':'#1C9FD4')) }}>{ad.crmLeads==null?'—':((ad.crmLeads-(ad.leads||0))>=0?'+':'')+(ad.crmLeads-(ad.leads||0)).toLocaleString('en-IN')}</div>
+              <div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:'#111827' }}>{ad.totalQL!=null?ad.totalQL.toLocaleString('en-IN'):'—'}</div><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'—'}</div><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'—'}</div>
+              <div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div><div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cplCrm) }}>{ad.cplCrm>0?'₹'+ad.cplCrm:'—'}</div><div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cpql) }}>{ad.cpql>0?'₹'+ad.cpql:'—'}</div>
               <span style={{ background:tBg[ad.type]||'#F3F4F6',color:tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span>
               <span style={{ background:hBg[ad.fatigueLabel]||'#E9F8EF',color:hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span>
               <div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div>
-              <div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.crmLeads==null?'—':ad.crmLeads.toLocaleString('en-IN')}</div><div style={{ fontSize:12,fontWeight:600,textAlign:'center',color:(ad.crmLeads==null?'#9CA3AF':((ad.crmLeads-(ad.leads||0))>=0?'#4CAE6F':'#1C9FD4')) }}>{ad.crmLeads==null?'—':((ad.crmLeads-(ad.leads||0))>=0?'+':'')+(ad.crmLeads-(ad.leads||0)).toLocaleString('en-IN')}</div>
               <div style={{ fontSize:12,color:ad.ctr<accCTRpct*0.6&&ad.ctr>0?'#1F3C84':'#374151',fontWeight:ad.ctr<accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div>
-              <div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div><div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cplCrm) }}>{ad.cplCrm>0?'₹'+ad.cplCrm:'—'}</div><div style={{ fontSize:12,fontWeight:600,color:cplCol(ad.cpql) }}>{ad.cpql>0?'₹'+ad.cpql:'—'}</div><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'—'}</div><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'—'}</div>
               <div style={{ fontSize:12,color:ad.frequency>4.5?'#1F3C84':ad.frequency>3?'#1C9FD4':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div>
               <div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div>
               <div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div>
             </div>
           ))}
+          </div>
         </div>
-      )}
-      {pageCount > 1 && (() => {
+        </>
+      )}      {pageCount > 1 && (() => {
         const win = 5
         let start = Math.max(1, safePage - Math.floor(win/2))
         let end = Math.min(pageCount, start + win - 1)
