@@ -3,12 +3,12 @@
 // same window Meta is showing. Without params it aggregates all-time.
 // Returns { byName: { <adName>: leads }, total, rows, distinct, since, until, ts }.
 //
-// humanQL/aiQL (FW_Human_QL_Count / FW_AI_QL_Count columns): these are AD-LEVEL TOTALS repeated
-// on every lead row for that ad (verified: 0 of 915 distinct ad names have more than one distinct
-// value pair across their rows), not per-row/per-day counts. So they're read directly (not summed
-// across rows) and are NOT filtered by since/until -- there is no legitimate way to time-slice a
-// pre-aggregated per-ad total, so byName's humanQL/aiQL always reflect the all-time value regardless
-// of the requested date window.
+// humanQL/aiQL (FW_Human_QL_Count / FW_AI_QL_Count columns): these are PER-DAY counts, same shape
+// as `leads` -- an earlier assumption that they were fixed ad-level constants (one value repeated
+// on every row for that ad) turned out to be wrong for current sheet data: a spot-check of July
+// data found 94 of 225 distinct ad names had more than one distinct (human,ai) value across their
+// rows in the same month. So they're summed per ad name and filtered by since/until exactly like
+// `leads`/byName, not read once from the first row seen.
 
 // auth helpers loaded via dynamic import() inside handler (this file is bundled as
 // CommonJS; a static import of the .mjs ESM file crashes with ERR_REQUIRE_ESM)
@@ -90,14 +90,6 @@ export default async function handler(req, res) {
       const cols = splitCsvLine(lines[i]);
       const name = (cols[nameIdx] || '').trim();
       if (!name) continue; // skip unattributed (blank) rows
-      if (!(name in humanQL) && humanQlIdx !== -1) {
-        const hq = parseInt((cols[humanQlIdx] || '').replace(/[^0-9-]/g, ''), 10);
-        if (!isNaN(hq)) humanQL[name] = hq;
-      }
-      if (!(name in aiQL) && aiQlIdx !== -1) {
-        const aq = parseInt((cols[aiQlIdx] || '').replace(/[^0-9-]/g, ''), 10);
-        if (!isNaN(aq)) aiQL[name] = aq;
-      }
       const iso = toIso(cols[dateIdx]);
       if (since || until) {
         if (!iso) continue;
@@ -108,6 +100,14 @@ export default async function handler(req, res) {
       byName[name] = (byName[name] || 0) + n;
       if (iso) byDate[iso] = (byDate[iso] || 0) + n;
       total += n; rows++;
+      if (humanQlIdx !== -1) {
+        const hq = parseInt((cols[humanQlIdx] || '').replace(/[^0-9-]/g, ''), 10);
+        if (!isNaN(hq)) humanQL[name] = (humanQL[name] || 0) + hq;
+      }
+      if (aiQlIdx !== -1) {
+        const aq = parseInt((cols[aiQlIdx] || '').replace(/[^0-9-]/g, ''), 10);
+        if (!isNaN(aq)) aiQL[name] = (aiQL[name] || 0) + aq;
+      }
     }
     res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate=1800');
     return res.status(200).json({ byName, byDate, humanQL, aiQL, total, rows, distinct: Object.keys(byName).length, since, until, ts: Date.now() });
