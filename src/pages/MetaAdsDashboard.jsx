@@ -445,22 +445,61 @@ const CREATIVE_COLS = [
 function CreativesTab({ data }) {
   const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, prevInsightsMap = {}, crmSummary = {} } = data
   const tableScrollRef = useRef(null)
+  const lsGet = (key, fallback) => { try { const v = JSON.parse(localStorage.getItem(key) || 'null'); return v == null ? fallback : v } catch { return fallback } }
   const [colOrder, setColOrder] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(CREATIVE_COL_ORDER_KEY) || 'null')
-      if (Array.isArray(saved) && saved.length === CREATIVE_COLS.length && CREATIVE_COLS.every(c => saved.includes(c.key))) return saved
-    } catch {}
+    const saved = lsGet(CREATIVE_COL_ORDER_KEY, null)
+    if (Array.isArray(saved) && saved.length === CREATIVE_COLS.length && CREATIVE_COLS.every(c => saved.includes(c.key))) return saved
     return CREATIVE_COLS.map(c => c.key)
   })
+  const [pinnedCols, setPinnedCols] = useState(() => lsGet('lq_meta_creatives_pinned', []))
+  const [hiddenCols, setHiddenCols] = useState(() => lsGet('lq_meta_creatives_hidden', []))
+  const [views, setViews] = useState(() => lsGet('lq_meta_creatives_views', {}))
   useEffect(() => { try { localStorage.setItem(CREATIVE_COL_ORDER_KEY, JSON.stringify(colOrder)) } catch {} }, [colOrder])
+  useEffect(() => { try { localStorage.setItem('lq_meta_creatives_pinned', JSON.stringify(pinnedCols)) } catch {} }, [pinnedCols])
+  useEffect(() => { try { localStorage.setItem('lq_meta_creatives_hidden', JSON.stringify(hiddenCols)) } catch {} }, [hiddenCols])
+  useEffect(() => { try { localStorage.setItem('lq_meta_creatives_views', JSON.stringify(views)) } catch {} }, [views])
   const [colsOpen, setColsOpen] = useState(false)
+  const [headerMenuKey, setHeaderMenuKey] = useState(null)
+  const [dragHeaderKey, setDragHeaderKey] = useState(null)
+  const [dragListKey, setDragListKey] = useState(null)
   const moveCol = (key, dir) => setColOrder(prev => {
     const i = prev.indexOf(key), j = i + dir
     if (j < 0 || j >= prev.length) return prev
     const next = [...prev]; [next[i], next[j]] = [next[j], next[i]]
     return next
   })
-  const resetCols = () => setColOrder(CREATIVE_COLS.map(c => c.key))
+  const reorderTo = (key, targetKey) => setColOrder(prev => {
+    if (key === targetKey) return prev
+    const next = prev.filter(k => k !== key)
+    const ti = next.indexOf(targetKey)
+    next.splice(ti, 0, key)
+    return next
+  })
+  const togglePin = (key) => setPinnedCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+  const toggleHidden = (key) => setHiddenCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+  const resetCols = () => { setColOrder(CREATIVE_COLS.map(c => c.key)); setPinnedCols([]); setHiddenCols([]) }
+  const saveView = () => {
+    const name = window.prompt('Name this view:')
+    if (!name || !name.trim()) return
+    setViews(prev => ({ ...prev, [name.trim()]: { colOrder, pinnedCols, hiddenCols } }))
+  }
+  const loadView = (name) => {
+    const v = views[name]
+    if (!v) return
+    if (Array.isArray(v.colOrder) && v.colOrder.length === CREATIVE_COLS.length) setColOrder(v.colOrder)
+    setPinnedCols(Array.isArray(v.pinnedCols) ? v.pinnedCols : [])
+    setHiddenCols(Array.isArray(v.hiddenCols) ? v.hiddenCols : [])
+  }
+  const deleteView = (name) => setViews(prev => { const next = { ...prev }; delete next[name]; return next })
+  const visibleOrder = colOrder.filter(k => !hiddenCols.includes(k))
+  const displayOrder = [...visibleOrder.filter(k => pinnedCols.includes(k)), ...visibleOrder.filter(k => !pinnedCols.includes(k))]
+  const colWidthOf = (k) => (CREATIVE_COLS.find(c => c.key === k) || {}).width || 100
+  const pinnedLeftMap = (() => {
+    let acc = 300 // 40px thumb + 260px identifier, both always sticky-pinned
+    const map = {}
+    displayOrder.filter(k => pinnedCols.includes(k)).forEach(k => { map[k] = acc; acc += colWidthOf(k) + 8 })
+    return map
+  })()
   const [viewMode, setViewMode] = useState('list')
   const PER_PAGE = 12
   const [page, setPage] = useState(1)
@@ -643,20 +682,40 @@ function CreativesTab({ data }) {
           {colsOpen && (
             <>
               <div onClick={()=>setColsOpen(false)} style={{ position:'fixed',inset:0,zIndex:98 }} />
-              <div style={{ position:'absolute',top:'calc(100% + 6px)',right:0,zIndex:99,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,0.12)',padding:'10px 6px',minWidth:210,maxHeight:340,overflowY:'auto' }}>
-                <div style={{ fontSize:10.5,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.05em',padding:'2px 10px 8px' }}>Column order</div>
-                {colOrder.map((key,idx)=>{
+              <div style={{ position:'absolute',top:'calc(100% + 6px)',right:0,zIndex:99,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,0.12)',padding:'10px 6px',minWidth:250,maxHeight:420,overflowY:'auto' }}>
+                <div style={{ fontSize:10.5,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.05em',padding:'2px 10px 6px' }}>Saved views</div>
+                <div style={{ padding:'0 10px 8px',display:'flex',flexWrap:'wrap',gap:6 }}>
+                  {Object.keys(views).length===0 && <span style={{ fontSize:11.5,color:'#9CA3AF' }}>None yet</span>}
+                  {Object.keys(views).map(name=>(
+                    <span key={name} style={{ display:'inline-flex',alignItems:'center',gap:4,background:'#F3F4F6',borderRadius:7,padding:'3px 4px 3px 9px' }}>
+                      <button type="button" onClick={()=>loadView(name)} style={{ border:'none',background:'transparent',cursor:'pointer',fontSize:11.5,fontWeight:600,color:'#374151',padding:0 }}>{name}</button>
+                      <button type="button" onClick={()=>deleteView(name)} title="Delete view" style={{ border:'none',background:'transparent',cursor:'pointer',fontSize:12,color:'#9CA3AF',padding:'0 4px',lineHeight:1 }}>×</button>
+                    </span>
+                  ))}
+                </div>
+                <button type="button" onClick={saveView} style={{ width:'calc(100% - 20px)',margin:'0 10px 10px',padding:'6px 10px',borderRadius:7,border:'1px dashed #C7D7F5',background:'#F7FAFF',color:'#1F3C84',fontSize:11.5,fontWeight:600,cursor:'pointer' }}>+ Save current as view</button>
+                <div style={{ fontSize:10.5,fontWeight:700,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.05em',padding:'6px 10px 8px',borderTop:'0.5px solid #F3F4F6' }}>Columns (drag to reorder)</div>
+                {colOrder.map((key)=>{
                   const c = CREATIVE_COLS.find(cc=>cc.key===key)
+                  const isPinned = pinnedCols.includes(key)
+                  const isHidden = hiddenCols.includes(key)
                   return (
-                    <div key={key} style={{ display:'flex',alignItems:'center',gap:6,padding:'5px 10px' }}>
-                      <span style={{ flex:1,fontSize:12.5,color:'#374151',fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{c?.label || key}</span>
-                      <button type="button" disabled={idx===0} onClick={()=>moveCol(key,-1)} title="Move up" style={{ width:22,height:22,borderRadius:5,border:'0.5px solid #E5E7EB',background:'#fff',color:idx===0?'#D1D5DB':'#374151',cursor:idx===0?'default':'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center' }}>▲</button>
-                      <button type="button" disabled={idx===colOrder.length-1} onClick={()=>moveCol(key,1)} title="Move down" style={{ width:22,height:22,borderRadius:5,border:'0.5px solid #E5E7EB',background:'#fff',color:idx===colOrder.length-1?'#D1D5DB':'#374151',cursor:idx===colOrder.length-1?'default':'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center' }}>▼</button>
+                    <div key={key}
+                      draggable
+                      onDragStart={()=>setDragListKey(key)}
+                      onDragOver={e=>e.preventDefault()}
+                      onDrop={e=>{ e.preventDefault(); if (dragListKey) reorderTo(dragListKey, key); setDragListKey(null) }}
+                      onDragEnd={()=>setDragListKey(null)}
+                      style={{ display:'flex',alignItems:'center',gap:6,padding:'5px 10px',opacity:isHidden?0.45:1,cursor:'grab',background:dragListKey===key?'#F3F4F6':'transparent',borderRadius:6 }}>
+                      <span style={{ fontSize:13,color:'#9CA3AF',flexShrink:0 }}>⠿</span>
+                      <span style={{ flex:1,fontSize:12.5,color:'#374151',fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis' }}>{c?c.label:key}</span>
+                      <button type="button" onClick={()=>togglePin(key)} title={isPinned?'Unpin':'Pin column'} style={{ width:22,height:22,borderRadius:5,border:'0.5px solid #E5E7EB',background:isPinned?'#EEF1FB':'#fff',color:isPinned?'#1F3C84':'#9CA3AF',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center' }}>📌</button>
+                      <button type="button" onClick={()=>toggleHidden(key)} title={isHidden?'Show column':'Hide column'} style={{ width:22,height:22,borderRadius:5,border:'0.5px solid #E5E7EB',background:'#fff',color:isHidden?'#9CA3AF':'#374151',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center' }}>{isHidden?'⊘':'👁'}</button>
                     </div>
                   )
                 })}
                 <div style={{ borderTop:'0.5px solid #F3F4F6',marginTop:6,paddingTop:6 }}>
-                  <button type="button" onClick={resetCols} style={{ width:'100%',padding:'6px 10px',borderRadius:7,border:'none',background:'transparent',color:'#1C9FD4',fontSize:12,fontWeight:600,cursor:'pointer',textAlign:'left' }}>Reset to default order</button>
+                  <button type="button" onClick={resetCols} style={{ width:'100%',padding:'6px 10px',borderRadius:7,border:'none',background:'transparent',color:'#1C9FD4',fontSize:12,fontWeight:600,cursor:'pointer',textAlign:'left' }}>Reset to default (clears pins &amp; hidden)</button>
                 </div>
               </div>
             </>
@@ -724,16 +783,47 @@ function CreativesTab({ data }) {
           <button type="button" onClick={()=>tableScrollRef.current&&tableScrollRef.current.scrollBy({left:320,behavior:'smooth'})} title="Scroll right" style={{ width:28,height:28,borderRadius:8,border:'0.5px solid #E5E7EB',background:'#fff',color:'#374151',cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center' }}>›</button>
         </div>
         <div ref={tableScrollRef} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflowX:'auto' }}>
-          <div style={{ minWidth:40+260+colOrder.reduce((s,k)=>s+((CREATIVE_COLS.find(c=>c.key===k)||{}).width||100),0) }}>
-          <div style={{ display:'grid',gridTemplateColumns:'40px 260px '+colOrder.map(k=>((CREATIVE_COLS.find(c=>c.key===k)||{}).width||100)+'px').join(' '),padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
-            <div/><div style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>Creative</div>
-            {colOrder.map(k=>{ const c=CREATIVE_COLS.find(cc=>cc.key===k); return <div key={k} style={{ fontSize:11,fontWeight:600,color:'#6B7280',textAlign:c&&c.align==='center'?'center':'left' }}>{c?c.label:k}</div> })}
+          <div style={{ minWidth:300+displayOrder.reduce((s,k)=>s+colWidthOf(k)+8,0) }}>
+          <div style={{ display:'grid',gridTemplateColumns:'40px 260px '+displayOrder.map(k=>colWidthOf(k)+'px').join(' '),padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
+            <div style={{ position:'sticky',left:0,zIndex:3,background:'#F9FAFB' }}/><div style={{ position:'sticky',left:40,zIndex:3,background:'#F9FAFB',fontSize:11,fontWeight:600,color:'#6B7280' }}>Creative</div>
+            {displayOrder.map(k=>{
+              const c=CREATIVE_COLS.find(cc=>cc.key===k)
+              const isPinned = pinnedCols.includes(k)
+              return (
+                <div key={k}
+                  draggable={!isPinned}
+                  onDragStart={()=>setDragHeaderKey(k)}
+                  onDragOver={e=>e.preventDefault()}
+                  onDrop={e=>{ e.preventDefault(); if (dragHeaderKey) reorderTo(dragHeaderKey, k); setDragHeaderKey(null) }}
+                  onDragEnd={()=>setDragHeaderKey(null)}
+                  style={{ position:isPinned?'sticky':'static',left:isPinned?pinnedLeftMap[k]:undefined,zIndex:isPinned?2:1,background:isPinned?'#F9FAFB':'transparent',borderRight:isPinned&&displayOrder.filter(x=>pinnedCols.includes(x)).slice(-1)[0]===k?'1px solid #E5E7EB':'none',fontSize:11,fontWeight:600,color:'#6B7280',textAlign:c&&c.align==='center'?'center':'left',display:'flex',alignItems:'center',gap:4,cursor:isPinned?'default':'grab',opacity:dragHeaderKey===k?0.4:1 }}>
+                  <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{c?c.label:k}</span>
+                  <span onClick={e=>{ e.stopPropagation(); setHeaderMenuKey(v=>v===k?null:k) }} style={{ cursor:'pointer',color:'#9CA3AF',fontSize:12,flexShrink:0 }}>⋮</span>
+                  {headerMenuKey===k && (
+                    <>
+                      <div onClick={e=>{ e.stopPropagation(); setHeaderMenuKey(null) }} style={{ position:'fixed',inset:0,zIndex:98 }} />
+                      <div onClick={e=>e.stopPropagation()} style={{ position:'absolute',top:'100%',left:0,marginTop:4,zIndex:99,background:'#fff',border:'1px solid #E5E7EB',borderRadius:8,boxShadow:'0 8px 24px rgba(0,0,0,0.12)',padding:4,minWidth:140 }}>
+                        <button type="button" onClick={()=>{ moveCol(k,-1); setHeaderMenuKey(null) }} style={{ display:'block',width:'100%',textAlign:'left',padding:'6px 10px',border:'none',background:'transparent',fontSize:12,color:'#374151',cursor:'pointer',borderRadius:6 }}>Move left</button>
+                        <button type="button" onClick={()=>{ moveCol(k,1); setHeaderMenuKey(null) }} style={{ display:'block',width:'100%',textAlign:'left',padding:'6px 10px',border:'none',background:'transparent',fontSize:12,color:'#374151',cursor:'pointer',borderRadius:6 }}>Move right</button>
+                        <button type="button" onClick={()=>{ togglePin(k); setHeaderMenuKey(null) }} style={{ display:'block',width:'100%',textAlign:'left',padding:'6px 10px',border:'none',background:'transparent',fontSize:12,color:'#374151',cursor:'pointer',borderRadius:6 }}>{isPinned?'Unpin column':'Pin column'}</button>
+                        <button type="button" onClick={()=>{ toggleHidden(k); setHeaderMenuKey(null) }} style={{ display:'block',width:'100%',textAlign:'left',padding:'6px 10px',border:'none',background:'transparent',fontSize:12,color:'#374151',cursor:'pointer',borderRadius:6 }}>Hide column</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })}
           </div>
           {pageItems.map((ad,i)=>(
-            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'40px 260px '+colOrder.map(k=>((CREATIVE_COLS.find(c=>c.key===k)||{}).width||100)+'px').join(' '),padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
-              <div style={{ width:32,height:32,borderRadius:6,background:'#F3F4F6',overflow:'hidden',flexShrink:0 }}>{ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div>
-              <div style={{ overflow:'hidden' }}><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'text',minWidth:0 }} title={ad.name}>{ad.name}</div><button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:11,lineHeight:1,padding:1,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
-              {colOrder.map(k=>{ const c=CREATIVE_COLS.find(cc=>cc.key===k); return c ? <Fragment key={k}>{c.render(ad,{cplCol,tBg,tColor,hBg,hColor,accCTRpct})}</Fragment> : null })}
+            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'40px 260px '+displayOrder.map(k=>colWidthOf(k)+'px').join(' '),padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
+              <div style={{ position:'sticky',left:0,zIndex:1,background:'#fff',width:32,height:32,borderRadius:6,overflow:'hidden',flexShrink:0 }}>{ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div>
+              <div style={{ position:'sticky',left:40,zIndex:1,background:'#fff',overflow:'hidden' }}><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:'text',minWidth:0 }} title={ad.name}>{ad.name}</div><button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:11,lineHeight:1,padding:1,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
+              {displayOrder.map(k=>{
+                const c=CREATIVE_COLS.find(cc=>cc.key===k)
+                const isPinned = pinnedCols.includes(k)
+                const cellStyle = isPinned ? { position:'sticky',left:pinnedLeftMap[k],zIndex:1,background:'#fff',borderRight:displayOrder.filter(x=>pinnedCols.includes(x)).slice(-1)[0]===k?'1px solid #F3F4F6':'none' } : null
+                return c ? <div key={k} style={cellStyle}>{c.render(ad,{cplCol,tBg,tColor,hBg,hColor,accCTRpct})}</div> : null
+              })}
             </div>
           ))}
           </div>
