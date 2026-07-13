@@ -868,15 +868,17 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   {scheduleMsg && <span style={{ fontSize: 11, fontWeight: 700, color: scheduleMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{scheduleMsg.type === 'err' ? '✕ ' : '✓ '}{scheduleMsg.text}</span>}
                 </div>
                 {sourceHealth.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 4px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 8, margin: '10px 0 4px' }}>
                     {sourceHealth.map(h => {
-                      const color = h.status === 'warn' ? '#854D0E' : h.status === 'error' ? '#c0392b' : '#15803D'
-                      const bg = h.status === 'warn' ? '#FEF9C3' : h.status === 'error' ? '#FEF2F2' : '#F0FDF4'
+                      const color = h.status === 'warn' ? '#C77D00' : h.status === 'error' ? '#c0392b' : '#15803D'
                       const mins = h.checked_at ? Math.round((Date.now() - new Date(h.checked_at).getTime()) / 60000) : null
+                      const rel = mins == null ? '' : mins < 60 ? mins + 'm ago' : mins < 1440 ? Math.round(mins / 60) + 'h ago' : Math.round(mins / 1440) + 'd ago'
                       return (
-                        <span key={h.name} title={h.message || 'OK'} style={{ fontSize: 10.5, fontWeight: 700, color, background: bg, border: '0.5px solid ' + color + '33', borderRadius: 6, padding: '3px 8px' }}>
-                          {h.status === 'ok' ? '✓' : '⚠'} {h.name}{mins != null ? ' · ' + mins + 'm ago' : ''}
-                        </span>
+                        <div key={h.name} title={h.message || 'OK'} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 8 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 11.5, fontWeight: 600, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</span>
+                          <span style={{ fontSize: 10.5, color: '#9CA3AF', flexShrink: 0 }}>{rel}</span>
+                        </div>
                       )
                     })}
                   </div>
