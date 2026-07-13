@@ -1713,3 +1713,48 @@ User wants a full dedicated Bing Ads page mirroring Google Ads (own sidebar entr
 7. Still need from the user: **Developer Token** (Microsoft Advertising UI, not yet obtained this session) and **Customer ID + Account ID** (Microsoft Advertising UI, not yet collected).
 8. Once all 6 credentials exist, set Vercel env vars (naming TBD, follow the `GOOGLE_ADS_*` convention, e.g. `BING_ADS_DEVELOPER_TOKEN`, `BING_ADS_CLIENT_ID`, `BING_ADS_CLIENT_SECRET`, `BING_ADS_REFRESH_TOKEN`, `BING_ADS_CUSTOMER_ID`, `BING_ADS_ACCOUNT_ID`), then build `api/bing-ads.mjs` (submit/poll/download/parse flow + new ZIP-parsing npm dependency) and `BingAdsDashboard.jsx` (mirror GoogleAdsDashboard.jsx's 4-tab structure + dashboardKit primitives), wire into `Sidebar.jsx` PAGE_LIST + `App.jsx` routes + access control.
 9. **Remember the 12-function Vercel cap** -- adding `api/bing-ads.mjs` will be function #13 and will BREAK THE DEPLOY again unless something is consolidated first (best candidate: merge `api/auth/google.mjs` + `api/auth/logout.mjs` + `api/auth/me.mjs` into one function with internal action routing) or the user upgrades to Vercel Pro. Do this consolidation (or confirm the upgrade) BEFORE adding the new function, not after -- don't repeat the same failed-deploy mistake.
+
+---
+
+## 2026-07-13 -- Settings > Data Sources: advanced source management (self-service diagnostics + scheduled monitoring)
+
+User wanted the Data Sources section in Settings to be a real self-service control center after a session-long detour diagnosing why Meta Ads Month-on-Month showed blank CRM/QL data for Feb-June (root cause: the FBleads Google Sheet had an active Filter scoping its live gviz query to July only -- confirmed via direct curl to the gviz CSV endpoint bypassing the app entirely, then confirmed fixed the same way once the filter was cleared). Explicit ask: "everything related to source... need detailed and can be fixed from there only... i dont want to do back and forth" then "advanced super level" when asked to prioritize.
+
+**Frontend (`src/pages/SettingsPage.jsx`), no new Vercel function (already at the 12-function Hobby cap, see note above):**
+- `testSheetConnection` (the existing "Test connection" per-source button) extended with:
+  - **Access/permission guard**: if the fetch returns HTML instead of CSV, throws a clear "sheet may no longer be shared publicly" error instead of a cryptic parse failure.
+  - **Date coverage breakdown**: auto-detects any column with "date" in its name, parses `DD-Mon-YYYY`, `YYYY-MM-DD`, and `M/D/YYYY` (added this session -- QL Ops's `qualified_date` column uses this format and was previously unparsed), and shows a month-by-month row-count table + min/max date range.
+  - **Narrow-window warning**: if only 1 month of data is present, shows the exact fix inline ("check for an active Filter, not a Filter view, on this sheet's tab") -- this is the self-service version of the multi-step manual diagnosis from this session.
+  - **Live-vs-cached comparison**: sources with a new `apiPath` field (currently only FB Leads / CRM Sheet -> `/api/crm-leads`) also cache-bust-fetch that backend route and compare its row count/date range against the direct sheet fetch, flagging a mismatch as "dashboards may still be showing a cached snapshot" -- catches Vercel edge-cache staleness (`Cache-Control: s-maxage=600, stale-while-revalidate=1800` on `api/crm-leads.js`) without a manual side-by-side curl.
+  - **Sample rows**: shows the first 3 actual data rows in a mini table.
+  - **Schema/row-count drift**: a rolling baseline persisted per source in `localStorage` (`lq_source_baseline_<key>`) diffs each check against the previous one and flags added/removed columns or a >=20% row-count swing.
+  - **Export diagnostics**: downloads the current test result as JSON.
+- **"Check all sources"** button runs every sheet-backed source's test sequentially and shows a compact health-strip summary.
+- **Self-service "Add a custom source"** form (name + URL) persisted via the existing generic `/api/preferences` (`key: 'custom_data_sources'`, value = array) -- no new endpoint needed, that route already accepts arbitrary keys. Registers/monitors an arbitrary sheet from Settings immediately; note left in the UI that actually consuming a new source in a dashboard chart still needs a small code change.
+
+**Scheduled background monitoring (`.github/workflows/source-health-check.yml`, new):**
+- Runs every 30 minutes (`workflow_dispatch` also available for manual trigger) via a `ubuntu-latest` runner + inline Python (stdlib only, no pip installs) -- no Vercel function involved, sidesteps the 12-function cap entirely.
+- Fetches each of the 7 sheet sources directly from Google (hardcoded default URLs, matching `DATA_SOURCES`' `defaultUrl`s -- a custom URL override set in Settings is NOT picked up by this workflow in v1, since it only reads Supabase, not `app_preferences`, to keep the script simple; revisit if that becomes a problem), computes row count + date coverage the same way the frontend does, and **upserts into a new Supabase table `source_health`** (`name` primary key) using the existing public anon key (same one already shipped client-side in this file as `RL_SB_KEY` -- not a new secret).
+- Compares each run against the previous stored row for that source: flags `status:'warn'` if date coverage suddenly narrows from >1 month to <=1, or row count drops >50%; flags `status:'error'` on fetch/parse failure (including the HTML-instead-of-CSV case).
+- On `warn`/`error`, also writes a row to the existing `activity_log` table (`email:'system'`, `action:'source_health_warning'`) so it surfaces in Settings > Activity Log without needing to check the Data tab.
+- Settings' Data tab reads this table on load (`getSourceHealth()`, same anon-key REST pattern as the existing `getReportLogs()`) and shows a status chip per source (✓ green / ⚠ amber+red) with "Xm ago" -- so problems are visible without clicking anything, not just when you happen to run a manual Test connection.
+
+**Required one-time setup (SQL, run once in Supabase SQL editor):**
+```sql
+CREATE TABLE IF NOT EXISTS public.source_health (
+  name TEXT PRIMARY KEY,
+  row_count INT,
+  distinct_dates INT,
+  first_date TEXT,
+  last_date TEXT,
+  status TEXT,
+  message TEXT,
+  checked_at TIMESTAMPTZ
+);
+ALTER TABLE public.source_health DISABLE ROW LEVEL SECURITY;
+```
+(RLS disabled to match every other table the anon key reads/writes -- `activity_log`, `report_logs`, `ask_ai_conversations`, etc.)
+
+**Also required:** add a GitHub Actions repo secret named `SUPABASE_ANON_KEY` (Settings -> Secrets and variables -> Actions -> New repository secret) with the same anon key value already shipped client-side (visible in `src/pages/SettingsPage.jsx` as `RL_SB_KEY`). The workflow reads it via `${{ secrets.SUPABASE_ANON_KEY }}` rather than a literal value hardcoded in the public YAML -- a first draft of this workflow had it inline and was correctly blocked before push (same key, just shouldn't be duplicated as a plaintext literal in a public workflow file). Without this secret set, `source-health-check.yml` runs but every Supabase call 401s and no health data is recorded.
+
+**Known v1 limitations (flagged, not fixed):** the GitHub Action checks only the 7 hardcoded default sheet URLs, not custom overrides saved in Settings, and not any admin-added custom sources (those only get checked when a human clicks "Test connection" or "Check all sources"). Also the date-format parser (`DD-Mon-YYYY` / `YYYY-MM-DD` / `M/D/YYYY`) is best-effort and may miss an unseen format on a future new source -- if a source's "Test connection" shows no date coverage section at all despite having an obvious date column, check the actual value format first.

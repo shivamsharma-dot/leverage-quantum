@@ -17,6 +17,21 @@ async function getReportLogs(limit = 200) {
   } catch { return [] }
 }
 
+// Populated by .github/workflows/source-health-check.yml (runs every 30 min) --
+// requires the source_health table (see CLAUDE.md for the create-table SQL). Missing
+// table/network issues resolve to [] so this degrades gracefully to "no automated
+// check yet" rather than breaking the page.
+async function getSourceHealth() {
+  try {
+    const res = await fetch(
+      `${RL_SB_URL}/rest/v1/source_health?select=*`,
+      { headers: { apikey: RL_SB_KEY, Authorization: `Bearer ${RL_SB_KEY}` } }
+    )
+    if (!res.ok) return []
+    return await res.json()
+  } catch { return [] }
+}
+
 const getRoleMeta = (role) => {
   if (role === 'admin') return { label: 'Admin', color: '#1F3C84', bg: '#E8EFF9' }
   if (role === 'viewer') return { label: 'Viewer', color: '#1C9FD4', bg: '#E3F5FD' }
@@ -125,6 +140,37 @@ export default function SettingsPage() {
     const [sheetSaving, setSheetSaving] = useState({})
     const [sheetMsg, setSheetMsg] = useState({}); const [editingSheet, setEditingSheet] = useState(null)
     const [sheetTest, setSheetTest] = useState({}) // { [key]: { loading, error, columns, columnCount, rowCount, ts } }
+    const [customSources, setCustomSources] = useState([]) // admin-added sources, stored server-side via /api/preferences
+    const [newSourceForm, setNewSourceForm] = useState({ name: '', url: '' })
+    const [addSourceMsg, setAddSourceMsg] = useState(null)
+    const [sourceHealth, setSourceHealth] = useState([]) // rows from the source_health table, written by the scheduled GitHub Action
+    const [checkingAll, setCheckingAll] = useState(false)
+    const _shRef = useRef(false)
+    useEffect(() => {
+      if (activeTab === 'data' && userIsAdmin && !_shRef.current) { _shRef.current = true; getSourceHealth().then(setSourceHealth) }
+    }, [activeTab, userIsAdmin])
+
+    const addCustomSource = async () => {
+      const name = newSourceForm.name.trim(), url = newSourceForm.url.trim()
+      if (!name || !url) { setAddSourceMsg({ type: 'err', text: 'Name and URL are both required' }); return }
+      const editKey = 'custom_' + Date.now()
+      const next = [...customSources, { name, editKey, defaultUrl: url, rows: 'live', custom: true }]
+      setCustomSources(next)
+      setNewSourceForm({ name: '', url: '' })
+      setAddSourceMsg(null)
+      try {
+        const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'custom_data_sources', value: next }) })
+        if (!r.ok) throw new Error('Save failed')
+        setAddSourceMsg({ type: 'ok', text: 'Added' })
+      } catch (e) {
+        setAddSourceMsg({ type: 'err', text: e.message })
+      }
+    }
+    const removeCustomSource = async (editKey) => {
+      const next = customSources.filter(s => s.editKey !== editKey)
+      setCustomSources(next)
+      try { await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'custom_data_sources', value: next }) }) } catch {}
+    }
 
   
   // SR Fee
@@ -160,6 +206,7 @@ export default function SettingsPage() {
                   ;['sheet_url_referral','sheet_url_qlops_daily','sheet_url_qlops_monthly','sheet_url_whatsapp','sheet_url_fbleads','sheet_url_leads_assigned','sheet_url_googleleads'].forEach(k => { if (pf[k]) su[k] = pf[k] })
                   setSheetUrls(su)
                   setSheetInputs(su)
+                  if (Array.isArray(pf.custom_data_sources)) setCustomSources(pf.custom_data_sources)
       })
       .catch(() => {})
       .finally(() => setPrefLoading(false))
@@ -221,6 +268,8 @@ export default function SettingsPage() {
         if (m) { const mon = MONTH_ABBR[m[2].toLowerCase()]; return mon != null ? new Date(+m[3], mon, +m[1]) : null }
         m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
         if (m) return new Date(+m[1], +m[2] - 1, +m[3])
+        m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/) // M/D/YYYY, e.g. QL Ops's qualified_date
+        if (m) return new Date(+m[3], +m[1] - 1, +m[2])
         return null
       }
 
@@ -246,9 +295,11 @@ export default function SettingsPage() {
           const r = await fetch(bust, { cache: 'no-store' })
           if (!r.ok) throw new Error('HTTP ' + r.status)
           const text = await r.text()
+          if (text.trim().startsWith('<')) throw new Error('Got an HTML page instead of CSV -- this sheet may no longer be shared publicly. Check its sharing settings.')
           const lines = text.split(/\r?\n/).filter(l => l.length > 0)
           if (lines.length < 1) throw new Error('Empty response')
           const columns = splitCsvLineClient(lines[0]).map(h => h.trim())
+          const sampleRows = lines.slice(1, 4).map(l => splitCsvLineClient(l))
           const dateColIdx = columns.findIndex(c => /date/i.test(c))
           let dateCol = null, monthCounts = null, minDate = null, maxDate = null
           if (dateColIdx !== -1) {
@@ -276,10 +327,47 @@ export default function SettingsPage() {
               }
             } catch {}
           }
-          setSheetTest(prev => ({ ...prev, [key]: { columns, columnCount: columns.length, rowCount: lines.length - 1, dateCol, monthCounts, minDate, maxDate, apiCompare, ts: Date.now() } }))
+          const rowCount = lines.length - 1
+          // Rolling baseline (localStorage) -- diffs this check against the LAST check for this
+          // source, so schema changes (columns added/removed) and sudden row-count swings surface
+          // immediately instead of needing a manual before/after comparison.
+          const baselineKey = 'lq_source_baseline_' + key
+          let drift = null
+          try {
+            const baseline = JSON.parse(localStorage.getItem(baselineKey) || 'null')
+            if (baseline) {
+              const addedCols = columns.filter(c => !baseline.columns.includes(c))
+              const removedCols = baseline.columns.filter(c => !columns.includes(c))
+              const rowDeltaPct = baseline.rowCount > 0 ? Math.round((rowCount - baseline.rowCount) / baseline.rowCount * 100) : null
+              if (addedCols.length || removedCols.length || (rowDeltaPct != null && Math.abs(rowDeltaPct) >= 20)) {
+                drift = { addedCols, removedCols, rowDeltaPct, sinceTs: baseline.ts }
+              }
+            }
+            localStorage.setItem(baselineKey, JSON.stringify({ columns, rowCount, ts: Date.now() }))
+          } catch {}
+          setSheetTest(prev => ({ ...prev, [key]: { columns, columnCount: columns.length, rowCount, sampleRows, dateCol, monthCounts, minDate, maxDate, apiCompare, drift, ts: Date.now() } }))
         } catch (e) {
           setSheetTest(prev => ({ ...prev, [key]: { error: e.message || 'Fetch failed' } }))
         }
+      }
+
+      const exportDiagnostics = (s) => {
+        const data = sheetTest[s.editKey]
+        if (!data) return
+        const blob = new Blob([JSON.stringify({ source: s.name, ...data }, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = s.name.replace(/[^a-z0-9]+/gi, '_') + '_diagnostics_' + new Date().toISOString().slice(0, 10) + '.json'
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+
+      const checkAllSources = async () => {
+        setCheckingAll(true)
+        const all = [...DATA_SOURCES.filter(s => s.editKey), ...customSources]
+        for (const s of all) { await testSheetConnection(s) }
+        setCheckingAll(false)
       }
 
       const saveSheetUrl = async (key) => {
@@ -665,9 +753,26 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               </div>
 
               <div className={styles.card}>
-                <h3 className={styles.cardTitle}>Data Sources</h3>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <h3 className={styles.cardTitle} style={{ marginBottom: 0 }}>Data Sources</h3>
+                  <button type="button" onClick={checkAllSources} disabled={checkingAll} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: checkingAll ? '#94A3B8' : 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: checkingAll ? 'default' : 'pointer' }}>{checkingAll ? 'Checking all...' : 'Check all sources'}</button>
+                </div>
+                {sourceHealth.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 4px' }}>
+                    {sourceHealth.map(h => {
+                      const color = h.status === 'warn' ? '#854D0E' : h.status === 'error' ? '#c0392b' : '#15803D'
+                      const bg = h.status === 'warn' ? '#FEF9C3' : h.status === 'error' ? '#FEF2F2' : '#F0FDF4'
+                      const mins = h.checked_at ? Math.round((Date.now() - new Date(h.checked_at).getTime()) / 60000) : null
+                      return (
+                        <span key={h.name} title={h.message || 'OK'} style={{ fontSize: 10.5, fontWeight: 700, color, background: bg, border: '0.5px solid ' + color + '33', borderRadius: 6, padding: '3px 8px' }}>
+                          {h.status === 'ok' ? '✓' : '⚠'} {h.name}{mins != null ? ' · ' + mins + 'm ago' : ''}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
                 <div className={styles.dsList}>
-                {DATA_SOURCES.map(s => (
+                {[...DATA_SOURCES, ...customSources].map(s => (
                   <div key={s.name} className={styles.dsRow} style={{ flexWrap: 'wrap', rowGap: 10 }}>
                     <span className={styles.dsIcon}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
@@ -676,16 +781,27 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div className={styles.dsName}>{s.name}</div>
                       <div className={styles.dsMeta} title={s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || '') : ''} style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || 'No default set') : (s.src + ' — ' + s.rows + ' rows')}</div>
                     </div>
-                    <span className={styles.dsStatus}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Connected'}</span>{s.editKey && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: '1px solid #1F3C84', background: '#fff', color: '#1F3C84', boxShadow: 'none' }} onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</button>)}{s.editKey && userIsAdmin && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', boxShadow: '0 4px 10px -3px rgba(31,60,132,0.5)' }} onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><button className={styles.primaryBtn} style={{ padding: '5px 14px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', boxShadow: '0 4px 10px -3px rgba(31,60,132,0.5)' }} onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}
+                    <span className={styles.dsStatus}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Connected'}</span>{s.editKey && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: '1px solid #1F3C84', background: '#fff', color: '#1F3C84', boxShadow: 'none' }} onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</button>)}{s.editKey && userIsAdmin && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', boxShadow: '0 4px 10px -3px rgba(31,60,132,0.5)' }} onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</button>)}{s.custom && userIsAdmin && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: '1px solid #FECACA', background: '#fff', color: '#c0392b', boxShadow: 'none' }} onClick={() => removeCustomSource(s.editKey)}>Remove</button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><button className={styles.primaryBtn} style={{ padding: '5px 14px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', boxShadow: '0 4px 10px -3px rgba(31,60,132,0.5)' }} onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}
                     {s.editKey && sheetTest[s.editKey] && !sheetTest[s.editKey].loading && (
                       <div style={{ flexBasis: '100%', width: '100%', marginTop: 8, padding: '10px 12px', borderRadius: 8, border: '1px solid ' + (sheetTest[s.editKey].error ? '#FECACA' : '#DCFCE7'), background: sheetTest[s.editKey].error ? '#FEF2F2' : '#F0FDF4' }}>
                         {sheetTest[s.editKey].error ? (
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#c0392b' }}>✕ {sheetTest[s.editKey].error}</div>
                         ) : (
                           <>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#15803D', marginBottom: 6 }}>
-                              ✓ Connected — {sheetTest[s.editKey].columnCount} columns, {sheetTest[s.editKey].rowCount.toLocaleString('en-IN')} rows
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: '#15803D' }}>
+                                ✓ Connected — {sheetTest[s.editKey].columnCount} columns, {sheetTest[s.editKey].rowCount.toLocaleString('en-IN')} rows
+                              </div>
+                              <button type="button" onClick={() => exportDiagnostics(s)} style={{ border: 'none', background: 'transparent', color: '#1F3C84', fontSize: 11, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>Export</button>
                             </div>
+                            {sheetTest[s.editKey].drift && (
+                              <div style={{ fontSize: 11.5, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE68A', borderRadius: 6, padding: '6px 9px', marginBottom: 8 }}>
+                                ⚠ Changed since your last check{sheetTest[s.editKey].drift.sinceTs ? ' (' + Math.round((Date.now() - sheetTest[s.editKey].drift.sinceTs) / 60000) + 'm ago)' : ''}:
+                                {sheetTest[s.editKey].drift.addedCols.length > 0 && <> new columns [{sheetTest[s.editKey].drift.addedCols.join(', ')}]</>}
+                                {sheetTest[s.editKey].drift.removedCols.length > 0 && <> removed columns [{sheetTest[s.editKey].drift.removedCols.join(', ')}]</>}
+                                {sheetTest[s.editKey].drift.rowDeltaPct != null && Math.abs(sheetTest[s.editKey].drift.rowDeltaPct) >= 20 && <> row count {sheetTest[s.editKey].drift.rowDeltaPct > 0 ? '+' : ''}{sheetTest[s.editKey].drift.rowDeltaPct}%</>}
+                              </div>
+                            )}
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sheetTest[s.editKey].monthCounts ? 10 : 0 }}>
                               {sheetTest[s.editKey].columns.map((c, i) => (
                                 <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #C7D7F5', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
@@ -727,6 +843,19 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 </div>
                               )
                             })()}
+                            {sheetTest[s.editKey].sampleRows && sheetTest[s.editKey].sampleRows.length > 0 && (
+                              <div style={{ marginTop: 10, paddingTop: 8, borderTop: '0.5px solid #E5E7EB', overflowX: 'auto' }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Sample rows</div>
+                                <table style={{ borderCollapse: 'collapse', fontSize: 10.5, whiteSpace: 'nowrap' }}>
+                                  <thead><tr>{sheetTest[s.editKey].columns.map((c, i) => (<th key={i} style={{ textAlign: 'left', padding: '3px 8px', color: '#9CA3AF', fontWeight: 700, borderBottom: '0.5px solid #E5E7EB' }}>{c || '(blank)'}</th>))}</tr></thead>
+                                  <tbody>
+                                    {sheetTest[s.editKey].sampleRows.map((row, ri) => (
+                                      <tr key={ri}>{row.map((v, ci) => (<td key={ci} style={{ padding: '3px 8px', color: '#374151', borderBottom: '0.5px solid #F3F4F6' }}>{v || '—'}</td>))}</tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
                           </>
                         )}
                       </div>
@@ -734,6 +863,18 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                 ))}
               </div>
+                {userIsAdmin && (
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '0.5px solid #F3F4F6' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Add a custom source</div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <input type="text" placeholder="Name" value={newSourceForm.name} onChange={e => setNewSourceForm(prev => ({ ...prev, name: e.target.value }))} className={styles.input} style={{ width: 180 }} />
+                      <input type="text" placeholder="Published/gviz CSV URL" value={newSourceForm.url} onChange={e => setNewSourceForm(prev => ({ ...prev, url: e.target.value }))} className={styles.input} style={{ flex: 1, minWidth: 260 }} />
+                      <button className={styles.primaryBtn} style={{ padding: '7px 16px', fontSize: 12, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff' }} onClick={addCustomSource}>Add</button>
+                    </div>
+                    {addSourceMsg && (<p className={styles.note} style={{ margin: '6px 0 0', color: addSourceMsg.type === 'err' ? '#c0392b' : undefined }}>{addSourceMsg.type === 'err' ? '✕ ' : '✓ '}{addSourceMsg.text}</p>)}
+                    <p className={styles.note} style={{ marginTop: 6 }}>Tracks and tests any published Google Sheet CSV from here. Note: to actually pull a new source into a dashboard chart still needs a small code change -- this just lets you register and monitor it immediately.</p>
+                  </div>
+                )}
               </div>
 
             </>
