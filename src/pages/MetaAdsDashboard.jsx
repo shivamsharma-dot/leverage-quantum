@@ -363,6 +363,10 @@ function CampaignsTab({ data }) {
             <div style={{ fontSize:12,color:'#9CA3AF' }}>{filtered.length} campaigns · avg CTR {accCTRpct.toFixed(2)}% · lifetime CPC ₹{Math.round(lifetimeCPC)}</div>
           </div>
       </div>
+      <div style={{ display:'flex',alignItems:'center',gap:8,padding:'9px 14px',marginBottom:14,background:'#FEF9C3',border:'1px solid #FDE68A',borderRadius:10,fontSize:12,color:'#854D0E',fontWeight:500 }}>
+        <span style={{ fontSize:14 }}>⚠</span>
+        <span>Human QL / AI QL / CPQL (Human) / CPQL (AI) columns aren't accurate right now — the CRM sheet source is being fixed. We'll update this note once the data is reliable again.</span>
+      </div>
       <div style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden' }}>
         <div style={{ display:'grid',gridTemplateColumns:cols,padding:'10px 16px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8,alignItems:'center' }}>
           <div style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>Campaign</div>
@@ -570,6 +574,10 @@ function CreativesTab({ data }) {
               <div style={{ fontSize:11.5, color:'#8A94A6', marginTop:5, position:'relative' }}>{k.sub}</div>
             </div>
           ))}
+        </div>
+        <div style={{ display:'flex',alignItems:'center',gap:8,padding:'9px 14px',marginBottom:14,background:'#FEF9C3',border:'1px solid #FDE68A',borderRadius:10,fontSize:12,color:'#854D0E',fontWeight:500 }}>
+          <span style={{ fontSize:14 }}>⚠</span>
+          <span>Human QL / AI QL / CPQL numbers aren't accurate right now — the CRM sheet source is being fixed. We'll update this note once the data is reliable again.</span>
         </div>
       <div style={{ display:'flex',gap:6,marginBottom:14,alignItems:'center',flexWrap:'nowrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 12px' }}>
         <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:120,minWidth:70,flexShrink:1,background:'#FAFAFA' }}/>
@@ -894,6 +902,10 @@ function TrendTab({ token, adAccount, mode }) {
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
       <div style={{ fontSize:12, color:'#9CA3AF', marginBottom:14 }}>{rangeLabel} · fixed range, not affected by the date filter on other tabs</div>
       <div style={{ fontSize:11, color:'#9CA3AF', marginBottom:10, fontStyle:'italic' }}>Futwork Human/AI QLs and CPQL are all-time account totals (per-ad constants from the CRM sheet, not date-bucketed) — not scoped to the range above, unlike every other card here.</div>
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'9px 14px', marginBottom:14, background:'#FEF9C3', border:'1px solid #FDE68A', borderRadius:10, fontSize:12, color:'#854D0E', fontWeight:500 }}>
+        <span style={{ fontSize:14 }}>⚠</span>
+        <span>Futwork Human QLs / AI QLs / CPQL numbers aren't accurate right now — the CRM sheet source is being fixed. We'll update this note once the data is reliable again.</span>
+      </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:12, marginBottom:16 }}>
         {[
           { label:'TOTAL SPEND', value:fmtINR(totals.spend), c1:'#1C9FD4', c2:'#29B9C3', icon:'₹' },
