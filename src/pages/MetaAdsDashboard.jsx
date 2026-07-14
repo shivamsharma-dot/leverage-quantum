@@ -784,7 +784,7 @@ function CreativesTab({ data }) {
         </div>
         <div ref={tableScrollRef} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflowX:'auto' }}>
           <div style={{ minWidth:300+displayOrder.reduce((s,k)=>s+colWidthOf(k)+8,0) }}>
-          <div style={{ display:'grid',gridTemplateColumns:'40px 260px '+displayOrder.map(k=>colWidthOf(k)+'px').join(' '),padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
+          <div style={{ display:'grid',gridTemplateColumns:'40px 260px '+displayOrder.map(k=>colWidthOf(k)+'px').join(' ')+' minmax(0,1fr)',padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
             <div style={{ position:'sticky',left:0,zIndex:3,background:'#F9FAFB' }}/><div style={{ position:'sticky',left:40,zIndex:3,background:'#F9FAFB',fontSize:11,fontWeight:600,color:'#6B7280' }}>Creative</div>
             {displayOrder.map(k=>{
               const c=CREATIVE_COLS.find(cc=>cc.key===k)
@@ -813,9 +813,10 @@ function CreativesTab({ data }) {
                 </div>
               )
             })}
+            <div />
           </div>
           {pageItems.map((ad,i)=>(
-            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'40px 260px '+displayOrder.map(k=>colWidthOf(k)+'px').join(' '),padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
+            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'40px 260px '+displayOrder.map(k=>colWidthOf(k)+'px').join(' ')+' minmax(0,1fr)',padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
               <div style={{ position:'sticky',left:0,zIndex:1,background:'#fff',width:32,height:32,borderRadius:6,overflow:'hidden',flexShrink:0 }}>{ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div>
               <div style={{ position:'sticky',left:40,zIndex:1,background:'#fff' }}><div style={{ display:'flex',alignItems:'flex-start',gap:4 }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'normal',wordBreak:'break-word',cursor:'text' }} title={ad.name}>{ad.name}</div><button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:11,lineHeight:1,padding:1,marginTop:2,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
               {displayOrder.map(k=>{
@@ -824,6 +825,7 @@ function CreativesTab({ data }) {
                 const cellStyle = { textAlign:c&&c.align==='center'?'center':'left', ...(isPinned ? { position:'sticky',left:pinnedLeftMap[k],zIndex:1,background:'#fff',borderRight:displayOrder.filter(x=>pinnedCols.includes(x)).slice(-1)[0]===k?'1px solid #F3F4F6':'none' } : {}) }
                 return c ? <div key={k} style={cellStyle}>{c.render(ad,{cplCol,tBg,tColor,hBg,hColor,accCTRpct})}</div> : null
               })}
+              <div />
             </div>
           ))}
           </div>
