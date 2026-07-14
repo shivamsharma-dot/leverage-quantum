@@ -631,7 +631,7 @@ function CreativesTab({ data }) {
     const totalQL = humanQLTotal + aiQLTotal
     const cpql = totalQL>0 ? Math.round(accSpend/totalQL) : 0
     const ctr = accCTRpct
-    return { spendSum, leadsSum, imprSum, clicksSum, activeCount, cpl, cplCrm, humanQLTotal, aiQLTotal, cpql, ctr, total:list.length }
+    return { spendSum, leadsSum, imprSum, clicksSum, activeCount, cpl, cplCrm, humanQLTotal, aiQLTotal, totalQL, cpql, ctr, total:list.length }
   }, [processed, crmSummary, accSpend])
   const hColor={'Healthy':'#166534','Moderate':'#854D0E','High Fatigue':'#991B1B'}
   const hBg={'Healthy':'#E9F8EF','Moderate':'#FEF9C3','High Fatigue':'#FEF2F2'}
@@ -652,6 +652,8 @@ function CreativesTab({ data }) {
             { key:'humanQL', label:'FUTWORK HUMAN QLs', value:kpiStats.humanQLTotal>0?kpiStats.humanQLTotal.toLocaleString('en-IN'):'—', sub:'in selected range, per matched ad', c1:'#4CAE6F', c2:'#29B9C3', icon:'✓' },
             { key:'aiQL', label:'FUTWORK AI QLs', value:kpiStats.aiQLTotal>0?kpiStats.aiQLTotal.toLocaleString('en-IN'):'—', sub:'in selected range, per matched ad', c1:'#29B9C3', c2:'#1C9FD4', icon:'✓' },
             { key:'cpql', label:'CPQL', value:kpiStats.cpql>0?'₹'+kpiStats.cpql.toLocaleString('en-IN'):'—', sub:'cost per qualified lead (Human + AI)', c1:'#1F3C84', c2:'#4CAE6F', icon:'◈' },
+            { key:'impr', label:'IMPRESSIONS', value:((n=>n>=1e7?(n/1e7).toFixed(2)+' Cr':n>=1e5?(n/1e5).toFixed(2)+' L':n>=1e3?(n/1e3).toFixed(1)+'K':String(Math.round(n||0))))(kpiStats.imprSum), sub:kpiStats.clicksSum.toLocaleString('en-IN')+' clicks', c1:'#0E7490', c2:'#1C9FD4', icon:'◫' },
+            { key:'totalQL', label:'TOTAL QLS', value:kpiStats.totalQL>0?kpiStats.totalQL.toLocaleString('en-IN'):'—', sub:'human + AI qualified leads', c1:'#4CAE6F', c2:'#1F3C84', icon:'✓' },
           ].map(k => (
             <div key={k.key} style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'16px 18px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)' }}>
               <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:'linear-gradient(90deg,'+k.c1+','+k.c2+')' }} />
@@ -825,7 +827,7 @@ function CreativesTab({ data }) {
               {displayOrder.map(k=>{
                 const c=CREATIVE_COLS.find(cc=>cc.key===k)
                 const isPinned = pinnedCols.includes(k)
-                const cellStyle = { textAlign:c&&c.align==='center'?'center':'left', ...(isPinned ? { position:'sticky',left:pinnedLeftMap[k],zIndex:1,background:'#fff',borderRight:displayOrder.filter(x=>pinnedCols.includes(x)).slice(-1)[0]===k?'1px solid #F3F4F6':'none' } : {}) }
+                const cellStyle = { textAlign:c&&c.align==='center'?'center':'left', display:'flex', alignItems:'center', justifyContent:c&&c.align==='center'?'center':'flex-start', ...(isPinned ? { position:'sticky',left:pinnedLeftMap[k],zIndex:1,background:'#fff',borderRight:displayOrder.filter(x=>pinnedCols.includes(x)).slice(-1)[0]===k?'1px solid #F3F4F6':'none' } : {}) }
                 return c ? <div key={k} style={cellStyle}>{c.render(ad,{cplCol,tBg,tColor,hBg,hColor,accCTRpct})}</div> : null
               })}
             </div>
