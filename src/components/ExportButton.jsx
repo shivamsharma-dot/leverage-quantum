@@ -1,7 +1,33 @@
 import { useState } from 'react'
+import { toast } from './ToastHost'
 
 export default function ExportButton({ data, filename, columns }) {
   const [open, setOpen] = useState(false)
+  const [sheetsBusy, setSheetsBusy] = useState(false)
+
+  const exportSheets = async () => {
+    if (!data || data.length === 0) return
+    setSheetsBusy(true)
+    try {
+      const cols = columns || Object.keys(data[0])
+      const rows = data.map(r => { const o = {}; cols.forEach(c => { o[c] = r[c] ?? '' }); return o })
+      const r = await fetch('/api/export-to-sheets', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows, filename }),
+      })
+      const resData = await r.json()
+      if (!r.ok) throw new Error(resData.error || 'Failed to export to Google Sheets')
+      window.open(resData.url, '_blank')
+      toast('Google Sheet created', { type: 'success' })
+      setOpen(false)
+    } catch (e) {
+      toast(e.message || 'Could not export to Google Sheets', { type: 'muted' })
+    } finally {
+      setSheetsBusy(false)
+    }
+  }
 
   const exportCSV = () => {
     if (!data || data.length === 0) return
@@ -100,6 +126,23 @@ export default function ExportButton({ data, filename, columns }) {
                 <polyline points="10 9 9 9 8 9"/>
               </svg>
               Export as JSON
+            </button>
+            <button onClick={exportSheets} disabled={sheetsBusy} style={{
+              display:'flex', alignItems:'center', gap:9, width:'100%',
+              padding:'9px 14px', border:'none', background:'none',
+              cursor: sheetsBusy ? 'default' : 'pointer', fontSize:13, fontWeight:500, color:'#111827',
+              borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
+              transition:'background .1s', opacity: sheetsBusy ? 0.6 : 1
+            }}
+            onMouseOver={e=>e.currentTarget.style.background='#F9FAFB'}
+            onMouseOut={e=>e.currentTarget.style.background='none'}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="9" y1="13" x2="15" y2="13"/>
+                <line x1="9" y1="17" x2="13" y2="17"/>
+              </svg>
+              {sheetsBusy ? 'Creating sheet…' : 'Export to Google Sheets'}
             </button>
           </div>
         </>
