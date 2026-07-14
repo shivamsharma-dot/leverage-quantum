@@ -442,6 +442,32 @@ const CREATIVE_COLS = [
   { key:'score', label:'Score', width:100, align:'center', render:(ad)=><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div> },
   { key:'wowCtr', label:'WoW CTR', width:100, align:'center', render:(ad)=><div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div> },
 ]
+function FilterDropdown({ label, value, options, open, onToggle, onSelect, accentOf }) {
+  const current = options.find(o=>o.v===value) || options[0]
+  return (
+    <div style={{ position:'relative',flexShrink:0 }}>
+      <button type="button" onClick={onToggle} style={{ display:'flex',alignItems:'center',gap:5,padding:'5px 9px',borderRadius:7,border:'0.5px solid '+(open?'#1C9FD4':'#E5E7EB'),background:'#fff',cursor:'pointer',fontSize:11,fontWeight:500,fontFamily:'inherit',color:'#374151',whiteSpace:'nowrap' }}>
+        <span style={{ color:'#9CA3AF',fontWeight:600 }}>{label}:</span>
+        <span style={{ fontWeight:600,color:accentOf?accentOf(value):'#374151' }}>{current.l}</span>
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink:0,transform:open?'rotate(180deg)':'rotate(0deg)',transition:'transform .15s' }}><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      {open && <div onClick={()=>onToggle()} style={{ position:'fixed',inset:0,zIndex:150 }}/>}
+      {open && (
+        <div style={{ position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:200,minWidth:130,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)',padding:4,overflow:'hidden' }}>
+          {options.map(o => (
+            <button key={o.v} type="button" onClick={()=>onSelect(o.v)}
+              style={{ display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',textAlign:'left',padding:'7px 9px',border:'none',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:value===o.v?700:500,fontFamily:'inherit',color:value===o.v?'#1F3C84':'#374151',background:value===o.v?'#E8EFF9':'transparent' }}
+              onMouseEnter={e=>{ if(value!==o.v) e.currentTarget.style.background='#F3F4F6' }}
+              onMouseLeave={e=>{ if(value!==o.v) e.currentTarget.style.background='transparent' }}>
+              <span>{o.l}</span>
+              {value===o.v && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 function CreativesTab({ data }) {
   const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, prevInsightsMap = {}, crmSummary = {} } = data
   const tableScrollRef = useRef(null)
@@ -510,6 +536,7 @@ function CreativesTab({ data }) {
   const [adTypeFilter, setAdTypeFilter] = useState('all')
   const [healthFilter, setHealthFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [openFilterMenu, setOpenFilterMenu] = useState(null)
   const [sortBy, setSortBy] = useState('spend')
   const [adNameSearch, setAdNameSearch] = useState('')
   const [showBackToTop, setShowBackToTop] = useState(false)
@@ -667,17 +694,16 @@ function CreativesTab({ data }) {
             </div>
           ))}
         </div>
-      <div style={{ display:'flex',gap:6,marginBottom:14,alignItems:'center',flexWrap:'nowrap',overflowX:'auto',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 12px' }}>
-        <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:120,minWidth:70,flexShrink:0,background:'#FAFAFA' }}/>
-        <div style={{ display:'flex',alignItems:'center',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:7,flexShrink:0 }}><span style={{ fontSize:10,fontWeight:600,color:'#9CA3AF',marginRight:4,whiteSpace:'nowrap' }}>Format</span>
-          {['all','video','image','carousel'].map(t=><button key={t} onClick={()=>setAdTypeFilter(t)} style={{ padding:'5px 7px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',background:adTypeFilter===t?'#1F3C84':'#fff',color:adTypeFilter===t?'#fff':'#6B7280' }}>{t.charAt(0).toUpperCase()+t.slice(1)}</button>)}
-        </div>
-        <div style={{ display:'flex',alignItems:'center',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:7,flexShrink:0 }}><span style={{ fontSize:10,fontWeight:600,color:'#9CA3AF',marginRight:4,whiteSpace:'nowrap' }}>Health</span>
-          {[{v:'all',l:'All'},{v:'healthy',l:'Healthy'},{v:'moderate',l:'Moderate'},{v:'fatigue',l:'Fatigue'}].map(h=><button key={h.v} onClick={()=>setHealthFilter(h.v)} style={{ padding:'5px 7px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',background:healthFilter===h.v?(h.v==='all'?'#1F3C84':h.v==='healthy'?'#166534':h.v==='moderate'?'#854D0E':'#991B1B'):'#fff',color:healthFilter===h.v?'#fff':'#6B7280' }}>{h.l}</button>)}
-        </div>
-        <div style={{ display:'flex',alignItems:'center',gap:3,borderLeft:'0.5px solid #E5E7EB',paddingLeft:7,flexShrink:0 }}><span style={{ fontSize:10,fontWeight:600,color:'#9CA3AF',marginRight:4,whiteSpace:'nowrap' }}>Status</span>
-          {[{v:'all',l:'All'},{v:'active',l:'Active'},{v:'inactive',l:'Inactive'}].map(st=><button key={st.v} onClick={()=>setStatusFilter(st.v)} style={{ padding:'5px 7px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',background:statusFilter===st.v?(st.v==='active'?'#166534':st.v==='inactive'?'#6B7280':'#1F3C84'):'#fff',color:statusFilter===st.v?'#fff':'#6B7280' }}>{st.l}</button>)}
-        </div>
+      <div style={{ display:'flex',gap:6,marginBottom:14,alignItems:'center',flexWrap:'nowrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 12px' }}>
+        <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:120,minWidth:44,flexShrink:1,flexGrow:0,background:'#FAFAFA' }}/>
+        <FilterDropdown label="Format" value={adTypeFilter} options={[{v:'all',l:'All'},{v:'video',l:'Video'},{v:'image',l:'Image'},{v:'carousel',l:'Carousel'}]}
+          open={openFilterMenu==='format'} onToggle={()=>setOpenFilterMenu(v=>v==='format'?null:'format')} onSelect={v=>{ setAdTypeFilter(v); setOpenFilterMenu(null) }} />
+        <FilterDropdown label="Health" value={healthFilter} options={[{v:'all',l:'All'},{v:'healthy',l:'Healthy'},{v:'moderate',l:'Moderate'},{v:'fatigue',l:'Fatigue'}]}
+          open={openFilterMenu==='health'} onToggle={()=>setOpenFilterMenu(v=>v==='health'?null:'health')} onSelect={v=>{ setHealthFilter(v); setOpenFilterMenu(null) }}
+          accentOf={v=>v==='healthy'?'#166534':v==='moderate'?'#854D0E':v==='fatigue'?'#991B1B':'#374151'} />
+        <FilterDropdown label="Status" value={statusFilter} options={[{v:'all',l:'All'},{v:'active',l:'Active'},{v:'inactive',l:'Inactive'}]}
+          open={openFilterMenu==='status'} onToggle={()=>setOpenFilterMenu(v=>v==='status'?null:'status')} onSelect={v=>{ setStatusFilter(v); setOpenFilterMenu(null) }}
+          accentOf={v=>v==='active'?'#166534':v==='inactive'?'#6B7280':'#374151'} />
         <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ padding:'5px 10px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:11,fontFamily:'inherit',cursor:'pointer',background:'#fff',color:'#374151',marginLeft:2,flexShrink:0 }}>
           <option value="spend">Sort: Spend</option><option value="leads">Sort: Leads</option><option value="cpl">Sort: CPL</option><option value="ctr">Sort: CTR</option><option value="frequency">Sort: Frequency</option><option value="score">Sort: Score</option><option value="impressions">Sort: Impressions</option>
         </select>
