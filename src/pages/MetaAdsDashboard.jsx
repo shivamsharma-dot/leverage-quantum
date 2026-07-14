@@ -694,8 +694,8 @@ function CreativesTab({ data }) {
             </div>
           ))}
         </div>
-      <div style={{ display:'flex',gap:6,marginBottom:14,alignItems:'center',flexWrap:'nowrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 12px' }}>
-        <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:120,minWidth:44,flexShrink:1,flexGrow:0,background:'#FAFAFA' }}/>
+      <div style={{ display:'flex',gap:5,marginBottom:14,alignItems:'center',flexWrap:'nowrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 12px' }}>
+        <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:100,minWidth:0,flexShrink:1,flexGrow:0,background:'#FAFAFA' }}/>
         <FilterDropdown label="Format" value={adTypeFilter} options={[{v:'all',l:'All'},{v:'video',l:'Video'},{v:'image',l:'Image'},{v:'carousel',l:'Carousel'}]}
           open={openFilterMenu==='format'} onToggle={()=>setOpenFilterMenu(v=>v==='format'?null:'format')} onSelect={v=>{ setAdTypeFilter(v); setOpenFilterMenu(null) }} />
         <FilterDropdown label="Health" value={healthFilter} options={[{v:'all',l:'All'},{v:'healthy',l:'Healthy'},{v:'moderate',l:'Moderate'},{v:'fatigue',l:'Fatigue'}]}
@@ -704,12 +704,11 @@ function CreativesTab({ data }) {
         <FilterDropdown label="Status" value={statusFilter} options={[{v:'all',l:'All'},{v:'active',l:'Active'},{v:'inactive',l:'Inactive'}]}
           open={openFilterMenu==='status'} onToggle={()=>setOpenFilterMenu(v=>v==='status'?null:'status')} onSelect={v=>{ setStatusFilter(v); setOpenFilterMenu(null) }}
           accentOf={v=>v==='active'?'#166534':v==='inactive'?'#6B7280':'#374151'} />
-        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ padding:'5px 10px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:11,fontFamily:'inherit',cursor:'pointer',background:'#fff',color:'#374151',marginLeft:2,flexShrink:0 }}>
-          <option value="spend">Sort: Spend</option><option value="leads">Sort: Leads</option><option value="cpl">Sort: CPL</option><option value="ctr">Sort: CTR</option><option value="frequency">Sort: Frequency</option><option value="score">Sort: Score</option><option value="impressions">Sort: Impressions</option>
-        </select>
-        <div style={{ marginLeft:'auto',display:'flex',gap:8,alignItems:'center',position:'relative',flexShrink:0 }}>
+        <FilterDropdown label="Sort" value={sortBy} options={[{v:'spend',l:'Spend'},{v:'leads',l:'Leads'},{v:'cpl',l:'CPL'},{v:'ctr',l:'CTR'},{v:'frequency',l:'Frequency'},{v:'score',l:'Score'},{v:'impressions',l:'Impressions'}]}
+          open={openFilterMenu==='sort'} onToggle={()=>setOpenFilterMenu(v=>v==='sort'?null:'sort')} onSelect={v=>{ setSortBy(v); setOpenFilterMenu(null) }} />
+        <div style={{ marginLeft:'auto',display:'flex',gap:5,alignItems:'center',position:'relative',flexShrink:0 }}>
           {viewMode==='list' && (
-            <button type="button" onClick={()=>setColsOpen(v=>!v)} style={{ display:'inline-flex',alignItems:'center',gap:5,padding:'5px 10px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:colsOpen?'#1F3C84':'#fff',color:colsOpen?'#fff':'#6B7280' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>Columns</button>
+            <button type="button" onClick={()=>setColsOpen(v=>!v)} style={{ display:'inline-flex',alignItems:'center',gap:4,padding:'5px 8px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',background:colsOpen?'#1F3C84':'#fff',color:colsOpen?'#fff':'#6B7280' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>Columns</button>
           )}
           {colsOpen && (
             <>
@@ -753,7 +752,7 @@ function CreativesTab({ data }) {
             </>
           )}
           <ExportButton data={exportRows} filename="meta_ads_creatives" />
-          {[{m:'grid',l:'⊞ Grid'},{m:'list',l:'☰ List'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} style={{ padding:'5px 10px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,cursor:'pointer',fontFamily:'inherit',background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
+          {[{m:'grid',l:'⊞ Grid'},{m:'list',l:'☰ List'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} style={{ padding:'5px 8px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
         </div>
       </div>
       <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · showing {filtered.length===0?0:((safePage-1)*PER_PAGE+1)}–{Math.min(safePage*PER_PAGE, filtered.length)} · account avg CTR {accCTRpct.toFixed(2)}%</div>
