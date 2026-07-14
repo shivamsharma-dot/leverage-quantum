@@ -604,6 +604,7 @@ function CreativesTab({ data }) {
     'CTR %': +(ad.ctr || 0).toFixed(2),
     Freq: +(ad.frequency || 0).toFixed(2), Score: ad.score || 0,
     'WoW CTR %': ad.ctrDelta != null ? +ad.ctrDelta.toFixed(1) : '',
+    'Ad Link': ad.previewLink || '',
   })), [filtered])
   const filteredTotals = useMemo(() => {
     let spend=0, impressions=0, clicks=0, leads=0, reach=0, active=0, freqSum=0, freqW=0, crmLeads=0, humanQL=0, aiQL=0;

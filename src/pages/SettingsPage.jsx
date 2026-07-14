@@ -232,6 +232,29 @@ export default function SettingsPage() {
 
     const [recentCommits, setRecentCommits] = useState([])
     const [commitsLoading, setCommitsLoading] = useState(false)
+    const [issueText, setIssueText] = useState('')
+    const [issueBusy, setIssueBusy] = useState(false)
+    const submitIssue = async () => {
+      const description = issueText.trim()
+      if (!description) return
+      setIssueBusy(true)
+      try {
+        const r = await fetch('/api/github-issue', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description, page: location.pathname + location.search, url: window.location.href }),
+        })
+        const data = await r.json()
+        if (!r.ok) throw new Error(data.error || 'Failed to file issue')
+        toast('Reported — issue #' + data.number + ' created', { type: 'success' })
+        setIssueText('')
+      } catch (e) {
+        toast(e.message || 'Could not file the issue', { type: 'muted' })
+      } finally {
+        setIssueBusy(false)
+      }
+    }
     const _rcRef = useRef(false)
     useEffect(() => {
       if (activeTab === 'activity' && userIsAdmin && !_rcRef.current) {
@@ -1274,6 +1297,27 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'activity' && userIsAdmin && (
+            <div className={styles.card} style={{ marginBottom: 18 }}>
+              <h3 className={styles.cardTitle}>Report an Issue</h3>
+              <p className={styles.cardDesc}>Spot a bug or something that looks off? File it directly as a GitHub issue -- attaches your account, the current page, and a timestamp automatically.</p>
+              <textarea
+                value={issueText}
+                onChange={e => setIssueText(e.target.value)}
+                placeholder="What's wrong? e.g. 'CPL on this page looks off for July'"
+                rows={3}
+                style={{ width: '100%', resize: 'vertical', padding: '10px 12px', borderRadius: 8, border: '1px solid #d8dded', fontSize: 13.5, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', marginTop: 10 }}
+              />
+              <button
+                type="button"
+                onClick={submitIssue}
+                disabled={issueBusy || !issueText.trim()}
+                style={{ marginTop: 10, padding: '8px 16px', borderRadius: 8, border: 'none', background: issueBusy || !issueText.trim() ? '#94A3B8' : 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: issueBusy || !issueText.trim() ? 'default' : 'pointer' }}>
+                {issueBusy ? 'Sending…' : 'Send report'}
+              </button>
             </div>
           )}
 

@@ -2,7 +2,6 @@ import React, { useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import CommandPalette from './components/CommandPalette'
 import ToastHost from './components/ToastHost'
-import ReportIssueButton from './components/ReportIssueButton'
 import { useAuth } from './hooks/useAuth'
 import { logActivity, pageLabel, installActivityTracker } from './components/ActivityLogger'
 import LoginPage from './pages/LoginPage'; import { prefetchSummaryAnalysis } from './lib/summaryData'
@@ -195,7 +194,6 @@ export default function App() {
       <style>{FADE_STYLE}</style>
       <CommandPalette />
       <ToastHost />
-      <ReportIssueButton />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
