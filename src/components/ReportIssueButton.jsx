@@ -9,8 +9,10 @@ const BLUE = '#1C9FD4'
 // Floating "Report an issue" button, available on every page. Files directly into
 // GitHub Issues via api/github-issue.mjs (kept server-side since it needs a token) --
 // gives any user a way to flag a problem from wherever they noticed it, instead of a
-// Slack message that gets lost. Positioned bottom-left so it never overlaps
-// SnapshotTool's bottom-right camera FAB.
+// Slack message that gets lost. Positioned bottom-left (never overlaps
+// SnapshotTool's bottom-right camera FAB) with bottom:96 to clear the
+// Sidebar's own user-profile footer card, which sits at margin:10 and is
+// ~60-70px tall -- bottom:22 used to render directly on top of it.
 export default function ReportIssueButton() {
   const { user } = useAuth()
   const location = useLocation()
@@ -46,7 +48,7 @@ export default function ReportIssueButton() {
   }
 
   return (
-    <div data-snapshot-ignore="true" style={{ position: 'fixed', left: 22, bottom: 22, zIndex: 9999, fontFamily: "'Plus Jakarta Sans','Inter',sans-serif" }}>
+    <div data-snapshot-ignore="true" style={{ position: 'fixed', left: 22, bottom: 96, zIndex: 9999, fontFamily: "'Plus Jakarta Sans','Inter',sans-serif" }}>
       {open && (
         <div style={{ position: 'absolute', bottom: 56, left: 0, width: 300, background: '#fff', border: '1px solid #E6EAF2', borderRadius: 14, boxShadow: '0 16px 40px rgba(15,31,75,0.20)', padding: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#0F1B33', marginBottom: 8 }}>Report an issue</div>
