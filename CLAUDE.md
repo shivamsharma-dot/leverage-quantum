@@ -182,7 +182,8 @@ Aggregates Meta Ads performance, cross-channel metrics, lead qualification data,
 │   ├── ask-ai.js            # Ask AI chat — Claude Sonnet + Meta tool use (SSE streaming)
 │   ├── img-proxy.js            # Image proxy for Meta creative thumbnails
 │   ├── refresh-meta.mjs        # Meta token refresh
-│   └── google-ads.mjs          # Google Ads data
+│   ├── google-ads.mjs          # Google Ads data
+│   └── bing-ads.mjs            # Bing Ads (Microsoft Advertising) data + async Reporting
 ├── src/
 │   ├── components/
 │   │   ├── Sidebar.jsx         # Nav sidebar (PAGE_LIST is source of truth)
@@ -1792,3 +1793,17 @@ Verification method: `document.documentElement.style.zoom` for quick checks, but
   - **Shared Drive**: create a genuine Shared Drive (NOT a regular folder under My Drive -- tried this first, confirmed via breadcrumb "My Drive > Quantum Exports" that it doesn't count) and add the service account as a Content manager member; backend would create files inside it instead. **Also currently blocked**: clicking "+ New" while on Drive's "Shared drives" view does nothing at all for this account -- the `leverageedu.com` Workspace org appears to have shared-drive creation disabled for regular members, so this ALSO needs a Workspace admin (either to grant the "Shared drive creator" privilege, or to create the Shared Drive themselves).
 - User is going to reach out to whoever holds Workspace super-admin rights for `leverageedu.com` with instructions covering both options (given verbatim in chat, not yet copied into this file verbatim -- ask the user for the outcome/which option they chose next session and follow up per whichever they picked).
 - **RESUME HERE:** once a Workspace admin has done either fix, the code path is already correct except domain-wide delegation needs one more edit -- add `subject: me.email` to the `JWT({...})` constructor in `api/export-to-sheets.mjs` (not yet done, since we don't yet know which path was chosen). If Shared Drive was chosen instead, the endpoint needs a small change to create the file with the Shared Drive folder as parent (Sheets API's own `spreadsheets.create` doesn't take a parent -- would need to either create via Drive API directly with `parents:[sharedDriveId]` + `supportsAllDrives:true`, or create via Sheets then `files.update` to `addParents` via Drive API, removing it from wherever it landed by default).
+
+## 2026-07-14 -- Bing Ads (Microsoft Advertising) integration SHIPPED (full parity)
+
+The Bing Ads build (planned in the "BING ADS ... IN PROGRESS" section above) is now live end-to-end. Chose Option 2 (full parity with Google Ads: live entities + async performance reporting).
+
+**Backend `api/bing-ads.mjs` (new, ~197 lines).** Mode-routed via `?mode=` mirroring `api/google-ads.mjs`: auth-gated with `getSessionUser` + `canAccessDashboard(role, 'bing_ads')` (401 not signed in / 403 forbidden), CORS, `missing_credentials` guard. Modes: `campaigns` (Campaigns/QueryByAccountId), `ad_groups` (AdGroups/QueryByCampaignId), `keywords` (Keywords/QueryByAdGroupId) hit Campaign Management REST v13; `report-submit` + `report-poll` drive the Reporting REST v13 async flow (SubmitGenerateReport -> PollGenerateReport -> download ZIP -> unzip CSV -> parse rows). OAuth token refresh via Google identity provider (`oauth2.googleapis.com/token`, refresh_token grant, scope `msads.manage`). Headers on every MS call: Bearer token + DeveloperToken + CustomerId + CustomerAccountId. Report ZIP is unzipped with **fflate** `unzipSync` (Node has no built-in ZIP parser), CSV parsed with a small RFC4180-ish splitter.
+
+**Dependency + build:** added `fflate ^0.8.2` to `package.json`. Because that desyncs `package-lock.json` (Vercel `npm ci` would fail), added `"installCommand": "npm install"` to `vercel.json` so Vercel reconciles the lock automatically on deploy. (vercel.json previously had only rewrites.)
+
+**Frontend `src/pages/BingAdsDashboard.jsx` (full rewrite of the scaffold).** Now fetches real data from `/api/bing-ads?mode=...` per tab (Campaigns / Ad groups / Keywords / Search terms), with per-tab loading state, 401 -> not-connected empty state, error + Retry, PremKPI summary row (Spend/Clicks/Impressions/Conversions in brand navy/blue/cyan/green), and DataTable per tab. Search terms tab orchestrates the async report client-side (submit -> poll every 3s up to ~60s -> render parsed rows). Uses only dashboardKit primitives (C, FONT, fmtN, Card, PremKPI, KPI_ICONS) + Sidebar + InlineLoader. No gradient changes.
+
+**Function count:** github-issue.mjs deletion earlier freed a slot; adding bing-ads.mjs brings the total to **12/12** (exactly at the Vercel Hobby cap). Any further new `api/*` file needs consolidation or a Pro upgrade.
+
+**REMAINING (user action, cannot be done by Claude):** set the 6 Vercel env vars `BING_ADS_CLIENT_ID`, `BING_ADS_CLIENT_SECRET`, `BING_ADS_REFRESH_TOKEN`, `BING_ADS_DEVELOPER_TOKEN`, `BING_ADS_CUSTOMER_ID`, `BING_ADS_ACCOUNT_ID`. The refresh token must be generated with the `msads.manage` scope (the existing Google Ads refresh token has a different scope and will NOT work for MS). User already has the 3 Microsoft credentials (Developer Token, Customer ID, Account ID) and a Google OAuth client from the Google Ads setup. Until the env vars are set, the page shows the "not connected" state (this is expected, not a bug).
