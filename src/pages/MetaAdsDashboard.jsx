@@ -708,7 +708,7 @@ function CreativesTab({ data }) {
           open={openFilterMenu==='sort'} onToggle={()=>setOpenFilterMenu(v=>v==='sort'?null:'sort')} onSelect={v=>{ setSortBy(v); setOpenFilterMenu(null) }} />
         <div style={{ marginLeft:'auto',display:'flex',gap:5,alignItems:'center',position:'relative',flexShrink:0 }}>
           {viewMode==='list' && (
-            <button type="button" onClick={()=>setColsOpen(v=>!v)} style={{ display:'inline-flex',alignItems:'center',gap:4,padding:'5px 8px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',background:colsOpen?'#1F3C84':'#fff',color:colsOpen?'#fff':'#6B7280' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>Columns</button>
+            <button type="button" onClick={()=>setColsOpen(v=>!v)} title="Columns" style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',width:28,height:28,borderRadius:7,border:'0.5px solid #E5E7EB',cursor:'pointer',flexShrink:0,background:colsOpen?'#1F3C84':'#fff',color:colsOpen?'#fff':'#6B7280' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
           )}
           {colsOpen && (
             <>
@@ -752,7 +752,7 @@ function CreativesTab({ data }) {
             </>
           )}
           <ExportButton data={exportRows} filename="meta_ads_creatives" />
-          {[{m:'grid',l:'⊞ Grid'},{m:'list',l:'☰ List'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} style={{ padding:'5px 8px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
+          {[{m:'grid',l:'⊞',t:'Grid view'},{m:'list',l:'☰',t:'List view'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} title={v.t} style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',width:28,height:28,borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:13,cursor:'pointer',flexShrink:0,background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
         </div>
       </div>
       <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · showing {filtered.length===0?0:((safePage-1)*PER_PAGE+1)}–{Math.min(safePage*PER_PAGE, filtered.length)} · account avg CTR {accCTRpct.toFixed(2)}%</div>
