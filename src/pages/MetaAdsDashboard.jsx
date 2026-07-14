@@ -505,7 +505,7 @@ function CreativesTab({ data }) {
     return map
   })()
   const [viewMode, setViewMode] = useState('list')
-  const PER_PAGE = 12
+  const PER_PAGE = 25
   const [page, setPage] = useState(1)
   const [adTypeFilter, setAdTypeFilter] = useState('all')
   const [healthFilter, setHealthFilter] = useState('all')
