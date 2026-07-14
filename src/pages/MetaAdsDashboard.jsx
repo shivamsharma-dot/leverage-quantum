@@ -446,10 +446,10 @@ function FilterDropdown({ label, value, options, open, onToggle, onSelect, accen
   const current = options.find(o=>o.v===value) || options[0]
   return (
     <div style={{ position:'relative',flexShrink:0 }}>
-      <button type="button" onClick={onToggle} style={{ display:'flex',alignItems:'center',gap:5,padding:'5px 9px',borderRadius:7,border:'0.5px solid '+(open?'#1C9FD4':'#E5E7EB'),background:'#fff',cursor:'pointer',fontSize:11,fontWeight:500,fontFamily:'inherit',color:'#374151',whiteSpace:'nowrap' }}>
+      <button type="button" onClick={onToggle} style={{ display:'flex',alignItems:'center',gap:3,padding:'4px 6px',borderRadius:7,border:'0.5px solid '+(open?'#1C9FD4':'#E5E7EB'),background:'#fff',cursor:'pointer',fontSize:10.5,fontWeight:500,fontFamily:'inherit',color:'#374151',whiteSpace:'nowrap' }}>
         <span style={{ color:'#9CA3AF',fontWeight:600 }}>{label}:</span>
         <span style={{ fontWeight:600,color:accentOf?accentOf(value):'#374151' }}>{current.l}</span>
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink:0,transform:open?'rotate(180deg)':'rotate(0deg)',transition:'transform .15s' }}><polyline points="6 9 12 15 18 9"/></svg>
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink:0,transform:open?'rotate(180deg)':'rotate(0deg)',transition:'transform .15s' }}><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       {open && <div onClick={()=>onToggle()} style={{ position:'fixed',inset:0,zIndex:150 }}/>}
       {open && (
@@ -694,8 +694,8 @@ function CreativesTab({ data }) {
             </div>
           ))}
         </div>
-      <div style={{ display:'flex',gap:5,marginBottom:14,alignItems:'center',flexWrap:'nowrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 12px' }}>
-        <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:100,minWidth:0,flexShrink:1,flexGrow:0,background:'#FAFAFA' }}/>
+      <div style={{ display:'flex',gap:4,marginBottom:14,alignItems:'center',flexWrap:'nowrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'8px 10px' }}>
+        <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 9px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:11.5,fontFamily:'inherit',outline:'none',width:90,minWidth:0,flexShrink:1,flexGrow:0,background:'#FAFAFA' }}/>
         <FilterDropdown label="Format" value={adTypeFilter} options={[{v:'all',l:'All'},{v:'video',l:'Video'},{v:'image',l:'Image'},{v:'carousel',l:'Carousel'}]}
           open={openFilterMenu==='format'} onToggle={()=>setOpenFilterMenu(v=>v==='format'?null:'format')} onSelect={v=>{ setAdTypeFilter(v); setOpenFilterMenu(null) }} />
         <FilterDropdown label="Health" value={healthFilter} options={[{v:'all',l:'All'},{v:'healthy',l:'Healthy'},{v:'moderate',l:'Moderate'},{v:'fatigue',l:'Fatigue'}]}
