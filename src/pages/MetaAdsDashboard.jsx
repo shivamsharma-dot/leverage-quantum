@@ -433,7 +433,7 @@ const CREATIVE_COLS = [
   { key:'aiQL', label:'AI QL', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'—'}</div> },
   { key:'cpl', label:'CPL (Meta)', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cpl) }}>{ad.cpl>0?'₹'+ad.cpl:'—'}</div> },
   { key:'cplCrm', label:'CPL (CRM)', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cplCrm) }}>{ad.cplCrm>0?'₹'+ad.cplCrm:'—'}</div> },
-  { key:'cpql', label:'CPQL', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cpql) }}>{ad.cpql>0?'₹'+ad.cpql:'—'}</div> },
+  { key:'cpql', label:'CPQL', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cpqlCol(ad.cpql) }}>{ad.cpql>0?'₹'+ad.cpql:'—'}</div> },
   { key:'type', label:'Type', width:90, align:'center', render:(ad,ctx)=><span style={{ background:ctx.tBg[ad.type]||'#F3F4F6',color:ctx.tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span> },
   { key:'health', label:'Health', width:100, align:'center', render:(ad,ctx)=><span style={{ background:ctx.hBg[ad.fatigueLabel]||'#E9F8EF',color:ctx.hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span> },
   { key:'spend', label:'Spend', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div> },
@@ -559,7 +559,9 @@ function CreativesTab({ data }) {
     const actions = cur.actions||[], leads = getAction(actions,'lead')
     const cpl = leads>0?Math.round(spend/leads):0
     const cplCrm = ad.crmLeads>0 ? Math.round(spend/ad.crmLeads) : 0
-    const totalQL = (ad.humanQL!=null || ad.aiQL!=null) ? ((ad.humanQL||0)+(ad.aiQL||0)) : null
+    // These leads are never sent to Futwork to qualify, so any CPQL computed for them is not meaningful -- always null.
+    const noQlSource = /mbbs|ivy100|nigeria/i.test(ad.name||'')
+    const totalQL = noQlSource ? null : (ad.humanQL!=null || ad.aiQL!=null) ? ((ad.humanQL||0)+(ad.aiQL||0)) : null
     const cpql = totalQL>0 ? Math.round(spend/totalQL) : 0
     const convRate = clicks>0?(leads/clicks*100):0
     const spendShare = accSpend>0?(spend/accSpend*100):0
@@ -666,6 +668,7 @@ function CreativesTab({ data }) {
   const tColor={video:'#1D4ED8',image:'#374151',carousel:'#0E93A6'}
   const tBg={video:'#EFF6FF',image:'#F3F4F6',carousel:'#E6FBFC'}
   const cplCol=v=>v>300?'#1F3C84':v>150?'#1C9FD4':v>0?'#4CAE6F':'#9CA3AF'
+  const cpqlCol=v=>v>3000?'#1F3C84':v>0?'#4CAE6F':'#9CA3AF'
   const fmtN=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':String(Math.round(n||0))
   const SB=({score})=>(<div style={{ display:'flex',alignItems:'center',gap:5 }}><div style={{ flex:1,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:score+'%',background:score>65?'#4CAE6F':score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,fontWeight:700,color:'#6B7280',minWidth:22 }}>{score}</span></div>)
   return (
@@ -800,7 +803,7 @@ function CreativesTab({ data }) {
                   <button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:12,lineHeight:1,padding:2,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
                 </div>
                 <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8 }}>
-                  {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL (Meta)',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'—',w:ad.cpl>300},{l:'CPL (CRM)',v:ad.cplCrm>0?'₹'+ad.cplCrm.toLocaleString('en-IN'):'—'},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:ad.leads>0?ad.leads.toLocaleString('en-IN'):'\u2014'},{l:'Human QL',v:ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'—'},{l:'AI QL',v:ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'—'},{l:'CPQL',v:ad.cpql>0?'₹'+ad.cpql.toLocaleString('en-IN'):'—'},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'—',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'—'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#1F3C84':'#111827' }}>{m.v}</div></div>)}
+                  {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL (Meta)',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'—',w:ad.cpl>300},{l:'CPL (CRM)',v:ad.cplCrm>0?'₹'+ad.cplCrm.toLocaleString('en-IN'):'—'},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:ad.leads>0?ad.leads.toLocaleString('en-IN'):'\u2014'},{l:'Human QL',v:ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'—'},{l:'AI QL',v:ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'—'},{l:'CPQL',v:ad.cpql>0?'₹'+ad.cpql.toLocaleString('en-IN'):'—',w:ad.cpql>3000},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'—',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'—'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#1F3C84':'#111827' }}>{m.v}</div></div>)}
                 </div>
                 {ad.ctrDelta!==null&&<div style={{ fontSize:11,color:ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',marginBottom:6,fontWeight:500 }}>{ad.ctrDelta>=0?'▲':'▼'} CTR {Math.abs(ad.ctrDelta).toFixed(1)}% vs last week</div>}
                 <div style={{ padding:'7px 10px',background:'#EFF6FF',borderRadius:7,marginBottom:6 }}><div style={{ fontSize:9,color:'#1D4ED8',fontWeight:600,textTransform:'uppercase',marginBottom:2,letterSpacing:'0.05em' }}>Hook Rate</div><div style={{ fontSize:14,fontWeight:700,color:'#1D4ED8' }}>{ad.hookRate>0?ad.hookRate.toFixed(1)+'%':'\u2014'}</div></div>
@@ -855,7 +858,7 @@ function CreativesTab({ data }) {
                 const c=CREATIVE_COLS.find(cc=>cc.key===k)
                 const isPinned = pinnedCols.includes(k)
                 const cellStyle = { textAlign:c&&c.align==='center'?'center':'left', display:'flex', alignItems:'center', justifyContent:c&&c.align==='center'?'center':'flex-start', ...(isPinned ? { position:'sticky',left:pinnedLeftMap[k],zIndex:1,background:'#fff',alignSelf:'stretch',borderRight:displayOrder.filter(x=>pinnedCols.includes(x)).slice(-1)[0]===k?'1px solid #F3F4F6':'none' } : {}) }
-                return c ? <div key={k} style={cellStyle}>{c.render(ad,{cplCol,tBg,tColor,hBg,hColor,accCTRpct})}</div> : null
+                return c ? <div key={k} style={cellStyle}>{c.render(ad,{cplCol,cpqlCol,tBg,tColor,hBg,hColor,accCTRpct})}</div> : null
               })}
             </div>
           ))}
