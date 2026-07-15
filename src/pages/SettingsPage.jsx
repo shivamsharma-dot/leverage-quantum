@@ -1323,9 +1323,18 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       </div>
 
                       {isEditing && (
-                        <div className={styles.editPanel}>
-                          <p className={styles.editLabel}>Edit Permissions</p>
-                          <div className={styles.roleOptions}>
+                        <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setEditingUser(null) }}>
+                        <div className={styles.editModalCard}>
+                          <div className={styles.dsModalHead}>
+                            <div>
+                              <div className={styles.dsModalTitle}>Edit permissions</div>
+                              <p className={styles.dsModalSub} style={{ margin: '2px 0 0' }}>{u.email}</p>
+                            </div>
+                            <button type="button" className={styles.dsModalClose} onClick={() => setEditingUser(null)}>
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                            </button>
+                          </div>
+                          <div className={styles.roleOptions} style={{ marginTop: 16 }}>
                             <label className={`${styles.roleOption} ${editIsAdmin ? styles.roleOptionActive : ''}`}>
                               <input type="radio" name="role" checked={editIsAdmin} onChange={() => { setEditIsAdmin(true); setEditIsViewer(false) }} />
                               Admin <span className={styles.roleHint}>Full access</span>
@@ -1377,6 +1386,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             </button>
                             <button className={styles.ghostBtn} onClick={() => setEditingUser(null)}>Cancel</button>
                           </div>
+                        </div>
                         </div>
                       )}
                     </div>
