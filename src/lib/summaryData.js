@@ -9,6 +9,9 @@ import { resolveSheetUrl } from './dataSources'
 
 const AD_ACCOUNT = 'act_641914389215638'
 const QLOPS_DAILY_DEFAULT = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Qlops'
+const QLOPS_MONTHLY_DEFAULT = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=QLSnapshot'
+const MQ_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const periodKey = (p) => { const m = String(p || '').match(/([A-Za-z]{3})[a-z]*-(\d{4})/); return m ? (parseInt(m[2], 10) * 12 + MQ_MON.indexOf(m[1])) : 0 }
 
 export const CACHE_KEY = 'summary_analysis'
 let inflight = null
@@ -99,6 +102,54 @@ async function fetchQlopsDaily() {
   }
 }
 
+async function fetchQlopsMonthly() {
+  try {
+    const url = await resolveSheetUrl('qlopsMonthly', QLOPS_MONTHLY_DEFAULT)
+    const csv = await fetch(url).then(r => (r.ok ? r.text() : ''))
+    if (!csv) return []
+    const rows = csv.trim().split('\n').map(parseCsvRow)
+    const [hdr, ...data] = rows
+    const low = hdr.map((x) => x.toLowerCase().trim())
+    const h = (k) => low.indexOf(k)
+    const num = (v) => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n }
+    const iPeriod = h('period')
+    if (iPeriod === -1) return []
+    return data
+      .filter((r) => r.length > 1 && (r[iPeriod] || '').trim())
+      .map((r) => ({
+        period: (r[iPeriod] || '').trim(),
+        source: (r[h('source')] || '').trim(),
+        oppCount: num(r[h('opp_count')]),
+        floorQueued: num(r[h('floor_queued')]),
+        futworkQualified: num(r[h('futwork_qualified')]),
+        superbotQualified: num(r[h('superbot_qualified')]),
+        futworkAiQualified: num(r[h('futwork_ai_qualified')]),
+      }))
+  } catch (e) {
+    console.error('summaryData: qlops monthly fetch failed', e)
+    return []
+  }
+}
+
+function buildMonthlyQlSeries(monthlyQl) {
+  const periods = {}
+  monthlyQl.forEach((r) => {
+    const p = (periods[r.period] = periods[r.period] || { period: r.period, oppCount: 0, floorQueued: 0, totalQL: 0 })
+    p.oppCount += r.oppCount
+    p.floorQueued += r.floorQueued
+    p.totalQL += r.futworkQualified + r.superbotQualified + r.futworkAiQualified
+  })
+  const periodRows = Object.values(periods).sort((a, b) => periodKey(a.period) - periodKey(b.period))
+  const latestPeriod = periodRows.length ? periodRows[periodRows.length - 1].period : null
+  const bySource = {}
+  monthlyQl.filter((r) => r.period === latestPeriod).forEach((r) => {
+    const s = (bySource[r.source || 'Unknown'] = bySource[r.source || 'Unknown'] || { source: r.source || 'Unknown', totalQL: 0 })
+    s.totalQL += r.futworkQualified + r.superbotQualified + r.futworkAiQualified
+  })
+  const bySourceRows = Object.values(bySource).sort((a, b) => b.totalQL - a.totalQL).slice(0, 6)
+  return { periodRows, bySourceRows }
+}
+
 function buildSeries(metaDaily, qlDaily) {
   const days = {}
   const ensure = (k) => (days[k] = days[k] || { date: k, spend: 0, clicks: 0, impressions: 0, metaLeads: 0, ql: 0, futwork: 0, superbot: 0 })
@@ -141,9 +192,10 @@ export async function loadSummaryAnalysis(bust) {
     if (inflight) return inflight
   }
   inflight = (async () => {
-    const results = await Promise.all([fetchMetaDaily(), fetchQlopsDaily()])
+    const results = await Promise.all([fetchMetaDaily(), fetchQlopsDaily(), fetchQlopsMonthly()])
     const built = buildSeries(results[0], results[1])
-    const result = { dayRows: built.dayRows, monthRows: built.monthRows, ts: new Date() }
+    const monthlyQl = buildMonthlyQlSeries(results[2])
+    const result = { dayRows: built.dayRows, monthRows: built.monthRows, monthlyQlPeriods: monthlyQl.periodRows, monthlyQlBySource: monthlyQl.bySourceRows, ts: new Date() }
     setSession(CACHE_KEY, result)
     inflight = null
     return result

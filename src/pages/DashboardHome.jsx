@@ -131,6 +131,7 @@ function SectionIcon({ id, color }) {
     meta: <><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z'/></>,
     qlops: <><path d='M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M23 21v-2a4 4 0 00-3-3.87'/><path d='M16 3.13a4 4 0 010 7.75'/></>,
     calendar: <><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></>,
+    monthlyql: <><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/><path d='M8 15l2.5 2.5L16 12'/></>,
   }
   return (
     <svg width='19' height='19' viewBox='0 0 24 24' fill='none' stroke={color} strokeWidth='1.8' strokeLinecap='round' strokeLinejoin='round'>
@@ -162,8 +163,8 @@ function AnalysisSection({ icon, color, title, tagline, insight, stats, dod, mom
       </div>
 
       <div style={{ display:'flex', gap:28, marginBottom:20, flexWrap:'wrap' }}>
-        <ChartPanel title={'Day on Day \u00b7 last 14 days'} data={dod.data} xKey='label' yKey={dod.key} color={color} valueFmt={dod.fmt} chartType={dod.type||'area'}/>
-        <ChartPanel title={'Month on Month \u00b7 last 6 months'} data={mom.data} xKey='label' yKey={mom.key} color={color} valueFmt={mom.fmt} chartType={mom.type||'bar'}/>
+        <ChartPanel title={dod.title || 'Day on Day \u00b7 last 14 days'} data={dod.data} xKey='label' yKey={dod.key} color={color} valueFmt={dod.fmt} chartType={dod.type||'area'}/>
+        <ChartPanel title={mom.title || 'Month on Month \u00b7 last 6 months'} data={mom.data} xKey='label' yKey={mom.key} color={color} valueFmt={mom.fmt} chartType={mom.type||'bar'}/>
       </div>
 
       <div style={{ display:'flex', gap:10, alignItems:'flex-start', background:color+'0C', border:'0.5px solid '+color+'22', borderRadius:12, padding:'12px 15px' }}>
@@ -192,6 +193,16 @@ function qlAnalystLine(M) {
   const share = M.futworkSharePct
   const mixNote = (share === null || share === undefined) ? '' : (' Futwork is driving ' + share.toFixed(0) + '% of this month\u2019s qualified volume, with Superbot contributing the remaining ' + (100-share).toFixed(0) + '%.')
   return 'Qualified leads ' + qlVerb + ' to ' + fmtN(M.lastDay.ql) + ' yesterday.' + mixNote
+}
+
+function monthlyQlAnalystLine(M) {
+  const mq = M.monthlyQl
+  if (!mq.cur.period) return 'Monthly QL trends will appear here once the Monthly QLs sheet has data for this period.'
+  const d = mq.conversionDeltaPct
+  const verb = (d === null || Math.abs(d) < 3) ? 'is tracking in line with' : d > 0 ? ('is running ' + Math.abs(d).toFixed(0) + '% above') : ('is running ' + Math.abs(d).toFixed(0) + '% below')
+  const top = M.monthlyQlBySource[0]
+  const sourceNote = top ? (' ' + top.source + ' is leading ' + mq.cur.period + ' with ' + fmtN(top.totalQL) + ' qualified leads.') : ''
+  return mq.cur.period + ' queued-to-QL conversion is ' + mq.conversion.toFixed(1) + '%, which ' + verb + ' last month.' + sourceNote
 }
 
 function mtdAnalystLine(M) {
@@ -239,13 +250,30 @@ export default function DashboardHome() {
     const pct = (cur, prev) => (prev ? ((cur-prev)/prev)*100 : null)
     const mtdCPQL = curMonthRow.ql ? curMonthRow.spend/curMonthRow.ql : 0
     const prevMonthCPQL = (prevMonthRow && prevMonthRow.ql) ? prevMonthRow.spend/prevMonthRow.ql : 0
+
+    const mqPeriods = analysis?.monthlyQlPeriods || []
+    const mqBySource = analysis?.monthlyQlBySource || []
+    const mqCur = mqPeriods[mqPeriods.length-1] || { period:'', oppCount:0, floorQueued:0, totalQL:0 }
+    const mqPrev = mqPeriods[mqPeriods.length-2] || null
+    const mqConversion = mqCur.floorQueued ? (mqCur.totalQL/mqCur.floorQueued*100) : 0
+    const mqPrevConversion = (mqPrev && mqPrev.floorQueued) ? (mqPrev.totalQL/mqPrev.floorQueued*100) : 0
+    const mqMom = mqPeriods.slice(-6).map(r => ({ ...r, label: r.period, conversion: r.floorQueued ? (r.totalQL/r.floorQueued*100) : 0 }))
+    const mqSourceChart = mqBySource.map(r => ({ ...r, label: r.source }))
+    const monthlyQl = {
+      cur: mqCur, prev: mqPrev, conversion: mqConversion, prevConversion: mqPrevConversion,
+      conversionDeltaPct: mqPrevConversion ? pct(mqConversion, mqPrevConversion) : null,
+      totalQLDeltaPct: (mqPrev && mqPrev.totalQL) ? pct(mqCur.totalQL, mqPrev.totalQL) : null,
+      mom: mqMom, bySource: mqSourceChart,
+    }
+
     return {
-      lastDay, prevDay, dod, mom, curMonthRow, prevMonthRow, mtdCPQL, prevMonthCPQL,
+      lastDay, prevDay, dod, mom, curMonthRow, prevMonthRow, mtdCPQL, prevMonthCPQL, monthlyQl,
       spendDeltaPct: pct(lastDay?.spend||0, prevDay?.spend||0),
       leadsDeltaPct: pct(lastDay?.metaLeads||0, prevDay?.metaLeads||0),
       qlDeltaPct: pct(lastDay?.ql||0, prevDay?.ql||0),
       mtdCPQLDeltaPct: prevMonthCPQL ? pct(mtdCPQL, prevMonthCPQL) : null,
       futworkSharePct: curMonthRow.ql ? (curMonthRow.futwork/curMonthRow.ql*100) : null,
+      monthlyQlBySource: mqBySource,
     }
   }, [analysis])
 
@@ -320,6 +348,18 @@ export default function DashboardHome() {
             ]}
             dod={{ data:M.dod, key:'cpql', fmt:(v)=>fmtC(v), type:'area' }}
             mom={{ data:M.mom, key:'cpql', fmt:(v)=>fmtC(v), type:'bar' }}
+          />
+
+          <AnalysisSection
+            icon='monthlyql' color={C.cyan} title='Monthly QLs' tagline='Queued-to-qualified conversion by source -- this month by source, month-on-month'
+            insight={monthlyQlAnalystLine(M)} loading={loading}
+            stats={[
+              { label:(M.monthlyQl.cur.period||'This Month')+' Total QLs', value: fmtN(M.monthlyQl.cur.totalQL||0), deltaPct: M.monthlyQl.totalQLDeltaPct, deltaLabel:'vs last month' },
+              { label:'Floor Queued (Month)', value: fmtN(M.monthlyQl.cur.floorQueued||0), deltaLabel:'Leads queued for qualification' },
+              { label:'Queued → QL Conversion', value: M.monthlyQl.conversion.toFixed(1)+'%', deltaPct: M.monthlyQl.conversionDeltaPct, deltaLabel:'vs last month' },
+            ]}
+            dod={{ data:M.monthlyQl.bySource, key:'totalQL', fmt:(v)=>fmtN(v), type:'bar', title:(M.monthlyQl.cur.period||'This month')+' by source' }}
+            mom={{ data:M.monthlyQl.mom, key:'totalQL', fmt:(v)=>fmtN(v), type:'bar', title:'Month on Month · last 6 months' }}
           />
         </div>
       </main>
