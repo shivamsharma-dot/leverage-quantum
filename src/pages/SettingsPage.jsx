@@ -719,6 +719,10 @@ export default function SettingsPage() {
   const [rcTesting, setRcTesting] = useState(false)
   const [rcSendType, setRcSendType] = useState('daily')
   const [rcSending, setRcSending] = useState(false)
+  const [editReportOpen, setEditReportOpen] = useState(false)
+  const [sendReportOpen, setSendReportOpen] = useState(false)
+  const [recipientsOpen, setRecipientsOpen] = useState(false)
+  const [sendAudience, setSendAudience] = useState('test')
   const [editingUser, setEditingUser] = useState(null)
   const [editIds, setEditIds] = useState([])
   const [editIsAdmin, setEditIsAdmin] = useState(false)
@@ -860,13 +864,12 @@ export default function SettingsPage() {
   }
 
   const sendTestReport = async () => {
-    if (!window.confirm('Send a TEST report to only your own email (' + (user?.email || 'you') + ')? No one else will receive it.')) return
     setRcTesting(true); setRcMsg('')
     try {
       const r = await fetch('/api/send-report', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'daily', recipients: [user?.email].filter(Boolean), triggered_by: 'test' }),
+        body: JSON.stringify({ type: rcSendType, recipients: [user?.email].filter(Boolean), triggered_by: 'test' }),
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed')
@@ -876,7 +879,6 @@ export default function SettingsPage() {
   }
 
   const sendReportNow = async () => {
-  if (!window.confirm('Send the ' + rcSendType + ' report now to ALL configured recipients?')) return
 setRcSending(true); setRcMsg('')
 try {
   const r = await fetch('/api/send-report', {
@@ -1547,77 +1549,162 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           {/* --------------- REPORTS --------------- */}
           {activeTab === 'reports' && userIsAdmin && (
             <>
-              <div className={styles.card}>
-                <h3 className={styles.cardTitle}>Email Sender</h3>
-                <p className={styles.cardDesc}>Name and address that report emails are sent from. The address domain must be verified in Resend (currently platform.leverageedu.com).</p>
-                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 12 }}>
-                  <label style={{ flex: 1, minWidth: 220, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: '#1F3C84' }}>Sender name
-                    <input value={rcName} onChange={e => setRcName(e.target.value)} placeholder="Leverage Quantum" style={{ padding: '8px 12px', border: '1px solid #d8dded', borderRadius: 8, fontSize: 14, fontWeight: 400 }} />
-                  </label>
-                  <label style={{ flex: 1, minWidth: 220, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: '#1F3C84' }}>Sender email
-                    <input value={rcEmail} onChange={e => setRcEmail(e.target.value)} placeholder="quantum@platform.leverageedu.com" style={{ padding: '8px 12px', border: '1px solid #d8dded', borderRadius: 8, fontSize: 14, fontWeight: 400 }} />
-                  </label>
-                </div>
-                {rcEmail && !rcEmail.endsWith('@platform.leverageedu.com') && (<p style={{ color: '#8a6d1f', fontSize: 12, marginTop: 8 }}>Note: this address is not on the verified domain platform.leverageedu.com — Resend may reject it.</p>)}
-              </div>
-              <div className={styles.card}>
-                <h3 className={styles.cardTitle}>Subject Lines</h3>
-                <p className={styles.cardDesc}>Optional overrides per report type. Leave blank to use the default subject.</p>
-                {['daily', 'weekly', 'monthly'].map(t => (
-                  <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10, fontSize: 13, fontWeight: 600, color: '#1F3C84' }}>
-                    <span style={{ width: 70, textTransform: 'capitalize' }}>{t}</span>
-                    <input value={rcSubjects[t]} onChange={e => setRcSubjects(prev => ({ ...prev, [t]: e.target.value }))} placeholder={'Default ' + t + ' subject'} style={{ flex: 1, padding: '8px 12px', border: '1px solid #d8dded', borderRadius: 8, fontSize: 14, fontWeight: 400 }} />
-                  </label>
-                ))}
-              </div>
-              <div className={styles.card}>
-                <h3 className={styles.cardTitle}>Automatic Reports</h3>
-                <p className={styles.cardDesc}>Master switch for scheduled (cron) reports. Turning this off stops all automatic sends; manual Send Report buttons still work.</p>
-                <label className={styles.reportsToggle} style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                  <input type="checkbox" className={styles.premToggle} checked={rcAuto} onChange={e => setRcAuto(e.target.checked)} />
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#1F3C84' }}>{rcAuto ? 'Automatic reports enabled' : 'Automatic reports disabled'}</span>
-                </label>
-              </div>
-              <div className={styles.card}>
-                <h3 className={styles.cardTitle}>Recipients</h3>
-                <p className={styles.cardDesc}>People who currently receive reports (toggled per user in the User Access tab):</p>
-                <p style={{ fontSize: 13, color: '#1F3C84', fontWeight: 600, marginTop: 8, lineHeight: 1.6 }}>{accessList.filter(u => u.receive_reports).map(u => u.email).join(', ') || 'No one selected — reports fall back to ' + (user?.email || 'admin')}</p>
-          <div style={{ marginTop: 14, borderTop: '0.5px solid #E2E8F0', paddingTop: 12 }}>
-            <p style={{ fontSize: 12, fontWeight: 600, color: '#64748B', margin: '0 0 8px', letterSpacing: '0.02em' }}>Per-recipient report types</p>
-            <p style={{ fontSize: 11.5, color: '#94A3B8', margin: '0 0 10px', lineHeight: 1.5 }}>Choose which scheduled reports each person receives. Unchecking all three is the same as receiving all.</p>
-            {accessList.filter(u => u.receive_reports).length === 0 ? (
-              <p style={{ fontSize: 12, color: '#94A3B8' }}>No recipients yet — enable people in the User Access tab.</p>
-            ) : accessList.filter(u => u.receive_reports).map(u => {
-              const types = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily','weekly','monthly']
-              return (
-                <div key={u.email} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: '0.5px solid #F1F5F9', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 12.5, color: '#1F3C84', fontWeight: 500 }}>{u.email}</span>
-                  <div style={{ display: 'flex', gap: 14 }}>
-                    {['daily','weekly','monthly'].map(t => (
-                      <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#475569', cursor: 'pointer', textTransform: 'capitalize' }}>
-                        <input type="checkbox" checked={types.includes(t)} onChange={e => toggleReportType(u, t, e.target.checked)} />
-                        {t}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-              </div>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
-                <button className={styles.primaryBtn} onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving\u2026' : 'Save report settings'}</button>
-                <button className={styles.ghostBtn} onClick={sendTestReport} disabled={rcTesting}>{rcTesting ? 'Sending\u2026' : 'Send test to me only'}</button>
-                <Dropdown
-                  value={rcSendType}
-                  onChange={setRcSendType}
-                  disabled={rcSending}
-                  options={[{ value: 'daily', label: 'Daily report' }, { value: 'weekly', label: 'Weekly report' }, { value: 'monthly', label: 'Monthly report' }]}
-                  minWidth={130}
-                />
-                <button className={styles.primaryBtn} onClick={sendReportNow} disabled={rcSending}>{rcSending ? 'Sending\u2026' : 'Send now'}</button>
-                {rcMsg && <span style={{ fontSize: 13, fontWeight: 600, color: rcMsg.charAt(0) === '\u2715' ? '#b4413c' : '#4CAE6F' }}>{rcMsg}</span>}
-              </div>
+              {(() => {
+                const reportRecipients = accessList.filter(u => u.receive_reports)
+                const recipCount = reportRecipients.length
+                return (
+                  <>
+                    <div className={styles.card} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <h3 className={styles.cardTitle} style={{ marginBottom: 0 }}>Scheduled reports</h3>
+                        <span className={styles.reportsPill + ' ' + (rcAuto ? styles.reportsPillOn : styles.reportsPillOff)}>
+                          <span className={styles.reportsPillDot} />
+                          {rcAuto ? 'Auto-send on' : 'Auto-send off'}
+                        </span>
+                        <button type="button" className={styles.reportsPill + ' ' + styles.reportsPillLink} onClick={() => setRecipientsOpen(true)}>
+                          {recipCount} recipient{recipCount === 1 ? '' : 's'}
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button className={styles.ghostBtn} onClick={() => setEditReportOpen(true)}>Edit settings</button>
+                        <button className={styles.primaryBtn} onClick={() => { setSendAudience('test'); setRcMsg(''); setSendReportOpen(true) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                          Send Report
+                        </button>
+                      </div>
+                    </div>
+
+                    {editReportOpen && (
+                      <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setEditReportOpen(false) }}>
+                        <div className={styles.dsModal}>
+                          <div className={styles.dsModalHead}>
+                            <div className={styles.dsModalTitle}>Edit report settings</div>
+                            <button type="button" className={styles.dsModalClose} onClick={() => setEditReportOpen(false)}>
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                            </button>
+                          </div>
+                          <p className={styles.dsModalSub}>Sender identity, per-type subject overrides, and whether scheduled sends run automatically.</p>
+                          <div className={styles.dsField}>
+                            <label>Sender name</label>
+                            <input value={rcName} onChange={e => setRcName(e.target.value)} placeholder="Leverage Quantum" />
+                          </div>
+                          <div className={styles.dsField}>
+                            <label>Sender email</label>
+                            <input value={rcEmail} onChange={e => setRcEmail(e.target.value)} placeholder="quantum@platform.leverageedu.com" />
+                            {rcEmail && !rcEmail.endsWith('@platform.leverageedu.com') && (
+                              <p className={styles.domainWarn}>Note: this address is not on the verified domain platform.leverageedu.com -- Resend may reject it.</p>
+                            )}
+                          </div>
+                          {['daily', 'weekly', 'monthly'].map(t => (
+                            <div className={styles.dsField} key={t}>
+                              <label style={{ textTransform: 'capitalize' }}>{t} subject</label>
+                              <input value={rcSubjects[t]} onChange={e => setRcSubjects(prev => ({ ...prev, [t]: e.target.value }))} placeholder={'Default ' + t + ' subject'} />
+                            </div>
+                          ))}
+                          <div className={styles.reportsToggleRow}>
+                            <div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>Automatic reports</div>
+                              <div style={{ fontSize: 11.5, color: '#94A3B8' }}>Scheduled (cron) sends run on their own. Turning this off only stops automatic sends -- Send Report still works.</div>
+                            </div>
+                            <input type="checkbox" className={styles.premToggle} checked={rcAuto} onChange={e => setRcAuto(e.target.checked)} />
+                          </div>
+                          {rcMsg && <p className={styles.rcFeedback + ' ' + (rcMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{rcMsg}</p>}
+                          <div className={styles.dsModalActions}>
+                            <button className={styles.dsBtnGhost} onClick={() => setEditReportOpen(false)}>Cancel</button>
+                            <button className={styles.dsBtnPrimary} onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving…' : 'Save changes'}</button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {sendReportOpen && (
+                      <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setSendReportOpen(false) }}>
+                        <div className={styles.dsModal}>
+                          <div className={styles.dsModalHead}>
+                            <div className={styles.dsModalTitle}>Send Report</div>
+                            <button type="button" className={styles.dsModalClose} onClick={() => setSendReportOpen(false)}>
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                            </button>
+                          </div>
+                          <p className={styles.dsModalSub}>Choose what to send and who gets it -- this fires immediately, outside the schedule.</p>
+                          <div className={styles.dsField}>
+                            <label>Report type</label>
+                            <Dropdown
+                              value={rcSendType}
+                              onChange={setRcSendType}
+                              disabled={rcSending || rcTesting}
+                              options={[{ value: 'daily', label: 'Daily report' }, { value: 'weekly', label: 'Weekly report' }, { value: 'monthly', label: 'Monthly report' }]}
+                              minWidth={200}
+                            />
+                          </div>
+                          <label className={styles.sendRadioCard + (sendAudience === 'test' ? ' ' + styles.sendRadioCardActive : '')} onClick={() => setSendAudience('test')}>
+                            <input type="radio" name="sendAudience" checked={sendAudience === 'test'} readOnly />
+                            <div>
+                              <div className={styles.sendRadioTitle}>Test to me only</div>
+                              <div className={styles.sendRadioDesc}>Sends to {user?.email || 'you'} -- no one else sees it.</div>
+                            </div>
+                          </label>
+                          <label className={styles.sendRadioCard + (sendAudience === 'all' ? ' ' + styles.sendRadioCardActive : '')} onClick={() => setSendAudience('all')}>
+                            <input type="radio" name="sendAudience" checked={sendAudience === 'all'} readOnly />
+                            <div>
+                              <div className={styles.sendRadioTitle}>All configured recipients</div>
+                              <div className={styles.sendRadioDesc}>Sends to everyone currently opted in.</div>
+                            </div>
+                          </label>
+                          {sendAudience === 'all' && (
+                            <div className={styles.sendWarnBox}>This will email <strong>{recipCount}</strong> {recipCount === 1 ? 'person' : 'people'} right now. This can't be undone.</div>
+                          )}
+                          {rcMsg && <p className={styles.rcFeedback + ' ' + (rcMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{rcMsg}</p>}
+                          <div className={styles.dsModalActions}>
+                            <button className={styles.dsBtnGhost} onClick={() => setSendReportOpen(false)}>Cancel</button>
+                            <button className={styles.dsBtnPrimary} disabled={rcTesting || rcSending} onClick={() => sendAudience === 'test' ? sendTestReport() : sendReportNow()}>
+                              {sendAudience === 'test' ? (rcTesting ? 'Sending…' : 'Send test') : (rcSending ? 'Sending…' : 'Send to ' + recipCount + ' recipient' + (recipCount === 1 ? '' : 's'))}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {recipientsOpen && (
+                      <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setRecipientsOpen(false) }}>
+                        <div className={styles.dsModal}>
+                          <div className={styles.dsModalHead}>
+                            <div className={styles.dsModalTitle}>Recipients</div>
+                            <button type="button" className={styles.dsModalClose} onClick={() => setRecipientsOpen(false)}>
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                            </button>
+                          </div>
+                          <p className={styles.dsModalSub}>Choose which scheduled reports each person gets. Unchecking all three for someone is the same as receiving all -- it's not an opt-out. To add or remove someone entirely, use their Reports toggle in User Access.</p>
+                          {recipCount === 0 ? (
+                            <p style={{ fontSize: 12, color: '#94A3B8' }}>No recipients yet -- enable people in the User Access tab.</p>
+                          ) : reportRecipients.map(u => {
+                            const types = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily', 'weekly', 'monthly']
+                            return (
+                              <div key={u.email} className={styles.recipRow}>
+                                <span className={styles.recipName}>{u.email}</span>
+                                <div className={styles.recipTypes}>
+                                  {['daily', 'weekly', 'monthly'].map(t => (
+                                    <button key={t} type="button"
+                                      className={styles.rtChip + (types.includes(t) ? ' ' + styles.rtChipOn : '')}
+                                      onClick={() => toggleReportType(u, t, !types.includes(t))}>
+                                      {t}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )
+                          })}
+                          <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 12, lineHeight: 1.5 }}>If no one is opted in, reports fall back to the admin account ({user?.email || 'admin'}) so sends never go nowhere.</p>
+                          <div className={styles.dsModalActions}>
+                            <button className={styles.dsBtnGhost} onClick={() => setRecipientsOpen(false)}>Close</button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
 
               <div className={styles.card}>
                 <div className={styles.activityHeader}>
@@ -1648,8 +1735,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <tbody>
                         {reportLogsList.map((log,idx)=>{
                           const STATUS = {
-                            sent:    { c:'#2E7D4F', bg:'#E9F8EF', label:'Sent' },
-                            skipped: { c:'#1577A0', bg:'#E3F5FD', label:'Skipped' },
+                            sent:    { c:'#4CAE6F', bg:'#EAF7EE', label:'Sent' },
+                            skipped: { c:'#1C9FD4', bg:'#E8F6FA', label:'Skipped' },
                             failed:  { c:'#1F3C84', bg:'#E8EFF9', label:'Failed' },
                           }
                           const s = STATUS[log.status] || { c:'#64748B', bg:'#F1F5F9', label: log.status||'Unknown' }
