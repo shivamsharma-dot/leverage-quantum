@@ -178,10 +178,15 @@ function RecordingPlayer({ row, onClose }) {
         onEnded={() => setPlaying(false)}
         onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 330 }} title={title}>{title}</div>
-        <button type="button" onClick={onClose} title="Close" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-        </button>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 290 }} title={title}>{title}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <a href={row.recordingUrl} download={(row.prospectId || 'recording') + '.mp3'} target="_blank" rel="noreferrer" title="Download recording" style={{ color: C.muted, display: 'flex', alignItems: 'center' }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+          </a>
+          <button type="button" onClick={onClose} title="Close" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'flex', alignItems: 'center' }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button type="button" onClick={() => skip(-10)} title="Back 10s" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.text, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
@@ -398,10 +403,16 @@ export default function AIQLDetailDashboard() {
       case 'degreeStatus': return r.degreeStatus || '—'
       case 'callDuration': return fmtDur(r.callDuration)
       case 'recordingUrl': return r.recordingUrl ? (
-        <button type="button" onClick={e => { e.stopPropagation(); setPlayingRow(r) }}
-          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.blue, fontWeight: 600, fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg> Play
-        </button>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <button type="button" onClick={e => { e.stopPropagation(); setPlayingRow(r) }}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.blue, fontWeight: 600, fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg> Play
+          </button>
+          <a href={r.recordingUrl} download={(r.prospectId || 'recording') + '.mp3'} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+            title="Download recording" style={{ color: C.muted, display: 'inline-flex', alignItems: 'center' }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+          </a>
+        </span>
       ) : '—'
       case 'prospectId': return r.prospectId ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'monospace', fontSize: 11 }} title={'Open Contact in LeadSquared: ' + r.prospectId}>
