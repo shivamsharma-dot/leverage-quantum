@@ -846,6 +846,8 @@ export default function SettingsPage() {
   const [rpType, setRpType] = useState('daily')
   const [rpView, setRpView] = useState('desktop')
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [recipSearch, setRecipSearch] = useState('')
+  const [bulkType, setBulkType] = useState(null)
   const [editingUser, setEditingUser] = useState(null)
   const [editIds, setEditIds] = useState([])
   const [editIsAdmin, setEditIsAdmin] = useState(false)
@@ -961,6 +963,32 @@ export default function SettingsPage() {
       body: JSON.stringify({ email: u.email, report_types: next }),
     })
     loadUsers()
+  }
+
+  // Bulk-toggle one report type across a set of recipients (e.g. the search-filtered list).
+  // If everyone in the set already has it on, turns it off for everyone; otherwise turns it on for everyone.
+  const bulkToggleReportType = async (recipients, type) => {
+    if (!recipients.length || bulkType) return
+    const allOn = recipients.every(u => {
+      const types = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily', 'weekly', 'monthly']
+      return types.includes(type)
+    })
+    const nextChecked = !allOn
+    setBulkType(type)
+    try {
+      await Promise.all(recipients.map(u => {
+        const current = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily', 'weekly', 'monthly']
+        const next = nextChecked ? Array.from(new Set([...current, type])) : current.filter(t => t !== type)
+        return fetch('/api/users', {
+          method: 'PATCH', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: u.email, report_types: next }),
+        })
+      }))
+    } finally {
+      setBulkType(null)
+      loadUsers()
+    }
   }
 
   const saveReportConfig = async () => {
@@ -1874,31 +1902,75 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             </button>
                           </div>
                           <p className={styles.dsModalSub}>Choose which scheduled reports each person gets. Unchecking all three for someone is the same as receiving all -- it's not an opt-out. To add or remove someone entirely, use their Reports toggle in User Access.</p>
-                          {recipCount > 0 && (
-                            <div className={styles.recipCountRow}>{recipCount} {recipCount === 1 ? 'person' : 'people'} opted in</div>
-                          )}
-                          {recipCount === 0 ? (
-                            <p style={{ fontSize: 12, color: '#94A3B8' }}>No recipients yet -- enable people in the User Access tab.</p>
-                          ) : (
-                            <div className={styles.recipList}>
-                              {reportRecipients.map(u => {
-                                const types = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily', 'weekly', 'monthly']
-                                return (
-                                  <div key={u.email} className={styles.recipRow}>
-                                    <span className={styles.recipName} title={u.email}>{u.email}</span>
-                                    <div className={styles.recipTypes}>
-                                      {['daily', 'weekly', 'monthly'].map(t => (
-                                        <button key={t} type="button"
-                                          className={styles.rtChip + (types.includes(t) ? ' ' + styles.rtChipOn : '')}
-                                          onClick={() => toggleReportType(u, t, !types.includes(t))}>
-                                          {t}
-                                        </button>
-                                      ))}
-                                    </div>
+                          {recipCount > 0 && (() => {
+                            const filteredRecipients = reportRecipients.filter(u => u.email.toLowerCase().includes(recipSearch.trim().toLowerCase()))
+                            return (
+                              <>
+                                <div className={styles.recipCountRow}>
+                                  {filteredRecipients.length === recipCount
+                                    ? `${recipCount} ${recipCount === 1 ? 'person' : 'people'} opted in`
+                                    : `${filteredRecipients.length} of ${recipCount} shown`}
+                                </div>
+                                {recipCount > 6 && (
+                                  <div className={styles.alSearch} style={{ maxWidth: 'none', marginTop: 0 }}>
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+                                    <input type="text" placeholder="Search by email..." value={recipSearch} onChange={e => setRecipSearch(e.target.value)} />
+                                    {recipSearch && (<button type="button" className={styles.alSearchClear} onClick={() => setRecipSearch('')} aria-label="Clear">×</button>)}
                                   </div>
-                                )
-                              })}
-                            </div>
+                                )}
+                                {filteredRecipients.length === 0 ? (
+                                  <p style={{ fontSize: 12, color: '#94A3B8', marginTop: 10 }}>No recipients match "{recipSearch}".</p>
+                                ) : (
+                                  <>
+                                    {filteredRecipients.length > 1 && (
+                                      <div className={styles.recipRow + ' ' + styles.recipBulkRow}>
+                                        <span className={styles.recipName} style={{ color: '#94A3B8', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                                          {recipSearch ? 'Toggle for shown' : 'Toggle for all'}
+                                        </span>
+                                        <div className={styles.recipTypes}>
+                                          {['daily', 'weekly', 'monthly'].map(t => {
+                                            const allOn = filteredRecipients.every(u => {
+                                              const types = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily', 'weekly', 'monthly']
+                                              return types.includes(t)
+                                            })
+                                            return (
+                                              <button key={t} type="button"
+                                                className={styles.rtChip + (allOn ? ' ' + styles.rtChipOn : '')}
+                                                disabled={!!bulkType}
+                                                onClick={() => bulkToggleReportType(filteredRecipients, t)}>
+                                                {bulkType === t ? '…' : t}
+                                              </button>
+                                            )
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div className={styles.recipList}>
+                                      {filteredRecipients.map(u => {
+                                        const types = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily', 'weekly', 'monthly']
+                                        return (
+                                          <div key={u.email} className={styles.recipRow}>
+                                            <span className={styles.recipName} title={u.email}>{u.email}</span>
+                                            <div className={styles.recipTypes}>
+                                              {['daily', 'weekly', 'monthly'].map(t => (
+                                                <button key={t} type="button"
+                                                  className={styles.rtChip + (types.includes(t) ? ' ' + styles.rtChipOn : '')}
+                                                  onClick={() => toggleReportType(u, t, !types.includes(t))}>
+                                                  {t}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            )
+                          })()}
+                          {recipCount === 0 && (
+                            <p style={{ fontSize: 12, color: '#94A3B8' }}>No recipients yet -- enable people in the User Access tab.</p>
                           )}
                           <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 12, lineHeight: 1.5 }}>If no one is opted in, reports fall back to the admin account ({user?.email || 'admin'}) so sends never go nowhere.</p>
                           <div className={styles.dsModalActions}>
