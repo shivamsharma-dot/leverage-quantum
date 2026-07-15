@@ -8,12 +8,14 @@ import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN } from '../ui/dashb
 
 const DEFAULT_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=HumanDetailedQL'
 const PAGE = 25
-const COL_ORDER_KEY = 'lq_human_ql_col_order'
+const COL_ORDER_KEY = 'lq_human_ql_col_order_v2'
 const COL_PINNED_KEY = 'lq_human_ql_col_pinned'
 const COL_HIDDEN_KEY = 'lq_human_ql_col_hidden'
 
 const HUMAN_QL_COLS = [
   { key: 'date', label: 'Date', width: 90 },
+  { key: 'prospectId', label: 'Prospect ID', width: 150, mono: true },
+  { key: 'opportunityId', label: 'Opportunity ID', width: 150, mono: true },
   { key: 'country', label: 'Country', width: 130 },
   { key: 'degree', label: 'Degree', width: 110 },
   { key: 'course', label: 'Course', width: 170, ellipsis: true },
@@ -25,8 +27,6 @@ const HUMAN_QL_COLS = [
   { key: 'degreeStatus', label: 'Degree Status', width: 110 },
   { key: 'callDuration', label: 'Duration', width: 80, numeric: true },
   { key: 'recordingUrl', label: 'Recording', width: 80, sortable: false },
-  { key: 'prospectId', label: 'Prospect ID', width: 150, mono: true },
-  { key: 'opportunityId', label: 'Opportunity ID', width: 150, mono: true },
 ]
 
 const DISPOSITION_COLOR = {
@@ -123,6 +123,85 @@ function FilterDropdown({ label, value, options, open, onToggle, onSelect }) {
   )
 }
 
+function fmtClock(sec) {
+  if (!isFinite(sec) || sec < 0) return '0:00'
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60)
+  return m + ':' + String(s).padStart(2, '0')
+}
+
+function RecordingPlayer({ row, onClose }) {
+  const audioRef = React.useRef(null)
+  const [playing, setPlaying] = useState(true)
+  const [curTime, setCurTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [seeking, setSeeking] = useState(false)
+  const [volume, setVolume] = useState(1)
+  const [muted, setMuted] = useState(false)
+
+  useEffect(() => {
+    setPlaying(true)
+    setCurTime(0)
+    setDuration(0)
+  }, [row?.recordingUrl])
+
+  const togglePlay = () => {
+    const el = audioRef.current
+    if (!el) return
+    if (el.paused) { el.play(); setPlaying(true) } else { el.pause(); setPlaying(false) }
+  }
+  const skip = delta => { const el = audioRef.current; if (el) el.currentTime = Math.min(Math.max(0, el.currentTime + delta), duration || Infinity) }
+  const toggleMute = () => { const el = audioRef.current; if (!el) return; el.muted = !el.muted; setMuted(el.muted) }
+
+  const pct = duration > 0 ? (curTime / duration) * 100 : 0
+
+  if (!row) return null
+  const title = [row.country, row.course].filter(Boolean).join(' — ') || row.prospectId
+
+  return (
+    <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 500, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 16, boxShadow: '0 16px 40px -8px rgba(15,23,42,0.28)', padding: '12px 18px', width: 420, fontFamily: FONT }}>
+      <audio ref={audioRef} src={row.recordingUrl} autoPlay
+        onTimeUpdate={e => { if (!seeking) setCurTime(e.currentTarget.currentTime) }}
+        onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
+        onEnded={() => setPlaying(false)}
+        onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 330 }} title={title}>{title}</div>
+        <button type="button" onClick={onClose} title="Close" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" onClick={() => skip(-10)} title="Back 10s" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.text, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
+        </button>
+        <button type="button" onClick={togglePlay} title={playing ? 'Pause' : 'Play'}
+          style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: `linear-gradient(135deg, ${C.navy}, ${C.blue})`, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {playing
+            ? <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+            : <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 2 }}><polygon points="5 3 19 12 5 21 5 3" /></svg>}
+        </button>
+        <button type="button" onClick={() => skip(10)} title="Forward 10s" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.text, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+        </button>
+        <span style={{ fontSize: 11, color: C.muted, fontVariantNumeric: 'tabular-nums', width: 34, flexShrink: 0 }}>{fmtClock(curTime)}</span>
+        <input type="range" min={0} max={duration || 0} step={0.1} value={curTime}
+          onMouseDown={() => setSeeking(true)}
+          onTouchStart={() => setSeeking(true)}
+          onChange={e => setCurTime(parseFloat(e.target.value))}
+          onMouseUp={e => { const el = audioRef.current; if (el) el.currentTime = parseFloat(e.target.value); setSeeking(false) }}
+          onTouchEnd={e => { const el = audioRef.current; if (el) el.currentTime = parseFloat(e.target.value); setSeeking(false) }}
+          style={{ flex: 1, height: 4, borderRadius: 99, accentColor: C.blue, background: `linear-gradient(to right, ${C.blue} ${pct}%, #E2E8F0 ${pct}%)`, cursor: 'pointer' }} />
+        <span style={{ fontSize: 11, color: C.muted, fontVariantNumeric: 'tabular-nums', width: 34, flexShrink: 0 }}>{fmtClock(duration)}</span>
+        <button type="button" onClick={toggleMute} title={muted ? 'Unmute' : 'Mute'} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          {muted
+            ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
+            : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function HumanQLDetailDashboard() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -132,7 +211,7 @@ export default function HumanQLDetailDashboard() {
   const [dispositionFilter, setDispositionFilter] = useState('all')
   const [openMenu, setOpenMenu] = useState(null)
   const [page, setPage] = useState(1)
-  const [playingUrl, setPlayingUrl] = useState(null)
+  const [playingRow, setPlayingRow] = useState(null)
   const [sortKey, setSortKey] = useState('date')
   const [sortDir, setSortDir] = useState('desc')
 
@@ -286,7 +365,7 @@ export default function HumanQLDetailDashboard() {
       case 'degreeStatus': return r.degreeStatus || '—'
       case 'callDuration': return fmtDur(r.callDuration)
       case 'recordingUrl': return r.recordingUrl ? (
-        <button type="button" onClick={e => { e.stopPropagation(); setPlayingUrl(r.recordingUrl) }}
+        <button type="button" onClick={e => { e.stopPropagation(); setPlayingRow(r) }}
           style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.blue, fontWeight: 600, fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg> Play
         </button>
@@ -470,15 +549,7 @@ export default function HumanQLDetailDashboard() {
         </div>
       </div>
 
-      {playingUrl && (
-        <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 500, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 14, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.28)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <audio controls autoPlay src={playingUrl} style={{ height: 32 }} />
-          <button type="button" onClick={() => setPlayingUrl(null)} title="Close player"
-            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'flex', alignItems: 'center' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-          </button>
-        </div>
-      )}
+      {playingRow && <RecordingPlayer row={playingRow} onClose={() => setPlayingRow(null)} />}
     </div>
   )
 }
