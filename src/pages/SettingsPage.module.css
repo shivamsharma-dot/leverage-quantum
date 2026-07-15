@@ -11,8 +11,8 @@
   --text-3:      var(--text3);
   --accent:      #1F3C84;
   --navy:        #1F3C84;
-  --primary:     var(--text);
-  --primary-h:   #2A2D34;
+  --primary:     linear-gradient(135deg, #1F3C84, #1C9FD4);
+  --primary-h:   linear-gradient(135deg, #1a3470, #1889b8);
   --ok:          #0F9D58;
   --ok-bg:       #ECFAF1;
   --err:         #DC2626;
@@ -90,10 +90,11 @@
 .primaryBtn {
   appearance: none; border: none; cursor: pointer; font-family: inherit;
   background: var(--primary); color: #fff; font-size: 13px; font-weight: 600;
-  padding: 9px 16px; border-radius: 9px; transition: background .15s, opacity .15s;
+  padding: 9px 16px; border-radius: 9px; transition: background .15s, opacity .15s, transform .15s, box-shadow .15s;
+  box-shadow: 0 4px 12px -4px rgba(31,60,132,.5);
   white-space: nowrap;
 }
-.primaryBtn:hover { background: var(--primary-h); }
+.primaryBtn:hover:not(:disabled) { background: var(--primary-h); transform: translateY(-1px); box-shadow: 0 6px 16px -4px rgba(31,60,132,.6); }
 .primaryBtn:disabled { opacity: .55; cursor: not-allowed; }
 .ghostBtn {
   appearance: none; cursor: pointer; font-family: inherit;
@@ -314,11 +315,6 @@
 .searchIcon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
 .searchInput { width: 100%; font-family: inherit; font-size: 13.5px; color: var(--text); background: #fff; border: 1px solid var(--border-2); border-radius: 9px; padding: 9px 13px 9px 34px; outline: none; transition: border-color .15s, box-shadow .15s; }
 .searchInput:focus { border-color: var(--accent); box-shadow: var(--ring); }
-.filterSelect { font-family: inherit; font-size: 13px; color: var(--text); background: #fff; border: 1px solid var(--border-2); border-radius: 9px; padding: 9px 12px; outline: none; cursor: pointer; }
-.filterSelect:focus { border-color: var(--accent); box-shadow: var(--ring); }
-.addInput { font-family: inherit; font-size: 13.5px; color: var(--text); background: #fff; border: 1px solid var(--border-2); border-radius: 9px; padding: 9px 13px; outline: none; min-width: 210px; transition: border-color .15s, box-shadow .15s; }
-.addInput:focus { border-color: var(--accent); box-shadow: var(--ring); }
-
 /* table */
 .tableCard { background: var(--card); border: 0.5px solid var(--border-2); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
 .tableHead, .uRow { display: grid; grid-template-columns: minmax(180px, 1.8fr) 100px 1fr 80px 110px 90px; align-items: center; gap: 8px; padding: 0 18px; }
@@ -386,9 +382,6 @@
 .uRow { transition:background .14s ease; border-radius:10px; }
 .uRow:hover { background:rgba(31,60,132,0.05); }
 .userName { font-size:14px !important; }
-.addInput { border-radius:10px !important; transition:border-color .15s, box-shadow .15s; }
-.addInput:focus { box-shadow:0 0 0 3px rgba(31,60,132,0.14); }
-.filterSelect { border-radius:10px !important; }
 
 /* ============================================================
    Premium Data Sources rows (dsRow*)

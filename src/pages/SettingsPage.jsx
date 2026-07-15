@@ -708,6 +708,7 @@ export default function SettingsPage() {
   const [usersLoading, setUsersLoading] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [accessMsg, setAccessMsg] = useState('')
+  const [addMemberOpen, setAddMemberOpen] = useState(false)
   // --- Report config (sender, subjects, auto switch) ---
   const [rcName, setRcName] = useState('')
   const [rcEmail, setRcEmail] = useState('')
@@ -786,7 +787,7 @@ export default function SettingsPage() {
     if (!email.endsWith('@leverageedu.com')) { setMsg('Only @leverageedu.com emails allowed'); return }
     if (accessList.find(u => u.email === email)) { setMsg('Already has access'); return }
     setUsersLoading(true)
-    if (await addUserAccess(email, 'viewer', user?.email)) { setMsg('Added: ' + email); setNewEmail(''); await loadUsers() }
+    if (await addUserAccess(email, 'viewer', user?.email)) { setMsg('Added: ' + email); setNewEmail(''); setAddMemberOpen(false); await loadUsers() }
     else setMsg('Failed to add')
     setUsersLoading(false)
   }
@@ -1249,18 +1250,42 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <svg className={styles.searchIcon} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
                   <input className={styles.searchInput} placeholder="Search by email…" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
                 </div>
-                <select className={styles.filterSelect} value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
-                  <option value="all">All roles</option>
-                  <option value="admin">Admin</option>
-                  <option value="viewer">Viewer</option>
-                  <option value="custom">Custom</option>
-                </select>
-                <input type="email" className={styles.addInput} placeholder="name@leverageedu.com"
-                  value={newEmail} onChange={e => setNewEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && addUser()} />
-                <button className={styles.primaryBtn} onClick={addUser} disabled={usersLoading}>
-                  {usersLoading ? 'Adding…' : 'Add member'}
+                <Dropdown
+                  value={roleFilter}
+                  onChange={setRoleFilter}
+                  options={[{ value: 'all', label: 'All roles' }, { value: 'admin', label: 'Admin' }, { value: 'viewer', label: 'Viewer' }, { value: 'custom', label: 'Custom' }]}
+                  minWidth={120}
+                />
+                <button className={styles.primaryBtn} onClick={() => { setNewEmail(''); setAccessMsg(''); setAddMemberOpen(true) }}>
+                  + Add member
                 </button>
               </div>
+
+              {addMemberOpen && (
+                <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setAddMemberOpen(false) }}>
+                  <div className={styles.dsModal}>
+                    <div className={styles.dsModalHead}>
+                      <div className={styles.dsModalTitle}>Add a member</div>
+                      <button type="button" className={styles.dsModalClose} onClick={() => setAddMemberOpen(false)}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                      </button>
+                    </div>
+                    <p className={styles.dsModalSub}>Adds them as a Viewer with no dashboards visible yet — use Edit afterward to grant specific access.</p>
+                    <div className={styles.dsField}>
+                      <label>Email</label>
+                      <input type="email" autoFocus placeholder="name@leverageedu.com" value={newEmail}
+                        onChange={e => setNewEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && addUser()} />
+                    </div>
+                    {accessMsg && !isOkMsg && (<p className={styles.note} style={{ margin: '-6px 0 12px', color: '#c0392b' }}>✕ {accessMsg}</p>)}
+                    <div className={styles.dsModalActions}>
+                      <button type="button" className={styles.dsBtnGhost} onClick={() => setAddMemberOpen(false)}>Cancel</button>
+                      <button type="button" className={styles.dsBtnPrimary} disabled={!newEmail.trim() || usersLoading} onClick={addUser}>
+                        {usersLoading ? 'Adding…' : 'Add member'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {accessMsg && (
                 <div className={`${styles.toast} ${isOkMsg ? styles.toastOk : styles.toastErr}`}>{accessMsg}</div>
