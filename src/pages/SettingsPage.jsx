@@ -1095,43 +1095,49 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <h3 className={styles.cardTitle} style={{ marginBottom: 0 }}>Data Sources</h3>
                   <button type="button" onClick={checkAllSources} disabled={checkingAll} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: checkingAll ? '#94A3B8' : 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: checkingAll ? 'default' : 'pointer' }}>{checkingAll ? 'Checking all...' : 'Check all sources'}</button>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '8px 0 2px', padding: '8px 10px', background: '#F9FAFB', borderRadius: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Automated checks</span>
-                  <Dropdown
-                    value={healthSchedule.mode}
-                    disabled={savingSchedule}
-                    onChange={v => saveHealthSchedule({ ...healthSchedule, mode: v })}
-                    options={[{ value: 'off', label: 'Off' }, { value: 'daily', label: 'Once daily at' }, { value: 'hourly', label: 'Every hour' }]}
-                  />
-                  {healthSchedule.mode === 'daily' && (
-                    <Dropdown
-                      value={healthSchedule.hour}
-                      disabled={savingSchedule}
-                      onChange={v => saveHealthSchedule({ ...healthSchedule, hour: v })}
-                      options={Array.from({ length: 24 }, (_, h) => ({ value: h, label: (h === 0 ? '12 AM' : h < 12 ? h + ' AM' : h === 12 ? '12 PM' : (h - 12) + ' PM') + ' IST' }))}
-                    />
-                  )}
-                  <span style={{ fontSize: 11, color: '#9CA3AF' }}>Runs via GitHub Actions -- "Check all sources" above is still available anytime.</span>
-                  {scheduleMsg && <span style={{ fontSize: 11, fontWeight: 700, color: scheduleMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{scheduleMsg.type === 'err' ? '✕ ' : '✓ '}{scheduleMsg.text}</span>}
-                </div>
-                {sourceHealth.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 8, margin: '10px 0 4px' }}>
-                    {sourceHealth.map(h => {
-                      const color = h.status === 'warn' ? '#C77D00' : h.status === 'error' ? '#c0392b' : '#15803D'
-                      const mins = h.checked_at ? Math.round((Date.now() - new Date(h.checked_at).getTime()) / 60000) : null
-                      const rel = mins == null ? '' : mins < 60 ? mins + 'm ago' : mins < 1440 ? Math.round(mins / 60) + 'h ago' : Math.round(mins / 1440) + 'd ago'
-                      return (
-                        <div key={h.name} title={h.message || 'OK'} style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '7px 10px', background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 8 }}>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                            <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0, marginTop: 4 }} />
-                            <span style={{ fontSize: 11.5, fontWeight: 600, color: '#374151', lineHeight: 1.3, whiteSpace: 'normal' }}>{h.name}</span>
-                          </div>
-                          <span style={{ fontSize: 10.5, color: '#9CA3AF', marginLeft: 13 }}>{rel}</span>
-                        </div>
-                      )
-                    })}
+                <div style={{ marginTop: 12, padding: '14px 16px', background: '#F9FAFB', border: '0.5px solid #EEF1F6', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                    <div style={{ minWidth: 200 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Automated checks</div>
+                      <div style={{ fontSize: 11.5, color: '#9CA3AF', lineHeight: 1.4 }}>Runs via GitHub Actions — "Check all sources" above is still available anytime.</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+                      <Dropdown
+                        value={healthSchedule.mode}
+                        disabled={savingSchedule}
+                        onChange={v => saveHealthSchedule({ ...healthSchedule, mode: v })}
+                        options={[{ value: 'off', label: 'Off' }, { value: 'daily', label: 'Once daily at' }, { value: 'hourly', label: 'Every hour' }]}
+                      />
+                      {healthSchedule.mode === 'daily' && (
+                        <Dropdown
+                          value={healthSchedule.hour}
+                          disabled={savingSchedule}
+                          onChange={v => saveHealthSchedule({ ...healthSchedule, hour: v })}
+                          options={Array.from({ length: 24 }, (_, h) => ({ value: h, label: (h === 0 ? '12 AM' : h < 12 ? h + ' AM' : h === 12 ? '12 PM' : (h - 12) + ' PM') + ' IST' }))}
+                        />
+                      )}
+                      {scheduleMsg && <span style={{ fontSize: 11, fontWeight: 700, color: scheduleMsg.type === 'err' ? '#1F3C84' : '#15803D', whiteSpace: 'nowrap' }}>{scheduleMsg.type === 'err' ? '✕ ' : '✓ '}{scheduleMsg.text}</span>}
+                    </div>
                   </div>
-                )}
+                  {sourceHealth.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '0.5px solid #EEF1F6' }}>
+                      {sourceHealth.map(h => {
+                        const color = h.status === 'warn' ? '#1C9FD4' : h.status === 'error' ? '#1F3C84' : '#4CAE6F'
+                        const mins = h.checked_at ? Math.round((Date.now() - new Date(h.checked_at).getTime()) / 60000) : null
+                        const rel = mins == null ? '' : mins < 60 ? mins + 'm ago' : mins < 1440 ? Math.round(mins / 60) + 'h ago' : Math.round(mins / 1440) + 'd ago'
+                        return (
+                          <div key={h.name} title={h.message || 'OK'} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 10, transition: 'box-shadow .15s ease, border-color .15s ease' }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: '0 0 0 3px ' + color + '1A' }} />
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontSize: 12, fontWeight: 650, color: '#1F2937', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.name}</div>
+                              <div style={{ fontSize: 10.5, color: '#9CA3AF', marginTop: 1 }}>{rel}</div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
                 {(() => {
                   const allSources = [...DATA_SOURCES, ...customSources]
                   const apiCount = allSources.filter(s => sourceCategory(s) === 'api').length
