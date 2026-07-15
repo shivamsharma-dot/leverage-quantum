@@ -468,9 +468,29 @@ function FilterDropdown({ label, value, options, open, onToggle, onSelect, accen
     </div>
   )
 }
-function CreativesTab({ data }) {
+function CreativesTab({ data, token }) {
   const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, prevInsightsMap = {}, crmSummary = {} } = data
   const tableScrollRef = useRef(null)
+  const [previewAd, setPreviewAd] = useState(null)
+  const [previewHtml, setPreviewHtml] = useState('')
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewError, setPreviewError] = useState('')
+
+  const openAdPreview = async (ad) => {
+    setPreviewAd(ad); setPreviewHtml(''); setPreviewError(''); setPreviewLoading(true)
+    const formats = ['DESKTOP_FEED_STANDARD', 'MOBILE_FEED_STANDARD', 'INSTAGRAM_STANDARD']
+    for (const fmt of formats) {
+      try {
+        const res = await fetch(`https://graph.facebook.com/v19.0/${ad.id}/previews?ad_format=${fmt}&access_token=${token}`)
+        const json = await res.json()
+        const body = json?.data?.[0]?.body
+        if (body) { setPreviewHtml(body); setPreviewLoading(false); return }
+      } catch (e) { /* try next format */ }
+    }
+    setPreviewError('Meta could not generate a preview for this ad format.')
+    setPreviewLoading(false)
+  }
+  const closeAdPreview = () => { setPreviewAd(null); setPreviewHtml(''); setPreviewError('') }
   const lsGet = (key, fallback) => { try { const v = JSON.parse(localStorage.getItem(key) || 'null'); return v == null ? fallback : v } catch { return fallback } }
   const [colOrder, setColOrder] = useState(() => {
     const saved = lsGet(CREATIVE_COL_ORDER_KEY, null)
@@ -790,12 +810,17 @@ function CreativesTab({ data }) {
       {viewMode==='grid'?(
         <div className="lq-stagger" style={{ display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:12 }}>
           {pageItems.map((ad,i)=>(
-            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden',cursor:'pointer',transition:'border-color .15s,box-shadow .15s',display:'flex',flexDirection:'column' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#1F3C84';e.currentTarget.style.boxShadow='0 2px 12px rgba(31,60,132,0.1)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#E5E7EB';e.currentTarget.style.boxShadow='none'}}>
+            <div key={ad.id||i} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden',transition:'border-color .15s,box-shadow .15s',display:'flex',flexDirection:'column' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#1F3C84';e.currentTarget.style.boxShadow='0 2px 12px rgba(31,60,132,0.1)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#E5E7EB';e.currentTarget.style.boxShadow='none'}}>
               <div style={{ position:'relative',height:130,background:'#F3F4F6',overflow:'hidden' }}>
                 {ad.creative?._thumbUrl?<img src={proxyImg(ad.creative._thumbUrl)} alt={ad.name} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>:<div style={{ width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4 }}><span style={{ fontSize:28,opacity:0.25 }}>{ad.type==='video'?'▶':ad.type==='carousel'?'▧':'□'}</span><span style={{ fontSize:10,color:'#9CA3AF' }}>{ad.type}</span></div>}
-                {ad.previewPlatform && <span style={{position:'absolute',top:8,right:8,padding:'2px 7px',borderRadius:5,background:'rgba(255,255,255,0.92)',fontSize:9,fontWeight:700,color:ad.previewPlatform==='instagram'?'#E1306C':ad.previewPlatform==='facebook'?'#1877F2':'#6B7280',letterSpacing:'0.03em',boxShadow:'0 1px 4px rgba(0,0,0,0.12)',backdropFilter:'blur(4px)',lineHeight:1.6}}>{ad.previewPlatform==='instagram'?'IG':ad.previewPlatform==='facebook'?'FB':'AD LIB'}</span>}
-                <span style={{ position:'absolute',top:8,left:8,background:tBg[ad.type]||'#F3F4F6',color:tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span>
-                <div style={{ position:'absolute',bottom:8,left:8,right:8 }}><SB score={ad.score}/></div>
+                <button type="button" onClick={()=>openAdPreview(ad)} title="Preview ad" style={{ position:'absolute',inset:0,width:'100%',height:'100%',border:'none',background:'rgba(15,23,42,0)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s' }} onMouseEnter={e=>{e.currentTarget.style.background='rgba(15,23,42,0.32)';e.currentTarget.firstChild.style.opacity=1}} onMouseLeave={e=>{e.currentTarget.style.background='rgba(15,23,42,0)';e.currentTarget.firstChild.style.opacity=0}}>
+                  <span style={{ opacity:0,transition:'opacity .15s',width:34,height:34,borderRadius:'50%',background:'#fff',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 12px rgba(0,0,0,0.25)' }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </span>
+                </button>
+                {ad.previewPlatform && <span style={{position:'absolute',top:8,right:8,padding:'2px 7px',borderRadius:5,background:'rgba(255,255,255,0.92)',fontSize:9,fontWeight:700,color:ad.previewPlatform==='instagram'?'#E1306C':ad.previewPlatform==='facebook'?'#1877F2':'#6B7280',letterSpacing:'0.03em',boxShadow:'0 1px 4px rgba(0,0,0,0.12)',backdropFilter:'blur(4px)',lineHeight:1.6,pointerEvents:'none'}}>{ad.previewPlatform==='instagram'?'IG':ad.previewPlatform==='facebook'?'FB':'AD LIB'}</span>}
+                <span style={{ position:'absolute',top:8,left:8,background:tBg[ad.type]||'#F3F4F6',color:tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase',pointerEvents:'none' }}>{ad.type}</span>
+                <div style={{ position:'absolute',bottom:8,left:8,right:8,pointerEvents:'none' }}><SB score={ad.score}/></div>
               </div>
               <div style={{ padding:'12px 14px' }}>
                 <div style={{ display:'flex',alignItems:'center',gap:6,marginBottom:10 }}>
@@ -851,8 +876,15 @@ function CreativesTab({ data }) {
             })}
           </div>
           {pageItems.map((ad,i)=>(
-            <div key={ad.id||i} onClick={()=>window.open(ad.previewLink,'_blank')} style={{ display:'grid',cursor:'pointer',gridTemplateColumns:'40px 260px '+displayOrder.map(colTrackOf).join(' '),padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
-              <div style={{ position:'sticky',left:0,zIndex:1,background:'#fff',alignSelf:'stretch',display:'flex',alignItems:'center',justifyContent:'center' }}><div style={{ width:32,height:32,borderRadius:6,overflow:'hidden',flexShrink:0 }}>{ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}</div></div>
+            <div key={ad.id||i} style={{ display:'grid',gridTemplateColumns:'40px 260px '+displayOrder.map(colTrackOf).join(' '),padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
+              <div style={{ position:'sticky',left:0,zIndex:1,background:'#fff',alignSelf:'stretch',display:'flex',alignItems:'center',justifyContent:'center' }}>
+                <button type="button" onClick={()=>openAdPreview(ad)} title="Preview ad" style={{ position:'relative',width:32,height:32,borderRadius:6,overflow:'hidden',flexShrink:0,border:'none',padding:0,cursor:'pointer',background:'#F3F4F6' }} onMouseEnter={e=>{const o=e.currentTarget.querySelector('.previewOverlay'); if(o) o.style.opacity=1}} onMouseLeave={e=>{const o=e.currentTarget.querySelector('.previewOverlay'); if(o) o.style.opacity=0}}>
+                  {ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}
+                  <span className="previewOverlay" style={{ position:'absolute',inset:0,background:'rgba(15,23,42,0.4)',opacity:0,transition:'opacity .15s',display:'flex',alignItems:'center',justifyContent:'center' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </span>
+                </button>
+              </div>
               <div style={{ position:'sticky',left:40,zIndex:1,background:'#fff',alignSelf:'stretch',display:'flex',flexDirection:'column',justifyContent:'center' }}><div style={{ display:'flex',alignItems:'flex-start',gap:4 }}><div style={{ fontSize:12,fontWeight:600,color:'#111827',whiteSpace:'normal',wordBreak:'break-word',cursor:'text' }} title={ad.name}>{ad.name}</div><button type="button" onClick={e=>copyAdName(e,ad.name)} title="Copy ad name" style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',fontSize:11,lineHeight:1,padding:1,marginTop:2,color:'#94A3B8',display:'inline-flex',alignItems:'center' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button></div><div style={{ fontSize:10,color:'#9CA3AF' }}>{ad.impressions>0?fmtN(ad.impressions)+' impr':'—'}</div></div>
               {displayOrder.map(k=>{
                 const c=CREATIVE_COLS.find(cc=>cc.key===k)
@@ -883,6 +915,39 @@ function CreativesTab({ data }) {
           </div>
         )
       })()}
+
+      {previewAd && (
+        <div onClick={closeAdPreview} style={{ position:'fixed',inset:0,zIndex:500,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:24 }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:'#fff',borderRadius:16,maxWidth:460,width:'100%',maxHeight:'85vh',overflowY:'auto',boxShadow:'0 30px 60px -20px rgba(0,0,0,.35)' }}>
+            <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',padding:'18px 20px 12px',borderBottom:'0.5px solid #F1F5F9' }}>
+              <div style={{ minWidth:0 }}>
+                <div style={{ fontSize:14,fontWeight:700,color:'#0F172A',wordBreak:'break-word' }}>{previewAd.name}</div>
+                <div style={{ fontSize:11,color:'#94A3B8',marginTop:2 }}>Live ad preview from Meta</div>
+              </div>
+              <button type="button" onClick={closeAdPreview} style={{ flexShrink:0,border:'none',background:'transparent',cursor:'pointer',color:'#94A3B8',padding:4,marginLeft:10 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div style={{ padding:20,display:'flex',flexDirection:'column',alignItems:'center',minHeight:220,justifyContent:'center' }}>
+              {previewLoading && (
+                <div style={{ textAlign:'center',color:'#94A3B8' }}>
+                  <div className={styles.bigSpinner}/>
+                  <p style={{ marginTop:14,fontSize:12.5 }}>Fetching ad preview…</p>
+                </div>
+              )}
+              {!previewLoading && previewHtml && (
+                <div style={{ width:'100%',display:'flex',justifyContent:'center' }} dangerouslySetInnerHTML={{ __html: previewHtml }} />
+              )}
+              {!previewLoading && !previewHtml && previewError && (
+                <div style={{ textAlign:'center' }}>
+                  <p style={{ fontSize:12.5,color:'#94A3B8',marginBottom:14,lineHeight:1.5 }}>{previewError}</p>
+                  <a href={previewAd.previewLink} target="_blank" rel="noreferrer" style={{ fontSize:12.5,fontWeight:700,color:'#1F3C84',textDecoration:'underline' }}>Open ad in a new tab instead</a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1864,7 +1929,6 @@ export default function MetaAdsDashboard() {
               </span>
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
-            {!isViewerRole && <button className={styles.disconnectBtn} onClick={disconnect}>Disconnect</button>}
             {activeTab === 'campaigns' && (
               <div style={{ position:'relative' }}>
                 <button onClick={()=>setShowInfo(v=>!v)} title='How these metrics are calculated' style={{ width:26,height:26,borderRadius:7,border:'0.5px solid #E5E7EB',background:showInfo?'#E8EFF9':'#fff',color:'#1F3C84',fontSize:13,fontWeight:700,fontStyle:'italic',fontFamily:'Georgia,serif',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>i</button>
@@ -1905,6 +1969,8 @@ export default function MetaAdsDashboard() {
           </div>
         </div>
 
+        {loading && data && <div className={styles.syncBar}/>}
+
         {error && (data ? (<div className={styles.errorBanner} style={{ background:'#FFF7E6', borderColor:'#F2C744', color:'#8A6100' }}>Showing cached data{cacheTs ? ` from ${new Date(cacheTs).toLocaleString()}` : ''} — live refresh failed (Meta rate limit). Retrying shortly…</div>) : (<div className={styles.errorBanner}>{error}</div>))}
 
         {loading && !data ? (
@@ -1913,9 +1979,9 @@ export default function MetaAdsDashboard() {
             <p style={{ marginTop: 16, fontSize: 13 }}>Loading Meta Ads data…</p>
           </div>
         ) : data ? (
-          <div style={{padding:'18px 28px'}}>
+          <div style={{padding:'18px 28px'}} className={loading ? styles.syncPulsing : ''}>
             {activeTab === 'campaigns' && <CampaignsTab data={crmData}/>}
-            {activeTab === 'creatives' && <CreativesTab data={crmData}/>}
+            {activeTab === 'creatives' && <CreativesTab data={crmData} token={token}/>}
             {activeTab === 'mom' && <TrendTab token={token} adAccount={adAccount} mode="month"/>}
             {activeTab === 'dod' && <TrendTab token={token} adAccount={adAccount} mode="day"/>}
             {activeTab === 'ask_ai'      && null}

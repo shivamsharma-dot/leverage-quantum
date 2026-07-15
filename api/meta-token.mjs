@@ -41,6 +41,17 @@ export default async function handler(req, res) {
     }
   }
 
-  res.setHeader('Allow', 'GET, POST')
+  if (req.method === 'DELETE') {
+    if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    try {
+      const r = await supabaseAdmin('meta_tokens?created_at=not.is.null', { method: 'DELETE' })
+      if (!r.ok) return res.status(500).json({ error: 'Failed to clear token' })
+      return res.status(200).json({ ok: true })
+    } catch (e) {
+      return res.status(500).json({ error: e.message })
+    }
+  }
+
+  res.setHeader('Allow', 'GET, POST, DELETE')
   return res.status(405).json({ error: 'Method not allowed' })
 }
