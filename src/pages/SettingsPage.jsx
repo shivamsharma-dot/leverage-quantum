@@ -845,6 +845,7 @@ export default function SettingsPage() {
   const [sendAudience, setSendAudience] = useState('test')
   const [rpType, setRpType] = useState('daily')
   const [rpView, setRpView] = useState('desktop')
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [editIds, setEditIds] = useState([])
   const [editIsAdmin, setEditIsAdmin] = useState(false)
@@ -1689,6 +1690,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         </button>
                       </div>
                       <div style={{ display: 'flex', gap: 10 }}>
+                        <button className={styles.ghostBtn} onClick={() => setPreviewOpen(true)}>Preview email</button>
                         <button className={styles.ghostBtn} onClick={() => setEditReportOpen(true)}>Edit settings</button>
                         <button className={styles.primaryBtn} onClick={() => { setSendAudience('test'); setRcMsg(''); setSendReportOpen(true) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
@@ -1697,70 +1699,79 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       </div>
                     </div>
 
-                    <div className={styles.card}>
-                      <h3 className={styles.cardTitle}>Email preview</h3>
-                      <p className={styles.cardDesc} style={{ marginBottom: 12 }}>
-                        Exactly what recipients see in Gmail, built from the real email template. Numbers and the AI analysis are sample data — those come from a live Meta Ads fetch and a Claude call at send time — but sender, subject, and layout below reflect your actual settings.
-                      </p>
-                      <p className={styles.rpNote}>The real template has no mobile-responsive styling, so phone Gmail doesn't reflow it — it shrinks the whole desktop layout to fit. The Mobile view here reproduces that shrink, not a redesigned layout.</p>
-                      <div className={styles.rpControls}>
-                        <div className={styles.rpTabs}>
-                          {['daily', 'weekly', 'monthly'].map(t => (
-                            <button key={t} type="button" className={styles.rpTab + (rpType === t ? ' ' + styles.rpTabActive : '')} onClick={() => setRpType(t)} style={{ textTransform: 'capitalize' }}>
-                              {t}
+                    {previewOpen && (
+                      <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setPreviewOpen(false) }}>
+                        <div className={styles.rpModalCard}>
+                          <div className={styles.dsModalHead}>
+                            <div className={styles.dsModalTitle}>Email preview</div>
+                            <button type="button" className={styles.dsModalClose} onClick={() => setPreviewOpen(false)}>
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                             </button>
-                          ))}
-                        </div>
-                        <div className={styles.rpViewToggle}>
-                          <button type="button" className={styles.rpViewBtn + (rpView === 'desktop' ? ' ' + styles.rpViewBtnActive : '')} onClick={() => setRpView('desktop')}>Desktop</button>
-                          <button type="button" className={styles.rpViewBtn + (rpView === 'mobile' ? ' ' + styles.rpViewBtnActive : '')} onClick={() => setRpView('mobile')}>Mobile</button>
-                        </div>
-                      </div>
-                      {(() => {
-                        const senderName = rcName.trim() || 'Leverage Quantum'
-                        const senderEmail = rcEmail.trim() || 'quantum@platform.leverageedu.com'
-                        const todayLabel = '15 Jul 2026'
-                        const subject = (rcSubjects[rpType] && rcSubjects[rpType].trim()) || RP_SUBJECTS[rpType](todayLabel)
-                        const initials = senderName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'LQ'
-                        const scale = rpView === 'mobile' ? 0.55 : 1
-                        const naturalWidth = 704
-                        const html = buildReportPreviewHTML(rpType, senderName + ' <span style="color:#1C9FD4">Quantum</span>')
-                        return (
-                          <div className={styles.rpFrame + (rpView === 'mobile' ? ' ' + styles.rpFrameMobile : '')}>
-                            <div className={styles.rpTop}>
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.3-4.3" /></svg>
-                              <span>Search mail</span>
+                          </div>
+                          <p className={styles.dsModalSub}>
+                            Exactly what recipients see in Gmail, built from the real email template. Numbers and the AI analysis are sample data — those come from a live Meta Ads fetch and a Claude call at send time — but sender, subject, and layout below reflect your actual settings.
+                          </p>
+                          <p className={styles.rpNote}>The real template has no mobile-responsive styling, so phone Gmail doesn't reflow it — it shrinks the whole desktop layout to fit. The Mobile view here reproduces that shrink, not a redesigned layout.</p>
+                          <div className={styles.rpControls}>
+                            <div className={styles.rpTabs}>
+                              {['daily', 'weekly', 'monthly'].map(t => (
+                                <button key={t} type="button" className={styles.rpTab + (rpType === t ? ' ' + styles.rpTabActive : '')} onClick={() => setRpType(t)} style={{ textTransform: 'capitalize' }}>
+                                  {t}
+                                </button>
+                              ))}
                             </div>
-                            <div className={styles.rpMsgHead}>
-                              <div className={styles.rpSubject}>{subject}</div>
-                              <div className={styles.rpFromRow}>
-                                <div className={styles.rpAvatar}>{initials}</div>
-                                <div className={styles.rpFromMeta}>
-                                  <div className={styles.rpFromName}>{senderName} <span className={styles.rpFromEmail}>&lt;{senderEmail}&gt;</span></div>
-                                  <div className={styles.rpToLine}>to me</div>
-                                </div>
-                                <div className={styles.rpTime}>9:30 AM</div>
-                              </div>
-                            </div>
-                            <div className={styles.rpBodyWrap} style={{ height: (rpView === 'mobile' ? 620 : 1120) }}>
-                              <iframe
-                                title="report-email-preview"
-                                srcDoc={'<html><body style="margin:0">' + html + '</body></html>'}
-                                style={{ width: naturalWidth, transform: `scale(${scale})`, transformOrigin: 'top left', height: naturalWidth * 1.8 }}
-                                scrolling="no"
-                                onLoad={e => {
-                                  try {
-                                    const h = e.target.contentDocument.body.scrollHeight
-                                    e.target.style.height = h + 'px'
-                                    e.target.parentElement.style.height = (h * scale) + 'px'
-                                  } catch (err) { /* cross-doc measurement can fail silently, fixed heights above cover it */ }
-                                }}
-                              />
+                            <div className={styles.rpViewToggle}>
+                              <button type="button" className={styles.rpViewBtn + (rpView === 'desktop' ? ' ' + styles.rpViewBtnActive : '')} onClick={() => setRpView('desktop')}>Desktop</button>
+                              <button type="button" className={styles.rpViewBtn + (rpView === 'mobile' ? ' ' + styles.rpViewBtnActive : '')} onClick={() => setRpView('mobile')}>Mobile</button>
                             </div>
                           </div>
-                        )
-                      })()}
-                    </div>
+                          {(() => {
+                            const senderName = rcName.trim() || 'Leverage Quantum'
+                            const senderEmail = rcEmail.trim() || 'quantum@platform.leverageedu.com'
+                            const todayLabel = '15 Jul 2026'
+                            const subject = (rcSubjects[rpType] && rcSubjects[rpType].trim()) || RP_SUBJECTS[rpType](todayLabel)
+                            const initials = senderName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'LQ'
+                            const scale = rpView === 'mobile' ? 0.55 : 1
+                            const naturalWidth = 704
+                            const html = buildReportPreviewHTML(rpType, senderName + ' <span style="color:#1C9FD4">Quantum</span>')
+                            return (
+                              <div className={styles.rpFrame + (rpView === 'mobile' ? ' ' + styles.rpFrameMobile : '')}>
+                                <div className={styles.rpTop}>
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.3-4.3" /></svg>
+                                  <span>Search mail</span>
+                                </div>
+                                <div className={styles.rpMsgHead}>
+                                  <div className={styles.rpSubject}>{subject}</div>
+                                  <div className={styles.rpFromRow}>
+                                    <div className={styles.rpAvatar}>{initials}</div>
+                                    <div className={styles.rpFromMeta}>
+                                      <div className={styles.rpFromName}>{senderName} <span className={styles.rpFromEmail}>&lt;{senderEmail}&gt;</span></div>
+                                      <div className={styles.rpToLine}>to me</div>
+                                    </div>
+                                    <div className={styles.rpTime}>9:30 AM</div>
+                                  </div>
+                                </div>
+                                <div className={styles.rpBodyWrap} style={{ height: (rpView === 'mobile' ? 620 : 1120) }}>
+                                  <iframe
+                                    title="report-email-preview"
+                                    srcDoc={'<html><body style="margin:0">' + html + '</body></html>'}
+                                    style={{ width: naturalWidth, transform: `scale(${scale})`, transformOrigin: 'top left', height: naturalWidth * 1.8 }}
+                                    scrolling="no"
+                                    onLoad={e => {
+                                      try {
+                                        const h = e.target.contentDocument.body.scrollHeight
+                                        e.target.style.height = h + 'px'
+                                        e.target.parentElement.style.height = (h * scale) + 'px'
+                                      } catch (err) { /* cross-doc measurement can fail silently, fixed heights above cover it */ }
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      </div>
+                    )}
 
                     {editReportOpen && (
                       <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setEditReportOpen(false) }}>
