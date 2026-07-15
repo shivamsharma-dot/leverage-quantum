@@ -491,6 +491,12 @@ function CreativesTab({ data, token }) {
     setPreviewLoading(false)
   }
   const closeAdPreview = () => { setPreviewAd(null); setPreviewHtml(''); setPreviewError('') }
+  const [linkCopied, setLinkCopied] = useState(false)
+  const copyPreviewLink = () => {
+    if (!previewAd?.previewLink) return
+    navigator.clipboard?.writeText(previewAd.previewLink)
+    setLinkCopied(true); setTimeout(() => setLinkCopied(false), 1800)
+  }
   const lsGet = (key, fallback) => { try { const v = JSON.parse(localStorage.getItem(key) || 'null'); return v == null ? fallback : v } catch { return fallback } }
   const [colOrder, setColOrder] = useState(() => {
     const saved = lsGet(CREATIVE_COL_ORDER_KEY, null)
@@ -936,15 +942,31 @@ function CreativesTab({ data, token }) {
                 </div>
               )}
               {!previewLoading && previewHtml && (
-                <div style={{ width:'100%',display:'flex',justifyContent:'center' }} dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                <div className={styles.adPreviewWrap} dangerouslySetInnerHTML={{ __html: previewHtml }} />
               )}
               {!previewLoading && !previewHtml && previewError && (
                 <div style={{ textAlign:'center' }}>
                   <p style={{ fontSize:12.5,color:'#94A3B8',marginBottom:14,lineHeight:1.5 }}>{previewError}</p>
-                  <a href={previewAd.previewLink} target="_blank" rel="noreferrer" style={{ fontSize:12.5,fontWeight:700,color:'#1F3C84',textDecoration:'underline' }}>Open ad in a new tab instead</a>
                 </div>
               )}
             </div>
+            {previewAd.previewLink && (
+              <div style={{ display:'flex',alignItems:'center',justifyContent:'center',gap:10,padding:'12px 20px 18px',borderTop:'0.5px solid #F1F5F9' }}>
+                <a href={previewAd.previewLink} target="_blank" rel="noreferrer"
+                  style={{ display:'inline-flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:8,border:'1px solid #E5E7EB',background:'#fff',color:'#374151',fontSize:12,fontWeight:600,textDecoration:'none' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  {previewAd.previewPlatform === 'instagram' ? 'Open on Instagram' : previewAd.previewPlatform === 'facebook' ? 'Open on Facebook' : 'Open in browser'}
+                </a>
+                <button type="button" onClick={copyPreviewLink}
+                  style={{ display:'inline-flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:8,border:'1px solid #E5E7EB',background:linkCopied?'#F0FDF4':'#fff',color:linkCopied?'#15803D':'#374151',fontSize:12,fontWeight:600,cursor:'pointer' }}>
+                  {linkCopied ? (
+                    <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Copied</>
+                  ) : (
+                    <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Copy link</>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

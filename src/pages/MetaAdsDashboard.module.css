@@ -161,6 +161,12 @@
 @keyframes syncPulse { 0%,100% { opacity:1; } 50% { opacity:.55; } }
 .syncPulsing { animation:syncPulse 1.4s ease-in-out infinite; }
 
+/* Ad preview modal: Meta's returned embed HTML isn't guaranteed to center
+   itself, so force it regardless of whatever wrapper markup it contains. */
+.adPreviewWrap { width:100%; display:flex; justify-content:center; }
+.adPreviewWrap > * { margin:0 auto; }
+.adPreviewWrap iframe { display:block; margin:0 auto; }
+
 /* TABLE */
 .tableWrap { background:#fff; border:1px solid #ECEEF2; border-radius:12px; overflow:hidden; }
 table { width:100%; border-collapse:collapse; font-size:12.5px; }
