@@ -82,6 +82,29 @@ function fmtDateLabel(iso) {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
 }
 
+// Fetches the recording as a blob and saves it via a throwaway object-URL link, so the
+// file downloads in place instead of navigating the tab (the plain <a download> approach
+// gets silently ignored by the browser for this cross-origin host, which just opens the
+// audio in a new tab instead of saving it). Falls back to opening in a new tab only if the
+// fetch itself fails (e.g. the host doesn't allow CORS), so the user isn't left with nothing.
+async function downloadRecording(url, filename) {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error('fetch failed: ' + res.status)
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
+  } catch (err) {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+}
+
 async function fetchRows() {
   const url = await resolveSheetUrl('humanQlDetail', DEFAULT_CSV)
   const res = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' })
@@ -149,6 +172,7 @@ function RecordingPlayer({ row, onClose }) {
   const [seeking, setSeeking] = useState(false)
   const [volume, setVolume] = useState(1)
   const [muted, setMuted] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     setPlaying(true)
@@ -163,6 +187,12 @@ function RecordingPlayer({ row, onClose }) {
   }
   const skip = delta => { const el = audioRef.current; if (el) el.currentTime = Math.min(Math.max(0, el.currentTime + delta), duration || Infinity) }
   const toggleMute = () => { const el = audioRef.current; if (!el) return; el.muted = !el.muted; setMuted(el.muted) }
+  const handleDownload = async () => {
+    if (downloading) return
+    setDownloading(true)
+    await downloadRecording(row.recordingUrl, (row.prospectId || 'recording') + '.mp3')
+    setDownloading(false)
+  }
 
   const pct = duration > 0 ? (curTime / duration) * 100 : 0
 
@@ -179,9 +209,11 @@ function RecordingPlayer({ row, onClose }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 290 }} title={title}>{title}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <a href={row.recordingUrl} download={(row.prospectId || 'recording') + '.mp3'} target="_blank" rel="noreferrer" title="Download recording" style={{ color: C.muted, display: 'flex', alignItems: 'center' }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-          </a>
+          <button type="button" onClick={handleDownload} disabled={downloading} title="Download recording" style={{ border: 'none', background: 'transparent', cursor: downloading ? 'wait' : 'pointer', color: C.muted, display: 'flex', alignItems: 'center' }}>
+            {downloading
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ animation: 'spin 0.8s linear infinite' }}><path d="M21 12a9 9 0 1 1-9-9" /></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>}
+          </button>
           <button type="button" onClick={onClose} title="Close" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'flex', alignItems: 'center' }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
@@ -231,6 +263,14 @@ export default function HumanQLDetailDashboard() {
   const [playingRow, setPlayingRow] = useState(null)
   const [sortKey, setSortKey] = useState('date')
   const [sortDir, setSortDir] = useState('desc')
+  const [downloadingIds, setDownloadingIds] = useState(() => new Set())
+
+  const handleRowDownload = async r => {
+    const id = r.prospectId
+    setDownloadingIds(prev => new Set(prev).add(id))
+    await downloadRecording(r.recordingUrl, (r.prospectId || 'recording') + '.mp3')
+    setDownloadingIds(prev => { const next = new Set(prev); next.delete(id); return next })
+  }
 
   const [colOrder, setColOrder] = useState(() => {
     const saved = lsGet(COL_ORDER_KEY, null)
@@ -406,10 +446,12 @@ export default function HumanQLDetailDashboard() {
             style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.blue, fontWeight: 600, fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg> Play
           </button>
-          <a href={r.recordingUrl} download={(r.prospectId || 'recording') + '.mp3'} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-            title="Download recording" style={{ color: C.muted, display: 'inline-flex', alignItems: 'center' }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-          </a>
+          <button type="button" onClick={e => { e.stopPropagation(); handleRowDownload(r) }} disabled={downloadingIds.has(r.prospectId)}
+            title="Download recording" style={{ border: 'none', background: 'transparent', cursor: downloadingIds.has(r.prospectId) ? 'wait' : 'pointer', color: C.muted, display: 'inline-flex', alignItems: 'center' }}>
+            {downloadingIds.has(r.prospectId)
+              ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ animation: 'spin 0.8s linear infinite' }}><path d="M21 12a9 9 0 1 1-9-9" /></svg>
+              : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>}
+          </button>
         </span>
       ) : '—'
       case 'prospectId': return r.prospectId ? (
