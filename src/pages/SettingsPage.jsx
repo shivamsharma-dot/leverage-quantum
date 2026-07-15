@@ -76,8 +76,57 @@ const DATA_SOURCES = [
   { name: 'Leads Assigned Sheet', editKey: 'sheet_url_leads_assigned', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Leadassigned' },  { name: 'Google Ads CRM Leads Sheet', editKey: 'sheet_url_googleleads', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=googleleads' },
   { name: 'Human QL Detail Sheet', editKey: 'sheet_url_human_ql_detail', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=HumanDetailedQL' },
   { name: 'AI QL Detail Sheet', editKey: 'sheet_url_ai_ql_detail', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=AIDetailedQL' },
-  { name: 'Cross-Channel Sheet',  src: 'aiContext.js',        rows: 'live' },
     ]
+
+// Official brand marks (Meta logo + 2026 Google Sheets icon), embedded verbatim from their
+// source assets -- not stylized approximations. Rendered at their natural aspect ratio via
+// dsIconBrand/dsIconSheets (wider than the generic square glyph) so they stay legible.
+const MetaIcon = () => (
+  <svg viewBox="0 0 287.56 191" className={styles.dsIconMeta}>
+    <defs>
+      <linearGradient id="dsMetaGrad1" x1="62.34" y1="101.45" x2="260.34" y2="91.45" gradientTransform="matrix(1, 0, 0, -1, 0, 192)" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stopColor="#0064e1" /><stop offset="0.4" stopColor="#0064e1" /><stop offset="0.83" stopColor="#0073ee" /><stop offset="1" stopColor="#0082fb" />
+      </linearGradient>
+      <linearGradient id="dsMetaGrad2" x1="41.42" y1="53" x2="41.42" y2="126" gradientTransform="matrix(1, 0, 0, -1, 0, 192)" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stopColor="#0082fb" /><stop offset="1" stopColor="#0064e0" />
+      </linearGradient>
+    </defs>
+    <path fill="#0081fb" d="M31.06,126c0,11,2.41,19.41,5.56,24.51A19,19,0,0,0,53.19,160c8.1,0,15.51-2,29.79-21.76,11.44-15.83,24.92-38,34-52l15.36-23.6c10.67-16.39,23-34.61,37.18-47C181.07,5.6,193.54,0,206.09,0c21.07,0,41.14,12.21,56.5,35.11,16.81,25.08,25,56.67,25,89.27,0,19.38-3.82,33.62-10.32,44.87C271,180.13,258.72,191,238.13,191V160c17.63,0,22-16.2,22-34.74,0-26.42-6.16-55.74-19.73-76.69-9.63-14.86-22.11-23.94-35.84-23.94-14.85,0-26.8,11.2-40.23,31.17-7.14,10.61-14.47,23.54-22.7,38.13l-9.06,16c-18.2,32.27-22.81,39.62-31.91,51.75C84.74,183,71.12,191,53.19,191c-21.27,0-34.72-9.21-43-23.09C3.34,156.6,0,141.76,0,124.85Z" />
+    <path fill="url(#dsMetaGrad1)" d="M24.49,37.3C38.73,15.35,59.28,0,82.85,0c13.65,0,27.22,4,41.39,15.61,15.5,12.65,32,33.48,52.63,67.81l7.39,12.32c17.84,29.72,28,45,33.93,52.22,7.64,9.26,13,12,19.94,12,17.63,0,22-16.2,22-34.74l27.4-.86c0,19.38-3.82,33.62-10.32,44.87C271,180.13,258.72,191,238.13,191c-12.8,0-24.14-2.78-36.68-14.61-9.64-9.08-20.91-25.21-29.58-39.71L146.08,93.6c-12.94-21.62-24.81-37.74-31.68-45C107,40.71,97.51,31.23,82.35,31.23c-12.27,0-22.69,8.61-31.41,21.78Z" />
+    <path fill="url(#dsMetaGrad2)" d="M82.35,31.23c-12.27,0-22.69,8.61-31.41,21.78C38.61,71.62,31.06,99.34,31.06,126c0,11,2.41,19.41,5.56,24.51L10.14,167.91C3.34,156.6,0,141.76,0,124.85,0,94.1,8.44,62.05,24.49,37.3,38.73,15.35,59.28,0,82.85,0Z" />
+  </svg>
+)
+
+const SheetsIcon = () => (
+  <svg viewBox="0 0 800 581.8182" className={styles.dsIconSheets}>
+    <path fill="#009954" d="M0 193.6364c0-40.65 0-60.9773 6.3818-77.1a90.91 90.91 0 0 1 51.0637-51.0591c16.1227-6.3864 36.4454-6.3864 77.1-6.3864H410.909c40.65 0 60.9773 0 77.1 6.3818a90.91 90.91 0 0 1 51.0636 51.0637c6.3818 16.1227 6.3818 36.4454 6.3818 77.1v194.5454c0 40.65 0 60.9773-6.3818 77.1a90.91 90.91 0 0 1-51.0636 51.0637c-16.1227 6.3818-36.45 6.3818-77.1 6.3818H134.5454c-40.65 0-60.9772 0-77.1045-6.3818a90.91 90.91 0 0 1-51.059-51.0637C0 449.1591 0 428.8318 0 388.1818Z" />
+    <mask id="dsSheetsMask" width="160" height="128" x="24" y="32" maskUnits="userSpaceOnUse"><rect width="160" height="128" x="24" y="32" fill="#fff" rx="20" /></mask>
+    <g mask="url(#dsSheetsMask)" transform="matrix(4.5454545,0,0,4.5454545,-36.363636,-145.45454)">
+      <path fill="#0ebc5f" d="M24 32h160v128H24Z" />
+      <g filter="url(#dsSheetsBlur)"><rect width="144" height="102" fill="url(#dsSheetsGrad)" rx="25.6" transform="matrix(1,0,0,-1,8,147)" /></g>
+    </g>
+    <path stroke="#ffffff" strokeLinecap="round" strokeWidth="54.5455" d="M327.2727 404.5455H709.091m-90.909 86.3636v-290.909" />
+    <defs>
+      <linearGradient id="dsSheetsGrad" x1="122.24" x2="20.76" y1="43.31" y2="43.31" gradientUnits="userSpaceOnUse"><stop stopColor="#0ebc5f" /><stop offset=".95" stopColor="#78c9ff" /></linearGradient>
+      <filter id="dsSheetsBlur" width="168" height="126" x="-4" y="33" colorInterpolationFilters="sRGB" filterUnits="userSpaceOnUse">
+        <feFlood floodOpacity="0" result="BackgroundImageFix" /><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" mode="normal" /><feGaussianBlur result="effect1_foregroundBlur" stdDeviation="6" />
+      </filter>
+    </defs>
+  </svg>
+)
+
+const GenericSourceIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" /><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3" /></svg>
+)
+
+// Sheet-backed sources (anything with editKey) get the real Sheets mark; Meta Graph API gets
+// the real Meta mark; everything else (Google Ads API, custom sources) keeps the generic glyph
+// until we have an equally-official asset for it.
+function sourceIconClass(s) {
+  if (s.editKey) return { Icon: SheetsIcon, wrap: styles.dsIconWrapSheets }
+  if (s.name === 'Meta Graph API') return { Icon: MetaIcon, wrap: styles.dsIconWrapBrand }
+  return { Icon: GenericSourceIcon, wrap: '' }
+}
 
 // Small custom-styled dropdown (never a native <select> -- house design rule).
 function Dropdown({ options, value, onChange, minWidth = 100, disabled }) {
@@ -910,10 +959,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                 )}
                 <div className={styles.dsList}>
-                {[...DATA_SOURCES, ...customSources].map(s => (
+                {[...DATA_SOURCES, ...customSources].map(s => {
+                  const { Icon, wrap } = sourceIconClass(s)
+                  return (
                   <div key={s.name} className={styles.dsRow} style={{ flexWrap: 'wrap', rowGap: 10 }}>
-                    <span className={styles.dsIcon}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+                    <span className={styles.dsIcon + (wrap ? ' ' + wrap : '')}>
+                      <Icon />
                     </span>
                     <div className={styles.dsBody}>
                       <div className={styles.dsName}>{s.name}</div>
@@ -1000,7 +1051,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       </div>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
                 {userIsAdmin && (
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: '0.5px solid #F3F4F6' }}>
