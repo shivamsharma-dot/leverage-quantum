@@ -8,9 +8,19 @@ import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN } from '../ui/dashb
 
 const DEFAULT_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=HumanDetailedQL'
 const PAGE = 25
-const COL_ORDER_KEY = 'lq_human_ql_col_order_v2'
+const COL_ORDER_KEY = 'lq_human_ql_col_order_v3'
 const COL_PINNED_KEY = 'lq_human_ql_col_pinned'
 const COL_HIDDEN_KEY = 'lq_human_ql_col_hidden'
+const VIEWS_KEY = 'lq_human_ql_views'
+
+// LeadSquared: Contact and Opportunity are distinct records -- prospect_id is the
+// Contact (the person), opportunity_id_futwork is this specific pipeline instance
+// for that person. opportunityEvent=12003 is fixed for this Human QL pipeline.
+const LEADSQUARED_CONTACT_URL = 'https://in21.leadsquared.com/LeadManagement/LeadDetails?LeadID='
+const LEADSQUARED_OPPORTUNITY_URL = 'https://in21.leadsquared.com/OpportunityManagement/OpportunityDetails?opportunityId='
+const LEADSQUARED_OPPORTUNITY_EVENT = '12003'
+
+const HOT_DISPOSITION = 'Call Transferred To Counsellor'
 
 const HUMAN_QL_COLS = [
   { key: 'date', label: 'Date', width: 90 },
@@ -25,6 +35,7 @@ const HUMAN_QL_COLS = [
   { key: 'campaign', label: 'Campaign', width: 190, ellipsis: true },
   { key: 'passport', label: 'Passport', width: 90 },
   { key: 'degreeStatus', label: 'Degree Status', width: 110 },
+  { key: 'questionsForCounselor', label: 'Questions', width: 220, ellipsis: true },
   { key: 'callDuration', label: 'Duration', width: 80, numeric: true },
   { key: 'recordingUrl', label: 'Recording', width: 80, sortable: false },
 ]
@@ -92,6 +103,7 @@ async function fetchRows() {
     campaign: (r[h('opp_first_campaign_name')] || '').trim(),
     passport: (r[h('valid_passport')] || '').trim(),
     degreeStatus: (r[h('student_current_degree_status')] || '').trim(),
+    questionsForCounselor: (r[h('questions_for_counselor')] || '').trim(),
     callDuration: r[h('call_duration')] || '0',
     recordingUrl: (r[h('call_recording_url')] || '').trim(),
     futworkProject: (r[h('futwork_project')] || '').trim(),
@@ -237,6 +249,23 @@ export default function HumanQLDetailDashboard() {
   const togglePin = key => setPinnedCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   const toggleHidden = key => setHiddenCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   const resetCols = () => { setColOrder(HUMAN_QL_COLS.map(c => c.key)); setPinnedCols([]); setHiddenCols([]) }
+
+  const [views, setViews] = useState(() => lsGet(VIEWS_KEY, {}))
+  useEffect(() => { try { localStorage.setItem(VIEWS_KEY, JSON.stringify(views)) } catch {} }, [views])
+  const saveView = () => {
+    const name = window.prompt('Name this view:')
+    if (!name || !name.trim()) return
+    setViews(prev => ({ ...prev, [name.trim()]: { countryFilter, dispositionFilter, search, monthDay } }))
+  }
+  const loadView = name => {
+    const v = views[name]
+    if (!v) return
+    setCountryFilter(v.countryFilter || 'all')
+    setDispositionFilter(v.dispositionFilter || 'all')
+    setSearch(v.search || '')
+    setMonthDay(v.monthDay || 'all')
+  }
+  const deleteView = name => setViews(prev => { const next = { ...prev }; delete next[name]; return next })
   const visibleOrder = colOrder.filter(k => !hiddenCols.includes(k))
   const displayOrder = [...visibleOrder.filter(k => pinnedCols.includes(k)), ...visibleOrder.filter(k => !pinnedCols.includes(k))]
   const colWidthOf = k => (HUMAN_QL_COLS.find(c => c.key === k) || {}).width || 120
@@ -334,7 +363,8 @@ export default function HumanQLDetailDashboard() {
   const exportRows = useMemo(() => sorted.map(r => ({
     Date: fmtDateLabel(r.date), Country: r.country, Degree: r.degree, Course: r.course, Intake: r.intake,
     Disposition: r.disposition, Budget: r.budget, Campaign: r.campaign, Passport: r.passport,
-    'Degree Status': r.degreeStatus, 'Duration (sec)': r.callDuration, 'Recording URL': r.recordingUrl,
+    'Degree Status': r.degreeStatus, Questions: r.questionsForCounselor,
+    'Duration (sec)': r.callDuration, 'Recording URL': r.recordingUrl,
     'Prospect ID': r.prospectId, 'Opportunity ID': r.opportunityId,
   })), [sorted])
 
@@ -363,6 +393,7 @@ export default function HumanQLDetailDashboard() {
       case 'campaign': return <span title={r.campaign}>{r.campaign || '—'}</span>
       case 'passport': return r.passport || '—'
       case 'degreeStatus': return r.degreeStatus || '—'
+      case 'questionsForCounselor': return <span title={r.questionsForCounselor}>{r.questionsForCounselor || '—'}</span>
       case 'callDuration': return fmtDur(r.callDuration)
       case 'recordingUrl': return r.recordingUrl ? (
         <button type="button" onClick={e => { e.stopPropagation(); setPlayingRow(r) }}
@@ -370,10 +401,18 @@ export default function HumanQLDetailDashboard() {
           <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg> Play
         </button>
       ) : '—'
-      case 'prospectId': case 'opportunityId': return r[key] ? (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'monospace', fontSize: 11 }} title={r[key]}>
-          {r[key].slice(0, 8)}…
-          <button type="button" onClick={e => copy(e, r[key])} title="Copy" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'inline-flex' }}>
+      case 'prospectId': return r.prospectId ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'monospace', fontSize: 11 }} title={'Open Contact in LeadSquared: ' + r.prospectId}>
+          <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: C.blue, textDecoration: 'none' }}>{r.prospectId.slice(0, 8)}…</a>
+          <button type="button" onClick={e => copy(e, r.prospectId)} title="Copy" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'inline-flex' }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+          </button>
+        </span>
+      ) : '—'
+      case 'opportunityId': return r.opportunityId ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'monospace', fontSize: 11 }} title={'Open Opportunity in LeadSquared: ' + r.opportunityId}>
+          <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: C.blue, textDecoration: 'none' }}>{r.opportunityId.slice(0, 8)}…</a>
+          <button type="button" onClick={e => copy(e, r.opportunityId)} title="Copy" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'inline-flex' }}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
           </button>
         </span>
@@ -455,7 +494,7 @@ export default function HumanQLDetailDashboard() {
                 <FilterDropdown label="Disposition" value={dispositionFilter} options={dispositionOptions}
                   open={openMenu === 'disposition'} onToggle={() => setOpenMenu(v => v === 'disposition' ? null : 'disposition')}
                   onSelect={v => { setDispositionFilter(v); setOpenMenu(null) }} />
-                <button type="button" onClick={() => setColsOpen(v => !v)} title="Columns"
+                <button type="button" onClick={() => setColsOpen(v => !v)} title="Views &amp; Columns"
                   style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, border: '0.5px solid ' + C.border, cursor: 'pointer', flexShrink: 0, background: colsOpen ? C.navy : '#fff', color: colsOpen ? '#fff' : '#6B7280' }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18" /></svg>
                 </button>
@@ -463,8 +502,19 @@ export default function HumanQLDetailDashboard() {
                 {colsOpen && (
                   <>
                     <div onClick={() => setColsOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 98 }} />
-                    <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 99, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 4, minWidth: 220, maxHeight: 360, overflowY: 'auto' }}>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 10px 8px' }}>Columns (drag to reorder)</div>
+                    <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 99, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: 4, minWidth: 240, maxHeight: 420, overflowY: 'auto' }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '2px 10px 6px' }}>Saved views</div>
+                      <div style={{ padding: '0 10px 8px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {Object.keys(views).length === 0 && <span style={{ fontSize: 11.5, color: '#9CA3AF' }}>None yet</span>}
+                        {Object.keys(views).map(name => (
+                          <span key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#F3F4F6', borderRadius: 7, padding: '3px 4px 3px 9px' }}>
+                            <button type="button" onClick={() => { loadView(name); setColsOpen(false) }} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 11.5, fontWeight: 600, color: '#374151', padding: 0 }}>{name}</button>
+                            <button type="button" onClick={() => deleteView(name)} title="Delete view" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, color: '#9CA3AF', padding: '0 4px', lineHeight: 1 }}>×</button>
+                          </span>
+                        ))}
+                      </div>
+                      <button type="button" onClick={saveView} style={{ width: 'calc(100% - 20px)', margin: '0 10px 10px', padding: '6px 10px', borderRadius: 7, border: '1px dashed #C7D7F5', background: '#F7FAFF', color: '#1F3C84', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>+ Save current filters as view</button>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 10px 8px', borderTop: '0.5px solid #F3F4F6' }}>Columns (drag to reorder)</div>
                       {colOrder.map(key => {
                         const c = HUMAN_QL_COLS.find(cc => cc.key === key)
                         const isPinned = pinnedCols.includes(key)
@@ -521,15 +571,23 @@ export default function HumanQLDetailDashboard() {
                   })}
                 </tr></thead>
                 <tbody>
-                  {pageItems.map((r, i) => (
-                    <tr key={r.prospectId || i}>
-                      {displayOrder.map(key => {
-                        const isPinned = pinnedCols.includes(key)
-                        const tdStyle = { ...td, ...(isPinned ? { position: 'sticky', left: pinnedLeftMap[key], zIndex: 1, background: '#fff', borderRight: pinnedCols[pinnedCols.length - 1] === key ? '1px solid #F3F4F6' : 'none' } : {}) }
-                        return <td key={key} style={tdStyle}>{cell(r, key)}</td>
-                      })}
-                    </tr>
-                  ))}
+                  {pageItems.map((r, i) => {
+                    const isHot = r.disposition === HOT_DISPOSITION
+                    return (
+                      <tr key={r.prospectId || i} style={{ background: isHot ? C.greenBg : 'transparent' }} title={isHot ? 'Call transferred to counsellor -- hot lead' : undefined}>
+                        {displayOrder.map((key, colIdx) => {
+                          const isPinned = pinnedCols.includes(key)
+                          const tdStyle = {
+                            ...td,
+                            background: isPinned ? (isHot ? C.greenBg : '#fff') : 'transparent',
+                            borderLeft: colIdx === 0 && isHot ? '3px solid ' + C.green : 'none',
+                            ...(isPinned ? { position: 'sticky', left: pinnedLeftMap[key], zIndex: 1, borderRight: pinnedCols[pinnedCols.length - 1] === key ? '1px solid #F3F4F6' : 'none' } : {}),
+                          }
+                          return <td key={key} style={tdStyle}>{cell(r, key)}</td>
+                        })}
+                      </tr>
+                    )
+                  })}
                   {pageItems.length === 0 && (
                     <tr><td colSpan={displayOrder.length} style={{ ...td, textAlign: 'center', color: C.muted, padding: '24px 12px' }}>No leads match these filters.</td></tr>
                   )}
