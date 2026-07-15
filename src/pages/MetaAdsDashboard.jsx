@@ -918,7 +918,7 @@ function CreativesTab({ data, token }) {
 
       {previewAd && (
         <div onClick={closeAdPreview} style={{ position:'fixed',inset:0,zIndex:500,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:24 }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:'#fff',borderRadius:16,maxWidth:460,width:'100%',maxHeight:'85vh',overflowY:'auto',boxShadow:'0 30px 60px -20px rgba(0,0,0,.35)' }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:'#fff',borderRadius:16,maxWidth:600,width:'100%',maxHeight:'85vh',overflow:'auto',boxShadow:'0 30px 60px -20px rgba(0,0,0,.35)' }}>
             <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',padding:'18px 20px 12px',borderBottom:'0.5px solid #F1F5F9' }}>
               <div style={{ minWidth:0 }}>
                 <div style={{ fontSize:14,fontWeight:700,color:'#0F172A',wordBreak:'break-word' }}>{previewAd.name}</div>
