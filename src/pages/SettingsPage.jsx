@@ -1270,7 +1270,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                       </button>
                     </div>
-                    <p className={styles.dsModalSub}>Adds them as a Viewer with no dashboards visible yet — use Edit afterward to grant specific access.</p>
+                    <p className={styles.dsModalSub}>Adds them as a Viewer with access to all dashboards — use Edit afterward to restrict it to specific ones.</p>
                     <div className={styles.dsField}>
                       <label>Email</label>
                       <input type="email" autoFocus placeholder="name@leverageedu.com" value={newEmail}
@@ -1608,12 +1608,14 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 18 }}>
                 <button className={styles.primaryBtn} onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving\u2026' : 'Save report settings'}</button>
                 <button className={styles.ghostBtn} onClick={sendTestReport} disabled={rcTesting}>{rcTesting ? 'Sending\u2026' : 'Send test to me only'}</button>
-<select value={rcSendType} onChange={e => setRcSendType(e.target.value)} disabled={rcSending} style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #E2E8F0', fontSize: 13, fontWeight: 600, color: '#1F3C84', background: '#fff', cursor: 'pointer' }}>
-  <option value="daily">Daily report</option>
-<option value="weekly">Weekly report</option>
-<option value="monthly">Monthly report</option>
-</select>
-<button onClick={sendReportNow} disabled={rcSending} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: rcSending ? '#94A3B8' : '#1F3C84', color: '#fff', fontSize: 13, fontWeight: 700, cursor: rcSending ? 'default' : 'pointer' }}>{rcSending ? 'Sending\u2026' : 'Send now'}</button>
+                <Dropdown
+                  value={rcSendType}
+                  onChange={setRcSendType}
+                  disabled={rcSending}
+                  options={[{ value: 'daily', label: 'Daily report' }, { value: 'weekly', label: 'Weekly report' }, { value: 'monthly', label: 'Monthly report' }]}
+                  minWidth={130}
+                />
+                <button className={styles.primaryBtn} onClick={sendReportNow} disabled={rcSending}>{rcSending ? 'Sending\u2026' : 'Send now'}</button>
                 {rcMsg && <span style={{ fontSize: 13, fontWeight: 600, color: rcMsg.charAt(0) === '\u2715' ? '#b4413c' : '#4CAE6F' }}>{rcMsg}</span>}
               </div>
 
