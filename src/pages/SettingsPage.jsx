@@ -1352,7 +1352,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 }
                 {hiddenPages.length>0&&!prefLoading&&<button onClick={()=>{setHiddenPages([]);setPrefSaveMsg(null)}} style={{marginTop:10,fontSize:11.5,fontWeight:600,color:'#DC2626',background:'none',border:'none',cursor:'pointer',padding:'4px 0',display:'flex',alignItems:'center',gap:5,fontFamily:"'Plus Jakarta Sans',sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>Reset — show all</button>}
               </div>
-              <div style={{borderTop:'0.5px solid #F1F5F9'}}/>
+              <div style={{borderTop:'0.5px solid #F1F5F9',margin:'22px 0'}}/>
               {/* page header */}
               <div className={styles.uaHeader}>
                 <div>
