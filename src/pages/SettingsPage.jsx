@@ -1874,25 +1874,32 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             </button>
                           </div>
                           <p className={styles.dsModalSub}>Choose which scheduled reports each person gets. Unchecking all three for someone is the same as receiving all -- it's not an opt-out. To add or remove someone entirely, use their Reports toggle in User Access.</p>
+                          {recipCount > 0 && (
+                            <div className={styles.recipCountRow}>{recipCount} {recipCount === 1 ? 'person' : 'people'} opted in</div>
+                          )}
                           {recipCount === 0 ? (
                             <p style={{ fontSize: 12, color: '#94A3B8' }}>No recipients yet -- enable people in the User Access tab.</p>
-                          ) : reportRecipients.map(u => {
-                            const types = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily', 'weekly', 'monthly']
-                            return (
-                              <div key={u.email} className={styles.recipRow}>
-                                <span className={styles.recipName}>{u.email}</span>
-                                <div className={styles.recipTypes}>
-                                  {['daily', 'weekly', 'monthly'].map(t => (
-                                    <button key={t} type="button"
-                                      className={styles.rtChip + (types.includes(t) ? ' ' + styles.rtChipOn : '')}
-                                      onClick={() => toggleReportType(u, t, !types.includes(t))}>
-                                      {t}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )
-                          })}
+                          ) : (
+                            <div className={styles.recipList}>
+                              {reportRecipients.map(u => {
+                                const types = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily', 'weekly', 'monthly']
+                                return (
+                                  <div key={u.email} className={styles.recipRow}>
+                                    <span className={styles.recipName} title={u.email}>{u.email}</span>
+                                    <div className={styles.recipTypes}>
+                                      {['daily', 'weekly', 'monthly'].map(t => (
+                                        <button key={t} type="button"
+                                          className={styles.rtChip + (types.includes(t) ? ' ' + styles.rtChipOn : '')}
+                                          onClick={() => toggleReportType(u, t, !types.includes(t))}>
+                                          {t}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
                           <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 12, lineHeight: 1.5 }}>If no one is opted in, reports fall back to the admin account ({user?.email || 'admin'}) so sends never go nowhere.</p>
                           <div className={styles.dsModalActions}>
                             <button className={styles.dsBtnGhost} onClick={() => setRecipientsOpen(false)}>Close</button>
