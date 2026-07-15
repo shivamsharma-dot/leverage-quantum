@@ -59,6 +59,8 @@ const NAV = [
         subItems: [
           { to: '/dashboard/lq-ops',         label: 'Daily QLs',   matchType: 'route' },
           { to: '/dashboard/lq-ops-monthly', label: 'Monthly QLs', matchType: 'route' },
+          { to: '/dashboard/lq-ops-detail',         label: 'Human QL Detail',        matchType: 'route' },
+          { to: '/dashboard/lq-ops-detail-monthly', label: 'Human QL Detail (Month)', matchType: 'route' },
         ]
       },
       { to: '/dashboard/whatsapp',     icon: <WhatsAppIcon />, label: 'WhatsApp',     end: false },
@@ -83,6 +85,8 @@ export const PAGE_LIST = [
   { id:'revenue',      label:'Revenue',      path:'/dashboard/revenue',     adminOnly:false },
   { id:'lq_ops',         label:'Daily QLs',    path:'/dashboard/lq-ops',          adminOnly:false },
   { id:'lq_ops_monthly', label:'Monthly QLs',  path:'/dashboard/lq-ops-monthly',  adminOnly:false },
+  { id:'lq_ops_detail',         label:'Human QL Detail',         path:'/dashboard/lq-ops-detail',         adminOnly:false },
+  { id:'lq_ops_detail_monthly', label:'Human QL Detail (Month)', path:'/dashboard/lq-ops-detail-monthly', adminOnly:false },
   { id:'whatsapp',     label:'WhatsApp',     path:'/dashboard/whatsapp',    adminOnly:false },
   { id:'referral', label:'Referral', path:'/dashboard/referral', adminOnly:false },
   { id:'leads_assigned', label:'Leads Assigned', path:'/dashboard/leads-assigned', adminOnly:false },
@@ -109,6 +113,7 @@ const ICON_MAP = {
   'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
   'Revenue': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>,
   'Google Ads': <GoogleAdsIcon/>, 'QL Ops': <PeopleIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
+  'Human QL Detail': <FunnelIcon/>, 'Human QL Detail (Month)': <FunnelIcon/>,
   'Bing Ads': <BingAdsIcon/>,
   'Referral': <ReferralIcon/>, 'Leads Assigned': <LeadsAssignedIcon/>,
   'WhatsApp': <WhatsAppIcon/>,
@@ -161,7 +166,7 @@ export default function Sidebar() {
 
   const isMetaParentActive = location.pathname.startsWith('/dashboard/meta-ads')
   const isGoogleParentActive = location.pathname.startsWith('/dashboard/google-ads')
-  const isQlOpsParentActive = location.pathname === '/dashboard/lq-ops' || location.pathname === '/dashboard/lq-ops-monthly'
+  const isQlOpsParentActive = location.pathname === '/dashboard/lq-ops' || location.pathname === '/dashboard/lq-ops-monthly' || location.pathname === '/dashboard/lq-ops-detail' || location.pathname === '/dashboard/lq-ops-detail-monthly'
 
   const [metaExpanded, setMetaExpanded] = React.useState(isMetaParentActive)
   React.useEffect(() => { if (isMetaParentActive) setMetaExpanded(true) }, [isMetaParentActive])

@@ -12,6 +12,7 @@ export const SHEET_PREF_KEYS = {
     fbleads: 'sheet_url_fbleads',
     leadsAssigned: 'sheet_url_leads_assigned',
     googleLeads: 'sheet_url_googleleads',
+    humanQlDetail: 'sheet_url_human_ql_detail',
 }
 
 let cached = null
