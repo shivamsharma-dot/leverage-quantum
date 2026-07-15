@@ -5,23 +5,24 @@ import ToastHost from './components/ToastHost'
 import { useAuth } from './hooks/useAuth'
 import { logActivity, pageLabel, installActivityTracker } from './components/ActivityLogger'
 import LoginPage from './pages/LoginPage'; import { prefetchSummaryAnalysis } from './lib/summaryData'
-const DashboardHome = lazy(() => import('./pages/DashboardHome'))
-const ROASDashboard = lazy(() => import('./pages/ROASDashboard'))
-const LeadQualityDashboard = lazy(() => import('./pages/LeadQualityDashboard'))
-const ChannelMixDashboard = lazy(() => import('./pages/ChannelMixDashboard'))
-const RevenueDashboard = lazy(() => import('./pages/RevenueDashboard'))
-const LeadQualificationDashboard = lazy(() => import('./pages/LeadQualificationDashboard'))
-const HumanQLDetailDashboard = lazy(() => import('./pages/HumanQLDetailDashboard'))
-const AIQLDetailDashboard = lazy(() => import('./pages/AIQLDetailDashboard'))
-const WhatsAppDashboard = lazy(() => import('./pages/WhatsAppDashboard'))
-const MTDDashboard = lazy(() => import('./pages/MTDDashboard'))
-const MetaAdsDashboard = lazy(() => import('./pages/MetaAdsDashboard'))
-const GoogleAdsDashboard = lazy(() => import('./pages/GoogleAdsDashboard'))
-const BingAdsDashboard = lazy(() => import('./pages/BingAdsDashboard'))
-const ReferralDashboard = lazy(() => import('./pages/ReferralDashboard'))
-const LeadsAssignedDashboard = lazy(() => import('./pages/LeadsAssignedDashboard'))
-const AskAI = lazy(() => import('./pages/AskAI'))
-const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+import { COMPONENT_IMPORTS, prefetchAllRoutes } from './lib/routePrefetch'
+const DashboardHome = lazy(COMPONENT_IMPORTS.DashboardHome)
+const ROASDashboard = lazy(COMPONENT_IMPORTS.ROASDashboard)
+const LeadQualityDashboard = lazy(COMPONENT_IMPORTS.LeadQualityDashboard)
+const ChannelMixDashboard = lazy(COMPONENT_IMPORTS.ChannelMixDashboard)
+const RevenueDashboard = lazy(COMPONENT_IMPORTS.RevenueDashboard)
+const LeadQualificationDashboard = lazy(COMPONENT_IMPORTS.LeadQualificationDashboard)
+const HumanQLDetailDashboard = lazy(COMPONENT_IMPORTS.HumanQLDetailDashboard)
+const AIQLDetailDashboard = lazy(COMPONENT_IMPORTS.AIQLDetailDashboard)
+const WhatsAppDashboard = lazy(COMPONENT_IMPORTS.WhatsAppDashboard)
+const MTDDashboard = lazy(COMPONENT_IMPORTS.MTDDashboard)
+const MetaAdsDashboard = lazy(COMPONENT_IMPORTS.MetaAdsDashboard)
+const GoogleAdsDashboard = lazy(COMPONENT_IMPORTS.GoogleAdsDashboard)
+const BingAdsDashboard = lazy(COMPONENT_IMPORTS.BingAdsDashboard)
+const ReferralDashboard = lazy(COMPONENT_IMPORTS.ReferralDashboard)
+const LeadsAssignedDashboard = lazy(COMPONENT_IMPORTS.LeadsAssignedDashboard)
+const AskAI = lazy(COMPONENT_IMPORTS.AskAI)
+const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
 
 // Suspense fallback — slim skeleton shown while lazy chunk loads
 
@@ -107,6 +108,16 @@ const DASHBOARD_FALLBACK_ORDER = [
 function ProtectedRoute({ children, dashboardId }) {
   const { user, loading } = useAuth()
   const location = useLocation(); /* warm the Summary page cache once per session, as soon as we know who is logged in */ useEffect(() => { if (user && user.email) prefetchSummaryAnalysis() }, [user && user.email])
+
+  // Warm every page's JS chunk in idle time once logged in, so switching sections
+  // almost never shows the Suspense loader (only the very first, unwarmed navigation would).
+  useEffect(() => {
+    if (!user || !user.email) return
+    const idle = window.requestIdleCallback || (fn => setTimeout(fn, 1500))
+    const cancelIdle = window.cancelIdleCallback || clearTimeout
+    const id = idle(() => prefetchAllRoutes())
+    return () => cancelIdle(id)
+  }, [user && user.email])
 
   // Dynamic page title
   useEffect(() => {

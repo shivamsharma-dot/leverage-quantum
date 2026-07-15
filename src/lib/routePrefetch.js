@@ -1,0 +1,72 @@
+// Central registry of lazy-loaded page chunks, used by App.jsx's React.lazy()
+// calls AND by Sidebar.jsx to warm a chunk on hover before the user clicks.
+// Keeping one source of truth means a hover-prefetch and the route's own
+// lazy() import resolve to the exact same chunk (browser module cache dedupes
+// the network fetch either way).
+export const COMPONENT_IMPORTS = {
+  DashboardHome: () => import('../pages/DashboardHome'),
+  ROASDashboard: () => import('../pages/ROASDashboard'),
+  LeadQualityDashboard: () => import('../pages/LeadQualityDashboard'),
+  ChannelMixDashboard: () => import('../pages/ChannelMixDashboard'),
+  RevenueDashboard: () => import('../pages/RevenueDashboard'),
+  LeadQualificationDashboard: () => import('../pages/LeadQualificationDashboard'),
+  HumanQLDetailDashboard: () => import('../pages/HumanQLDetailDashboard'),
+  AIQLDetailDashboard: () => import('../pages/AIQLDetailDashboard'),
+  WhatsAppDashboard: () => import('../pages/WhatsAppDashboard'),
+  MTDDashboard: () => import('../pages/MTDDashboard'),
+  MetaAdsDashboard: () => import('../pages/MetaAdsDashboard'),
+  GoogleAdsDashboard: () => import('../pages/GoogleAdsDashboard'),
+  BingAdsDashboard: () => import('../pages/BingAdsDashboard'),
+  ReferralDashboard: () => import('../pages/ReferralDashboard'),
+  LeadsAssignedDashboard: () => import('../pages/LeadsAssignedDashboard'),
+  AskAI: () => import('../pages/AskAI'),
+  SettingsPage: () => import('../pages/SettingsPage'),
+}
+
+// Route path (no query string) -> component key above.
+const ROUTE_COMPONENT = {
+  '/': 'DashboardHome',
+  '/dashboard/roas': 'ROASDashboard',
+  '/dashboard/mtd': 'MTDDashboard',
+  '/dashboard/lead-quality': 'LeadQualityDashboard',
+  '/dashboard/channel-mix': 'ChannelMixDashboard',
+  '/dashboard/revenue': 'RevenueDashboard',
+  '/dashboard/lq-ops': 'LeadQualificationDashboard',
+  '/dashboard/lq-ops-monthly': 'LeadQualificationDashboard',
+  '/dashboard/lq-ops-detail': 'HumanQLDetailDashboard',
+  '/dashboard/lq-ops-ai-detail': 'AIQLDetailDashboard',
+  '/dashboard/referral': 'ReferralDashboard',
+  '/dashboard/leads-assigned': 'LeadsAssignedDashboard',
+  '/dashboard/whatsapp': 'WhatsAppDashboard',
+  '/dashboard/meta-ads': 'MetaAdsDashboard',
+  '/dashboard/google-ads': 'GoogleAdsDashboard',
+  '/dashboard/bing-ads': 'BingAdsDashboard',
+  '/ask-ai': 'AskAI',
+  '/settings': 'SettingsPage',
+}
+
+const warmed = new Set()
+
+// Warm a single route's chunk (e.g. on sidebar hover/focus). Safe to call
+// repeatedly — only fetches once per session.
+export function prefetchRoute(path) {
+  const base = (path || '').split('?')[0]
+  const key = ROUTE_COMPONENT[base]
+  if (!key || warmed.has(key)) return
+  warmed.add(key)
+  COMPONENT_IMPORTS[key]().catch(() => { warmed.delete(key) })
+}
+
+let allWarmed = false
+
+// Warm every page chunk in the background (idle time) so most navigations
+// never hit the Suspense fallback at all, even without a hover first.
+export function prefetchAllRoutes() {
+  if (allWarmed) return
+  allWarmed = true
+  Object.entries(COMPONENT_IMPORTS).forEach(([key, load]) => {
+    if (warmed.has(key)) return
+    warmed.add(key)
+    load().catch(() => { warmed.delete(key) })
+  })
+}

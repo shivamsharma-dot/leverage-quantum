@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import styles from './Sidebar.module.css'
 import SnapshotTool from './SnapshotTool'
+import { prefetchRoute } from '../lib/routePrefetch'
 
 const NAV = [
   {
@@ -248,7 +249,7 @@ export default function Sidebar() {
               <div key={group.label} style={{marginBottom:8,padding:'0 10px'}}>
                 <div style={{fontSize:10,fontWeight:600,color:'#9CA3AF',letterSpacing:'0.08em',textTransform:'uppercase',padding:'10px 6px 4px'}}>{group.label}</div>
                 {group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item=>(
-                  <a key={item.to} href={item.to} onClick={()=>setMobileOpen(false)}
+                  <a key={item.to} href={item.to} onClick={()=>setMobileOpen(false)} onTouchStart={()=>prefetchRoute(item.defaultTo || item.to)}
                     style={{display:'flex',alignItems:'center',gap:9,padding:'9px 10px',borderRadius:9,textDecoration:'none',color:'#374151',fontSize:13,fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
                     {item.icon}{item.label}
                   </a>
@@ -282,6 +283,7 @@ export default function Sidebar() {
         <div className={styles.collapsedNav}>
           {NAV.map(group => group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item => (
             <NavLink key={item.label} to={item.to} end={item.end}
+              onMouseEnter={()=>prefetchRoute(item.defaultTo || item.to)} onFocus={()=>prefetchRoute(item.defaultTo || item.to)}
               className={({ isActive }) => `${styles.collapsedItem} ${isActive || (item.label === 'Meta Ads' && isMetaParentActive) ? styles.collapsedActive : ''}`}
               title={item.label}>
               {ICON_MAP[item.label]}
@@ -331,6 +333,7 @@ export default function Sidebar() {
                     <button
                       className={`${styles.navItem} ${parentActive ? styles.active : ''}`}
                       onClick={() => { setExpanded(item.label)(e => !e); if (!parentActive) navigate(item.defaultTo || item.subItems[0].to) }}
+                      onMouseEnter={()=>prefetchRoute(item.defaultTo || item.subItems[0].to)} onFocus={()=>prefetchRoute(item.defaultTo || item.subItems[0].to)}
                       style={{width:'100%',textAlign:'left',background:'none',border:'none',cursor:'pointer',font:'inherit'}}>
                       <span className={styles.navIcon}>{item.icon}</span>
                       <span style={{flex:1}}>{item.label}</span>
@@ -345,6 +348,7 @@ export default function Sidebar() {
                           <button key={sub.label}
                             className={`${styles.subNavItem} ${isSubActive(sub) ? styles.subNavActive : ''}`}
                             onClick={() => navigate(sub.to)}
+                            onMouseEnter={()=>prefetchRoute(sub.to)} onFocus={()=>prefetchRoute(sub.to)}
                             style={{width:'100%',textAlign:'left',background:'none',border:'none',cursor:'pointer',font:'inherit'}}>
                             <span style={{width:5,height:5,borderRadius:'50%',background:isSubActive(sub)?'#1F3C84':'#D1D5DB',flexShrink:0,display:'inline-block'}}/>
                             <span>{sub.label}</span>
@@ -357,6 +361,7 @@ export default function Sidebar() {
               }
               return (
                 <NavLink key={item.label} to={item.to} end={item.end}
+                  onMouseEnter={()=>prefetchRoute(item.to)} onFocus={()=>prefetchRoute(item.to)}
                   className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
                   <span className={styles.navIcon}>{item.icon}</span>
                   <span>{item.label}</span>
@@ -390,6 +395,7 @@ export default function Sidebar() {
         </div>
         {canSee('settings') && (
           <NavLink to="/settings" title="Settings"
+            onMouseEnter={()=>prefetchRoute('/settings')} onFocus={()=>prefetchRoute('/settings')}
             className={({ isActive }) => `${styles.gearBtn}${isActive ? ' '+styles.gearBtnActive : ''}`}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="12" cy="12" r="3"/>
