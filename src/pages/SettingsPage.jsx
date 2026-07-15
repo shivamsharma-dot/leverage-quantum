@@ -128,6 +128,12 @@ function sourceIconClass(s) {
   return { Icon: GenericSourceIcon, wrap: '' }
 }
 
+// Sheet-backed sources (editKey) and admin-added custom sources are always CSV/Sheet-driven;
+// everything else (Meta Graph API, Google Ads API) is a live server-side API connection.
+function sourceCategory(s) {
+  return (s.editKey || s.custom) ? 'sheets' : 'api'
+}
+
 // Small custom-styled dropdown (never a native <select> -- house design rule).
 function Dropdown({ options, value, onChange, minWidth = 100, disabled }) {
   const [open, setOpen] = useState(false)
@@ -254,6 +260,8 @@ export default function SettingsPage() {
     const [customSources, setCustomSources] = useState([]) // admin-added sources, stored server-side via /api/preferences
     const [newSourceForm, setNewSourceForm] = useState({ name: '', url: '' })
     const [addSourceMsg, setAddSourceMsg] = useState(null)
+    const [addSourceOpen, setAddSourceOpen] = useState(false)
+    const [sourceCatFilter, setSourceCatFilter] = useState('api') // 'api' | 'sheets' -- which category card is selected
     const [sourceHealth, setSourceHealth] = useState([]) // rows from the source_health table, written by the scheduled GitHub Action
     const [checkingAll, setCheckingAll] = useState(false)
     const [testDetailsOpen, setTestDetailsOpen] = useState({}) // per-source: whether columns/month-chips/sample-rows are expanded
@@ -317,6 +325,8 @@ export default function SettingsPage() {
         const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'custom_data_sources', value: next }) })
         if (!r.ok) throw new Error('Save failed')
         setAddSourceMsg({ type: 'ok', text: 'Added' })
+        setAddSourceOpen(false)
+        setSourceCatFilter('sheets') // custom sources are always sheet-backed -- jump to the category that now contains it
       } catch (e) {
         setCustomSources(prev) // revert -- otherwise it stays visible (even testable) despite never being persisted, and vanishes on next reload with no explanation
         setAddSourceMsg({ type: 'err', text: e.message })
@@ -958,8 +968,44 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     })}
                   </div>
                 )}
+                {(() => {
+                  const allSources = [...DATA_SOURCES, ...customSources]
+                  const apiCount = allSources.filter(s => sourceCategory(s) === 'api').length
+                  const sheetsCount = allSources.filter(s => sourceCategory(s) === 'sheets').length
+                  return (
+                    <div className={styles.dsCatRow}>
+                      <button type="button" className={styles.dsCatCard + (sourceCatFilter === 'api' ? ' ' + styles.dsCatCardActive : '')} onClick={() => setSourceCatFilter('api')}>
+                        <div className={styles.dsCatCheck}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></div>
+                        <div className={styles.dsCatTop}>
+                          <div className={styles.dsCatIcons}><span><MetaIcon /></span><span><GenericSourceIcon /></span></div>
+                          <span className={styles.dsCatCount}>{apiCount} connection{apiCount === 1 ? '' : 's'}</span>
+                        </div>
+                        <div className={styles.dsCatName}>API Connections</div>
+                        <div className={styles.dsCatDesc}>Live server-side connections: Meta Graph API, Google Ads API.</div>
+                      </button>
+                      <button type="button" className={styles.dsCatCard + (sourceCatFilter === 'sheets' ? ' ' + styles.dsCatCardActive : '')} onClick={() => setSourceCatFilter('sheets')}>
+                        <div className={styles.dsCatCheck}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></div>
+                        <div className={styles.dsCatTop}>
+                          <div className={styles.dsCatIcons}><span><SheetsIcon /></span></div>
+                          <span className={styles.dsCatCount}>{sheetsCount} connection{sheetsCount === 1 ? '' : 's'}</span>
+                        </div>
+                        <div className={styles.dsCatName}>Google Sheets</div>
+                        <div className={styles.dsCatDesc}>Published CSV sheets powering every dashboard's live data.</div>
+                      </button>
+                    </div>
+                  )
+                })()}
+                <div className={styles.dsListHead}>
+                  <span className={styles.dsListTitle}>{sourceCatFilter === 'api' ? 'API Connections' : 'Google Sheets'}</span>
+                  {userIsAdmin && (
+                    <button type="button" className={styles.dsAddBtn} onClick={() => { setNewSourceForm({ name: '', url: '' }); setAddSourceMsg(null); setAddSourceOpen(true) }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                      Add source
+                    </button>
+                  )}
+                </div>
                 <div className={styles.dsList}>
-                {[...DATA_SOURCES, ...customSources].map(s => {
+                {[...DATA_SOURCES, ...customSources].filter(s => sourceCategory(s) === sourceCatFilter).map(s => {
                   const { Icon, wrap } = sourceIconClass(s)
                   return (
                   <div key={s.name} className={styles.dsRow} style={{ flexWrap: 'wrap', rowGap: 10 }}>
@@ -1054,18 +1100,44 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   )
                 })}
               </div>
-                {userIsAdmin && (
-                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '0.5px solid #F3F4F6' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Add a custom source</div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                      <input type="text" placeholder="Name" value={newSourceForm.name} onChange={e => setNewSourceForm(prev => ({ ...prev, name: e.target.value }))} className={styles.input} style={{ width: 180 }} />
-                      <input type="text" placeholder="Published/gviz CSV URL" value={newSourceForm.url} onChange={e => setNewSourceForm(prev => ({ ...prev, url: e.target.value }))} className={styles.input} style={{ flex: 1, minWidth: 260 }} />
-                      <button className={styles.primaryBtn} style={{ padding: '7px 16px', fontSize: 12, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff' }} onClick={addCustomSource}>Add</button>
+                {addSourceOpen && userIsAdmin && (() => {
+                  const name = newSourceForm.name.trim()
+                  const url = newSourceForm.url.trim()
+                  const nameInvalid = addSourceMsg && addSourceMsg.type === 'err' && !name
+                  const urlInvalid = addSourceMsg && addSourceMsg.type === 'err' && !url.startsWith('http')
+                  const canSubmit = !!name && url.startsWith('http')
+                  return (
+                    <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setAddSourceOpen(false) }}>
+                      <div className={styles.dsModal}>
+                        <div className={styles.dsModalHead}>
+                          <div className={styles.dsModalTitle}>Add a data source</div>
+                          <button type="button" className={styles.dsModalClose} onClick={() => setAddSourceOpen(false)}>
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                          </button>
+                        </div>
+                        <p className={styles.dsModalSub}>Register a published Google Sheet so it's tracked and testable from here. Wiring it into an actual dashboard chart still needs a small code change.</p>
+                        <div className={styles.dsField + (nameInvalid ? ' ' + styles.dsFieldInvalid : '')}>
+                          <label>Name</label>
+                          <input type="text" autoFocus placeholder="e.g. Partner Referral Sheet" value={newSourceForm.name} onChange={e => setNewSourceForm(prev => ({ ...prev, name: e.target.value }))} />
+                          <p className={styles.dsFieldErr}>Give this source a name.</p>
+                        </div>
+                        <div className={styles.dsField + (urlInvalid ? ' ' + styles.dsFieldInvalid : '')}>
+                          <label>Published / gviz CSV URL</label>
+                          <input type="text" placeholder="https://docs.google.com/spreadsheets/.../gviz/tq?tqx=out:csv&sheet=..." value={newSourceForm.url} onChange={e => setNewSourceForm(prev => ({ ...prev, url: e.target.value }))} />
+                          <p className={styles.dsFieldHint}>File &rarr; Share &rarr; Publish to web, choose CSV, paste the link here.</p>
+                          <p className={styles.dsFieldErr}>Paste a valid sheet URL.</p>
+                        </div>
+                        {addSourceMsg && addSourceMsg.type === 'err' && (name && url.startsWith('http')) && (
+                          <p className={styles.note} style={{ margin: '-6px 0 12px', color: '#c0392b' }}>✕ {addSourceMsg.text}</p>
+                        )}
+                        <div className={styles.dsModalActions}>
+                          <button type="button" className={styles.dsBtnGhost} onClick={() => setAddSourceOpen(false)}>Cancel</button>
+                          <button type="button" className={styles.dsBtnPrimary} disabled={!canSubmit} onClick={addCustomSource}>Add source</button>
+                        </div>
+                      </div>
                     </div>
-                    {addSourceMsg && (<p className={styles.note} style={{ margin: '6px 0 0', color: addSourceMsg.type === 'err' ? '#c0392b' : undefined }}>{addSourceMsg.type === 'err' ? '✕ ' : '✓ '}{addSourceMsg.text}</p>)}
-                    <p className={styles.note} style={{ marginTop: 6 }}>Tracks and tests any published Google Sheet CSV from here. Note: to actually pull a new source into a dashboard chart still needs a small code change -- this just lets you register and monitor it immediately.</p>
-                  </div>
-                )}
+                  )
+                })()}
               </div>
 
             </>
