@@ -160,6 +160,13 @@ export default function HumanQLDetailDashboard() {
   const resetCols = () => { setColOrder(HUMAN_QL_COLS.map(c => c.key)); setPinnedCols([]); setHiddenCols([]) }
   const visibleOrder = colOrder.filter(k => !hiddenCols.includes(k))
   const displayOrder = [...visibleOrder.filter(k => pinnedCols.includes(k)), ...visibleOrder.filter(k => !pinnedCols.includes(k))]
+  const colWidthOf = k => (HUMAN_QL_COLS.find(c => c.key === k) || {}).width || 120
+  const pinnedLeftMap = (() => {
+    let acc = 0
+    const map = {}
+    displayOrder.filter(k => pinnedCols.includes(k)).forEach(k => { map[k] = acc; acc += colWidthOf(k) })
+    return map
+  })()
 
   useEffect(() => {
     let cancelled = false
@@ -417,14 +424,16 @@ export default function HumanQLDetailDashboard() {
                   {displayOrder.map(key => {
                     const c = HUMAN_QL_COLS.find(cc => cc.key === key)
                     const sortable = !c || c.sortable !== false
+                    const isPinned = pinnedCols.includes(key)
+                    const thStyle = { ...th, ...(isPinned ? { position: 'sticky', left: pinnedLeftMap[key], zIndex: 3, background: '#F9FAFB', borderRight: pinnedCols[pinnedCols.length - 1] === key ? '1px solid #E5E7EB' : 'none' } : {}) }
                     return (
-                      <th key={key} style={th}
-                        draggable
+                      <th key={key} style={thStyle}
+                        draggable={!isPinned}
                         onDragStart={() => setDragKey(key)}
                         onDragOver={e => e.preventDefault()}
                         onDrop={e => { e.preventDefault(); if (dragKey) reorderTo(dragKey, key); setDragKey(null) }}
                         onDragEnd={() => setDragKey(null)}>
-                        <span onClick={() => sortable && toggleSort(key)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: sortable ? 'pointer' : 'grab' }}>
+                        <span onClick={() => sortable && toggleSort(key)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: sortable ? 'pointer' : (isPinned ? 'default' : 'grab') }}>
                           {c ? c.label : key}
                           {sortable && sortKey === key && <span style={{ color: C.blue }}>{sortDir === 'asc' ? '▲' : '▼'}</span>}
                         </span>
@@ -435,7 +444,11 @@ export default function HumanQLDetailDashboard() {
                 <tbody>
                   {pageItems.map((r, i) => (
                     <tr key={r.prospectId || i}>
-                      {displayOrder.map(key => <td key={key} style={td}>{cell(r, key)}</td>)}
+                      {displayOrder.map(key => {
+                        const isPinned = pinnedCols.includes(key)
+                        const tdStyle = { ...td, ...(isPinned ? { position: 'sticky', left: pinnedLeftMap[key], zIndex: 1, background: '#fff', borderRight: pinnedCols[pinnedCols.length - 1] === key ? '1px solid #F3F4F6' : 'none' } : {}) }
+                        return <td key={key} style={tdStyle}>{cell(r, key)}</td>
+                      })}
                     </tr>
                   ))}
                   {pageItems.length === 0 && (
