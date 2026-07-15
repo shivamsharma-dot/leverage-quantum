@@ -985,19 +985,23 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   return (
                     <div className={styles.dsCatRow}>
                       <button type="button" className={styles.dsCatCard + (sourceCatFilter === 'api' ? ' ' + styles.dsCatCardActive : '')} onClick={() => setSourceCatFilter('api')}>
-                        <div className={styles.dsCatCheck}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></div>
                         <div className={styles.dsCatTop}>
                           <div className={styles.dsCatIcons}><span><MetaIcon /></span><span><GoogleIcon /></span></div>
-                          <span className={styles.dsCatCount}>{apiCount} connection{apiCount === 1 ? '' : 's'}</span>
+                          <span className={styles.dsCatCountWrap}>
+                            <span className={styles.dsCatCount}>{apiCount} connection{apiCount === 1 ? '' : 's'}</span>
+                            <span className={styles.dsCatCheck}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></span>
+                          </span>
                         </div>
                         <div className={styles.dsCatName}>API Connections</div>
                         <div className={styles.dsCatDesc}>Live server-side connections: Meta Graph API, Google Ads API.</div>
                       </button>
                       <button type="button" className={styles.dsCatCard + (sourceCatFilter === 'sheets' ? ' ' + styles.dsCatCardActive : '')} onClick={() => setSourceCatFilter('sheets')}>
-                        <div className={styles.dsCatCheck}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></div>
                         <div className={styles.dsCatTop}>
                           <div className={styles.dsCatIcons}><span><SheetsIcon /></span></div>
-                          <span className={styles.dsCatCount}>{sheetsCount} connection{sheetsCount === 1 ? '' : 's'}</span>
+                          <span className={styles.dsCatCountWrap}>
+                            <span className={styles.dsCatCount}>{sheetsCount} connection{sheetsCount === 1 ? '' : 's'}</span>
+                            <span className={styles.dsCatCheck}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg></span>
+                          </span>
                         </div>
                         <div className={styles.dsCatName}>Google Sheets</div>
                         <div className={styles.dsCatDesc}>Published CSV sheets powering every dashboard's live data.</div>

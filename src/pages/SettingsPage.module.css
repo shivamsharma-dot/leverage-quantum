@@ -435,14 +435,15 @@
 .dsCatIcons span + span { margin-left:-9px; }
 .dsCatIcons svg { width:16px; height:16px; }
 .dsCatIcons svg.dsIconMeta { width:22px; height:auto; }
-.dsCatCount { font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px; background:#E8EFF9; color:#1F3C84; flex-shrink:0; }
+.dsCatCountWrap { position:relative; flex-shrink:0; }
+.dsCatCount { font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px; background:#E8EFF9; color:#1F3C84; display:inline-block; }
 .dsCatName { font-size:14px; font-weight:700; letter-spacing:-0.01em; color:var(--text); }
 .dsCatDesc { font-size:11.5px; color:var(--text-3); line-height:1.4; }
-.dsCatCheck { position:absolute; top:13px; right:13px; width:17px; height:17px; border-radius:50%; background:#1C9FD4;
+.dsCatCheck { position:absolute; top:-7px; right:-7px; width:16px; height:16px; border-radius:50%; background:#1C9FD4;
                color:#fff; display:flex; align-items:center; justify-content:center; opacity:0; transform:scale(.6);
-               transition:opacity .15s ease, transform .15s ease; }
+               box-shadow:0 0 0 2px #fff; transition:opacity .15s ease, transform .15s ease; }
 .dsCatCardActive .dsCatCheck { opacity:1; transform:scale(1); }
-.dsCatCheck svg { width:9px; height:9px; }
+.dsCatCheck svg { width:8px; height:8px; }
 
 /* ---- filtered-list header + add button ---- */
 .dsListHead { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
