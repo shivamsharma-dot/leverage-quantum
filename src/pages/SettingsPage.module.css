@@ -505,6 +505,34 @@
 .rtChip.rtChipOn { background:linear-gradient(135deg, #1F3C84, #1C9FD4); border-color:transparent; color:#fff; }
 
 /* ============================================================
+   Report email preview (rp*) — live Gmail-style preview
+============================================================ */
+.rpNote { font-size:11.5px; color:#8a6d1f; background:#FEF9E7; border:1px solid #FBEEC3; border-radius:9px; padding:9px 12px; line-height:1.55; margin:0 0 14px; }
+.rpControls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:14px; }
+.rpTabs { display:inline-flex; gap:3px; background:#F1F5F9; border-radius:9px; padding:3px; }
+.rpTab { border:none; background:transparent; padding:6px 13px; border-radius:7px; font-size:12px; font-weight:700; color:#64748B; cursor:pointer; font-family:inherit; transition:background .15s,color .15s; }
+.rpTab.rpTabActive { background:linear-gradient(135deg,#1F3C84,#1C9FD4); color:#fff; }
+.rpViewToggle { display:inline-flex; gap:3px; background:#F1F5F9; border-radius:9px; padding:3px; margin-left:auto; }
+.rpViewBtn { border:none; background:transparent; padding:6px 13px; border-radius:7px; font-size:12px; font-weight:700; color:#64748B; cursor:pointer; font-family:inherit; }
+.rpViewBtn.rpViewBtnActive { background:#fff; color:#1F3C84; box-shadow:0 1px 3px rgba(16,30,68,.12); }
+.rpFrame { background:#fff; border:1px solid #EEF1F6; border-radius:14px; overflow:hidden; box-shadow:0 1px 2px rgba(16,30,68,.04),0 8px 24px -16px rgba(16,30,68,.10); }
+.rpFrame.rpFrameMobile { max-width:380px; margin:0 auto; }
+.rpTop { background:#fff; border-bottom:1px solid #EEF1F6; padding:9px 16px; display:flex; align-items:center; gap:9px; }
+.rpTop svg { width:14px; height:14px; color:#9CA3AF; flex-shrink:0; }
+.rpTop span { flex:1; background:#F1F5F9; border-radius:20px; padding:6px 13px; font-size:11.5px; color:#9CA3AF; }
+.rpMsgHead { padding:14px 18px 12px; border-bottom:1px solid #EEF1F6; }
+.rpSubject { font-size:15px; font-weight:600; color:#0F172A; margin-bottom:9px; word-break:break-word; }
+.rpFromRow { display:flex; align-items:flex-start; gap:9px; }
+.rpAvatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,#1F3C84,#1C9FD4); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.rpFromMeta { flex:1; min-width:0; }
+.rpFromName { font-size:12.5px; font-weight:700; color:#0F172A; }
+.rpFromEmail { font-size:11px; color:#9CA3AF; }
+.rpToLine { font-size:10.5px; color:#9CA3AF; margin-top:1px; }
+.rpTime { font-size:10.5px; color:#9CA3AF; white-space:nowrap; }
+.rpBodyWrap { background:#F0F4F8; overflow-x:auto; }
+.rpBodyWrap iframe { border:none; display:block; width:100%; background:#F0F4F8; }
+
+/* ============================================================
    Premium Page Visibility cards (pv*)
 ============================================================ */
 .pvGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }

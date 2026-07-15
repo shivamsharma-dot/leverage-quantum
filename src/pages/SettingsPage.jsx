@@ -217,6 +217,126 @@ function KpiIconPreview({ name, color = '#94A3B8' }) {
   return icons[name] || icons['grid']
 }
 
+// ---- Report email preview (mirrors api/send-report.js buildReport()) ----
+// Sample data + AI text stand in for a live send; header/KPI/table/footer markup is copied verbatim.
+const RP_SAMPLE = {
+  daily:   { periodLabel: 'Yesterday — Tue, 14 Jul 2026', spend: 412000, impr: 1284000, clicks: 9820, ctr: 0.76, cpm: 321, freq: 2.9, reach: 441000, leads: 186, days: 1 },
+  weekly:  { periodLabel: 'Last 7 Days — 08 Jul to 14 Jul 2026', spend: 2890000, impr: 8760000, clicks: 64200, ctr: 0.73, cpm: 330, freq: 3.4, reach: 1620000, leads: 1240, days: 7 },
+  monthly: { periodLabel: 'Last 30 Days — 15 Jun to 14 Jul 2026', spend: 11640000, impr: 35800000, clicks: 251000, ctr: 0.70, cpm: 325, freq: 4.1, reach: 4900000, leads: 5010, days: 30 },
+}
+const RP_SUBJECTS = {
+  daily: d => `Meta Ads Daily Report — Yesterday · ${d}`,
+  weekly: d => `Meta Ads Weekly Report — Last 7 Days · ${d}`,
+  monthly: d => `Meta Ads Monthly Report — Last 30 Days · ${d}`,
+}
+const RP_CAMPS = [
+  { name: 'PMX_FB_Ger_NAS_10June2026_Ad2', status: 'ACTIVE', spend: 184000, ctr: 1.12, freq: 2.1, leads: 64 },
+  { name: 'PMX_FB_UK_LeadGen_NAS_11_May26-Ad4', status: 'ACTIVE', spend: 151000, ctr: 0.61, freq: 4.2, leads: 31 },
+  { name: 'PMX_Demandgen_Italy_18Feb26', status: 'ACTIVE', spend: 98000, ctr: 0.44, freq: 3.8, leads: 19 },
+  { name: 'Remarketing_13July26_Sep26Intake', status: 'PAUSED', spend: 62000, ctr: 0.88, freq: 1.6, leads: 22 },
+]
+const RP_AI_SAMPLE = `
+<div style="padding:10px 14px;border-radius:8px;background:#F0FDF4;border-left:3px solid #22C55E;color:#14532D;margin-bottom:8px;font-size:13px;line-height:1.6">Biggest win: PMX_FB_Ger_NAS_10June2026_Ad2 is delivering <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">64 leads</strong> at a CTR of 1.12% — your most efficient campaign this period.</div>
+<div style="padding:10px 14px;border-radius:8px;background:#FFF5F5;border-left:3px solid #EF4444;color:#7F1D1D;margin-bottom:8px;font-size:13px;line-height:1.6">Biggest risk: PMX_FB_UK_LeadGen_NAS_11_May26-Ad4 is showing frequency <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">4.2x</strong> with CTR down to 0.61% — classic fatigue signal.</div>
+<div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #F1F5F9">CAMPAIGN FLAGS</div>
+<div style="padding:10px 14px;border-radius:8px;background:#EFF6FF;border-left:3px solid #3B82F6;color:#1E3A8A;margin-bottom:8px;font-size:13px;line-height:1.6">PMX_FB_UK_LeadGen_NAS_11_May26-Ad4: frequency above 3.5x threshold, CTR trending down — refresh creative.</div>
+<div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #F1F5F9">TOP 3 ACTIONS</div>
+<div style="font-size:13px;line-height:1.7;color:#334155">1. Refresh creative on Ad4 (UK) this week — frequency fatigue is capping reach.<br>2. Increase budget on Ad2 (Germany) — still efficient at scale.<br>3. Review Remarketing_13July26_Sep26Intake — paused but held 22 leads at strong CTR; consider reactivating.</div>`
+
+function rpFmtINR(n) {
+  n = parseFloat(n) || 0
+  if (n >= 1e7) return '₹' + (n / 1e7).toFixed(2) + ' Cr'
+  if (n >= 1e5) return '₹' + (n / 1e5).toFixed(1) + 'L'
+  if (n >= 1000) return '₹' + Math.round(n).toLocaleString('en-IN')
+  return '₹' + Math.round(n)
+}
+function rpKpiCard(label, value, sub, accent) {
+  return `<td width="20%" style="padding:4px"><div style="background:#F8FAFC;border-radius:10px;border:0.5px solid #E2E8F0;border-top:3px solid ${accent};padding:12px 14px"><div style="font-size:20px;font-weight:800;color:#0F172A;letter-spacing:-0.03em;line-height:1">${value}</div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94A3B8;margin-top:5px">${label}</div>${sub ? `<div style="font-size:10.5px;color:#94A3B8;margin-top:3px">${sub}</div>` : ''}</div></td>`
+}
+function rpCampTable(camps, avgCTR) {
+  const rows = camps.map((c, i) => {
+    const cpl = c.leads > 0 ? c.spend / c.leads : 0
+    const fatigue = c.freq > 3.5 || c.ctr < avgCTR * 0.5
+    const rowBg = i % 2 === 0 ? '#fff' : '#FAFBFC'
+    return `<tr style="background:${fatigue ? '#FFFBF0' : rowBg}">
+      <td style="padding:9px 12px;font-size:12px;font-weight:600;color:#0F172A;white-space:nowrap">${c.name.length > 40 ? c.name.slice(0, 38) + '…' : c.name}</td>
+      <td style="padding:9px 8px;text-align:center"><span style="display:inline-block;padding:2px 7px;border-radius:12px;font-size:10px;font-weight:700;background:${c.status === 'ACTIVE' ? '#DCFCE7' : '#F1F5F9'};color:${c.status === 'ACTIVE' ? '#166534' : '#94A3B8'}">${c.status}</span></td>
+      <td style="padding:9px 8px;font-size:12px;font-weight:700;color:#0F172A;text-align:right">${rpFmtINR(c.spend)}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;font-weight:600;color:${c.ctr >= 1 ? '#166534' : c.ctr >= avgCTR ? '#1E3A8A' : '#991B1B'}">${c.ctr.toFixed(2)}%</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;font-weight:600;color:${c.freq > 3.5 ? '#C2410C' : '#475569'}">${c.freq.toFixed(1)}x${c.freq > 3.5 ? ' ⚠' : ''}</td>
+      <td style="padding:9px 8px;font-size:12px;font-weight:700;text-align:right;color:#0F172A">${c.leads.toLocaleString('en-IN')}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;color:#475569">${cpl > 0 ? rpFmtINR(cpl) : '—'}</td>
+    </tr>`
+  }).join('')
+  return `<div style="overflow-x:auto;margin-top:4px"><table style="width:100%;border-collapse:collapse;font-family:${'-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif'}"><thead><tr style="background:#F8FAFC;border-bottom:2px solid #E2E8F0">${['Campaign', 'Status', 'Spend', 'CTR', 'Freq', 'Leads', 'CPL'].map(h => `<th style="padding:9px ${h === 'Campaign' ? '12px' : '8px'};font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748B;text-align:${h === 'Campaign' ? 'left' : 'right'};white-space:nowrap">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`
+}
+function rpSectionTitle(emoji, title) {
+  return `<div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#94A3B8;padding:16px 0 10px;border-bottom:1px solid #F1F5F9;margin-bottom:14px">${emoji}&nbsp; ${title}</div>`
+}
+function buildReportPreviewHTML(reportType, senderName) {
+  const NAVY = '#1F3C84', BLUE = '#1C9FD4', CYAN = '#29B9C3', GREEN = '#4CAE6F'
+  const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"
+  const s = RP_SAMPLE[reportType]
+  const accentColor = reportType === 'daily' ? BLUE : reportType === 'weekly' ? GREEN : NAVY
+  const typeLabel = reportType === 'daily' ? 'Daily' : reportType === 'weekly' ? 'Weekly' : 'Monthly'
+  const cpl = s.leads > 0 ? s.spend / s.leads : 0
+  const eps = s.leads > 0 ? (s.leads / s.days).toFixed(1) : '0'
+  const todayLabel = '15 Jul 2026'
+  return `<div style="max-width:680px;margin:0 auto;padding:24px 12px;font-family:${FONT};background:#F0F4F8">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,${NAVY} 0%,#0F2560 60%,#0D3D6B 100%);border-radius:16px 16px 0 0;overflow:hidden">
+      <tr><td style="padding:28px 32px 24px">
+        <table cellpadding="0" cellspacing="0" style="margin-bottom:20px"><tr>
+          <td style="vertical-align:middle;padding-right:10px"><table cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px"><tr>
+            <td valign="bottom" style="padding-right:2px"><div style="width:5px;height:10px;background:${GREEN};border-radius:2px"></div></td>
+            <td valign="bottom" style="padding-right:2px"><div style="width:5px;height:15px;background:${CYAN};border-radius:2px"></div></td>
+            <td valign="bottom"><div style="width:5px;height:19px;background:${BLUE};border-radius:2px"></div></td>
+          </tr></table></td>
+          <td style="vertical-align:middle"><div style="font-size:11px;font-weight:700;letter-spacing:.15em;color:rgba(255,255,255,0.45);text-transform:uppercase;line-height:1">LEVERAGE</div><div style="font-size:16px;font-weight:800;color:${BLUE};letter-spacing:.08em;text-transform:uppercase;line-height:1.2">QUANTUM</div></td>
+          <td style="vertical-align:middle;padding-left:16px"><div style="width:1px;height:32px;background:rgba(255,255,255,0.12)"></div></td>
+          <td style="vertical-align:middle;padding-left:16px"><span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${accentColor};font-size:10px;font-weight:700;color:#fff;letter-spacing:.06em;text-transform:uppercase">${typeLabel} Report</span></td>
+        </tr></table>
+        <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em;margin-bottom:4px">Meta Ads Performance</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.5);letter-spacing:.01em">${s.periodLabel}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px">act_641914389215638 · Generated ${todayLabel}</div>
+      </td></tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0">
+      <tr><td style="padding:16px 20px 4px"><table cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed"><tr>
+        ${rpKpiCard('Spend', rpFmtINR(s.spend), RP_CAMPS.length + ' campaigns', accentColor)}
+        ${rpKpiCard('Leads', s.leads.toLocaleString('en-IN'), 'EPS: ' + eps + '/day', BLUE)}
+        ${rpKpiCard('CPL', rpFmtINR(cpl), cpl > 3000 ? '⚠ Above target' : '✓ On track', cpl > 3000 ? '#EF4444' : '#22C55E')}
+        ${rpKpiCard('CTR', s.ctr.toFixed(2) + '%', s.ctr >= 1 ? '✓ Healthy' : '⚠ Below 1%', s.ctr >= 1 ? '#22C55E' : '#F59E0B')}
+        ${rpKpiCard('Freq', s.freq.toFixed(2) + 'x', s.freq > 3.5 ? '⚠ Fatigue risk' : '✓ OK', s.freq > 3.5 ? '#EF4444' : '#22C55E')}
+      </tr></table></td></tr>
+      <tr><td style="padding:4px 26px 8px"><table cellpadding="0" cellspacing="0"><tr>
+        <td style="padding-right:20px"><span style="font-size:11.5px;color:#64748B">Impressions</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${s.impr.toLocaleString('en-IN')}</span></td>
+        <td style="padding-right:20px"><span style="font-size:11.5px;color:#64748B">Reach</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${s.reach.toLocaleString('en-IN')}</span></td>
+        <td style="padding-right:20px"><span style="font-size:11.5px;color:#64748B">CPM</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${rpFmtINR(s.cpm)}</span></td>
+        <td><span style="font-size:11.5px;color:#64748B">Clicks</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${s.clicks.toLocaleString('en-IN')}</span></td>
+      </tr></table></td></tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:1px solid #F1F5F9">
+      <tr><td style="padding:0 26px 20px">${rpSectionTitle('📊', 'Campaign Breakdown')}${rpCampTable(RP_CAMPS, s.ctr)}</td></tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:1px solid #F1F5F9">
+      <tr><td style="padding:0 26px 24px">${rpSectionTitle('🤖', 'AI Analysis — Claude Sonnet')}${RP_AI_SAMPLE}</td></tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:${NAVY};border-radius:0 0 16px 16px;overflow:hidden">
+      <tr><td style="padding:16px 32px"><table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td style="vertical-align:middle"><table cellpadding="0" cellspacing="0"><tr>
+          <td style="vertical-align:middle;padding-right:8px"><table cellpadding="0" cellspacing="0"><tr>
+            <td valign="bottom" style="padding-right:1px"><div style="width:3px;height:7px;background:${GREEN};border-radius:1px"></div></td>
+            <td valign="bottom" style="padding-right:1px"><div style="width:3px;height:10px;background:${CYAN};border-radius:1px"></div></td>
+            <td valign="bottom"><div style="width:3px;height:13px;background:${BLUE};border-radius:1px"></div></td>
+          </tr></table></td>
+          <td style="vertical-align:middle"><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.9)">${senderName}</span></td>
+        </tr></table></td>
+        <td style="text-align:right;vertical-align:middle"><span style="font-size:10.5px;color:rgba(255,255,255,0.3)">Auto-generated · ${todayLabel} · Do not reply</span></td>
+      </tr></table></td></tr>
+    </table>
+  </div>`
+}
+
 export default function SettingsPage() {
   const { user } = useAuth()
   const userIsAdmin = user?.role === 'admin'
@@ -723,6 +843,8 @@ export default function SettingsPage() {
   const [sendReportOpen, setSendReportOpen] = useState(false)
   const [recipientsOpen, setRecipientsOpen] = useState(false)
   const [sendAudience, setSendAudience] = useState('test')
+  const [rpType, setRpType] = useState('daily')
+  const [rpView, setRpView] = useState('desktop')
   const [editingUser, setEditingUser] = useState(null)
   const [editIds, setEditIds] = useState([])
   const [editIsAdmin, setEditIsAdmin] = useState(false)
@@ -1573,6 +1695,71 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           Send Report
                         </button>
                       </div>
+                    </div>
+
+                    <div className={styles.card}>
+                      <h3 className={styles.cardTitle}>Email preview</h3>
+                      <p className={styles.cardDesc} style={{ marginBottom: 12 }}>
+                        Exactly what recipients see in Gmail, built from the real email template. Numbers and the AI analysis are sample data — those come from a live Meta Ads fetch and a Claude call at send time — but sender, subject, and layout below reflect your actual settings.
+                      </p>
+                      <p className={styles.rpNote}>The real template has no mobile-responsive styling, so phone Gmail doesn't reflow it — it shrinks the whole desktop layout to fit. The Mobile view here reproduces that shrink, not a redesigned layout.</p>
+                      <div className={styles.rpControls}>
+                        <div className={styles.rpTabs}>
+                          {['daily', 'weekly', 'monthly'].map(t => (
+                            <button key={t} type="button" className={styles.rpTab + (rpType === t ? ' ' + styles.rpTabActive : '')} onClick={() => setRpType(t)} style={{ textTransform: 'capitalize' }}>
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                        <div className={styles.rpViewToggle}>
+                          <button type="button" className={styles.rpViewBtn + (rpView === 'desktop' ? ' ' + styles.rpViewBtnActive : '')} onClick={() => setRpView('desktop')}>Desktop</button>
+                          <button type="button" className={styles.rpViewBtn + (rpView === 'mobile' ? ' ' + styles.rpViewBtnActive : '')} onClick={() => setRpView('mobile')}>Mobile</button>
+                        </div>
+                      </div>
+                      {(() => {
+                        const senderName = rcName.trim() || 'Leverage Quantum'
+                        const senderEmail = rcEmail.trim() || 'quantum@platform.leverageedu.com'
+                        const todayLabel = '15 Jul 2026'
+                        const subject = (rcSubjects[rpType] && rcSubjects[rpType].trim()) || RP_SUBJECTS[rpType](todayLabel)
+                        const initials = senderName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'LQ'
+                        const scale = rpView === 'mobile' ? 0.55 : 1
+                        const naturalWidth = 704
+                        const html = buildReportPreviewHTML(rpType, senderName + ' <span style="color:#1C9FD4">Quantum</span>')
+                        return (
+                          <div className={styles.rpFrame + (rpView === 'mobile' ? ' ' + styles.rpFrameMobile : '')}>
+                            <div className={styles.rpTop}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.3-4.3" /></svg>
+                              <span>Search mail</span>
+                            </div>
+                            <div className={styles.rpMsgHead}>
+                              <div className={styles.rpSubject}>{subject}</div>
+                              <div className={styles.rpFromRow}>
+                                <div className={styles.rpAvatar}>{initials}</div>
+                                <div className={styles.rpFromMeta}>
+                                  <div className={styles.rpFromName}>{senderName} <span className={styles.rpFromEmail}>&lt;{senderEmail}&gt;</span></div>
+                                  <div className={styles.rpToLine}>to me</div>
+                                </div>
+                                <div className={styles.rpTime}>9:30 AM</div>
+                              </div>
+                            </div>
+                            <div className={styles.rpBodyWrap} style={{ height: (rpView === 'mobile' ? 620 : 1120) }}>
+                              <iframe
+                                title="report-email-preview"
+                                srcDoc={'<html><body style="margin:0">' + html + '</body></html>'}
+                                style={{ width: naturalWidth, transform: `scale(${scale})`, transformOrigin: 'top left', height: naturalWidth * 1.8 }}
+                                scrolling="no"
+                                onLoad={e => {
+                                  try {
+                                    const h = e.target.contentDocument.body.scrollHeight
+                                    e.target.style.height = h + 'px'
+                                    e.target.parentElement.style.height = (h * scale) + 'px'
+                                  } catch (err) { /* cross-doc measurement can fail silently, fixed heights above cover it */ }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </div>
 
                     {editReportOpen && (
