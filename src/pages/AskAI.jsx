@@ -553,11 +553,12 @@ export default function AskAI() {
 
   /* composer — shared between the centered landing state and the docked-to-bottom conversation state */
   const composerActive = composerFocused || !!input
+  const composerRadius = isMobile ? 22 : 14
   const composer = (
     <div style={{maxWidth: composerActive ? 'min(920px, 96%)' : 'min(880px, 94%)',margin:'0 auto',width:'100%',transition:'max-width .28s cubic-bezier(.4,0,.2,1)'}}>
-      <div style={{position:'relative',background:'#fff',border:'none',borderRadius:14, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding: composerActive ? '12px 16px 11px' : '8px 14px 9px',transform: composerActive?'scale(1.008)':'scale(1)',transition:'padding .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), box-shadow .28s ease',boxShadow:composerActive?'0 10px 32px -8px rgba(28,159,212,0.32), 0 2px 6px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)'}}>
+      <div style={{position:'relative',background:'#fff',border:'none',borderRadius:composerRadius, animation: loading?'qGlow 1.6s ease-in-out infinite':'none', padding: isMobile ? '16px 18px 14px' : (composerActive ? '12px 16px 11px' : '8px 14px 9px'),transform: composerActive?'scale(1.008)':'scale(1)',transition:'padding .28s cubic-bezier(.4,0,.2,1), transform .28s cubic-bezier(.4,0,.2,1), box-shadow .28s ease',boxShadow:composerActive?'0 10px 32px -8px rgba(28,159,212,0.32), 0 2px 6px rgba(15,23,42,0.06)':'0 2px 14px rgba(15,23,42,0.07), 0 1px 2px rgba(15,23,42,0.04)'}}>
         {/* brand gradient top accent bar — clipped by a full-size overlay (not the bar's own radius, which can't express a 16px arc at 3px tall) so its corners follow the container's actual curve; the overlay is a sibling of the dropdown-bearing content, not an ancestor, so dropdowns still render unclipped */}
-        <div style={{position:'absolute',inset:0,borderRadius:14,overflow:'hidden',pointerEvents:'none'}}>
+        <div style={{position:'absolute',inset:0,borderRadius:composerRadius,overflow:'hidden',pointerEvents:'none'}}>
           <div style={{position:'absolute',top:0,left:0,right:0,height:composerActive?4:3,background:'linear-gradient(90deg,#1F3C84 0%,#1C9FD4 45%,#29B9C3 75%,#4CAE6F 100%)',opacity:composerActive?1:0.85,transition:'opacity .25s ease, height .25s ease'}}/>
         </div>
         <textarea ref={textRef} value={input} disabled={loading} rows={1} placeholder="Ask anything…" className="composerInput"
@@ -565,8 +566,8 @@ export default function AskAI() {
           onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}}
           onFocus={()=>{setRailOpen(false);setComposerFocused(true)}}
           onBlur={()=>setComposerFocused(false)}
-          style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:8}}>
+          style={{width:'100%',border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:isMobile?16:14,color:'#0F172A',background:'transparent',maxHeight:180,lineHeight:1.6,padding:0}}/>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:isMobile?12:8}}>
           <div style={{display:'flex',alignItems:'center',gap:6}}>
             <div ref={scopeRef} style={{position:'relative'}}>
               <button onClick={e=>{e.stopPropagation();setScopeOpen(v=>!v)}} className="mabtn"
@@ -601,13 +602,13 @@ export default function AskAI() {
           <div style={{display:'flex',alignItems:'center',gap:6}}>
             {micSupported&&!(isMobile&&input.trim())&&(
               <button onClick={toggleMic} title={listening?'Stop dictation':'Dictate your question'} className={listening?'micbtn micbtn-on':'micbtn'}
-                style={{width:34,height:34,borderRadius:9,border:`0.5px solid ${listening?'#CDEBD8':borderColor}`,background:listening?'#F0F9F4':'transparent',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',transition:'all .15s'}}>
-                <Ico n="mic" s={15} c={listening?GREEN:'#94A3B8'}/>
+                style={{width:isMobile?42:34,height:isMobile?42:34,borderRadius:isMobile?13:9,border:`0.5px solid ${listening?'#CDEBD8':borderColor}`,background:listening?'#F0F9F4':'transparent',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',transition:'all .15s'}}>
+                <Ico n="mic" s={isMobile?18:15} c={listening?GREEN:'#94A3B8'}/>
               </button>
             )}
             <button onClick={()=>{ if(loading){abortRef.current?.abort()} else {send()} }} disabled={!loading&&!input.trim()} title={loading?'Stop generating':'Send'} className="sendbtn"
-            style={{width:36,height:36,borderRadius:10,border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:(loading||input.trim())?'pointer':'not-allowed',background:(loading||input.trim())?'linear-gradient(135deg,#1F3C84,#1C9FD4 60%,#29B9C3)':'#E5E7EB',boxShadow:(loading||input.trim())?'0 6px 16px -4px rgba(28,159,212,0.6)':'none',transition:'all .2s'}}>
-            <span style={{display:'flex'}}><Ico n={loading?'close':'send'} s={15} c="#fff" sw={2}/></span>
+            style={{width:isMobile?44:36,height:isMobile?44:36,borderRadius:isMobile?14:10,border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:(loading||input.trim())?'pointer':'not-allowed',background:(loading||input.trim())?'linear-gradient(135deg,#1F3C84,#1C9FD4 60%,#29B9C3)':'#E5E7EB',boxShadow:(loading||input.trim())?'0 6px 16px -4px rgba(28,159,212,0.6)':'none',transition:'all .2s'}}>
+            <span style={{display:'flex'}}><Ico n={loading?'close':'send'} s={isMobile?17:15} c="#fff" sw={2}/></span>
           </button>
           </div>
         </div>
@@ -675,7 +676,6 @@ export default function AskAI() {
   .qChipsRow{ flex-wrap:nowrap!important; justify-content:flex-start!important; overflow-x:auto!important; max-width:100vw!important; width:100vw!important; margin:0 -20px!important; padding:0 20px 6px!important; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
   .qChipsRow::-webkit-scrollbar{ display:none; }
   .qChipsRow button{ flex:0 0 auto!important; }
-  .qChipsRow.chips-hidden{ opacity:0!important; max-height:0!important; overflow:hidden!important; margin-top:0!important; margin-bottom:0!important; padding:0!important; pointer-events:none!important; }
   .askai-caption{ display:none!important; }
 }
 /* dynamic-viewport-height fallback: keeps the composer pinned above a mobile keyboard instead of
@@ -916,7 +916,7 @@ export default function AskAI() {
           {/* Messages */}
           <div className="cs" style={{flex:1,overflowY:'auto',padding: messages.length===0 ? '20px 20px 40px' : '20px 0'}}>
             {messages.length===0?(
-              <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'20px',animation:'fadeUp .5s ease'}}>
+              <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:isMobile?'flex-start':'center',padding:isMobile?'32px 20px 0':'20px',animation:'fadeUp .5s ease'}}>
                 {/* Logo orb */}
             <div className="qHeroOrb" style={{position:'relative',marginBottom:22,animation:'scaleIn .5s ease',width:78,height:78,display:'flex',alignItems:'center',justifyContent:'center'}}>
               <div className="qOrb" style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -926,20 +926,22 @@ export default function AskAI() {
                 <div className="qHeroTitle" style={{fontSize:26,fontWeight:800,color:'#0F172A',marginBottom:6,letterSpacing:'-0.03em',textAlign:'center',animation:'fadeUp .5s ease .1s both'}}>
                   <span className="qShine">{greeting()}</span>, {firstName}
                 </div>
-                <div className="qHeroSub" style={{fontSize:14,color:'#94A3B8',textAlign:'center',maxWidth:440,lineHeight:1.6,marginBottom:28,animation:'fadeUp .5s ease .15s both'}}>
+                <div className="qHeroSub" style={{fontSize:14,color:'#94A3B8',textAlign:'center',maxWidth:440,lineHeight:1.6,marginBottom:isMobile?0:28,animation:'fadeUp .5s ease .15s both'}}>
                   Your marketing intelligence layer. Ask anything, from a quick number to a full performance report.
                 </div>
-                {/* quick prompts */}
-                <div className={"qChipsRow"+(isMobile&&composerFocused?" chips-hidden":"")} style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',maxWidth:620,animation:'fadeUp .5s ease .2s both',transition:'opacity .18s ease, max-height .18s ease, margin .18s ease'}}>
-                  {QUICK.map((q,i)=>(
-                    <button key={i} onClick={()=>send(q.text)} className="qp qChip"
-                      style={{padding:'8px 14px',borderRadius:20,border:`0.5px solid #E5E7EB`,background:'#fff',color:'#475569',fontSize:12.5,fontWeight:500,cursor:'pointer',fontFamily:FONT,transition:'all .2s',whiteSpace:'nowrap'}}>
-                      {q.label}
-                    </button>
-                  ))}
-                </div>
-                {/* composer lives here on the landing state — centered as one unit with the greeting, Claude.ai/ChatGPT-style; docks to the bottom only once a conversation starts */}
-                <div style={{width:'100%',maxWidth:'min(880px, 94%)',marginTop:28,animation:'fadeUp .5s ease .25s both'}}>{composer}</div>
+                {/* quick prompts — dropped entirely on mobile (Gemini-style: just the greeting + a big bottom-docked composer, no chip clutter) */}
+                {!isMobile&&(
+                  <div className="qChipsRow" style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',maxWidth:620,animation:'fadeUp .5s ease .2s both'}}>
+                    {QUICK.map((q,i)=>(
+                      <button key={i} onClick={()=>send(q.text)} className="qp qChip"
+                        style={{padding:'8px 14px',borderRadius:20,border:`0.5px solid #E5E7EB`,background:'#fff',color:'#475569',fontSize:12.5,fontWeight:500,cursor:'pointer',fontFamily:FONT,transition:'all .2s',whiteSpace:'nowrap'}}>
+                        {q.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* composer lives here on the landing state on desktop — centered as one unit with the greeting, Claude.ai/ChatGPT-style. On mobile it's docked to the bottom of the screen instead (below, outside this centered block) so it reads as an anchored bar, not a small box floating mid-screen with empty space under it. */}
+                {!isMobile&&<div style={{width:'100%',maxWidth:'min(880px, 94%)',marginTop:28,animation:'fadeUp .5s ease .25s both'}}>{composer}</div>}
               </div>
             ):(
               <div style={{maxWidth:'min(880px, 94%)',margin:'0 auto',padding:'0 20px'}}>
@@ -988,9 +990,9 @@ export default function AskAI() {
             )}
           </div>
 
-          {/* Input — docked to the bottom only once a conversation has started; on the landing state the composer renders centered above, inside the empty-state block */}
-          {messages.length>0&&(
-            <div style={{padding:'12px 20px 16px',flexShrink:0}}>
+          {/* Input — docked to the bottom once a conversation has started, OR always on mobile (where the composer is never centered inline with the greeting — see the empty-state block above) */}
+          {(messages.length>0||isMobile)&&(
+            <div style={{padding:isMobile?'10px 14px calc(14px + env(safe-area-inset-bottom))':'12px 20px 16px',flexShrink:0}}>
               {composer}
             </div>
           )}
