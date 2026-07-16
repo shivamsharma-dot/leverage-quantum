@@ -25,6 +25,13 @@ export default function LoginPage() {
   const [error, setError]     = useState('')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+const [gsiWidth, setGsiWidth] = useState(360)
+useEffect(() => {
+const calc = () => setGsiWidth(Math.round(Math.max(220, Math.min(360, window.innerWidth - 96))))
+calc()
+window.addEventListener('resize', calc)
+return () => window.removeEventListener('resize', calc)
+}, [])
 
   useEffect(() => { if (user) navigate('/') }, [user, navigate])
 
@@ -106,7 +113,7 @@ export default function LoginPage() {
               theme="filled_black"
               shape="pill"
               size="large"
-              width="360"
+              width={gsiWidth}
               text="continue_with"
               hosted_domain={ALLOWED_DOMAIN}
             />
