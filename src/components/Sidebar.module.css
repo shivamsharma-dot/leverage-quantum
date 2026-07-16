@@ -180,7 +180,7 @@
 .subNavItem {
   display: flex; align-items: center; gap: 8px;
   padding: 7px 10px; border-radius: 7px;
-  font-size: 12px; font-weight: 500;
+  font-size: 13px; font-weight: 500;
   color: #9CA3AF;
   cursor: pointer; transition: all .12s;
   font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
