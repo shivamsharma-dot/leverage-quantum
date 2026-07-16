@@ -92,15 +92,17 @@ total.costPerConv=total.conversions?total.spend/total.conversions:0
 return res.json({ads,total,tab:'ads'})
 }
 if(tab==='conversions'){
-const rows=await gaql(token,cid,`SELECT segments.conversion_action_name,segments.conversion_action_category,metrics.conversions,metrics.conversions_value,metrics.cost_micros FROM campaign WHERE ${dc} AND metrics.conversions>0 ORDER BY metrics.conversions DESC LIMIT 500`)
+// NOTE: cost_micros is a PROHIBITED_SEGMENT_WITH_METRIC combo alongside
+// segments.conversion_action_* per Google's GAQL validator -- spend can't be
+// attributed per conversion-action in one query, so it's omitted here.
+const rows=await gaql(token,cid,`SELECT segments.conversion_action_name,segments.conversion_action_category,metrics.conversions,metrics.conversions_value FROM campaign WHERE ${dc} AND metrics.conversions>0 ORDER BY metrics.conversions DESC LIMIT 500`)
 const byAction={}
 rows.forEach(r=>{
 const name=r.segments.conversionActionName||'(unnamed)'
 const category=r.segments.conversionActionCategory||'OTHER'
-if(!byAction[name])byAction[name]={name,category,conversions:0,value:0,spend:0}
+if(!byAction[name])byAction[name]={name,category,conversions:0,value:0}
 byAction[name].conversions+=+Number(r.metrics.conversions||0)
 byAction[name].value+=+Number(r.metrics.conversionsValue||0)
-byAction[name].spend+=mic(r.metrics.costMicros)
 })
 const actions=Object.values(byAction).map(a=>({...a,conversions:+a.conversions.toFixed(1),value:+a.value.toFixed(2)})).sort((a,b)=>b.conversions-a.conversions)
 const leadCategories=['SUBMIT_LEAD_FORM','LEAD','PHONE_CALL_LEAD','IMPORTED_LEAD','QUALIFIED_LEAD','CONVERTED_LEAD','DRIVING_DIRECTIONS','STORE_VISIT']
