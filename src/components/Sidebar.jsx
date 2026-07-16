@@ -238,6 +238,29 @@ export default function Sidebar() {
     return location.pathname.startsWith(sub.to.split('?')[0]) && currentTab === sub.tabKey
   }
 
+  const parentActiveFor = (item) =>
+    item.label === 'Meta Ads' ? isMetaParentActive :
+    item.label === 'Google Ads' ? isGoogleParentActive :
+    item.label === 'QL Ops' ? isQlOpsParentActive : false
+
+  // Collapsed-rail flyout: hovering a parent item with subItems opens a fixed-position
+  // panel listing its sub-pages, since the icon-only rail has no room to show them inline.
+  const [flyout, setFlyout] = React.useState(null)
+  const flyoutCloseTimer = React.useRef(null)
+
+  const openFlyout = (item, el) => {
+    if (flyoutCloseTimer.current) { clearTimeout(flyoutCloseTimer.current); flyoutCloseTimer.current = null }
+    const rect = el.getBoundingClientRect()
+    setFlyout({ label: item.label, subItems: item.subItems, top: rect.top })
+  }
+  const scheduleCloseFlyout = () => {
+    if (flyoutCloseTimer.current) clearTimeout(flyoutCloseTimer.current)
+    flyoutCloseTimer.current = setTimeout(() => setFlyout(null), 150)
+  }
+  const cancelCloseFlyout = () => {
+    if (flyoutCloseTimer.current) { clearTimeout(flyoutCloseTimer.current); flyoutCloseTimer.current = null }
+  }
+
   if (collapsed) {
     return (
       <>
@@ -290,14 +313,41 @@ export default function Sidebar() {
         </button>
         <div className={styles.collapsedNav}>
           {NAV.map(group => group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item => (
-            <NavLink key={item.label} to={item.to} end={item.end}
-              onMouseEnter={()=>prefetchRoute(item.defaultTo || item.to)} onFocus={()=>prefetchRoute(item.defaultTo || item.to)}
-              className={({ isActive }) => `${styles.collapsedItem} ${isActive || (item.label === 'Meta Ads' && isMetaParentActive) ? styles.collapsedActive : ''}`}
-              title={item.label}>
-              {ICON_MAP[item.label]}
-            </NavLink>
+            item.subItems ? (
+              <div key={item.label} style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}
+                onMouseEnter={(e) => openFlyout(item, e.currentTarget)}
+                onMouseLeave={scheduleCloseFlyout}>
+                <NavLink to={item.defaultTo || item.subItems[0].to} end={item.end}
+                  onFocus={()=>prefetchRoute(item.defaultTo || item.subItems[0].to)}
+                  className={`${styles.collapsedItem} ${parentActiveFor(item) ? styles.collapsedActive : ''}`}
+                  title={item.label}>
+                  {ICON_MAP[item.label]}
+                </NavLink>
+              </div>
+            ) : (
+              <NavLink key={item.label} to={item.to} end={item.end}
+                onMouseEnter={()=>prefetchRoute(item.defaultTo || item.to)} onFocus={()=>prefetchRoute(item.defaultTo || item.to)}
+                className={({ isActive }) => `${styles.collapsedItem} ${isActive ? styles.collapsedActive : ''}`}
+                title={item.label}>
+                {ICON_MAP[item.label]}
+              </NavLink>
+            )
           )))}
         </div>
+        {flyout && (
+          <div className={styles.collapsedFlyout} style={{ top: Math.min(flyout.top, window.innerHeight - 16 - flyout.subItems.length * 38 - 44) }}
+            onMouseEnter={cancelCloseFlyout} onMouseLeave={scheduleCloseFlyout}>
+            <div className={styles.collapsedFlyoutHeader}>{flyout.label}</div>
+            {flyout.subItems.map(sub => (
+              <div key={sub.to}
+                className={`${styles.collapsedFlyoutItem} ${isSubActive(sub) ? styles.collapsedFlyoutItemActive : ''}`}
+                onMouseEnter={()=>prefetchRoute(sub.to)}
+                onClick={() => { navigate(sub.to); setFlyout(null) }}>
+                {sub.label}
+              </div>
+            ))}
+          </div>
+        )}
         <div className={styles.collapsedAvatar} title={user?.email}>
           <div className={styles.avatar}>
             {user?.picture ? <img src={user.picture} alt={user.name}/> : initials}
