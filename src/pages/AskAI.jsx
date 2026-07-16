@@ -268,6 +268,13 @@ export default function AskAI() {
   const [promptSearch, setPromptSearch] = useState('')
   const [expandedPrompt, setExpandedPrompt] = useState(null)
   const [convSearch, setConvSearch] = useState('')
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 640) // drives mobile-only composer/rail behavior (icon-only controls, chip auto-hide on focus, mic<->send exclusivity)
+  useEffect(()=>{
+    const mq = window.matchMedia('(max-width:640px)')
+    const h = e => setIsMobile(e.matches)
+    mq.addEventListener('change', h)
+    return () => mq.removeEventListener('change', h)
+  },[])
   const [editingId, setEditingId]   = useState(null)   // conversation being renamed
   const [editTitle, setEditTitle]   = useState('')
   const [personFilter, setPersonFilter] = useState('all') // 'all' | 'mine' | '<email>'
@@ -563,10 +570,10 @@ export default function AskAI() {
           <div style={{display:'flex',alignItems:'center',gap:6}}>
             <div ref={scopeRef} style={{position:'relative'}}>
               <button onClick={e=>{e.stopPropagation();setScopeOpen(v=>!v)}} className="mabtn"
-                style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${scopeOpen?'#CBD5E1':borderColor}`,background:scopeOpen?'#F1F4F8':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:scopeOpen?'#1F3C84':'#475569',fontFamily:FONT,transition:'all .15s'}}>
+                style={{display:'flex',alignItems:'center',gap:5,padding:isMobile?'6px':'5px 10px',border:`0.5px solid ${scopeOpen?'#CBD5E1':borderColor}`,background:scopeOpen?'#F1F4F8':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:scopeOpen?'#1F3C84':'#475569',fontFamily:FONT,transition:'all .15s'}}>
                 <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,background:platformScope==='meta'?(connected?GREEN:'#CBD5E1'):platformScope==='google'?GREEN:'#94A3B8'}}/>
-                {platformScope==='meta'?'Meta Ads':platformScope==='google'?'Google Ads':'All sources'}
-                <span style={{display:'flex',transform:'rotate(90deg)'}}><Ico n="chevR" s={10} c={scopeOpen?'#1F3C84':'#94A3B8'}/></span>
+                {!isMobile&&(platformScope==='meta'?'Meta Ads':platformScope==='google'?'Google Ads':'All sources')}
+                {!isMobile&&<span style={{display:'flex',transform:'rotate(90deg)'}}><Ico n="chevR" s={10} c={scopeOpen?'#1F3C84':'#94A3B8'}/></span>}
               </button>
               {scopeOpen&&(
                 <div onClick={e=>e.stopPropagation()} style={{position:'absolute',bottom:'calc(100% + 6px)',left:0,minWidth:170,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 10px 30px -8px rgba(15,23,42,0.18)',padding:6,zIndex:20}}>
@@ -584,15 +591,15 @@ export default function AskAI() {
                 </div>
               )}
             </div>
-            {[['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
+            {[['history','History','history'],['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
               <button key={id} onClick={e=>{e.stopPropagation();toggleRail(id)}} className="mabtn"
-                style={{display:'flex',alignItems:'center',gap:5,padding:'5px 10px',border:`0.5px solid ${rail===id?'#CBD5E1':borderColor}`,background:rail===id?'#F1F4F8':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id?'#1F3C84':'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
-                <Ico n={ic} s={12} c={rail===id?'#1F3C84':'#94A3B8'}/>{lbl}
+                style={{display:'flex',alignItems:'center',gap:5,padding:isMobile?'6px':'5px 10px',border:`0.5px solid ${rail===id&&railOpen?'#CBD5E1':borderColor}`,background:rail===id&&railOpen?'#F1F4F8':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id&&railOpen?'#1F3C84':'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
+                <Ico n={ic} s={12} c={rail===id&&railOpen?'#1F3C84':'#94A3B8'}/>{!isMobile&&lbl}
               </button>
             ))}
           </div>
           <div style={{display:'flex',alignItems:'center',gap:6}}>
-            {micSupported&&(
+            {micSupported&&!(isMobile&&input.trim())&&(
               <button onClick={toggleMic} title={listening?'Stop dictation':'Dictate your question'} className={listening?'micbtn micbtn-on':'micbtn'}
                 style={{width:34,height:34,borderRadius:9,border:`0.5px solid ${listening?'#CDEBD8':borderColor}`,background:listening?'#F0F9F4':'transparent',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',transition:'all .15s'}}>
                 <Ico n="mic" s={15} c={listening?GREEN:'#94A3B8'}/>
@@ -605,12 +612,12 @@ export default function AskAI() {
           </div>
         </div>
       </div>
-      <div style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Powered by Claude Sonnet 4.5 — can make mistakes, always verify important numbers.</div>
+      <div className="askai-caption" style={{textAlign:'center',fontSize:11,color:'#CBD5E1',marginTop:8}}>Powered by Claude Sonnet 4.5 — can make mistakes, always verify important numbers.</div>
     </div>
   )
 
   return (
-    <div style={{display:'flex',height:'100vh',fontFamily:FONT,overflow:'hidden'}}>
+    <div className="askai-shell" style={{display:'flex',fontFamily:FONT,overflow:'hidden'}}>
       <style>{`
         
         * { box-sizing: border-box; }
@@ -668,7 +675,15 @@ export default function AskAI() {
   .qChipsRow{ flex-wrap:nowrap!important; justify-content:flex-start!important; overflow-x:auto!important; max-width:100vw!important; width:100vw!important; margin:0 -20px!important; padding:0 20px 6px!important; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
   .qChipsRow::-webkit-scrollbar{ display:none; }
   .qChipsRow button{ flex:0 0 auto!important; }
+  .qChipsRow.chips-hidden{ opacity:0!important; max-height:0!important; overflow:hidden!important; margin-top:0!important; margin-bottom:0!important; padding:0!important; pointer-events:none!important; }
+  .askai-caption{ display:none!important; }
 }
+/* dynamic-viewport-height fallback: keeps the composer pinned above a mobile keyboard instead of
+   getting shoved off-screen by iOS Safari's 100vh (which ignores the on-screen keyboard/chrome) */
+.askai-shell{ height:100vh; }
+@supports (height:100dvh){ .askai-shell{ height:100dvh; } }
+.askai-rail-close{ display:none; }
+@media (max-width:768px){ .askai-rail-close{ display:flex!important; } }
       `}</style>
 
       {/* Quantum sidebar */}
@@ -709,6 +724,9 @@ export default function AskAI() {
                 })}
                 <button onClick={newConv} title="New chat" className="askai-toolbar-btn" style={{marginLeft:'auto',marginBottom:9,width:28,height:28,borderRadius:7}}>
                   <Ico n="new" s={15} c="#1F3C84"/>
+                </button>
+                <button onClick={()=>setRailOpen(false)} title="Close" className="askai-toolbar-btn askai-rail-close" style={{marginBottom:9,width:28,height:28,borderRadius:7}}>
+                  <Ico n="close" s={15} c="#94A3B8"/>
                 </button>
               </div>
 
@@ -912,7 +930,7 @@ export default function AskAI() {
                   Your marketing intelligence layer. Ask anything, from a quick number to a full performance report.
                 </div>
                 {/* quick prompts */}
-                <div className="qChipsRow" style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',maxWidth:620,animation:'fadeUp .5s ease .2s both'}}>
+                <div className={"qChipsRow"+(isMobile&&composerFocused?" chips-hidden":"")} style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center',maxWidth:620,animation:'fadeUp .5s ease .2s both',transition:'opacity .18s ease, max-height .18s ease, margin .18s ease'}}>
                   {QUICK.map((q,i)=>(
                     <button key={i} onClick={()=>send(q.text)} className="qp qChip"
                       style={{padding:'8px 14px',borderRadius:20,border:`0.5px solid #E5E7EB`,background:'#fff',color:'#475569',fontSize:12.5,fontWeight:500,cursor:'pointer',fontFamily:FONT,transition:'all .2s',whiteSpace:'nowrap'}}>
