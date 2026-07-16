@@ -9,7 +9,7 @@ import { usePresence } from '../hooks/usePresence'
 import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'; import { resolveSheetUrl } from '../lib/dataSources'
 
 const DATE_RANGES=[{id:'TODAY',label:'Today'},{id:'LAST_7_DAYS',label:'Last 7 days'},{id:'LAST_30_DAYS',label:'Last 30 days'},{id:'LAST_90_DAYS',label:'Last 90 days'},{id:'THIS_MONTH',label:'This month'},{id:'LAST_MONTH',label:'Last month'},{id:'CUSTOM',label:'Custom'}]
-const TABS=[{id:'campaigns',label:'Campaigns'},{id:'ads',label:'Ads'},{id:'keywords',label:'Keywords'},{id:'searchTerms',label:'Search terms'},{id:'adGroups',label:'Ad groups'}];const LEADS_CSV_DEFAULT='https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=googleleads';function parseLeadsCSV(t){const rows=[];let i=0,field='',row=[],inq=false;while(i<t.length){const c=t[i];const cc=t.charCodeAt(i);if(inq){if(c==='"'){if(t[i+1]==='"'){field+='"';i+=2;continue}inq=false;i++;continue}field+=c;i++;continue}else{if(c==='"'){inq=true;i++;continue}if(c===','){row.push(field);field='';i++;continue}if(cc===13){i++;continue}if(cc===10){row.push(field);rows.push(row);row=[];field='';i++;continue}field+=c;i++;continue}}if(field.length||row.length){row.push(field);rows.push(row)}const h=rows[0]||[];return rows.slice(1).filter(r=>r.length>1).map(r=>Object.fromEntries(h.map((k,idx)=>[k,(r[idx]||'')])))};function parseLeadDate(s){const m=String(s||'').trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);if(!m)return null;const MN={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};const mi=MN[m[2]];if(mi==null)return null;return new Date(+m[3],mi,+m[1])};function resolveDateRangeBounds(dr,cFrom,cTo){const today=new Date();const d0=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(dr==='CUSTOM'&&cFrom&&cTo){const p=cFrom.split('-'),q=cTo.split('-');return{start:new Date(+p[0],+p[1]-1,+p[2]),end:new Date(+q[0],+q[1]-1,+q[2])}}if(dr==='TODAY')return{start:d0,end:d0};if(dr==='LAST_7_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-7);return{start:s,end:e}}if(dr==='LAST_30_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-30);return{start:s,end:e}}if(dr==='LAST_90_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-90);return{start:s,end:e}}if(dr==='THIS_MONTH')return{start:new Date(d0.getFullYear(),d0.getMonth(),1),end:d0};if(dr==='LAST_MONTH'){const s=new Date(d0.getFullYear(),d0.getMonth()-1,1);const e=new Date(d0.getFullYear(),d0.getMonth(),0);return{start:s,end:e}}return{start:new Date(d0.getFullYear(),d0.getMonth(),1),end:d0}}
+const TABS=[{id:'campaigns',label:'Campaigns'},{id:'ads',label:'Ads'},{id:'keywords',label:'Keywords'},{id:'searchTerms',label:'Search terms'},{id:'adGroups',label:'Ad groups'},{id:'conversions',label:'Conversions'},{id:'devices',label:'Devices'},{id:'geo',label:'Locations'},{id:'audiences',label:'Audiences'},{id:'schedule',label:'Schedule'},{id:'assets',label:'Assets'}];const LEADS_CSV_DEFAULT='https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=googleleads';function parseLeadsCSV(t){const rows=[];let i=0,field='',row=[],inq=false;while(i<t.length){const c=t[i];const cc=t.charCodeAt(i);if(inq){if(c==='"'){if(t[i+1]==='"'){field+='"';i+=2;continue}inq=false;i++;continue}field+=c;i++;continue}else{if(c==='"'){inq=true;i++;continue}if(c===','){row.push(field);field='';i++;continue}if(cc===13){i++;continue}if(cc===10){row.push(field);rows.push(row);row=[];field='';i++;continue}field+=c;i++;continue}}if(field.length||row.length){row.push(field);rows.push(row)}const h=rows[0]||[];return rows.slice(1).filter(r=>r.length>1).map(r=>Object.fromEntries(h.map((k,idx)=>[k,(r[idx]||'')])))};function parseLeadDate(s){const m=String(s||'').trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);if(!m)return null;const MN={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};const mi=MN[m[2]];if(mi==null)return null;return new Date(+m[3],mi,+m[1])};function resolveDateRangeBounds(dr,cFrom,cTo){const today=new Date();const d0=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(dr==='CUSTOM'&&cFrom&&cTo){const p=cFrom.split('-'),q=cTo.split('-');return{start:new Date(+p[0],+p[1]-1,+p[2]),end:new Date(+q[0],+q[1]-1,+q[2])}}if(dr==='TODAY')return{start:d0,end:d0};if(dr==='LAST_7_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-7);return{start:s,end:e}}if(dr==='LAST_30_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-30);return{start:s,end:e}}if(dr==='LAST_90_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-90);return{start:s,end:e}}if(dr==='THIS_MONTH')return{start:new Date(d0.getFullYear(),d0.getMonth(),1),end:d0};if(dr==='LAST_MONTH'){const s=new Date(d0.getFullYear(),d0.getMonth()-1,1);const e=new Date(d0.getFullYear(),d0.getMonth(),0);return{start:s,end:e}}return{start:new Date(d0.getFullYear(),d0.getMonth(),1),end:d0}}
 
 const fmt=n=>n==null?'—':n>=1e7?'₹'+(n/1e7).toFixed(2)+' Cr':n>=1e5?'₹'+(n/1e5).toFixed(1)+'L':n>=1000?'₹'+(n/1000).toFixed(1)+'K':'₹'+Math.round(n).toLocaleString('en-IN')
 const fmtPct=n=>n==null?'—':(n*100).toFixed(2)+'%'
@@ -66,13 +66,14 @@ const NotConnected=()=>(
 )
 
 const Loader=()=><InlineLoader label='Loading from Google Ads' height={300}/>
+const bidLabel=s=>s?s.split('_').map(w=>w[0]+w.slice(1).toLowerCase()).join(' '):'—'
 function CampaignsTab({data,loading,leadsByCampaign={},totalLeads=0}){
 const {sort,Th}=useSort('spend')
 const [exp,setExp]=useState(null)
 const [search,setSearch]=useState('')
 if(loading)return <Loader/>
 if(!data)return null
-const{campaigns=[],total={}}=data||{}
+const{campaigns=[],total={},negatives={}}=data||{}
 if(!campaigns.length&&!loading)return <NotConnected/>
 const filtered=campaigns.filter(c=>!search||c.name.toLowerCase().includes(search.toLowerCase()))
 const sorted=sort(filtered)
@@ -125,11 +126,21 @@ return <>
 <td style={{padding:'9px 12px',textAlign:'right',fontSize:12.5,color:c.impressionShare>0.8?C.green:c.impressionShare>0.5?'#D97706':'#DC2626'}}>{fmtPct(c.impressionShare)}</td>
 </tr>
 {exp===c.id&&<tr style={{borderBottom:'1px solid #F8FAFC',background:'#F8FAFF'}}><td colSpan={12} style={{padding:'12px 24px'}}>
-<div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,fontSize:12}}>
-{[{l:'Campaign ID',v:c.id},{l:'Channel type',v:c.type},{l:'Impression Share',v:fmtPct(c.impressionShare)},{l:'Cost per click',v:fmtCpc(c.avgCpc)}].map(({l,v})=>(
+<div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,fontSize:12,marginBottom:(negatives[c.id]||[]).length?16:0}}>
+{[{l:'Campaign ID',v:c.id},{l:'Channel type',v:c.type},{l:'Impression Share',v:fmtPct(c.impressionShare)},{l:'Cost per click',v:fmtCpc(c.avgCpc)},{l:'Bid strategy',v:bidLabel(c.biddingStrategy)},{l:'Target CPA',v:c.targetCpa?fmt(c.targetCpa):'—'},{l:'Target ROAS',v:c.targetRoas?c.targetRoas+'x (actual '+(c.actualRoas??'—')+'x)':(c.actualRoas!=null?'Actual '+c.actualRoas+'x':'—')},{l:'Conv. value',v:c.spend&&c.actualRoas?fmt(c.spend*c.actualRoas):'—'}].map(({l,v})=>(
 <div key={l}><div style={{fontSize:10,color:C.muted,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:3}}>{l}</div><div style={{fontWeight:700,color:C.text}}>{v}</div></div>
 ))}
 </div>
+{(negatives[c.id]||[]).length>0&&(
+<div>
+<div style={{fontSize:10,color:C.muted,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:6}}>Negative keywords ({negatives[c.id].length})</div>
+<div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+{negatives[c.id].slice(0,40).map((n,ni)=>(
+<span key={ni} style={{fontSize:11,fontWeight:600,color:'#DC2626',background:'#FEF2F2',padding:'3px 8px',borderRadius:6}}>{n.text}</span>
+))}
+</div>
+</div>
+)}
 </td></tr>}
 </React.Fragment>
 ))}</tbody>
@@ -367,6 +378,248 @@ return <>
 </>
 }
 
+const LEAD_CATEGORIES=['SUBMIT_LEAD_FORM','LEAD','PHONE_CALL_LEAD','IMPORTED_LEAD','QUALIFIED_LEAD','CONVERTED_LEAD']
+const catLabel=c=>({SUBMIT_LEAD_FORM:'Lead form',PHONE_CALL_LEAD:'Phone call lead',IMPORTED_LEAD:'Imported lead',QUALIFIED_LEAD:'Qualified lead',CONVERTED_LEAD:'Converted lead',LEAD:'Lead',PURCHASE:'Purchase',SIGNUP:'Sign-up',PAGE_VIEW:'Page view',DOWNLOAD:'Download',OTHER:'Other'}[c]||c)
+function ConversionsTab({data,loading}){
+if(loading)return <Loader/>
+if(!data)return null
+const{actions=[],totalLeads=0,totalConversions=0}=data||{}
+return <>
+<div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<PremKPI label='LEADS (GOOGLE-TRACKED)' value={fmtN(totalLeads)} sub='Lead-category conversion actions only' accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
+<PremKPI label='ALL CONVERSIONS' value={fmtN(totalConversions)} sub='Every conversion action combined' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
+<PremKPI label='CONVERSION ACTIONS' value={fmtN(actions.length)} sub='Distinct actions firing' accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai}/>
+</div>
+<Card title='Conversion actions' sub='This is where Google Ads breaks Conversions down by what actually happened — form fill, call, etc.'>
+<div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}>
+<thead><tr><th style={{padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'left',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'}}>Action</th><th style={{padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'left',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'}}>Category</th><th style={{padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'}}>Conversions</th><th style={{padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'}}>Value</th><th style={{padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'}}>Spend</th><th style={{padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'}}>Cost / Conv.</th></tr></thead>
+<tbody>{actions.map((a,i)=>(
+<tr key={i} style={{borderBottom:'0.5px solid '+C.border,background:LEAD_CATEGORIES.includes(a.category)?C.greenBg:'transparent'}}>
+<td style={{padding:'8px 12px',fontSize:12.5,color:C.text,fontWeight:600}}>{a.name}</td>
+<td style={{padding:'8px 12px'}}><span style={{fontSize:10,fontWeight:700,color:LEAD_CATEGORIES.includes(a.category)?C.green:C.sub,background:LEAD_CATEGORIES.includes(a.category)?'#fff':'#F3F4F6',padding:'2px 7px',borderRadius:6}}>{catLabel(a.category)}</span></td>
+<td style={{padding:'8px 12px',textAlign:'right',fontWeight:700,color:C.text,fontSize:12.5}}>{a.conversions.toFixed(1)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{a.value?fmt(a.value):'—'}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmt(a.spend)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{a.conversions?fmt(a.spend/a.conversions):'—'}</td>
+</tr>
+))}</tbody>
+</table></div>
+</Card>
+</>
+}
+
+const DEVICE_LABEL={MOBILE:'Mobile',DESKTOP:'Desktop',TABLET:'Tablet',CONNECTED_TV:'Connected TV',OTHER:'Other'}
+function DevicesTab({data,loading}){
+const {sort,Th}=useSort('spend')
+if(loading)return <Loader/>
+if(!data)return null
+const{rows=[],summary=[]}=data||{}
+const sorted=sort(rows)
+return <>
+<div style={{display:'grid',gridTemplateColumns:'repeat('+Math.max(summary.length,1)+',minmax(0,1fr))',gap:14,marginBottom:20}}>
+{summary.map(d=>(
+<PremKPI key={d.device} label={(DEVICE_LABEL[d.device]||d.device).toUpperCase()} value={fmt(d.spend)} sub={fmtN(d.conversions)+' conv. · '+fmtPct(d.ctr)+' CTR'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/>
+))}
+</div>
+<Card title='Spend by device' sub='Top 8 by spend (₹K)'>
+<ResponsiveContainer width='100%' height={Math.max(140,summary.length*40)}>
+<BarChart data={summary.map(d=>({name:DEVICE_LABEL[d.device]||d.device,spend:Math.round(d.spend/1000)}))} layout='vertical' margin={{top:0,right:60,left:0,bottom:0}} barSize={22}>
+<XAxis type='number' hide/>
+<YAxis type='category' dataKey='name' width={100} tick={{fontSize:11,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false}/>
+<Tooltip formatter={v=>'₹'+v+'K'} contentStyle={{fontSize:11,border:'0.5px solid #E5E7EB',borderRadius:8,fontFamily:FONT}}/>
+<Bar dataKey='spend' radius={[0,5,5,0]} fill={C.navy}>
+<LabelList dataKey='spend' position='right' formatter={v=>'₹'+v+'K'} style={{fontSize:10,fontWeight:700,fill:'#374151'}}/>
+</Bar>
+</BarChart>
+</ResponsiveContainer>
+</Card>
+<div style={{marginTop:16}}>
+<Card title='Device × campaign' sub={rows.length+' rows'}>
+<div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}>
+<thead><tr><Th k='campaign'>Campaign</Th><Th k='device'>Device</Th><Th k='spend' right>Spend</Th><Th k='impressions' right>Impr.</Th><Th k='clicks' right>Clicks</Th><Th k='ctr' right>CTR</Th><Th k='avgCpc' right>Avg CPC</Th><Th k='conversions' right>Conv.</Th></tr></thead>
+<tbody>{sorted.slice(0,300).map((r,i)=>(
+<tr key={i} style={{borderBottom:'0.5px solid '+C.border}}>
+<td style={{padding:'8px 12px',fontSize:12.5,color:C.text,fontWeight:600,maxWidth:220,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}} title={r.campaign}>{r.campaign}</td>
+<td style={{padding:'8px 12px',fontSize:12}}><span style={{fontSize:10,fontWeight:700,color:C.navy,background:C.navyBg,padding:'2px 7px',borderRadius:6}}>{DEVICE_LABEL[r.device]||r.device}</span></td>
+<td style={{padding:'8px 12px',textAlign:'right',fontWeight:700,color:C.text,fontSize:12.5,whiteSpace:'nowrap'}}>{fmt(r.spend)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtN(r.impressions)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtN(r.clicks)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtPct(r.ctr)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5,whiteSpace:'nowrap'}}>{fmtCpc(r.avgCpc)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.navy,fontWeight:700,fontSize:12.5}}>{r.conversions?.toFixed(1)||'—'}</td>
+</tr>
+))}</tbody>
+</table></div>
+</Card>
+</div>
+</>
+}
+
+function LocationsTab({data,loading}){
+const {sort,Th}=useSort('spend')
+const [search,setSearch]=useState('')
+if(loading)return <Loader/>
+if(!data)return null
+const{locations=[]}=data||{}
+const filtered=locations.filter(l=>!search||l.location.toLowerCase().includes(search.toLowerCase()))
+const sorted=sort(filtered)
+const totalSpend=locations.reduce((s,l)=>s+l.spend,0)
+const totalConv=locations.reduce((s,l)=>s+l.conversions,0)
+return <>
+<div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<PremKPI label='LOCATIONS' value={fmtN(locations.length)} sub='Cities/regions with spend' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.globe}/>
+<PremKPI label='TOTAL SPEND' value={fmt(totalSpend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
+<PremKPI label='CONVERSIONS' value={fmtN(totalConv)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
+</div>
+<Card title='Performance by location' sub={filtered.length+' of '+locations.length+' · matched to where the person searching physically was'} action={
+<input value={search} onChange={e=>setSearch(e.target.value)} placeholder='Search city/region...' style={{padding:'6px 10px',border:'0.5px solid '+C.border,borderRadius:8,fontSize:12,fontFamily:FONT,outline:'none',width:220,background:'var(--card)',color:C.text}}/>
+}>
+<div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}>
+<thead><tr><Th k='location'>Location</Th><Th k='spend' right>Spend</Th><Th k='impressions' right>Impr.</Th><Th k='clicks' right>Clicks</Th><Th k='ctr' right>CTR</Th><Th k='conversions' right>Conv.</Th></tr></thead>
+<tbody>{sorted.map((l,i)=>(
+<tr key={i} style={{borderBottom:'0.5px solid '+C.border}}>
+<td style={{padding:'8px 12px',fontSize:12.5,color:C.text,fontWeight:600}}>{l.location}</td>
+<td style={{padding:'8px 12px',textAlign:'right',fontWeight:700,color:C.text,fontSize:12.5,whiteSpace:'nowrap'}}>{fmt(l.spend)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtN(l.impressions)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtN(l.clicks)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtPct(l.ctr)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.navy,fontWeight:700,fontSize:12.5}}>{l.conversions?.toFixed(1)||'—'}</td>
+</tr>
+))}</tbody>
+</table></div>
+</Card>
+</>
+}
+
+function AudiencesTab({data,loading}){
+const {sort,Th}=useSort('spend')
+if(loading)return <Loader/>
+if(!data)return null
+const{audiences=[]}=data||{}
+const sorted=sort(audiences)
+return <>
+<div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<PremKPI label='AUDIENCE SEGMENTS' value={fmtN(audiences.length)} sub='In-market, affinity, remarketing lists in use' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
+<PremKPI label='TOTAL SPEND' value={fmt(audiences.reduce((s,a)=>s+a.spend,0))} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
+</div>
+{audiences.length===0?(
+<Card title='Audience segments' sub='No audience targeting/observation found for this range'><div style={{padding:'20px 4px',fontSize:12.5,color:C.muted}}>This account may be using automated/PMax audience signals that Google doesn't report per-segment, or no explicit audiences are attached in this date range.</div></Card>
+):(
+<Card title='Audience segments' sub={audiences.length+' rows'}>
+<div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}>
+<thead><tr><Th k='name'>Segment</Th><Th k='type'>Type</Th><Th k='campaign'>Campaign</Th><Th k='adGroup'>Ad group</Th><Th k='spend' right>Spend</Th><Th k='impressions' right>Impr.</Th><Th k='clicks' right>Clicks</Th><Th k='ctr' right>CTR</Th><Th k='conversions' right>Conv.</Th></tr></thead>
+<tbody>{sorted.map((a,i)=>(
+<tr key={i} style={{borderBottom:'0.5px solid '+C.border}}>
+<td style={{padding:'8px 12px',fontSize:12.5,color:C.text,fontWeight:600,maxWidth:200,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}} title={a.name}>{a.name}</td>
+<td style={{padding:'8px 12px'}}><span style={{fontSize:10,fontWeight:700,color:C.navy,background:C.navyBg,padding:'2px 7px',borderRadius:6}}>{a.type}</span></td>
+<td style={{padding:'8px 12px',fontSize:12,color:C.sub,maxWidth:160,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{a.campaign}</td>
+<td style={{padding:'8px 12px',fontSize:12,color:C.sub,maxWidth:160,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{a.adGroup}</td>
+<td style={{padding:'8px 12px',textAlign:'right',fontWeight:700,color:C.text,fontSize:12.5,whiteSpace:'nowrap'}}>{fmt(a.spend)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtN(a.impressions)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtN(a.clicks)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtPct(a.ctr)}</td>
+<td style={{padding:'8px 12px',textAlign:'right',color:C.navy,fontWeight:700,fontSize:12.5}}>{a.conversions?.toFixed(1)||'—'}</td>
+</tr>
+))}</tbody>
+</table></div>
+</Card>
+)}
+</>
+}
+
+const DAY_LABEL={MONDAY:'Mon',TUESDAY:'Tue',WEDNESDAY:'Wed',THURSDAY:'Thu',FRIDAY:'Fri',SATURDAY:'Sat',SUNDAY:'Sun'}
+const DAY_ORDER=['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY']
+function ScheduleTab({data,loading}){
+if(loading)return <Loader/>
+if(!data)return null
+const{cells=[]}=data||{}
+const maxSpend=Math.max(1,...cells.map(c=>c.spend))
+const cellMap={}
+cells.forEach(c=>{cellMap[c.day+'_'+c.hour]=c})
+const byHour=Array.from({length:24},(_,h)=>{
+const row=DAY_ORDER.reduce((s,d)=>s+(cellMap[d+'_'+h]?.spend||0),0)
+return row
+})
+const bestHour=byHour.indexOf(Math.max(...byHour))
+return <>
+<div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<PremKPI label='TOTAL SPEND' value={fmt(cells.reduce((s,c)=>s+c.spend,0))} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
+<PremKPI label='BEST HOUR (BY SPEND)' value={bestHour+':00'} sub='Highest overall spend hour' accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/>
+</div>
+<Card title='Spend by day × hour' sub='Darker = higher spend for that slot, across all campaigns'>
+<div style={{overflowX:'auto'}}>
+<table style={{borderCollapse:'collapse',fontFamily:FONT,width:'100%'}}>
+<thead><tr><th style={{padding:'6px 8px',fontSize:10,color:C.muted}}></th>{Array.from({length:24},(_,h)=>(<th key={h} style={{padding:'4px 2px',fontSize:9,color:C.muted,fontWeight:600}}>{h}</th>))}</tr></thead>
+<tbody>{DAY_ORDER.map(day=>(
+<tr key={day}>
+<td style={{padding:'4px 8px',fontSize:11,fontWeight:700,color:C.text,whiteSpace:'nowrap'}}>{DAY_LABEL[day]}</td>
+{Array.from({length:24},(_,h)=>{
+const cell=cellMap[day+'_'+h]
+const intensity=cell?Math.min(1,cell.spend/maxSpend):0
+return(
+<td key={h} title={cell?fmt(cell.spend)+' · '+fmtN(cell.conversions)+' conv.':'No spend'} style={{width:20,height:20,background:'rgba(31,60,132,'+(0.06+intensity*0.85)+')',border:'1px solid #fff'}}/>
+)
+})}
+</tr>
+))}</tbody>
+</table>
+</div>
+</Card>
+</>
+}
+
+const PERF_LABEL_COLOR={BEST:C.green,GOOD:C.blue,LOW:'#DC2626',LEARNING:'#D97706',PENDING:C.muted,UNKNOWN:C.muted}
+const PERF_LABEL_TEXT={BEST:'Best',GOOD:'Good',LOW:'Low',LEARNING:'Learning',PENDING:'Pending',UNKNOWN:'Unrated'}
+function AssetsTab({data,loading}){
+const [filter,setFilter]=useState('all')
+if(loading)return <Loader/>
+if(!data)return null
+const{assets=[]}=data||{}
+const filtered=filter==='all'?assets:assets.filter(a=>a.performanceLabel===filter)
+const counts=assets.reduce((m,a)=>{m[a.performanceLabel]=(m[a.performanceLabel]||0)+1;return m},{})
+return <>
+<div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<PremKPI label='ASSETS' value={fmtN(assets.length)} sub='Images, video &amp; text across PMax/Display' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
+<PremKPI label='BEST' value={fmtN(counts.BEST||0)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
+<PremKPI label='GOOD' value={fmtN(counts.GOOD||0)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai}/>
+<PremKPI label='LOW / LEARNING' value={fmtN((counts.LOW||0)+(counts.LEARNING||0))} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/>
+</div>
+<Card title='Asset performance' sub={filtered.length+" of "+assets.length+" · Google's own performance rating per asset"} action={
+<div style={{display:'flex',gap:6}}>
+{['all','BEST','GOOD','LEARNING','LOW'].map(f=>(
+<div key={f} onClick={()=>setFilter(f)} style={pillStyle(filter===f)}>{f==='all'?'All':PERF_LABEL_TEXT[f]}</div>
+))}
+</div>
+}>
+{filtered.length===0?(
+<div style={{padding:'20px 4px',fontSize:12.5,color:C.muted}}>No assets found for this filter — this account may not be running Performance Max or Display campaigns with reportable assets in this date range.</div>
+):(
+<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12}}>
+{filtered.map((a,i)=>(
+<div key={i} style={{border:'0.5px solid '+C.border,borderRadius:10,overflow:'hidden',background:'var(--card)'}}>
+{a.imageUrl?(
+<div style={{height:110,background:'#F3F4F6',overflow:'hidden'}}><img src={a.imageUrl} alt='' style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none'}}/></div>
+):a.youtubeId?(
+<div style={{height:110,background:'#111827',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:11}}>▶ YouTube video</div>
+):(
+<div style={{padding:'14px 12px',fontSize:12.5,color:C.text,minHeight:70,lineHeight:1.4}}>{a.text||'(no preview)'}</div>
+)}
+<div style={{padding:'8px 10px'}}>
+<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+<span style={{fontSize:9.5,fontWeight:700,color:C.muted,textTransform:'uppercase',letterSpacing:'0.04em'}}>{a.fieldType}</span>
+<span style={{fontSize:9.5,fontWeight:700,color:'#fff',background:PERF_LABEL_COLOR[a.performanceLabel]||C.muted,padding:'2px 7px',borderRadius:99}}>{PERF_LABEL_TEXT[a.performanceLabel]||a.performanceLabel}</span>
+</div>
+<div style={{fontSize:11,color:C.sub,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}} title={a.campaign}>{a.campaign}</div>
+<div style={{fontSize:10,color:C.muted}}>{a.source}</div>
+</div>
+</div>
+))}
+</div>
+)}
+</Card>
+</>
+}
+
 function TrendTab({mode}){const [rows,setRows]=useState([]);const [total,setTotal]=useState({});const [loading,setLoading]=useState(true);const [err,setErr]=useState(null);useEffect(()=>{const now=new Date();const pad=n=>String(n).padStart(2,'0');const until=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());const since=mode==='month'?(now.getFullYear()+'-01-01'):(now.getFullYear()+'-'+pad(now.getMonth()+1)+'-01');setLoading(true);const token=localStorage.getItem('quantum_token');fetch('/api/google-ads?tab=trend&mode='+mode+'&from='+since+'&to='+until,{headers:{'Authorization':'Bearer '+(token||'')}}).then(r=>r.json()).then(json=>{if(json.error){setErr(json.error);return}setRows(json.points||[]);setTotal(json.total||{})}).catch(e=>setErr(e.message)).finally(()=>setLoading(false))},[mode]);if(loading)return <Loader/>;const fmtPeriod=p=>mode==='month'?new Date(p).toLocaleDateString('en-US',{month:'short',year:'numeric'}):new Date(p).toLocaleDateString('en-US',{day:'2-digit',month:'short'});const thS={padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'};const thL={...thS,textAlign:'left'};const tdR={padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5};const tdL={padding:'8px 12px',fontSize:12.5,color:C.text,fontWeight:600};return <><div style={{fontSize:12,color:C.muted,marginBottom:14,fontFamily:FONT}}>{mode==='month'?'Fixed range: Jan 1 to today (not affected by the date filter)':'Fixed range: 1st of this month to today (not affected by the date filter)'}</div>{err&&<div style={{padding:'10px 14px',borderRadius:10,background:'#FEF2F2',color:'#DC2626',fontSize:12.5,fontWeight:600,marginBottom:16}}>{err}</div>}<div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}><PremKPI label='Total Spend' value={fmt(total.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/><PremKPI label='Impressions' value={fmtN(total.impressions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/><PremKPI label='Clicks' value={fmtN(total.clicks)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai}/><PremKPI label='CTR' value={fmtPct(total.ctr)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/><PremKPI label='Conversions' value={fmtN(total.conversions)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent}/></div><Card title={mode==='month'?'Month on month':'Day on day'} sub={rows.length+' periods'}><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}><thead><tr><th style={thL}>Period</th><th style={thS}>Spend</th><th style={thS}>Impr.</th><th style={thS}>Clicks</th><th style={thS}>CTR</th><th style={thS}>Avg CPC</th><th style={thS}>Conv.</th><th style={thS}>CPA</th></tr></thead><tbody>{rows.map((r,i)=>(<tr key={i} style={{borderBottom:'0.5px solid '+C.border}}><td style={tdL}>{fmtPeriod(r.period)}</td><td style={{...tdR,fontWeight:700,color:C.text}}>{fmt(r.spend)}</td><td style={tdR}>{fmtN(r.impressions)}</td><td style={tdR}>{fmtN(r.clicks)}</td><td style={tdR}>{fmtPct(r.ctr)}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmtCpc(r.avgCpc)}</td><td style={{...tdR,color:C.navy,fontWeight:700}}>{r.conversions?.toFixed(1)||'—'}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmt(r.costPerConv)}</td></tr>))}<tr style={{background:'#F8FAFC',fontWeight:800}}><td style={{...tdL,fontWeight:800}}>Total</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmt(total.spend)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.impressions)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.clicks)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtPct(total.ctr)}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmtCpc(total.avgCpc)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{total.conversions?(+total.conversions).toFixed(1):'—'}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmt(total.costPerConv)}</td></tr></tbody></table></div></Card></>}const METRIC_INFO=[
 {k:'Spend',v:'Cost in the selected date range, from Google Ads metrics.cost_micros.'},
 {k:'Impressions / Clicks',v:'Raw counts from Google Ads for the selected range.'},
@@ -507,7 +760,14 @@ activeTab==='campaigns' ? <CampaignsTab data={data.campaigns} loading={!!loading
 activeTab==='ads' ? <AdsTab data={data.ads} loading={!!loading.ads}/> :
 activeTab==='keywords' ? <KeywordsTab data={data.keywords} loading={!!loading.keywords}/> :
 activeTab==='searchTerms'?<SearchTermsTab data={data.searchTerms} loading={!!loading.searchTerms}/>:
-activeTab==='mom'?<TrendTab mode='month'/>:activeTab==='dod'?<TrendTab mode='day'/>:<AdGroupsTab data={data.adGroups} loading={!!loading.adGroups}/>
+activeTab==='adGroups'?<AdGroupsTab data={data.adGroups} loading={!!loading.adGroups}/>:
+activeTab==='conversions'?<ConversionsTab data={data.conversions} loading={!!loading.conversions}/>:
+activeTab==='devices'?<DevicesTab data={data.devices} loading={!!loading.devices}/>:
+activeTab==='geo'?<LocationsTab data={data.geo} loading={!!loading.geo}/>:
+activeTab==='audiences'?<AudiencesTab data={data.audiences} loading={!!loading.audiences}/>:
+activeTab==='schedule'?<ScheduleTab data={data.schedule} loading={!!loading.schedule}/>:
+activeTab==='assets'?<AssetsTab data={data.assets} loading={!!loading.assets}/>:
+activeTab==='mom'?<TrendTab mode='month'/>:<TrendTab mode='day'/>
 )}
 </div>
 </div>
