@@ -79,7 +79,7 @@ const filtered=campaigns.filter(c=>!search||c.name.toLowerCase().includes(search
 const sorted=sort(filtered)
 const chartData=campaigns.filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend).slice(0,8).map(c=>({name:c.name.length>18?c.name.slice(0,18)+'...':c.name,spend:Math.round(c.spend/1000)}))
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:14,marginBottom:20}}><PremKPI label='Leads' value={fmtN(totalLeads)} sub='From CRM sheet' accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
+<div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:14,marginBottom:20}}><PremKPI label='Leads' value={fmtN(totalLeads)} sub='From CRM sheet' accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
 <PremKPI label='Total Spend' value={fmt(total.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='Impressions' value={fmtN(total.impressions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/>
 <PremKPI label='Clicks' value={fmtN(total.clicks)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai}/>
@@ -164,7 +164,7 @@ const domain=u=>{try{return new URL(u).hostname.replace(/^www\./,'')}catch{retur
 const copyLink=url=>{navigator.clipboard?.writeText(url);setLinkCopied(true);setTimeout(()=>setLinkCopied(false),1800)}
 const exportRows=filtered.map(a=>({Headline:a.headlines[0]||'',Campaign:a.campaign,'Ad Group':a.adGroup,Type:AD_TYPE_LABEL[a.type]||a.type,Status:a.status,'Landing Page':a.finalUrl||'',Spend:a.spend,Impressions:a.impressions,Clicks:a.clicks,CTR:a.ctr,'Avg CPC':a.avgCpc,Conversions:a.conversions,CPA:a.costPerConv}))
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='ADS' value={fmtN(ads.length)} sub='Total tracked' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='TOTAL SPEND' value={fmt(total?.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
 <PremKPI label='IMPRESSIONS' value={fmtN(total?.impressions)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/>
@@ -254,7 +254,7 @@ const qsColor=q=>q>=7?C.green:q>=5?C.blue:C.navy
 const matchBg=m=>({EXACT:C.navyBg,PHRASE:C.blueBg,BROAD:'#F3F4F6'}[m]||'#F3F4F6')
 const matchColor=m=>({EXACT:C.navy,PHRASE:C.blue,BROAD:C.sub}[m]||C.sub)
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(6,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(6,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='KEYWORDS' value={fmtN(keywords.length)} sub='Total tracked' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='TOTAL SPEND' value={fmt(total?.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
 <PremKPI label='IMPRESSIONS' value={fmtN(total?.impressions)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/>
@@ -303,7 +303,7 @@ const totalImpr=searchTerms.reduce((s,x)=>s+(x.impressions||0),0)
 const totalClicks=searchTerms.reduce((s,x)=>s+(x.clicks||0),0)
 const totalConv=searchTerms.reduce((s,x)=>s+(x.conversions||0),0)
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='SEARCH TERMS' value={fmtN(searchTerms.length)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='TOTAL SPEND' value={fmt(totalSpend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
 <PremKPI label='IMPRESSIONS' value={fmtN(totalImpr)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/>
@@ -345,7 +345,7 @@ const{adGroups=[],total={}}=data||{}
 const filtered=adGroups.filter(g=>!search||g.name.toLowerCase().includes(search.toLowerCase())||g.campaign.toLowerCase().includes(search.toLowerCase()))
 const sorted=sort(filtered)
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='AD GROUPS' value={fmtN(adGroups.length)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='TOTAL SPEND' value={fmt(total?.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
 <PremKPI label='IMPRESSIONS' value={fmtN(total?.impressions)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe}/><PremKPI label='CLICKS' value={fmtN(total?.clicks)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
@@ -385,7 +385,7 @@ if(loading)return <Loader/>
 if(!data)return null
 const{actions=[],totalLeads=0,totalConversions=0}=data||{}
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='LEADS (GOOGLE-TRACKED)' value={fmtN(totalLeads)} sub='Lead-category conversion actions only' accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
 <PremKPI label='ALL CONVERSIONS' value={fmtN(totalConversions)} sub='Every conversion action combined' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='CONVERSION ACTIONS' value={fmtN(actions.length)} sub='Distinct actions firing' accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai}/>
@@ -464,7 +464,7 @@ const sorted=sort(filtered)
 const totalSpend=locations.reduce((s,l)=>s+l.spend,0)
 const totalConv=locations.reduce((s,l)=>s+l.conversions,0)
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='LOCATIONS' value={fmtN(locations.length)} sub='Cities/regions with spend' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.globe}/>
 <PremKPI label='TOTAL SPEND' value={fmt(totalSpend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
 <PremKPI label='CONVERSIONS' value={fmtN(totalConv)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
@@ -496,7 +496,7 @@ if(!data)return null
 const{audiences=[]}=data||{}
 const sorted=sort(audiences)
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='AUDIENCE SEGMENTS' value={fmtN(audiences.length)} sub='In-market, affinity, remarketing lists in use' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='TOTAL SPEND' value={fmt(audiences.reduce((s,a)=>s+a.spend,0))} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent}/>
 </div>
@@ -540,7 +540,7 @@ return row
 })
 const bestHour=byHour.indexOf(Math.max(...byHour))
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='TOTAL SPEND' value={fmt(cells.reduce((s,c)=>s+c.spend,0))} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='BEST HOUR (BY SPEND)' value={bestHour+':00'} sub='Highest overall spend hour' accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/>
 </div>
@@ -576,7 +576,7 @@ const{assets=[]}=data||{}
 const filtered=filter==='all'?assets:assets.filter(a=>a.performanceLabel===filter)
 const counts=assets.reduce((m,a)=>{m[a.performanceLabel]=(m[a.performanceLabel]||0)+1;return m},{})
 return <>
-<div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:14,marginBottom:20}}>
+<div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:14,marginBottom:20}}>
 <PremKPI label='ASSETS' value={fmtN(assets.length)} sub='Images, video &amp; text across PMax/Display' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/>
 <PremKPI label='BEST' value={fmtN(counts.BEST||0)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/>
 <PremKPI label='GOOD' value={fmtN(counts.GOOD||0)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai}/>
@@ -618,7 +618,7 @@ return <>
 </>
 }
 
-function TrendTab({mode}){const [rows,setRows]=useState([]);const [total,setTotal]=useState({});const [loading,setLoading]=useState(true);const [err,setErr]=useState(null);useEffect(()=>{const now=new Date();const pad=n=>String(n).padStart(2,'0');const until=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());const since=mode==='month'?(now.getFullYear()+'-01-01'):(now.getFullYear()+'-'+pad(now.getMonth()+1)+'-01');setLoading(true);const token=localStorage.getItem('quantum_token');fetch('/api/google-ads?tab=trend&mode='+mode+'&from='+since+'&to='+until,{headers:{'Authorization':'Bearer '+(token||'')}}).then(r=>r.json()).then(json=>{if(json.error){setErr(json.error);return}setRows(json.points||[]);setTotal(json.total||{})}).catch(e=>setErr(e.message)).finally(()=>setLoading(false))},[mode]);if(loading)return <Loader/>;const fmtPeriod=p=>mode==='month'?new Date(p).toLocaleDateString('en-US',{month:'short',year:'numeric'}):new Date(p).toLocaleDateString('en-US',{day:'2-digit',month:'short'});const thS={padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'};const thL={...thS,textAlign:'left'};const tdR={padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5};const tdL={padding:'8px 12px',fontSize:12.5,color:C.text,fontWeight:600};return <><div style={{fontSize:12,color:C.muted,marginBottom:14,fontFamily:FONT}}>{mode==='month'?'Fixed range: Jan 1 to today (not affected by the date filter)':'Fixed range: 1st of this month to today (not affected by the date filter)'}</div>{err&&<div style={{padding:'10px 14px',borderRadius:10,background:C.navyBg,color:C.navy,fontSize:12.5,fontWeight:600,marginBottom:16}}>{err}</div>}<div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}><PremKPI label='Total Spend' value={fmt(total.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/><PremKPI label='Impressions' value={fmtN(total.impressions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/><PremKPI label='Clicks' value={fmtN(total.clicks)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai}/><PremKPI label='CTR' value={fmtPct(total.ctr)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/><PremKPI label='Conversions' value={fmtN(total.conversions)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent}/></div><Card title={mode==='month'?'Month on month':'Day on day'} sub={rows.length+' periods'}><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}><thead><tr><th style={thL}>Period</th><th style={thS}>Spend</th><th style={thS}>Impr.</th><th style={thS}>Clicks</th><th style={thS}>CTR</th><th style={thS}>Avg CPC</th><th style={thS}>Conv.</th><th style={thS}>CPA</th></tr></thead><tbody>{rows.map((r,i)=>(<tr key={i} style={{borderBottom:'0.5px solid '+C.border}}><td style={tdL}>{fmtPeriod(r.period)}</td><td style={{...tdR,fontWeight:700,color:C.text}}>{fmt(r.spend)}</td><td style={tdR}>{fmtN(r.impressions)}</td><td style={tdR}>{fmtN(r.clicks)}</td><td style={tdR}>{fmtPct(r.ctr)}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmtCpc(r.avgCpc)}</td><td style={{...tdR,color:C.navy,fontWeight:700}}>{r.conversions?.toFixed(1)||'—'}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmt(r.costPerConv)}</td></tr>))}<tr style={{background:'#F8FAFC',fontWeight:800}}><td style={{...tdL,fontWeight:800}}>Total</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmt(total.spend)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.impressions)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.clicks)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtPct(total.ctr)}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmtCpc(total.avgCpc)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{total.conversions?(+total.conversions).toFixed(1):'—'}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmt(total.costPerConv)}</td></tr></tbody></table></div></Card></>}const METRIC_INFO=[
+function TrendTab({mode}){const [rows,setRows]=useState([]);const [total,setTotal]=useState({});const [loading,setLoading]=useState(true);const [err,setErr]=useState(null);useEffect(()=>{const now=new Date();const pad=n=>String(n).padStart(2,'0');const until=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());const since=mode==='month'?(now.getFullYear()+'-01-01'):(now.getFullYear()+'-'+pad(now.getMonth()+1)+'-01');setLoading(true);const token=localStorage.getItem('quantum_token');fetch('/api/google-ads?tab=trend&mode='+mode+'&from='+since+'&to='+until,{headers:{'Authorization':'Bearer '+(token||'')}}).then(r=>r.json()).then(json=>{if(json.error){setErr(json.error);return}setRows(json.points||[]);setTotal(json.total||{})}).catch(e=>setErr(e.message)).finally(()=>setLoading(false))},[mode]);if(loading)return <Loader/>;const fmtPeriod=p=>mode==='month'?new Date(p).toLocaleDateString('en-US',{month:'short',year:'numeric'}):new Date(p).toLocaleDateString('en-US',{day:'2-digit',month:'short'});const thS={padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'};const thL={...thS,textAlign:'left'};const tdR={padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5};const tdL={padding:'8px 12px',fontSize:12.5,color:C.text,fontWeight:600};return <><div style={{fontSize:12,color:C.muted,marginBottom:14,fontFamily:FONT}}>{mode==='month'?'Fixed range: Jan 1 to today (not affected by the date filter)':'Fixed range: 1st of this month to today (not affected by the date filter)'}</div>{err&&<div style={{padding:'10px 14px',borderRadius:10,background:C.navyBg,color:C.navy,fontSize:12.5,fontWeight:600,marginBottom:16}}>{err}</div>}<div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}><PremKPI label='Total Spend' value={fmt(total.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/><PremKPI label='Impressions' value={fmtN(total.impressions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/><PremKPI label='Clicks' value={fmtN(total.clicks)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai}/><PremKPI label='CTR' value={fmtPct(total.ctr)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/><PremKPI label='Conversions' value={fmtN(total.conversions)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent}/></div><Card title={mode==='month'?'Month on month':'Day on day'} sub={rows.length+' periods'}><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}><thead><tr><th style={thL}>Period</th><th style={thS}>Spend</th><th style={thS}>Impr.</th><th style={thS}>Clicks</th><th style={thS}>CTR</th><th style={thS}>Avg CPC</th><th style={thS}>Conv.</th><th style={thS}>CPA</th></tr></thead><tbody>{rows.map((r,i)=>(<tr key={i} style={{borderBottom:'0.5px solid '+C.border}}><td style={tdL}>{fmtPeriod(r.period)}</td><td style={{...tdR,fontWeight:700,color:C.text}}>{fmt(r.spend)}</td><td style={tdR}>{fmtN(r.impressions)}</td><td style={tdR}>{fmtN(r.clicks)}</td><td style={tdR}>{fmtPct(r.ctr)}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmtCpc(r.avgCpc)}</td><td style={{...tdR,color:C.navy,fontWeight:700}}>{r.conversions?.toFixed(1)||'—'}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmt(r.costPerConv)}</td></tr>))}<tr style={{background:'#F8FAFC',fontWeight:800}}><td style={{...tdL,fontWeight:800}}>Total</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmt(total.spend)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.impressions)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.clicks)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtPct(total.ctr)}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmtCpc(total.avgCpc)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{total.conversions?(+total.conversions).toFixed(1):'—'}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmt(total.costPerConv)}</td></tr></tbody></table></div></Card></>}const METRIC_INFO=[
 {k:'Spend',v:'Cost in the selected date range, from Google Ads metrics.cost_micros.'},
 {k:'Impressions / Clicks',v:'Raw counts from Google Ads for the selected range.'},
 {k:'CTR',v:'Clicks ÷ Impressions.'},
