@@ -656,8 +656,8 @@ const token=localStorage.getItem('quantum_token')
 const apiTab=tab==='searchTerms'?'search_terms':tab==='adGroups'?'ad_groups':tab
 const q=custom?('from='+cFrom+'&to='+cTo):('dateRange='+dr);const res=await fetch('/api/google-ads'+'?tab='+apiTab+'&'+q,{headers:{'Authorization':'Bearer '+(token||'')}})
 if(res.status===503||res.status===401){setNotConnected(true);return}
-if(!res.ok)throw new Error('API error '+res.status)
-const json=await res.json()
+const json=await res.json().catch(()=>({}))
+if(!res.ok)throw new Error(json.error||('API error '+res.status))
 if(json.error&&json.error.includes('credential')||json.notConnected){setNotConnected(true);return}
 setData(p=>({...p,[tab]:json}))
 loaded.current[k]=true

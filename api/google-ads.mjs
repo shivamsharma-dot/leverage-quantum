@@ -15,7 +15,7 @@ return d.access_token
 
 async function gaql(token,cid,query){
 const r=await fetch(`${ADS_BASE}/customers/${cid}/googleAds:search`,{method:'POST',headers:{'Authorization':`Bearer ${token}`,'developer-token':process.env.GOOGLE_ADS_DEVELOPER_TOKEN,'Content-Type':'application/json','login-customer-id':process.env.GOOGLE_ADS_MANAGER_ID||cid},body:JSON.stringify({query})})
-if(!r.ok){const e=await r.text();throw new Error(`Ads API ${r.status}: ${e.slice(0,300)}`)}
+if(!r.ok){const e=await r.text();throw new Error(`Ads API ${r.status}: ${e.slice(0,2000)}`)}
 const d=await r.json();return d.results||[]
 }
 
