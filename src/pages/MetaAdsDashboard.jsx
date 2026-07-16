@@ -335,7 +335,7 @@ function CampaignsTab({ data }) {
   const cols = '2.2fr 80px 70px 100px 100px 80px 75px 85px 85px 95px 70px 85px 85px 80px 70px'
   return (
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
-        <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16 }}>
+        <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16 }}>
           {[
             { label:'IMPRESSIONS',value:accImpr.toLocaleString('en-IN'),sub:accClicks.toLocaleString('en-IN')+' clicks',c1:'#1F3C84',c2:'#1C9FD4',icon:'◐' },
             { label:'PERIOD SPEND',value:fmtINR(accSpend),sub:totActive+' active · '+pausedCampaignCount+' paused',c1:'#1C9FD4',c2:'#29B9C3',icon:'₹' },
@@ -390,7 +390,7 @@ function CampaignsTab({ data }) {
             </div>
             {expanded===c.id&&(
               <div style={{ padding:'16px 16px 16px 32px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB' }}>
-                <div style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:10,marginBottom:10 }}>
+                <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:10,marginBottom:10 }}>
                   {[{l:'Reach',v:fmtN(c.reach)},{l:'CPC',v:c.cpc>0?'₹'+Math.round(c.cpc):'—'},{l:'CPM',v:c.cpm>0?'₹'+Math.round(c.cpm):'—'},{l:'Conv. Rate',v:c.convRate>0?c.convRate.toFixed(2)+'%':'—'},{l:'Frequency',v:c.frequency>0?c.frequency.toFixed(2):'—',w:c.frequency>3},{l:'Spend Share',v:c.spendShare.toFixed(1)+'%'},{l:'CRM Conv. Rate',v:(c.crmLeads>0&&c.clicks>0)?((c.crmLeads/c.clicks*100).toFixed(2)+'%'):'—'}].map(m=><div key={m.l} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:8,padding:'10px 14px' }}><div style={{ fontSize:10,color:'#9CA3AF',fontWeight:600,marginBottom:4 }}>{m.l}</div><div style={{ fontSize:16,fontWeight:700,color:m.w?'#1F3C84':'#111827' }}>{m.v}</div></div>)}
                 </div>
                 {c.fatigueLevel!=='healthy'&&<div style={{ padding:'10px 14px',background:c.fatigueLevel==='fatigue'?'#FEF2F2':'#FEF9C3',borderRadius:8,fontSize:12,color:c.fatigueLevel==='fatigue'?'#991B1B':'#854D0E',fontWeight:500 }}>{c.fatigueLevel==='fatigue'?'⚠ High frequency ('+c.frequency.toFixed(1)+') — audience fatigued. Refresh creatives or expand targeting.':'⚡ Frequency '+c.frequency.toFixed(1)+' approaching fatigue. Monitor CTR closely.'}</div>}
@@ -699,7 +699,7 @@ function CreativesTab({ data, token }) {
   const SB=({score})=>(<div style={{ display:'flex',alignItems:'center',gap:5 }}><div style={{ flex:1,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:score+'%',background:score>65?'#4CAE6F':score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,fontWeight:700,color:'#6B7280',minWidth:22 }}>{score}</span></div>)
   return (
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
-        <div style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:14,marginBottom:18 }}>
+        <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:14,marginBottom:18 }}>
           {[
             { key:'spend', label:'PERIOD SPEND', value:fmtINR(kpiStats.spendSum), sub:((n=>n>=1e7?(n/1e7).toFixed(2)+' Cr':n>=1e5?(n/1e5).toFixed(2)+' L':n>=1e3?(n/1e3).toFixed(1)+'K':String(Math.round(n||0))))(kpiStats.imprSum)+' impressions', c1:'#1C9FD4', c2:'#29B9C3', icon:'₹' },
             { key:'leads', label:'LEADS', value:kpiStats.leadsSum.toLocaleString('en-IN'), sub:'in selected range', c1:'#4CAE6F', c2:'#34D399', icon:'◉' },
@@ -1181,7 +1181,7 @@ function TrendTab({ token, adAccount, mode }) {
   return (
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
       <div style={{ fontSize:12, color:'#9CA3AF', marginBottom:14 }}>{rangeLabel} · fixed range, not affected by the date filter on other tabs</div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:12, marginBottom:16 }}>
+      <div className='lq-kpi-grid' style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:12, marginBottom:16 }}>
         {[
           { label:'TOTAL SPEND', value:fmtINR(totals.spend), c1:'#1C9FD4', c2:'#29B9C3', icon:'₹' },
           { label:'LEADS (META)', value:totals.leads.toLocaleString('en-IN'), c1:'#4CAE6F', c2:'#34D399', icon:'◉' },
