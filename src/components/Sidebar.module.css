@@ -175,11 +175,11 @@
   padding: 2px 6px;
 }
 
-.subNav { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 4px 28px; }
+.subNav { display: flex; flex-direction: column; gap: 3px; margin: 8px 0 8px 28px; }
 
 .subNavItem {
   display: flex; align-items: center; gap: 8px;
-  padding: 6px 10px; border-radius: 6px;
+  padding: 7px 10px; border-radius: 7px;
   font-size: 12px; font-weight: 500;
   color: #9CA3AF;
   cursor: pointer; transition: all .12s;
