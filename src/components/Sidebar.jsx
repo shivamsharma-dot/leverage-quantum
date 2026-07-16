@@ -41,6 +41,7 @@ const NAV = [
         end: false,
         subItems: [
           { to: '/dashboard/google-ads?tab=campaigns',   label: 'Campaigns',    matchType: 'query', tabKey: 'campaigns' },
+          { to: '/dashboard/google-ads?tab=ads',          label: 'Ads',          matchType: 'query', tabKey: 'ads' },
           { to: '/dashboard/google-ads?tab=keywords',    label: 'Keywords',     matchType: 'query', tabKey: 'keywords' },
           { to: '/dashboard/google-ads?tab=searchTerms', label: 'Search Terms', matchType: 'query', tabKey: 'searchTerms' },
           { to: '/dashboard/google-ads?tab=adGroups',   label: 'Ad Groups',    matchType: 'query', tabKey: 'adGroups' },{ to: '/dashboard/google-ads?tab=mom', label: 'Month on Month', matchType: 'query', tabKey: 'mom' },{ to: '/dashboard/google-ads?tab=dod', label: 'Day on Day', matchType: 'query', tabKey: 'dod' },
