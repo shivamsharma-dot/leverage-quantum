@@ -10,6 +10,15 @@ import { resolveSheetUrl } from './dataSources'
 const AD_ACCOUNT = 'act_641914389215638'
 const QLOPS_DAILY_DEFAULT = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Qlops'
 const QLOPS_MONTHLY_DEFAULT = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=QLSnapshot'
+const GOOGLE_LEADS_DEFAULT = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=googleleads'
+const GLEAD_MON = { Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06', Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12' }
+function parseGoogleLeadDate(raw) {
+  const m = String(raw || '').trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/)
+  if (!m) return null
+  const mo = GLEAD_MON[m[2]]
+  if (!mo) return null
+  return m[3] + '-' + mo + '-' + m[1].padStart(2, '0')
+}
 const MQ_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const periodKey = (p) => { const m = String(p || '').match(/([A-Za-z]{3})[a-z]*-(\d{4})/); return m ? (parseInt(m[2], 10) * 12 + MQ_MON.indexOf(m[1])) : 0 }
 
@@ -76,6 +85,50 @@ async function fetchMetaDaily() {
     })
   } catch (e) {
     console.error('summaryData: meta fetch failed', e)
+    return []
+  }
+}
+
+async function fetchGoogleDaily() {
+  try {
+    const until = new Date()
+    const since = new Date()
+    since.setDate(since.getDate() - 210)
+    const fmt = (d) => d.toISOString().slice(0, 10)
+    const res = await fetch('/api/google-ads?tab=trend&mode=day&from=' + fmt(since) + '&to=' + fmt(until), { credentials: 'include' })
+    if (!res.ok) return []
+    const json = await res.json()
+    if (json.error || json.notConnected) return []
+    return (json.points || []).map((p) => ({
+      date: p.period,
+      spend: p.spend || 0,
+      clicks: p.clicks || 0,
+      impressions: p.impressions || 0,
+      conversions: p.conversions || 0,
+    }))
+  } catch (e) {
+    console.error('summaryData: google ads fetch failed', e)
+    return []
+  }
+}
+
+async function fetchGoogleLeadsDaily() {
+  try {
+    const url = await resolveSheetUrl('googleLeads', GOOGLE_LEADS_DEFAULT)
+    const csv = await fetch(url).then(r => (r.ok ? r.text() : ''))
+    if (!csv) return []
+    const rows = csv.trim().split('\n').map(parseCsvRow)
+    const [hdr, ...data] = rows
+    const low = hdr.map((x) => x.toLowerCase().trim())
+    const h = (k) => low.indexOf(k)
+    const iDate = h('lead_created_date')
+    const iLeads = h('leads')
+    if (iDate === -1) return []
+    return data
+      .map((r) => ({ date: parseGoogleLeadDate(r[iDate]), leads: parseFloat(String(r[iLeads] || '1').replace(/[^0-9.-]/g, '')) || 1 }))
+      .filter((r) => r.date)
+  } catch (e) {
+    console.error('summaryData: google leads fetch failed', e)
     return []
   }
 }
@@ -150,9 +203,9 @@ function buildMonthlyQlSeries(monthlyQl) {
   return { periodRows, bySourceRows }
 }
 
-function buildSeries(metaDaily, qlDaily) {
+function buildSeries(metaDaily, qlDaily, googleDaily, googleLeadsDaily) {
   const days = {}
-  const ensure = (k) => (days[k] = days[k] || { date: k, spend: 0, clicks: 0, impressions: 0, metaLeads: 0, ql: 0, futwork: 0, superbot: 0 })
+  const ensure = (k) => (days[k] = days[k] || { date: k, spend: 0, clicks: 0, impressions: 0, metaLeads: 0, ql: 0, futwork: 0, superbot: 0, googleSpend: 0, googleClicks: 0, googleImpressions: 0, googleConversions: 0, googleLeads: 0 })
   metaDaily.forEach((d) => {
     const row = ensure(d.date)
     row.spend += d.spend
@@ -165,12 +218,23 @@ function buildSeries(metaDaily, qlDaily) {
     row.ql += 1
     row[r.provider] += 1
   })
+  googleDaily.forEach((d) => {
+    const row = ensure(d.date)
+    row.googleSpend += d.spend
+    row.googleClicks += d.clicks
+    row.googleImpressions += d.impressions
+    row.googleConversions += d.conversions
+  })
+  googleLeadsDaily.forEach((r) => {
+    const row = ensure(r.date)
+    row.googleLeads += r.leads
+  })
   const dayRows = Object.keys(days).sort().map((k) => days[k])
 
   const months = {}
   dayRows.forEach((r) => {
     const mk = r.date.slice(0, 7)
-    months[mk] = months[mk] || { month: mk, spend: 0, clicks: 0, impressions: 0, metaLeads: 0, ql: 0, futwork: 0, superbot: 0 }
+    months[mk] = months[mk] || { month: mk, spend: 0, clicks: 0, impressions: 0, metaLeads: 0, ql: 0, futwork: 0, superbot: 0, googleSpend: 0, googleClicks: 0, googleImpressions: 0, googleConversions: 0, googleLeads: 0 }
     const m = months[mk]
     m.spend += r.spend
     m.clicks += r.clicks
@@ -179,6 +243,11 @@ function buildSeries(metaDaily, qlDaily) {
     m.ql += r.ql
     m.futwork += r.futwork
     m.superbot += r.superbot
+    m.googleSpend += r.googleSpend
+    m.googleClicks += r.googleClicks
+    m.googleImpressions += r.googleImpressions
+    m.googleConversions += r.googleConversions
+    m.googleLeads += r.googleLeads
   })
   const monthRows = Object.keys(months).sort().map((k) => months[k])
   return { dayRows: dayRows, monthRows: monthRows }
@@ -192,8 +261,8 @@ export async function loadSummaryAnalysis(bust) {
     if (inflight) return inflight
   }
   inflight = (async () => {
-    const results = await Promise.all([fetchMetaDaily(), fetchQlopsDaily(), fetchQlopsMonthly()])
-    const built = buildSeries(results[0], results[1])
+    const results = await Promise.all([fetchMetaDaily(), fetchQlopsDaily(), fetchQlopsMonthly(), fetchGoogleDaily(), fetchGoogleLeadsDaily()])
+    const built = buildSeries(results[0], results[1], results[3], results[4])
     const monthlyQl = buildMonthlyQlSeries(results[2])
     const result = { dayRows: built.dayRows, monthRows: built.monthRows, monthlyQlPeriods: monthlyQl.periodRows, monthlyQlBySource: monthlyQl.bySourceRows, ts: new Date() }
     setSession(CACHE_KEY, result)

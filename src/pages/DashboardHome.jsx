@@ -129,6 +129,7 @@ function ChartPanel({ title, data, xKey, yKey, color, valueFmt, chartType }) {
 function SectionIcon({ id, color }) {
   const icons = {
     meta: <><path d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z'/></>,
+    google: <path d='M21.35 11.1H12.18V13.83H18.69C18.36 17.64 15.19 19.27 12.19 19.27C8.36 19.27 5 16.25 5 12C5 7.9 8.2 4.73 12.2 4.73C15.29 4.73 17.1 6.7 17.1 6.7L19 4.72C19 4.72 16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12C2.03 17.05 6.16 22 12.25 22C17.6 22 21.5 18.33 21.5 12.91C21.5 11.76 21.35 11.1 21.35 11.1Z' fill={color}/>,
     qlops: <><path d='M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2'/><circle cx='9' cy='7' r='4'/><path d='M23 21v-2a4 4 0 00-3-3.87'/><path d='M16 3.13a4 4 0 010 7.75'/></>,
     calendar: <><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></>,
     monthlyql: <><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/><path d='M8 15l2.5 2.5L16 12'/></>,
@@ -184,6 +185,17 @@ function metaAnalystLine(M) {
   if (sp !== null && ld !== null && sp <= -3 && ld >= 0) read = 'A healthy sign of improving efficiency.'
   else if (sp !== null && ld !== null && sp >= 3 && ld < 0) read = "Worth a creative or audience refresh before spend scales further -- efficiency is slipping."
   return 'Spend ' + spendVerb + ' to ' + fmtC(M.lastDay.spend) + leadNote + '. ' + read
+}
+
+function googleAnalystLine(M) {
+  if (!M.lastDay || !M.lastDay.googleSpend) return 'Google Ads performance will appear here as soon as spend data starts flowing in for this account.'
+  const sp = M.googleSpendDeltaPct, ld = M.googleLeadsDeltaPct
+  const spendVerb = (sp === null || Math.abs(sp) < 3) ? 'held roughly flat' : sp > 0 ? ('climbed ' + Math.abs(sp).toFixed(0) + '% day-on-day') : ('eased ' + Math.abs(sp).toFixed(0) + '% day-on-day')
+  const leadNote = (ld === null) ? '' : (Math.abs(ld) < 3) ? ', with lead volume holding steady' : ld > 0 ? (', and leads rose ' + Math.abs(ld).toFixed(0) + '% alongside it') : (', even as leads dipped ' + Math.abs(ld).toFixed(0) + '%')
+  let read = 'Overall, performance is tracking within a normal band.'
+  if (sp !== null && ld !== null && sp <= -3 && ld >= 0) read = 'A healthy sign of improving efficiency.'
+  else if (sp !== null && ld !== null && sp >= 3 && ld < 0) read = 'Worth a keyword or bid-strategy review before spend scales further -- efficiency is slipping.'
+  return 'Spend ' + spendVerb + ' to ' + fmtC(M.lastDay.googleSpend) + leadNote + '. ' + read
 }
 
 function qlAnalystLine(M) {
@@ -274,6 +286,8 @@ export default function DashboardHome() {
       mtdCPQLDeltaPct: prevMonthCPQL ? pct(mtdCPQL, prevMonthCPQL) : null,
       futworkSharePct: curMonthRow.ql ? (curMonthRow.futwork/curMonthRow.ql*100) : null,
       monthlyQlBySource: mqBySource,
+      googleSpendDeltaPct: pct(lastDay?.googleSpend||0, prevDay?.googleSpend||0),
+      googleLeadsDeltaPct: pct(lastDay?.googleLeads||0, prevDay?.googleLeads||0),
     }
   }, [analysis])
 
@@ -324,6 +338,18 @@ export default function DashboardHome() {
             ]}
             dod={{ data:M.dod, key:'spend', fmt:(v)=>fmtC(v), type:'area' }}
             mom={{ data:M.mom, key:'spend', fmt:(v)=>fmtC(v), type:'bar' }}
+          />
+
+          <AnalysisSection
+            icon='google' color={C.navy} title='Google Ads' tagline='Spend, leads and click-through -- last day, day-on-day, month-on-month'
+            insight={googleAnalystLine(M)} loading={loading}
+            stats={[
+              { label:'Yesterday Spend', value: fmtC(M.lastDay?.googleSpend||0), deltaPct: M.googleSpendDeltaPct, deltaLabel:'vs day before' },
+              { label:'Yesterday Leads', value: fmtN(M.lastDay?.googleLeads||0), deltaPct: M.googleLeadsDeltaPct, deltaLabel:'vs day before, from CRM sheet' },
+              { label:'Yesterday CTR', value: (M.lastDay && M.lastDay.googleImpressions ? ((M.lastDay.googleClicks/M.lastDay.googleImpressions)*100).toFixed(2) : '0.00')+'%', deltaLabel:'Click-through rate' },
+            ]}
+            dod={{ data:M.dod, key:'googleSpend', fmt:(v)=>fmtC(v), type:'area' }}
+            mom={{ data:M.mom, key:'googleSpend', fmt:(v)=>fmtC(v), type:'bar' }}
           />
 
           <AnalysisSection
