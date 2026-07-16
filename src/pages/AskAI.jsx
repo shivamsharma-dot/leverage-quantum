@@ -571,8 +571,8 @@ export default function AskAI() {
           <div style={{display:'flex',alignItems:'center',gap:6}}>
             <div ref={scopeRef} style={{position:'relative'}}>
               <button onClick={e=>{e.stopPropagation();setScopeOpen(v=>!v)}} className="mabtn"
-                style={{display:'flex',alignItems:'center',gap:5,padding:isMobile?'6px':'5px 10px',border:`0.5px solid ${scopeOpen?'#CBD5E1':borderColor}`,background:scopeOpen?'#F1F4F8':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:scopeOpen?'#1F3C84':'#475569',fontFamily:FONT,transition:'all .15s'}}>
-                <div style={{width:6,height:6,borderRadius:'50%',flexShrink:0,background:platformScope==='meta'?(connected?GREEN:'#CBD5E1'):platformScope==='google'?GREEN:'#94A3B8'}}/>
+                style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,width:isMobile?42:undefined,height:isMobile?42:undefined,padding:isMobile?0:'5px 10px',border:`0.5px solid ${scopeOpen?'#CBD5E1':borderColor}`,background:scopeOpen?'#F1F4F8':'transparent',borderRadius:isMobile?13:8,cursor:'pointer',fontSize:12,fontWeight:500,color:scopeOpen?'#1F3C84':'#475569',fontFamily:FONT,transition:'all .15s'}}>
+                <div style={{width:isMobile?9:6,height:isMobile?9:6,borderRadius:'50%',flexShrink:0,background:platformScope==='meta'?(connected?GREEN:'#CBD5E1'):platformScope==='google'?GREEN:'#94A3B8'}}/>
                 {!isMobile&&(platformScope==='meta'?'Meta Ads':platformScope==='google'?'Google Ads':'All sources')}
                 {!isMobile&&<span style={{display:'flex',transform:'rotate(90deg)'}}><Ico n="chevR" s={10} c={scopeOpen?'#1F3C84':'#94A3B8'}/></span>}
               </button>
@@ -594,8 +594,8 @@ export default function AskAI() {
             </div>
             {[['history','History','history'],['prompts','Prompts','prompts'],['memories','Memories','brain']].map(([id,lbl,ic])=>(
               <button key={id} onClick={e=>{e.stopPropagation();toggleRail(id)}} className="mabtn"
-                style={{display:'flex',alignItems:'center',gap:5,padding:isMobile?'6px':'5px 10px',border:`0.5px solid ${rail===id&&railOpen?'#CBD5E1':borderColor}`,background:rail===id&&railOpen?'#F1F4F8':'transparent',borderRadius:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id&&railOpen?'#1F3C84':'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
-                <Ico n={ic} s={12} c={rail===id&&railOpen?'#1F3C84':'#94A3B8'}/>{!isMobile&&lbl}
+                style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,width:isMobile?42:undefined,height:isMobile?42:undefined,padding:isMobile?0:'5px 10px',border:`0.5px solid ${rail===id&&railOpen?'#CBD5E1':borderColor}`,background:rail===id&&railOpen?'#F1F4F8':'transparent',borderRadius:isMobile?13:8,cursor:'pointer',fontSize:12,fontWeight:500,color:rail===id&&railOpen?'#1F3C84':'#94A3B8',fontFamily:FONT,transition:'all .15s'}}>
+                <Ico n={ic} s={isMobile?18:12} c={rail===id&&railOpen?'#1F3C84':'#94A3B8'}/>{!isMobile&&lbl}
               </button>
             ))}
           </div>
@@ -669,13 +669,10 @@ export default function AskAI() {
 .askai-reopen-strip:hover{ background:linear-gradient(90deg,rgba(15,23,42,0.05),transparent); }
 @media (max-width:768px){ .askai-rail{ width:86vw!important; max-width:340px; top:0; bottom:0; left:0; border-radius:0; box-shadow:0 0 40px rgba(15,23,42,0.22); } .askai-backdrop{ display:block!important; } }
 @media (max-width:640px){
-  .qHeroOrb{ width:56px!important; height:56px!important; margin-bottom:14px!important; }
-  .qHeroOrb svg{ width:26px!important; height:26px!important; }
-  .qHeroTitle{ font-size:20px!important; margin-bottom:4px!important; }
-  .qHeroSub{ font-size:13px!important; margin-bottom:18px!important; }
-  .qChipsRow{ flex-wrap:nowrap!important; justify-content:flex-start!important; overflow-x:auto!important; max-width:100vw!important; width:100vw!important; margin:0 -20px!important; padding:0 20px 6px!important; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
-  .qChipsRow::-webkit-scrollbar{ display:none; }
-  .qChipsRow button{ flex:0 0 auto!important; }
+  .qHeroOrb{ width:84px!important; height:84px!important; margin-bottom:24px!important; }
+  .qHeroOrb svg{ width:38px!important; height:38px!important; }
+  .qHeroTitle{ font-size:30px!important; margin-bottom:10px!important; }
+  .qHeroSub{ font-size:15.5px!important; margin-bottom:0!important; }
   .askai-caption{ display:none!important; }
 }
 /* dynamic-viewport-height fallback: keeps the composer pinned above a mobile keyboard instead of
@@ -916,7 +913,7 @@ export default function AskAI() {
           {/* Messages */}
           <div className="cs" style={{flex:1,overflowY:'auto',padding: messages.length===0 ? '20px 20px 40px' : '20px 0'}}>
             {messages.length===0?(
-              <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:isMobile?'flex-start':'center',padding:isMobile?'32px 20px 0':'20px',animation:'fadeUp .5s ease'}}>
+              <div style={{height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'20px',animation:'fadeUp .5s ease'}}>
                 {/* Logo orb */}
             <div className="qHeroOrb" style={{position:'relative',marginBottom:22,animation:'scaleIn .5s ease',width:78,height:78,display:'flex',alignItems:'center',justifyContent:'center'}}>
               <div className="qOrb" style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center'}}>
