@@ -295,7 +295,7 @@ export default function MTDDashboard(){
         <div style={{flex:1,overflowY:'auto',padding:'18px 24px'}}>
           {total&&(<>
 
-            <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:12}}>
+            <div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:12}}>
               <KPI icon={KPI_ICONS.spend} label='Total Spend' value={fmtINR(total.spend)} accent='#1F3C84' sub={prevTotal?'prev '+fmtINR(prevTotal.spend):undefined} cur={total.spend} prev={prevTotal?.spend} invert/>
               <KPI icon={KPI_ICONS.leads} label='Total Leads' value={fmtNum(total.leads)} accent='#1C9FD4' sub={prevTotal?'prev '+fmtNum(prevTotal.leads):undefined} cur={total.leads} prev={prevTotal?.leads} prorate={prorate}/>
               <KPI icon={KPI_ICONS.cpl} label='CPL' value={fmtINR(total.cpl)} accent='#1C9FD4' sub='Cost per lead' cur={total.cpl} prev={prevTotal?.cpl} invert/>
@@ -303,7 +303,7 @@ export default function MTDDashboard(){
               <KPI icon={KPI_ICONS.roas} label='ROAS' value={total.roas>0?total.roas.toFixed(2)+'x':'\u2014'} accent={roasColor(total.roas)} cur={total.roas} prev={prevTotal?.roas}/>
             </div>
 
-            <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12,marginBottom:22}}>
+            <div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12,marginBottom:22}}>
               <KPI icon={KPI_ICONS.qual} label='FW Qualified' value={fmtNum(total.fwQual)} accent='#1F3C84' sub={'of '+fmtNum(total.fwQ)+' queued'} cur={total.fwQual} prev={prevTotal?.fwQual} prorate={prorate}/>
               <KPI icon={KPI_ICONS.pct} label='FW QL%' value={total.fwQL.toFixed(2)+'%'} accent='#1C9FD4' sub='Futwork quality' cur={total.fwQL} prev={prevTotal?.fwQL}/>
               <KPI icon={KPI_ICONS.qual} label='SB Qualified' value={fmtNum(total.sbQual)} accent='#29B9C3' sub={total.sbQL.toFixed(2)+'% QL'} cur={total.sbQual} prev={prevTotal?.sbQual}/>
