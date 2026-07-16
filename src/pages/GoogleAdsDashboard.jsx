@@ -19,13 +19,13 @@ const pillStyle=active=>({padding:'5px 14px',borderRadius:999,fontSize:12,fontWe
 const tabBtn=active=>({padding:'8px 16px',borderRadius:8,fontSize:12.5,fontWeight:700,cursor:'pointer',fontFamily:FONT,border:'0.5px solid '+(active?C.navy:C.border),background:active?C.navy:'var(--card)',color:active?'#fff':C.sub,transition:'all .15s'})
 
 const StatusBadge=({s})=>{
-const map={ENABLED:{bg:C.greenBg,color:C.green,dot:C.green,label:'Active'},PAUSED:{bg:'#FEF9C3',color:'#D97706',dot:'#D97706',label:'Paused'},REMOVED:{bg:'#FEF2F2',color:'#DC2626',dot:'#DC2626',label:'Removed'}}
+const map={ENABLED:{bg:C.greenBg,color:C.green,dot:C.green,label:'Active'},PAUSED:{bg:C.blueBg,color:C.blue,dot:C.blue,label:'Paused'},REMOVED:{bg:C.navyBg,color:C.navy,dot:C.navy,label:'Removed'}}
 const v=map[s]||{bg:'#F3F4F6',color:'#6B7280',dot:'#9CA3AF',label:s||'Unknown'}
 return <span style={{background:v.bg,color:v.color,fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:10,display:'inline-flex',alignItems:'center',gap:4,fontFamily:FONT}}><span style={{width:6,height:6,borderRadius:'50%',background:v.dot,display:'inline-block'}}/>{v.label}</span>
 }
 
 const TypeTag=({t})=>{
-const map={SEARCH:{bg:C.blueBg,color:C.blue,label:'Search'},DISPLAY:{bg:C.greenBg,color:C.green,label:'Display'},SHOPPING:{bg:'#FEF9C3',color:'#D97706',label:'Shopping'},VIDEO:{bg:'#FEF2F2',color:'#DC2626',label:'Video'},PERFORMANCE_MAX:{bg:C.navyBg,color:C.navy,label:'PMax'}}
+const map={SEARCH:{bg:C.blueBg,color:C.blue,label:'Search'},DISPLAY:{bg:C.greenBg,color:C.green,label:'Display'},SHOPPING:{bg:C.cyanBg,color:C.cyan,label:'Shopping'},VIDEO:{bg:C.navyBg,color:C.navy,label:'Video'},PERFORMANCE_MAX:{bg:C.navyBg,color:C.navy,label:'PMax'}}
 const v=map[t]||{bg:'#F3F4F6',color:'#6B7280',label:t||'Other'}
 return <span style={{background:v.bg,color:v.color,fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:8,fontFamily:FONT}}>{v.label}</span>
 }
@@ -123,7 +123,7 @@ return <>
 <td style={{padding:'9px 12px',textAlign:'right',color:C.sub,fontSize:12.5,whiteSpace:'nowrap'}}>{fmtCpc(c.avgCpc)}</td>
 <td style={{padding:'9px 12px',textAlign:'right',color:C.navy,fontWeight:700,fontSize:12.5}}>{c.conversions?.toFixed(1)||'—'}</td>
 <td style={{padding:'9px 12px',textAlign:'right',color:C.sub,fontSize:12.5,whiteSpace:'nowrap'}}>{fmt(c.costPerConv)}</td>
-<td style={{padding:'9px 12px',textAlign:'right',fontSize:12.5,color:c.impressionShare>0.8?C.green:c.impressionShare>0.5?'#D97706':'#DC2626'}}>{fmtPct(c.impressionShare)}</td>
+<td style={{padding:'9px 12px',textAlign:'right',fontSize:12.5,color:c.impressionShare>0.8?C.green:c.impressionShare>0.5?C.blue:C.navy}}>{fmtPct(c.impressionShare)}</td>
 </tr>
 {exp===c.id&&<tr style={{borderBottom:'1px solid #F8FAFC',background:'#F8FAFF'}}><td colSpan={12} style={{padding:'12px 24px'}}>
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,fontSize:12,marginBottom:(negatives[c.id]||[]).length?16:0}}>
@@ -136,7 +136,7 @@ return <>
 <div style={{fontSize:10,color:C.muted,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:6}}>Negative keywords ({negatives[c.id].length})</div>
 <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
 {negatives[c.id].slice(0,40).map((n,ni)=>(
-<span key={ni} style={{fontSize:11,fontWeight:600,color:'#DC2626',background:'#FEF2F2',padding:'3px 8px',borderRadius:6}}>{n.text}</span>
+<span key={ni} style={{fontSize:11,fontWeight:600,color:C.navy,background:C.navyBg,padding:'3px 8px',borderRadius:6}}>{n.text}</span>
 ))}
 </div>
 </div>
@@ -250,7 +250,7 @@ const{keywords=[],total={}}=data||{}
 const filtered=keywords.filter(k=>!search||k.text.toLowerCase().includes(search.toLowerCase()))
 const sorted=sort(filtered)
 const avgQS=keywords.filter(k=>k.qualityScore>0).reduce((s,k,_,a)=>s+k.qualityScore/a.filter(x=>x.qualityScore>0).length,0)
-const qsColor=q=>q>=7?C.green:q>=5?'#D97706':'#DC2626'
+const qsColor=q=>q>=7?C.green:q>=5?C.blue:C.navy
 const matchBg=m=>({EXACT:C.navyBg,PHRASE:C.blueBg,BROAD:'#F3F4F6'}[m]||'#F3F4F6')
 const matchColor=m=>({EXACT:C.navy,PHRASE:C.blue,BROAD:C.sub}[m]||C.sub)
 return <>
@@ -566,7 +566,7 @@ return(
 </>
 }
 
-const PERF_LABEL_COLOR={BEST:C.green,GOOD:C.blue,LOW:'#DC2626',LEARNING:'#D97706',PENDING:C.muted,UNKNOWN:C.muted}
+const PERF_LABEL_COLOR={BEST:C.green,GOOD:C.blue,LOW:C.navy,LEARNING:C.cyan,PENDING:C.muted,UNKNOWN:C.muted}
 const PERF_LABEL_TEXT={BEST:'Best',GOOD:'Good',LOW:'Low',LEARNING:'Learning',PENDING:'Pending',UNKNOWN:'Unrated'}
 function AssetsTab({data,loading}){
 const [filter,setFilter]=useState('all')
@@ -618,7 +618,7 @@ return <>
 </>
 }
 
-function TrendTab({mode}){const [rows,setRows]=useState([]);const [total,setTotal]=useState({});const [loading,setLoading]=useState(true);const [err,setErr]=useState(null);useEffect(()=>{const now=new Date();const pad=n=>String(n).padStart(2,'0');const until=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());const since=mode==='month'?(now.getFullYear()+'-01-01'):(now.getFullYear()+'-'+pad(now.getMonth()+1)+'-01');setLoading(true);const token=localStorage.getItem('quantum_token');fetch('/api/google-ads?tab=trend&mode='+mode+'&from='+since+'&to='+until,{headers:{'Authorization':'Bearer '+(token||'')}}).then(r=>r.json()).then(json=>{if(json.error){setErr(json.error);return}setRows(json.points||[]);setTotal(json.total||{})}).catch(e=>setErr(e.message)).finally(()=>setLoading(false))},[mode]);if(loading)return <Loader/>;const fmtPeriod=p=>mode==='month'?new Date(p).toLocaleDateString('en-US',{month:'short',year:'numeric'}):new Date(p).toLocaleDateString('en-US',{day:'2-digit',month:'short'});const thS={padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'};const thL={...thS,textAlign:'left'};const tdR={padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5};const tdL={padding:'8px 12px',fontSize:12.5,color:C.text,fontWeight:600};return <><div style={{fontSize:12,color:C.muted,marginBottom:14,fontFamily:FONT}}>{mode==='month'?'Fixed range: Jan 1 to today (not affected by the date filter)':'Fixed range: 1st of this month to today (not affected by the date filter)'}</div>{err&&<div style={{padding:'10px 14px',borderRadius:10,background:'#FEF2F2',color:'#DC2626',fontSize:12.5,fontWeight:600,marginBottom:16}}>{err}</div>}<div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}><PremKPI label='Total Spend' value={fmt(total.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/><PremKPI label='Impressions' value={fmtN(total.impressions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/><PremKPI label='Clicks' value={fmtN(total.clicks)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai}/><PremKPI label='CTR' value={fmtPct(total.ctr)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/><PremKPI label='Conversions' value={fmtN(total.conversions)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent}/></div><Card title={mode==='month'?'Month on month':'Day on day'} sub={rows.length+' periods'}><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}><thead><tr><th style={thL}>Period</th><th style={thS}>Spend</th><th style={thS}>Impr.</th><th style={thS}>Clicks</th><th style={thS}>CTR</th><th style={thS}>Avg CPC</th><th style={thS}>Conv.</th><th style={thS}>CPA</th></tr></thead><tbody>{rows.map((r,i)=>(<tr key={i} style={{borderBottom:'0.5px solid '+C.border}}><td style={tdL}>{fmtPeriod(r.period)}</td><td style={{...tdR,fontWeight:700,color:C.text}}>{fmt(r.spend)}</td><td style={tdR}>{fmtN(r.impressions)}</td><td style={tdR}>{fmtN(r.clicks)}</td><td style={tdR}>{fmtPct(r.ctr)}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmtCpc(r.avgCpc)}</td><td style={{...tdR,color:C.navy,fontWeight:700}}>{r.conversions?.toFixed(1)||'—'}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmt(r.costPerConv)}</td></tr>))}<tr style={{background:'#F8FAFC',fontWeight:800}}><td style={{...tdL,fontWeight:800}}>Total</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmt(total.spend)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.impressions)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.clicks)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtPct(total.ctr)}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmtCpc(total.avgCpc)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{total.conversions?(+total.conversions).toFixed(1):'—'}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmt(total.costPerConv)}</td></tr></tbody></table></div></Card></>}const METRIC_INFO=[
+function TrendTab({mode}){const [rows,setRows]=useState([]);const [total,setTotal]=useState({});const [loading,setLoading]=useState(true);const [err,setErr]=useState(null);useEffect(()=>{const now=new Date();const pad=n=>String(n).padStart(2,'0');const until=now.getFullYear()+'-'+pad(now.getMonth()+1)+'-'+pad(now.getDate());const since=mode==='month'?(now.getFullYear()+'-01-01'):(now.getFullYear()+'-'+pad(now.getMonth()+1)+'-01');setLoading(true);const token=localStorage.getItem('quantum_token');fetch('/api/google-ads?tab=trend&mode='+mode+'&from='+since+'&to='+until,{headers:{'Authorization':'Bearer '+(token||'')}}).then(r=>r.json()).then(json=>{if(json.error){setErr(json.error);return}setRows(json.points||[]);setTotal(json.total||{})}).catch(e=>setErr(e.message)).finally(()=>setLoading(false))},[mode]);if(loading)return <Loader/>;const fmtPeriod=p=>mode==='month'?new Date(p).toLocaleDateString('en-US',{month:'short',year:'numeric'}):new Date(p).toLocaleDateString('en-US',{day:'2-digit',month:'short'});const thS={padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9'};const thL={...thS,textAlign:'left'};const tdR={padding:'8px 12px',textAlign:'right',color:C.sub,fontSize:12.5};const tdL={padding:'8px 12px',fontSize:12.5,color:C.text,fontWeight:600};return <><div style={{fontSize:12,color:C.muted,marginBottom:14,fontFamily:FONT}}>{mode==='month'?'Fixed range: Jan 1 to today (not affected by the date filter)':'Fixed range: 1st of this month to today (not affected by the date filter)'}</div>{err&&<div style={{padding:'10px 14px',borderRadius:10,background:C.navyBg,color:C.navy,fontSize:12.5,fontWeight:600,marginBottom:16}}>{err}</div>}<div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:14,marginBottom:20}}><PremKPI label='Total Spend' value={fmt(total.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total}/><PremKPI label='Impressions' value={fmtN(total.impressions)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe}/><PremKPI label='Clicks' value={fmtN(total.clicks)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai}/><PremKPI label='CTR' value={fmtPct(total.ctr)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot}/><PremKPI label='Conversions' value={fmtN(total.conversions)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent}/></div><Card title={mode==='month'?'Month on month':'Day on day'} sub={rows.length+' periods'}><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}><thead><tr><th style={thL}>Period</th><th style={thS}>Spend</th><th style={thS}>Impr.</th><th style={thS}>Clicks</th><th style={thS}>CTR</th><th style={thS}>Avg CPC</th><th style={thS}>Conv.</th><th style={thS}>CPA</th></tr></thead><tbody>{rows.map((r,i)=>(<tr key={i} style={{borderBottom:'0.5px solid '+C.border}}><td style={tdL}>{fmtPeriod(r.period)}</td><td style={{...tdR,fontWeight:700,color:C.text}}>{fmt(r.spend)}</td><td style={tdR}>{fmtN(r.impressions)}</td><td style={tdR}>{fmtN(r.clicks)}</td><td style={tdR}>{fmtPct(r.ctr)}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmtCpc(r.avgCpc)}</td><td style={{...tdR,color:C.navy,fontWeight:700}}>{r.conversions?.toFixed(1)||'—'}</td><td style={{...tdR,whiteSpace:'nowrap'}}>{fmt(r.costPerConv)}</td></tr>))}<tr style={{background:'#F8FAFC',fontWeight:800}}><td style={{...tdL,fontWeight:800}}>Total</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmt(total.spend)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.impressions)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtN(total.clicks)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{fmtPct(total.ctr)}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmtCpc(total.avgCpc)}</td><td style={{...tdR,fontWeight:800,color:C.text}}>{total.conversions?(+total.conversions).toFixed(1):'—'}</td><td style={{...tdR,fontWeight:800,color:C.text,whiteSpace:'nowrap'}}>{fmt(total.costPerConv)}</td></tr></tbody></table></div></Card></>}const METRIC_INFO=[
 {k:'Spend',v:'Cost in the selected date range, from Google Ads metrics.cost_micros.'},
 {k:'Impressions / Clicks',v:'Raw counts from Google Ads for the selected range.'},
 {k:'CTR',v:'Clicks ÷ Impressions.'},
@@ -696,7 +696,7 @@ return(
 )}
 
 <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,border:'0.5px solid '+C.border,background:'var(--card)'}}>
-<span style={{width:7,height:7,borderRadius:'50%',background:notConnected?'#DC2626':C.green,flexShrink:0,boxShadow:'0 0 0 3px '+(notConnected?'rgba(220,38,38,.15)':'rgba(76,174,111,.18)')}}/>
+<span style={{width:7,height:7,borderRadius:'50%',background:notConnected?C.navy:C.green,flexShrink:0,boxShadow:'0 0 0 3px '+(notConnected?'rgba(31,60,132,.15)':'rgba(76,174,111,.18)')}}/>
 <span style={{fontSize:11.5,fontWeight:700,color:C.text,whiteSpace:'nowrap'}}>{notConnected?'Not connected':'Google Ads · Live'}</span>
 </div>
 
@@ -752,7 +752,7 @@ return(
 {TABS.map(t=><div key={t.id} style={tabBtn(activeTab===t.id)} onClick={()=>setTab(t.id)}>{t.label}</div>)}
 </div>
 <div style={{flex:1,overflowY:'auto',padding:'16px 28px 28px'}}>
-{error&&<div style={{padding:'10px 14px',borderRadius:10,background:'#FEF2F2',color:'#DC2626',fontSize:12.5,fontWeight:600,marginBottom:16}}>{error}</div>}
+{error&&<div style={{padding:'10px 14px',borderRadius:10,background:C.navyBg,color:C.navy,fontSize:12.5,fontWeight:600,marginBottom:16}}>{error}</div>}
 {notConnected ? <NotConnected/> : (
 activeTab==='campaigns' ? <CampaignsTab data={data.campaigns} loading={!!loading.campaigns} leadsByCampaign={leadsAgg.byCampaign} totalLeads={leadsAgg.total}/> :
 activeTab==='ads' ? <AdsTab data={data.ads} loading={!!loading.ads}/> :
