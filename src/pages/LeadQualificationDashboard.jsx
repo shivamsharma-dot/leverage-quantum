@@ -1453,7 +1453,7 @@ const baseCsv = await resolveSheetUrl(cfg.id === 'daily' ? 'qlopsDaily' : 'qlops
             <>
             {view === 'daily' && (<>
               {/* -- PREMIUM KPI ROW -- */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 18 }}>
+              <div className='lq-kpi-grid' style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 18 }}>
                 <PremKPI label="Total Qualified" value={fmtN(totals.total)} sub={selMonth}                       delta={totals.totalDelta} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
                 <PremKPI label="Futwork"          value={fmtN(totals.fw)}   sub={pct(totals.fw, totals.total) + ' share'}   delta={totals.fwDelta}    accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />
                 <PremKPI label="Futwork AI"       value={fmtN(totals.fwai)} sub={pct(totals.fwai, totals.total) + ' share'} delta={totals.fwaiDelta}  accent="#29B9C3" accentBg="#E4F8F9" icon={KPI_ICONS.ai} />
