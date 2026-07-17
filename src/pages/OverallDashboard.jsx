@@ -312,10 +312,23 @@ const SUMMARY_COLUMNS = [
   { key:'qlPct', label:'QL %' },
   { key:'appPct', label:'App %' },
   { key:'depositPct', label:'Deposit %' },
+  { key:'estSrRevenue', label:'Est. SR Revenue' },
+  { key:'actSrRevenue', label:'Actual SR Revenue' },
 ]
 const SUMMARY_COLUMN_KEYS = SUMMARY_COLUMNS.map(c => c.key)
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
 const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
+const SR_EST_RATE_KEY = 'lq_overall_sr_est_rate'
+const SR_ACT_RATE_KEY = 'lq_overall_sr_act_rate'
+const SR_DEFAULT_RATE = 350000
+
+// Simple INR formatter with L/Cr suffixes, matching the app's other fmtINR helpers.
+function fmtINR(n) {
+  n = parseFloat(n) || 0
+  if (n >= 1e7) return '₹' + (n / 1e7).toFixed(2) + ' Cr'
+  if (n >= 1e5) return '₹' + (n / 1e5).toFixed(1) + 'L'
+  return '₹' + Math.round(n).toLocaleString('en-IN')
+}
 
 function summaryValue(g, key) {
   if (key === 'qlPct') return g.queued > 0 ? (g.humanQL / g.queued) * 100 : null
@@ -325,7 +338,9 @@ function summaryValue(g, key) {
 }
 function summaryFmt(key, v) {
   if (v == null) return '—'
-  return key.endsWith('Pct') ? v.toFixed(1) + '%' : fmtN(v)
+  if (key.endsWith('Pct')) return v.toFixed(1) + '%'
+  if (key.endsWith('SrRevenue')) return fmtINR(v)
+  return fmtN(v)
 }
 function summaryColor(key) {
   if (key === 'raus') return C.navy
@@ -333,17 +348,22 @@ function summaryColor(key) {
   if (key === 'appPct') return C.blue
   if (key === 'depositPct') return C.green
   if (key === 'leads') return '#0F172A'
+  if (key === 'estSrRevenue') return C.blue
+  if (key === 'actSrRevenue') return C.green
   return '#475569'
 }
-const SUMMARY_BOLD_COLS = ['leads', 'raus', 'qlPct', 'appPct', 'depositPct']
+const SUMMARY_BOLD_COLS = ['leads', 'raus', 'qlPct', 'appPct', 'depositPct', 'estSrRevenue', 'actSrRevenue']
 
 // Show/hide + reorder popover for the summary table's columns.
-function ColumnsPicker({ order, visible, onToggle, onMove, onClose }) {
+function ColumnsPicker({ order, visible, onToggle, onMove, onClose, onReset }) {
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:399 }} />
-      <div style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:230, maxHeight:320, overflowY:'auto' }}>
-        <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', padding:'4px 8px 8px' }}>Columns — show, hide, reorder</div>
+      <div style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:230, maxHeight:340, overflowY:'auto' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 8px 8px' }}>
+          <span style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>Columns — show, hide, reorder</span>
+          <button onClick={onReset} style={{ border:'none', background:'transparent', color:C.blue, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:FONT, flexShrink:0 }}>Reset</button>
+        </div>
         {order.map((key, i) => {
           const col = SUMMARY_COLUMNS.find(c => c.key === key)
           if (!col) return null
@@ -370,19 +390,30 @@ function ColumnsPicker({ order, visible, onToggle, onMove, onClose }) {
   )
 }
 
+// Brand-consistent line icons for the insight cards — same stroke-based visual language
+// as KPI_ICONS in dashboardKit.jsx, so these read as part of the design system rather
+// than ad-hoc unicode glyphs.
+const INSIGHT_ICONS = {
+  trendUp:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>,
+  trendDown: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6" /><polyline points="17 18 23 18 23 12" /></svg>,
+  target:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></svg>,
+  alert:     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4" /><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 17h.01" /></svg>,
+  rocket:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" /><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" /><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" /><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" /></svg>,
+}
+
 // Executive insight callout — a single "what a CEO reads first" card: icon chip,
 // bold headline stat, and a plain-English sentence explaining what it means / what to do.
 function InsightCard({ icon, eyebrow, headline, headlineColor, body, accent }) {
   return (
-    <div style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'18px 20px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)', display:'flex', flexDirection:'column', gap:8, minWidth:0 }}>
+    <div style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'20px 22px', minHeight:168, background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 10px 28px -14px rgba(16,24,42,0.2)', display:'flex', flexDirection:'column', gap:10, minWidth:0 }}>
       <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:`linear-gradient(90deg, ${accent}, ${accent}99)` }} />
-      <div style={{ position:'absolute', top:-30, right:-30, width:100, height:100, borderRadius:'50%', background:`linear-gradient(135deg, ${accent}14, ${accent}05)` }} />
-      <div style={{ display:'flex', alignItems:'center', gap:8, position:'relative' }}>
-        <div style={{ width:28, height:28, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:'#fff', background:`linear-gradient(135deg, ${accent}, ${accent}D9)`, boxShadow:`0 4px 10px -2px ${accent}66`, flexShrink:0 }}>{icon}</div>
-        <span style={{ fontSize:10.5, fontWeight:700, letterSpacing:'0.07em', color:'#64748B', textTransform:'uppercase' }}>{eyebrow}</span>
+      <div style={{ position:'absolute', top:-36, right:-36, width:110, height:110, borderRadius:'50%', background:`linear-gradient(135deg, ${accent}12, ${accent}04)` }} />
+      <div style={{ display:'flex', alignItems:'center', gap:10, position:'relative' }}>
+        <div style={{ width:32, height:32, borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', background:`linear-gradient(135deg, ${accent}, ${accent}D9)`, boxShadow:`0 4px 10px -2px ${accent}66`, flexShrink:0 }}>{INSIGHT_ICONS[icon]}</div>
+        <span style={{ fontSize:10.5, fontWeight:700, letterSpacing:'0.07em', color:'#8A94A6', textTransform:'uppercase' }}>{eyebrow}</span>
       </div>
-      <div style={{ fontSize:22, fontWeight:800, letterSpacing:'-0.5px', color: headlineColor || '#0F1B33', lineHeight:1.15, position:'relative' }}>{headline}</div>
-      <div style={{ fontSize:12.5, color:'#475569', lineHeight:1.55, position:'relative' }}>{body}</div>
+      <div style={{ fontSize:21, fontWeight:800, letterSpacing:'-0.4px', color: headlineColor || '#0F1B33', lineHeight:1.2, position:'relative', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{headline}</div>
+      <div style={{ fontSize:12.5, color:'#5A6473', lineHeight:1.6, position:'relative' }}>{body}</div>
     </div>
   )
 }
@@ -449,6 +480,11 @@ export default function OverallDashboard() {
   const [sortDir, setSortDir] = useState('desc')
   const [rowLimit, setRowLimit] = useState(25)
   const [showColsPicker, setShowColsPicker] = useState(false)
+  const [showRatesPicker, setShowRatesPicker] = useState(false)
+  const [estRate, setEstRate] = useState(() => { try { const s = localStorage.getItem(SR_EST_RATE_KEY); return s ? Number(s) : SR_DEFAULT_RATE } catch { return SR_DEFAULT_RATE } })
+  const [actRate, setActRate] = useState(() => { try { const s = localStorage.getItem(SR_ACT_RATE_KEY); return s ? Number(s) : SR_DEFAULT_RATE } catch { return SR_DEFAULT_RATE } })
+  useEffect(() => { try { localStorage.setItem(SR_EST_RATE_KEY, String(estRate)) } catch {} }, [estRate])
+  useEffect(() => { try { localStorage.setItem(SR_ACT_RATE_KEY, String(actRate)) } catch {} }, [actRate])
   const [visibleCols, setVisibleCols] = useState(() => {
     try { const s = localStorage.getItem(SUMMARY_COLS_STORAGE_KEY); const parsed = s ? JSON.parse(s) : null; return Array.isArray(parsed) ? parsed.filter(k => SUMMARY_COLUMN_KEYS.includes(k)) : SUMMARY_COLUMN_KEYS }
     catch { return SUMMARY_COLUMN_KEYS }
@@ -475,6 +511,7 @@ export default function OverallDashboard() {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('desc') }
   }
+  const resetCols = () => { setVisibleCols(SUMMARY_COLUMN_KEYS); setColOrder(SUMMARY_COLUMN_KEYS) }
 
   // Date filter state — mirrors Daily QLs exactly: a single "active filter" is either
   // a preset (LD/L7D/MTD), the month picker, or a custom calendar range.
@@ -515,7 +552,7 @@ export default function OverallDashboard() {
     const set = new Set(rows.filter(r => r.mk != null).map(r => r.mk))
     return [...set].sort((a, b) => a - b)
   }, [rows])
-  const monthOptions = useMemo(() => [...months].reverse().map(monthLabel), [months])
+  const monthOptions = useMemo(() => ['All months', ...[...months].reverse().map(monthLabel)], [months])
   const monthKeyByLabel = useMemo(() => new Map(months.map(mk => [monthLabel(mk), mk])), [months])
 
   const sources = useMemo(() => {
@@ -689,6 +726,21 @@ export default function OverallDashboard() {
     return [...m.values()].sort((a, b) => b.leads - a.leads)
   }, [filtered])
 
+  // Full day-level breakdown (all metrics, no 30-day cap) for the summary table's Day
+  // grouping — distinct from `byDay` above, which is the chart's lighter/capped version.
+  const byDayFull = useMemo(() => {
+    const m = new Map()
+    filtered.forEach(r => {
+      if (!r.date) return
+      const key = dayKey(r.date)
+      const e = m.get(key) || { key, date:r.date, label:dayLabel(r.date), leads:0, queued:0, humanQL:0, apps:0, offers:0, deposits:0, raus:0 }
+      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus
+      m.set(key, e)
+    })
+    return [...m.values()].sort((a, b) => b.key.localeCompare(a.key))
+  }, [filtered])
+
   const topCampaignsByLeads = useMemo(() => byCampaign.slice(0, 5), [byCampaign])
   const topCampaignsByEfficiency = useMemo(() => (
     byCampaign.filter(c => c.queued >= 15).map(c => ({ ...c, qlRate: c.queued > 0 ? (c.humanQL / c.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 5)
@@ -702,7 +754,7 @@ export default function OverallDashboard() {
     if (prevWindow && prevKpis.leads > 0) {
       const up = leadsDelta >= 0
       list.push({
-        icon: up ? '↑' : '↓', eyebrow:'Momentum vs last period', accent: up ? C.green : C.navy,
+        icon: up ? 'trendUp' : 'trendDown', eyebrow:'Momentum vs last period', accent: up ? C.green : C.navy,
         headline: (up ? '+' : '') + leadsDelta.toFixed(1) + '%',
         headlineColor: up ? C.green : C.navy,
         body: `${fmtN(kpis.leads)} leads this period vs ${fmtN(prevKpis.leads)} previously. ${up ? 'Volume is scaling — check queued/QL capacity keeps pace.' : 'Volume has slowed — worth checking source spend and creative fatigue.'}`,
@@ -713,7 +765,7 @@ export default function OverallDashboard() {
       const top = bySource[0]
       const topRate = top.queued > 0 ? (top.humanQL / top.queued) * 100 : null
       list.push({
-        icon:'★', eyebrow:'Top source by volume', accent:C.navy, headline: top.source, headlineColor:C.navy,
+        icon:'target', eyebrow:'Top source by volume', accent:C.navy, headline: top.source, headlineColor:C.navy,
         body: `${pct(top.leads, kpis.leads)} of all leads (${fmtN(top.leads)}) came from here${topRate != null ? `, converting ${topRate.toFixed(1)}% of queued leads to Human QL` : ''}.`,
       })
     }
@@ -722,7 +774,7 @@ export default function OverallDashboard() {
     if (withRate.length) {
       const worst = [...withRate].sort((a, b) => a.rate - b.rate)[0]
       list.push({
-        icon:'!', eyebrow:'Biggest funnel leak', accent:C.blue, headline: worst.from + ' → ' + worst.to,
+        icon:'alert', eyebrow:'Biggest funnel leak', accent:C.blue, headline: worst.from + ' → ' + worst.to,
         headlineColor: heatColor(worst.rate),
         body: `Only ${worst.rate.toFixed(1)}% of ${worst.from} convert to ${worst.to} — the weakest step in the funnel this period. Start here for the fastest lift.`,
       })
@@ -731,7 +783,7 @@ export default function OverallDashboard() {
     if (topCampaignsByEfficiency.length) {
       const best = topCampaignsByEfficiency[0]
       list.push({
-        icon:'▲', eyebrow:'Best campaign to scale', accent:C.green, headline: best.qlRate.toFixed(1) + '% QL rate', headlineColor:C.green,
+        icon:'rocket', eyebrow:'Best campaign to scale', accent:C.green, headline: best.qlRate.toFixed(1) + '% QL rate', headlineColor:C.green,
         body: `${best.campaign} converts best among campaigns with real volume (${fmtN(best.queued)} queued) — a strong candidate to push more budget toward.`,
       })
     }
@@ -745,6 +797,9 @@ export default function OverallDashboard() {
     if (grpBy === 'campaign') return byCampaign.map(c => ({
       label:c.campaign, leads:c.leads, queued:c.queued, humanQL:c.humanQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus,
     }))
+    if (grpBy === 'day') return byDayFull.map(d => ({
+      label:d.label, dateKey:d.key, leads:d.leads, queued:d.queued, humanQL:d.humanQL, apps:d.apps, offers:d.offers, deposits:d.deposits, raus:d.raus,
+    }))
     return byMonth.map(m => {
       const full = filtered.filter(r => r.mk === m.mk)
       return {
@@ -753,16 +808,23 @@ export default function OverallDashboard() {
         deposits:m.deposits, raus: full.reduce((t, r) => t + r.raus, 0),
       }
     })
-  }, [grpBy, bySource, byCampaign, byMonth, filtered])
+  }, [grpBy, bySource, byCampaign, byDayFull, byMonth, filtered])
 
-  const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : 'Month'
+  const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'day' ? 'Date' : 'Month'
 
-  const exportRows = useMemo(() => grouped.map(g => ({
+  // SR Revenue — Estimated (Applications × rate) and Actual (RAUs × rate). Both rates are
+  // user-configurable in the toolbar below and persist to localStorage.
+  const groupedWithRevenue = useMemo(() => grouped.map(g => ({
+    ...g, estSrRevenue: g.apps * estRate, actSrRevenue: g.raus * actRate,
+  })), [grouped, estRate, actRate])
+
+  const exportRows = useMemo(() => groupedWithRevenue.map(g => ({
     [grpByLabel]: g.label,
     Leads: g.leads, 'Total Queued': g.queued, 'Human QL': g.humanQL,
     Applications: g.apps, Offers: g.offers, Deposits: g.deposits, RAUs: g.raus,
     'QL %': pct(g.humanQL, g.queued), 'App %': pct(g.apps, g.humanQL), 'Deposit %': pct(g.deposits, g.offers),
-  })), [grouped, grpByLabel])
+    'Est. SR Revenue': fmtINR(g.estSrRevenue), 'Actual SR Revenue': fmtINR(g.actSrRevenue),
+  })), [groupedWithRevenue, grpByLabel])
 
   const maxSourceLeads = bySource.length ? Math.max(...bySource.map(s => s.leads)) : 1
   const totalSourceLeads = bySource.reduce((t, s) => t + s.leads, 0)
@@ -772,17 +834,21 @@ export default function OverallDashboard() {
   ), [colOrder, visibleCols])
 
   const tableRows = useMemo(() => {
-    let rs = grouped
+    let rs = groupedWithRevenue
     const q = tableSearch.trim().toLowerCase()
     if (q) rs = rs.filter(g => g.label.toLowerCase().includes(q))
     const sorted = [...rs].sort((a, b) => {
-      if (sortKey === 'label') { const cmp = a.label.localeCompare(b.label); return sortDir === 'asc' ? cmp : -cmp }
+      if (sortKey === 'label') {
+        // Day view sorts chronologically by the underlying date key, not the display label
+        const cmp = (a.dateKey && b.dateKey) ? a.dateKey.localeCompare(b.dateKey) : a.label.localeCompare(b.label)
+        return sortDir === 'asc' ? cmp : -cmp
+      }
       const av = summaryValue(a, sortKey), bv = summaryValue(b, sortKey)
       const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv
       return sortDir === 'asc' ? an - bn : bn - an
     })
     return rowLimit === 'all' ? sorted : sorted.slice(0, rowLimit)
-  }, [grouped, tableSearch, sortKey, sortDir, rowLimit])
+  }, [groupedWithRevenue, tableSearch, sortKey, sortDir, rowLimit])
 
   const tableExportRows = useMemo(() => tableRows.map(g => {
     const o = { [grpByLabel]: g.label }
@@ -934,7 +1000,7 @@ export default function OverallDashboard() {
 
           {/* EXECUTIVE INSIGHTS — the "read this first" row */}
           {insights.length > 0 && (
-            <div style={{ display:'grid', gridTemplateColumns:`repeat(${insights.length}, minmax(0,1fr))`, gap:14, marginBottom:20 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:14, marginBottom:20 }}>
               {insights.map((ins, i) => <InsightCard key={i} {...ins} />)}
             </div>
           )}
@@ -1040,7 +1106,7 @@ export default function OverallDashboard() {
             <Card
               action={
                 <div style={{ display:'flex', gap:6 }}>
-                  {[['source', 'Source'], ['campaign', 'Campaign'], ['month', 'Month']].map(([v, l]) => (
+                  {[['source', 'Source'], ['campaign', 'Campaign'], ['month', 'Month'], ['day', 'Day']].map(([v, l]) => (
                     <button key={v} onClick={() => setGrpBy(v)} style={{ padding:'5px 12px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : '#E5E7EB'), background: grpBy === v ? C.navy : '#fff', color: grpBy === v ? '#fff' : '#374151', fontSize:11.5, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
                   ))}
                 </div>
@@ -1074,7 +1140,27 @@ export default function OverallDashboard() {
                     Columns
                   </button>
                   {showColsPicker && (
-                    <ColumnsPicker order={colOrder} visible={visibleCols} onToggle={toggleCol} onMove={moveCol} onClose={() => setShowColsPicker(false)} />
+                    <ColumnsPicker order={colOrder} visible={visibleCols} onToggle={toggleCol} onMove={moveCol} onClose={() => setShowColsPicker(false)} onReset={resetCols} />
+                  )}
+                </div>
+
+                <div style={{ position:'relative' }}>
+                  <button onClick={() => setShowRatesPicker(v => !v)} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:8, border:`0.5px solid ${showRatesPicker ? C.navy : C.border}`, background: showRatesPicker ? C.navyBg : 'var(--card)', color: showRatesPicker ? C.navy : '#374151', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:FONT }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>
+                    SR Rates
+                  </button>
+                  {showRatesPicker && (
+                    <>
+                      <div onClick={() => setShowRatesPicker(false)} style={{ position:'fixed', inset:0, zIndex:399 }} />
+                      <div style={{ position:'absolute', left:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:14, minWidth:260 }}>
+                        <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>SR revenue calculator rates</div>
+                        <label style={{ fontSize:11, fontWeight:600, color:C.sub, display:'block', marginBottom:4 }}>Est. SR Revenue — ₹ per Application</label>
+                        <input type="number" value={estRate} onChange={e => setEstRate(Number(e.target.value) || 0)} style={{ width:'100%', boxSizing:'border-box', padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12.5, color:C.text, marginBottom:10, outline:'none' }} />
+                        <label style={{ fontSize:11, fontWeight:600, color:C.sub, display:'block', marginBottom:4 }}>Actual SR Revenue — ₹ per RAU</label>
+                        <input type="number" value={actRate} onChange={e => setActRate(Number(e.target.value) || 0)} style={{ width:'100%', boxSizing:'border-box', padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12.5, color:C.text, outline:'none' }} />
+                        <div style={{ fontSize:10.5, color:C.muted, marginTop:10, lineHeight:1.5 }}>Est. SR Revenue = Applications × this rate. Actual SR Revenue = RAUs × this rate. Both columns update live and are remembered on this device.</div>
+                      </div>
+                    </>
                   )}
                 </div>
 
