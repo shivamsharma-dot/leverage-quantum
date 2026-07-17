@@ -3,9 +3,10 @@ import React from 'react'
 /*
   CalculatorTool — floating calculator + scratch "rough sheet".
   Self-contained, mounted from the shared Sidebar so it appears on every
-  page (same convention as SnapshotTool). Lives at the left edge of the
-  screen: hovering the edge tab (or the panel itself) slides it open;
-  moving away closes it after a short delay. Click pins/unpins it open.
+  page (same convention as SnapshotTool). Lives at the right edge of the
+  screen, stacked above the Snapshot FAB so both floating tools share one
+  side: hovering the edge tab (or the panel itself) slides it open; moving
+  away closes it after a short delay. Click pins/unpins it open.
   Brand palette only: navy #1F3C84, blue #1C9FD4, cyan #29B9C3, green #4CAE6F.
 */
 
@@ -163,19 +164,18 @@ export default function CalculatorTool() {
   )
 
   return (
-    <div data-snapshot-ignore="true" style={{ position: 'fixed', top: '50%', left: 0, transform: 'translateY(-50%)', zIndex: 700, fontFamily: FONT }}>
-      {/* Edge hover-trigger tab -- always visible, half-tucked at the left edge */}
+    <div data-snapshot-ignore="true" style={{ position: 'fixed', top: '38%', right: 0, transform: 'translateY(-50%)', zIndex: 700, fontFamily: FONT, display: 'flex', alignItems: 'center', flexDirection: 'row-reverse' }}>
+      {/* Edge hover-trigger tab -- always visible, half-tucked at the right edge, above the Snapshot FAB */}
       <div
         onMouseEnter={openPanel}
         onMouseLeave={scheduleClose}
         onClick={() => { setPinned(p => !p); openPanel() }}
         title="Calculator & rough sheet"
         style={{
-          position: 'absolute', top: '50%', left: open ? 0 : 0, transform: 'translateY(-50%)',
-          width: 22, height: 64, borderRadius: '0 12px 12px 0',
+          width: 22, height: 64, borderRadius: '12px 0 0 12px', flexShrink: 0,
           background: `linear-gradient(180deg, ${NAVY}, ${BLUE})`,
           display: open ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', boxShadow: '2px 0 10px rgba(31,60,132,0.28)',
+          cursor: 'pointer', boxShadow: '-2px 0 10px rgba(31,60,132,0.28)',
         }}
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -196,12 +196,12 @@ export default function CalculatorTool() {
           onMouseLeave={scheduleClose}
           style={{
             width: 288, maxHeight: '82vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-            background: 'var(--card)', border: '0.5px solid var(--card-border)', borderRadius: '0 16px 16px 0',
+            background: 'var(--card)', border: '0.5px solid var(--card-border)', borderRadius: '16px 0 0 16px',
             boxShadow: '0 1px 2px rgba(15,23,42,0.06), 0 24px 48px -14px rgba(31,60,132,0.32), 0 4px 16px rgba(15,23,42,0.10)',
             animation: 'calcToolIn .16s cubic-bezier(0.22,1,0.36,1) both',
           }}
         >
-          <style>{`@keyframes calcToolIn { from { opacity:0; transform:translateX(-12px);} to { opacity:1; transform:translateX(0);} }`}</style>
+          <style>{`@keyframes calcToolIn { from { opacity:0; transform:translateX(12px);} to { opacity:1; transform:translateX(0);} }`}</style>
 
           {/* Header: tabs + pin */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 10px 0' }}>
