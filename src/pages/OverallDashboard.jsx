@@ -298,6 +298,78 @@ const grid2 = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }
 const heatColor = v => v == null ? C.muted : v >= 50 ? C.green : v >= 25 ? C.cyan : v >= 10 ? C.blue : C.navy
 const heatBg = v => v == null ? 'transparent' : v >= 50 ? C.greenBg : v >= 25 ? C.cyanBg : v >= 10 ? C.blueBg : C.navyBg
 
+// ── Grouped summary table — customizable columns (show/hide + reorder, persisted to
+// localStorage so the layout sticks between sessions), sortable headers, search, and a
+// per-view export button — same "creative table" pattern as Meta Ads Creatives.
+const SUMMARY_COLUMNS = [
+  { key:'leads', label:'Leads' },
+  { key:'queued', label:'Total Queued' },
+  { key:'humanQL', label:'Human QL' },
+  { key:'apps', label:'Applications' },
+  { key:'offers', label:'Offers' },
+  { key:'deposits', label:'Deposits' },
+  { key:'raus', label:'RAUs' },
+  { key:'qlPct', label:'QL %' },
+  { key:'appPct', label:'App %' },
+  { key:'depositPct', label:'Deposit %' },
+]
+const SUMMARY_COLUMN_KEYS = SUMMARY_COLUMNS.map(c => c.key)
+const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
+const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
+
+function summaryValue(g, key) {
+  if (key === 'qlPct') return g.queued > 0 ? (g.humanQL / g.queued) * 100 : null
+  if (key === 'appPct') return g.humanQL > 0 ? (g.apps / g.humanQL) * 100 : null
+  if (key === 'depositPct') return g.offers > 0 ? (g.deposits / g.offers) * 100 : null
+  return g[key]
+}
+function summaryFmt(key, v) {
+  if (v == null) return '—'
+  return key.endsWith('Pct') ? v.toFixed(1) + '%' : fmtN(v)
+}
+function summaryColor(key) {
+  if (key === 'raus') return C.navy
+  if (key === 'qlPct') return C.cyan
+  if (key === 'appPct') return C.blue
+  if (key === 'depositPct') return C.green
+  if (key === 'leads') return '#0F172A'
+  return '#475569'
+}
+const SUMMARY_BOLD_COLS = ['leads', 'raus', 'qlPct', 'appPct', 'depositPct']
+
+// Show/hide + reorder popover for the summary table's columns.
+function ColumnsPicker({ order, visible, onToggle, onMove, onClose }) {
+  return (
+    <>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:399 }} />
+      <div style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:230, maxHeight:320, overflowY:'auto' }}>
+        <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', padding:'4px 8px 8px' }}>Columns — show, hide, reorder</div>
+        {order.map((key, i) => {
+          const col = SUMMARY_COLUMNS.find(c => c.key === key)
+          if (!col) return null
+          const isVisible = visible.includes(key)
+          return (
+            <div key={key} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 8px', borderRadius:8 }}>
+              <label style={{ display:'flex', alignItems:'center', gap:8, flex:1, cursor:'pointer', minWidth:0 }}>
+                <input type="checkbox" checked={isVisible} onChange={() => onToggle(key)} style={{ width:14, height:14, cursor:'pointer', accentColor:C.navy, flexShrink:0 }} />
+                <span style={{ fontSize:12.5, fontWeight: isVisible ? 600 : 400, color: isVisible ? C.text : C.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{col.label}</span>
+              </label>
+              <div style={{ display:'flex', gap:2, flexShrink:0 }}>
+                <button onClick={() => onMove(key, -1)} disabled={i === 0} title="Move up" style={{ width:22, height:22, borderRadius:6, border:'none', background:'transparent', color: i === 0 ? '#CBD5E1' : C.muted, cursor: i === 0 ? 'default' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+                </button>
+                <button onClick={() => onMove(key, 1)} disabled={i === order.length - 1} title="Move down" style={{ width:22, height:22, borderRadius:6, border:'none', background:'transparent', color: i === order.length - 1 ? '#CBD5E1' : C.muted, cursor: i === order.length - 1 ? 'default' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
 // Executive insight callout — a single "what a CEO reads first" card: icon chip,
 // bold headline stat, and a plain-English sentence explaining what it means / what to do.
 function InsightCard({ icon, eyebrow, headline, headlineColor, body, accent }) {
@@ -369,6 +441,40 @@ export default function OverallDashboard() {
   const [campaignQuery, setCampaignQuery] = useState('')
   const [showInfo, setShowInfo] = useState(false)
   const [grpBy, setGrpBy] = useState('source')
+
+  // Summary table customization — search, sortable columns, show/hide + reorder columns
+  // (persisted), row limit. Mirrors the Meta Ads Creatives table's "customizable" pattern.
+  const [tableSearch, setTableSearch] = useState('')
+  const [sortKey, setSortKey] = useState('leads')
+  const [sortDir, setSortDir] = useState('desc')
+  const [rowLimit, setRowLimit] = useState(25)
+  const [showColsPicker, setShowColsPicker] = useState(false)
+  const [visibleCols, setVisibleCols] = useState(() => {
+    try { const s = localStorage.getItem(SUMMARY_COLS_STORAGE_KEY); const parsed = s ? JSON.parse(s) : null; return Array.isArray(parsed) ? parsed.filter(k => SUMMARY_COLUMN_KEYS.includes(k)) : SUMMARY_COLUMN_KEYS }
+    catch { return SUMMARY_COLUMN_KEYS }
+  })
+  const [colOrder, setColOrder] = useState(() => {
+    try {
+      const s = localStorage.getItem(SUMMARY_ORDER_STORAGE_KEY)
+      const parsed = s ? JSON.parse(s) : null
+      const base = Array.isArray(parsed) ? parsed.filter(k => SUMMARY_COLUMN_KEYS.includes(k)) : []
+      const missing = SUMMARY_COLUMN_KEYS.filter(k => !base.includes(k))
+      return [...base, ...missing]
+    } catch { return SUMMARY_COLUMN_KEYS }
+  })
+  useEffect(() => { try { localStorage.setItem(SUMMARY_COLS_STORAGE_KEY, JSON.stringify(visibleCols)) } catch {} }, [visibleCols])
+  useEffect(() => { try { localStorage.setItem(SUMMARY_ORDER_STORAGE_KEY, JSON.stringify(colOrder)) } catch {} }, [colOrder])
+  const toggleCol = key => setVisibleCols(v => v.includes(key) ? v.filter(k => k !== key) : [...v, key])
+  const moveCol = (key, dir) => setColOrder(order => {
+    const idx = order.indexOf(key); const swapIdx = idx + dir
+    if (swapIdx < 0 || swapIdx >= order.length) return order
+    const next = [...order];[next[idx], next[swapIdx]] = [next[swapIdx], next[idx]]
+    return next
+  })
+  const handleSort = key => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('desc') }
+  }
 
   // Date filter state — mirrors Daily QLs exactly: a single "active filter" is either
   // a preset (LD/L7D/MTD), the month picker, or a custom calendar range.
@@ -661,6 +767,29 @@ export default function OverallDashboard() {
   const maxSourceLeads = bySource.length ? Math.max(...bySource.map(s => s.leads)) : 1
   const totalSourceLeads = bySource.reduce((t, s) => t + s.leads, 0)
 
+  const displayCols = useMemo(() => (
+    colOrder.filter(k => visibleCols.includes(k)).map(k => SUMMARY_COLUMNS.find(c => c.key === k)).filter(Boolean)
+  ), [colOrder, visibleCols])
+
+  const tableRows = useMemo(() => {
+    let rs = grouped
+    const q = tableSearch.trim().toLowerCase()
+    if (q) rs = rs.filter(g => g.label.toLowerCase().includes(q))
+    const sorted = [...rs].sort((a, b) => {
+      if (sortKey === 'label') { const cmp = a.label.localeCompare(b.label); return sortDir === 'asc' ? cmp : -cmp }
+      const av = summaryValue(a, sortKey), bv = summaryValue(b, sortKey)
+      const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv
+      return sortDir === 'asc' ? an - bn : bn - an
+    })
+    return rowLimit === 'all' ? sorted : sorted.slice(0, rowLimit)
+  }, [grouped, tableSearch, sortKey, sortDir, rowLimit])
+
+  const tableExportRows = useMemo(() => tableRows.map(g => {
+    const o = { [grpByLabel]: g.label }
+    displayCols.forEach(c => { o[c.label] = summaryFmt(c.key, summaryValue(g, c.key)) })
+    return o
+  }), [tableRows, displayCols, grpByLabel])
+
   if (loading) {
     return (
       <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
@@ -905,7 +1034,8 @@ export default function OverallDashboard() {
             </Card>
           </div>
 
-          {/* GROUPED SUMMARY TABLE */}
+          {/* GROUPED SUMMARY TABLE — customizable: search, sortable columns, show/hide +
+              reorder columns (persisted), row limit, and a per-view export. */}
           <div style={{ marginTop:16 }}>
             <Card
               action={
@@ -916,38 +1046,77 @@ export default function OverallDashboard() {
                 </div>
               }
             >
-              {sectionTitle('Funnel summary by ' + grpByLabel.toLowerCase(), 'full-funnel totals and stage conversion rates')}
+              {sectionTitle('Funnel summary by ' + grpByLabel.toLowerCase(), 'full-funnel totals and stage conversion rates — search, sort, and customize the columns below')}
+
+              {/* TOOLBAR */}
+              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:14 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 10px', borderRadius:8, border:`0.5px solid ${C.border}`, background:'var(--card)', flex:'1 1 200px', minWidth:160, maxWidth:280 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+                  <input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder={`Search ${grpByLabel.toLowerCase()}…`}
+                    style={{ border:'none', outline:'none', background:'transparent', fontFamily:FONT, fontSize:12, fontWeight:600, color:C.text, width:'100%' }} />
+                  {tableSearch && (
+                    <button onClick={() => setTableSearch('')} style={{ border:'none', background:'transparent', cursor:'pointer', color:C.muted, display:'flex', padding:0, flexShrink:0 }}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                  <span style={{ fontSize:11, color:C.muted, fontFamily:FONT }}>Show</span>
+                  {[10, 25, 50, 'all'].map(n => (
+                    <button key={n} onClick={() => setRowLimit(n)} style={{ padding:'5px 10px', borderRadius:7, border:'none', cursor:'pointer', fontSize:11.5, fontWeight:700, fontFamily:FONT, background: rowLimit === n ? C.navy : 'transparent', color: rowLimit === n ? '#fff' : '#64748B' }}>{n === 'all' ? 'All' : n}</button>
+                  ))}
+                </div>
+
+                <div style={{ position:'relative' }}>
+                  <button onClick={() => setShowColsPicker(v => !v)} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:8, border:`0.5px solid ${showColsPicker ? C.navy : C.border}`, background: showColsPicker ? C.navyBg : 'var(--card)', color: showColsPicker ? C.navy : '#374151', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:FONT }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="18" rx="1" /><rect x="14" y="3" width="7" height="18" rx="1" /></svg>
+                    Columns
+                  </button>
+                  {showColsPicker && (
+                    <ColumnsPicker order={colOrder} visible={visibleCols} onToggle={toggleCol} onMove={moveCol} onClose={() => setShowColsPicker(false)} />
+                  )}
+                </div>
+
+                <div style={{ marginLeft:'auto' }}>
+                  <ExportButton data={tableExportRows} filename={'overall-' + grpBy} />
+                </div>
+              </div>
+
               <div style={{ overflowX:'auto' }}>
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5, fontFamily:FONT }}>
                   <thead>
                     <tr style={{ background:'#F8FAFC', borderBottom:'2px solid #E2E8F0' }}>
-                      {[grpByLabel, 'Leads', 'Total Queued', 'Human QL', 'Applications', 'Offers', 'Deposits', 'RAUs', 'QL %', 'App %', 'Deposit %'].map((h, i) => (
-                        <th key={h} style={{ padding:'9px ' + (i === 0 ? '12px' : '8px'), fontSize:9.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color:'#64748B', textAlign: i === 0 ? 'left' : 'right', whiteSpace:'nowrap' }}>{h}</th>
+                      <th onClick={() => handleSort('label')} style={{ padding:'9px 12px', fontSize:9.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
+                        {grpByLabel}{sortKey === 'label' && (sortDir === 'asc' ? ' ▲' : ' ▼')}
+                      </th>
+                      {displayCols.map(col => (
+                        <th key={col.key} onClick={() => handleSort(col.key)} style={{ padding:'9px 8px', fontSize:9.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === col.key ? C.navy : '#64748B', textAlign:'right', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
+                          {col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {grouped.map((g, i) => (
+                    {tableRows.map((g, i) => (
                       <tr key={g.label} style={{ background: i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
                         <td style={{ padding:'9px 12px', fontWeight:600, color:'#0F172A' }}>{g.label}</td>
-                        <td style={{ padding:'9px 8px', textAlign:'right', fontWeight:700, color:'#0F172A' }}>{fmtN(g.leads)}</td>
-                        <td style={{ padding:'9px 8px', textAlign:'right', color:'#475569' }}>{fmtN(g.queued)}</td>
-                        <td style={{ padding:'9px 8px', textAlign:'right', color:'#475569' }}>{fmtN(g.humanQL)}</td>
-                        <td style={{ padding:'9px 8px', textAlign:'right', color:'#475569' }}>{fmtN(g.apps)}</td>
-                        <td style={{ padding:'9px 8px', textAlign:'right', color:'#475569' }}>{fmtN(g.offers)}</td>
-                        <td style={{ padding:'9px 8px', textAlign:'right', color:'#475569' }}>{fmtN(g.deposits)}</td>
-                        <td style={{ padding:'9px 8px', textAlign:'right', fontWeight:700, color:C.navy }}>{fmtN(g.raus)}</td>
-                        <td style={{ padding:'9px 8px', textAlign:'right', color:C.cyan, fontWeight:600 }}>{pct(g.humanQL, g.queued)}</td>
-                        <td style={{ padding:'9px 8px', textAlign:'right', color:C.blue, fontWeight:600 }}>{pct(g.apps, g.humanQL)}</td>
-                        <td style={{ padding:'9px 8px', textAlign:'right', color:C.green, fontWeight:600 }}>{pct(g.deposits, g.offers)}</td>
+                        {displayCols.map(col => (
+                          <td key={col.key} style={{ padding:'9px 8px', textAlign:'right', color:summaryColor(col.key), fontWeight: SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400 }}>
+                            {summaryFmt(col.key, summaryValue(g, col.key))}
+                          </td>
+                        ))}
                       </tr>
                     ))}
-                    {grouped.length === 0 && (
-                      <tr><td colSpan={11} style={{ padding:'20px', textAlign:'center', color:'#94A3B8' }}>No data for this selection.</td></tr>
+                    {tableRows.length === 0 && (
+                      <tr><td colSpan={displayCols.length + 1} style={{ padding:'20px', textAlign:'center', color:'#94A3B8' }}>No data for this selection.</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
+              {grouped.length > tableRows.length && (
+                <div style={{ fontSize:11, color:C.muted, textAlign:'center', marginTop:10 }}>Showing {tableRows.length} of {grouped.length} — increase "Show" above to see more.</div>
+              )}
             </Card>
           </div>
 
