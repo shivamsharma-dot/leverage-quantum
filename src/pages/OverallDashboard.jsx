@@ -1101,11 +1101,15 @@ export default function OverallDashboard() {
                     {tableRows.map((g, i) => (
                       <tr key={g.label} style={{ background: i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
                         <td style={{ padding:'9px 12px', fontWeight:600, color:'#0F172A' }}>{g.label}</td>
-                        {displayCols.map(col => (
-                          <td key={col.key} style={{ padding:'9px 8px', textAlign:'right', color:summaryColor(col.key), fontWeight: SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400 }}>
-                            {summaryFmt(col.key, summaryValue(g, col.key))}
-                          </td>
-                        ))}
+                        {displayCols.map(col => {
+                          const v = summaryValue(g, col.key)
+                          const isPct = col.key.endsWith('Pct')
+                          return (
+                            <td key={col.key} style={{ padding:'9px 8px', textAlign:'right', color: isPct ? heatColor(v) : summaryColor(col.key), fontWeight: SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400, background: isPct ? heatBg(v) : 'transparent' }}>
+                              {summaryFmt(col.key, v)}
+                            </td>
+                          )
+                        })}
                       </tr>
                     ))}
                     {tableRows.length === 0 && (
