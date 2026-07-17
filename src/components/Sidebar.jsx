@@ -264,106 +264,31 @@ export default function Sidebar() {
     if (flyoutCloseTimer.current) { clearTimeout(flyoutCloseTimer.current); flyoutCloseTimer.current = null }
   }
 
-  if (collapsed) {
-    return (
-      <>
-      <div className="lq-mobile-topbar" style={{display:'none',position:'fixed',top:0,left:0,right:0,zIndex:1000,height:52,background:'var(--sidebar-bg)',borderBottom:'0.5px solid var(--card-border)',alignItems:'center',justifyContent:'space-between',padding:'0 16px'}}>
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/><rect x="7" y="7" width="4" height="14" rx="1.5" fill="#29B9C3"/><rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1C9FD4"/></svg>
-          <span style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:'#1C9FD4',letterSpacing:'2px',textTransform:'uppercase'}}>QUANTUM</span>
-        </div>
-        <button onClick={()=>setMobileOpen(o=>!o)} style={{background:'none',border:'none',cursor:'pointer',padding:6,color:'#374151',display:'flex',alignItems:'center'}}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        </button>
-      </div>
-      {mobileOpen && (
-        <div style={{position:'fixed',inset:0,zIndex:999,display:'flex'}} onClick={()=>setMobileOpen(false)}>
-          <div style={{width:240,height:'100%',background:'var(--sidebar-bg)',borderRight:'0.5px solid var(--card-border)',overflowY:'auto',paddingTop:'calc(60px + env(safe-area-inset-top))'}} onClick={e=>e.stopPropagation()}>
-            {NAV.map(group=>(group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).length===0?null:(
-              <div key={group.label} style={{marginBottom:8,padding:'0 10px'}}>
-                <div style={{fontSize:10,fontWeight:600,color:'#9CA3AF',letterSpacing:'0.08em',textTransform:'uppercase',padding:'10px 6px 4px'}}>{group.label}</div>
-                {group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item=>(
-                  <a key={item.to} href={item.to} onClick={()=>setMobileOpen(false)} onTouchStart={()=>prefetchRoute(item.defaultTo || item.to)}
-                    style={{display:'flex',alignItems:'center',gap:9,padding:'9px 10px',borderRadius:9,textDecoration:'none',color:'#374151',fontSize:13,fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                    {item.icon}{item.label}
-                  </a>
-                ))}
-              </div>
-            )))}
-          </div>
-          <div style={{flex:1,background:'rgba(0,0,0,0.3)'}}/>
-        </div>
-      )}
-      <aside className={styles.sidebarCollapsed}>
-        {/* Quantum logo mark — visible when collapsed */}
-        <div style={{
-          height: 52, display:'flex', alignItems:'center', justifyContent:'center',
-          flexShrink: 0, borderBottom: '0.5px solid #F3F4F6', width:'100%'
-        }}>
-          <div style={{
-            width:34, height:34, borderRadius:9, background:'#F0F4FF',
-            border:'0.5px solid #E0E7FF', display:'flex', alignItems:'center', justifyContent:'center'
-          }}>
-            <svg width="16" height="16" viewBox="0 0 22 22" fill="none">
-              <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/>
-              <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
-              <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84"/>
-            </svg>
-          </div>
-        </div>
-        <button className={styles.collapseBtn} onClick={toggle} title="Expand sidebar">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
-        <div className={styles.collapsedNav}>
-          {NAV.map(group => group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item => (
-            item.subItems ? (
-              <div key={item.label} style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}
-                onMouseEnter={(e) => openFlyout(item, e.currentTarget)}
-                onMouseLeave={scheduleCloseFlyout}>
-                <NavLink to={item.defaultTo || item.subItems[0].to} end={item.end}
-                  onFocus={()=>prefetchRoute(item.defaultTo || item.subItems[0].to)}
-                  className={`${styles.collapsedItem} ${parentActiveFor(item) ? styles.collapsedActive : ''}`}
-                  title={item.label}>
-                  {ICON_MAP[item.label]}
-                </NavLink>
-              </div>
-            ) : (
-              <NavLink key={item.label} to={item.to} end={item.end}
-                onMouseEnter={()=>prefetchRoute(item.defaultTo || item.to)} onFocus={()=>prefetchRoute(item.defaultTo || item.to)}
-                className={({ isActive }) => `${styles.collapsedItem} ${isActive ? styles.collapsedActive : ''}`}
-                title={item.label}>
-                {ICON_MAP[item.label]}
-              </NavLink>
-            )
-          )))}
-        </div>
-        {flyout && (
-          <div className={styles.collapsedFlyout} style={{ top: Math.min(flyout.top, window.innerHeight - 16 - flyout.subItems.length * 38 - 44) }}
-            onMouseEnter={cancelCloseFlyout} onMouseLeave={scheduleCloseFlyout}>
-            <div className={styles.collapsedFlyoutHeader}>{flyout.label}</div>
-            {flyout.subItems.map(sub => (
-              <div key={sub.to}
-                className={`${styles.collapsedFlyoutItem} ${isSubActive(sub) ? styles.collapsedFlyoutItemActive : ''}`}
-                onMouseEnter={()=>prefetchRoute(sub.to)}
-                onClick={() => { navigate(sub.to); setFlyout(null) }}>
-                {sub.label}
-              </div>
-            ))}
-          </div>
-        )}
-        <div className={styles.collapsedAvatar} title={user?.email}>
-          <div className={styles.avatar}>
-            {user?.picture ? <img src={user.picture} alt={user.name}/> : initials}
-          </div>
-        </div>
-        <SnapshotTool/>
-      </aside>
-      </>
-    )
+  // Auto-hide/peek: while the rail is collapsed, hovering it (or moving the
+  // cursor to the screen edge) reveals the full expanded nav as a floating
+  // overlay -- the collapsed rail itself stays in flow at 78px so no page
+  // content ever reflows; the overlay just sits on top of it, above the
+  // scrollable content. Same 150ms-close-delay pattern as the flyout above,
+  // so moving the mouse from the rail into the panel doesn't flicker-close it.
+  const [peekOpen, setPeekOpen] = React.useState(false)
+  const peekCloseTimer = React.useRef(null)
+  const openPeek = () => {
+    if (peekCloseTimer.current) { clearTimeout(peekCloseTimer.current); peekCloseTimer.current = null }
+    setPeekOpen(true)
+  }
+  const schedulePeekClose = () => {
+    if (peekCloseTimer.current) clearTimeout(peekCloseTimer.current)
+    peekCloseTimer.current = setTimeout(() => setPeekOpen(false), 220)
+  }
+  const cancelPeekClose = () => {
+    if (peekCloseTimer.current) { clearTimeout(peekCloseTimer.current); peekCloseTimer.current = null }
   }
 
-  return (
-    <aside className={styles.sidebar}>
+  // Shared body for the true expanded sidebar AND the collapsed-rail peek
+  // overlay, so the two never drift out of sync -- edit the nav/footer once.
+  function renderNavBody() {
+    return (
+      <>
       <div className={styles.logoArea}>
         <div className={styles.logoPill}>
           <img src="https://publicassets.leverageedu.com/landing-pages-new/logo-dark.svg" alt="Leverage Edu" className={styles.logoImg}/>
@@ -471,7 +396,121 @@ export default function Sidebar() {
           </svg>
         </button>
       </div>
+      </>
+    )
+  }
+
+  if (collapsed) {
+    return (
+      <>
+      <div className="lq-mobile-topbar" style={{display:'none',position:'fixed',top:0,left:0,right:0,zIndex:1000,height:52,background:'var(--sidebar-bg)',borderBottom:'0.5px solid var(--card-border)',alignItems:'center',justifyContent:'space-between',padding:'0 16px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/><rect x="7" y="7" width="4" height="14" rx="1.5" fill="#29B9C3"/><rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1C9FD4"/></svg>
+          <span style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:'#1C9FD4',letterSpacing:'2px',textTransform:'uppercase'}}>QUANTUM</span>
+        </div>
+        <button onClick={()=>setMobileOpen(o=>!o)} style={{background:'none',border:'none',cursor:'pointer',padding:6,color:'#374151',display:'flex',alignItems:'center'}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+      {mobileOpen && (
+        <div style={{position:'fixed',inset:0,zIndex:999,display:'flex'}} onClick={()=>setMobileOpen(false)}>
+          <div style={{width:240,height:'100%',background:'var(--sidebar-bg)',borderRight:'0.5px solid var(--card-border)',overflowY:'auto',paddingTop:'calc(60px + env(safe-area-inset-top))'}} onClick={e=>e.stopPropagation()}>
+            {NAV.map(group=>(group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).length===0?null:(
+              <div key={group.label} style={{marginBottom:8,padding:'0 10px'}}>
+                <div style={{fontSize:10,fontWeight:600,color:'#9CA3AF',letterSpacing:'0.08em',textTransform:'uppercase',padding:'10px 6px 4px'}}>{group.label}</div>
+                {group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item=>(
+                  <a key={item.to} href={item.to} onClick={()=>setMobileOpen(false)} onTouchStart={()=>prefetchRoute(item.defaultTo || item.to)}
+                    style={{display:'flex',alignItems:'center',gap:9,padding:'9px 10px',borderRadius:9,textDecoration:'none',color:'#374151',fontSize:13,fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                    {item.icon}{item.label}
+                  </a>
+                ))}
+              </div>
+            )))}
+          </div>
+          <div style={{flex:1,background:'rgba(0,0,0,0.3)'}}/>
+        </div>
+      )}
+      <aside className={styles.sidebarCollapsed} onMouseEnter={openPeek} onMouseLeave={schedulePeekClose}>
+        {/* Quantum logo mark — visible when collapsed */}
+        <div style={{
+          height: 52, display:'flex', alignItems:'center', justifyContent:'center',
+          flexShrink: 0, borderBottom: '0.5px solid #F3F4F6', width:'100%'
+        }}>
+          <div style={{
+            width:34, height:34, borderRadius:9, background:'#F0F4FF',
+            border:'0.5px solid #E0E7FF', display:'flex', alignItems:'center', justifyContent:'center'
+          }}>
+            <svg width="16" height="16" viewBox="0 0 22 22" fill="none">
+              <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/>
+              <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
+              <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84"/>
+            </svg>
+          </div>
+        </div>
+        <button className={styles.collapseBtn} onClick={toggle} title="Expand sidebar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+        <div className={styles.collapsedNav}>
+          {NAV.map(group => group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item => (
+            item.subItems ? (
+              <div key={item.label} style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}
+                onMouseEnter={(e) => openFlyout(item, e.currentTarget)}
+                onMouseLeave={scheduleCloseFlyout}>
+                <NavLink to={item.defaultTo || item.subItems[0].to} end={item.end}
+                  onFocus={()=>prefetchRoute(item.defaultTo || item.subItems[0].to)}
+                  className={`${styles.collapsedItem} ${parentActiveFor(item) ? styles.collapsedActive : ''}`}
+                  title={item.label}>
+                  {ICON_MAP[item.label]}
+                </NavLink>
+              </div>
+            ) : (
+              <NavLink key={item.label} to={item.to} end={item.end}
+                onMouseEnter={()=>prefetchRoute(item.defaultTo || item.to)} onFocus={()=>prefetchRoute(item.defaultTo || item.to)}
+                className={({ isActive }) => `${styles.collapsedItem} ${isActive ? styles.collapsedActive : ''}`}
+                title={item.label}>
+                {ICON_MAP[item.label]}
+              </NavLink>
+            )
+          )))}
+        </div>
+        {flyout && (
+          <div className={styles.collapsedFlyout} style={{ top: Math.min(flyout.top, window.innerHeight - 16 - flyout.subItems.length * 38 - 44) }}
+            onMouseEnter={cancelCloseFlyout} onMouseLeave={scheduleCloseFlyout}>
+            <div className={styles.collapsedFlyoutHeader}>{flyout.label}</div>
+            {flyout.subItems.map(sub => (
+              <div key={sub.to}
+                className={`${styles.collapsedFlyoutItem} ${isSubActive(sub) ? styles.collapsedFlyoutItemActive : ''}`}
+                onMouseEnter={()=>prefetchRoute(sub.to)}
+                onClick={() => { navigate(sub.to); setFlyout(null) }}>
+                {sub.label}
+              </div>
+            ))}
+          </div>
+        )}
+        <div className={styles.collapsedAvatar} title={user?.email}>
+          <div className={styles.avatar}>
+            {user?.picture ? <img src={user.picture} alt={user.name}/> : initials}
+          </div>
+        </div>
+        <SnapshotTool/>
+      </aside>
+      {peekOpen && (
+        <>
+        <div className={styles.sidebarPeekBackdrop} onMouseEnter={schedulePeekClose} />
+        <aside className={`${styles.sidebar} ${styles.sidebarPeek}`}
+          onMouseEnter={cancelPeekClose} onMouseLeave={schedulePeekClose}>
+          {renderNavBody()}
+        </aside>
+        </>
+      )}
+      </>
+    )
+  }
+
+  return (
+    <aside className={styles.sidebar}>
+      {renderNavBody()}
       <SnapshotTool/>
     </aside>
   )
-                                  }
+}
