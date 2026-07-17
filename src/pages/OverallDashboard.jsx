@@ -127,6 +127,56 @@ function Dropdown({ options, value, onChange, label, minWidth = 120 }) {
   )
 }
 
+// Campaign search — free-text filter with a ranked autocomplete list (top campaigns
+// by leads shown by default, narrowed by substring match as the user types) since
+// campaign name is how people actually look things up on this page.
+function CampaignSearch({ value, onChange, suggestions, minWidth = 210 }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
+  }, [])
+  return (
+    <div style={{ position:'relative' }} ref={ref}>
+      <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 10px', borderRadius:8, border:`0.5px solid ${open ? C.navy : C.border}`, background: open ? C.navyBg : 'var(--card)', minWidth, boxShadow: open ? '0 0 0 3px rgba(31,60,132,0.08)' : 'none', transition:'all .15s' }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+        <input
+          value={value}
+          onChange={e => { onChange(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          placeholder="Search campaign…"
+          style={{ border:'none', outline:'none', background:'transparent', fontFamily:FONT, fontSize:12, fontWeight:600, color:C.text, width:'100%' }}
+        />
+        {value && (
+          <button onClick={() => { onChange(''); setOpen(false) }} style={{ border:'none', background:'transparent', cursor:'pointer', color:C.muted, display:'flex', padding:0, flexShrink:0 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        )}
+      </div>
+      {open && suggestions.length > 0 && (
+        <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:500, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:6, minWidth:Math.max(minWidth, 280), maxHeight:280, overflowY:'auto' }}>
+          <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', padding:'4px 8px 6px' }}>{value.trim() ? 'Matching campaigns' : 'Top campaigns'}</div>
+          {suggestions.map(s => (
+            <button key={s.name} onClick={() => { onChange(s.name); setOpen(false) }}
+              style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, background:'transparent' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+              <span style={{ fontSize:12.5, fontWeight:600, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.name}</span>
+              <span style={{ fontSize:11, fontWeight:700, color:C.navy, flexShrink:0 }}>{fmtN(s.leads)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && value.trim() && suggestions.length === 0 && (
+        <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:500, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:'10px 12px', minWidth:Math.max(minWidth, 280), fontSize:12, color:C.muted, fontFamily:FONT }}>
+          No campaign names match "{value}"
+        </div>
+      )}
+    </div>
+  )
+}
+
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
 
@@ -247,6 +297,7 @@ export default function OverallDashboard() {
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
   const [source, setSource] = useState('All')
+  const [campaignQuery, setCampaignQuery] = useState('')
   const [showInfo, setShowInfo] = useState(false)
   const [grpBy, setGrpBy] = useState('source')
 
@@ -297,6 +348,20 @@ export default function OverallDashboard() {
     return ['All', ...[...set].sort()]
   }, [rows])
 
+  // Master campaign list — scoped to the FULL dataset (not the active period/source
+  // filters) so a campaign that only shows up in an earlier month is still searchable
+  // right now, ranked by total leads (most-relevant / most-searched proxy) on top.
+  const campaignOptions = useMemo(() => {
+    const m = new Map()
+    rows.forEach(r => { if (!r.campaign) return; m.set(r.campaign, (m.get(r.campaign) || 0) + r.leads) })
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([name, leads]) => ({ name, leads }))
+  }, [rows])
+  const campaignSuggestions = useMemo(() => {
+    const q = campaignQuery.trim().toLowerCase()
+    const list = q ? campaignOptions.filter(c => c.name.toLowerCase().includes(q)) : campaignOptions
+    return list.slice(0, 8)
+  }, [campaignOptions, campaignQuery])
+
   // Is the selected month the current calendar month?
   const isCurrentMonth = useMemo(() => {
     const mk = monthKeyByLabel.get(selMonth)
@@ -328,8 +393,11 @@ export default function OverallDashboard() {
   }, [rows, dateWindow, selMonth, monthKeyByLabel])
 
   const filtered = useMemo(() => {
-    return source === 'All' ? dateFilteredRows : dateFilteredRows.filter(r => r.source === source)
-  }, [dateFilteredRows, source])
+    let rs = source === 'All' ? dateFilteredRows : dateFilteredRows.filter(r => r.source === source)
+    const q = campaignQuery.trim().toLowerCase()
+    if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
+    return rs
+  }, [dateFilteredRows, source, campaignQuery])
 
   const kpis = useMemo(() => {
     const sum = k => filtered.reduce((t, r) => t + r[k], 0)
@@ -375,9 +443,24 @@ export default function OverallDashboard() {
     return [...m.values()].sort((a, b) => a.mk - b.mk)
   }, [filtered])
 
+  const byCampaign = useMemo(() => {
+    const m = new Map()
+    filtered.forEach(r => {
+      if (!r.campaign) return
+      const e = m.get(r.campaign) || { campaign:r.campaign, leads:0, queued:0, humanQL:0, apps:0, offers:0, deposits:0, raus:0 }
+      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus
+      m.set(r.campaign, e)
+    })
+    return [...m.values()].sort((a, b) => b.leads - a.leads)
+  }, [filtered])
+
   const grouped = useMemo(() => {
     if (grpBy === 'source') return bySource.map(s => ({
       label:s.source, leads:s.leads, queued:s.queued, humanQL:s.humanQL, apps:s.apps, offers:s.offers, deposits:s.deposits, raus:s.raus,
+    }))
+    if (grpBy === 'campaign') return byCampaign.map(c => ({
+      label:c.campaign, leads:c.leads, queued:c.queued, humanQL:c.humanQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus,
     }))
     return byMonth.map(m => {
       const full = filtered.filter(r => r.mk === m.mk)
@@ -387,14 +470,16 @@ export default function OverallDashboard() {
         deposits:m.deposits, raus: full.reduce((t, r) => t + r.raus, 0),
       }
     })
-  }, [grpBy, bySource, byMonth, filtered])
+  }, [grpBy, bySource, byCampaign, byMonth, filtered])
+
+  const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : 'Month'
 
   const exportRows = useMemo(() => grouped.map(g => ({
-    [grpBy === 'source' ? 'Source' : 'Month']: g.label,
+    [grpByLabel]: g.label,
     Leads: g.leads, 'Total Queued': g.queued, 'Human QL': g.humanQL,
     Applications: g.apps, Offers: g.offers, Deposits: g.deposits, RAUs: g.raus,
     'QL %': pct(g.humanQL, g.queued), 'App %': pct(g.apps, g.humanQL), 'Deposit %': pct(g.deposits, g.offers),
-  })), [grouped, grpBy])
+  })), [grouped, grpByLabel])
 
   const maxSourceLeads = bySource.length ? Math.max(...bySource.map(s => s.leads)) : 1
   const totalSourceLeads = bySource.reduce((t, s) => t + s.leads, 0)
@@ -511,6 +596,7 @@ export default function OverallDashboard() {
               </div>
 
               <Dropdown label="Source" options={sources} value={source} minWidth={110} onChange={setSource} />
+              <CampaignSearch value={campaignQuery} onChange={setCampaignQuery} suggestions={campaignSuggestions} />
             </div>
 
             {lastSync && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT }}>Synced {syncFmt.format(lastSync)}</span>}
@@ -597,18 +683,18 @@ export default function OverallDashboard() {
             <Card
               action={
                 <div style={{ display:'flex', gap:6 }}>
-                  {[['source', 'Source'], ['month', 'Month']].map(([v, l]) => (
+                  {[['source', 'Source'], ['campaign', 'Campaign'], ['month', 'Month']].map(([v, l]) => (
                     <button key={v} onClick={() => setGrpBy(v)} style={{ padding:'5px 12px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : '#E5E7EB'), background: grpBy === v ? C.navy : '#fff', color: grpBy === v ? '#fff' : '#374151', fontSize:11.5, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
                   ))}
                 </div>
               }
             >
-              {sectionTitle('Funnel summary by ' + grpBy, 'full-funnel totals and stage conversion rates')}
+              {sectionTitle('Funnel summary by ' + grpByLabel.toLowerCase(), 'full-funnel totals and stage conversion rates')}
               <div style={{ overflowX:'auto' }}>
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5, fontFamily:FONT }}>
                   <thead>
                     <tr style={{ background:'#F8FAFC', borderBottom:'2px solid #E2E8F0' }}>
-                      {[grpBy === 'source' ? 'Source' : 'Month', 'Leads', 'Total Queued', 'Human QL', 'Applications', 'Offers', 'Deposits', 'RAUs', 'QL %', 'App %', 'Deposit %'].map((h, i) => (
+                      {[grpByLabel, 'Leads', 'Total Queued', 'Human QL', 'Applications', 'Offers', 'Deposits', 'RAUs', 'QL %', 'App %', 'Deposit %'].map((h, i) => (
                         <th key={h} style={{ padding:'9px ' + (i === 0 ? '12px' : '8px'), fontSize:9.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color:'#64748B', textAlign: i === 0 ? 'left' : 'right', whiteSpace:'nowrap' }}>{h}</th>
                       ))}
                     </tr>
