@@ -507,6 +507,21 @@ export default function OverallDashboard() {
     const next = [...order];[next[idx], next[swapIdx]] = [next[swapIdx], next[idx]]
     return next
   })
+  // Drag-and-drop reordering directly on the table's column headers (in addition
+  // to the up/down arrows in the Columns popover) -- drag one header onto another
+  // to move it there. dragOverKey drives a live insertion-point indicator so the
+  // drop target is visible while dragging, not just after release.
+  const [dragKey, setDragKey] = useState(null)
+  const [dragOverKey, setDragOverKey] = useState(null)
+  const reorderColumns = (fromKey, toKey) => {
+    if (!fromKey || fromKey === toKey) return
+    setColOrder(order => {
+      if (!order.includes(fromKey) || !order.includes(toKey)) return order
+      const next = order.filter(k => k !== fromKey)
+      next.splice(next.indexOf(toKey), 0, fromKey)
+      return next
+    })
+  }
   const handleSort = key => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('desc') }
@@ -1177,7 +1192,21 @@ export default function OverallDashboard() {
                         {grpByLabel}{sortKey === 'label' && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                       </th>
                       {displayCols.map(col => (
-                        <th key={col.key} onClick={() => handleSort(col.key)} style={{ padding:'9px 8px', fontSize:9.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === col.key ? C.navy : '#64748B', textAlign:'right', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
+                        <th key={col.key}
+                          onClick={() => handleSort(col.key)}
+                          draggable
+                          onDragStart={e => { setDragKey(col.key); e.dataTransfer.effectAllowed = 'move' }}
+                          onDragOver={e => { e.preventDefault(); if (dragOverKey !== col.key) setDragOverKey(col.key) }}
+                          onDragLeave={() => setDragOverKey(k => (k === col.key ? null : k))}
+                          onDrop={e => { e.preventDefault(); reorderColumns(dragKey, col.key); setDragKey(null); setDragOverKey(null) }}
+                          onDragEnd={() => { setDragKey(null); setDragOverKey(null) }}
+                          title="Click to sort — drag to reorder"
+                          style={{
+                            padding:'9px 8px', fontSize:9.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
+                            color: sortKey === col.key ? C.navy : '#64748B', textAlign:'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
+                            opacity: dragKey === col.key ? 0.35 : 1,
+                            boxShadow: dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none',
+                          }}>
                           {col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                         </th>
                       ))}
