@@ -1,5 +1,5 @@
 import { OAuth2Client } from 'google-auth-library'
-import { ALLOWED_DOMAIN, signSession, sessionCookie, clearCookie, getSessionUser, supabaseAdmin } from '../lib/auth.mjs'
+import { ALLOWED_DOMAIN, signSession, sessionCookie, clearCookie, getSessionUser, supabaseAdmin, SUPERADMINS } from '../lib/auth.mjs'
 
 // Consolidates the former api/auth/google.mjs, api/auth/logout.mjs, api/auth/me.mjs
 // into one function (routed by ?action=) -- Vercel Hobby caps at 12 serverless
@@ -13,8 +13,32 @@ export default async function handler(req, res) {
   if (action === 'me') {
     const user = getSessionUser(req)
     if (!user) return res.status(401).json({ user: null })
+    // The session cookie's `role` is a snapshot from login time (or the last
+    // /me call), so a Settings > User Access change made mid-session would
+    // otherwise never take effect until the cookie expires (up to 8h) or the
+    // user logs out and back in. Re-check allowed_users on every call instead
+    // -- cheap single-row lookup -- and reissue the cookie if the role moved,
+    // so a freshly granted page shows up on the user's very next load/refresh.
+    let freshRole = user.role
+    try {
+      const r = await supabaseAdmin(
+        `allowed_users?email=eq.${encodeURIComponent(user.email)}&select=role`,
+      )
+      const rows = await r.json()
+      if (Array.isArray(rows) && rows.length && rows[0].role) freshRole = rows[0].role
+    } catch {
+      // DB unreachable -- fall back to the cookie's existing role rather than
+      // breaking an already-logged-in user's session.
+    }
+    // Superadmins always stay admin regardless of the stored row, same override
+    // getSessionUser() applies when first decoding the cookie.
+    if (SUPERADMINS.includes(String(user.email).toLowerCase())) freshRole = 'admin'
+    if (freshRole !== user.role) {
+      const refreshed = { email: user.email, name: user.name, picture: user.picture, role: freshRole }
+      res.setHeader('Set-Cookie', sessionCookie(signSession(refreshed)))
+    }
     return res.status(200).json({
-      user: { email: user.email, name: user.name, picture: user.picture, role: user.role },
+      user: { email: user.email, name: user.name, picture: user.picture, role: freshRole },
     })
   }
 
