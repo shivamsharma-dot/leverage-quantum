@@ -374,6 +374,7 @@ async function buildReport(token, reportType) {
   const todayLabel = now.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
   const typeLabel  = reportType === 'daily' ? 'Daily' : reportType === 'weekly' ? 'Weekly' : 'Monthly'
   const accentColor = reportType === 'daily' ? BLUE : reportType === 'weekly' ? GREEN : NAVY
+  const accentTint  = reportType === 'daily' ? '#EAF3FC' : reportType === 'weekly' ? '#EAF7EE' : '#EEF1FB'
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -383,138 +384,117 @@ async function buildReport(token, reportType) {
 <meta name="color-scheme" content="light">
 <title>Leverage Quantum — ${typeLabel} Report · ${todayLabel}</title>
 </head>
-<body style="margin:0;padding:0;background:#F0F4F8;font-family:${FONT};color:#0F172A;-webkit-font-smoothing:antialiased">
-<div style="max-width:680px;margin:0 auto;padding:24px 12px">
+<body style="margin:0;padding:0;background-color:#F4F6F9;font-family:${FONT};color:#0F172A;-webkit-font-smoothing:antialiased">
+<div style="margin:0;padding:32px 12px;background-color:#F4F6F9">
+<div style="max-width:680px;margin:0 auto">
 
-  <!-- HEADER -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${NAVY};border-radius:16px 16px 0 0;overflow:hidden">
+  <!-- TOP ACCENT STRIPE -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:20px 20px 0 0;overflow:hidden">
     <tr>
-      <td style="padding:28px 32px 24px">
-        <!-- Logo row -->
-        <table cellpadding="0" cellspacing="0" style="margin-bottom:20px">
-          <tr>
-            <td style="vertical-align:middle;padding-right:10px">
-              <!-- Quantum icon (3 bars) -->
-              <table cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px">
-                <tr>
-                  <td valign="bottom" style="padding-right:2px"><div style="width:5px;height:10px;background:${GREEN};border-radius:2px"></div></td>
-                  <td valign="bottom" style="padding-right:2px"><div style="width:5px;height:15px;background:${CYAN};border-radius:2px"></div></td>
-                  <td valign="bottom"><div style="width:5px;height:19px;background:${BLUE};border-radius:2px"></div></td>
-                </tr>
-              </table>
-            </td>
-            <td style="vertical-align:middle">
-              <div style="font-size:11px;font-weight:700;letter-spacing:.15em;color:rgba(255,255,255,0.45);text-transform:uppercase;line-height:1">LEVERAGE</div>
-              <div style="font-size:16px;font-weight:800;color:${BLUE};letter-spacing:.08em;text-transform:uppercase;line-height:1.2">QUANTUM</div>
-            </td>
-            <td style="vertical-align:middle;padding-left:16px">
-              <div style="width:1px;height:32px;background:rgba(255,255,255,0.12)"></div>
-            </td>
-            <td style="vertical-align:middle;padding-left:16px">
-              <span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${accentColor};font-size:10px;font-weight:700;color:#fff;letter-spacing:.06em;text-transform:uppercase">${typeLabel} Report</span>
-            </td>
-          </tr>
-        </table>
-        <!-- Title -->
-        <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em;margin-bottom:4px">Meta Ads Performance</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.5);letter-spacing:.01em">${periodLabel}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px">${AD_ACCOUNT} · Generated ${todayLabel}</div>
-      </td>
+      <td width="25%" style="background-color:${NAVY};font-size:0;line-height:0;height:5px">&nbsp;</td>
+      <td width="25%" style="background-color:${BLUE};font-size:0;line-height:0;height:5px">&nbsp;</td>
+      <td width="25%" style="background-color:${CYAN};font-size:0;line-height:0;height:5px">&nbsp;</td>
+      <td width="25%" style="background-color:${GREEN};font-size:0;line-height:0;height:5px">&nbsp;</td>
     </tr>
   </table>
 
-  <!-- KPI STRIP -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:none">
-    <tr>
-      <td style="padding:16px 20px 4px">
-        <table cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed">
-          <tr>
-            ${kpiCard('Spend', fmtINR(spend), `${camps.length} campaigns`, accentColor)}
-            ${kpiCard('Leads', leads.toLocaleString('en-IN'), `EPS: ${eps}/day`, BLUE)}
-            ${kpiCard('CPL', fmtINR(cpl), cpl > 3000 ? '⚠ Above target' : '✓ On track', cpl > 3000 ? '#EF4444' : '#22C55E')}
-            ${kpiCard('CTR', fmtPct(ctr), ctr >= 1 ? '✓ Healthy' : '⚠ Below 1%', ctr >= 1 ? '#22C55E' : '#F59E0B')}
-            ${kpiCard('Freq', freq.toFixed(2) + 'x', freq > 3.5 ? '⚠ Fatigue risk' : '✓ OK', freq > 3.5 ? '#EF4444' : '#22C55E')}
-          </tr>
-        </table>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding:4px 26px 8px">
-        <table cellpadding="0" cellspacing="0">
-          <tr>
-            <td style="padding-right:20px">
-              <span style="font-size:11.5px;color:#64748B">Impressions</span>
-              <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${impr.toLocaleString('en-IN')}</span>
-            </td>
-            <td style="padding-right:20px">
-              <span style="font-size:11.5px;color:#64748B">Reach</span>
-              <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${reach.toLocaleString('en-IN')}</span>
-            </td>
-            <td style="padding-right:20px">
-              <span style="font-size:11.5px;color:#64748B">CPM</span>
-              <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${fmtINR(cpm)}</span>
-            </td>
-            <td>
-              <span style="font-size:11.5px;color:#64748B">Clicks</span>
-              <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${clicks.toLocaleString('en-IN')}</span>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;box-shadow:0 24px 60px -24px rgba(15,23,42,0.18);border-left:1px solid #EEF1F6;border-right:1px solid #EEF1F6">
 
-  <!-- CAMPAIGN TABLE -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:1px solid #F1F5F9">
-    <tr>
-      <td style="padding:0 26px 20px">
-        ${sectionTitle('📊', 'Campaign Breakdown')}
-        ${campTable(camps, ctr)}
-      </td>
-    </tr>
-  </table>
+    <!-- HEADER -->
+    <tr><td style="padding:32px 36px 24px">
+      <table cellpadding="0" cellspacing="0"><tr>
+        <td style="vertical-align:middle;padding-right:12px">
+          <table cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #EEF1F6;border-radius:10px;box-shadow:0 3px 10px rgba(15,23,42,0.10)">
+            <tr><td style="padding:9px 11px">
+              <table cellpadding="0" cellspacing="0"><tr>
+                <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:9px;background-color:${GREEN};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+                <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:14px;background-color:${CYAN};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+                <td valign="bottom"><div style="width:4px;height:17px;background-color:${BLUE};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+              </tr></table>
+            </td></tr>
+          </table>
+        </td>
+        <td style="vertical-align:middle">
+          <div style="font-size:16px;font-weight:800;color:${NAVY};letter-spacing:.02em;line-height:1.2">Leverage Quantum</div>
+        </td>
+      </tr></table>
 
-  <!-- AI ANALYSIS -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:1px solid #F1F5F9">
-    <tr>
-      <td style="padding:0 26px 24px">
-        ${sectionTitle('🤖', 'AI Analysis — Claude Sonnet')}
-        ${aiHTML}
-      </td>
-    </tr>
+      <div style="margin-top:22px">
+        <span style="display:inline-block;padding:4px 11px;border-radius:20px;background-color:${accentTint};font-size:10px;font-weight:700;color:${accentColor};letter-spacing:.08em;text-transform:uppercase">${typeLabel} Report</span>
+      </div>
+      <div style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.35;margin:12px 0 6px">Meta Ads Performance</div>
+      <div style="font-size:12.5px;color:#94A3B8">${periodLabel} &middot; <span style="color:#64748B;font-weight:600">${AD_ACCOUNT}</span> &middot; Generated ${todayLabel}</div>
+    </td></tr>
+
+    <tr><td style="padding:0 36px">
+      <div style="height:1px;background-color:#EEF1F6"></div>
+    </td></tr>
+
+    <!-- KPI STRIP -->
+    <tr><td style="padding:24px 26px 4px">
+      <table cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed">
+        <tr>
+          ${kpiCard('Spend', fmtINR(spend), `${camps.length} campaigns`, accentColor)}
+          ${kpiCard('Leads', leads.toLocaleString('en-IN'), `EPS: ${eps}/day`, BLUE)}
+          ${kpiCard('CPL', fmtINR(cpl), cpl > 3000 ? '⚠ Above target' : '✓ On track', cpl > 3000 ? '#EF4444' : '#22C55E')}
+          ${kpiCard('CTR', fmtPct(ctr), ctr >= 1 ? '✓ Healthy' : '⚠ Below 1%', ctr >= 1 ? '#22C55E' : '#F59E0B')}
+          ${kpiCard('Freq', freq.toFixed(2) + 'x', freq > 3.5 ? '⚠ Fatigue risk' : '✓ OK', freq > 3.5 ? '#EF4444' : '#22C55E')}
+        </tr>
+      </table>
+    </td></tr>
+    <tr><td style="padding:4px 36px 8px">
+      <table cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding-right:20px">
+            <span style="font-size:11.5px;color:#64748B">Impressions</span>
+            <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${impr.toLocaleString('en-IN')}</span>
+          </td>
+          <td style="padding-right:20px">
+            <span style="font-size:11.5px;color:#64748B">Reach</span>
+            <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${reach.toLocaleString('en-IN')}</span>
+          </td>
+          <td style="padding-right:20px">
+            <span style="font-size:11.5px;color:#64748B">CPM</span>
+            <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${fmtINR(cpm)}</span>
+          </td>
+          <td>
+            <span style="font-size:11.5px;color:#64748B">Clicks</span>
+            <span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${clicks.toLocaleString('en-IN')}</span>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+
+    <tr><td style="padding:0 36px">
+      <div style="height:1px;background-color:#EEF1F6;margin-top:12px"></div>
+    </td></tr>
+
+    <!-- CAMPAIGN TABLE -->
+    <tr><td style="padding:20px 26px 8px">
+      ${sectionTitle('📊', 'Campaign Breakdown')}
+      ${campTable(camps, ctr)}
+    </td></tr>
+
+    <tr><td style="padding:0 36px">
+      <div style="height:1px;background-color:#EEF1F6"></div>
+    </td></tr>
+
+    <!-- AI ANALYSIS -->
+    <tr><td style="padding:20px 26px 32px">
+      ${sectionTitle('🤖', 'AI Analysis — Claude Sonnet')}
+      ${aiHTML}
+    </td></tr>
+
   </table>
 
   <!-- FOOTER -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:${NAVY};border-radius:0 0 16px 16px;overflow:hidden">
-    <tr>
-      <td style="padding:16px 32px">
-        <table width="100%" cellpadding="0" cellspacing="0">
-          <tr>
-            <td style="vertical-align:middle">
-              <table cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="vertical-align:middle;padding-right:8px">
-                    <table cellpadding="0" cellspacing="0"><tr>
-                      <td valign="bottom" style="padding-right:1px"><div style="width:3px;height:7px;background:${GREEN};border-radius:1px"></div></td>
-                      <td valign="bottom" style="padding-right:1px"><div style="width:3px;height:10px;background:${CYAN};border-radius:1px"></div></td>
-                      <td valign="bottom"><div style="width:3px;height:13px;background:${BLUE};border-radius:1px"></div></td>
-                    </tr></table>
-                  </td>
-                  <td style="vertical-align:middle">
-                    <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.9)">Leverage <span style="color:${BLUE}">Quantum</span></span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-            <td style="text-align:right;vertical-align:middle">
-              <span style="font-size:10.5px;color:rgba(255,255,255,0.3)">Auto-generated · ${todayLabel} · Do not reply</span>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F8FAFC;border-radius:0 0 20px 20px;border:1px solid #EEF1F6;border-top:none">
+    <tr><td style="padding:16px 36px;text-align:center">
+      <span style="font-size:10.5px;color:#94A3B8">Leverage Quantum &middot; Auto-generated &middot; ${todayLabel} &middot; Do not reply</span>
+    </td></tr>
   </table>
 
+</div>
 </div>
 </body>
 </html>`
