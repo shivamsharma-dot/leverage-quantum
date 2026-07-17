@@ -618,7 +618,7 @@ export default function OverallDashboard() {
       list.push({
         icon:'!', eyebrow:'Biggest funnel leak', accent:C.blue, headline: worst.from + ' → ' + worst.to,
         headlineColor: heatColor(worst.rate),
-        body: `Only ${worst.rate.toFixed(1)}% of ${worst.from.toLowerCase()} convert to ${worst.to.toLowerCase()} — the weakest step in the funnel this period. Start here for the fastest lift.`,
+        body: `Only ${worst.rate.toFixed(1)}% of ${worst.from} convert to ${worst.to} — the weakest step in the funnel this period. Start here for the fastest lift.`,
       })
     }
     // 4. Most efficient campaign worth scaling
