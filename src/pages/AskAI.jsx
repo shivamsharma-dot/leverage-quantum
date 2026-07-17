@@ -244,7 +244,7 @@ function buildFollowUps(question,answer){
   const chips=[]
   if(has('campaign','ad set','adset')) chips.push('Break this down by ad set')
   if(has('crm','qualified','qualif')) chips.push('Show the CRM-qualified view')
-  if(has('scale','pause','budget','reallocat')) chips.push('Estimate the Rs impact of this')
+  if(has('scale','pause','budget','reallocat')) chips.push('Estimate the ₹ impact of this')
   if(has('spend','cpl','cost')) chips.push('Compare this to last month')
   if(has('fatigue','frequency','creative')) chips.push('Which creatives should I refresh first?')
   if(has('google')&&!has('meta')) chips.push('How does Meta compare on this?')

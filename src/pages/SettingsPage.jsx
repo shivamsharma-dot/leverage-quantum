@@ -1165,12 +1165,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <p className={styles.cardDesc}>SR fee per RAU used in projected revenue. Formula: RAUs × SR Fee × 0.9</p>
                 <label className={styles.fieldLabel}>SR Fee per RAU</label>
                 <div className={styles.inputGroup}>
-                  <span className={styles.prefix}>Rs.</span>
+                  <span className={styles.prefix}>₹</span>
                   <input type="number" className={styles.input} style={{ maxWidth: 220 }} value={srFeeInput}
                     onChange={e => setSrFeeInput(e.target.value)} />
                   <button className={styles.primaryBtn} onClick={saveSrFee}>{srFeeSaved ? 'Saved' : 'Save'}</button>
                 </div>
-                <p className={styles.note}>Current: Rs.{parseInt(srFeeInput || 90000).toLocaleString('en-IN')} per RAU</p>
+                <p className={styles.note}>Current: ₹{parseInt(srFeeInput || 90000).toLocaleString('en-IN')} per RAU</p>
               </div>
 
               <div className={styles.card}>

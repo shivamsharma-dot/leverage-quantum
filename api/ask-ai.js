@@ -126,10 +126,10 @@ function parseCSV(csv) {
 
 function fmtINR(n) {
   const x = parseFloat(n) || 0
-  if (x >= 1e7) return 'Rs ' + (x/1e7).toFixed(2) + ' Cr'
-  if (x >= 1e5) return 'Rs ' + (x/1e5).toFixed(1) + 'L'
-  if (x >= 1000) return 'Rs ' + (x/1e3).toFixed(0) + 'K'
-  return 'Rs ' + Math.round(x).toLocaleString('en-IN')
+  if (x >= 1e7) return '₹' + (x/1e7).toFixed(2) + ' Cr'
+  if (x >= 1e5) return '₹' + (x/1e5).toFixed(1) + 'L'
+  if (x >= 1000) return '₹' + (x/1e3).toFixed(0) + 'K'
+  return '₹' + Math.round(x).toLocaleString('en-IN')
 }
 
 // Parse 'DD-Mon-YYYY' (e.g. 02-Jul-2026) -> 'YYYY-MM-DD'. Returns null if unparseable.
@@ -610,13 +610,13 @@ BUSINESS & FUNNEL CONTEXT
 
 COMPANY: Leverage Edu -- India's leading study abroad platform
 FUNNEL: Meta/Google Ad -> Lead Form -> Raw Lead -> CRM Lead -> QL Call -> Qualified Lead -> Application -> Enrolment
-REVENUE MODEL: Commission per enrolled student (high LTV, typically Rs 50K-2L per enrolment)
+REVENUE MODEL: Commission per enrolled student (high LTV, typically ₹50K-2L per enrolment)
 
 META ADS BENCHMARKS (India, EdTech/Study Abroad):
-- Good CPL: Rs 150-400 | Alarm: >Rs 600
+- Good CPL: ₹150-400 | Alarm: >₹600
 - Good CTR (Feed): 1.2-2.5% | Alarm: <0.8%
 - Good Frequency: <3.0 | Fatigue: >3.5 Feed, >5 Reels
-- Good CPM: Rs 80-200 | Alarm: >Rs 350
+- Good CPM: ₹80-200 | Alarm: >₹350
 - Audience size sweet spot: 2M-15M for cold, 100K-2M for retargeting
 
 CRM LEAD BENCHMARKS (India, EdTech):
@@ -631,7 +631,7 @@ YOUR OPERATING PRINCIPLES
 ===============================================
 
 1. DIAGNOSE FIRST -- always identify the root cause before recommending action
-2. PRIORITISE BY Rs IMPACT -- rank every recommendation by expected rupee impact
+2. PRIORITISE BY RUPEE IMPACT -- rank every recommendation by expected rupee impact
 3. FLAG RISKS PROACTIVELY -- don't wait to be asked; surface fatigue, CPL spikes, CRM lead drops
 4. BE SPECIFIC -- "pause campaign X" not "consider pausing some campaigns"
 5. SHOW YOUR WORKING -- especially for calculations; don't just give answers
@@ -643,7 +643,7 @@ YOUR OPERATING PRINCIPLES
 11. ALWAYS GIVE NEXT STEPS -- end every analysis with ranked actions
 
 FORMAT RULES:
-- Use Rs, K, L, Cr for all money
+- Use ₹, K, L, Cr for all money (never "Rs")
 - Bold **key numbers**
 - Use tables for comparisons (always)
 - Use [!] for warnings, [OK] for positive signals, [UP] for growth, [DOWN] for decline`
