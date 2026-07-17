@@ -7,6 +7,7 @@ import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
+import { getSession, setSession, hasLoaded, getPersisted } from '../lib/sessionLoad'
 import {
   C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
 } from '../ui/dashboardKit'
@@ -538,30 +539,61 @@ export default function OverallDashboard() {
   const [showCustom, setShowCustom] = useState(false)
   const [hoveredPreset, setHoveredPreset] = useState(null)
   const hasSetInitial = useRef(false)
+  const CACHE_KEY = 'overall'
 
+  const applyCsv = useCallback((txt) => {
+    const mapped = parseCSV(txt).map(mapRow)
+    setRows(mapped)
+    if (!hasSetInitial.current) {
+      const ms = [...new Set(mapped.filter(r => r.mk != null).map(r => r.mk))].sort((a, b) => a - b)
+      if (ms.length) {
+        const curKey = monthKey(new Date())
+        const defMk = ms.includes(curKey) ? curKey : ms[ms.length - 1]
+        setSelMonth(monthLabel(defMk))
+      }
+      hasSetInitial.current = true
+    }
+  }, [])
+
+  // Fetch-once-per-session (mirrors QL Ops/WhatsApp/Referral): if this tab already
+  // loaded Overall this session, reuse it instantly instead of re-fetching+re-parsing
+  // the full sheet on every SPA navigation back to this page. On a genuinely cold
+  // load (fresh tab, nothing loaded yet this session) paint instantly from the last
+  // known-good snapshot persisted in localStorage -- if one exists -- while a real
+  // fetch runs in the background, so the page never sits on a blank spinner for as
+  // long as the CSV takes to download when we already have something to show.
   const loadData = useCallback(async (bust = false) => {
-    setLoading(true)
+    if (!bust && hasLoaded(CACHE_KEY)) {
+      applyCsv(getSession(CACHE_KEY).data)
+      setLastSync(new Date(getSession(CACHE_KEY).ts))
+      setLoading(false)
+      return
+    }
+    let paintedFromCache = false
+    if (!bust) {
+      const persisted = getPersisted(CACHE_KEY)
+      if (persisted) {
+        applyCsv(persisted.data)
+        setLastSync(new Date(persisted.ts))
+        setLoading(false)
+        paintedFromCache = true
+      }
+    }
+    if (!paintedFromCache) setLoading(true)
     try {
       const base = await resolveOverallUrl()
       const u = bust ? base + (base.includes('?') ? '&' : '?') + '_=' + Date.now() : base
       const res = await fetch(u)
       const txt = await res.text()
-      const mapped = parseCSV(txt).map(mapRow)
-      setRows(mapped)
-      if (!hasSetInitial.current) {
-        const ms = [...new Set(mapped.filter(r => r.mk != null).map(r => r.mk))].sort((a, b) => a - b)
-        if (ms.length) {
-          const curKey = monthKey(new Date())
-          const defMk = ms.includes(curKey) ? curKey : ms[ms.length - 1]
-          setSelMonth(monthLabel(defMk))
-        }
-        hasSetInitial.current = true
-      }
+      applyCsv(txt)
+      setSession(CACHE_KEY, txt)
       setLastSync(new Date())
       setError(null)
-    } catch (e) { setError('Failed to load: ' + e.message) }
+    } catch (e) {
+      if (!paintedFromCache) setError('Failed to load: ' + e.message)
+    }
     finally { setLoading(false) }
-  }, [])
+  }, [applyCsv])
   useEffect(() => { loadData() }, [loadData])
 
   const months = useMemo(() => {

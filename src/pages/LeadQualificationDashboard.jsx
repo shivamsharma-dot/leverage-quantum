@@ -9,7 +9,7 @@ import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
 import { fetchCSV } from '../lib/sheetCache'
-import { getSession, setSession } from '../lib/sessionLoad'
+import { getSession, setSession, getPersisted } from '../lib/sessionLoad'
 import { usePresence } from '../hooks/usePresence'
 import { useAuth } from '../hooks/useAuth'
 import { resolveSheetUrl } from '../lib/dataSources'
@@ -635,57 +635,80 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const [mCustomTo, setMCustomTo]      = useState('')
   const [showMCustom, setShowMCustom]  = useState(false)
 
-  const loadData = useCallback(async (bust = false) => {
-    setLoading(true)
-    const t0 = Date.now()
-    try {
-      const cfg = QL_VIEWS.find(v => v.id === view) || QL_VIEWS[0]
-      const cacheKey = 'qlops_' + cfg.id
-      const cached = getSession(cacheKey)
-      let csv
-      if (!bust && cached) {
-        csv = cached.data
-      } else {
-const baseCsv = await resolveSheetUrl(cfg.id === 'daily' ? 'qlopsDaily' : 'qlopsMonthly', cfg.csv)
-            const url = bust ? baseCsv + (baseCsv.includes('?') ? '&' : '?') + '_=' + Date.now() : baseCsv
-              const res = await fetch(url)
-        csv = await res.text()
-        setSession(cacheKey, csv)
-      }
-      const parsed = parseCSV(csv)
-      if (cfg.id !== 'daily') {
-        setMonthlyRows(parseMonthlyCSV(csv))
-      } else {
+  const processCsv = useCallback((csv, cfg) => {
+    const parsed = parseCSV(csv)
+    if (cfg.id !== 'daily') {
+      setMonthlyRows(parseMonthlyCSV(csv))
+    } else {
+      // Normalize month to clean 'Mon-YYYY' from qualified_date (raw
+      // qualified_month column mixes '01-Apr-2026','Apr-2026' & stray values).
+      const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+      const _norm=(raw)=>{ const m=String(raw||'').match(/([A-Za-z]{3})[a-z]*[-\s]*(\d{4})/); return m?(m[1][0].toUpperCase()+m[1].slice(1,3).toLowerCase()+'-'+m[2]):'' }
+      parsed.forEach(r=>{ const d=new Date(r.qualified_date); if(!isNaN(d)){ r.month=MON[d.getMonth()]+'-'+d.getFullYear() } else { const c=_norm(r.month); r.month = c || '' } })
+      setRows(parsed)
+      // Build month list sorted by actual qualified_date (earliest per month)
+      const monthMap = {}
+      parsed.forEach(r => {
+        const dateVal = r.qualified_date
+        if (r.month && dateVal) {
+          // keep the earliest date per month so sort is stable
+          if (!monthMap[r.month] || dateVal < monthMap[r.month])
+            monthMap[r.month] = dateVal
+        }
+      })
+      const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
+        .sort((a, b) => new Date(monthMap[a] || 0) - new Date(monthMap[b] || 0))
+      setMonths(ms)
+      setMonthStartMap(monthMap)
+      const _now=new Date(); const _curKey=MON[_now.getMonth()]+'-'+_now.getFullYear()
+      const _def = ms.includes(_curKey) ? _curKey : (ms[ms.length-1] || '')
+      setSelMonth(prev => prev || _def)
+    }
+  }, [])
 
-          // Normalize month to clean 'Mon-YYYY' from qualified_date (raw
-          // qualified_month column mixes '01-Apr-2026','Apr-2026' & stray values).
-          const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-          const _norm=(raw)=>{ const m=String(raw||'').match(/([A-Za-z]{3})[a-z]*[-\s]*(\d{4})/); return m?(m[1][0].toUpperCase()+m[1].slice(1,3).toLowerCase()+'-'+m[2]):'' }
-          parsed.forEach(r=>{ const d=new Date(r.qualified_date); if(!isNaN(d)){ r.month=MON[d.getMonth()]+'-'+d.getFullYear() } else { const c=_norm(r.month); r.month = c || '' } })
-        setRows(parsed)
-        // Build month list sorted by actual qualified_date (earliest per month)
-        const monthMap = {}
-        parsed.forEach(r => {
-          const dateVal = r.qualified_date
-          if (r.month && dateVal) {
-            // keep the earliest date per month so sort is stable
-            if (!monthMap[r.month] || dateVal < monthMap[r.month])
-              monthMap[r.month] = dateVal
-          }
-        })
-        const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
-          .sort((a, b) => new Date(monthMap[a] || 0) - new Date(monthMap[b] || 0))
-        setMonths(ms)
-        setMonthStartMap(monthMap)
-        const _now=new Date(); const _curKey=MON[_now.getMonth()]+'-'+_now.getFullYear()
-          const _def = ms.includes(_curKey) ? _curKey : (ms[ms.length-1] || '')
-          setSelMonth(prev => prev || _def)
-        
+  // Fetch-once-per-session, plus instant-paint-from-localStorage on a cold tab: if
+  // this session already loaded this view, reuse it with zero network cost. Otherwise,
+  // if a snapshot survived from a prior session (localStorage), render it immediately
+  // instead of blocking on a fresh fetch of a very large sheet, then quietly fetch the
+  // real thing in the background and swap it in once ready.
+  const loadData = useCallback(async (bust = false) => {
+    const t0 = Date.now()
+    const cfg = QL_VIEWS.find(v => v.id === view) || QL_VIEWS[0]
+    const cacheKey = 'qlops_' + cfg.id
+    const cached = getSession(cacheKey)
+
+    if (!bust && cached) {
+      processCsv(cached.data, cfg)
+      setLastSync(new Date(cached.ts))
+      setLoading(false)
+      return
+    }
+
+    let paintedFromCache = false
+    if (!bust) {
+      const persisted = getPersisted(cacheKey)
+      if (persisted) {
+        processCsv(persisted.data, cfg)
+        setLastSync(new Date(persisted.ts))
+        setLoading(false)
+        paintedFromCache = true
       }
+    }
+    if (!paintedFromCache) setLoading(true)
+    try {
+      const baseCsv = await resolveSheetUrl(cfg.id === 'daily' ? 'qlopsDaily' : 'qlopsMonthly', cfg.csv)
+      const url = bust ? baseCsv + (baseCsv.includes('?') ? '&' : '?') + '_=' + Date.now() : baseCsv
+      const res = await fetch(url)
+      const csv = await res.text()
+      processCsv(csv, cfg)
+      setSession(cacheKey, csv)
       setLastSync(new Date())
     } catch (e) { console.error('QL fetch', e) }
-    finally { setTimeout(() => setLoading(false), Math.max(0, 750 - (Date.now() - t0))) }
-  }, [view])
+    finally {
+      if (paintedFromCache) setLoading(false)
+      else setTimeout(() => setLoading(false), Math.max(0, 750 - (Date.now() - t0)))
+    }
+  }, [view, processCsv])
 
   useEffect(() => { loadData() }, [loadData])
 
