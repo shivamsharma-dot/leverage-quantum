@@ -7,6 +7,7 @@ import { logActivity, pageLabel, installActivityTracker } from './components/Act
 import LoginPage from './pages/LoginPage'; import { prefetchSummaryAnalysis } from './lib/summaryData'
 import { COMPONENT_IMPORTS, prefetchAllRoutes } from './lib/routePrefetch'
 const DashboardHome = lazy(COMPONENT_IMPORTS.DashboardHome)
+const OverallDashboard = lazy(COMPONENT_IMPORTS.OverallDashboard)
 const ROASDashboard = lazy(COMPONENT_IMPORTS.ROASDashboard)
 const LeadQualityDashboard = lazy(COMPONENT_IMPORTS.LeadQualityDashboard)
 const ChannelMixDashboard = lazy(COMPONENT_IMPORTS.ChannelMixDashboard)
@@ -29,6 +30,7 @@ const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
 // Page title map — dynamic titles per route
 const PAGE_TITLES = {
   '/': 'Summary',
+  '/dashboard/overall': 'Overall',
   '/dashboard/meta-ads': 'Meta Ads',
   '/dashboard/google-ads': 'Google Ads',
   '/dashboard/bing-ads': 'Bing Ads',
@@ -213,6 +215,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute dashboardId="home"> <DashboardHome /></ProtectedRoute>} />
+          <Route path="/dashboard/overall" element={<ProtectedRoute dashboardId="overall"> <OverallDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/roas" element={<ProtectedRoute dashboardId="roas"> <ROASDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/mtd" element={<ProtectedRoute dashboardId="mtd"> <MTDDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/lead-quality" element={<ProtectedRoute dashboardId="lead_quality"><LeadQualityDashboard /></ProtectedRoute>} />

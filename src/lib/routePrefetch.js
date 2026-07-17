@@ -5,6 +5,7 @@
 // the network fetch either way).
 export const COMPONENT_IMPORTS = {
   DashboardHome: () => import('../pages/DashboardHome'),
+  OverallDashboard: () => import('../pages/OverallDashboard'),
   ROASDashboard: () => import('../pages/ROASDashboard'),
   LeadQualityDashboard: () => import('../pages/LeadQualityDashboard'),
   ChannelMixDashboard: () => import('../pages/ChannelMixDashboard'),
@@ -26,6 +27,7 @@ export const COMPONENT_IMPORTS = {
 // Route path (no query string) -> component key above.
 const ROUTE_COMPONENT = {
   '/': 'DashboardHome',
+  '/dashboard/overall': 'OverallDashboard',
   '/dashboard/roas': 'ROASDashboard',
   '/dashboard/mtd': 'MTDDashboard',
   '/dashboard/lead-quality': 'LeadQualityDashboard',
