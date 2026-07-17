@@ -4,6 +4,31 @@ import { toast } from './ToastHost'
 export default function ExportButton({ data, filename, columns }) {
   const [open, setOpen] = useState(false)
   const [sheetsBusy, setSheetsBusy] = useState(false)
+  const [slackBusy, setSlackBusy] = useState(false)
+
+  const exportSlack = async () => {
+    if (!data || data.length === 0) return
+    if (!window.confirm(`Post "${filename || 'this export'}" (${data.length} row${data.length === 1 ? '' : 's'}) to the team Slack channel?`)) return
+    setSlackBusy(true)
+    try {
+      const cols = columns || Object.keys(data[0])
+      const rows = data.map(r => { const o = {}; cols.forEach(c => { o[c] = r[c] ?? '' }); return o })
+      const r = await fetch('/api/send-report', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'slack_export', title: filename, columns: cols, rows, sourcePage: filename }),
+      })
+      const resData = await r.json()
+      if (!r.ok) throw new Error(resData.error || 'Failed to post to Slack')
+      toast('Posted to Slack', { type: 'success' })
+      setOpen(false)
+    } catch (e) {
+      toast(e.message || 'Could not post to Slack', { type: 'muted' })
+    } finally {
+      setSlackBusy(false)
+    }
+  }
 
   const exportSheets = async () => {
     if (!data || data.length === 0) return
@@ -143,6 +168,20 @@ export default function ExportButton({ data, filename, columns }) {
                 <line x1="9" y1="17" x2="13" y2="17"/>
               </svg>
               {sheetsBusy ? 'Creating sheet…' : 'Export to Google Sheets'}
+            </button>
+            <button onClick={exportSlack} disabled={slackBusy} style={{
+              display:'flex', alignItems:'center', gap:9, width:'100%',
+              padding:'9px 14px', border:'none', background:'none',
+              cursor: slackBusy ? 'default' : 'pointer', fontSize:13, fontWeight:500, color:'#111827',
+              borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
+              transition:'background .1s', opacity: slackBusy ? 0.6 : 1
+            }}
+            onMouseOver={e=>e.currentTarget.style.background='#F9FAFB'}
+            onMouseOut={e=>e.currentTarget.style.background='none'}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4A154B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+              </svg>
+              {slackBusy ? 'Posting…' : 'Send to Slack'}
             </button>
           </div>
         </>

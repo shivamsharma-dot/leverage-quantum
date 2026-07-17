@@ -303,63 +303,75 @@ function buildReportPreviewHTML(reportType, senderName) {
   const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"
   const s = RP_SAMPLE[reportType]
   const accentColor = reportType === 'daily' ? BLUE : reportType === 'weekly' ? GREEN : NAVY
+  const accentTint = reportType === 'daily' ? '#EAF3FC' : reportType === 'weekly' ? '#EAF7EE' : '#EEF1FB'
   const typeLabel = reportType === 'daily' ? 'Daily' : reportType === 'weekly' ? 'Weekly' : 'Monthly'
   const cpl = s.leads > 0 ? s.spend / s.leads : 0
   const eps = s.leads > 0 ? (s.leads / s.days).toFixed(1) : '0'
   const todayLabel = '15 Jul 2026'
-  return `<div style="max-width:680px;margin:0 auto;padding:24px 12px;font-family:${FONT};background:#F0F4F8">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,${NAVY} 0%,#0F2560 60%,#0D3D6B 100%);border-radius:16px 16px 0 0;overflow:hidden">
-      <tr><td style="padding:28px 32px 24px">
-        <table cellpadding="0" cellspacing="0" style="margin-bottom:20px"><tr>
-          <td style="vertical-align:middle;padding-right:10px"><table cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px"><tr>
-            <td valign="bottom" style="padding-right:2px"><div style="width:5px;height:10px;background:${GREEN};border-radius:2px"></div></td>
-            <td valign="bottom" style="padding-right:2px"><div style="width:5px;height:15px;background:${CYAN};border-radius:2px"></div></td>
-            <td valign="bottom"><div style="width:5px;height:19px;background:${BLUE};border-radius:2px"></div></td>
-          </tr></table></td>
-          <td style="vertical-align:middle"><div style="font-size:11px;font-weight:700;letter-spacing:.15em;color:rgba(255,255,255,0.45);text-transform:uppercase;line-height:1">LEVERAGE</div><div style="font-size:16px;font-weight:800;color:${BLUE};letter-spacing:.08em;text-transform:uppercase;line-height:1.2">QUANTUM</div></td>
-          <td style="vertical-align:middle;padding-left:16px"><div style="width:1px;height:32px;background:rgba(255,255,255,0.12)"></div></td>
-          <td style="vertical-align:middle;padding-left:16px"><span style="display:inline-block;padding:3px 10px;border-radius:20px;background:${accentColor};font-size:10px;font-weight:700;color:#fff;letter-spacing:.06em;text-transform:uppercase">${typeLabel} Report</span></td>
-        </tr></table>
-        <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-.02em;margin-bottom:4px">Meta Ads Performance</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.5);letter-spacing:.01em">${s.periodLabel}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px">act_641914389215638 · Generated ${todayLabel}</div>
-      </td></tr>
+  return `<div style="margin:0;padding:32px 12px;background-color:#F4F6F9;font-family:${FONT}">
+  <div style="max-width:680px;margin:0 auto">
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:20px 20px 0 0;overflow:hidden">
+      <tr>
+        <td width="25%" style="background-color:${NAVY};font-size:0;line-height:0;height:5px">&nbsp;</td>
+        <td width="25%" style="background-color:${BLUE};font-size:0;line-height:0;height:5px">&nbsp;</td>
+        <td width="25%" style="background-color:${CYAN};font-size:0;line-height:0;height:5px">&nbsp;</td>
+        <td width="25%" style="background-color:${GREEN};font-size:0;line-height:0;height:5px">&nbsp;</td>
+      </tr>
     </table>
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0">
-      <tr><td style="padding:16px 20px 4px"><table cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed"><tr>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;box-shadow:0 24px 60px -24px rgba(15,23,42,0.18);border-left:1px solid #EEF1F6;border-right:1px solid #EEF1F6">
+
+      <tr><td style="padding:32px 36px 24px">
+        <table cellpadding="0" cellspacing="0"><tr>
+          <td style="vertical-align:middle;padding-right:12px">
+            <table cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #EEF1F6;border-radius:10px;box-shadow:0 3px 10px rgba(15,23,42,0.10)">
+              <tr><td style="padding:9px 11px"><table cellpadding="0" cellspacing="0"><tr>
+                <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:9px;background-color:${GREEN};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+                <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:14px;background-color:${CYAN};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+                <td valign="bottom"><div style="width:4px;height:17px;background-color:${BLUE};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+              </tr></table></td></tr>
+            </table>
+          </td>
+          <td style="vertical-align:middle"><div style="font-size:16px;font-weight:800;color:${NAVY};letter-spacing:.02em;line-height:1.2">${senderName}</div></td>
+        </tr></table>
+        <div style="margin-top:22px"><span style="display:inline-block;padding:4px 11px;border-radius:20px;background-color:${accentTint};font-size:10px;font-weight:700;color:${accentColor};letter-spacing:.08em;text-transform:uppercase">${typeLabel} Report</span></div>
+        <div style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.35;margin:12px 0 6px">Meta Ads Performance</div>
+        <div style="font-size:12.5px;color:#94A3B8">${s.periodLabel} &middot; <span style="color:#64748B;font-weight:600">act_641914389215638</span> &middot; Generated ${todayLabel}</div>
+      </td></tr>
+
+      <tr><td style="padding:0 36px"><div style="height:1px;background-color:#EEF1F6"></div></td></tr>
+
+      <tr><td style="padding:24px 26px 4px"><table cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed"><tr>
         ${rpKpiCard('Spend', rpFmtINR(s.spend), RP_CAMPS.length + ' campaigns', accentColor)}
         ${rpKpiCard('Leads', s.leads.toLocaleString('en-IN'), 'EPS: ' + eps + '/day', BLUE)}
         ${rpKpiCard('CPL', rpFmtINR(cpl), cpl > 3000 ? '⚠ Above target' : '✓ On track', cpl > 3000 ? '#EF4444' : '#22C55E')}
         ${rpKpiCard('CTR', s.ctr.toFixed(2) + '%', s.ctr >= 1 ? '✓ Healthy' : '⚠ Below 1%', s.ctr >= 1 ? '#22C55E' : '#F59E0B')}
         ${rpKpiCard('Freq', s.freq.toFixed(2) + 'x', s.freq > 3.5 ? '⚠ Fatigue risk' : '✓ OK', s.freq > 3.5 ? '#EF4444' : '#22C55E')}
       </tr></table></td></tr>
-      <tr><td style="padding:4px 26px 8px"><table cellpadding="0" cellspacing="0"><tr>
+      <tr><td style="padding:4px 36px 8px"><table cellpadding="0" cellspacing="0"><tr>
         <td style="padding-right:20px"><span style="font-size:11.5px;color:#64748B">Impressions</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${s.impr.toLocaleString('en-IN')}</span></td>
         <td style="padding-right:20px"><span style="font-size:11.5px;color:#64748B">Reach</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${s.reach.toLocaleString('en-IN')}</span></td>
         <td style="padding-right:20px"><span style="font-size:11.5px;color:#64748B">CPM</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${rpFmtINR(s.cpm)}</span></td>
         <td><span style="font-size:11.5px;color:#64748B">Clicks</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${s.clicks.toLocaleString('en-IN')}</span></td>
       </tr></table></td></tr>
+
+      <tr><td style="padding:0 36px"><div style="height:1px;background-color:#EEF1F6;margin-top:12px"></div></td></tr>
+
+      <tr><td style="padding:20px 26px 8px">${rpSectionTitle('📊', 'Campaign Breakdown')}${rpCampTable(RP_CAMPS, s.ctr)}</td></tr>
+
+      <tr><td style="padding:0 36px"><div style="height:1px;background-color:#EEF1F6"></div></td></tr>
+
+      <tr><td style="padding:20px 26px 32px">${rpSectionTitle('🤖', 'AI Analysis — Claude Sonnet')}${RP_AI_SAMPLE}</td></tr>
+
     </table>
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:1px solid #F1F5F9">
-      <tr><td style="padding:0 26px 20px">${rpSectionTitle('📊', 'Campaign Breakdown')}${rpCampTable(RP_CAMPS, s.ctr)}</td></tr>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F8FAFC;border-radius:0 0 20px 20px;border:1px solid #EEF1F6;border-top:none">
+      <tr><td style="padding:16px 36px;text-align:center"><span style="font-size:10.5px;color:#94A3B8">Leverage Quantum &middot; Auto-generated &middot; ${todayLabel} &middot; Do not reply</span></td></tr>
     </table>
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:1px solid #F1F5F9">
-      <tr><td style="padding:0 26px 24px">${rpSectionTitle('🤖', 'AI Analysis — Claude Sonnet')}${RP_AI_SAMPLE}</td></tr>
-    </table>
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:${NAVY};border-radius:0 0 16px 16px;overflow:hidden">
-      <tr><td style="padding:16px 32px"><table width="100%" cellpadding="0" cellspacing="0"><tr>
-        <td style="vertical-align:middle"><table cellpadding="0" cellspacing="0"><tr>
-          <td style="vertical-align:middle;padding-right:8px"><table cellpadding="0" cellspacing="0"><tr>
-            <td valign="bottom" style="padding-right:1px"><div style="width:3px;height:7px;background:${GREEN};border-radius:1px"></div></td>
-            <td valign="bottom" style="padding-right:1px"><div style="width:3px;height:10px;background:${CYAN};border-radius:1px"></div></td>
-            <td valign="bottom"><div style="width:3px;height:13px;background:${BLUE};border-radius:1px"></div></td>
-          </tr></table></td>
-          <td style="vertical-align:middle"><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.9)">${senderName}</span></td>
-        </tr></table></td>
-        <td style="text-align:right;vertical-align:middle"><span style="font-size:10.5px;color:rgba(255,255,255,0.3)">Auto-generated · ${todayLabel} · Do not reply</span></td>
-      </tr></table></td></tr>
-    </table>
-  </div>`
+
+  </div>
+</div>`
 }
 
 export default function SettingsPage() {
@@ -581,6 +593,8 @@ export default function SettingsPage() {
         if (pf.report_from_email != null) setRcEmail(pf.report_from_email)
         if (pf.report_subjects) setRcSubjects({ daily: pf.report_subjects.daily || '', weekly: pf.report_subjects.weekly || '', monthly: pf.report_subjects.monthly || '' })
         if (pf.auto_reports_enabled != null) setRcAuto(pf.auto_reports_enabled !== false)
+        if (pf.slack_webhook_url != null) setSlackWebhook(pf.slack_webhook_url)
+        if (pf.slack_auto_reports_enabled != null) setSlackAuto(pf.slack_auto_reports_enabled !== false)
         setSavedHiddenPages(hp)
         setHiddenPages(hp)
         // Also sync to localStorage so Sidebar gets it immediately
@@ -921,6 +935,12 @@ export default function SettingsPage() {
   const [rcTesting, setRcTesting] = useState(false)
   const [rcSendType, setRcSendType] = useState('daily')
   const [rcSending, setRcSending] = useState(false)
+  // --- Slack config (webhook + auto-post toggle) ---
+  const [slackWebhook, setSlackWebhook] = useState('')
+  const [slackAuto, setSlackAuto] = useState(true)
+  const [slackCfgSaving, setSlackCfgSaving] = useState(false)
+  const [slackCfgMsg, setSlackCfgMsg] = useState('')
+  const [slackTesting, setSlackTesting] = useState(false)
   const [editReportOpen, setEditReportOpen] = useState(false)
   const [sendReportOpen, setSendReportOpen] = useState(false)
   const [recipientsOpen, setRecipientsOpen] = useState(false)
@@ -1094,6 +1114,41 @@ export default function SettingsPage() {
       setRcMsg('Saved \u2713 report settings updated')
     } catch (e) { setRcMsg('\u2715 ' + e.message) }
     finally { setRcSaving(false); setTimeout(() => setRcMsg(''), 5000) }
+  }
+
+  const saveSlackConfig = async () => {
+    setSlackCfgSaving(true); setSlackCfgMsg('')
+    try {
+      const entries = [
+        ['slack_webhook_url', slackWebhook.trim()],
+        ['slack_auto_reports_enabled', slackAuto],
+      ]
+      for (const [key, value] of entries) {
+        const r = await fetch('/api/preferences', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, value }),
+        })
+        if (!r.ok) throw new Error('Failed to save ' + key)
+      }
+      setSlackCfgMsg('Saved ✓')
+    } catch (e) { setSlackCfgMsg('✕ ' + e.message) }
+    finally { setSlackCfgSaving(false); setTimeout(() => setSlackCfgMsg(''), 5000) }
+  }
+
+  const sendSlackTest = async () => {
+    setSlackTesting(true); setSlackCfgMsg('')
+    try {
+      const r = await fetch('/api/send-report', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'slack_answer', question: 'Slack connection test from Settings', answerMarkdown: 'This is a test message from **Leverage Quantum** — if you can see this, your Slack webhook is connected correctly.' }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Failed')
+      setSlackCfgMsg('Test message posted ✓')
+    } catch (e) { setSlackCfgMsg('✕ ' + e.message) }
+    finally { setSlackTesting(false); setTimeout(() => setSlackCfgMsg(''), 6000) }
   }
 
   const sendTestReport = async () => {
@@ -2071,6 +2126,27 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </>
                 )
               })()}
+
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Slack</h3>
+                <p className={styles.cardDesc}>Post Ask AI answers, page exports, and a compact summary of every scheduled report to a team Slack channel. Create an Incoming Webhook in Slack (Slack app settings &gt; Incoming Webhooks &gt; Add New Webhook to Workspace) and paste the URL below.</p>
+                <label className={styles.fieldLabel}>Webhook URL</label>
+                <div className={styles.inputGroup}>
+                  <input type="text" className={styles.input} placeholder="https://hooks.slack.com/services/…" value={slackWebhook}
+                    onChange={e => setSlackWebhook(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#374151' }}>
+                    <input type="checkbox" checked={slackAuto} onChange={e => setSlackAuto(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                    Also post a summary card to Slack for every scheduled report
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <button className={styles.primaryBtn} onClick={saveSlackConfig} disabled={slackCfgSaving}>{slackCfgSaving ? 'Saving…' : 'Save'}</button>
+                  <button className={styles.ghostBtn} onClick={sendSlackTest} disabled={slackTesting || !slackWebhook.trim()}>{slackTesting ? 'Sending…' : 'Send test message'}</button>
+                  {slackCfgMsg && <span className={styles.rcFeedback + ' ' + (slackCfgMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{slackCfgMsg}</span>}
+                </div>
+              </div>
 
               <div className={styles.card}>
                 <div className={styles.activityHeader}>

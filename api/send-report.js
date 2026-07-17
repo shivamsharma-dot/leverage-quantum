@@ -77,13 +77,136 @@ async function getRecipients(reportType) {
 async function getReportConfig() {
   const out = {}
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled)`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled,slack_webhook_url,slack_auto_reports_enabled)`, {
       headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
     })
     const rows = (await res.json()) || []
     for (const r of rows) out[r.key] = r.value
   } catch {}
   return out
+}
+
+// ── Slack (Incoming Webhook) ──────────────────────────────────────────────────
+// Webhook URL is admin-editable in Settings > Reports (app_preferences.slack_webhook_url),
+// falling back to the SLACK_WEBHOOK_URL env var -- same override pattern as report_from_email.
+
+async function postToSlack(webhookUrl, payload) {
+  const res = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+  const text = await res.text()
+  if (!res.ok || text.trim() !== 'ok') throw new Error(text || `Slack webhook error ${res.status}`)
+  return text
+}
+
+// Slack has no native markdown-table rendering, so pipe tables are rendered as an aligned
+// monospace code block instead; **bold** becomes Slack's *bold* mrkdwn syntax.
+function mdToSlackText(md) {
+  if (!md) return ''
+  let text = String(md)
+  const tableRe = /((?:^\|.*\|[ \t]*\r?\n)+)/gm
+  text = text.replace(tableRe, block => {
+    const lines = block.trim().split('\n').filter(l => !/^\|[\s:|-]+\|$/.test(l.trim()))
+    const rows = lines.map(l => l.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim()))
+    if (!rows.length) return block
+    const widths = rows[0].map((_, ci) => Math.max(...rows.map(r => (r[ci] || '').length)))
+    const rendered = rows.map(r => r.map((c, ci) => (c || '').padEnd(widths[ci])).join('  ')).join('\n')
+    return '```\n' + rendered + '\n```\n'
+  })
+  text = text.replace(/\*\*(.+?)\*\*/g, '*$1*')
+  return text.trim()
+}
+
+function buildSlackAnswerBlocks({ question, answerMarkdown, askedBy }) {
+  const body = mdToSlackText(answerMarkdown).slice(0, 2900)
+  return {
+    blocks: [
+      { type: 'header', text: { type: 'plain_text', text: '📊 Ask AI Answer', emoji: true } },
+      { type: 'section', text: { type: 'mrkdwn', text: `*${(question || '').slice(0, 300)}*` } },
+      { type: 'divider' },
+      { type: 'section', text: { type: 'mrkdwn', text: body || '_No content_' } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `Shared by ${askedBy || 'a teammate'} · Leverage Quantum` }] },
+    ],
+  }
+}
+
+function buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy }) {
+  const cols = columns && columns.length ? columns : (rows[0] ? Object.keys(rows[0]) : [])
+  const capped = rows.slice(0, 20)
+  const widths = cols.map(c => Math.max(c.length, ...(capped.length ? capped.map(r => String(r[c] ?? '').length) : [0])))
+  const headerLine = cols.map((c, ci) => c.padEnd(widths[ci])).join('  ')
+  const sepLine = widths.map(w => '-'.repeat(w)).join('  ')
+  const bodyLines = capped.map(r => cols.map((c, ci) => String(r[c] ?? '').padEnd(widths[ci])).join('  ')).join('\n')
+  const table = '```\n' + headerLine + '\n' + sepLine + '\n' + bodyLines + '\n```'
+  const truncNote = rows.length > 20 ? `\n_Showing first 20 of ${rows.length} rows -- use Export > CSV/Sheets for the full data._` : ''
+  return {
+    blocks: [
+      { type: 'header', text: { type: 'plain_text', text: `📤 ${(title || 'Export').slice(0, 140)}`, emoji: true } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `${sourcePage ? sourcePage + ' · ' : ''}${rows.length} row${rows.length === 1 ? '' : 's'} · shared by ${askedBy || 'a teammate'}` }] },
+      { type: 'section', text: { type: 'mrkdwn', text: (table + truncNote).slice(0, 2900) } },
+    ],
+  }
+}
+
+function buildSlackReportSummary({ typeLabel, periodLabel, summary, todayLabel }) {
+  const { spend, leads, cpl, ctr, freq } = summary
+  return {
+    blocks: [
+      { type: 'header', text: { type: 'plain_text', text: `📊 Meta Ads ${typeLabel} Report`, emoji: true } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `${periodLabel} · Generated ${todayLabel}` }] },
+      { type: 'section', fields: [
+        { type: 'mrkdwn', text: `*Spend*\n${fmtINR(spend)}` },
+        { type: 'mrkdwn', text: `*Leads*\n${leads.toLocaleString('en-IN')}` },
+        { type: 'mrkdwn', text: `*CPL*\n${fmtINR(cpl)}` },
+        { type: 'mrkdwn', text: `*CTR*\n${fmtPct(ctr)}` },
+        { type: 'mrkdwn', text: `*Frequency*\n${freq.toFixed(2)}x` },
+      ] },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: 'Full report with campaign breakdown + AI analysis sent by email.' }] },
+    ],
+  }
+}
+
+async function handleSlackAnswer(req, res) {
+  const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (!canAccessDashboard(me.role, 'ask_ai')) return res.status(403).json({ error: 'Forbidden' })
+
+  const cfg = await getReportConfig()
+  const webhook = cfg.slack_webhook_url || process.env.SLACK_WEBHOOK_URL
+  if (!webhook) return res.status(500).json({ error: 'Slack is not connected -- add a webhook URL in Settings > Reports.' })
+
+  const { question, answerMarkdown } = req.body || {}
+  if (!answerMarkdown) return res.status(400).json({ error: 'No answer content to send' })
+
+  try {
+    await postToSlack(webhook, buildSlackAnswerBlocks({ question, answerMarkdown, askedBy: me.email }))
+    await logReport({ report_type: 'slack answer', recipients: ['slack'], status: 'sent', triggered_by: me.email })
+    return res.status(200).json({ ok: true, success: true })
+  } catch (e) {
+    await logReport({ report_type: 'slack answer', recipients: ['slack'], status: 'failed', error: e.message, triggered_by: me.email })
+    return res.status(500).json({ error: e.message })
+  }
+}
+
+async function handleSlackExport(req, res) {
+  const { getSessionUser } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+
+  const cfg = await getReportConfig()
+  const webhook = cfg.slack_webhook_url || process.env.SLACK_WEBHOOK_URL
+  if (!webhook) return res.status(500).json({ error: 'Slack is not connected -- add a webhook URL in Settings > Reports.' })
+
+  const { title, columns, rows, sourcePage } = req.body || {}
+  if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'No rows to send' })
+
+  try {
+    await postToSlack(webhook, buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy: me.email }))
+    await logReport({ report_type: 'slack export', recipients: ['slack'], status: 'sent', triggered_by: me.email })
+    return res.status(200).json({ ok: true, success: true })
+  } catch (e) {
+    await logReport({ report_type: 'slack export', recipients: ['slack'], status: 'failed', error: e.message, triggered_by: me.email })
+    return res.status(500).json({ error: e.message })
+  }
 }
 
 // ── Ask AI "email this answer" — standalone, deliberately NOT sharing buildReport()'s
@@ -376,7 +499,7 @@ async function buildReport(token, reportType) {
   const accentColor = reportType === 'daily' ? BLUE : reportType === 'weekly' ? GREEN : NAVY
   const accentTint  = reportType === 'daily' ? '#EAF3FC' : reportType === 'weekly' ? '#EAF7EE' : '#EEF1FB'
 
-  return `<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -498,6 +621,8 @@ async function buildReport(token, reportType) {
 </div>
 </body>
 </html>`
+
+  return { html, summary, periodLabel, typeLabel }
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -507,6 +632,12 @@ export default async function handler(req, res) {
 
   if ((req.body?.type || req.query?.type) === 'chat_answer') {
     return handleChatAnswerEmail(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'slack_answer') {
+    return handleSlackAnswer(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'slack_export') {
+    return handleSlackExport(req, res)
   }
 
   const RESEND_KEY = process.env.RESEND_API_KEY
@@ -546,7 +677,7 @@ export default async function handler(req, res) {
     : (process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <quantum@platform.leverageedu.com>')
   const subjOverride = (cfg.report_subjects && cfg.report_subjects[report_type]) || null
 
-    const html = await buildReport(token, report_type)
+    const { html, summary: reportSummary, periodLabel: reportPeriodLabel, typeLabel: reportTypeLabel } = await buildReport(token, report_type)
     const todayLabel = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
     const SUBJECTS = {
       daily:   `Meta Ads Daily Report — Yesterday · ${todayLabel}`,
@@ -568,6 +699,17 @@ export default async function handler(req, res) {
     if (!sendRes.ok) throw new Error(sendData.message || JSON.stringify(sendData))
 
     await logReport({ report_type, recipients, status: 'sent', triggered_by })
+
+    // Cross-post a compact summary card to Slack alongside the email, if connected + enabled
+    if (cfg.slack_auto_reports_enabled !== false) {
+      const hook = cfg.slack_webhook_url || process.env.SLACK_WEBHOOK_URL
+      if (hook) {
+        try {
+          await postToSlack(hook, buildSlackReportSummary({ typeLabel: reportTypeLabel, periodLabel: reportPeriodLabel, summary: reportSummary, todayLabel }))
+        } catch (e) { console.error('[slack report]', e.message) }
+      }
+    }
+
     return res.status(200).json({ ok: true, success: true, recipients, id: sendData.id, report_type })
 
   } catch (e) {

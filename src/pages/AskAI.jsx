@@ -183,6 +183,7 @@ function Ico({n,s=16,c='currentColor',sw=2}){
     edit:     <><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4z"/></>,
     mic:      <><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></>,
     mail:     <><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></>,
+    slack:    <><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></>,
   }
   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d[n]}</svg>
 }
@@ -337,6 +338,9 @@ export default function AskAI() {
   const [emailRecipients, setEmailRecipients] = useState('')
   const [emailSending, setEmailSending] = useState(false)
   const [emailMsg, setEmailMsg] = useState(null)
+  const [slackModalIdx, setSlackModalIdx] = useState(null) // index of the assistant message being posted to Slack via the confirm modal, or null
+  const [slackSending, setSlackSending] = useState(false)
+  const [slackMsg, setSlackMsg] = useState(null)
   const [editingMsgText, setEditingMsgText] = useState('')
   const [showWelcomeAnim, setShowWelcomeAnim] = useState(true)
 
@@ -632,6 +636,25 @@ export default function AskAI() {
       setEmailMsg({type:'err',text:e.message})
     }finally{setEmailSending(false)}
   },[emailModalIdx,messages,emailRecipients])
+
+  /* post an answer to Slack — same explicit-confirm pattern as email, no recipient field
+     since it always goes to the one configured team channel (Settings > Reports). */
+  const sendAnswerSlack = useCallback(async()=>{
+    const idx=slackModalIdx; if(idx==null) return
+    const m=messages[idx]; if(!m) return
+    const question=messages[idx-1]?.content||''
+    setSlackSending(true); setSlackMsg(null)
+    try{
+      const r=await fetch('/api/send-report',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({type:'slack_answer',question,answerMarkdown:m.content})})
+      const d=await r.json().catch(()=>({}))
+      if(!r.ok) throw new Error(d.error||'Send failed')
+      setSlackMsg({type:'ok',text:'Posted'})
+      setTimeout(()=>{setSlackModalIdx(null);setSlackMsg(null)},1200)
+    }catch(e){
+      setSlackMsg({type:'err',text:e.message})
+    }finally{setSlackSending(false)}
+  },[slackModalIdx,messages])
 
   /* memories */
   const addMem = async()=>{
@@ -1141,11 +1164,11 @@ export default function AskAI() {
                               <Markdown text={m.content+(m.streaming?'▍':'')}/>
                               {!m.streaming&&(
                                 <div style={{display:'flex',gap:4,marginTop:8}}>
-                                  {[['copy','Copy'],['refresh','Retry'],['mail','Email']].map(([ic,lbl])=>(
+                                  {[['copy','Copy'],['refresh','Retry'],['mail','Email'],['slack','Slack']].map(([ic,lbl])=>(
                                     <button key={ic} title={lbl} className="mabtn" disabled={ic==='refresh'&&loading}
                                       style={{display:'flex',alignItems:'center',gap:5,padding:'5px 9px',border:`1px solid ${borderColor}`,background:'transparent',borderRadius:7,cursor:(ic==='refresh'&&loading)?'default':'pointer',color:'#64748B',fontSize:11.5,fontWeight:500,fontFamily:FONT,transition:'all .15s',opacity:(ic==='refresh'&&loading)?0.5:1}}
-                                      onClick={()=>{if(ic==='copy'){navigator.clipboard?.writeText(m.content);setCopied(k);setTimeout(()=>setCopied(null),1500)}else if(ic==='refresh'){regenerate(k)}else if(ic==='mail'){setEmailModalIdx(k);setEmailRecipients(uid!=='default'?uid:'');setEmailMsg(null)}}}>
-                                      <Ico n={copied===k&&ic==='copy'?'check':ic==='refresh'?'refresh':ic==='mail'?'mail':'copy'} s={12} c={copied===k&&ic==='copy'?GREEN:'#64748B'}/>{lbl}
+                                      onClick={()=>{if(ic==='copy'){navigator.clipboard?.writeText(m.content);setCopied(k);setTimeout(()=>setCopied(null),1500)}else if(ic==='refresh'){regenerate(k)}else if(ic==='mail'){setEmailModalIdx(k);setEmailRecipients(uid!=='default'?uid:'');setEmailMsg(null)}else if(ic==='slack'){setSlackModalIdx(k);setSlackMsg(null)}}}>
+                                      <Ico n={copied===k&&ic==='copy'?'check':ic==='refresh'?'refresh':ic==='mail'?'mail':ic==='slack'?'slack':'copy'} s={12} c={copied===k&&ic==='copy'?GREEN:'#64748B'}/>{lbl}
                                     </button>
                                   ))}
                                 </div>
@@ -1205,6 +1228,29 @@ export default function AskAI() {
               <button onClick={sendAnswerEmail} disabled={emailSending||!emailRecipients.trim()}
                 style={{padding:'8px 18px',borderRadius:8,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:13,fontWeight:700,fontFamily:FONT,cursor:(emailSending||!emailRecipients.trim())?'not-allowed':'pointer',opacity:(emailSending||!emailRecipients.trim())?0.6:1}}>
                 {emailSending?'Sending…':'Send email'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send-to-Slack confirm modal — posts to the one team channel configured in Settings > Reports */}
+      {slackModalIdx!=null&&(
+        <div onClick={e=>{if(e.target===e.currentTarget&&!slackSending)setSlackModalIdx(null)}} style={{position:'fixed',inset:0,zIndex:200,background:'rgba(15,23,42,0.45)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{width:420,maxWidth:'calc(100vw - 32px)',background:'#fff',borderRadius:16,padding:'22px 22px 20px',boxShadow:'0 20px 60px -12px rgba(15,23,42,0.35)'}}>
+            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:2}}>
+              <div style={{fontSize:16,fontWeight:800,color:'#0F172A',fontFamily:FONT}}>Post this answer to Slack</div>
+              <button onClick={()=>!slackSending&&setSlackModalIdx(null)} style={{border:'none',background:'transparent',color:'#94A3B8',cursor:'pointer',padding:4,display:'flex'}}>
+                <Ico n="close" s={16} c="#94A3B8"/>
+              </button>
+            </div>
+            <p style={{fontSize:12,color:'#94A3B8',margin:'2px 0 16px',lineHeight:1.5,fontFamily:FONT}}>Sends this answer to the team Slack channel configured in Settings &gt; Reports.</p>
+            {slackMsg&&<div style={{marginTop:2,marginBottom:14,fontSize:12,fontWeight:600,color:slackMsg.type==='err'?NAVY:GREEN,fontFamily:FONT}}>{slackMsg.type==='err'?'✕ ':'✓ '}{slackMsg.text}</div>}
+            <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:slackMsg?0:18}}>
+              <button onClick={()=>setSlackModalIdx(null)} disabled={slackSending} style={{padding:'8px 16px',borderRadius:8,border:`1px solid ${borderColor}`,background:'transparent',color:'#64748B',fontSize:13,fontWeight:600,fontFamily:FONT,cursor:slackSending?'default':'pointer'}}>Cancel</button>
+              <button onClick={sendAnswerSlack} disabled={slackSending}
+                style={{padding:'8px 18px',borderRadius:8,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:13,fontWeight:700,fontFamily:FONT,cursor:slackSending?'not-allowed':'pointer',opacity:slackSending?0.6:1}}>
+                {slackSending?'Posting…':'Post to Slack'}
               </button>
             </div>
           </div>
