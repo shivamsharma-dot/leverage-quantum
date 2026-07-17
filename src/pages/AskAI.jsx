@@ -73,10 +73,10 @@ function pickRandom(pool, n){
 }
 
 /* ─── SSE ask ─────────────────────────────────────────────────── */
-async function askClaude(messages, metaToken, memories, onChunk, signal, platformScope='all') {
+async function askClaude(messages, metaToken, memories, onChunk, signal, platformScope='all', convId=null) {
   const res = await fetch('/api/ask-ai', {
     method:'POST', headers:{'Content-Type':'application/json'}, signal,
-    body: JSON.stringify({ messages:messages.slice(-1).map(m=>({role:m.role||'user',content:m.content})), history:messages.slice(0,-1).map(m=>({role:m.role,content:m.content})), metaToken, memories:memories.map(m=>m.content), platformScope })
+    body: JSON.stringify({ messages:messages.slice(-1).map(m=>({role:m.role||'user',content:m.content})), history:messages.slice(0,-1).map(m=>({role:m.role,content:m.content})), metaToken, memories:memories.map(m=>m.content), platformScope, convId })
   })
   if (!res.ok) { const e=await res.json().catch(()=>({error:'Error'})); throw new Error(e.error||`HTTP ${res.status}`) }
   const reader=res.body.getReader(); const dec=new TextDecoder()
@@ -480,7 +480,7 @@ export default function AskAI() {
     try{
       const reply=await askClaude(updated,metaToken,combinedMemories,partial=>{
         setMessages(m=>{const c=[...m];c[c.length-1]={role:'assistant',content:partial,streaming:true};return c})
-      },ac.signal,platformScope)
+      },ac.signal,platformScope,cid)
       const final=[...updated,{role:'assistant',content:reply}]
       setMessages(final); saveMessages(cid,final)
     }catch(e){
@@ -502,7 +502,7 @@ export default function AskAI() {
     try{
       const reply=await askClaude(truncated,metaToken,combinedMemories,partial=>{
         setMessages(m=>{const c=[...m];c[c.length-1]={role:'assistant',content:partial,streaming:true};return c})
-      },ac.signal,platformScope)
+      },ac.signal,platformScope,activeId)
       const final=[...truncated,{role:'assistant',content:reply}]
       setMessages(final); if(activeId) saveMessages(activeId,final)
     }catch(e){

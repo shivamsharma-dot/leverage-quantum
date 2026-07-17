@@ -9,6 +9,63 @@ const TOOL_MODEL = MODEL // NOTE: intermediate rounds must call tools reliably; 
 const SB_URL = process.env.SUPABASE_URL || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
+// USD per 1M tokens -- Sonnet-tier public pricing. This is an ESTIMATE for the Settings > Ask AI
+// cost dashboard, not a real Anthropic billing read (no such API is exposed to a server API key) --
+// the raw token counts logged to ask_ai_usage are the source of truth; re-derive cost from those
+// if pricing ever changes rather than trusting old estimated_cost_usd rows.
+const PRICING = { 'claude-sonnet-4-5': { input: 3.00, output: 15.00 } }
+function estimateCost(model, inputTokens, outputTokens) {
+  const p = PRICING[model] || PRICING['claude-sonnet-4-5']
+  return (inputTokens / 1e6) * p.input + (outputTokens / 1e6) * p.output
+}
+
+// -- Settings > Ask AI: tool-call audit log + token/cost usage logging --------
+// Fire-and-forget-but-awaited (short timeout) writes via the service-role key; failures are
+// swallowed so a logging hiccup never breaks the actual chat response. Reads happen straight from
+// the frontend via the anon key (same pattern as report_logs/source_health) -- no read endpoint here.
+function resultRowCount(result) {
+  if (!result || result.error) return 0
+  if (typeof result.count === 'number') return result.count
+  if (typeof result.rows === 'number') return result.rows
+  for (const k of ['campaigns', 'adGroups', 'keywords', 'searchTerms', 'points', 'data']) {
+    if (Array.isArray(result[k])) return result[k].length
+  }
+  return null
+}
+
+async function logToolCall({ convId, userId, toolName, params, rowCount, latencyMs, hadError }) {
+  if (!SB_KEY) return
+  try {
+    await fetch(`${SB_URL}/rest/v1/ask_ai_tool_calls`, {
+      method: 'POST',
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        conv_id: convId || null, user_id: userId || null, tool_name: toolName,
+        params: JSON.stringify(params || {}).slice(0, 2000), row_count: rowCount == null ? null : rowCount,
+        latency_ms: latencyMs, had_error: !!hadError, created_at: new Date().toISOString()
+      }),
+      signal: AbortSignal.timeout(5000)
+    })
+  } catch {}
+}
+
+async function logUsage({ convId, userId, model, inputTokens, outputTokens }) {
+  if (!SB_KEY) return
+  try {
+    const cost = estimateCost(model, inputTokens, outputTokens)
+    await fetch(`${SB_URL}/rest/v1/ask_ai_usage`, {
+      method: 'POST',
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        conv_id: convId || null, user_id: userId || null, model,
+        input_tokens: inputTokens || 0, output_tokens: outputTokens || 0,
+        estimated_cost_usd: +cost.toFixed(4), created_at: new Date().toISOString()
+      }),
+      signal: AbortSignal.timeout(5000)
+    })
+  } catch {}
+}
+
 const AD_ACCOUNT = 'act_641914389215638'
 const CRM_SHEET_BASE = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet='
 const FB_LEADS_SHEET = CRM_SHEET_BASE + 'FBleads'
@@ -681,7 +738,7 @@ export default async function handler(req, res) {
     return handleRegenerateMemory(res, me)
   }
 
-  const { messages=[], history=[], metaToken: clientToken='', memories=[], platformScope='all' } = req.body||{}
+  const { messages=[], history=[], metaToken: clientToken='', memories=[], platformScope='all', convId=null } = req.body||{}
   if (!messages.length) return res.status(400).json({ error: 'No messages' })
 
   const metaToken = clientToken || await getTokenFromSupabase() || ''
@@ -706,6 +763,7 @@ export default async function handler(req, res) {
     if (!merged.length) return res.status(400).json({ error: 'No valid user message' })
 
     let currentMessages = [...merged]
+    let totalInputTokens = 0, totalOutputTokens = 0
     const MAX_TOOL_ROUNDS = 5
     // User can scope the platform via the composer dropdown — restrict which
     // tools the model even sees, instead of relying on it to infer scope from
@@ -741,6 +799,7 @@ export default async function handler(req, res) {
       }
 
       const response = await anthropicRes.json()
+      if (response.usage) { totalInputTokens += response.usage.input_tokens || 0; totalOutputTokens += response.usage.output_tokens || 0 }
       const toolUseBlocks = (response.content || []).filter(b => b.type === 'tool_use')
 
       if (toolUseBlocks.length === 0 || response.stop_reason === 'end_turn') {
@@ -756,6 +815,7 @@ export default async function handler(req, res) {
             res.write(`data: ${JSON.stringify({delta: chunk})}\n\n`)
             await new Promise(r => setTimeout(r, 0))
           }
+          await logUsage({ convId, userId: me.email, model: TOOL_MODEL, inputTokens: totalInputTokens, outputTokens: totalOutputTokens })
           res.write(`data: ${JSON.stringify({done: true, content: textContent})}\n\n`)
           res.end()
           return
@@ -768,6 +828,7 @@ export default async function handler(req, res) {
 
       for (const toolUse of toolUseBlocks) {
         let result
+        const _toolT0 = Date.now()
         if (toolUse.name === 'query_meta_ads') {
           result = await executeMetaQuery(metaToken, toolUse.input || {})
         } else if (toolUse.name === 'query_google_ads') {
@@ -781,6 +842,7 @@ export default async function handler(req, res) {
         } else {
           result = { error: 'Unknown tool: ' + toolUse.name }
         }
+        await logToolCall({ convId, userId: me.email, toolName: toolUse.name, params: toolUse.input, rowCount: resultRowCount(result), latencyMs: Date.now() - _toolT0, hadError: !!(result && result.error) })
         toolResults.push({
           type: 'tool_result',
           tool_use_id: toolUse.id,
@@ -824,6 +886,7 @@ export default async function handler(req, res) {
     const reader = finalRes.body.getReader()
     const decoder = new TextDecoder()
     let buffer = '', fullText = ''
+    let finalInputTokens = 0, finalOutputTokens = 0
 
     while (true) {
       const { done, value } = await reader.read()
@@ -837,6 +900,12 @@ export default async function handler(req, res) {
         if (data==='[DONE]') continue
         try {
           const parsed = JSON.parse(data)
+          if (parsed.type==='message_start' && parsed.message?.usage) {
+            finalInputTokens = parsed.message.usage.input_tokens || 0
+          }
+          if (parsed.type==='message_delta' && parsed.usage) {
+            finalOutputTokens = parsed.usage.output_tokens || 0
+          }
           if (parsed.type==='content_block_delta' && parsed.delta?.type==='text_delta') {
             const text = parsed.delta.text
             fullText += text
@@ -845,6 +914,10 @@ export default async function handler(req, res) {
         } catch {}
       }
     }
+
+    totalInputTokens += finalInputTokens
+    totalOutputTokens += finalOutputTokens
+    await logUsage({ convId, userId: me.email, model: MODEL, inputTokens: totalInputTokens, outputTokens: totalOutputTokens })
 
     res.write(`data: ${JSON.stringify({done:true, content:fullText})}\n\n`)
     res.end()

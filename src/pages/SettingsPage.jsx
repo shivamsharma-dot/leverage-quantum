@@ -34,6 +34,31 @@ async function getSourceHealth() {
   } catch { return [] }
 }
 
+// Ask AI tool-call audit log + token/cost usage -- written server-side (service-role key) by
+// api/ask-ai.js, read here via the anon key, same pattern as report_logs/source_health above.
+async function getAskAiToolCalls(limit = 200) {
+  try {
+    const res = await fetch(
+      `${RL_SB_URL}/rest/v1/ask_ai_tool_calls?select=*&order=created_at.desc&limit=${limit}`,
+      { headers: { apikey: RL_SB_KEY, Authorization: `Bearer ${RL_SB_KEY}` } }
+    )
+    if (!res.ok) return []
+    return await res.json()
+  } catch { return [] }
+}
+
+async function getAskAiUsage(days = 30) {
+  try {
+    const since = new Date(Date.now() - days * 86400000).toISOString()
+    const res = await fetch(
+      `${RL_SB_URL}/rest/v1/ask_ai_usage?select=*&created_at=gte.${encodeURIComponent(since)}&order=created_at.asc`,
+      { headers: { apikey: RL_SB_KEY, Authorization: `Bearer ${RL_SB_KEY}` } }
+    )
+    if (!res.ok) return []
+    return await res.json()
+  } catch { return [] }
+}
+
 // GitHub's public commit API -- no token needed since this repo is public (60 req/hr per IP
 // is plenty for an occasional Settings-tab load). Doubles as a "what's new" changelog and,
 // sitting right above Activity Log, an easy eyeball-correlation between a deploy and a
@@ -351,7 +376,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const requested = params.get('tab');
-    if (requested && ['data','users','activity','reports','appearance','profile'].includes(requested)) setActiveTab(requested);
+    if (requested && ['data','users','activity','reports','askai','appearance','profile'].includes(requested)) setActiveTab(requested);
   }, [location.search]);
 
   const _actRef = useRef(false)
@@ -380,6 +405,45 @@ export default function SettingsPage() {
     setReportLogsLoading(true)
     setReportLogsList(await getReportLogs(200))
     setReportLogsLoading(false)
+  }
+
+  // Ask AI: tool-call audit log + token/cost usage monitoring
+  const _askaiRef = useRef(false)
+  useEffect(() => {
+    if (activeTab === 'askai' && userIsAdmin && !_askaiRef.current) { _askaiRef.current = true; loadAskAiToolCalls(); loadAskAiUsage() }
+  }, [activeTab, userIsAdmin])
+  const [askaiToolCalls, setAskaiToolCalls] = useState([])
+  const [askaiToolCallsLoading, setAskaiToolCallsLoading] = useState(false)
+  const [askaiToolFilter, setAskaiToolFilter] = useState('all')
+  const [askaiDetail, setAskaiDetail] = useState(null) // selected tool-call row shown in the popup, or null
+  const loadAskAiToolCalls = async () => {
+    setAskaiToolCallsLoading(true)
+    setAskaiToolCalls(await getAskAiToolCalls(300))
+    setAskaiToolCallsLoading(false)
+  }
+  const [askaiUsageRows, setAskaiUsageRows] = useState([])
+  const [askaiUsageLoading, setAskaiUsageLoading] = useState(false)
+  const loadAskAiUsage = async () => {
+    setAskaiUsageLoading(true)
+    setAskaiUsageRows(await getAskAiUsage(30))
+    setAskaiUsageLoading(false)
+  }
+  const [askaiBudgetInput, setAskaiBudgetInput] = useState('')
+  const [askaiBudgetSaving, setAskaiBudgetSaving] = useState(false)
+  const [askaiBudgetMsg, setAskaiBudgetMsg] = useState(null)
+  const saveAskaiBudget = async () => {
+    setAskaiBudgetSaving(true); setAskaiBudgetMsg(null)
+    try {
+      const n = parseFloat(askaiBudgetInput) || 0
+      const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'ask_ai_monthly_budget_usd', value: n }) })
+      if (!r.ok) throw new Error('Save failed')
+      setAskaiBudgetMsg({ type: 'ok', text: 'Saved' })
+    } catch (e) {
+      setAskaiBudgetMsg({ type: 'err', text: e.message })
+    } finally {
+      setAskaiBudgetSaving(false)
+      setTimeout(() => setAskaiBudgetMsg(null), 3000)
+    }
   }
 // Published-sheet connector (admin-configurable CSV URLs)
     const [sheetUrls, setSheetUrls] = useState({})
@@ -528,6 +592,7 @@ export default function SettingsPage() {
                   setSheetInputs(su)
                   if (Array.isArray(pf.custom_data_sources)) setCustomSources(pf.custom_data_sources)
                   if (pf.source_health_schedule) setHealthSchedule(pf.source_health_schedule)
+                  if (pf.ask_ai_monthly_budget_usd != null) setAskaiBudgetInput(String(pf.ask_ai_monthly_budget_usd))
       })
       .catch(() => {})
       .finally(() => setPrefLoading(false))
@@ -1065,6 +1130,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
     ...(userIsAdmin ? [{ id: 'data', label: 'Data', icon: 'layers' }] : []),
     ...(userIsAdmin ? [{ id: 'users', label: 'User Access', icon: 'users' }, { id: 'activity', label: 'Activity Log', icon: 'activity' }] : []),
     ...(userIsAdmin ? [{ id: 'reports', label: 'Reports', icon: 'mail' }] : []),
+    ...(userIsAdmin ? [{ id: 'askai', label: 'Ask AI', icon: 'chat' }] : []),
     ...(userIsAdmin ? [{ id: 'appearance', label: 'Appearance', icon: 'eye' }] : []),
     { id: 'profile', label: 'Profile', icon: 'person' },
   ]
@@ -2067,6 +2133,202 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               </div>
             </>
           )}
+
+          {/* ---------------- ASK AI ---------------- */}
+          {activeTab === 'askai' && userIsAdmin && (() => {
+            const todayStr = new Date().toISOString().slice(0, 10)
+            const monthStr = todayStr.slice(0, 7)
+            const byDay = {}
+            askaiUsageRows.forEach(r => {
+              const day = (r.created_at || '').slice(0, 10)
+              if (!byDay[day]) byDay[day] = { day, requests: 0, input: 0, output: 0, cost: 0 }
+              byDay[day].requests += 1
+              byDay[day].input += r.input_tokens || 0
+              byDay[day].output += r.output_tokens || 0
+              byDay[day].cost += parseFloat(r.estimated_cost_usd || 0)
+            })
+            const askaiDaily = Object.values(byDay).sort((a, b) => b.day.localeCompare(a.day))
+            const todayRow = byDay[todayStr] || { requests: 0, input: 0, output: 0, cost: 0 }
+            const monthCost = askaiDaily.filter(d => d.day.startsWith(monthStr)).reduce((s, d) => s + d.cost, 0)
+            const budgetNum = parseFloat(askaiBudgetInput) || 0
+            const budgetPct = budgetNum > 0 ? Math.min(100, (monthCost / budgetNum) * 100) : 0
+            const budgetColor = budgetPct >= 90 ? '#1F3C84' : budgetPct >= 70 ? '#1C9FD4' : '#4CAE6F'
+            const askaiToolNames = Array.from(new Set(askaiToolCalls.map(c => c.tool_name).filter(Boolean))).sort()
+            const askaiFilteredCalls = askaiToolFilter === 'all' ? askaiToolCalls : askaiToolCalls.filter(c => c.tool_name === askaiToolFilter)
+            const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n || 0)
+            return (
+            <>
+              <div className={styles.card}>
+                <div className={styles.activityHeader}>
+                  <div>
+                    <h3 className={styles.cardTitle}>Ask AI Usage &amp; Cost</h3>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>Token counts come from each response's real usage numbers; cost is an estimate (Sonnet-tier public pricing) for budgeting, not a live Anthropic billing read — no such API is exposed to a server key.</p>
+                  </div>
+                  <button className={styles.ghostBtn} onClick={loadAskAiUsage}>
+                    {askaiUsageLoading ? 'Loading…' : '↻ Refresh'}
+                  </button>
+                </div>
+
+                <div className={styles.statStrip}>
+                  <div className={styles.statCard}>
+                    <div><div className={styles.statLabel}>Today's cost (est.)</div><div className={styles.statValue}>${todayRow.cost.toFixed(2)}</div></div>
+                    <span className={`${styles.statIcon} ${styles.statIconNavy}`}>
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>
+                    </span>
+                  </div>
+                  <div className={styles.statCard}>
+                    <div><div className={styles.statLabel}>Today's tokens</div><div className={styles.statValue}>{fmtTok(todayRow.input + todayRow.output)}</div></div>
+                    <span className={`${styles.statIcon} ${styles.statIconBlue}`}>
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                    </span>
+                  </div>
+                  <div className={styles.statCard}>
+                    <div><div className={styles.statLabel}>This month (est.)</div><div className={styles.statValue}>${monthCost.toFixed(2)}</div></div>
+                    <span className={`${styles.statIcon} ${styles.statIconCyan}`}>
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>
+                    </span>
+                  </div>
+                  <div className={styles.statCard}>
+                    <div><div className={styles.statLabel}>Tool calls logged</div><div className={styles.statValue}>{askaiToolCalls.length}</div></div>
+                    <span className={`${styles.statIcon} ${styles.statIconGreen}`}>
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 16, padding: '14px 16px', background: '#F9FAFB', border: '0.5px solid #EEF1F6', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: budgetNum > 0 ? 10 : 0 }}>
+                    <div style={{ minWidth: 200 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Monthly budget (self-declared)</div>
+                      <div style={{ fontSize: 11.5, color: '#9CA3AF', lineHeight: 1.4 }}>No public Anthropic API exposes remaining account credits — set your own monthly ceiling to get an early warning as estimated spend approaches it.</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>$</span>
+                      <input type="number" min="0" step="1" value={askaiBudgetInput} onChange={e => setAskaiBudgetInput(e.target.value)}
+                        style={{ width: 90, padding: '7px 10px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif" }} />
+                      <button className={styles.primaryBtn} onClick={saveAskaiBudget} disabled={askaiBudgetSaving} style={{ padding: '7px 16px' }}>
+                        {askaiBudgetSaving ? 'Saving…' : 'Save'}
+                      </button>
+                      {askaiBudgetMsg && <span style={{ fontSize: 11, fontWeight: 700, color: askaiBudgetMsg.type === 'err' ? '#1F3C84' : '#15803D', whiteSpace: 'nowrap' }}>{askaiBudgetMsg.type === 'err' ? '✕ ' : '✓ '}{askaiBudgetMsg.text}</span>}
+                    </div>
+                  </div>
+                  {budgetNum > 0 && (
+                    <div>
+                      <div style={{ height: 8, borderRadius: 4, background: '#E5E7EB', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${budgetPct}%`, background: budgetColor, borderRadius: 4, transition: 'width .3s ease' }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 5 }}>${monthCost.toFixed(2)} of ${budgetNum.toFixed(2)} used this month ({budgetPct.toFixed(0)}%){budgetPct >= 90 ? ' — approaching the ceiling' : ''}</div>
+                    </div>
+                  )}
+                </div>
+
+                {askaiDaily.length > 0 && (
+                  <div className={styles.alCard} style={{ marginTop: 16 }}>
+                    <div className={styles.tableWrap}>
+                      <table className={styles.alTable}>
+                        <thead className={styles.alHead}>
+                          <tr>{['DATE', 'REQUESTS', 'INPUT TOKENS', 'OUTPUT TOKENS', 'EST. COST'].map(h => <th key={h}>{h}</th>)}</tr>
+                        </thead>
+                        <tbody>
+                          {askaiDaily.slice(0, 14).map(d => (
+                            <tr key={d.day} className={styles.alRow}>
+                              <td className={styles.alTd}>{new Date(d.day + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                              <td className={styles.alTd}>{d.requests}</td>
+                              <td className={styles.alTd}>{fmtTok(d.input)}</td>
+                              <td className={styles.alTd}>{fmtTok(d.output)}</td>
+                              <td className={styles.alTd}>${d.cost.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className={styles.alFoot}>Showing last {Math.min(askaiDaily.length, 14)} days</div>
+                  </div>
+                )}
+                {askaiDaily.length === 0 && !askaiUsageLoading && (
+                  <div className={styles.empty} style={{ marginTop: 16 }}>No usage logged yet — send a message in Ask AI to start tracking.</div>
+                )}
+              </div>
+
+              <div className={styles.card}>
+                <div className={styles.activityHeader}>
+                  <div>
+                    <h3 className={styles.cardTitle}>Tool-Call Audit Log</h3>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>Every live Meta/Google/CRM query the assistant actually ran, with parameters, row counts, and latency — click a row to see the full request.</p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Dropdown value={askaiToolFilter} onChange={setAskaiToolFilter}
+                      options={[{ value: 'all', label: 'All tools' }, ...askaiToolNames.map(n => ({ value: n, label: n }))]} />
+                    <button className={styles.ghostBtn} onClick={loadAskAiToolCalls}>
+                      {askaiToolCallsLoading ? 'Loading…' : '↻ Refresh'}
+                    </button>
+                  </div>
+                </div>
+
+                {askaiFilteredCalls.length === 0 && !askaiToolCallsLoading && (
+                  <div className={styles.empty}>No tool calls logged yet.</div>
+                )}
+
+                {askaiFilteredCalls.length > 0 && (
+                  <div className={styles.alCard}>
+                    <div className={styles.tableWrap}>
+                      <table className={styles.alTable}>
+                        <thead className={styles.alHead}>
+                          <tr>{['TOOL', 'ROWS', 'LATENCY', 'STATUS', 'WHEN', ''].map(h => <th key={h}>{h}</th>)}</tr>
+                        </thead>
+                        <tbody>
+                          {askaiFilteredCalls.slice(0, 200).map((c, idx) => {
+                            const dt = c.created_at ? new Date(c.created_at) : null
+                            const dateStr = dt ? dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'
+                            const timeStr = dt ? dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''
+                            return (
+                              <tr key={c.id || idx} className={styles.alRow}>
+                                <td className={`${styles.alTd} ${styles.alPage}`}>{c.tool_name || '—'}</td>
+                                <td className={styles.alTd}>{c.row_count == null ? '—' : c.row_count}</td>
+                                <td className={styles.alTd}>{c.latency_ms != null ? `${c.latency_ms}ms` : '—'}</td>
+                                <td className={styles.alTd}>
+                                  <span className={styles.alTag} style={{ background: c.had_error ? '#E8EFF9' : '#EAF7EE', color: c.had_error ? '#1F3C84' : '#4CAE6F' }}>{c.had_error ? 'Error' : 'OK'}</span>
+                                </td>
+                                <td className={styles.alTd}>{dateStr}{timeStr ? ` · ${timeStr}` : ''}</td>
+                                <td className={styles.alTd}>
+                                  <button className={styles.ghostBtn} style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => setAskaiDetail(c)}>View</button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className={styles.alFoot}>Showing {Math.min(askaiFilteredCalls.length, 200)} of {askaiFilteredCalls.length} {askaiFilteredCalls.length === 1 ? 'call' : 'calls'}</div>
+                  </div>
+                )}
+              </div>
+
+              {askaiDetail && (
+                <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setAskaiDetail(null) }}>
+                  <div className={styles.dsModal}>
+                    <div className={styles.dsModalHead}>
+                      <div className={styles.dsModalTitle}>{askaiDetail.tool_name}</div>
+                      <button type="button" className={styles.dsModalClose} onClick={() => setAskaiDetail(null)}>
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                      </button>
+                    </div>
+                    <p className={styles.dsModalSub}>
+                      {askaiDetail.created_at ? new Date(askaiDetail.created_at).toLocaleString('en-IN') : ''} &middot; {askaiDetail.user_id || 'unknown user'} &middot; {askaiDetail.row_count == null ? '—' : askaiDetail.row_count} rows &middot; {askaiDetail.latency_ms != null ? `${askaiDetail.latency_ms}ms` : '—'}
+                    </p>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Parameters</div>
+                    <pre style={{ margin: 0, padding: 12, background: '#F8FAFC', border: '0.5px solid #EEF1F6', borderRadius: 10, fontSize: 12, fontFamily: 'monospace', color: '#1E293B', overflowX: 'auto', maxHeight: 280, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                      {(() => { try { return JSON.stringify(JSON.parse(askaiDetail.params || '{}'), null, 2) } catch { return askaiDetail.params || '{}' } })()}
+                    </pre>
+                    <div className={styles.dsModalActions}>
+                      <button type="button" className={styles.dsBtnGhost} onClick={() => setAskaiDetail(null)}>Close</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+            )
+          })()}
 
           {/* ---------------- APPEARANCE ---------------- */}
           {activeTab === 'appearance' && userIsAdmin && (
