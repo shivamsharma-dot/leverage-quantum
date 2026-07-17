@@ -95,6 +95,31 @@ async function askClaude(messages, metaToken, memories, onChunk, signal, platfor
 
 /* ─── markdown ────────────────────────────────────────────────── */
 function ih(t){return t.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}\u{20D0}-\u{20FF}]/gu,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/`([^`]+)`/g,`<code style="background:#F1F5F9;padding:1px 5px;border-radius:4px;font-size:12px;font-family:monospace">$1</code>`)}
+/* string-returning sibling of Markdown() below, for the "email this answer" export —
+   reuses ih() for inline escaping/bold/italic/code so the two never drift on that logic,
+   but builds an HTML string (for Resend) instead of JSX. */
+function mdToEmailHtml(text){
+  const lines=(text||'').split('\n'); let i=0; const out=[]
+  while(i<lines.length){
+    const l=lines[i]
+    if(l.startsWith('```')){const buf=[];i++;while(i<lines.length&&!lines[i].startsWith('```')){buf.push(lines[i]);i++};i++
+      out.push(`<pre style="background:#F1F5F9;padding:12px;border-radius:8px;font-family:monospace;font-size:12px;overflow-x:auto">${buf.join('\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`);continue}
+    if(/^\|(.+)\|$/.test(l)&&i+1<lines.length&&/^\|[-:\s|]+\|$/.test(lines[i+1])){
+      const head=l.split('|').slice(1,-1).map(s=>s.trim());i+=2;const rows=[]
+      while(i<lines.length&&/^\|(.+)\|$/.test(lines[i])){rows.push(lines[i].split('|').slice(1,-1).map(s=>s.trim()));i++}
+      out.push(`<table style="border-collapse:collapse;width:100%;font-size:13px;margin:12px 0"><thead><tr>${head.map(h=>`<th style="border:1px solid #E5E7EB;padding:8px 12px;background:#F3F4F6;text-align:left;font-weight:700;color:#0F172A">${ih(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td style="border:1px solid #E5E7EB;padding:8px 12px;color:#374151">${ih(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`);continue}
+    if(/^#{1,3}\s/.test(l)){const lv=l.match(/^#+/)[0].length;const sz=lv===1?20:lv===2?17:15
+      out.push(`<div style="font-size:${sz}px;font-weight:800;color:#1F3C84;margin:16px 0 6px">${ih(l.replace(/^#+\s/,''))}</div>`);i++;continue}
+    if(/^[-•*]\s/.test(l)){const items=[];while(i<lines.length&&/^[-•*]\s/.test(lines[i])){items.push(lines[i].replace(/^[-•*]\s/,''));i++}
+      out.push(`<ul style="margin:8px 0;padding-left:18px;color:#374151;font-size:14px;line-height:1.7">${items.map(it=>`<li style="margin-bottom:4px">${ih(it)}</li>`).join('')}</ul>`);continue}
+    if(/^\d+\.\s/.test(l)){const items=[];while(i<lines.length&&/^\d+\.\s/.test(lines[i])){items.push(lines[i].replace(/^\d+\.\s/,''));i++}
+      out.push(`<ol style="margin:8px 0;padding-left:18px;color:#374151;font-size:14px;line-height:1.7">${items.map(it=>`<li style="margin-bottom:4px">${ih(it)}</li>`).join('')}</ol>`);continue}
+    if(/^(---|\*\*\*)/.test(l.trim())){out.push(`<hr style="border:none;border-top:1px solid #E5E7EB;margin:14px 0">`);i++;continue}
+    if(l.trim()===''){i++;continue}
+    out.push(`<p style="margin:5px 0;color:#1E293B;font-size:14px;line-height:1.7">${ih(l)}</p>`);i++
+  }
+  return out.join('\n')
+}
 function Markdown({text}){
   const out=[]; const lines=(text||'').split('\n'); let i=0
   while(i<lines.length){
@@ -157,6 +182,7 @@ function Ico({n,s=16,c='currentColor',sw=2}){
     pin:      <><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.5-2.5V8l1.5-2H5l1.5 2v6.5z"/></>,
     edit:     <><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4z"/></>,
     mic:      <><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></>,
+    mail:     <><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></>,
   }
   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d[n]}</svg>
 }
@@ -307,6 +333,10 @@ export default function AskAI() {
   const [copied, setCopied]       = useState(null)
   const [editingMsgIdx, setEditingMsgIdx] = useState(null) // index of the user message currently being edited-and-resent, or null
   const [openTraceIdx, setOpenTraceIdx] = useState(null) // index of the assistant message whose "what I checked" trace is expanded, or null
+  const [emailModalIdx, setEmailModalIdx] = useState(null) // index of the assistant message being emailed via the confirm modal, or null
+  const [emailRecipients, setEmailRecipients] = useState('')
+  const [emailSending, setEmailSending] = useState(false)
+  const [emailMsg, setEmailMsg] = useState(null)
   const [editingMsgText, setEditingMsgText] = useState('')
   const [showWelcomeAnim, setShowWelcomeAnim] = useState(true)
 
@@ -581,6 +611,27 @@ export default function AskAI() {
       setMessages(final); saveMessages(cid,final)
     }finally{setLoading(false)}
   },[messages,loading,activeId,metaToken,combinedMemories,saveMessages,platformScope])
+
+  /* email an answer — wires into the existing Reports send infrastructure (/api/send-report),
+     explicit-confirm gated since sending mail is an audience-expanding action. */
+  const sendAnswerEmail = useCallback(async()=>{
+    const idx=emailModalIdx; if(idx==null) return
+    const m=messages[idx]; if(!m) return
+    const question=messages[idx-1]?.content||''
+    const recipients=emailRecipients.split(',').map(s=>s.trim()).filter(Boolean)
+    if(!recipients.length){ setEmailMsg({type:'err',text:'Add at least one recipient'}); return }
+    setEmailSending(true); setEmailMsg(null)
+    try{
+      const r=await fetch('/api/send-report',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({type:'chat_answer',question,answerHtml:mdToEmailHtml(m.content),recipients})})
+      const d=await r.json().catch(()=>({}))
+      if(!r.ok) throw new Error(d.error||'Send failed')
+      setEmailMsg({type:'ok',text:'Sent'})
+      setTimeout(()=>{setEmailModalIdx(null);setEmailMsg(null)},1200)
+    }catch(e){
+      setEmailMsg({type:'err',text:e.message})
+    }finally{setEmailSending(false)}
+  },[emailModalIdx,messages,emailRecipients])
 
   /* memories */
   const addMem = async()=>{
@@ -1090,11 +1141,11 @@ export default function AskAI() {
                               <Markdown text={m.content+(m.streaming?'▍':'')}/>
                               {!m.streaming&&(
                                 <div style={{display:'flex',gap:4,marginTop:8}}>
-                                  {[['copy','Copy'],['refresh','Retry']].map(([ic,lbl])=>(
+                                  {[['copy','Copy'],['refresh','Retry'],['mail','Email']].map(([ic,lbl])=>(
                                     <button key={ic} title={lbl} className="mabtn" disabled={ic==='refresh'&&loading}
                                       style={{display:'flex',alignItems:'center',gap:5,padding:'5px 9px',border:`1px solid ${borderColor}`,background:'transparent',borderRadius:7,cursor:(ic==='refresh'&&loading)?'default':'pointer',color:'#64748B',fontSize:11.5,fontWeight:500,fontFamily:FONT,transition:'all .15s',opacity:(ic==='refresh'&&loading)?0.5:1}}
-                                      onClick={()=>{if(ic==='copy'){navigator.clipboard?.writeText(m.content);setCopied(k);setTimeout(()=>setCopied(null),1500)}else if(ic==='refresh'){regenerate(k)}}}>
-                                      <Ico n={copied===k&&ic==='copy'?'check':ic==='refresh'?'refresh':'copy'} s={12} c={copied===k&&ic==='copy'?GREEN:'#64748B'}/>{lbl}
+                                      onClick={()=>{if(ic==='copy'){navigator.clipboard?.writeText(m.content);setCopied(k);setTimeout(()=>setCopied(null),1500)}else if(ic==='refresh'){regenerate(k)}else if(ic==='mail'){setEmailModalIdx(k);setEmailRecipients(uid!=='default'?uid:'');setEmailMsg(null)}}}>
+                                      <Ico n={copied===k&&ic==='copy'?'check':ic==='refresh'?'refresh':ic==='mail'?'mail':'copy'} s={12} c={copied===k&&ic==='copy'?GREEN:'#64748B'}/>{lbl}
                                     </button>
                                   ))}
                                 </div>
@@ -1133,6 +1184,32 @@ export default function AskAI() {
           )}
         </div>
       </div>
+
+      {/* Email-this-answer confirm modal — sending mail is audience-expanding, so it's always an explicit confirm, never a silent send */}
+      {emailModalIdx!=null&&(
+        <div onClick={e=>{if(e.target===e.currentTarget&&!emailSending)setEmailModalIdx(null)}} style={{position:'fixed',inset:0,zIndex:200,background:'rgba(15,23,42,0.45)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{width:420,maxWidth:'calc(100vw - 32px)',background:'#fff',borderRadius:16,padding:'22px 22px 20px',boxShadow:'0 20px 60px -12px rgba(15,23,42,0.35)'}}>
+            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:2}}>
+              <div style={{fontSize:16,fontWeight:800,color:'#0F172A',fontFamily:FONT}}>Email this answer</div>
+              <button onClick={()=>!emailSending&&setEmailModalIdx(null)} style={{border:'none',background:'transparent',color:'#94A3B8',cursor:'pointer',padding:4,display:'flex'}}>
+                <Ico n="close" s={16} c="#94A3B8"/>
+              </button>
+            </div>
+            <p style={{fontSize:12,color:'#94A3B8',margin:'2px 0 16px',lineHeight:1.5,fontFamily:FONT}}>Sends this answer as a branded email via Resend. Comma-separate multiple recipients.</p>
+            <label style={{fontSize:11,fontWeight:700,color:'#374151',textTransform:'uppercase',letterSpacing:'0.05em',fontFamily:FONT}}>Recipients</label>
+            <input value={emailRecipients} onChange={e=>setEmailRecipients(e.target.value)} placeholder="name@leverageedu.com, name2@leverageedu.com"
+              style={{width:'100%',marginTop:6,padding:'9px 12px',borderRadius:9,border:`1px solid ${borderColor}`,fontSize:13,fontFamily:FONT,color:'#1E293B',outline:'none',boxSizing:'border-box'}}/>
+            {emailMsg&&<div style={{marginTop:10,fontSize:12,fontWeight:600,color:emailMsg.type==='err'?NAVY:GREEN,fontFamily:FONT}}>{emailMsg.type==='err'?'✕ ':'✓ '}{emailMsg.text}</div>}
+            <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:18}}>
+              <button onClick={()=>setEmailModalIdx(null)} disabled={emailSending} style={{padding:'8px 16px',borderRadius:8,border:`1px solid ${borderColor}`,background:'transparent',color:'#64748B',fontSize:13,fontWeight:600,fontFamily:FONT,cursor:emailSending?'default':'pointer'}}>Cancel</button>
+              <button onClick={sendAnswerEmail} disabled={emailSending||!emailRecipients.trim()}
+                style={{padding:'8px 18px',borderRadius:8,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:13,fontWeight:700,fontFamily:FONT,cursor:(emailSending||!emailRecipients.trim())?'not-allowed':'pointer',opacity:(emailSending||!emailRecipients.trim())?0.6:1}}>
+                {emailSending?'Sending…':'Send email'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

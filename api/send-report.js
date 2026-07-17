@@ -86,6 +86,79 @@ async function getReportConfig() {
   return out
 }
 
+// ── Ask AI "email this answer" — standalone, deliberately NOT sharing buildReport()'s
+// Meta-token/campaign-table logic (that's tightly coupled to the auto-generated report
+// shape). This is a much simpler wrapper: brand header/footer + the answer's own HTML.
+function buildChatAnswerEmail({ question, answerHtml, askedBy }) {
+  const todayLabel = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="color-scheme" content="light">
+<title>Ask AI answer — ${todayLabel}</title></head>
+<body style="margin:0;padding:0;background:#F0F4F8;font-family:${FONT};color:#0F172A;-webkit-font-smoothing:antialiased">
+<div style="max-width:640px;margin:0 auto;padding:24px 12px">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,${NAVY} 0%,#0F2560 60%,#0D3D6B 100%);border-radius:16px 16px 0 0;overflow:hidden">
+    <tr><td style="padding:24px 28px 20px">
+      <table cellpadding="0" cellspacing="0"><tr>
+        <td style="vertical-align:middle;padding-right:10px">
+          <table cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px"><tr>${LOGO_ICON_SVG.replace('<svg','<td><svg').replace('</svg>','</svg></td>')}</tr></table>
+        </td>
+        <td style="vertical-align:middle">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.15em;color:rgba(255,255,255,0.45);text-transform:uppercase;line-height:1">LEVERAGE</div>
+          <div style="font-size:16px;font-weight:800;color:${BLUE};letter-spacing:.08em;text-transform:uppercase;line-height:1.2">QUANTUM</div>
+        </td>
+      </tr></table>
+      <div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:rgba(255,255,255,0.5);text-transform:uppercase;margin:18px 0 6px">Ask AI answer</div>
+      <div style="font-size:16px;font-weight:700;color:#fff;line-height:1.4">${(question||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:8px">Shared by ${askedBy||'a teammate'} · ${todayLabel}</div>
+    </td></tr>
+  </table>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border-left:0.5px solid #E2E8F0;border-right:0.5px solid #E2E8F0;border-top:none">
+    <tr><td style="padding:22px 26px">${answerHtml}</td></tr>
+  </table>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:${NAVY};border-radius:0 0 16px 16px;overflow:hidden">
+    <tr><td style="padding:14px 28px"><span style="font-size:10.5px;color:rgba(255,255,255,0.3)">Leverage Quantum Ask AI · ${todayLabel} · Do not reply</span></td></tr>
+  </table>
+</div>
+</body>
+</html>`
+}
+
+async function handleChatAnswerEmail(req, res) {
+  const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (!canAccessDashboard(me.role, 'ask_ai')) return res.status(403).json({ error: 'Forbidden' })
+
+  const RESEND_KEY = process.env.RESEND_API_KEY
+  if (!RESEND_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not configured' })
+
+  const { question, answerHtml } = req.body || {}
+  const recipients = Array.isArray(req.body?.recipients) ? req.body.recipients.filter(Boolean) : []
+  if (!answerHtml) return res.status(400).json({ error: 'No answer content to send' })
+  if (!recipients.length) return res.status(400).json({ error: 'No recipients specified' })
+
+  try {
+    const cfg = await getReportConfig()
+    const fromAddr = cfg.report_from_email
+      ? `${cfg.report_from_name || 'Leverage Quantum'} <${cfg.report_from_email}>`
+      : (process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <quantum@platform.leverageedu.com>')
+    const html = buildChatAnswerEmail({ question, answerHtml, askedBy: me.email })
+    const sendRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_KEY}` },
+      body: JSON.stringify({ from: fromAddr, to: recipients, subject: `Ask AI: ${(question||'').slice(0,80)}`, html }),
+    })
+    const sendData = await sendRes.json()
+    if (!sendRes.ok) throw new Error(sendData.message || JSON.stringify(sendData))
+    await logReport({ report_type: 'chat answer', recipients, status: 'sent', triggered_by: me.email })
+    return res.status(200).json({ ok: true, success: true, recipients, id: sendData.id })
+  } catch (e) {
+    await logReport({ report_type: 'chat answer', recipients, status: 'failed', error: e.message, triggered_by: me.email })
+    return res.status(500).json({ error: e.message })
+  }
+}
+
 async function logReport({ report_type, recipients, status, error = null, triggered_by = 'cron' }) {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/report_logs`, {
@@ -419,6 +492,10 @@ async function buildReport(token, reportType) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
+
+  if ((req.body?.type || req.query?.type) === 'chat_answer') {
+    return handleChatAnswerEmail(req, res)
+  }
 
   const RESEND_KEY = process.env.RESEND_API_KEY
   if (!RESEND_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not configured' })
