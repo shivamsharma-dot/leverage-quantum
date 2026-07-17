@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { toast } from './ToastHost'
+import Button from './Button'
 
 export default function ExportButton({ data, filename, columns }) {
   const [open, setOpen] = useState(false)
@@ -86,30 +87,22 @@ export default function ExportButton({ data, filename, columns }) {
 
   return (
     <div style={{position:'relative'}}>
-      <button
+      <Button
+        size="sm" variant="secondary"
         onClick={() => setOpen(o => !o)}
-        style={{
-          display:'flex', alignItems:'center', gap:6,
-          padding:'7px 13px', borderRadius:8,
-          background:'#fff', border:'1px solid #E5E7EB',
-          color:'#374151', fontSize:12.5, fontWeight:600,
-          cursor:'pointer', fontFamily:'Inter,sans-serif',
-          boxShadow:'0 1px 2px rgba(0,0,0,0.04)',
-          transition:'all .15s'
-        }}
-        onMouseOver={e=>e.currentTarget.style.borderColor='#1C9FD4'}
-        onMouseOut={e=>e.currentTarget.style.borderColor='#E5E7EB'}
+        icon={
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        }
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
         Export
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           <polyline points="6 9 12 15 18 9"/>
         </svg>
-      </button>
+      </Button>
 
       {open && (
         <>
@@ -126,7 +119,7 @@ export default function ExportButton({ data, filename, columns }) {
               borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
               transition:'background .1s'
             }}
-            onMouseOver={e=>e.currentTarget.style.background='#F9FAFB'}
+            onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
             onMouseOut={e=>e.currentTarget.style.background='none'}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round">
                 <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -141,7 +134,7 @@ export default function ExportButton({ data, filename, columns }) {
               borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
               transition:'background .1s'
             }}
-            onMouseOver={e=>e.currentTarget.style.background='#F9FAFB'}
+            onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
             onMouseOut={e=>e.currentTarget.style.background='none'}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366F1" strokeWidth="2" strokeLinecap="round">
                 <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -159,7 +152,7 @@ export default function ExportButton({ data, filename, columns }) {
               borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
               transition:'background .1s', opacity: sheetsBusy ? 0.6 : 1
             }}
-            onMouseOver={e=>e.currentTarget.style.background='#F9FAFB'}
+            onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
             onMouseOut={e=>e.currentTarget.style.background='none'}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round">
                 <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -176,7 +169,7 @@ export default function ExportButton({ data, filename, columns }) {
               borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
               transition:'background .1s', opacity: slackBusy ? 0.6 : 1
             }}
-            onMouseOver={e=>e.currentTarget.style.background='#F9FAFB'}
+            onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
             onMouseOut={e=>e.currentTarget.style.background='none'}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4A154B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
