@@ -49,6 +49,20 @@ async function logToolCall({ convId, userId, toolName, params, rowCount, latency
   } catch {}
 }
 
+// Plain-English one-liner for the "what I checked" trace shown above an answer
+// (collapsed by default in the UI) — ThoughtSpot Spotter and Perplexity both treat
+// this kind of verifiability as a trust feature, not clutter, for a numbers tool.
+function buildToolSummary(name, input) {
+  input = input || {}
+  const range = input.time_range ? `${input.time_range.since} to ${input.time_range.until}`
+    : input.date_preset || (input.from && input.to ? `${input.from} to ${input.to}` : input.dateRange) || (input.since || input.until ? `${input.since||'start'} to ${input.until||'now'}` : 'last 30d')
+  if (name === 'query_meta_ads') return `Checked Meta ${input.level || 'account'} data (${range})`
+  if (name === 'query_google_ads') return `Checked Google Ads ${input.tab || 'data'} (${range})`
+  if (name === 'query_meta_crm_leads') return `Checked Meta CRM leads (${range})`
+  if (name === 'query_google_crm_leads') return `Checked Google CRM leads (${range})`
+  return `Ran ${name}`
+}
+
 async function logUsage({ convId, userId, model, inputTokens, outputTokens }) {
   if (!SB_KEY) return
   try {
@@ -795,6 +809,7 @@ export default async function handler(req, res) {
       if (!anthropicRes.ok) {
         const err = await anthropicRes.json().catch(()=>({}))
         const msg = err?.error?.message || `Anthropic API error ${anthropicRes.status}`
+        if (res.headersSent) { res.write(`data: ${JSON.stringify({error:msg})}\n\n`); res.end(); return }
         return res.status(anthropicRes.status).json({ error: msg })
       }
 
@@ -805,9 +820,11 @@ export default async function handler(req, res) {
       if (toolUseBlocks.length === 0 || response.stop_reason === 'end_turn') {
         const textContent = (response.content || []).filter(b => b.type === 'text').map(b => b.text).join('')
         if (textContent) {
-          res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
-          res.setHeader('Cache-Control', 'no-cache, no-transform')
-          res.setHeader('X-Accel-Buffering', 'no')
+          if (!res.headersSent) {
+            res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+            res.setHeader('Cache-Control', 'no-cache, no-transform')
+            res.setHeader('X-Accel-Buffering', 'no')
+          }
           const chars = textContent.split('')
           const CHUNK_SIZE = 20
           for (let i = 0; i < chars.length; i += CHUNK_SIZE) {
@@ -826,6 +843,15 @@ export default async function handler(req, res) {
       const assistantMessage = { role: 'assistant', content: response.content }
       const toolResults = []
 
+      // Committing to streaming mode here: we know at least one real tool call is about to run,
+      // so open the SSE channel now to emit a "what I checked" trace event per tool as it completes
+      // (collapsed-by-default UI above the answer), instead of only logging to the admin audit log.
+      if (!res.headersSent) {
+        res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+        res.setHeader('Cache-Control', 'no-cache, no-transform')
+        res.setHeader('X-Accel-Buffering', 'no')
+      }
+
       for (const toolUse of toolUseBlocks) {
         let result
         const _toolT0 = Date.now()
@@ -842,7 +868,9 @@ export default async function handler(req, res) {
         } else {
           result = { error: 'Unknown tool: ' + toolUse.name }
         }
-        await logToolCall({ convId, userId: me.email, toolName: toolUse.name, params: toolUse.input, rowCount: resultRowCount(result), latencyMs: Date.now() - _toolT0, hadError: !!(result && result.error) })
+        const hadError = !!(result && result.error)
+        await logToolCall({ convId, userId: me.email, toolName: toolUse.name, params: toolUse.input, rowCount: resultRowCount(result), latencyMs: Date.now() - _toolT0, hadError })
+        res.write(`data: ${JSON.stringify({tool_call:{name:toolUse.name, summary:buildToolSummary(toolUse.name,toolUse.input), error:hadError}})}\n\n`)
         toolResults.push({
           type: 'tool_result',
           tool_use_id: toolUse.id,
@@ -876,12 +904,16 @@ export default async function handler(req, res) {
 
     if (!finalRes.ok) {
       const err = await finalRes.json().catch(()=>({}))
-      return res.status(finalRes.status).json({ error: err?.error?.message || 'Final stream error' })
+      const msg = err?.error?.message || 'Final stream error'
+      if (res.headersSent) { res.write(`data: ${JSON.stringify({error:msg})}\n\n`); res.end(); return }
+      return res.status(finalRes.status).json({ error: msg })
     }
 
-    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
-    res.setHeader('Cache-Control', 'no-cache, no-transform')
-    res.setHeader('X-Accel-Buffering', 'no')
+    if (!res.headersSent) {
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+      res.setHeader('Cache-Control', 'no-cache, no-transform')
+      res.setHeader('X-Accel-Buffering', 'no')
+    }
 
     const reader = finalRes.body.getReader()
     const decoder = new TextDecoder()

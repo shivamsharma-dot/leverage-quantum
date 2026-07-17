@@ -73,7 +73,7 @@ function pickRandom(pool, n){
 }
 
 /* ─── SSE ask ─────────────────────────────────────────────────── */
-async function askClaude(messages, metaToken, memories, onChunk, signal, platformScope='all', convId=null) {
+async function askClaude(messages, metaToken, memories, onChunk, signal, platformScope='all', convId=null, onToolCall=null) {
   const res = await fetch('/api/ask-ai', {
     method:'POST', headers:{'Content-Type':'application/json'}, signal,
     body: JSON.stringify({ messages:messages.slice(-1).map(m=>({role:m.role||'user',content:m.content})), history:messages.slice(0,-1).map(m=>({role:m.role,content:m.content})), metaToken, memories:memories.map(m=>m.content), platformScope, convId })
@@ -87,7 +87,7 @@ async function askClaude(messages, metaToken, memories, onChunk, signal, platfor
     const lines=buf.split('\n'); buf=lines.pop()
     for(const line of lines){
       if(!line.startsWith('data: '))continue
-      try{ const p=JSON.parse(line.slice(6)); if(p.error)throw new Error(p.error); if(p.delta){full+=p.delta;onChunk?.(full)} if(p.done)return p.content||full } catch(e){if(e.message&&!e.message.includes('JSON'))throw e}
+      try{ const p=JSON.parse(line.slice(6)); if(p.error)throw new Error(p.error); if(p.tool_call){onToolCall?.(p.tool_call);continue} if(p.delta){full+=p.delta;onChunk?.(full)} if(p.done)return p.content||full } catch(e){if(e.message&&!e.message.includes('JSON'))throw e}
     }
   }
   return full
@@ -306,6 +306,7 @@ export default function AskAI() {
   const [personFilter, setPersonFilter] = useState('all') // 'all' | 'mine' | '<email>'
   const [copied, setCopied]       = useState(null)
   const [editingMsgIdx, setEditingMsgIdx] = useState(null) // index of the user message currently being edited-and-resent, or null
+  const [openTraceIdx, setOpenTraceIdx] = useState(null) // index of the assistant message whose "what I checked" trace is expanded, or null
   const [editingMsgText, setEditingMsgText] = useState('')
   const [showWelcomeAnim, setShowWelcomeAnim] = useState(true)
 
@@ -501,14 +502,18 @@ export default function AskAI() {
     }
     setShowWelcomeAnim(false)
     const updated=[...messages,{role:'user',content:q}]
-    setMessages([...updated,{role:'assistant',content:'',streaming:true}])
+    setMessages([...updated,{role:'assistant',content:'',streaming:true,toolTrace:[]}])
     setLoading(true)
         const ac=new AbortController(); abortRef.current=ac
     try{
+      let trace=[]
       const reply=await askClaude(updated,metaToken,combinedMemories,partial=>{
-        setMessages(m=>{const c=[...m];c[c.length-1]={role:'assistant',content:partial,streaming:true};return c})
-      },ac.signal,platformScope,cid)
-      const final=[...updated,{role:'assistant',content:reply}]
+        setMessages(m=>{const c=[...m];c[c.length-1]={...c[c.length-1],content:partial,streaming:true};return c})
+      },ac.signal,platformScope,cid,tc=>{
+        trace=[...trace,tc]
+        setMessages(m=>{const c=[...m];c[c.length-1]={...c[c.length-1],toolTrace:trace};return c})
+      })
+      const final=[...updated,{role:'assistant',content:reply,toolTrace:trace}]
       setMessages(final); saveMessages(cid,final)
     }catch(e){
         if(e.name==='AbortError'){ setMessages(m=>{const c=[...m];if(c.length)c[c.length-1]={...c[c.length-1],streaming:false};return c}); return }
@@ -523,14 +528,18 @@ export default function AskAI() {
     const priorUser = messages.slice(0,idx).reverse().find(m=>m.role==='user')
     if(!priorUser) return
     const truncated = messages.slice(0,idx)
-    setMessages([...truncated,{role:'assistant',content:'',streaming:true}])
+    setMessages([...truncated,{role:'assistant',content:'',streaming:true,toolTrace:[]}])
     setLoading(true)
     const ac=new AbortController(); abortRef.current=ac
     try{
+      let trace=[]
       const reply=await askClaude(truncated,metaToken,combinedMemories,partial=>{
-        setMessages(m=>{const c=[...m];c[c.length-1]={role:'assistant',content:partial,streaming:true};return c})
-      },ac.signal,platformScope,activeId)
-      const final=[...truncated,{role:'assistant',content:reply}]
+        setMessages(m=>{const c=[...m];c[c.length-1]={...c[c.length-1],content:partial,streaming:true};return c})
+      },ac.signal,platformScope,activeId,tc=>{
+        trace=[...trace,tc]
+        setMessages(m=>{const c=[...m];c[c.length-1]={...c[c.length-1],toolTrace:trace};return c})
+      })
+      const final=[...truncated,{role:'assistant',content:reply,toolTrace:trace}]
       setMessages(final); if(activeId) saveMessages(activeId,final)
     }catch(e){
       if(e.name==='AbortError'){ setMessages(m=>{const c=[...m];if(c.length)c[c.length-1]={...c[c.length-1],streaming:false};return c}); return }
@@ -553,14 +562,18 @@ export default function AskAI() {
       setActiveId(cid)
     }
     const updated=[...truncated,{role:'user',content:q}]
-    setMessages([...updated,{role:'assistant',content:'',streaming:true}])
+    setMessages([...updated,{role:'assistant',content:'',streaming:true,toolTrace:[]}])
     setLoading(true)
     const ac=new AbortController(); abortRef.current=ac
     try{
+      let trace=[]
       const reply=await askClaude(updated,metaToken,combinedMemories,partial=>{
-        setMessages(m=>{const c=[...m];c[c.length-1]={role:'assistant',content:partial,streaming:true};return c})
-      },ac.signal,platformScope,cid)
-      const final=[...updated,{role:'assistant',content:reply}]
+        setMessages(m=>{const c=[...m];c[c.length-1]={...c[c.length-1],content:partial,streaming:true};return c})
+      },ac.signal,platformScope,cid,tc=>{
+        trace=[...trace,tc]
+        setMessages(m=>{const c=[...m];c[c.length-1]={...c[c.length-1],toolTrace:trace};return c})
+      })
+      const final=[...updated,{role:'assistant',content:reply,toolTrace:trace}]
       setMessages(final); saveMessages(cid,final)
     }catch(e){
       if(e.name==='AbortError'){ setMessages(m=>{const c=[...m];if(c.length)c[c.length-1]={...c[c.length-1],streaming:false};return c}); return }
@@ -1058,6 +1071,22 @@ export default function AskAI() {
                         <div style={{flex:1,minWidth:0}}>
                           {m.content?(
                             <>
+                              {m.toolTrace&&m.toolTrace.length>0&&(
+                                <div style={{marginBottom:8}}>
+                                  <button onClick={()=>setOpenTraceIdx(v=>v===k?null:k)}
+                                    style={{display:'flex',alignItems:'center',gap:5,padding:'3px 0',border:'none',background:'transparent',cursor:'pointer',fontSize:11,color:'#94A3B8',fontFamily:FONT}}>
+                                    <span style={{display:'flex',transform:openTraceIdx===k?'rotate(90deg)':'none',transition:'transform .15s'}}><Ico n="chevR" s={9} c="#94A3B8"/></span>
+                                    Checked {m.toolTrace.length} data {m.toolTrace.length===1?'source':'sources'}
+                                  </button>
+                                  {openTraceIdx===k&&(
+                                    <div style={{marginTop:2,paddingLeft:14,borderLeft:'2px solid #EEF1F6'}}>
+                                      {m.toolTrace.map((t,ti)=>(
+                                        <div key={ti} style={{fontSize:11,color:t.error?'#1F3C84':'#94A3B8',lineHeight:1.6,fontWeight:t.error?600:400}}>{t.summary}</div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               <Markdown text={m.content+(m.streaming?'▍':'')}/>
                               {!m.streaming&&(
                                 <div style={{display:'flex',gap:4,marginTop:8}}>
