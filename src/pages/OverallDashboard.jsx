@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
-  CartesianGrid, LineChart, Line, Legend,
+  CartesianGrid, LineChart, Line, Legend, AreaChart, Area,
 } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
@@ -57,6 +57,8 @@ function parseD(s) {
 }
 const monthKey = d => d.getFullYear() * 12 + d.getMonth()
 const monthLabel = k => MN[((k % 12) + 12) % 12] + "'" + String(Math.floor(k / 12)).slice(2)
+const dayKey = d => { const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}` }
+const dayLabel = d => `${d.getDate()} ${MN[d.getMonth()]}`
 
 function parseNum(v) {
   if (v == null) return 0
@@ -289,7 +291,74 @@ const sectionTitle = (t, s) => (
   </div>
 )
 const axis = { fontSize:11, fill:C.muted, fontFamily:FONT }
-const grid2 = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginTop:0 }
+const grid2 = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }
+
+// Heat scale for conversion rates — brand colors only (no red/amber on data), matching
+// the convention used elsewhere in the app (navy = needs attention, green = strong).
+const heatColor = v => v == null ? C.muted : v >= 50 ? C.green : v >= 25 ? C.cyan : v >= 10 ? C.blue : C.navy
+const heatBg = v => v == null ? 'transparent' : v >= 50 ? C.greenBg : v >= 25 ? C.cyanBg : v >= 10 ? C.blueBg : C.navyBg
+
+// Executive insight callout — a single "what a CEO reads first" card: icon chip,
+// bold headline stat, and a plain-English sentence explaining what it means / what to do.
+function InsightCard({ icon, eyebrow, headline, headlineColor, body, accent }) {
+  return (
+    <div style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'18px 20px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)', display:'flex', flexDirection:'column', gap:8, minWidth:0 }}>
+      <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:`linear-gradient(90deg, ${accent}, ${accent}99)` }} />
+      <div style={{ position:'absolute', top:-30, right:-30, width:100, height:100, borderRadius:'50%', background:`linear-gradient(135deg, ${accent}14, ${accent}05)` }} />
+      <div style={{ display:'flex', alignItems:'center', gap:8, position:'relative' }}>
+        <div style={{ width:28, height:28, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:'#fff', background:`linear-gradient(135deg, ${accent}, ${accent}D9)`, boxShadow:`0 4px 10px -2px ${accent}66`, flexShrink:0 }}>{icon}</div>
+        <span style={{ fontSize:10.5, fontWeight:700, letterSpacing:'0.07em', color:'#64748B', textTransform:'uppercase' }}>{eyebrow}</span>
+      </div>
+      <div style={{ fontSize:22, fontWeight:800, letterSpacing:'-0.5px', color: headlineColor || '#0F1B33', lineHeight:1.15, position:'relative' }}>{headline}</div>
+      <div style={{ fontSize:12.5, color:'#475569', lineHeight:1.55, position:'relative' }}>{body}</div>
+    </div>
+  )
+}
+
+// Compact "does the funnel actually convert" strip — stage-to-stage conversion, not just
+// raw counts, since that's what tells a marketer where the real leak is.
+function ConversionChain({ steps }) {
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:`repeat(${steps.length}, minmax(0,1fr))`, gap:10, marginTop:16 }}>
+      {steps.map((s, i) => (
+        <div key={i} style={{ padding:'10px 12px', borderRadius:10, background: heatBg(s.rate), border:'0.5px solid #EEF1F6', minWidth:0 }}>
+          <div style={{ fontSize:9.5, fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.05em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{s.from} → {s.to}</div>
+          <div style={{ fontSize:18, fontWeight:800, color: heatColor(s.rate), marginTop:3 }}>{s.rate == null ? '—' : s.rate.toFixed(1) + '%'}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Ranked efficiency leaderboard (percentage-based, not volume-based) — reuses the same
+// visual language as RankedBars (numbered chip + bar + value) but the bar length and
+// color both encode a conversion RATE (0-100%) rather than a raw count.
+function EfficiencyList({ data, labelKey, rateKey, subKey }) {
+  if (!data.length) return <div style={{ textAlign:'center', padding:'24px 0', color:C.muted, fontSize:13, fontFamily:FONT }}>Not enough volume yet</div>
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+      {data.map((r, i) => {
+        const rate = r[rateKey]
+        const col = heatColor(rate)
+        return (
+          <div key={r[labelKey] + i} style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ width:20, textAlign:'center', fontSize:10, fontWeight:800, color:'#fff', background:col, borderRadius:6, padding:'2px 0', flexShrink:0 }}>{i + 1}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4, alignItems:'baseline', gap:8 }}>
+                <span style={{ fontSize:12, fontWeight:600, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r[labelKey]}</span>
+                <span style={{ fontSize:12.5, fontWeight:800, color:col, flexShrink:0, fontVariantNumeric:'tabular-nums' }}>{rate.toFixed(1)}%</span>
+              </div>
+              <div style={{ height:7, borderRadius:99, background:'#F1F5F9', overflow:'hidden' }}>
+                <div style={{ height:'100%', width:Math.min(rate, 100) + '%', borderRadius:99, background:`linear-gradient(90deg,${col},${col}cc)` }} />
+              </div>
+            </div>
+            <div style={{ fontSize:10.5, color:C.muted, width:60, textAlign:'right', flexShrink:0, fontVariantNumeric:'tabular-nums' }}>{fmtN(r[subKey])} q'd</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export default function OverallDashboard() {
   const [rows, setRows] = useState([])
@@ -399,16 +468,47 @@ export default function OverallDashboard() {
     return rs
   }, [dateFilteredRows, source, campaignQuery])
 
-  const kpis = useMemo(() => {
-    const sum = k => filtered.reduce((t, r) => t + r[k], 0)
+  const sumKpis = list => {
+    const sum = k => list.reduce((t, r) => t + r[k], 0)
     return {
       leads: sum('leads'), floorQueued: sum('floorQueued'),
       futworkQ: sum('futworkQ'), superbotQ: sum('superbotQ'),
       humanQL: sum('humanQL'), apps: sum('apps'), offers: sum('offers'),
       deposits: sum('deposits'), raus: sum('raus'),
     }
-  }, [filtered])
+  }
+  const kpis = useMemo(() => sumKpis(filtered), [filtered])
   const totalQueued = kpis.futworkQ + kpis.superbotQ
+
+  // Previous-equivalent-period comparison — same length window immediately before the
+  // active one (or the previous calendar month, when in month mode) — so every KPI can
+  // show a real vs-last-period delta instead of a static sub-label.
+  const prevWindow = useMemo(() => {
+    if (activeFilter === 'month') {
+      const mk = monthKeyByLabel.get(selMonth)
+      return mk == null ? null : { type:'month', mk: mk - 1 }
+    }
+    if (dateWindow) {
+      const days = Math.round((dateWindow.to - dateWindow.from) / 86400000) + 1
+      const prevTo = new Date(dateWindow.from); prevTo.setDate(prevTo.getDate() - 1); prevTo.setHours(23, 59, 59, 999)
+      const prevFrom = new Date(prevTo); prevFrom.setDate(prevTo.getDate() - (days - 1)); prevFrom.setHours(0, 0, 0, 0)
+      return { type:'range', from:prevFrom, to:prevTo }
+    }
+    return null
+  }, [activeFilter, dateWindow, selMonth, monthKeyByLabel])
+
+  const prevFiltered = useMemo(() => {
+    if (!prevWindow) return []
+    let rs = prevWindow.type === 'month' ? rows.filter(r => r.mk === prevWindow.mk) : rows.filter(r => r.date && r.date >= prevWindow.from && r.date <= prevWindow.to)
+    if (source !== 'All') rs = rs.filter(r => r.source === source)
+    const q = campaignQuery.trim().toLowerCase()
+    if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
+    return rs
+  }, [rows, prevWindow, source, campaignQuery])
+
+  const prevKpis = useMemo(() => sumKpis(prevFiltered), [prevFiltered])
+  const prevTotalQueued = prevKpis.futworkQ + prevKpis.superbotQ
+  const deltaPct = (cur, prev) => (!prev ? null : ((cur - prev) / prev) * 100)
 
   const funnel = useMemo(() => ([
     { stage:'Leads Generated', count:kpis.leads },
@@ -421,6 +521,16 @@ export default function OverallDashboard() {
     { stage:'RAUs', count:kpis.raus },
   ]), [kpis, totalQueued])
 
+  // The real conversion PATH (not the parallel Floor/Queued split) — used both for the
+  // conversion-chain strip and to find the biggest leak for the insights row.
+  const conversionChain = useMemo(() => ([
+    { from:'Leads', to:'Queued', a:kpis.leads, b:totalQueued },
+    { from:'Queued', to:'Human QL', a:totalQueued, b:kpis.humanQL },
+    { from:'Human QL', to:'Apps', a:kpis.humanQL, b:kpis.apps },
+    { from:'Apps', to:'Offers', a:kpis.apps, b:kpis.offers },
+    { from:'Offers', to:'Deposits', a:kpis.offers, b:kpis.deposits },
+  ].map(s => ({ ...s, rate: s.a > 0 ? (s.b / s.a) * 100 : null }))), [kpis, totalQueued])
+
   const bySource = useMemo(() => {
     const m = new Map()
     filtered.forEach(r => {
@@ -432,6 +542,10 @@ export default function OverallDashboard() {
     return [...m.values()].sort((a, b) => b.leads - a.leads)
   }, [filtered])
 
+  const bySourceEfficiency = useMemo(() => (
+    bySource.filter(s => s.queued >= 10).map(s => ({ ...s, qlRate: s.queued > 0 ? (s.humanQL / s.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 8)
+  ), [bySource])
+
   const byMonth = useMemo(() => {
     const m = new Map()
     filtered.forEach(r => {
@@ -441,6 +555,20 @@ export default function OverallDashboard() {
       m.set(r.mk, e)
     })
     return [...m.values()].sort((a, b) => a.mk - b.mk)
+  }, [filtered])
+
+  // Daily trend — last 30 days present in the active selection, gives the "what happened
+  // recently" pulse a marketer checks first thing in the morning.
+  const byDay = useMemo(() => {
+    const m = new Map()
+    filtered.forEach(r => {
+      if (!r.date) return
+      const key = dayKey(r.date)
+      const e = m.get(key) || { key, date:r.date, leads:0, queued:0, humanQL:0 }
+      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      m.set(key, e)
+    })
+    return [...m.values()].sort((a, b) => a.key < b.key ? -1 : 1).slice(-30).map(d => ({ ...d, label:dayLabel(d.date) }))
   }, [filtered])
 
   const byCampaign = useMemo(() => {
@@ -454,6 +582,55 @@ export default function OverallDashboard() {
     })
     return [...m.values()].sort((a, b) => b.leads - a.leads)
   }, [filtered])
+
+  const topCampaignsByLeads = useMemo(() => byCampaign.slice(0, 5), [byCampaign])
+  const topCampaignsByEfficiency = useMemo(() => (
+    byCampaign.filter(c => c.queued >= 15).map(c => ({ ...c, qlRate: c.queued > 0 ? (c.humanQL / c.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 5)
+  ), [byCampaign])
+
+  // ── Executive insights — the "read this first" narrative row ──────────────────────
+  const insights = useMemo(() => {
+    const list = []
+    // 1. Momentum vs previous equivalent period
+    const leadsDelta = deltaPct(kpis.leads, prevKpis.leads)
+    if (prevWindow && prevKpis.leads > 0) {
+      const up = leadsDelta >= 0
+      list.push({
+        icon: up ? '↑' : '↓', eyebrow:'Momentum vs last period', accent: up ? C.green : C.navy,
+        headline: (up ? '+' : '') + leadsDelta.toFixed(1) + '%',
+        headlineColor: up ? C.green : C.navy,
+        body: `${fmtN(kpis.leads)} leads this period vs ${fmtN(prevKpis.leads)} previously. ${up ? 'Volume is scaling — check queued/QL capacity keeps pace.' : 'Volume has slowed — worth checking source spend and creative fatigue.'}`,
+      })
+    }
+    // 2. Top source
+    if (bySource.length) {
+      const top = bySource[0]
+      const topRate = top.queued > 0 ? (top.humanQL / top.queued) * 100 : null
+      list.push({
+        icon:'★', eyebrow:'Top source by volume', accent:C.navy, headline: top.source, headlineColor:C.navy,
+        body: `${pct(top.leads, kpis.leads)} of all leads (${fmtN(top.leads)}) came from here${topRate != null ? `, converting ${topRate.toFixed(1)}% of queued leads to Human QL` : ''}.`,
+      })
+    }
+    // 3. Biggest leak in the conversion chain
+    const withRate = conversionChain.filter(s => s.rate != null && s.a >= 20)
+    if (withRate.length) {
+      const worst = [...withRate].sort((a, b) => a.rate - b.rate)[0]
+      list.push({
+        icon:'!', eyebrow:'Biggest funnel leak', accent:C.blue, headline: worst.from + ' → ' + worst.to,
+        headlineColor: heatColor(worst.rate),
+        body: `Only ${worst.rate.toFixed(1)}% of ${worst.from.toLowerCase()} convert to ${worst.to.toLowerCase()} — the weakest step in the funnel this period. Start here for the fastest lift.`,
+      })
+    }
+    // 4. Most efficient campaign worth scaling
+    if (topCampaignsByEfficiency.length) {
+      const best = topCampaignsByEfficiency[0]
+      list.push({
+        icon:'▲', eyebrow:'Best campaign to scale', accent:C.green, headline: best.qlRate.toFixed(1) + '% QL rate', headlineColor:C.green,
+        body: `${best.campaign} converts best among campaigns with real volume (${fmtN(best.queued)} queued) — a strong candidate to push more budget toward.`,
+      })
+    }
+    return list.slice(0, 4)
+  }, [kpis, prevKpis, prevWindow, bySource, conversionChain, topCampaignsByEfficiency])
 
   const grouped = useMemo(() => {
     if (grpBy === 'source') return bySource.map(s => ({
@@ -609,12 +786,13 @@ export default function OverallDashboard() {
               <button onClick={() => setShowInfo(v => !v)} title="How these metrics are calculated" style={{ width:30, height:30, borderRadius:8, border:`0.5px solid ${C.border}`, background: showInfo ? C.navyBg : 'var(--card)', color:C.navy, fontSize:14, fontWeight:700, fontStyle:'italic', fontFamily:'Georgia,serif', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>i</button>
               {showInfo && <div onClick={() => setShowInfo(false)} style={{ position:'fixed', inset:0, zIndex:150 }} />}
               {showInfo && (
-                <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:360, maxHeight:'74vh', overflowY:'auto', background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 14px 40px rgba(15,23,42,0.16)', padding:'16px 18px', textAlign:'left', fontFamily:FONT }}>
+                <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:380, maxHeight:'74vh', overflowY:'auto', background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 14px 40px rgba(15,23,42,0.16)', padding:'16px 18px', textAlign:'left', fontFamily:FONT }}>
                   <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:8 }}>How Overall is calculated</div>
                   <div style={{ fontSize:11, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
                   <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.7 }}>
-                    <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). From there it continues <b>Human QL</b> (Futwork-qualified) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (revenue attribution units). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line — the rest of the funnel below them is the conversion path once a lead is queued.<br /><br />
-                    Last Day / Last 7D / MTD and Custom filter by lead date; the Month dropdown scopes to one calendar month. Source filters everything below.
+                    <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). From there it continues <b>Human QL</b> (Futwork-qualified) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (revenue attribution units). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
+                    <b>Executive insights</b> and <b>KPI deltas</b> compare the active period against the immediately preceding period of equal length (or the previous calendar month, in month view). <b>Biggest funnel leak</b> and campaign efficiency rankings use the real conversion path (Leads → Queued → Human QL → Apps → Offers → Deposits), skipping the parallel Floor Queued branch.<br /><br />
+                    Last Day / Last 7D / MTD and Custom filter by lead date; the Month dropdown scopes to one calendar month. Source and campaign search filter everything below.
                   </div>
                 </div>
               )}
@@ -625,43 +803,62 @@ export default function OverallDashboard() {
         {/* SCROLLABLE CONTENT */}
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
 
-          {/* KPI ROW */}
+          {/* EXECUTIVE INSIGHTS — the "read this first" row */}
+          {insights.length > 0 && (
+            <div style={{ display:'grid', gridTemplateColumns:`repeat(${insights.length}, minmax(0,1fr))`, gap:14, marginBottom:20 }}>
+              {insights.map((ins, i) => <InsightCard key={i} {...ins} />)}
+            </div>
+          )}
+
+          {/* KPI ROW — with vs-previous-period deltas */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
-            <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-            <PremKPI label="FLOOR QUEUED" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="TOTAL QUEUED" value={fmtN(totalQueued)} sub={'Futwork ' + fmtN(kpis.futworkQ) + ' · Superbot ' + fmtN(kpis.superbotQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
-            <PremKPI label="HUMAN QL" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, totalQueued) + ' of queued'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.humanQL) + ' of QL'} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-            <PremKPI label="OFFERS" value={fmtN(kpis.offers)} sub={pct(kpis.offers, kpis.apps) + ' of apps'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="DEPOSITS" value={fmtN(kpis.deposits)} sub={pct(kpis.deposits, kpis.offers) + ' of offers'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} />
-            <PremKPI label="TOTAL RAUs" value={fmtN(kpis.raus)} sub="revenue attr. units" accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
+            <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+            <PremKPI label="FLOOR QUEUED" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} delta={deltaPct(kpis.floorQueued, prevKpis.floorQueued)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="TOTAL QUEUED" value={fmtN(totalQueued)} sub={'Futwork ' + fmtN(kpis.futworkQ) + ' · Superbot ' + fmtN(kpis.superbotQ)} delta={deltaPct(totalQueued, prevTotalQueued)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
+            <PremKPI label="HUMAN QL" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, totalQueued) + ' of queued'} delta={deltaPct(kpis.humanQL, prevKpis.humanQL)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.humanQL) + ' of QL'} delta={deltaPct(kpis.apps, prevKpis.apps)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+            <PremKPI label="OFFERS" value={fmtN(kpis.offers)} sub={pct(kpis.offers, kpis.apps) + ' of apps'} delta={deltaPct(kpis.offers, prevKpis.offers)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="DEPOSITS" value={fmtN(kpis.deposits)} sub={pct(kpis.deposits, kpis.offers) + ' of offers'} delta={deltaPct(kpis.deposits, prevKpis.deposits)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} />
+            <PremKPI label="TOTAL RAUs" value={fmtN(kpis.raus)} sub="revenue attr. units" delta={deltaPct(kpis.raus, prevKpis.raus)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
           </div>
 
-          {/* FUNNEL */}
+          {/* FUNNEL + STAGE CONVERSION */}
           <Card>
             {sectionTitle('Overall funnel', 'lead → revenue path for the selected period and source')}
-            <ResponsiveContainer width="100%" height={320}>
+            <ResponsiveContainer width="100%" height={300}>
               <BarChart data={funnel} layout="vertical" margin={{ left:20, right:50, top:4, bottom:4 }}>
                 <CartesianGrid horizontal={false} stroke={C.border} />
                 <XAxis type="number" tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
                 <YAxis type="category" dataKey="stage" tick={axis} axisLine={false} tickLine={false} width={110} />
                 <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
-                <Bar dataKey="count" name="Count" radius={[0, 6, 6, 0]} barSize={22}>
+                <Bar dataKey="count" name="Count" radius={[0, 6, 6, 0]} barSize={20}>
                   {funnel.map((e, i) => <Cell key={i} fill={brandColor(i)} />)}
                   <LabelList dataKey="count" position="right" formatter={fmtN} style={{ fontSize:11, fontWeight:700, fill:C.sub }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            <div style={{ borderTop:'1px solid #F1F5F9', marginTop:4, paddingTop:16 }}>
+              <div style={{ fontSize:10.5, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>Stage-to-stage conversion (the real path)</div>
+              <ConversionChain steps={conversionChain} />
+            </div>
           </Card>
 
-          {/* SOURCE BREAKDOWN + MONTH TREND */}
-          <div style={grid2}>
+          {/* SOURCE VOLUME + SOURCE EFFICIENCY */}
+          <div style={{ ...grid2, marginTop:16 }}>
             <Card>
-              {sectionTitle('Leads by source', 'top sources this period')}
+              {sectionTitle('Leads by source', 'volume leaders this period')}
               <RankedBars data={bySource.slice(0, 8).map(s => ({ source:s.source, count:s.leads }))} labelKey="source" max={maxSourceLeads} total={totalSourceLeads} colorFn={brandColor} showRank />
             </Card>
             <Card>
-              {sectionTitle('Month-on-month trend', 'leads, queued, human QL and deposits by month')}
+              {sectionTitle('Source efficiency', 'queued → Human QL rate — where quality actually converts (min. 10 queued)')}
+              <EfficiencyList data={bySourceEfficiency} labelKey="source" rateKey="qlRate" subKey="queued" />
+            </Card>
+          </div>
+
+          {/* MONTH TREND + DAILY TREND */}
+          <div style={{ ...grid2, marginTop:16 }}>
+            <Card>
+              {sectionTitle('Month-on-month trend', 'leads, queued and human QL by month')}
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={byMonth} margin={{ left:0, right:12, top:4, bottom:4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -675,6 +872,36 @@ export default function OverallDashboard() {
                   <Line type="monotone" dataKey="deposits" name="Deposits" stroke={C.green} strokeWidth={2.5} dot={{ r:3 }} />
                 </LineChart>
               </ResponsiveContainer>
+            </Card>
+            <Card>
+              {sectionTitle('Daily pulse', 'last 30 days of lead volume in the active selection')}
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={byDay} margin={{ left:0, right:12, top:4, bottom:4 }}>
+                  <defs>
+                    <linearGradient id="ovLeadsFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.navy} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={C.navy} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
+                  <Tooltip content={<BrandTooltip />} />
+                  <Area type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} fill="url(#ovLeadsFill)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </Card>
+          </div>
+
+          {/* TOP MOVERS — what to scale, framed for decisions */}
+          <div style={{ ...grid2, marginTop:16 }}>
+            <Card>
+              {sectionTitle('Top campaigns by volume', 'where the leads are coming from right now')}
+              <RankedBars data={topCampaignsByLeads.map(c => ({ campaign:c.campaign, count:c.leads }))} labelKey="campaign" max={topCampaignsByLeads.length ? topCampaignsByLeads[0].leads : 1} total={totalSourceLeads} colorFn={brandColor} showRank />
+            </Card>
+            <Card>
+              {sectionTitle('Best campaigns to scale', 'highest Human QL rate among campaigns with real volume (min. 15 queued)')}
+              <EfficiencyList data={topCampaignsByEfficiency} labelKey="campaign" rateKey="qlRate" subKey="queued" />
             </Card>
           </div>
 
