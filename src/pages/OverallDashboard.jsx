@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
   CartesianGrid, LineChart, Line, Legend,
@@ -85,34 +85,134 @@ function mapRow(r) {
   }
 }
 
-function Dropdown({ options, value, onChange, minWidth = 130 }) {
+// ── Header controls — ported verbatim (styling + behavior) from the Daily QLs
+// page under QL Ops (LeadQualificationDashboard.jsx), per instruction to match
+// that header exactly: pill/Dropdown/DateRangePicker components below are the
+// same components, just re-declared here since they're local to that file.
+
+function Dropdown({ options, value, onChange, label, minWidth = 120 }) {
   const [open, setOpen] = useState(false)
-  const ref = React.useRef(null)
+  const ref = useRef(null)
   useEffect(() => {
     const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
   }, [])
   return (
-    <div style={{ position:'relative' }} ref={ref}>
-      <button onClick={() => setOpen(v => !v)} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 11px 7px 13px', borderRadius:9, border:`0.5px solid ${open ? C.navy : '#E5E7EB'}`, background: open ? C.navyBg : '#fff', color:'#0F172A', cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight:600, minWidth, boxShadow: open ? '0 0 0 3px rgba(31,60,132,0.09)' : '0 1px 3px rgba(15,23,42,0.06)', transition:'all .15s', whiteSpace:'nowrap' }}>
-        <span style={{ flex:1, textAlign:'left' }}>{(options.find(o => (o.value ?? o) === value)?.label) ?? value}</span>
-        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ flexShrink:0, transition:'transform .2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-          <path d="M1 1l4 4 4-4" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-      {open && (
-        <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:500, background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, boxShadow:'0 16px 48px rgba(15,23,42,0.14)', padding:6, minWidth:Math.max(minWidth, 160), maxHeight:320, overflowY:'auto' }}>
-          {options.map(opt => {
-            const v = opt.value ?? opt
-            const active = v === value
-            return (
-              <button key={v} onClick={() => { onChange(v); setOpen(false) }} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12.5, fontWeight: active ? 700 : 400, background: active ? C.navyBg : 'transparent', color: active ? C.navy : '#0F172A' }}>
-                {opt.label ?? opt}
-              </button>
-            )
-          })}
-        </div>
-      )}
+    <div style={{ display:'flex', alignItems:'center', gap:6 }} ref={ref}>
+      {label && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT, whiteSpace:'nowrap' }}>{label}</span>}
+      <div style={{ position:'relative' }}>
+        <button onClick={() => setOpen(v => !v)} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px 6px 12px', borderRadius:8, border:`0.5px solid ${open ? C.navy : C.border}`, background: open ? C.navyBg : 'var(--card)', color:C.text, cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight:600, minWidth, boxShadow: open ? '0 0 0 3px rgba(31,60,132,0.08)' : 'none', transition:'all .15s', whiteSpace:'nowrap' }}>
+          <span style={{ flex:1, textAlign:'left' }}>{value}</span>
+          <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ flexShrink:0, transition:'transform .2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+            <path d="M1 1l4 4 4-4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {open && (
+          <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:500, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:6, minWidth:Math.max(minWidth, 150), maxHeight:280, overflowY:'auto' }}>
+            {options.map(opt => {
+              const active = opt === value
+              return (
+                <button key={opt} onClick={() => { onChange(opt); setOpen(false) }} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12.5, fontWeight: active ? 700 : 400, background: active ? C.navyBg : 'transparent', color: active ? C.navy : C.text }}>
+                  <span style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                    {opt}
+                    {active && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
+
+function CalMonth({ year, month, from, to, hovered, onSelect, onHover }) {
+  const first = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0).getDate()
+  const startDow = first.getDay()
+  const cells = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= lastDay; d++) cells.push(new Date(year, month, d))
+  return (
+    <div style={{ width:220 }}>
+      <div style={{ textAlign:'center', fontWeight:700, fontSize:13, color:C.text, marginBottom:8, fontFamily:FONT }}>{MONTHS_SHORT[month]} {year}</div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2, marginBottom:4 }}>
+        {DAYS.map(d => <div key={d} style={{ textAlign:'center', fontSize:10, fontWeight:700, color:C.muted, padding:'2px 0', fontFamily:FONT }}>{d}</div>)}
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2 }}>
+        {cells.map((date, i) => {
+          if (!date) return <div key={'e'+i} />
+          const ts = date.getTime()
+          const fromTs = from ? from.getTime() : null
+          const toTs = (to || hovered) ? (to || hovered).getTime() : null
+          const isFrom = fromTs && ts === fromTs
+          const isTo = toTs && ts === toTs && from
+          const inRange = fromTs && toTs && ts > Math.min(fromTs, toTs) && ts < Math.max(fromTs, toTs)
+          const today = new Date(); today.setHours(0, 0, 0, 0)
+          const isToday = ts === today.getTime()
+          let bg = 'transparent', color = C.text
+          if (isFrom || isTo) { bg = C.navy; color = 'var(--card)' }
+          else if (inRange) { bg = C.navyBg; color = C.navy }
+          return (
+            <button key={ts} onClick={() => onSelect(date)} onMouseEnter={() => onHover(date)} onMouseLeave={() => onHover(null)}
+              style={{ width:'100%', aspectRatio:'1', border:'none', cursor:'pointer', borderRadius:6, background:bg, color, fontSize:11.5, fontWeight: isFrom || isTo ? 700 : isToday ? 600 : 400, fontFamily:FONT, position:'relative', transition:'background .1s' }}>
+              {date.getDate()}
+              {isToday && !isFrom && !isTo && <span style={{ position:'absolute', bottom:2, left:'50%', transform:'translateX(-50%)', width:4, height:4, borderRadius:'50%', background:C.blue, display:'block' }} />}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+const fmt = d => { if (!d) return ''; const y=d.getFullYear(),mo=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0'); return `${y}-${mo}-${dy}` }
+
+function DateRangePicker({ from, to, onChange }) {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const [viewYear, setViewYear] = useState(today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(today.getMonth())
+  const [hovered, setHovered] = useState(null)
+  const [selFrom, setSelFrom] = useState(from || null)
+  const [selTo, setSelTo] = useState(to || null)
+  const [step, setStep] = useState(from ? 'to' : 'from')
+
+  const handleSelect = date => {
+    if (step === 'from' || selTo) { setSelFrom(date); setSelTo(null); setStep('to') }
+    else { if (date < selFrom) { setSelFrom(date); setSelTo(selFrom) } else { setSelTo(date) }; setStep('from') }
+  }
+  const right = viewMonth === 11 ? { y: viewYear + 1, m: 0 } : { y: viewYear, m: viewMonth + 1 }
+  const canApply = selFrom && selTo
+  const NavBtn = ({ dir, onClick }) => (
+    <button onClick={onClick} style={{ width:28, height:28, borderRadius:7, border:`0.5px solid ${C.border}`, background:'var(--card)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:C.sub }}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">{dir === 'left' ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}</svg>
+    </button>
+  )
+  const goLeft = () => viewMonth === 0 ? (setViewYear(y => y - 1), setViewMonth(11)) : setViewMonth(m => m - 1)
+  const goRight = () => viewMonth === 11 ? (setViewYear(y => y + 1), setViewMonth(0)) : setViewMonth(m => m + 1)
+
+  return (
+    <div style={{ padding:'16px 20px', fontFamily:FONT }}>
+      <div style={{ display:'flex', gap:8, marginBottom:14, alignItems:'center' }}>
+        <div style={{ flex:1, padding:'6px 10px', borderRadius:8, border:`1.5px solid ${step === 'from' ? C.navy : C.border}`, background: step === 'from' ? C.navyBg : '#FAFAFA', fontSize:12, fontWeight:600, color: selFrom ? C.text : C.muted, fontFamily:FONT, cursor:'pointer' }} onClick={() => setStep('from')}>{selFrom ? fmt(selFrom) : 'Start date'}</div>
+        <svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M0 5h14M10 1l4 4-4 4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        <div style={{ flex:1, padding:'6px 10px', borderRadius:8, border:`1.5px solid ${step === 'to' && selFrom ? C.navy : C.border}`, background: step === 'to' && selFrom ? C.navyBg : '#FAFAFA', fontSize:12, fontWeight:600, color: selTo ? C.text : C.muted, fontFamily:FONT, cursor: selFrom ? 'pointer' : 'default' }} onClick={() => selFrom && setStep('to')}>{selTo ? fmt(selTo) : 'End date'}</div>
+      </div>
+      <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:12 }}>
+        <NavBtn dir="left" onClick={goLeft} /><div style={{ flex:1 }} /><NavBtn dir="right" onClick={goRight} />
+      </div>
+      <div style={{ display:'flex', gap:24 }}>
+        <CalMonth year={viewYear} month={viewMonth} from={selFrom} to={selTo} hovered={step === 'to' ? hovered : null} onSelect={handleSelect} onHover={step === 'to' ? setHovered : () => {}} />
+        <CalMonth year={right.y} month={right.m} from={selFrom} to={selTo} hovered={step === 'to' ? hovered : null} onSelect={handleSelect} onHover={step === 'to' ? setHovered : () => {}} />
+      </div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:14, paddingTop:12, borderTop:'0.5px solid #F1F5F9' }}>
+        <button onClick={() => { setSelFrom(null); setSelTo(null); setStep('from') }} style={{ padding:'6px 12px', borderRadius:8, border:`0.5px solid ${C.border}`, background:'var(--card)', fontSize:11.5, fontWeight:600, fontFamily:FONT, cursor:'pointer', color:C.sub }}>Clear</button>
+        <button onClick={() => canApply && onChange(fmt(selFrom), fmt(selTo))} disabled={!canApply} style={{ padding:'7px 18px', borderRadius:8, border:'none', cursor: canApply ? 'pointer' : 'not-allowed', background: canApply ? C.navy : 'var(--card-border)', color: canApply ? 'var(--card)' : C.muted, fontSize:12, fontWeight:700, fontFamily:FONT }}>Apply range</button>
+      </div>
     </div>
   )
 }
@@ -146,10 +246,19 @@ export default function OverallDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
-  const [period, setPeriod] = useState('all')
   const [source, setSource] = useState('All')
   const [showInfo, setShowInfo] = useState(false)
   const [grpBy, setGrpBy] = useState('source')
+
+  // Date filter state — mirrors Daily QLs exactly: a single "active filter" is either
+  // a preset (LD/L7D/MTD), the month picker, or a custom calendar range.
+  const [datePreset, setDatePreset] = useState('month') // 'LD' | 'L7D' | 'MTD' | 'custom' | 'month'
+  const [selMonth, setSelMonth] = useState('') // month label e.g. "Jul'26"
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [showCustom, setShowCustom] = useState(false)
+  const [hoveredPreset, setHoveredPreset] = useState(null)
+  const hasSetInitial = useRef(false)
 
   const loadData = useCallback(async (bust = false) => {
     setLoading(true)
@@ -158,7 +267,17 @@ export default function OverallDashboard() {
       const u = bust ? base + (base.includes('?') ? '&' : '?') + '_=' + Date.now() : base
       const res = await fetch(u)
       const txt = await res.text()
-      setRows(parseCSV(txt).map(mapRow))
+      const mapped = parseCSV(txt).map(mapRow)
+      setRows(mapped)
+      if (!hasSetInitial.current) {
+        const ms = [...new Set(mapped.filter(r => r.mk != null).map(r => r.mk))].sort((a, b) => a - b)
+        if (ms.length) {
+          const curKey = monthKey(new Date())
+          const defMk = ms.includes(curKey) ? curKey : ms[ms.length - 1]
+          setSelMonth(monthLabel(defMk))
+        }
+        hasSetInitial.current = true
+      }
       setLastSync(new Date())
       setError(null)
     } catch (e) { setError('Failed to load: ' + e.message) }
@@ -170,18 +289,47 @@ export default function OverallDashboard() {
     const set = new Set(rows.filter(r => r.mk != null).map(r => r.mk))
     return [...set].sort((a, b) => a - b)
   }, [rows])
+  const monthOptions = useMemo(() => [...months].reverse().map(monthLabel), [months])
+  const monthKeyByLabel = useMemo(() => new Map(months.map(mk => [monthLabel(mk), mk])), [months])
 
   const sources = useMemo(() => {
     const set = new Set(rows.map(r => r.source))
-    return [...set].sort()
+    return ['All', ...[...set].sort()]
   }, [rows])
 
+  // Is the selected month the current calendar month?
+  const isCurrentMonth = useMemo(() => {
+    const mk = monthKeyByLabel.get(selMonth)
+    if (mk == null) return false
+    return mk === monthKey(new Date())
+  }, [selMonth, monthKeyByLabel])
+
+  const activeFilter = datePreset === 'custom' ? 'custom' : (datePreset === 'month') ? 'month' : 'preset'
+
+  const dateWindow = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    if (datePreset === 'LD') { const y = new Date(today); y.setDate(today.getDate() - 1); return { from:y, to:y, label:'Last Day' } }
+    if (datePreset === 'L7D') { const y = new Date(today); y.setDate(today.getDate() - 1); const f = new Date(y); f.setDate(y.getDate() - 6); return { from:f, to:y, label:'Last 7 days' } }
+    if (datePreset === 'MTD') { const f = new Date(today.getFullYear(), today.getMonth(), 1); return { from:f, to:today, label:'MTD ' + today.toLocaleString('default', { month:'short', year:'numeric' }) } }
+    if (datePreset === 'custom' && customFrom && customTo) {
+      const [fy, fm, fd] = customFrom.split('-').map(Number); const cf = new Date(fy, fm - 1, fd); cf.setHours(0, 0, 0, 0)
+      const [ty, tm, td] = customTo.split('-').map(Number); const ct = new Date(ty, tm - 1, td); ct.setHours(23, 59, 59, 999)
+      return { from:cf, to:ct, label:customFrom + ' -> ' + customTo }
+    }
+    return null
+  }, [datePreset, customFrom, customTo])
+
+  const dateFilteredRows = useMemo(() => {
+    if (!dateWindow) {
+      const mk = monthKeyByLabel.get(selMonth)
+      return mk == null ? rows : rows.filter(r => r.mk === mk)
+    }
+    return rows.filter(r => r.date && r.date >= dateWindow.from && r.date <= dateWindow.to)
+  }, [rows, dateWindow, selMonth, monthKeyByLabel])
+
   const filtered = useMemo(() => {
-    let rs = rows
-    if (period !== 'all') rs = rs.filter(r => r.mk === Number(period))
-    if (source !== 'All') rs = rs.filter(r => r.source === source)
-    return rs
-  }, [rows, period, source])
+    return source === 'All' ? dateFilteredRows : dateFilteredRows.filter(r => r.source === source)
+  }, [dateFilteredRows, source])
 
   const kpis = useMemo(() => {
     const sum = k => filtered.reduce((t, r) => t + r[k], 0)
@@ -235,8 +383,8 @@ export default function OverallDashboard() {
       const full = filtered.filter(r => r.mk === m.mk)
       return {
         label:m.label, leads:m.leads, queued:m.queued, humanQL:m.humanQL,
-        apps: full.reduce((t,r)=>t+r.apps,0), offers: full.reduce((t,r)=>t+r.offers,0),
-        deposits:m.deposits, raus: full.reduce((t,r)=>t+r.raus,0),
+        apps: full.reduce((t, r) => t + r.apps, 0), offers: full.reduce((t, r) => t + r.offers, 0),
+        deposits:m.deposits, raus: full.reduce((t, r) => t + r.raus, 0),
       }
     })
   }, [grpBy, bySource, byMonth, filtered])
@@ -248,8 +396,6 @@ export default function OverallDashboard() {
     'QL %': pct(g.humanQL, g.queued), 'App %': pct(g.apps, g.humanQL), 'Deposit %': pct(g.deposits, g.offers),
   })), [grouped, grpBy])
 
-  const periodOptions = [{ value:'all', label:'All time' }, ...months.map(mk => ({ value:String(mk), label:monthLabel(mk) }))]
-  const sourceOptions = ['All', ...sources]
   const maxSourceLeads = bySource.length ? Math.max(...bySource.map(s => s.leads)) : 1
   const totalSourceLeads = bySource.reduce((t, s) => t + s.leads, 0)
 
@@ -270,8 +416,7 @@ export default function OverallDashboard() {
     )
   }
 
-  const periodLabel = period === 'all' ? 'All time' : monthLabel(Number(period))
-  const fmt = new Intl.DateTimeFormat('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit' })
+  const syncFmt = new Intl.DateTimeFormat('en-IN', { hour:'2-digit', minute:'2-digit', second:'2-digit' })
 
   return (
     <div className="lq-page-shell" style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
@@ -279,34 +424,115 @@ export default function OverallDashboard() {
       <style>{`.kpiCard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(15,23,42,0.05),0 16px 32px -14px rgba(31,60,132,0.22)!important}`}</style>
       <div style={{ margin:'12px 14px 0', borderRadius:14, border:'1px solid #EEF1F6', boxShadow:'0 1px 3px rgba(31,60,132,0.06)', flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
 
-        {/* HEADER — mirrors the MTD page header: breadcrumb, title, period label chip, filters, sync, refresh, export, info */}
-        <div style={{ background:'var(--card)', borderBottom:'0.5px solid ' + C.border, padding:'0 28px', minHeight:56, height:'auto', display:'flex', alignItems:'center', gap:12, flexShrink:0, flexWrap:'wrap' }}>
-          <div style={{ flex:1, padding:'10px 0' }}>
+        {/* HEADER — same structure/behavior as the Daily QLs header (QL Ops): inline filter
+            label in the title, LD/L7D/MTD pill group, month Dropdown, Custom calendar range,
+            Source dropdown, Synced, Refresh, Export, info popover. */}
+        <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${C.border}`, padding:'0 28px', minHeight:56, height:'auto', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, overflow:'visible' }}>
+          <div>
             <p style={{ fontSize:10.5, color:C.muted, margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / Overall</p>
-            <h1 style={{ fontSize:17, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.4px', fontFamily:FONT }}>Overall Performance</h1>
+            <h1 style={{ fontSize:18, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.4px', fontFamily:FONT }}>
+              Overall Performance
+              {' - '}
+              {activeFilter === 'custom' && customFrom
+                ? <span style={{ fontSize:13, fontWeight:600, color:C.blue }}>{customFrom} -&gt; {customTo}</span>
+                : activeFilter === 'preset' && dateWindow
+                  ? <span style={{ fontSize:13, fontWeight:600, color:C.blue }}>{dateWindow.label}</span>
+                  : <span>{selMonth || '-'}</span>}
+            </h1>
           </div>
-          <div style={{ fontSize:11, color:C.muted, background:'#F1F5F9', padding:'3px 10px', borderRadius:6 }}>{periodLabel}</div>
-          <Dropdown options={periodOptions} value={period} onChange={setPeriod} minWidth={110} />
-          <Dropdown options={sourceOptions} value={source} onChange={setSource} minWidth={140} />
-          <div style={{ fontSize:11, color:'#94A3B8', borderLeft:'0.5px solid #E5E7EB', paddingLeft:14 }}>{lastSync ? 'Synced ' + fmt.format(lastSync) : ''}</div>
-          <button onClick={() => loadData(true)} disabled={loading} style={{ padding:'6px 14px', borderRadius:8, border:'0.5px solid #E5E7EB', fontSize:12, fontWeight:500, cursor: loading ? 'wait' : 'pointer', fontFamily:'inherit', background:'#fff', color:'#374151', display:'flex', alignItems:'center', gap:6, opacity: loading ? 0.65 : 1 }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
-            {loading ? 'Refreshing' : 'Refresh'}
-          </button>
-          <ExportButton data={exportRows} filename="overall-summary" />
-          <div style={{ position:'relative' }}>
-            <button onClick={() => setShowInfo(v => !v)} title="How these metrics are calculated" style={{ width:30, height:30, borderRadius:8, border:'0.5px solid #E5E7EB', background: showInfo ? '#E8EFF9' : '#fff', color:'#1F3C84', fontSize:14, fontWeight:700, fontStyle:'italic', fontFamily:'Georgia,serif', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>i</button>
-            {showInfo && <div onClick={() => setShowInfo(false)} style={{ position:'fixed', inset:0, zIndex:150 }} />}
-            {showInfo && (
-              <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:360, maxHeight:'74vh', overflowY:'auto', background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:12, boxShadow:'0 14px 40px rgba(15,23,42,0.16)', padding:'16px 18px', textAlign:'left', fontFamily:FONT }}>
-                <div style={{ fontSize:12.5, fontWeight:800, color:'#0F172A', marginBottom:8 }}>How Overall is calculated</div>
-                <div style={{ fontSize:11, color:'#94A3B8', marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
-                <div style={{ fontSize:11.5, color:'#475569', lineHeight:1.7 }}>
-                  <b>Leads Generated</b> → <b>Floor Queued</b> → <b>Total Queued</b> (Futwork + Superbot) → <b>Human QL</b> (Futwork-qualified) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (revenue attribution units). Each stage is a subset of the one before it, so the funnel chart below reads top-to-bottom as the real conversion path.<br /><br />
-                  Filters apply the Period and Source selectors to every KPI, chart, and the grouped table below.
+          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflow:'visible', flexShrink:1, minWidth:0 }}>
+
+            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', background:'#F8FAFC', padding:'6px 10px', borderRadius:12, border:'0.5px solid #E5E7EB' }}>
+              {isCurrentMonth && (
+                <div style={{ display:'flex', alignItems:'center', gap:4, background:'var(--bg3)', borderRadius:9, padding:3 }}>
+                  {[['LD', 'Last Day'], ['L7D', 'Last 7D'], ['MTD', 'MTD']].map(([key, lbl2]) => {
+                    const today2 = new Date(); today2.setHours(0, 0, 0, 0)
+                    let tipFrom, tipTo
+                    if (key === 'LD') { tipFrom = new Date(today2); tipFrom.setDate(today2.getDate() - 1); tipTo = tipFrom }
+                    else if (key === 'L7D') { tipTo = new Date(today2); tipTo.setDate(today2.getDate() - 1); tipFrom = new Date(tipTo); tipFrom.setDate(tipTo.getDate() - 6) }
+                    else { tipFrom = new Date(today2.getFullYear(), today2.getMonth(), 1); tipTo = today2 }
+                    const fmtShort = d => `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`
+                    const tipLabel = fmtShort(tipFrom) + ' - ' + fmtShort(tipTo)
+                    const isHov = hoveredPreset === key
+                    return (
+                      <div key={key} style={{ position:'relative' }}>
+                        <button
+                          onClick={() => { setDatePreset(key); setCustomFrom(''); setCustomTo(''); setShowCustom(false) }}
+                          onMouseEnter={() => setHoveredPreset(key)}
+                          onMouseLeave={() => setHoveredPreset(null)}
+                          style={{
+                            padding:'5px 11px', borderRadius:7, border:'none', cursor:'pointer', fontSize:11.5, fontWeight:700, fontFamily:FONT,
+                            background: activeFilter === 'custom' ? 'transparent' : datePreset === key ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent',
+                            color: activeFilter === 'custom' ? '#CBD5E1' : datePreset === key ? '#fff' : '#64748B',
+                            boxShadow: activeFilter === 'custom' ? 'none' : datePreset === key ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
+                            opacity: activeFilter === 'custom' ? 0.5 : 1,
+                            pointerEvents: activeFilter === 'custom' ? 'none' : 'auto',
+                            transition:'all .15s',
+                          }}>{lbl2}</button>
+                        <div style={{ position:'absolute', top:'calc(100% + 7px)', left:'50%', transform:'translateX(-50%)', background:'#1E293B', color:'var(--card)', fontSize:11, fontWeight:500, fontFamily:FONT, padding:'5px 10px', borderRadius:7, whiteSpace:'nowrap', pointerEvents:'none', boxShadow:'0 4px 14px rgba(15,23,42,0.18)', zIndex:600, opacity: isHov ? 1 : 0, transition:'opacity .15s ease' }}>
+                          {tipLabel}
+                          <div style={{ position:'absolute', top:-4, left:'50%', transform:'translateX(-50%)', width:8, height:8, background:'#1E293B', borderRadius:2, clipPath:'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
+              )}
+
+              {monthOptions.length > 0 && (
+                <div style={{ opacity: activeFilter !== 'month' ? 0.45 : 1, transition:'opacity .15s' }} title={activeFilter !== 'month' ? 'Click to switch to month view' : undefined}>
+                  <Dropdown
+                    options={monthOptions}
+                    value={selMonth}
+                    minWidth={110}
+                    onChange={v => { setSelMonth(v); setDatePreset('month'); setCustomFrom(''); setCustomTo(''); setShowCustom(false) }}
+                  />
+                </div>
+              )}
+
+              <div style={{ position:'relative' }}>
+                <button onClick={() => { setShowCustom(v => !v); if (!showCustom) setDatePreset('month') }}
+                  style={{ padding:'6px 11px', borderRadius:8, border:`0.5px solid ${datePreset === 'custom' ? C.navy : C.border}`, background: datePreset === 'custom' ? C.navyBg : 'var(--card)', color: datePreset === 'custom' ? C.navy : C.sub, fontSize:11.5, fontWeight:600, fontFamily:FONT, cursor:'pointer', display:'flex', alignItems:'center', gap:5, boxShadow: showCustom ? '0 0 0 3px rgba(31,60,132,0.08)' : 'none', transition:'all .15s' }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                  {datePreset === 'custom' && customFrom ? customFrom + ' -> ' + customTo : 'Custom'}
+                </button>
+                {showCustom && (
+                  <>
+                    <div onClick={() => setShowCustom(false)} style={{ position:'fixed', inset:0, zIndex:399 }} />
+                    <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:14, boxShadow:'0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', overflow:'hidden' }}>
+                      <DateRangePicker
+                        from={customFrom ? (() => { const [y, m, d] = customFrom.split('-').map(Number); return new Date(y, m - 1, d) })() : null}
+                        to={customTo ? (() => { const [y, m, d] = customTo.split('-').map(Number); return new Date(y, m - 1, d) })() : null}
+                        onChange={(f, t) => { setCustomFrom(f); setCustomTo(t); setDatePreset('custom'); setShowCustom(false) }}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
-            )}
+
+              <Dropdown label="Source" options={sources} value={source} minWidth={110} onChange={setSource} />
+            </div>
+
+            {lastSync && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT }}>Synced {syncFmt.format(lastSync)}</span>}
+            <button onClick={() => loadData(true)} disabled={loading} className="lqRefreshBtn" style={{ padding:'6px 14px', borderRadius:8, border:`0.5px solid ${C.border}`, fontSize:12, fontWeight:500, cursor: loading ? 'wait' : 'pointer', fontFamily:FONT, background:'var(--card)', color:'#374151', display:'flex', alignItems:'center', gap:6, opacity: loading ? 0.65 : 1 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+              {loading ? 'Refreshing' : 'Refresh'}
+            </button>
+            <ExportButton data={exportRows} filename="overall-summary" />
+            <div style={{ position:'relative' }}>
+              <button onClick={() => setShowInfo(v => !v)} title="How these metrics are calculated" style={{ width:30, height:30, borderRadius:8, border:`0.5px solid ${C.border}`, background: showInfo ? C.navyBg : 'var(--card)', color:C.navy, fontSize:14, fontWeight:700, fontStyle:'italic', fontFamily:'Georgia,serif', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>i</button>
+              {showInfo && <div onClick={() => setShowInfo(false)} style={{ position:'fixed', inset:0, zIndex:150 }} />}
+              {showInfo && (
+                <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:360, maxHeight:'74vh', overflowY:'auto', background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 14px 40px rgba(15,23,42,0.16)', padding:'16px 18px', textAlign:'left', fontFamily:FONT }}>
+                  <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:8 }}>How Overall is calculated</div>
+                  <div style={{ fontSize:11, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
+                  <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.7 }}>
+                    <b>Leads Generated</b> → <b>Floor Queued</b> → <b>Total Queued</b> (Futwork + Superbot) → <b>Human QL</b> (Futwork-qualified) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (revenue attribution units). Each stage is a subset of the one before it, so the funnel chart below reads top-to-bottom as the real conversion path.<br /><br />
+                    Last Day / Last 7D / MTD and Custom filter by lead date; the Month dropdown scopes to one calendar month. Source filters everything below.
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
