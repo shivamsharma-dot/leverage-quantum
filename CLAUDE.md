@@ -1972,3 +1972,20 @@ With the user's explicit "ok" to actually send a test email (asked for beforehan
 **Confirmed via Settings > Reports > Report Activity**: a new row appeared -- `Chat Answer | SENT | shivam.sharma@leverageedu.com | 1 recipient | 17 Jul 2026 . 01:04 pm`. The `report_type: 'chat answer'` value (chosen with a space instead of an underscore specifically so the existing `textTransform:'capitalize'` display logic would render it cleanly) shows correctly as "Chat Answer" in the activity table, sitting naturally alongside the existing Daily/Weekly cron rows. No console errors (only the pre-existing benign extension noise). This closes out Batch 3a end-to-end -- the feature is fully verified, not just UI-checked.
 
 Not independently confirmed: the actual rendered appearance of the table/list HTML inside a real email client inbox (Gmail/Outlook rendering quirks with the inline-styled `<table>`/`<ul>` markup `mdToEmailHtml()` produces) -- the Report Activity log only confirms Resend accepted and sent it, not how it looks on arrival. Worth a visual check next time the user is in their inbox.
+
+## 2026-07-17 (later still) -- Ask AI "email this answer": premium redesign ported to production, verified in real Gmail (commit 003fb45)
+
+Ported the finalized email design (iterated live in a Claude Code Artifact, several rounds of user art-direction) into the actual `buildChatAnswerEmail()` function in `api/send-report.js`, replacing the flat-navy-header version from `7c92ebe`.
+
+**Design (all inline HTML/CSS, no gradients, no SVGs -- both were the earlier Gmail-rendering bugs):**
+- Top accent: 4 solid `<td>` color blocks (navy/blue/cyan/green), not a blended gradient.
+- White rounded-square logo icon with `box-shadow` (was a flat navy block) + 3 solid-color div bars (no inline SVG).
+- Green "ASK AI ANSWER" pill tag, bold 22px question headline, muted "Shared by ... · date" line, clean 1px divider.
+- Answer content area (`answerHtml`, dynamic) unchanged in structure; wrapper card is `table-layout` safe throughout so nothing can overflow the 600px width regardless of content length.
+- Footer: light `#F8FAFC` bar, centered muted text, rounded bottom corners matching the card.
+
+**Verified live end-to-end** (quantum.leverageedu.com/ask-ai, admin session): sent a short/cheap test question forcing a real markdown table answer, clicked Email, confirmed recipient (self only), clicked Send -- confirmed "Sent" in the modal, then opened the actual email in Gmail: top stripe renders as 4 correct solid brand blocks (no purple), logo renders correctly (no blank icon), table/content stay within the card, footer aligns flush with the card edges. No console errors.
+
+NOTE: the table's "Rs" currency labels come from the AI's own answer content (system prompt / `fmtINR()` still say "Rs" per the not-yet-applied Design Rule #11 sweep noted 2026-07-17 earlier today) -- this is expected and separate from the email template itself, which correctly uses `&#8377;` wherever the template's own copy renders currency (none in this particular answer, since all currency came from the dynamic answerHtml).
+
+`node --check api/send-report.js` passed before push. DashboardHome.jsx untouched.
