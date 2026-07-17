@@ -371,6 +371,7 @@ NO colored top border. NO colored icon squares. NO tinted backgrounds.
 8. **Dropdowns** — always custom-styled, never native `<select>`
 9. **"i" tooltip rule** — every dashboard page must include an information tooltip explaining metric calculations. Keep in sync when metrics change.
 10. **Design quality** — production-grade on every element: custom dropdowns, styled tooltips, proper spacing, hover states on all interactive elements. Nothing default or plain.
+11. **Currency symbol** — use `₹` (the actual rupee sign), never `Rs`, `Rs.`, or `INR`, anywhere revenue/spend/cost/currency is displayed (dashboards, Ask AI answers, reports, emails). In HTML output (emails especially) prefer the numeric entity `&#8377;` over the raw UTF-8 character for reliability across mail clients/encodings. **Not yet retroactively applied** — existing code still uses `Rs` in many places (`fmtINR()` helpers in `api/ask-ai.js`/`api/send-report.js`, most dashboard pages, the Ask AI system prompt's FORMAT RULES). Added 2026-07-17 when building the Ask AI "email this answer" feature; apply going forward, and do a full find-and-replace sweep across the app if/when asked.
 
 ---
 
