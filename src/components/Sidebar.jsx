@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import styles from './Sidebar.module.css'
 import SnapshotTool from './SnapshotTool'
+import CalculatorTool from './CalculatorTool'
 import { prefetchRoute } from '../lib/routePrefetch'
 
 const NAV = [
@@ -493,6 +494,7 @@ export default function Sidebar() {
           </div>
         </div>
         <SnapshotTool/>
+        <CalculatorTool/>
       </aside>
       {peekOpen && (
         <>
@@ -511,6 +513,7 @@ export default function Sidebar() {
     <aside className={styles.sidebar}>
       {renderNavBody()}
       <SnapshotTool/>
+      <CalculatorTool/>
     </aside>
   )
 }
