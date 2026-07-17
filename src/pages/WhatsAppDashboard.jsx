@@ -11,6 +11,7 @@ import {
   C, FONT, BRAND_RAMP, brandColor, PAGE_SIZE,
   fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
 } from '../ui/dashboardKit'
+import Button from '../components/Button'
 
 const CSV_DEFAULT = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=whatsapp'
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -278,9 +279,9 @@ export default function WhatsAppDashboard() {
               {monthList.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
             {lastSync && <span style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>}
-            <button onClick={handleRefresh} disabled={refreshing} style={{ padding: '7px 12px', borderRadius: 8, border: '0.5px solid #e5e7eb', fontSize: 12, fontWeight: 600, cursor: refreshing ? 'wait' : 'pointer', fontFamily: FONT, background: '#fff', color: '#374151', opacity: refreshing ? 0.65 : 1 }}>
+            <Button size='sm' variant='secondary' onClick={handleRefresh} disabled={refreshing}>
               {refreshing ? 'Refreshing' : 'Refresh'}
-            </button>
+            </Button>
           </div>
         </div>
 

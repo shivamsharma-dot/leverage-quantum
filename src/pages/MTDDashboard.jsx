@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelL
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
+import Button from '../components/Button'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT58jwL_E0MSciEW_nyrHQMA-0DiFqUN3wstB9yTpfM3gdhK-ctxaODRuqtdxurFRJwmhvbzqS_9EuM/pub?output=csv'
 
@@ -254,9 +255,11 @@ export default function MTDDashboard(){
             minWidth={130}
           />}
           <div style={{fontSize:11,color:'#94A3B8',borderLeft:'0.5px solid #E5E7EB',paddingLeft:14}}>{lastSync?'Synced '+fmt.format(lastSync):''}</div>
-          <button onClick={loadData} disabled={loading} className="lqRefreshBtn" style={{padding:'6px 14px',borderRadius:8,border:'0.5px solid #E5E7EB',fontSize:12,fontWeight:500,cursor:loading?'wait':'pointer',fontFamily:'inherit',background:'#fff',color:'#374151',display:'flex',alignItems:'center',gap:6,opacity:loading?0.65:1,transition:'opacity .15s ease'}}>
-            <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' style={{animation:loading?'spin .8s linear infinite':'none'}}><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/></svg>{loading?'Refreshing':'Refresh'}
-          </button>
+          <Button size='sm' variant='secondary' onClick={loadData} disabled={loading} className="lqRefreshBtn" icon={
+            <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' style={{animation:loading?'spin .8s linear infinite':'none'}}><polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/></svg>
+          }>
+            {loading?'Refreshing':'Refresh'}
+          </Button>
           <ExportButton data={srcs} filename='mtd-by-source'/>
           <button onClick={()=>setCompare(v=>!v)} title='Split view: Meta vs Google by source' style={{padding:'6px 12px',borderRadius:8,border:'0.5px solid '+(compare?'#1C9FD4':'#E5E7EB'),fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit',background:compare?'#E3F5FD':'#fff',color:compare?'#1C9FD4':'#374151',display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
             <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'><rect x='3' y='3' width='8' height='18' rx='1'/><rect x='13' y='3' width='8' height='18' rx='1'/></svg>

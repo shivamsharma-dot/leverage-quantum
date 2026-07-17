@@ -7,6 +7,7 @@ import ExportButton from '../components/ExportButton'
 import { useAuth } from '../hooks/useAuth'
 import { usePresence } from '../hooks/usePresence'
 import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'; import { resolveSheetUrl } from '../lib/dataSources'
+import Button from '../components/Button'
 
 const DATE_RANGES=[{id:'TODAY',label:'Today'},{id:'LAST_7_DAYS',label:'Last 7 days'},{id:'LAST_30_DAYS',label:'Last 30 days'},{id:'LAST_90_DAYS',label:'Last 90 days'},{id:'THIS_MONTH',label:'This month'},{id:'LAST_MONTH',label:'Last month'},{id:'CUSTOM',label:'Custom'}]
 const TABS=[{id:'campaigns',label:'Campaigns'},{id:'ads',label:'Ads'},{id:'keywords',label:'Keywords'},{id:'searchTerms',label:'Search terms'},{id:'adGroups',label:'Ad groups'},{id:'conversions',label:'Conversions'},{id:'devices',label:'Devices'},{id:'geo',label:'Locations'},{id:'audiences',label:'Audiences'},{id:'schedule',label:'Schedule'},{id:'assets',label:'Assets'}];const LEADS_CSV_DEFAULT='https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=googleleads';function parseLeadsCSV(t){const rows=[];let i=0,field='',row=[],inq=false;while(i<t.length){const c=t[i];const cc=t.charCodeAt(i);if(inq){if(c==='"'){if(t[i+1]==='"'){field+='"';i+=2;continue}inq=false;i++;continue}field+=c;i++;continue}else{if(c==='"'){inq=true;i++;continue}if(c===','){row.push(field);field='';i++;continue}if(cc===13){i++;continue}if(cc===10){row.push(field);rows.push(row);row=[];field='';i++;continue}field+=c;i++;continue}}if(field.length||row.length){row.push(field);rows.push(row)}const h=rows[0]||[];return rows.slice(1).filter(r=>r.length>1).map(r=>Object.fromEntries(h.map((k,idx)=>[k,(r[idx]||'')])))};function parseLeadDate(s){const m=String(s||'').trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);if(!m)return null;const MN={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};const mi=MN[m[2]];if(mi==null)return null;return new Date(+m[3],mi,+m[1])};function resolveDateRangeBounds(dr,cFrom,cTo){const today=new Date();const d0=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(dr==='CUSTOM'&&cFrom&&cTo){const p=cFrom.split('-'),q=cTo.split('-');return{start:new Date(+p[0],+p[1]-1,+p[2]),end:new Date(+q[0],+q[1]-1,+q[2])}}if(dr==='TODAY')return{start:d0,end:d0};if(dr==='LAST_7_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-7);return{start:s,end:e}}if(dr==='LAST_30_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-30);return{start:s,end:e}}if(dr==='LAST_90_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-90);return{start:s,end:e}}if(dr==='THIS_MONTH')return{start:new Date(d0.getFullYear(),d0.getMonth(),1),end:d0};if(dr==='LAST_MONTH'){const s=new Date(d0.getFullYear(),d0.getMonth()-1,1);const e=new Date(d0.getFullYear(),d0.getMonth(),0);return{start:s,end:e}}return{start:new Date(d0.getFullYear(),d0.getMonth(),1),end:d0}}
@@ -721,12 +722,13 @@ return(
 
 {lastSync&&!isBusy&&<span style={{fontSize:10.5,color:C.muted,whiteSpace:'nowrap'}}>Synced {lastSync.toLocaleTimeString()}</span>}
 
-<button onClick={()=>{loaded.current={};setData({});loadTab(activeTab,dateRange,customFrom,customTo)}} disabled={isBusy} style={{padding:'6px 14px',borderRadius:8,border:'0.5px solid '+C.border,fontSize:12,fontWeight:600,cursor:isBusy?'default':'pointer',fontFamily:FONT,background:'var(--card)',color:C.text,display:'flex',alignItems:'center',gap:6,opacity:isBusy?.7:1}}>
+<Button size='sm' variant='secondary' disabled={isBusy} onClick={()=>{loaded.current={};setData({});loadTab(activeTab,dateRange,customFrom,customTo)}} icon={
 <span style={{display:'inline-flex',animation:isBusy?'gadsSpin .7s linear infinite':'none'}}>
 <svg width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' strokeLinejoin='round'><polyline points='23 4 23 10 17 10'/><polyline points='1 20 1 14 7 14'/><path d='M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15'/></svg>
 </span>
+}>
 {isBusy?'Refreshing…':'Refresh'}
-</button>
+</Button>
 
 {activeTab==='campaigns'&&(
 <div style={{position:'relative'}}>

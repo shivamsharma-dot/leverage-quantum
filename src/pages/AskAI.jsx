@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import Sidebar from '../components/Sidebar'
 import { toast } from '../components/ToastHost'
+import Button from '../components/Button'
 
 /* ─── tokens ──────────────────────────────────────────────────── */
 const NAVY   = '#1F3C84'
@@ -1007,10 +1008,10 @@ export default function AskAI() {
                         {expandedPrompt===p.id&&(
                           <div style={{padding:'0 0 14px',animation:'fadeIn .2s ease'}}>
                             <div style={{fontSize:11.5,color:'#94A3B8',lineHeight:1.6,marginBottom:10,maxHeight:100,overflowY:'auto'}}>{p.text.slice(0,200)}{p.text.length>200?'…':''}</div>
-                            <button onClick={()=>{setInput(p.text);textRef.current?.focus()}}
-                              style={{width:'100%',padding:'9px',borderRadius:9,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:12.5,fontWeight:700,fontFamily:FONT,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,boxShadow:'0 4px 12px -4px rgba(28,159,212,0.45)'}}>
-                              <Ico n="spark" s={12} c="#fff"/> Use this prompt
-                            </button>
+                            <Button onClick={()=>{setInput(p.text);textRef.current?.focus()}} size="sm" style={{width:'100%'}}
+                              icon={<Ico n="spark" s={12} c={NAVY}/>}>
+                              Use this prompt
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -1027,10 +1028,10 @@ export default function AskAI() {
                     <div style={{marginBottom:16}}>
                       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
                         <span style={{fontSize:11,fontWeight:700,color:'#1F3C84',letterSpacing:'0.02em'}}>Project memory</span>
-                        <button onClick={regenerateMemory} disabled={regenLoading}
-                          style={{display:'flex',alignItems:'center',gap:5,padding:'4px 9px',border:'none',background:'#F1F4F8',borderRadius:7,cursor:regenLoading?'default':'pointer',fontSize:11,fontWeight:600,color:'#1F3C84',fontFamily:FONT,opacity:regenLoading?0.6:1}}>
-                          <Ico n="refresh" s={11} c="#1F3C84"/>{regenLoading?'Updating…':'Regenerate'}
-                        </button>
+                        <Button onClick={regenerateMemory} disabled={regenLoading} size="sm"
+                          icon={<Ico n="refresh" s={11} c={NAVY}/>}>
+                          {regenLoading?'Updating…':'Regenerate'}
+                        </Button>
                       </div>
                       {autoMemory?(
                         <div style={{fontSize:12,color:'#374151',lineHeight:1.65,whiteSpace:'pre-wrap',padding:'11px 12px',background:'#F8FAFC',borderRadius:9,border:'0.5px solid #EEF1F6'}}>{autoMemory}</div>
@@ -1116,9 +1117,8 @@ export default function AskAI() {
                               onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();editAndResend(k,editingMsgText)}if(e.key==='Escape')setEditingMsgIdx(null)}}
                               style={{width:'100%',minHeight:44,border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#1E293B',lineHeight:1.65,background:'transparent',padding:0}}/>
                             <div style={{display:'flex',justifyContent:'flex-end',gap:6,marginTop:8}}>
-                              <button onClick={()=>setEditingMsgIdx(null)} style={{padding:'5px 12px',borderRadius:7,border:`1px solid ${borderColor}`,background:'transparent',color:'#64748B',fontSize:12,fontWeight:600,fontFamily:FONT,cursor:'pointer'}}>Cancel</button>
-                              <button onClick={()=>editAndResend(k,editingMsgText)} disabled={!editingMsgText.trim()}
-                                style={{padding:'5px 14px',borderRadius:7,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:12,fontWeight:700,fontFamily:FONT,cursor:editingMsgText.trim()?'pointer':'not-allowed',opacity:editingMsgText.trim()?1:0.5}}>Resend</button>
+                              <Button size="sm" variant="secondary" onClick={()=>setEditingMsgIdx(null)}>Cancel</Button>
+                              <Button size="sm" onClick={()=>editAndResend(k,editingMsgText)} disabled={!editingMsgText.trim()}>Resend</Button>
                             </div>
                           </div>
                         </div>
@@ -1165,11 +1165,11 @@ export default function AskAI() {
                               {!m.streaming&&(
                                 <div style={{display:'flex',gap:4,marginTop:8}}>
                                   {[['copy','Copy'],['refresh','Retry'],['mail','Email'],['slack','Slack']].map(([ic,lbl])=>(
-                                    <button key={ic} title={lbl} className="mabtn" disabled={ic==='refresh'&&loading}
-                                      style={{display:'flex',alignItems:'center',gap:5,padding:'5px 9px',border:`1px solid ${borderColor}`,background:'transparent',borderRadius:7,cursor:(ic==='refresh'&&loading)?'default':'pointer',color:'#64748B',fontSize:11.5,fontWeight:500,fontFamily:FONT,transition:'all .15s',opacity:(ic==='refresh'&&loading)?0.5:1}}
+                                    <Button key={ic} title={lbl} size="sm" variant="secondary" disabled={ic==='refresh'&&loading}
+                                      icon={<Ico n={copied===k&&ic==='copy'?'check':ic==='refresh'?'refresh':ic==='mail'?'mail':ic==='slack'?'slack':'copy'} s={12} c={copied===k&&ic==='copy'?GREEN:'#64748B'}/>}
                                       onClick={()=>{if(ic==='copy'){navigator.clipboard?.writeText(m.content);setCopied(k);setTimeout(()=>setCopied(null),1500)}else if(ic==='refresh'){regenerate(k)}else if(ic==='mail'){setEmailModalIdx(k);setEmailRecipients(uid!=='default'?uid:'');setEmailMsg(null)}else if(ic==='slack'){setSlackModalIdx(k);setSlackMsg(null)}}}>
-                                      <Ico n={copied===k&&ic==='copy'?'check':ic==='refresh'?'refresh':ic==='mail'?'mail':ic==='slack'?'slack':'copy'} s={12} c={copied===k&&ic==='copy'?GREEN:'#64748B'}/>{lbl}
-                                    </button>
+                                      {lbl}
+                                    </Button>
                                   ))}
                                 </div>
                               )}
@@ -1224,11 +1224,10 @@ export default function AskAI() {
               style={{width:'100%',marginTop:6,padding:'9px 12px',borderRadius:9,border:`1px solid ${borderColor}`,fontSize:13,fontFamily:FONT,color:'#1E293B',outline:'none',boxSizing:'border-box'}}/>
             {emailMsg&&<div style={{marginTop:10,fontSize:12,fontWeight:600,color:emailMsg.type==='err'?NAVY:GREEN,fontFamily:FONT}}>{emailMsg.type==='err'?'✕ ':'✓ '}{emailMsg.text}</div>}
             <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:18}}>
-              <button onClick={()=>setEmailModalIdx(null)} disabled={emailSending} style={{padding:'8px 16px',borderRadius:8,border:`1px solid ${borderColor}`,background:'transparent',color:'#64748B',fontSize:13,fontWeight:600,fontFamily:FONT,cursor:emailSending?'default':'pointer'}}>Cancel</button>
-              <button onClick={sendAnswerEmail} disabled={emailSending||!emailRecipients.trim()}
-                style={{padding:'8px 18px',borderRadius:8,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:13,fontWeight:700,fontFamily:FONT,cursor:(emailSending||!emailRecipients.trim())?'not-allowed':'pointer',opacity:(emailSending||!emailRecipients.trim())?0.6:1}}>
+              <Button variant="secondary" onClick={()=>setEmailModalIdx(null)} disabled={emailSending}>Cancel</Button>
+              <Button onClick={sendAnswerEmail} disabled={emailSending||!emailRecipients.trim()}>
                 {emailSending?'Sending…':'Send email'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1247,11 +1246,10 @@ export default function AskAI() {
             <p style={{fontSize:12,color:'#94A3B8',margin:'2px 0 16px',lineHeight:1.5,fontFamily:FONT}}>Sends this answer to the team Slack channel configured in Settings &gt; Reports.</p>
             {slackMsg&&<div style={{marginTop:2,marginBottom:14,fontSize:12,fontWeight:600,color:slackMsg.type==='err'?NAVY:GREEN,fontFamily:FONT}}>{slackMsg.type==='err'?'✕ ':'✓ '}{slackMsg.text}</div>}
             <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:slackMsg?0:18}}>
-              <button onClick={()=>setSlackModalIdx(null)} disabled={slackSending} style={{padding:'8px 16px',borderRadius:8,border:`1px solid ${borderColor}`,background:'transparent',color:'#64748B',fontSize:13,fontWeight:600,fontFamily:FONT,cursor:slackSending?'default':'pointer'}}>Cancel</button>
-              <button onClick={sendAnswerSlack} disabled={slackSending}
-                style={{padding:'8px 18px',borderRadius:8,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:13,fontWeight:700,fontFamily:FONT,cursor:slackSending?'not-allowed':'pointer',opacity:slackSending?0.6:1}}>
+              <Button variant="secondary" onClick={()=>setSlackModalIdx(null)} disabled={slackSending}>Cancel</Button>
+              <Button onClick={sendAnswerSlack} disabled={slackSending}>
                 {slackSending?'Posting…':'Post to Slack'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

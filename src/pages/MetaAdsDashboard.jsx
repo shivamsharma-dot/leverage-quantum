@@ -4,6 +4,7 @@ import { usePresence } from '../hooks/usePresence'
 import { TrendingUp, Users, MousePointer, Eye, Target, BarChart2, Zap, Activity, Award, Globe, Layers } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
+import Button from '../components/Button'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
@@ -194,10 +195,10 @@ function ConnectScreen({ onConnect, onPaste, error, loading }) {
         {error && <div className={styles.connectError}>{error}</div>}
         {!showPaste
           ? <>
-              <button className={styles.connectBtn} onClick={onConnect} disabled={loading}>
-                {loading ? <><span className={styles.spinner}/> Connecting…</> : <><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg> Continue with Meta</>}
-              </button>
-              <button onClick={() => setShowPaste(true)} style={{background:'none',border:'none',color:'#9CA3AF',fontSize:12,cursor:'pointer',fontFamily:'Inter,sans-serif',marginTop:4}}>Paste access token manually →</button>
+              <Button onClick={onConnect} disabled={loading} style={{width:'100%',marginBottom:12}}>
+                {loading ? <><span className={styles.spinner}/> Connecting…</> : <><svg width="16" height="16" viewBox="0 0 24 24" fill="#1877F2"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg> Continue with Meta</>}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowPaste(true)} style={{color:'#9CA3AF',marginTop:4}}>Paste access token manually →</Button>
             </>
           : <>
               <p style={{fontSize:12.5,color:'#374151',marginBottom:8,textAlign:'left',fontWeight:500}}>Paste your Meta Access Token</p>
@@ -206,8 +207,8 @@ function ConnectScreen({ onConnect, onPaste, error, loading }) {
               </p>
               <input type="text" placeholder="EAAxxxxxxxxxxxxxxx..." value={manual} onChange={e => setManual(e.target.value)}
                 style={{width:'100%',padding:'9px 12px',border:'1px solid #E5E7EB',borderRadius:8,fontSize:12,fontFamily:'monospace',marginBottom:8,boxSizing:'border-box',outline:'none'}}/>
-              <button className={styles.connectBtn} onClick={() => onPaste(manual)} disabled={!manual.trim()}>Connect</button>
-              <button onClick={() => setShowPaste(false)} style={{background:'none',border:'none',color:'#9CA3AF',fontSize:12,cursor:'pointer',fontFamily:'Inter,sans-serif',marginTop:4}}>← Back</button>
+              <Button onClick={() => onPaste(manual)} disabled={!manual.trim()} style={{width:'100%',marginBottom:12}}>Connect</Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowPaste(false)} style={{color:'#9CA3AF',marginTop:4}}>← Back</Button>
             </>
         }
         <p className={styles.connectNote}>Token stored locally in your browser only.</p>
@@ -957,14 +958,14 @@ function CreativesTab({ data, token }) {
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                   {previewAd.previewPlatform === 'instagram' ? 'Open on Instagram' : previewAd.previewPlatform === 'facebook' ? 'Open on Facebook' : 'Open in browser'}
                 </a>
-                <button type="button" onClick={copyPreviewLink}
-                  style={{ display:'inline-flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:8,border:'1px solid #E5E7EB',background:linkCopied?'#F0FDF4':'#fff',color:linkCopied?'#15803D':'#374151',fontSize:12,fontWeight:600,cursor:'pointer' }}>
+                <Button variant="secondary" size="sm" onClick={copyPreviewLink}
+                  style={linkCopied ? {background:'#F0FDF4',color:'#15803D'} : undefined}>
                   {linkCopied ? (
                     <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Copied</>
                   ) : (
                     <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Copy link</>
                   )}
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -1815,10 +1816,9 @@ export default function MetaAdsDashboard() {
               <span style={{fontSize:12,color:'#B45309'}}>Please reconnect to view live data.</span>
             </div>
             {!isViewerRole && (
-              <button onClick={() => { disconnect(); setTokenExpired(false) }}
-                style={{background:'#D97706',color:'#fff',border:'none',borderRadius:6,padding:'5px 12px',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
+              <Button size="sm" onClick={() => { disconnect(); setTokenExpired(false) }}>
                 Reconnect
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -1934,23 +1934,20 @@ export default function MetaAdsDashboard() {
                 <DatePicker value={customFrom} onChange={setCustomFrom} placeholder="From date" maxDate={customTo || new Date().toISOString().slice(0,10)}/>
                 <span style={{fontSize:12,color:'#9CA3AF'}}>to</span>
                 <DatePicker value={customTo} onChange={setCustomTo} placeholder="To date" maxDate={new Date().toISOString().slice(0,10)}/>
-                <button
-                  disabled={!customFrom || !customTo || loading}
-                  onClick={() => customFrom && customTo && loadAllData(token, 'custom_range', customFrom, customTo)}
-                  style={{padding:'6px 14px',borderRadius:7,background:customFrom&&customTo?'#0F172A':'#E5E7EB',color:customFrom&&customTo?'#fff':'#9CA3AF',border:'none',fontSize:12,fontWeight:600,cursor:customFrom&&customTo?'pointer':'not-allowed',fontFamily:'Inter,sans-serif',transition:'all .15s'}}>
+                <Button size="sm" disabled={!customFrom || !customTo || loading}
+                  onClick={() => customFrom && customTo && loadAllData(token, 'custom_range', customFrom, customTo)}>
                   Apply
-                </button>
+                </Button>
               </div>
             )}
             {lastSync && <span className={styles.syncTag}>Synced {lastSync.toLocaleTimeString()}</span>}
             {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#4CAE6F':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
-            <button className={styles.refreshBtn} onClick={() => { loadAllData(token, datePreset); setCrmRefreshNonce(n=>n+1) }} disabled={loading}
-              style={{opacity: loading ? 0.7 : 1}}>
-              <span style={{display:'inline-flex', animation: loading ? 'spin .7s linear infinite' : 'none'}}>
+            <Button size="sm" variant="secondary" onClick={() => { loadAllData(token, datePreset); setCrmRefreshNonce(n=>n+1) }} disabled={loading}
+              icon={<span style={{display:'inline-flex', animation: loading ? 'spin .7s linear infinite' : 'none'}}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-              </span>
+              </span>}>
               {loading ? 'Refreshing…' : 'Refresh'}
-            </button>
+            </Button>
             {activeTab === 'campaigns' && (
               <div style={{ position:'relative' }}>
                 <button onClick={()=>setShowInfo(v=>!v)} title='How these metrics are calculated' style={{ width:26,height:26,borderRadius:7,border:'0.5px solid #E5E7EB',background:showInfo?'#E8EFF9':'#fff',color:'#1F3C84',fontSize:13,fontWeight:700,fontStyle:'italic',fontFamily:'Georgia,serif',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>i</button>

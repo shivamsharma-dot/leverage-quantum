@@ -7,6 +7,7 @@ import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
+import Button from '../components/Button'
 import { fetchCSV } from '../lib/sheetCache'
 import { getSession, setSession } from '../lib/sessionLoad'
 import { usePresence } from '../hooks/usePresence'
@@ -462,19 +463,12 @@ function DateRangePicker({ from, to, onChange, onClose }) {
 
       {/* Footer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `0.5px solid #F1F5F9` }}>
-        <button onClick={() => { setSelFrom(null); setSelTo(null); setStep('from') }}
-          style={{ padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', fontSize: 11.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer', color: C.sub }}>
+        <Button size="sm" variant="secondary" onClick={() => { setSelFrom(null); setSelTo(null); setStep('from') }}>
           Clear
-        </button>
-        <button onClick={() => canApply && onChange(fmt(selFrom), fmt(selTo))}
-          disabled={!canApply}
-          style={{
-            padding: '7px 18px', borderRadius: 8, border: 'none', cursor: canApply?'pointer':'not-allowed',
-            background: canApply ? C.navy : 'var(--card-border)', color: canApply?'var(--card)':C.muted,
-            fontSize: 12, fontWeight: 700, fontFamily: FONT, transition: 'all .15s',
-          }}>
+        </Button>
+        <Button size="sm" onClick={() => canApply && onChange(fmt(selFrom), fmt(selTo))} disabled={!canApply}>
           Apply range
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -507,27 +501,21 @@ const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
   }
   return (
     <div style={{position:'relative'}}>
-      <button onClick={() => setOpen(v => !v)}
-        style={{
-          display:'flex', alignItems:'center', gap:6, padding:'6px 13px',
-          borderRadius:8, background:'var(--card)',
-          border:`0.5px solid ${open ? C.navy : C.border}`,
-          color: open ? C.navy : '#374151', fontSize:12, fontWeight:600,
-          cursor:'pointer', fontFamily:FONT,
-          boxShadow: open ? `0 0 0 3px rgba(31,60,132,0.08)` : 'none',
-          transition:'all .15s',
-        }}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
+      <Button size="sm" variant="secondary" onClick={() => setOpen(v => !v)}
+        style={open ? { borderColor: C.navy, color: C.navy, boxShadow: `0 0 0 3px rgba(31,60,132,0.08)` } : undefined}
+        icon={
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        }>
         Export
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
           style={{transition:'transform .2s', transform: open?'rotate(180deg)':'rotate(0deg)'}}>
           <polyline points="6 9 12 15 18 9"/>
         </svg>
-      </button>
+      </Button>
       {open && (
         <>
           <div onClick={() => setOpen(false)} style={{position:'fixed',inset:0,zIndex:399}}/>
@@ -558,23 +546,16 @@ const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
             ))}
             <div style={{height:'0.5px',background:'var(--bg3)',margin:'8px 4px'}}/>
             <div style={{display:'flex',gap:6,padding:'2px 4px 4px'}}>
-              {[['CSV','csv',C.navy],['JSON','json',C.blue]].map(([lbl,type,hc])=>(
-                <button key={type} onClick={()=>download(type)}
-                  style={{
-                    flex:1, padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`,
-                    background:'var(--card)', cursor:'pointer', fontFamily:FONT,
-                    fontSize:12, fontWeight:600, color:C.text,
-                    display:'flex', alignItems:'center', justifyContent:'center', gap:5,
-                    transition:'all .12s',
-                  }}
-                  onMouseOver={e=>{e.currentTarget.style.borderColor=hc;e.currentTarget.style.color=hc}}
-                  onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.text}}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                  </svg>
+              {[['CSV','csv'],['JSON','json']].map(([lbl,type])=>(
+                <Button key={type} size="sm" variant="secondary" onClick={()=>download(type)} style={{flex:1}}
+                  icon={
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                  }>
                   {lbl}
-                </button>
+                </Button>
               ))}
             </div>
             <div style={{fontSize:10,color:C.muted,textAlign:'center',padding:'4px 0 2px'}}>
@@ -607,22 +588,17 @@ const BrandTooltip = ({ active, payload, label, fmt }) => {
 }
 
 // Small export button used in monthly table card headers
-const MTableExportBtn = ({ onClick, disabled, C, FONT }) => (
-  <button onClick={onClick} disabled={disabled}
-    style={{
-      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-      borderRadius: 8, background: 'var(--card)', border: `0.5px solid ${C.border}`,
-      color: disabled ? C.muted : '#374151', fontSize: 12, fontWeight: 600,
-      cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: FONT,
-      opacity: disabled ? 0.55 : 1, transition: 'all .15s',
-    }}>
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-      <polyline points="7 10 12 15 17 10"/>
-      <line x1="12" y1="15" x2="12" y2="3"/>
-    </svg>
+const MTableExportBtn = ({ onClick, disabled }) => (
+  <Button size="sm" variant="secondary" onClick={onClick} disabled={disabled}
+    icon={
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    }>
     Export CSV
-  </button>
+  </Button>
 )
 
 export default function LeadQualificationDashboard({ forcedView } = {}) {
@@ -1382,19 +1358,15 @@ const baseCsv = await resolveSheetUrl(cfg.id === 'daily' ? 'qlopsDaily' : 'qlops
               {view === 'daily' && <><Dropdown label="Provider" options={providers} value={selProvider} minWidth={100} onChange={v => { setSelProvider(v); setPage(0) }} />
             <Dropdown label="Source" options={sources} value={selSource} minWidth={100} onChange={v => { setSelSource(v); setPage(0) }} /></>}
             {lastSync && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {lastSync.toLocaleTimeString()}</span>}
-            <button onClick={() => loadData(true)} disabled={loading} className="lqRefreshBtn"
-              style={{
-                padding: '6px 14px', borderRadius: 8, border: `0.5px solid ${C.border}`,
-                fontSize: 12, fontWeight: 500, cursor: loading ? 'wait' : 'pointer',
-                fontFamily: FONT, background: 'var(--card)', color: '#374151',
-                display: 'flex', alignItems: 'center', gap: 6, opacity: loading ? 0.65 : 1,
-              }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-                style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}>
-                <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-              </svg>
+            <Button size="sm" variant="secondary" onClick={() => loadData(true)} disabled={loading} className="lqRefreshBtn"
+              icon={
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                  style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}>
+                  <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                </svg>
+              }>
               {loading ? 'Refreshing' : 'Refresh'}
-            </button>
+            </Button>
 
             {/* Export button with view selector */}
             <div style={{position:'relative'}}>

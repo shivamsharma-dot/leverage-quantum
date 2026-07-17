@@ -12,6 +12,7 @@ import {
   C, FONT, BRAND_RAMP, brandColor, PAGE_SIZE,
   fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
 } from '../ui/dashboardKit';
+import Button from '../components/Button';
 
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Referral';
 function parseCSV(t) {
@@ -278,10 +279,9 @@ export default function ReferralDashboard() {
             <h1 style={{ fontSize:18, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.4px', fontFamily:FONT }}>Referral</h1>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <button onClick={() => loadData(true)} disabled={loading} title="Refresh data"
-            style={{ padding:'6px 14px', borderRadius:8, border:'1px solid #e5e7eb', fontSize:12, fontWeight:500, cursor: loading ? 'wait' : 'pointer', fontFamily:FONT, background:'#fff', color:'#374151', display:'flex', alignItems:'center', gap:6, opacity: loading ? 0.65 : 1 }}>
+          <Button size='sm' variant='secondary' onClick={() => loadData(true)} disabled={loading} title="Refresh data">
             {loading ? 'Refreshing' : 'Refresh'}
-          </button>
+          </Button>
           {/* DATE_RANGE_GROUP */}
           <span style={{ fontSize:10.5, fontWeight:700, color:C.muted, letterSpacing:0.5 }}>DATE</span>
           {[['all','All'],['MTD','MTD'],['L7D','7D'],['L30D','30D'],['custom','Custom']].map(([v,lab]) => <div key={v} style={pillStyle(dateRange === v)} onClick={() => setDateRange(v)}>{lab}</div>)}

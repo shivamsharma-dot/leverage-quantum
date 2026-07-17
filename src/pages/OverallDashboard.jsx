@@ -6,6 +6,7 @@ import {
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
+import Button from '../components/Button'
 import {
   C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
 } from '../ui/dashboardKit'
@@ -262,8 +263,8 @@ function DateRangePicker({ from, to, onChange }) {
         <CalMonth year={right.y} month={right.m} from={selFrom} to={selTo} hovered={step === 'to' ? hovered : null} onSelect={handleSelect} onHover={step === 'to' ? setHovered : () => {}} />
       </div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:14, paddingTop:12, borderTop:'0.5px solid #F1F5F9' }}>
-        <button onClick={() => { setSelFrom(null); setSelTo(null); setStep('from') }} style={{ padding:'6px 12px', borderRadius:8, border:`0.5px solid ${C.border}`, background:'var(--card)', fontSize:11.5, fontWeight:600, fontFamily:FONT, cursor:'pointer', color:C.sub }}>Clear</button>
-        <button onClick={() => canApply && onChange(fmt(selFrom), fmt(selTo))} disabled={!canApply} style={{ padding:'7px 18px', borderRadius:8, border:'none', cursor: canApply ? 'pointer' : 'not-allowed', background: canApply ? C.navy : 'var(--card-border)', color: canApply ? 'var(--card)' : C.muted, fontSize:12, fontWeight:700, fontFamily:FONT }}>Apply range</button>
+        <Button onClick={() => { setSelFrom(null); setSelTo(null); setStep('from') }} variant="secondary" size="sm">Clear</Button>
+        <Button onClick={() => canApply && onChange(fmt(selFrom), fmt(selTo))} disabled={!canApply} size="sm">Apply range</Button>
       </div>
     </div>
   )
@@ -362,7 +363,7 @@ function ColumnsPicker({ order, visible, onToggle, onMove, onClose, onReset }) {
       <div style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:230, maxHeight:340, overflowY:'auto' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 8px 8px' }}>
           <span style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>Columns — show, hide, reorder</span>
-          <button onClick={onReset} style={{ border:'none', background:'transparent', color:C.blue, fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:FONT, flexShrink:0 }}>Reset</button>
+          <Button onClick={onReset} variant="ghost" size="sm" style={{ padding:'2px 8px' }}>Reset</Button>
         </div>
         {order.map((key, i) => {
           const col = SUMMARY_COLUMNS.find(c => c.key === key)
@@ -987,10 +988,15 @@ export default function OverallDashboard() {
             </div>
 
             {lastSync && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT }}>Synced {syncFmt.format(lastSync)}</span>}
-            <button onClick={() => loadData(true)} disabled={loading} className="lqRefreshBtn" style={{ padding:'6px 14px', borderRadius:8, border:`0.5px solid ${C.border}`, fontSize:12, fontWeight:500, cursor: loading ? 'wait' : 'pointer', fontFamily:FONT, background:'var(--card)', color:'#374151', display:'flex', alignItems:'center', gap:6, opacity: loading ? 0.65 : 1 }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+            <Button
+              onClick={() => loadData(true)}
+              disabled={loading}
+              size="sm"
+              variant="secondary"
+              icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>}
+            >
               {loading ? 'Refreshing' : 'Refresh'}
-            </button>
+            </Button>
             <ExportButton data={exportRows} filename="overall-summary" />
             <div style={{ position:'relative' }}>
               <button onClick={() => setShowInfo(v => !v)} title="How these metrics are calculated" style={{ width:30, height:30, borderRadius:8, border:`0.5px solid ${C.border}`, background: showInfo ? C.navyBg : 'var(--card)', color:C.navy, fontSize:14, fontWeight:700, fontStyle:'italic', fontFamily:'Georgia,serif', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>i</button>
@@ -1150,20 +1156,28 @@ export default function OverallDashboard() {
                 </div>
 
                 <div style={{ position:'relative' }}>
-                  <button onClick={() => setShowColsPicker(v => !v)} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:8, border:`0.5px solid ${showColsPicker ? C.navy : C.border}`, background: showColsPicker ? C.navyBg : 'var(--card)', color: showColsPicker ? C.navy : '#374151', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:FONT }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="18" rx="1" /><rect x="14" y="3" width="7" height="18" rx="1" /></svg>
+                  <Button
+                    onClick={() => setShowColsPicker(v => !v)}
+                    size="sm"
+                    variant="secondary"
+                    icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="18" rx="1" /><rect x="14" y="3" width="7" height="18" rx="1" /></svg>}
+                  >
                     Columns
-                  </button>
+                  </Button>
                   {showColsPicker && (
                     <ColumnsPicker order={colOrder} visible={visibleCols} onToggle={toggleCol} onMove={moveCol} onClose={() => setShowColsPicker(false)} onReset={resetCols} />
                   )}
                 </div>
 
                 <div style={{ position:'relative' }}>
-                  <button onClick={() => setShowRatesPicker(v => !v)} style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:8, border:`0.5px solid ${showRatesPicker ? C.navy : C.border}`, background: showRatesPicker ? C.navyBg : 'var(--card)', color: showRatesPicker ? C.navy : '#374151', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:FONT }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>
+                  <Button
+                    onClick={() => setShowRatesPicker(v => !v)}
+                    size="sm"
+                    variant="secondary"
+                    icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>}
+                  >
                     SR Rates
-                  </button>
+                  </Button>
                   {showRatesPicker && (
                     <>
                       <div onClick={() => setShowRatesPicker(false)} style={{ position:'fixed', inset:0, zIndex:399 }} />

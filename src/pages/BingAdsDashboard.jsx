@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { InlineLoader } from '../components/SkeletonLoader'
 import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'
+import Button from '../components/Button'
 
 const TABS = [
   { id: 'campaigns', label: 'Campaigns', mode: 'campaigns' },
@@ -239,10 +240,7 @@ export default function BingAdsDashboard() {
             {error ? (
               <div style={{ padding: '32px 24px', textAlign: 'center' }}>
                 <p style={{ margin: 0, fontSize: 13.5, color: C.amber, fontWeight: 600 }}>{error}</p>
-                <button onClick={() => { setError(null); setData(d => ({ ...d, [activeTab]: undefined })) }} style={{
-                  marginTop: 14, padding: '8px 16px', borderRadius: 9, border: '1px solid ' + C.border,
-                  background: '#fff', color: C.navy, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: FONT,
-                }}>Retry</button>
+                <Button size='sm' style={{ marginTop: 14 }} onClick={() => { setError(null); setData(d => ({ ...d, [activeTab]: undefined })) }}>Retry</Button>
               </div>
             ) : isLoading ? (
               <div style={{ padding: '48px 24px' }}>

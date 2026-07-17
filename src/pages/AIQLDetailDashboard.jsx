@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import ExportButton from '../components/ExportButton'
+import Button from '../components/Button'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { resolveSheetUrl } from '../lib/dataSources'
 import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN } from '../ui/dashboardKit'
@@ -501,10 +502,9 @@ export default function AIQLDetailDashboard() {
             <FilterDropdown label="Day" value={monthDay} options={['all', ...availableDays]}
               open={openMenu === 'day'} onToggle={() => setOpenMenu(v => v === 'day' ? null : 'day')}
               onSelect={v => { setMonthDay(v); setOpenMenu(null) }} />
-            <button onClick={reload} disabled={loading} title="Refresh data"
-              style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid ' + C.border, fontSize: 12, fontWeight: 500, cursor: loading ? 'wait' : 'pointer', fontFamily: FONT, background: '#fff', color: '#374151' }}>
+            <Button onClick={reload} disabled={loading} title="Refresh data" size="sm">
               {loading ? 'Refreshing' : 'Refresh'}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -568,7 +568,9 @@ export default function AIQLDetailDashboard() {
                           </span>
                         ))}
                       </div>
-                      <button type="button" onClick={saveView} style={{ width: 'calc(100% - 20px)', margin: '0 10px 10px', padding: '6px 10px', borderRadius: 7, border: '1px dashed #C7D7F5', background: '#F7FAFF', color: '#1F3C84', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>+ Save current filters as view</button>
+                      <div style={{ margin: '0 10px 10px' }}>
+                        <Button onClick={saveView} size="sm" variant="secondary" style={{ width: '100%' }}>+ Save current filters as view</Button>
+                      </div>
                       <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 10px 8px', borderTop: '0.5px solid #F3F4F6' }}>Columns (drag to reorder)</div>
                       {colOrder.map(key => {
                         const c = AI_QL_COLS.find(cc => cc.key === key)
@@ -595,7 +597,7 @@ export default function AIQLDetailDashboard() {
                         )
                       })}
                       <div style={{ borderTop: '0.5px solid #F3F4F6', marginTop: 6, paddingTop: 6 }}>
-                        <button type="button" onClick={resetCols} style={{ width: '100%', padding: '6px 10px', borderRadius: 7, border: 'none', background: 'transparent', color: '#1C9FD4', fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}>Reset to default (clears pins &amp; hidden)</button>
+                        <Button onClick={resetCols} size="sm" variant="ghost" style={{ width: '100%', justifyContent: 'flex-start', color: '#1C9FD4' }}>Reset to default (clears pins &amp; hidden)</Button>
                       </div>
                     </div>
                   </>

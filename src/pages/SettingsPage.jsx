@@ -4,6 +4,7 @@ import Sidebar, { PAGE_LIST } from '../components/Sidebar'
 import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole } from '../hooks/useAuth'
 import { getActivityLog } from '../components/ActivityLogger.js'
 import { toast } from '../components/ToastHost'
+import Button from '../components/Button'
 import styles from './SettingsPage.module.css'
 
 const RL_SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
@@ -1223,7 +1224,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <span className={styles.prefix}>₹</span>
                   <input type="number" className={styles.input} style={{ maxWidth: 220 }} value={srFeeInput}
                     onChange={e => setSrFeeInput(e.target.value)} />
-                  <button className={styles.primaryBtn} onClick={saveSrFee}>{srFeeSaved ? 'Saved' : 'Save'}</button>
+                  <Button onClick={saveSrFee}>{srFeeSaved ? 'Saved' : 'Save'}</Button>
                 </div>
                 <p className={styles.note}>Current: ₹{parseInt(srFeeInput || 90000).toLocaleString('en-IN')} per RAU</p>
               </div>
@@ -1231,7 +1232,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <div className={styles.card}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                   <h3 className={styles.cardTitle} style={{ marginBottom: 0 }}>Data Sources</h3>
-                  <button type="button" onClick={checkAllSources} disabled={checkingAll} style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: checkingAll ? '#94A3B8' : 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: checkingAll ? 'default' : 'pointer' }}>{checkingAll ? 'Checking all...' : 'Check all sources'}</button>
+                  <Button size="sm" onClick={checkAllSources} disabled={checkingAll}>{checkingAll ? 'Checking all...' : 'Check all sources'}</Button>
                 </div>
                 <div style={{ marginTop: 12, padding: '14px 16px', background: '#F9FAFB', border: '0.5px solid #EEF1F6', borderRadius: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -1310,10 +1311,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <div className={styles.dsListHead}>
                   <span className={styles.dsListTitle}>{sourceCatFilter === 'api' ? 'API Connections' : 'Google Sheets'}</span>
                   {userIsAdmin && (
-                    <button type="button" className={styles.dsAddBtn} onClick={() => { setNewSourceForm({ name: '', url: '' }); setAddSourceMsg(null); setAddSourceOpen(true) }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                    <Button size="sm" icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>} onClick={() => { setNewSourceForm({ name: '', url: '' }); setAddSourceMsg(null); setAddSourceOpen(true) }}>
                       Add source
-                    </button>
+                    </Button>
                   )}
                 </div>
                 <div className={styles.dsList}>
@@ -1328,7 +1328,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div className={styles.dsName}>{s.name}</div>
                                             <div className={styles.dsMeta} title={s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || '') : ''} style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.editKey ? (() => { const u = sheetUrls[s.editKey] || s.defaultUrl; if (!u) return 'No default set'; const m = u.match(/[?&]sheet=([^&]+)/); return 'Google Sheet' + (m ? ' \u00b7 ' + decodeURIComponent(m[1].replace(/\+/g, ' ')) : ''); })() : (s.src + ' \u2014 ' + s.rows + ' rows')}</div>
                     </div>
-                    <span className={styles.dsStatus} data-st={s.editKey ? (sheetUrls[s.editKey] ? 'custom' : 'default') : 'live'}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Live'}</span>{s.editKey && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: '1px solid #1F3C84', background: '#fff', color: '#1F3C84', boxShadow: 'none' }} onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</button>)}{s.editKey && userIsAdmin && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', boxShadow: '0 4px 10px -3px rgba(31,60,132,0.5)' }} onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</button>)}{s.custom && userIsAdmin && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: '1px solid #FECACA', background: '#fff', color: '#c0392b', boxShadow: 'none' }} onClick={() => removeCustomSource(s.editKey)}>Remove</button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><button className={styles.primaryBtn} style={{ padding: '5px 14px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: 'none', background: 'linear-gradient(135deg, #1F3C84, #1C9FD4)', color: '#fff', boxShadow: '0 4px 10px -3px rgba(31,60,132,0.5)' }} onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}{s.disconnectable && userIsAdmin && (<button className={styles.primaryBtn} style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 700, borderRadius: 7, border: '1px solid #FECACA', background: '#fff', color: '#c0392b', boxShadow: 'none' }} onClick={disconnectMeta} disabled={metaDisconnecting}>{metaDisconnecting ? 'Disconnecting...' : 'Disconnect'}</button>)}{s.disconnectable && metaDisconnectMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: metaDisconnectMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{metaDisconnectMsg.type === 'err' ? '✕ ' : '✓ '}{metaDisconnectMsg.text}</p>)}
+                    <span className={styles.dsStatus} data-st={s.editKey ? (sheetUrls[s.editKey] ? 'custom' : 'default') : 'live'}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Live'}</span>{s.editKey && (<Button size="sm" variant="secondary" onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</Button>)}{s.editKey && userIsAdmin && (<Button size="sm" onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</Button>)}{s.custom && userIsAdmin && (<Button size="sm" danger onClick={() => removeCustomSource(s.editKey)}>Remove</Button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><Button size="sm" onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</Button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}{s.disconnectable && userIsAdmin && (<Button size="sm" danger onClick={disconnectMeta} disabled={metaDisconnecting}>{metaDisconnecting ? 'Disconnecting...' : 'Disconnect'}</Button>)}{s.disconnectable && metaDisconnectMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: metaDisconnectMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{metaDisconnectMsg.type === 'err' ? '✕ ' : '✓ '}{metaDisconnectMsg.text}</p>)}
                     {s.editKey && sheetTest[s.editKey] && !sheetTest[s.editKey].loading && (
                       <div style={{ position: 'relative', flexBasis: '100%', width: '100%', marginTop: 8, padding: '10px 36px 10px 12px', borderRadius: 8, border: '1px solid ' + (sheetTest[s.editKey].error ? '#FECACA' : '#DCFCE7'), background: sheetTest[s.editKey].error ? '#FEF2F2' : '#F0FDF4' }}>
                         <button type="button" onClick={() => setSheetTest(prev => { const next = { ...prev }; delete next[s.editKey]; return next })} title="Close" style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 5, border: 'none', background: 'transparent', color: '#6B7280', fontSize: 14, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
@@ -1443,8 +1443,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           <p className={styles.note} style={{ margin: '-6px 0 12px', color: '#c0392b' }}>✕ {addSourceMsg.text}</p>
                         )}
                         <div className={styles.dsModalActions}>
-                          <button type="button" className={styles.dsBtnGhost} onClick={() => setAddSourceOpen(false)}>Cancel</button>
-                          <button type="button" className={styles.dsBtnPrimary} disabled={!canSubmit} onClick={addCustomSource}>Add source</button>
+                          <Button variant="secondary" onClick={() => setAddSourceOpen(false)}>Cancel</Button>
+                          <Button disabled={!canSubmit} onClick={addCustomSource}>Add source</Button>
                         </div>
                       </div>
                     </div>
@@ -1467,10 +1467,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                   <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0,marginTop:2}}>
                     {prefSaveMsg&&<span style={{fontSize:11,fontWeight:600,color:prefSaveMsg.type==='ok'?'#16A34A':'#DC2626',background:prefSaveMsg.type==='ok'?'#F0FDF4':'#FEF2F2',border:'0.5px solid '+(prefSaveMsg.type==='ok'?'#BBF7D0':'#FECACA'),borderRadius:6,padding:'3px 10px',whiteSpace:'nowrap'}}>{prefSaveMsg.text}</span>}
-                    <button onClick={saveHiddenPages} disabled={prefSaving||!hasPendingChanges||prefLoading}
-                      style={{padding:'6px 16px',borderRadius:8,border:'none',cursor:hasPendingChanges&&!prefSaving?'pointer':'not-allowed',background:hasPendingChanges&&!prefSaving?'#1F3C84':'#E2E8F0',color:hasPendingChanges&&!prefSaving?'#fff':'#94A3B8',fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',sans-serif",transition:'all .15s',display:'flex',alignItems:'center',gap:6,opacity:prefSaving?0.65:1}}>
-                      {prefSaving?<><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{animation:'spin .8s linear infinite'}}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Saving…</>:<><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>{hasPendingChanges?'Save changes':'Saved'}</>}
-                    </button>
+                    <Button size="sm" onClick={saveHiddenPages} disabled={prefSaving||!hasPendingChanges||prefLoading}
+                      icon={prefSaving?<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{animation:'spin .8s linear infinite'}}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}>
+                      {prefSaving?'Saving…':(hasPendingChanges?'Save changes':'Saved')}
+                    </Button>
                   </div>
                 </div>
                 {prefLoading?<div style={{fontSize:12,color:'#94A3B8'}}>Loading…</div>:
@@ -1494,7 +1494,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 })}
               </div>
                 }
-                {hiddenPages.length>0&&!prefLoading&&<button onClick={()=>{setHiddenPages([]);setPrefSaveMsg(null)}} style={{marginTop:10,fontSize:11.5,fontWeight:600,color:'#DC2626',background:'none',border:'none',cursor:'pointer',padding:'4px 0',display:'flex',alignItems:'center',gap:5,fontFamily:"'Plus Jakarta Sans',sans-serif"}}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>Reset — show all</button>}
+                {hiddenPages.length>0&&!prefLoading&&<div style={{marginTop:10}}><Button size="sm" variant="secondary" icon={<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>} onClick={()=>{setHiddenPages([]);setPrefSaveMsg(null)}}>Reset — show all</Button></div>}
               </div>
               <div style={{borderTop:'0.5px solid #F1F5F9',margin:'22px 0'}}/>
               {/* page header */}
@@ -1504,12 +1504,11 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <p className={styles.uaSubtitle}>Manage who can access Quantum and which dashboards they see.</p>
                 </div>
                 <div className={styles.uaHeaderActions}>
-                  <button className={styles.ghostBtn} onClick={loadUsers}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <Button size="sm" variant="secondary" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-                    </svg>
+                    </svg>} onClick={loadUsers}>
                     Refresh
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -1553,9 +1552,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   options={[{ value: 'all', label: 'All roles' }, { value: 'admin', label: 'Admin' }, { value: 'viewer', label: 'Viewer' }, { value: 'custom', label: 'Custom' }]}
                   minWidth={120}
                 />
-                <button className={styles.primaryBtn} onClick={() => { setNewEmail(''); setAccessMsg(''); setAddMemberOpen(true) }}>
+                <Button onClick={() => { setNewEmail(''); setAccessMsg(''); setAddMemberOpen(true) }}>
                   + Add member
-                </button>
+                </Button>
               </div>
 
               {addMemberOpen && (
@@ -1575,10 +1574,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </div>
                     {accessMsg && !isOkMsg && (<p className={styles.note} style={{ margin: '-6px 0 12px', color: '#c0392b' }}>✕ {accessMsg}</p>)}
                     <div className={styles.dsModalActions}>
-                      <button type="button" className={styles.dsBtnGhost} onClick={() => setAddMemberOpen(false)}>Cancel</button>
-                      <button type="button" className={styles.dsBtnPrimary} disabled={!newEmail.trim() || usersLoading} onClick={addUser}>
+                      <Button variant="secondary" onClick={() => setAddMemberOpen(false)}>Cancel</Button>
+                      <Button disabled={!newEmail.trim() || usersLoading} onClick={addUser}>
                         {usersLoading ? 'Adding…' : 'Add member'}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -1703,10 +1702,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           </div>
 
                           <div className={styles.editActions}>
-                            <button className={styles.primaryBtn} onClick={() => saveEdit(u.email)} disabled={usersLoading}>
+                            <Button onClick={() => saveEdit(u.email)} disabled={usersLoading}>
                               {usersLoading ? 'Saving…' : 'Save changes'}
-                            </button>
-                            <button className={styles.ghostBtn} onClick={() => setEditingUser(null)}>Cancel</button>
+                            </Button>
+                            <Button variant="secondary" onClick={() => setEditingUser(null)}>Cancel</Button>
                           </div>
                         </div>
                         </div>
@@ -1728,9 +1727,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <h3 className={styles.cardTitle}>Recent Updates</h3>
                   <p className={styles.cardDesc} style={{ margin: 0 }}>Latest changes shipped to Quantum -- if something looks different, check here first.</p>
                 </div>
-                <button className={styles.ghostBtn} onClick={() => { setCommitsLoading(true); getRecentCommits(15).then(setRecentCommits).finally(() => setCommitsLoading(false)) }}>
+                <Button size="sm" variant="secondary" onClick={() => { setCommitsLoading(true); getRecentCommits(15).then(setRecentCommits).finally(() => setCommitsLoading(false)) }}>
                   {commitsLoading ? 'Loading…' : '↻ Refresh'}
-                </button>
+                </Button>
               </div>
               {recentCommits.length === 0 && !commitsLoading && (
                 <div className={styles.empty}>No commit history available right now.</div>
@@ -1757,9 +1756,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <h3 className={styles.cardTitle}>Activity Log</h3>
                   <p className={styles.cardDesc} style={{ margin: 0 }}>See who viewed which dashboard and when.</p>
                 </div>
-                <button className={styles.ghostBtn} onClick={loadActivity}>
+                <Button size="sm" variant="secondary" onClick={loadActivity}>
                   {activityLoading ? 'Loading…' : '↻ Refresh'}
-                </button>
+                </Button>
               </div>
 
               {activityLog.length > 0 && (
@@ -1862,12 +1861,11 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         </button>
                       </div>
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <button className={styles.ghostBtn} onClick={() => setPreviewOpen(true)}>Preview email</button>
-                        <button className={styles.ghostBtn} onClick={() => setEditReportOpen(true)}>Edit settings</button>
-                        <button className={styles.primaryBtn} onClick={() => { setSendAudience('test'); setRcMsg(''); setSendReportOpen(true) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                        <Button variant="secondary" onClick={() => setPreviewOpen(true)}>Preview email</Button>
+                        <Button variant="secondary" onClick={() => setEditReportOpen(true)}>Edit settings</Button>
+                        <Button icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>} onClick={() => { setSendAudience('test'); setRcMsg(''); setSendReportOpen(true) }}>
                           Send Report
-                        </button>
+                        </Button>
                       </div>
                     </div>
 
@@ -1981,8 +1979,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           </div>
                           {rcMsg && <p className={styles.rcFeedback + ' ' + (rcMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{rcMsg}</p>}
                           <div className={styles.dsModalActions}>
-                            <button className={styles.dsBtnGhost} onClick={() => setEditReportOpen(false)}>Cancel</button>
-                            <button className={styles.dsBtnPrimary} onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving…' : 'Save changes'}</button>
+                            <Button variant="secondary" onClick={() => setEditReportOpen(false)}>Cancel</Button>
+                            <Button onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving…' : 'Save changes'}</Button>
                           </div>
                         </div>
                       </div>
@@ -2027,10 +2025,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           )}
                           {rcMsg && <p className={styles.rcFeedback + ' ' + (rcMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{rcMsg}</p>}
                           <div className={styles.dsModalActions}>
-                            <button className={styles.dsBtnGhost} onClick={() => setSendReportOpen(false)}>Cancel</button>
-                            <button className={styles.dsBtnPrimary} disabled={rcTesting || rcSending} onClick={() => sendAudience === 'test' ? sendTestReport() : sendReportNow()}>
+                            <Button variant="secondary" onClick={() => setSendReportOpen(false)}>Cancel</Button>
+                            <Button disabled={rcTesting || rcSending} onClick={() => sendAudience === 'test' ? sendTestReport() : sendReportNow()}>
                               {sendAudience === 'test' ? (rcTesting ? 'Sending…' : 'Send test') : (rcSending ? 'Sending…' : 'Send to ' + recipCount + ' recipient' + (recipCount === 1 ? '' : 's'))}
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -2118,7 +2116,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           )}
                           <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 12, lineHeight: 1.5 }}>If no one is opted in, reports fall back to the admin account ({user?.email || 'admin'}) so sends never go nowhere.</p>
                           <div className={styles.dsModalActions}>
-                            <button className={styles.dsBtnGhost} onClick={() => setRecipientsOpen(false)}>Close</button>
+                            <Button variant="secondary" onClick={() => setRecipientsOpen(false)}>Close</Button>
                           </div>
                         </div>
                       </div>
@@ -2142,8 +2140,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </label>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <button className={styles.primaryBtn} onClick={saveSlackConfig} disabled={slackCfgSaving}>{slackCfgSaving ? 'Saving…' : 'Save'}</button>
-                  <button className={styles.ghostBtn} onClick={sendSlackTest} disabled={slackTesting || !slackWebhook.trim()}>{slackTesting ? 'Sending…' : 'Send test message'}</button>
+                  <Button onClick={saveSlackConfig} disabled={slackCfgSaving}>{slackCfgSaving ? 'Saving…' : 'Save'}</Button>
+                  <Button variant="secondary" onClick={sendSlackTest} disabled={slackTesting || !slackWebhook.trim()}>{slackTesting ? 'Sending…' : 'Send test message'}</Button>
                   {slackCfgMsg && <span className={styles.rcFeedback + ' ' + (slackCfgMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{slackCfgMsg}</span>}
                 </div>
               </div>
@@ -2154,9 +2152,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <h3 className={styles.cardTitle}>Report Activity</h3>
                     <p className={styles.cardDesc} style={{ margin: 0 }}>Every send attempt — scheduled (GitHub Actions cron), manual, and test — with the real outcome. A skipped run (auto-reports disabled) is logged here even though GitHub Actions itself shows it as a green "success".</p>
                   </div>
-                  <button className={styles.ghostBtn} onClick={loadReportLogs}>
+                  <Button size="sm" variant="secondary" onClick={loadReportLogs}>
                     {reportLogsLoading ? 'Loading\u2026' : '\u21bb Refresh'}
-                  </button>
+                  </Button>
                 </div>
 
                 {reportLogsList.length === 0 && !reportLogsLoading && (
@@ -2240,9 +2238,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <h3 className={styles.cardTitle}>Ask AI Usage &amp; Cost</h3>
                     <p className={styles.cardDesc} style={{ margin: 0 }}>Token counts come from each response's real usage numbers; cost is an estimate (Sonnet-tier public pricing) for budgeting, not a live Anthropic billing read — no such API is exposed to a server key.</p>
                   </div>
-                  <button className={styles.ghostBtn} onClick={loadAskAiUsage}>
+                  <Button size="sm" variant="secondary" onClick={loadAskAiUsage}>
                     {askaiUsageLoading ? 'Loading…' : '↻ Refresh'}
-                  </button>
+                  </Button>
                 </div>
 
                 <div className={styles.statStrip}>
@@ -2282,9 +2280,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>$</span>
                       <input type="number" min="0" step="1" value={askaiBudgetInput} onChange={e => setAskaiBudgetInput(e.target.value)}
                         style={{ width: 90, padding: '7px 10px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif" }} />
-                      <button className={styles.primaryBtn} onClick={saveAskaiBudget} disabled={askaiBudgetSaving} style={{ padding: '7px 16px' }}>
+                      <Button size="sm" onClick={saveAskaiBudget} disabled={askaiBudgetSaving}>
                         {askaiBudgetSaving ? 'Saving…' : 'Save'}
-                      </button>
+                      </Button>
                       {askaiBudgetMsg && <span style={{ fontSize: 11, fontWeight: 700, color: askaiBudgetMsg.type === 'err' ? '#1F3C84' : '#15803D', whiteSpace: 'nowrap' }}>{askaiBudgetMsg.type === 'err' ? '✕ ' : '✓ '}{askaiBudgetMsg.text}</span>}
                     </div>
                   </div>
@@ -2335,9 +2333,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Dropdown value={askaiToolFilter} onChange={setAskaiToolFilter}
                       options={[{ value: 'all', label: 'All tools' }, ...askaiToolNames.map(n => ({ value: n, label: n }))]} />
-                    <button className={styles.ghostBtn} onClick={loadAskAiToolCalls}>
+                    <Button size="sm" variant="secondary" onClick={loadAskAiToolCalls}>
                       {askaiToolCallsLoading ? 'Loading…' : '↻ Refresh'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
@@ -2367,7 +2365,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 </td>
                                 <td className={styles.alTd}>{dateStr}{timeStr ? ` · ${timeStr}` : ''}</td>
                                 <td className={styles.alTd}>
-                                  <button className={styles.ghostBtn} style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => setAskaiDetail(c)}>View</button>
+                                  <Button size="sm" variant="secondary" onClick={() => setAskaiDetail(c)}>View</Button>
                                 </td>
                               </tr>
                             )
@@ -2397,7 +2395,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       {(() => { try { return JSON.stringify(JSON.parse(askaiDetail.params || '{}'), null, 2) } catch { return askaiDetail.params || '{}' } })()}
                     </pre>
                     <div className={styles.dsModalActions}>
-                      <button type="button" className={styles.dsBtnGhost} onClick={() => setAskaiDetail(null)}>Close</button>
+                      <Button variant="secondary" onClick={() => setAskaiDetail(null)}>Close</Button>
                     </div>
                   </div>
                 </div>
@@ -2606,9 +2604,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         <span className={styles.pxStatusBadge}><i className={styles.pxDot}/> Active session</span>
                       </div>
                     </div>
-                    <button className={styles.pxCopyBtn} onClick={()=>{ if(user?.email){navigator.clipboard?.writeText(user.email); setCopied(true); setTimeout(()=>setCopied(false),1600);} }}>
+                    <Button size="sm" variant="secondary" onClick={()=>{ if(user?.email){navigator.clipboard?.writeText(user.email); setCopied(true); setTimeout(()=>setCopied(false),1600);} }}>
                       {copied ? 'Copied' : 'Copy email'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
 

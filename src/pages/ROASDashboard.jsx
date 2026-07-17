@@ -5,6 +5,7 @@ import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import CompareMode from '../components/CompareMode'
+import Button from '../components/Button'
 import styles from './ROASDashboard.module.css'
 
 const CH_COLORS = { Facebook:'#1C9FD4', Google:'#4CAE6F', LinkedIn:'#1C9FD4', Bing:'#F59E0B' }
@@ -186,11 +187,11 @@ export default function ROASDashboard(){
             {prevMonth&&<div className={styles.momBadge}>↕ vs {prevMonth.replace('-2025','')}</div>}
             <ExportButton data={filtered} filename="roas_data"/>
             <InfoTooltip items={[['Total Spend','Sum of all ad spend Jan–Dec 2025.'],['AC Revenue','Admission Counselling collected revenue.'],['VAS Revenue','Value Added Services revenue.'],['Total Revenue','AC + VAS collected.'],['ROAS','Revenue ÷ Spend.'],['Proj Revenue','SR Fee × RAUs × 0.9.'],['OPPs','Total raw leads.'],['QLs','Qualified leads.'],['L→Q%','QLs ÷ Total Leads.'],['CPL','Spend ÷ Total Leads.']]}/>
-            <button onClick={() => setShowCompare(true)}
-              style={{display:'flex',alignItems:'center',gap:6,padding:'7px 13px',borderRadius: 12,background:'#E8EFF9',border:'1px solid #E8EFF9',color:'#1F3C84',fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:"'Plus Jakarta Sans','Inter',sans-serif"}}>
+            <Button size='sm' onClick={() => setShowCompare(true)} icon={
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+            }>
               Compare
-            </button>
+            </Button>
             <div className={styles.liveBadge}><span className={styles.liveDot}/>Live</div>
           </div>
         </div>
