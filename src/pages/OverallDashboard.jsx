@@ -412,8 +412,8 @@ export default function OverallDashboard() {
 
   const funnel = useMemo(() => ([
     { stage:'Leads Generated', count:kpis.leads },
-    { stage:'Floor Queued', count:kpis.floorQueued },
     { stage:'Total Queued', count:totalQueued },
+    { stage:'Floor Queued', count:kpis.floorQueued },
     { stage:'Human QL', count:kpis.humanQL },
     { stage:'Applications', count:kpis.apps },
     { stage:'Offers', count:kpis.offers },
@@ -613,7 +613,7 @@ export default function OverallDashboard() {
                   <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:8 }}>How Overall is calculated</div>
                   <div style={{ fontSize:11, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
                   <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.7 }}>
-                    <b>Leads Generated</b> → <b>Floor Queued</b> → <b>Total Queued</b> (Futwork + Superbot) → <b>Human QL</b> (Futwork-qualified) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (revenue attribution units). Each stage is a subset of the one before it, so the funnel chart below reads top-to-bottom as the real conversion path.<br /><br />
+                    <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). From there it continues <b>Human QL</b> (Futwork-qualified) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (revenue attribution units). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line — the rest of the funnel below them is the conversion path once a lead is queued.<br /><br />
                     Last Day / Last 7D / MTD and Custom filter by lead date; the Month dropdown scopes to one calendar month. Source filters everything below.
                   </div>
                 </div>
