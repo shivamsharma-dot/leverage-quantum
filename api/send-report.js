@@ -97,11 +97,17 @@ function buildChatAnswerEmail({ question, answerHtml, askedBy }) {
 <title>Ask AI answer — ${todayLabel}</title></head>
 <body style="margin:0;padding:0;background:#F0F4F8;font-family:${FONT};color:#0F172A;-webkit-font-smoothing:antialiased">
 <div style="max-width:640px;margin:0 auto;padding:24px 12px">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,${NAVY} 0%,#0F2560 60%,#0D3D6B 100%);border-radius:16px 16px 0 0;overflow:hidden">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${NAVY};border-radius:16px 16px 0 0;overflow:hidden">
     <tr><td style="padding:24px 28px 20px">
       <table cellpadding="0" cellspacing="0"><tr>
         <td style="vertical-align:middle;padding-right:10px">
-          <table cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px"><tr>${LOGO_ICON_SVG.replace('<svg','<td><svg').replace('</svg>','</svg></td>')}</tr></table>
+          <table cellpadding="0" cellspacing="0" style="background-color:rgba(255,255,255,0.1);border-radius:10px;padding:8px 10px">
+            <tr>
+              <td valign="bottom" style="padding-right:2px"><div style="width:5px;height:10px;background-color:${GREEN};border-radius:2px;font-size:0;line-height:0">&nbsp;</div></td>
+              <td valign="bottom" style="padding-right:2px"><div style="width:5px;height:15px;background-color:${CYAN};border-radius:2px;font-size:0;line-height:0">&nbsp;</div></td>
+              <td valign="bottom"><div style="width:5px;height:19px;background-color:${BLUE};border-radius:2px;font-size:0;line-height:0">&nbsp;</div></td>
+            </tr>
+          </table>
         </td>
         <td style="vertical-align:middle">
           <div style="font-size:11px;font-weight:700;letter-spacing:.15em;color:rgba(255,255,255,0.45);text-transform:uppercase;line-height:1">LEVERAGE</div>
@@ -355,7 +361,7 @@ async function buildReport(token, reportType) {
 <div style="max-width:680px;margin:0 auto;padding:24px 12px">
 
   <!-- HEADER -->
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,${NAVY} 0%,#0F2560 60%,#0D3D6B 100%);border-radius:16px 16px 0 0;overflow:hidden">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:${NAVY};border-radius:16px 16px 0 0;overflow:hidden">
     <tr>
       <td style="padding:28px 32px 24px">
         <!-- Logo row -->
