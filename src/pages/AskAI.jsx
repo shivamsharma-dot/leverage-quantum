@@ -110,11 +110,19 @@ function Markdown({text}){
     if(/^\|(.+)\|$/.test(l)&&i+1<lines.length&&/^\|[-:\s|]+\|$/.test(lines[i+1])){
       const head=l.split('|').slice(1,-1).map(s=>s.trim());i+=2;const rows=[]
       while(i<lines.length&&/^\|(.+)\|$/.test(lines[i])){rows.push(lines[i].split('|').slice(1,-1).map(s=>s.trim()));i++}
-      out.push(<div key={out.length} style={{overflowX:'auto',margin:'12px 0'}}>
+      const toCsv=()=>{
+        const esc=v=>/[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v
+        return [head,...rows].map(r=>r.map(esc).join(',')).join('\n')
+      }
+      out.push(<div key={out.length} style={{borderRadius:10,overflow:'hidden',margin:'12px 0',border:'0.5px solid #E5E7EB'}}>
+        <div style={{padding:'5px 10px',background:'#F8FAFC',borderBottom:'0.5px solid #E5E7EB',display:'flex',justifyContent:'flex-end'}}>
+          <button onClick={()=>navigator.clipboard?.writeText(toCsv())} style={{background:'transparent',border:'none',color:'#9CA3AF',fontSize:11,cursor:'pointer',fontFamily:FONT}}>Copy as CSV</button>
+        </div>
+        <div style={{overflowX:'auto'}}>
         <table style={{borderCollapse:'collapse',width:'100%',fontSize:13}}>
           <thead><tr>{head.map((h,j)=><th key={j} style={{border:'1px solid #E5E7EB',padding:'8px 12px',background:'#F3F4F6',textAlign:'left',fontWeight:700,color:'#0F172A'}}>{h}</th>)}</tr></thead>
           <tbody>{rows.map((r,ri)=><tr key={ri}>{r.map((cc,ci)=><td key={ci} style={{border:'1px solid #E5E7EB',padding:'8px 12px',color:'#374151'}} dangerouslySetInnerHTML={{__html:ih(cc)}}/>)}</tr>)}</tbody>
-        </table></div>);continue}
+        </table></div></div>);continue}
     if(/^#{1,3}\s/.test(l)){const lv=l.match(/^#+/)[0].length;const sz=lv===1?18:lv===2?15.5:14
       out.push(<div key={out.length} style={{fontSize:sz,fontWeight:800,color:'#1F3C84',margin:'16px 0 6px',letterSpacing:'-0.02em'}} dangerouslySetInnerHTML={{__html:ih(l.replace(/^#+\s/,''))}}/>);i++;continue}
     if(/^[-•*]\s/.test(l)){const items=[];while(i<lines.length&&/^[-•*]\s/.test(lines[i])){items.push(lines[i].replace(/^[-•*]\s/,''));i++}
@@ -201,6 +209,23 @@ function buildLoaderPhases(question,scope){
   phases.push('Composing your answer...')
   return Array.from(new Set(phases)).slice(0,4)
 }
+/* follow-up suggestion chips — heuristic v1 (frontend-only, no extra model call).
+   Looks at what was just asked/answered and offers 2-3 natural next questions,
+   the same "keep the conversation moving" pattern Perplexity/Moby/Hex all use. */
+function buildFollowUps(question,answer){
+  const q=(question||'').toLowerCase(), a=(answer||'').toLowerCase()
+  const has=(...words)=>words.some(w=>q.includes(w)||a.includes(w))
+  const chips=[]
+  if(has('campaign','ad set','adset')) chips.push('Break this down by ad set')
+  if(has('crm','qualified','qualif')) chips.push('Show the CRM-qualified view')
+  if(has('scale','pause','budget','reallocat')) chips.push('Estimate the Rs impact of this')
+  if(has('spend','cpl','cost')) chips.push('Compare this to last month')
+  if(has('fatigue','frequency','creative')) chips.push('Which creatives should I refresh first?')
+  if(has('google')&&!has('meta')) chips.push('How does Meta compare on this?')
+  if(has('meta')&&!has('google')) chips.push('How does Google compare on this?')
+  if(chips.length<2) chips.push('What should I do next?')
+  return Array.from(new Set(chips)).slice(0,3)
+}
 function MagicLoader({question='',platformScope='all'}){
   const phases=useMemo(()=>buildLoaderPhases(question,platformScope),[question,platformScope])
   const [i,setI]=useState(0);
@@ -280,6 +305,8 @@ export default function AskAI() {
   const [editTitle, setEditTitle]   = useState('')
   const [personFilter, setPersonFilter] = useState('all') // 'all' | 'mine' | '<email>'
   const [copied, setCopied]       = useState(null)
+  const [editingMsgIdx, setEditingMsgIdx] = useState(null) // index of the user message currently being edited-and-resent, or null
+  const [editingMsgText, setEditingMsgText] = useState('')
   const [showWelcomeAnim, setShowWelcomeAnim] = useState(true)
 
   const bottomRef   = useRef(null)
@@ -512,7 +539,35 @@ export default function AskAI() {
     }finally{setLoading(false)}
   },[messages,loading,metaToken,combinedMemories,platformScope,activeId,saveMessages])
 
-
+  /* edit-and-resend — replaces the user turn at idx with newText, truncates everything after it (including
+     the old assistant reply), and re-asks. Same shape as regenerate, but forking from an edited USER message
+     rather than just re-running the existing one. */
+  const editAndResend = useCallback(async(idx,newText)=>{
+    const q=(newText||'').trim(); if(!q||loading) return
+    setEditingMsgIdx(null)
+    const truncated = messages.slice(0,idx)
+    let cid=activeId
+    if(!cid){
+      cid='cv_'+Date.now()
+      setConvs(cs=>[{id:cid,title:q.slice(0,45),created_at:new Date().toISOString(),updated_at:new Date().toISOString(),message_count:0},...cs])
+      setActiveId(cid)
+    }
+    const updated=[...truncated,{role:'user',content:q}]
+    setMessages([...updated,{role:'assistant',content:'',streaming:true}])
+    setLoading(true)
+    const ac=new AbortController(); abortRef.current=ac
+    try{
+      const reply=await askClaude(updated,metaToken,combinedMemories,partial=>{
+        setMessages(m=>{const c=[...m];c[c.length-1]={role:'assistant',content:partial,streaming:true};return c})
+      },ac.signal,platformScope,cid)
+      const final=[...updated,{role:'assistant',content:reply}]
+      setMessages(final); saveMessages(cid,final)
+    }catch(e){
+      if(e.name==='AbortError'){ setMessages(m=>{const c=[...m];if(c.length)c[c.length-1]={...c[c.length-1],streaming:false};return c}); return }
+      const final=[...updated,{role:'assistant',content:`⚠️ ${e.message}`}]
+      setMessages(final); saveMessages(cid,final)
+    }finally{setLoading(false)}
+  },[messages,loading,activeId,metaToken,combinedMemories,saveMessages,platformScope])
 
   /* memories */
   const addMem = async()=>{
@@ -652,6 +707,8 @@ export default function AskAI() {
         .rb:not(.rb-active):hover{background:rgba(28,159,212,0.10)!important;border-radius:14px!important}
         .qp:hover{background:#F1F4F8!important;border-color:#CBD5E1!important;color:#1F3C84!important;transform:translateY(-1px)!important;transition:all .2s!important}
         .cv:hover .cvact{opacity:1!important}
+        .umsg:hover .umsgAct{opacity:1!important}
+        .umsgAct:hover{background:#F1F4F8!important;color:#1F3C84!important}
         .cv:hover .delbtn{opacity:1!important}
         .cvact button:hover{background:rgba(0,0,0,0.06)!important}
         .cv:hover{transform:translateY(-1px)}
@@ -959,14 +1016,38 @@ export default function AskAI() {
               </div>
             ):(
               <div style={{maxWidth:'min(880px, 94%)',margin:'0 auto',padding:'0 20px'}}>
-                {messages.map((m,k)=>(
+                {messages.map((m,k)=>{
+                  const isLastAssistant = m.role==='assistant' && k===messages.length-1 && m.content && !m.streaming && !loading
+                  const followUps = isLastAssistant ? buildFollowUps(messages[k-1]?.content,m.content) : []
+                  return (
                   <div key={k} style={{marginBottom:24,animation:k===messages.length-1||k===messages.length-2?'fadeUp .3s ease':'none'}}>
                     {m.role==='user'?(
-                      <div style={{display:'flex',justifyContent:'flex-end'}}>
-                        <div style={{maxWidth:'74%',background:'#F1F4F8',border:'0.5px solid #E2E6EC',borderRadius:'18px 18px 5px 18px',padding:'11px 16px'}}>
-                          <div style={{fontSize:14,color:'#1E293B',lineHeight:1.65,whiteSpace:'pre-wrap'}}>{m.content}</div>
+                      editingMsgIdx===k?(
+                        <div style={{display:'flex',justifyContent:'flex-end'}}>
+                          <div style={{maxWidth:'80%',width:'100%',background:'#fff',border:`1px solid ${BLUE}`,borderRadius:'18px 18px 5px 18px',padding:'11px 16px',boxShadow:'0 4px 14px -6px rgba(28,159,212,0.3)'}}>
+                            <textarea autoFocus value={editingMsgText} onChange={e=>setEditingMsgText(e.target.value)}
+                              onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();editAndResend(k,editingMsgText)}if(e.key==='Escape')setEditingMsgIdx(null)}}
+                              style={{width:'100%',minHeight:44,border:'none',outline:'none',resize:'none',fontFamily:FONT,fontSize:14,color:'#1E293B',lineHeight:1.65,background:'transparent',padding:0}}/>
+                            <div style={{display:'flex',justifyContent:'flex-end',gap:6,marginTop:8}}>
+                              <button onClick={()=>setEditingMsgIdx(null)} style={{padding:'5px 12px',borderRadius:7,border:`1px solid ${borderColor}`,background:'transparent',color:'#64748B',fontSize:12,fontWeight:600,fontFamily:FONT,cursor:'pointer'}}>Cancel</button>
+                              <button onClick={()=>editAndResend(k,editingMsgText)} disabled={!editingMsgText.trim()}
+                                style={{padding:'5px 14px',borderRadius:7,border:'none',background:`linear-gradient(135deg,${NAVY},${BLUE})`,color:'#fff',fontSize:12,fontWeight:700,fontFamily:FONT,cursor:editingMsgText.trim()?'pointer':'not-allowed',opacity:editingMsgText.trim()?1:0.5}}>Resend</button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      ):(
+                        <div className="umsg" style={{display:'flex',justifyContent:'flex-end',alignItems:'flex-end',gap:6}}>
+                          {!loading&&(
+                            <button title="Edit and resend" className="umsgAct mabtn" onClick={()=>{setEditingMsgIdx(k);setEditingMsgText(m.content)}}
+                              style={{opacity:0,transition:'opacity .15s',display:'flex',alignItems:'center',padding:5,border:'none',background:'transparent',color:'#94A3B8',cursor:'pointer',flexShrink:0}}>
+                              <Ico n="edit" s={13} c="#94A3B8"/>
+                            </button>
+                          )}
+                          <div style={{maxWidth:'74%',background:'#F1F4F8',border:'0.5px solid #E2E6EC',borderRadius:'18px 18px 5px 18px',padding:'11px 16px'}}>
+                            <div style={{fontSize:14,color:'#1E293B',lineHeight:1.65,whiteSpace:'pre-wrap'}}>{m.content}</div>
+                          </div>
+                        </div>
+                      )
                     ):(
                       <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
                         {m.content&&(
@@ -989,6 +1070,16 @@ export default function AskAI() {
                                   ))}
                                 </div>
                               )}
+                              {followUps.length>0&&(
+                                <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:10}}>
+                                  {followUps.map((chip,ci)=>(
+                                    <button key={ci} onClick={()=>send(chip)} className="qp"
+                                      style={{padding:'6px 12px',borderRadius:16,border:`0.5px solid ${borderColor}`,background:'#fff',color:'#475569',fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:FONT,transition:'all .2s',whiteSpace:'nowrap'}}>
+                                      {chip}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </>
                           ):(
                             /* magic loader — liners are derived from the question just asked, not static */
@@ -998,7 +1089,8 @@ export default function AskAI() {
                       </div>
                     )}
                   </div>
-                ))}
+                  )
+                })}
                 <div ref={bottomRef}/>
               </div>
             )}
