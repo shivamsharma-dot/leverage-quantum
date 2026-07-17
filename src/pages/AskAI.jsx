@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import Sidebar from '../components/Sidebar'
+import { toast } from '../components/ToastHost'
 
 /* ─── tokens ──────────────────────────────────────────────────── */
 const NAVY   = '#1F3C84'
@@ -295,11 +296,20 @@ export default function AskAI() {
     return ()=>document.removeEventListener('mousedown', onDocClick)
   },[scopeOpen])
 
-  /* dictation mic — Web Speech API. Feature-detected; button only renders where supported. */
+  /* dictation mic — Web Speech API. Feature-detected; button only renders where supported.
+     iOS blocks getUserMedia (and therefore SpeechRecognition, which needs mic access) inside
+     a home-screen "Add to Home Screen" standalone PWA — a long-standing WebKit limitation,
+     not something fixable in JS. This app IS installed that way on iOS (see PWA section above),
+     so on iOS+standalone we skip attempting rec.start() (it silently fails/aborts instantly —
+     the "mic does nothing" symptom) and tell the user to use Safari directly instead. */
+  const isIOS = typeof navigator!=='undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent)
+  const isStandalonePWA = typeof window!=='undefined' && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches)
+  const micBlockedByIOSPwa = isIOS && isStandalonePWA
   const micSupported = typeof window!=='undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
   const toggleMic = useCallback(()=>{
     if (!micSupported) return
     if (listening) { recognitionRef.current?.stop(); return }
+    if (micBlockedByIOSPwa) { toast('Dictation needs Safari directly — iOS blocks microphone access inside an installed home-screen app. Open Quantum in Safari to use the mic, or just type.', {type:'muted', duration:5500}); return }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     const rec = new SR()
     rec.lang = 'en-IN'
@@ -310,12 +320,19 @@ export default function AskAI() {
       setInput(prev => (prev ? prev.trim()+' ' : '') + transcript)
       textRef.current?.focus()
     }
-    rec.onerror = () => setListening(false)
+    rec.onerror = e => {
+      setListening(false)
+      const reason = e?.error==='not-allowed'||e?.error==='service-not-allowed' ? 'Microphone permission was denied — check Settings > Safari > Microphone.'
+        : e?.error==='no-speech' ? "Didn't catch that — try again."
+        : e?.error==='network' ? 'Dictation needs an internet connection.'
+        : 'Dictation failed — try again or type your question.'
+      toast(reason, {type:'muted', duration:4200})
+    }
     rec.onend = () => setListening(false)
     recognitionRef.current = rec
     setListening(true)
     rec.start()
-  },[listening,micSupported])
+  },[listening,micSupported,micBlockedByIOSPwa])
 
   // persist convs
   useEffect(()=>{try{localStorage.setItem(CV_KEY,JSON.stringify(convs.slice(0,500)))}catch{}},[convs])
