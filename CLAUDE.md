@@ -1873,3 +1873,47 @@ No console errors on either commit's live checks (only pre-existing benign exten
 - Desktop/Android working path is unchanged other than the new onerror toast -- no regression risk to the "listening toggles / transcript inserted" flow itself.
 
 **Verification:** `npm run build` clean, deployed (`aa6058e` Ready/Production on Vercel, confirmed). Live click-test of the still-working (non-iOS, non-standalone) mic path was IN PROGRESS when every open browser tab hit Quantum's 8-hour session expiry simultaneously and redirected to `/login` -- did not sign in (Google OAuth is user-only, never Claude's to perform). Re-verify the desktop mic toggle once a session is available. **The actual fix -- the iOS-standalone toast -- can only be confirmed on a real installed iPhone app** (this browser tool cannot reach iOS/standalone mode at all, see the tooling-limitation entry directly above); ask the user to confirm the toast appears when tapping mic inside the real installed Quantum home-screen app.
+
+## 2026-07-17 -- Ask AI: dedicated Settings tab -- tool-call audit log + token/cost usage monitoring (commit `fce0fb6`)
+
+**User ask:** "i need one dedicated page of ask ai in settings" -> discussed options, user picked the "advanced" tier: tool-call transparency (currently zero visibility into what Meta/Google/CRM queries the assistant actually runs) and token/cost monitoring (motivated by the real July 2026 incident where the Anthropic account ran out of credits with nobody noticing until users saw errors -- see the "CRITICAL KNOWN ISSUE" banner at the top of this file). User's exact instruction: "keep the design kit in mind, use popup wherever required and go ahead."
+
+**New Settings > Ask AI tab (admin-only, id `askai`)** -- built entirely from EXISTING SettingsPage CSS classes (`.card`/`.cardTitle`/`.cardDesc`/`.statStrip`/`.statCard`/`.alCard`/`.alTable`/`.dsModalOverlay`/`.dsModal` etc., same ones used by User Access stats and Report Activity) -- **zero new CSS added**, matching the "keep the design kit in mind" instruction literally.
+
+**Backend (`api/ask-ai.js`), two new logging paths, both additive/non-blocking to the actual chat response:**
+- **Tool-call audit log**: every tool execution in the `for (const toolUse of toolUseBlocks)` loop is now timed (`Date.now()` before/after) and logged via a new `logToolCall()` helper to a new `ask_ai_tool_calls` table -- `conv_id`, `user_id`, `tool_name`, `params` (JSON, truncated to 2000 chars), `row_count` (derived per-tool via a new `resultRowCount()` helper that checks `result.count`/`result.rows`/known array keys depending on which tool ran), `latency_ms`, `had_error`. This directly answers "what did it actually query to get that number" -- previously zero visibility.
+- **Token/cost usage**: `totalInputTokens`/`totalOutputTokens` accumulate across every round of the tool-use loop (each non-streaming intermediate call's `response.usage` field) AND the final SSE stream -- parsing `message_start.message.usage.input_tokens` and `message_delta.usage.output_tokens` from the stream, which the code was previously not reading at all despite Anthropic sending them on every request. Logged once per completed request (both the early-return "no tool calls needed" path and the normal final-stream path each call `logUsage()`) to a new `ask_ai_usage` table, with an `estimated_cost_usd` computed from a `PRICING` constant (`claude-sonnet-4-5`: $3/$15 per 1M input/output tokens, Sonnet-tier public pricing -- **not a real Anthropic billing read**, no such API exists for a server key; the raw token counts are the actual source of truth if pricing ever changes).
+- `convId` added to the request body (threaded from `AskAI.jsx`'s `send()`/`regenerate()` via `cid`/`activeId`) so both new tables can tie rows back to a conversation.
+- Both logging calls are `await`ed (not fire-and-forget) despite adding a little latency, specifically because Vercel serverless functions can terminate immediately after the response ends -- an un-awaited fetch could get killed mid-flight and never actually write.
+
+**Frontend reads** go straight from `SettingsPage.jsx` to Supabase via the anon key (`getAskAiToolCalls()`/`getAskAiUsage()`, same exact pattern as the pre-existing `getReportLogs()`/`getSourceHealth()` a few lines above them) -- no new API endpoint, keeping Vercel's function count untouched. Writes only ever happen server-side via the service-role key.
+
+**What's on the tab:**
+1. **Usage & Cost card** -- stat strip (today's cost, today's tokens, this month's cost, tool calls logged), a self-declared monthly budget input (explicitly labeled as self-declared since there's no way to read real remaining Anthropic credits) with a progress bar that shifts navy->blue->green by how close spend is to the ceiling (no red/amber, per the brand rule), and a daily-breakdown table for the last 14 days.
+2. **Tool-Call Audit Log card** -- filterable-by-tool-name table (tool / rows / latency / OK-or-Error / when), each row's "View" button opening a `dsModal` popup (the existing Add-Data-Source modal's exact CSS classes) showing the full JSON params pretty-printed.
+
+**REQUIRED — new Supabase tables (SQL, run once in Supabase SQL editor; feature degrades gracefully to empty states until these exist):**
+```sql
+CREATE TABLE IF NOT EXISTS public.ask_ai_tool_calls (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  conv_id TEXT, user_id TEXT, tool_name TEXT, params TEXT,
+  row_count INT, latency_ms INT, had_error BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ask_ai_tool_calls_created ON public.ask_ai_tool_calls(created_at DESC);
+ALTER TABLE public.ask_ai_tool_calls DISABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.ask_ai_usage (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  conv_id TEXT, user_id TEXT, model TEXT,
+  input_tokens INT, output_tokens INT, estimated_cost_usd NUMERIC(10,4),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ask_ai_usage_created ON public.ask_ai_usage(created_at DESC);
+ALTER TABLE public.ask_ai_usage DISABLE ROW LEVEL SECURITY;
+```
+(RLS disabled to match every other table the anon key reads, same as `report_logs`/`source_health`/`activity_log`.)
+
+**NOT built this round (deferred, discussed but out of scope per the user's "go ahead" on the narrower #1+#2 offer):** per-tool kill switches, an editable business-context/persona layer, response thumbs-up/down feedback loop, an eval harness of golden test questions. All flagged as a follow-up tier if the audit log + cost monitoring prove useful.
+
+**Verification status:** `npm run build` clean (frontend), `node --check api/ask-ai.js` clean (serverless function, not covered by the Vite build). NOT yet live-verified end-to-end -- the two Supabase tables above must be created first (user action), and a real Ask AI message needs to be sent to populate any rows; until then the tab correctly shows its empty states. Re-verify the full flow (send a message -> check both tables populate -> confirm the Settings tab renders real numbers -> open the tool-call detail popup) once the tables exist.
