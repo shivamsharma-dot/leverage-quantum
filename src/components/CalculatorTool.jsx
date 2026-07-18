@@ -521,6 +521,16 @@ export default function CalculatorTool() {
   const cellInputRefs = React.useRef({})
   const clipboardRef = React.useRef('')
 
+  // ---- Arrow-key cell reference picking while composing a formula (like
+  // Sheets/Excel): once you've typed at least one character into a cell
+  // whose content starts with "=", arrow keys move a pointer around the
+  // grid and insert/update that cell's reference at the caret instead of
+  // navigating away. Plain arrow keys (not composing a formula) just move
+  // between cells like Tab/Enter already do. ----
+  const composingRef = React.useRef(false)
+  const pickStateRef = React.useRef(null) // {sourceKey, insertStart, insertEnd, pointerR, pointerC}
+  const [formulaPointer, setFormulaPointer] = React.useState(null) // {r,c} while picking
+
   React.useEffect(() => {
     const up = () => { isSelectingRef.current = false }
     window.addEventListener('mouseup', up)
@@ -614,8 +624,46 @@ export default function CalculatorTool() {
     if (meta && /^x$/i.test(e.key)) { e.preventDefault(); cutSelection(); return }
     if (meta && /^v$/i.test(e.key)) { e.preventDefault(); pasteSelection(); return }
     if ((e.key === 'Delete' || e.key === 'Backspace') && isMultiSelect) { e.preventDefault(); clearSelectionCells(); return }
-    if (e.key === 'Enter') { e.preventDefault(); setSelection({ r1: r + 1, c1: c, r2: r + 1, c2: c }); focusCell(r + 1, c) }
-    else if (e.key === 'Tab') { e.preventDefault(); const nc = c + (e.shiftKey ? -1 : 1); setSelection({ r1: r, c1: nc, r2: r, c2: nc }); focusCell(r, nc) }
+    if (e.key === 'Enter') { e.preventDefault(); pickStateRef.current = null; setFormulaPointer(null); setSelection({ r1: r + 1, c1: c, r2: r + 1, c2: c }); focusCell(r + 1, c); return }
+    if (e.key === 'Tab') { e.preventDefault(); pickStateRef.current = null; setFormulaPointer(null); const nc = c + (e.shiftKey ? -1 : 1); setSelection({ r1: r, c1: nc, r2: r, c2: nc }); focusCell(r, nc); return }
+
+    const dirs = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }
+    if (dirs[e.key]) {
+      e.preventDefault()
+      const key = `${r}-${c}`
+      const isFormula = e.target.value.trim().startsWith('=')
+      if (composingRef.current && isFormula) {
+        // Reference-picking mode: move a virtual pointer and splice its ref into the formula text.
+        const [dr, dc] = dirs[e.key]
+        const clampN = (n, max) => Math.max(0, Math.min(max, n))
+        const picking = pickStateRef.current && pickStateRef.current.sourceKey === key
+        const baseR = picking ? pickStateRef.current.pointerR : r
+        const baseC = picking ? pickStateRef.current.pointerC : c
+        const newR = clampN(baseR + dr, SHEET_ROWS - 1)
+        const newC = clampN(baseC + dc, SHEET_COLS - 1)
+        const token = cellRef(newR, newC)
+        const input = e.target
+        const val = input.value
+        const insertStart = picking ? pickStateRef.current.insertStart : (input.selectionStart ?? val.length)
+        const oldEnd = picking ? pickStateRef.current.insertEnd : insertStart
+        const newVal = val.slice(0, insertStart) + token + val.slice(oldEnd)
+        const insertEnd = insertStart + token.length
+        updateCell(r, c, newVal)
+        input.value = newVal
+        input.setSelectionRange(insertEnd, insertEnd)
+        pickStateRef.current = { sourceKey: key, insertStart, insertEnd, pointerR: newR, pointerC: newC }
+        setFormulaPointer({ r: newR, c: newC })
+      } else {
+        // Not composing a formula -- plain cell-to-cell navigation.
+        pickStateRef.current = null
+        setFormulaPointer(null)
+        const [dr, dc] = dirs[e.key]
+        const nr = Math.max(0, Math.min(SHEET_ROWS - 1, r + dr))
+        const nc = Math.max(0, Math.min(SHEET_COLS - 1, c + dc))
+        setSelection({ r1: nr, c1: nc, r2: nr, c2: nc })
+        focusCell(nr, nc)
+      }
+    }
   }
 
   const selectedComputed = computeCell(grid, selection.r1, selection.c1, new Set())
@@ -889,22 +937,34 @@ export default function CalculatorTool() {
                 <table style={{ borderCollapse: 'collapse', width: '100%', fontFamily: FONT, userSelect: isSelectingRef.current ? 'none' : 'auto' }}>
                   <thead>
                     <tr>
-                      <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, background: '#F4F6F9', width: 30, minWidth: 30 }} />
-                      {Array.from({ length: SHEET_COLS }).map((_, c) => (
-                        <th key={c} style={{
-                          position: 'sticky', top: 0, zIndex: 2, background: '#F4F6F9', color: '#64748B',
-                          fontSize: 10.5, fontWeight: 700, padding: '5px 4px', borderBottom: '0.5px solid var(--card-border)',
-                          borderLeft: '0.5px solid var(--card-border)', minWidth: 62,
-                        }}>{colLetter(c)}</th>
-                      ))}
+                      <th onClick={() => { setSelection({ r1: 0, c1: 0, r2: SHEET_ROWS - 1, c2: SHEET_COLS - 1 }); focusCell(0, 0) }}
+                        title="Select all"
+                        style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, background: '#F4F6F9', width: 30, minWidth: 30, cursor: 'pointer' }} />
+                      {Array.from({ length: SHEET_COLS }).map((_, c) => {
+                        const colSelected = selRect.c0 <= c && c <= selRect.c1 && selRect.r0 === 0 && selRect.r1 === SHEET_ROWS - 1
+                        return (
+                          <th key={c}
+                            onClick={e => { e.shiftKey ? setSelection(prev => ({ ...prev, r1: 0, r2: SHEET_ROWS - 1, c2: c })) : (setSelection({ r1: 0, c1: c, r2: SHEET_ROWS - 1, c2: c }), focusCell(0, c)) }}
+                            title="Click to select column, shift-click to extend"
+                            style={{
+                              position: 'sticky', top: 0, zIndex: 2, background: colSelected ? 'rgba(28,159,212,0.14)' : '#F4F6F9', color: colSelected ? BLUE : '#64748B',
+                              fontSize: 10.5, fontWeight: 700, padding: '5px 4px', borderBottom: '0.5px solid var(--card-border)',
+                              borderLeft: '0.5px solid var(--card-border)', minWidth: 62, cursor: 'pointer',
+                            }}>{colLetter(c)}</th>
+                        )
+                      })}
                     </tr>
                   </thead>
                   <tbody>
-                    {Array.from({ length: SHEET_ROWS }).map((_, r) => (
+                    {Array.from({ length: SHEET_ROWS }).map((_, r) => {
+                      const rowSelected = selRect.r0 <= r && r <= selRect.r1 && selRect.c0 === 0 && selRect.c1 === SHEET_COLS - 1
+                      return (
                       <tr key={r}>
-                        <td style={{
-                          position: 'sticky', left: 0, zIndex: 1, background: '#F4F6F9', color: '#94A3B8',
-                          fontSize: 10.5, fontWeight: 700, textAlign: 'center', padding: '3px 4px',
+                        <td onClick={e => { e.shiftKey ? setSelection(prev => ({ ...prev, c1: 0, c2: SHEET_COLS - 1, r2: r })) : (setSelection({ r1: r, c1: 0, r2: r, c2: SHEET_COLS - 1 }), focusCell(r, 0)) }}
+                          title="Click to select row, shift-click to extend"
+                          style={{
+                          position: 'sticky', left: 0, zIndex: 1, background: rowSelected ? 'rgba(28,159,212,0.14)' : '#F4F6F9', color: rowSelected ? BLUE : '#94A3B8',
+                          fontSize: 10.5, fontWeight: 700, textAlign: 'center', padding: '3px 4px', cursor: 'pointer',
                           borderRight: '0.5px solid var(--card-border)', borderBottom: '0.5px solid var(--card-border)',
                         }}>{r + 1}</td>
                         {Array.from({ length: SHEET_COLS }).map((_, c) => {
@@ -914,6 +974,7 @@ export default function CalculatorTool() {
                           const isFocused = focusedKey === key
                           const selected = isCellSelected(r, c)
                           const active = isActiveCell(r, c)
+                          const isPointer = formulaPointer && formulaPointer.r === r && formulaPointer.c === c
                           const showValue = isFocused ? raw : displayString(computed)
                           return (
                             <td key={c} style={{ padding: 0, border: '0.5px solid var(--card-border)' }}>
@@ -922,15 +983,16 @@ export default function CalculatorTool() {
                                 value={showValue}
                                 onMouseDown={e => { if (e.shiftKey) shiftSelect(r, c); else startSelect(r, c) }}
                                 onMouseEnter={() => extendSelect(r, c)}
-                                onFocus={e => { setFocusedKey(key); beginEdit(); e.target.select() }}
-                                onBlur={() => { setFocusedKey(k => (k === key ? null : k)); commitEdit() }}
-                                onChange={e => updateCell(r, c, e.target.value)}
+                                onFocus={e => { setFocusedKey(key); beginEdit(); composingRef.current = false; pickStateRef.current = null; setFormulaPointer(null); e.target.select() }}
+                                onBlur={() => { setFocusedKey(k => (k === key ? null : k)); commitEdit(); pickStateRef.current = null; setFormulaPointer(null) }}
+                                onChange={e => { composingRef.current = true; pickStateRef.current = null; setFormulaPointer(null); updateCell(r, c, e.target.value) }}
                                 onKeyDown={onCellKeyDown(r, c)}
                                 style={{
-                                  width: '100%', boxSizing: 'border-box', border: active ? `1.5px solid ${BLUE}` : 'none', outline: 'none',
+                                  width: '100%', boxSizing: 'border-box',
+                                  border: isPointer ? `1.5px dashed ${BLUE}` : (active ? `1.5px solid ${BLUE}` : 'none'), outline: 'none',
                                   padding: '5px 6px', fontSize: 11.5, fontFamily: FONT,
                                   textAlign: typeof computed === 'number' ? 'right' : 'left',
-                                  background: selected ? (active ? 'rgba(28,159,212,0.14)' : 'rgba(28,159,212,0.08)') : 'transparent',
+                                  background: isPointer ? 'rgba(28,159,212,0.10)' : selected ? (active ? 'rgba(28,159,212,0.14)' : 'rgba(28,159,212,0.08)') : 'transparent',
                                   color: computed === '#ERR' || computed === '#CIRC' ? '#B91C1C' : (typeof computed === 'number' ? INK : 'var(--text)'),
                                 }}
                               />
@@ -938,12 +1000,13 @@ export default function CalculatorTool() {
                           )
                         })}
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10, color: '#94A3B8' }}>
-                <span>Enter moves down · Tab moves right · drag or shift-click to select a range · stored locally on this browser</span>
+                <span>Enter moves down · Tab/arrows navigate · arrows point at cells while typing a formula · click a column/row header to select it · stored locally on this browser</span>
                 {selStats && (
                   <span style={{ flexShrink: 0, fontWeight: 700, color: NAVY, display: 'flex', gap: 10 }}>
                     <span>Sum {fmtNum(selStats.sum)}</span>
