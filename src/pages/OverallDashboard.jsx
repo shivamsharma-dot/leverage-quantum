@@ -1036,7 +1036,7 @@ export default function OverallDashboard() {
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
 
           {/* KPI ROW — with vs-previous-period deltas */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(6, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="FLOOR QUEUED" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} delta={deltaPct(kpis.floorQueued, prevKpis.floorQueued)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label="TOTAL QUEUED" value={fmtN(totalQueued)} sub={'Futwork ' + fmtN(kpis.futworkQ) + ' · Superbot ' + fmtN(kpis.superbotQ)} delta={deltaPct(totalQueued, prevTotalQueued)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
