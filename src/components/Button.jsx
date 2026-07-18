@@ -19,9 +19,15 @@ const SIZES = {
 
 export default function Button({
   children, icon, size = 'md', variant = 'primary', danger = false,
-  disabled = false, type = 'button', style, onClick, title, ...rest
+  disabled = false, type = 'button', style, onClick, title, previewVariantId, ...rest
 }) {
-  const variantId = useDesignStyle('button')
+  // useDesignStyle is always called (rules of hooks) even when a preview
+  // override is supplied -- Settings > Appearance's picker renders this same
+  // component 20 times with an explicit previewVariantId per swatch so the
+  // preview is pixel-identical (including hover state and decorative extras)
+  // to what actually ships, instead of a hand-rolled approximation.
+  const liveVariantId = useDesignStyle('button')
+  const variantId = previewVariantId ?? liveVariantId
   const s = SIZES[size] || SIZES.md
   const [hover, setHover] = React.useState(false)
   const isHovering = hover && !disabled

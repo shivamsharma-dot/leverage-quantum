@@ -7,7 +7,6 @@ import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
 import { useDesignStyle, setDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
-import { getButtonVariantStyle } from '../ui/buttonVariants'
 import styles from './SettingsPage.module.css'
 
 // Short labels for the design-system pickers below -- purely descriptive,
@@ -2459,20 +2458,18 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>Buttons</h3>
                 <p className={styles.cardDesc}>Pick a button style — applies to every button in the app immediately.</p>
+                <p className={styles.cardDesc} style={{ marginTop: -4 }}>Hover a preview to see how it actually behaves — several of these differ mainly on hover (a ring, a glow, a spinning border), not at rest.</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
                   {BUTTON_STYLE_NAMES.map((name, i) => {
                     const id = i + 1
                     const active = buttonStyleId === id
-                    const { style } = getButtonVariantStyle(id, { mode: 'primary', danger: false, hover: false })
                     return (
                       <div key={id} onClick={() => setDesignStyle('button', id)} style={{
                         cursor: 'pointer', borderRadius: 12, padding: 12, border: `1.5px solid ${active ? '#1F3C84' : '#E2E8F0'}`,
                         background: active ? '#F0FBFF' : '#fff', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
                         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center',
                       }}>
-                        <button type="button" style={{ ...style, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 700, fontSize: 11.5, padding: '6px 12px', borderRadius: style.borderRadius ?? 11, cursor: 'default', pointerEvents: 'none' }}>
-                          Preview
-                        </button>
+                        <Button previewVariantId={id} size="sm">Preview</Button>
                         <div style={{ fontSize: 10.5, fontWeight: 600, color: active ? '#1F3C84' : '#64748B', textAlign: 'center', lineHeight: 1.3 }}>{id}. {name}</div>
                       </div>
                     )
