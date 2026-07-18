@@ -713,8 +713,8 @@ function CreativesTab({ data, token }) {
             </div>
           ))}
         </div>
-      <div style={{ display:'flex',gap:4,marginBottom:14,alignItems:'center',flexWrap:'nowrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'8px 10px' }}>
-        <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 9px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:11.5,fontFamily:'inherit',outline:'none',width:90,minWidth:0,flexShrink:1,flexGrow:0,background:'#FAFAFA' }}/>
+      <div style={{ display:'flex',gap:6,marginBottom:14,alignItems:'center',flexWrap:'nowrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'8px 10px' }}>
+        <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'7px 12px',border:'0.5px solid #E5E7EB',borderRadius:8,fontSize:12.5,fontFamily:'inherit',outline:'none',width:110,minWidth:0,flexShrink:1,flexGrow:0,background:'#FAFAFA' }}/>
         <FilterDropdown label="Format" value={adTypeFilter} options={[{v:'all',l:'All'},{v:'video',l:'Video'},{v:'image',l:'Image'},{v:'carousel',l:'Carousel'}]}
           open={openFilterMenu==='format'} onToggle={()=>setOpenFilterMenu(v=>v==='format'?null:'format')} onSelect={v=>{ setAdTypeFilter(v); setOpenFilterMenu(null) }} />
         <FilterDropdown label="Corridor" value={corridorFilter} options={[{v:'all',l:'All'},...CORRIDORS.map(c=>({v:c.id,l:c.label}))]}
@@ -729,7 +729,7 @@ function CreativesTab({ data, token }) {
           open={openFilterMenu==='sort'} onToggle={()=>setOpenFilterMenu(v=>v==='sort'?null:'sort')} onSelect={v=>{ setSortBy(v); setOpenFilterMenu(null) }} />
         <div style={{ marginLeft:'auto',display:'flex',gap:5,alignItems:'center',position:'relative',flexShrink:0 }}>
           {viewMode==='list' && (
-            <button type="button" onClick={()=>setColsOpen(v=>!v)} title="Columns" style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',width:28,height:28,borderRadius:7,border:'0.5px solid #E5E7EB',cursor:'pointer',flexShrink:0,background:colsOpen?'#1F3C84':'#fff',color:colsOpen?'#fff':'#6B7280' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+            <button type="button" onClick={()=>setColsOpen(v=>!v)} title="Columns" style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',width:32,height:32,borderRadius:8,border:'0.5px solid #E5E7EB',cursor:'pointer',flexShrink:0,background:colsOpen?'#1F3C84':'#fff',color:colsOpen?'#fff':'#6B7280' }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
           )}
           {colsOpen && (
             <>
@@ -773,7 +773,7 @@ function CreativesTab({ data, token }) {
             </>
           )}
           <ExportButton data={exportRows} filename="meta_ads_creatives" />
-          {[{m:'grid',l:'⊞',t:'Grid view'},{m:'list',l:'☰',t:'List view'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} title={v.t} style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',width:28,height:28,borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:13,cursor:'pointer',flexShrink:0,background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
+          {[{m:'grid',l:'⊞',t:'Grid view'},{m:'list',l:'☰',t:'List view'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} title={v.t} style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',width:32,height:32,borderRadius:8,border:'0.5px solid #E5E7EB',fontSize:15,cursor:'pointer',flexShrink:0,background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
         </div>
       </div>
       <div style={{ fontSize:12,color:'#9CA3AF',marginBottom:12 }}>{filtered.length} creatives · showing {filtered.length===0?0:((safePage-1)*PER_PAGE+1)}–{Math.min(safePage*PER_PAGE, filtered.length)} · account avg CTR {accCTRpct.toFixed(2)}%</div>
@@ -1864,11 +1864,11 @@ export default function MetaAdsDashboard() {
               <div style={{position:'relative'}} ref={accountPickerRef}>
                 <div
                   onClick={() => !loading && setAccountPickerOpen(o => !o)}
-                  style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 10px',borderRadius:8,border:'1px solid #E5E7EB',background:'#fff',cursor:loading?'not-allowed':'pointer',minWidth:180,maxWidth:220,transition:'border .15s',borderColor:accountPickerOpen?'#1C9FD4':'#E5E7EB'}}>
+                  style={{display:'flex',alignItems:'center',gap:8,padding:'7px 12px',borderRadius:8,border:'1px solid #E5E7EB',background:'#fff',cursor:loading?'not-allowed':'pointer',minWidth:180,maxWidth:220,transition:'border .15s',borderColor:accountPickerOpen?'#1C9FD4':'#E5E7EB'}}>
                   <div style={{width:24,height:24,borderRadius:6,background:'#EEF2FF',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366F1" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
                   </div>
-                  <span style={{flex:1,fontSize:12,fontWeight:600,color:'#0F172A',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                  <span style={{flex:1,fontSize:12.5,fontWeight:600,color:'#0F172A',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                     {adAccounts.find(a => a.id === adAccount)?.name || adAccount}
                   </span>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{flexShrink:0,transform:accountPickerOpen?'rotate(180deg)':'rotate(0deg)',transition:'transform .2s'}}><polyline points="6 9 12 15 18 9"/></svg>
@@ -1899,7 +1899,7 @@ export default function MetaAdsDashboard() {
           {activeTab!=='mom' && activeTab!=='dod' && (
 <div style={{ position:'relative' }}>
             <button type="button" onClick={()=>!loading && setDateOpen(o=>!o)} disabled={loading}
-              style={{ display:'flex',alignItems:'center',gap:8,padding:'6px 10px',borderRadius:8,border:'1px solid '+(dateOpen?'#1C9FD4':'#E5E7EB'),background:'#fff',cursor:loading?'not-allowed':'pointer',minWidth:130,justifyContent:'space-between',fontSize:12,fontWeight:600,color:'#0F172A',fontFamily:'inherit',transition:'border .15s' }}>
+              style={{ display:'flex',alignItems:'center',gap:8,padding:'7px 12px',borderRadius:8,border:'1px solid '+(dateOpen?'#1C9FD4':'#E5E7EB'),background:'#fff',cursor:loading?'not-allowed':'pointer',minWidth:140,justifyContent:'space-between',fontSize:12.5,fontWeight:600,color:'#0F172A',fontFamily:'inherit',transition:'border .15s' }}>
               <span>{(PRESETS.find(p=>p.id===datePreset)||{}).label || 'Select range'}</span>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink:0,transform:dateOpen?'rotate(180deg)':'rotate(0deg)',transition:'transform .2s' }}><polyline points="6 9 12 15 18 9"/></svg>
             </button>

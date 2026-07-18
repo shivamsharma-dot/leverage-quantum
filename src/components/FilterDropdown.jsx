@@ -8,10 +8,10 @@ export default function FilterDropdown({ label, value, options, open, onToggle, 
   const current = options.find(o => o.v === value) || options[0]
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
-      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '4px 6px', borderRadius: 7, border: '0.5px solid ' + (open ? '#1C9FD4' : '#E5E7EB'), background: '#fff', cursor: 'pointer', fontSize: 10.5, fontWeight: 500, fontFamily: 'inherit', color: '#374151', whiteSpace: 'nowrap' }}>
+      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: '0.5px solid ' + (open ? '#1C9FD4' : '#E5E7EB'), background: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', color: '#374151', whiteSpace: 'nowrap' }}>
         <span style={{ color: '#9CA3AF', fontWeight: 600 }}>{label}:</span>
         <span style={{ fontWeight: 600, color: accentOf ? accentOf(value) : '#374151' }}>{current.l}</span>
-        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
       </button>
       {open && <div onClick={() => onToggle()} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />}
       {open && (

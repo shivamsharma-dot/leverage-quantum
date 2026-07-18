@@ -694,21 +694,21 @@ return(
 {activeUsers.length>0&&(
 <div style={{display:'flex',alignItems:'center',marginRight:2}}>
 {activeUsers.slice(0,5).map((u,idx)=>(
-<div key={u.email||idx} title={u.name||u.email} style={{width:22,height:22,borderRadius:'50%',border:'2px solid var(--card)',marginLeft:idx?-7:0,background:'linear-gradient(135deg,'+C.blue+','+C.cyan+')',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff',position:'relative'}}>
+<div key={u.email||idx} title={u.name||u.email} style={{width:28,height:28,borderRadius:'50%',border:'2px solid var(--card)',marginLeft:idx?-8:0,background:'linear-gradient(135deg,'+C.blue+','+C.cyan+')',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'#fff',position:'relative'}}>
 {u.picture?<img src={u.picture} alt='' style={{width:'100%',height:'100%',borderRadius:'50%',objectFit:'cover'}}/>:(u.name||u.email||'?')[0].toUpperCase()}
 </div>
 ))}
-{activeUsers.length>1&&<span style={{fontSize:10.5,color:C.muted,marginLeft:8,whiteSpace:'nowrap'}}>{activeUsers.length} online</span>}
+{activeUsers.length>1&&<span style={{fontSize:11,color:C.muted,marginLeft:8,whiteSpace:'nowrap'}}>{activeUsers.length} online</span>}
 </div>
 )}
 
-<div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,border:'0.5px solid '+C.border,background:'var(--card)'}}>
+<div style={{display:'flex',alignItems:'center',gap:6,padding:'7px 12px',borderRadius:8,border:'0.5px solid '+C.border,background:'var(--card)'}}>
 <span style={{width:7,height:7,borderRadius:'50%',background:notConnected?C.navy:C.green,flexShrink:0,boxShadow:'0 0 0 3px '+(notConnected?'rgba(31,60,132,.15)':'rgba(76,174,111,.18)')}}/>
-<span style={{fontSize:11.5,fontWeight:700,color:C.text,whiteSpace:'nowrap'}}>{notConnected?'Not connected':'Google Ads · Live'}</span>
+<span style={{fontSize:12.5,fontWeight:700,color:C.text,whiteSpace:'nowrap'}}>{notConnected?'Not connected':'Google Ads · Live'}</span>
 </div>
 
 <div style={{position:'relative'}}>
-<button type='button' onClick={()=>setDateOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:6,padding:'6px 12px',borderRadius:8,border:'0.5px solid '+(dateOpen?C.blue:C.border),background:'var(--card)',fontSize:12,fontWeight:600,color:C.text,cursor:'pointer',fontFamily:FONT}}>
+<button type='button' onClick={()=>setDateOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 12px',borderRadius:8,border:'0.5px solid '+(dateOpen?C.blue:C.border),background:'var(--card)',fontSize:12.5,fontWeight:600,color:C.text,cursor:'pointer',fontFamily:FONT}}>
 {currentRangeLabel}
 <svg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round' style={{transform:dateOpen?'rotate(180deg)':'none',transition:'transform .15s',opacity:.5}}><polyline points='6 9 12 15 18 9'/></svg>
 </button>

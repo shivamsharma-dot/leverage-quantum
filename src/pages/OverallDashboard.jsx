@@ -334,9 +334,9 @@ function fmtINR(n) {
 }
 
 function summaryValue(g, key) {
-  if (key === 'qlPct') return g.queued > 0 ? (g.humanQL / g.queued) * 100 : null
-  if (key === 'appPct') return g.humanQL > 0 ? (g.apps / g.humanQL) * 100 : null
-  if (key === 'depositPct') return g.offers > 0 ? (g.deposits / g.offers) * 100 : null
+  if (key === 'qlPct') return g.queued > 0 ? (g.humanQL / g.queued) * 100 : 0
+  if (key === 'appPct') return g.humanQL > 0 ? (g.apps / g.humanQL) * 100 : 0
+  if (key === 'depositPct') return g.offers > 0 ? (g.deposits / g.offers) * 100 : 0
   return g[key]
 }
 function summaryFmt(key, v) {
@@ -390,34 +390,6 @@ function ColumnsPicker({ order, visible, onToggle, onMove, onClose, onReset }) {
         })}
       </div>
     </>
-  )
-}
-
-// Brand-consistent line icons for the insight cards — same stroke-based visual language
-// as KPI_ICONS in dashboardKit.jsx, so these read as part of the design system rather
-// than ad-hoc unicode glyphs.
-const INSIGHT_ICONS = {
-  trendUp:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>,
-  trendDown: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6" /><polyline points="17 18 23 18 23 12" /></svg>,
-  target:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></svg>,
-  alert:     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4" /><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 17h.01" /></svg>,
-  rocket:    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" /><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" /><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" /><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" /></svg>,
-}
-
-// Executive insight callout — a single "what a CEO reads first" card: icon chip,
-// bold headline stat, and a plain-English sentence explaining what it means / what to do.
-function InsightCard({ icon, eyebrow, headline, headlineColor, body, accent }) {
-  return (
-    <div style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'20px 22px', minHeight:168, background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 10px 28px -14px rgba(16,24,42,0.2)', display:'flex', flexDirection:'column', gap:10, minWidth:0 }}>
-      <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:`linear-gradient(90deg, ${accent}, ${accent}99)` }} />
-      <div style={{ position:'absolute', top:-36, right:-36, width:110, height:110, borderRadius:'50%', background:`linear-gradient(135deg, ${accent}12, ${accent}04)` }} />
-      <div style={{ display:'flex', alignItems:'center', gap:10, position:'relative' }}>
-        <div style={{ width:32, height:32, borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', background:`linear-gradient(135deg, ${accent}, ${accent}D9)`, boxShadow:`0 4px 10px -2px ${accent}66`, flexShrink:0 }}>{INSIGHT_ICONS[icon]}</div>
-        <span style={{ fontSize:10.5, fontWeight:700, letterSpacing:'0.07em', color:'#8A94A6', textTransform:'uppercase' }}>{eyebrow}</span>
-      </div>
-      <div style={{ fontSize:21, fontWeight:800, letterSpacing:'-0.4px', color: headlineColor || '#0F1B33', lineHeight:1.2, position:'relative', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{headline}</div>
-      <div style={{ fontSize:12.5, color:'#5A6473', lineHeight:1.6, position:'relative' }}>{body}</div>
-    </div>
   )
 }
 
@@ -808,50 +780,6 @@ export default function OverallDashboard() {
     byCampaign.filter(c => c.queued >= 15).map(c => ({ ...c, qlRate: c.queued > 0 ? (c.humanQL / c.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 5)
   ), [byCampaign])
 
-  // ── Executive insights — the "read this first" narrative row ──────────────────────
-  const insights = useMemo(() => {
-    const list = []
-    // 1. Momentum vs previous equivalent period
-    const leadsDelta = deltaPct(kpis.leads, prevKpis.leads)
-    if (prevWindow && prevKpis.leads > 0) {
-      const up = leadsDelta >= 0
-      list.push({
-        icon: up ? 'trendUp' : 'trendDown', eyebrow:'Momentum vs last period', accent: up ? C.green : C.navy,
-        headline: (up ? '+' : '') + leadsDelta.toFixed(1) + '%',
-        headlineColor: up ? C.green : C.navy,
-        body: `${fmtN(kpis.leads)} leads this period vs ${fmtN(prevKpis.leads)} previously. ${up ? 'Volume is scaling — check queued/QL capacity keeps pace.' : 'Volume has slowed — worth checking source spend and creative fatigue.'}`,
-      })
-    }
-    // 2. Top source
-    if (bySource.length) {
-      const top = bySource[0]
-      const topRate = top.queued > 0 ? (top.humanQL / top.queued) * 100 : null
-      list.push({
-        icon:'target', eyebrow:'Top source by volume', accent:C.navy, headline: top.source, headlineColor:C.navy,
-        body: `${pct(top.leads, kpis.leads)} of all leads (${fmtN(top.leads)}) came from here${topRate != null ? `, converting ${topRate.toFixed(1)}% of queued leads to Human QL` : ''}.`,
-      })
-    }
-    // 3. Biggest leak in the conversion chain
-    const withRate = conversionChain.filter(s => s.rate != null && s.a >= 20)
-    if (withRate.length) {
-      const worst = [...withRate].sort((a, b) => a.rate - b.rate)[0]
-      list.push({
-        icon:'alert', eyebrow:'Biggest funnel leak', accent:C.blue, headline: worst.from + ' → ' + worst.to,
-        headlineColor: heatColor(worst.rate),
-        body: `Only ${worst.rate.toFixed(1)}% of ${worst.from} convert to ${worst.to} — the weakest step in the funnel this period. Start here for the fastest lift.`,
-      })
-    }
-    // 4. Most efficient campaign worth scaling
-    if (topCampaignsByEfficiency.length) {
-      const best = topCampaignsByEfficiency[0]
-      list.push({
-        icon:'rocket', eyebrow:'Best campaign to scale', accent:C.green, headline: best.qlRate.toFixed(1) + '% QL rate', headlineColor:C.green,
-        body: `${best.campaign} converts best among campaigns with real volume (${fmtN(best.queued)} queued) — a strong candidate to push more budget toward.`,
-      })
-    }
-    return list.slice(0, 4)
-  }, [kpis, prevKpis, prevWindow, bySource, conversionChain, topCampaignsByEfficiency])
-
   const grouped = useMemo(() => {
     if (grpBy === 'source') return bySource.map(s => ({
       label:s.source, leads:s.leads, queued:s.queued, humanQL:s.humanQL, apps:s.apps, offers:s.offers, deposits:s.deposits, raus:s.raus,
@@ -1068,13 +996,6 @@ export default function OverallDashboard() {
         {/* SCROLLABLE CONTENT */}
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
 
-          {/* EXECUTIVE INSIGHTS — the "read this first" row */}
-          {insights.length > 0 && (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:14, marginBottom:20 }}>
-              {insights.map((ins, i) => <InsightCard key={i} {...ins} />)}
-            </div>
-          )}
-
           {/* KPI ROW — with vs-previous-period deltas */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(4, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
@@ -1177,7 +1098,7 @@ export default function OverallDashboard() {
               action={
                 <div style={{ display:'flex', gap:6 }}>
                   {[['source', 'Source'], ['campaign', 'Campaign'], ['corridor', 'Corridor'], ['month', 'Month'], ['day', 'Day']].map(([v, l]) => (
-                    <button key={v} onClick={() => setGrpBy(v)} style={{ padding:'5px 12px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : '#E5E7EB'), background: grpBy === v ? C.navy : '#fff', color: grpBy === v ? '#fff' : '#374151', fontSize:11.5, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
+                    <button key={v} onClick={() => setGrpBy(v)} style={{ padding:'7px 14px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : '#E5E7EB'), background: grpBy === v ? C.navy : '#fff', color: grpBy === v ? '#fff' : '#374151', fontSize:12.5, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
                   ))}
                 </div>
               }
@@ -1186,10 +1107,10 @@ export default function OverallDashboard() {
 
               {/* TOOLBAR */}
               <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:14 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 10px', borderRadius:8, border:`0.5px solid ${C.border}`, background:'var(--card)', flex:'1 1 200px', minWidth:160, maxWidth:280 }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+                <div style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', borderRadius:8, border:`0.5px solid ${C.border}`, background:'var(--card)', flex:'1 1 200px', minWidth:160, maxWidth:280 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
                   <input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder={`Search ${grpByLabel.toLowerCase()}…`}
-                    style={{ border:'none', outline:'none', background:'transparent', fontFamily:FONT, fontSize:12, fontWeight:600, color:C.text, width:'100%' }} />
+                    style={{ border:'none', outline:'none', background:'transparent', fontFamily:FONT, fontSize:12.5, fontWeight:600, color:C.text, width:'100%' }} />
                   {tableSearch && (
                     <button onClick={() => setTableSearch('')} style={{ border:'none', background:'transparent', cursor:'pointer', color:C.muted, display:'flex', padding:0, flexShrink:0 }}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -1198,9 +1119,9 @@ export default function OverallDashboard() {
                 </div>
 
                 <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                  <span style={{ fontSize:11, color:C.muted, fontFamily:FONT }}>Show</span>
+                  <span style={{ fontSize:12, color:C.muted, fontFamily:FONT }}>Show</span>
                   {[10, 25, 50, 'all'].map(n => (
-                    <button key={n} onClick={() => setRowLimit(n)} style={{ padding:'5px 10px', borderRadius:7, border:'none', cursor:'pointer', fontSize:11.5, fontWeight:700, fontFamily:FONT, background: rowLimit === n ? C.navy : 'transparent', color: rowLimit === n ? '#fff' : '#64748B' }}>{n === 'all' ? 'All' : n}</button>
+                    <button key={n} onClick={() => setRowLimit(n)} style={{ padding:'7px 12px', borderRadius:7, border:'none', cursor:'pointer', fontSize:12.5, fontWeight:700, fontFamily:FONT, background: rowLimit === n ? C.navy : 'transparent', color: rowLimit === n ? '#fff' : '#64748B' }}>{n === 'all' ? 'All' : n}</button>
                   ))}
                 </div>
 
@@ -1223,7 +1144,7 @@ export default function OverallDashboard() {
                     onClick={() => setShowRatesPicker(v => !v)}
                     size="sm"
                     variant="secondary"
-                    icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>}
+                    icon={<span style={{ fontSize:13, fontWeight:800, lineHeight:1, fontFamily:FONT }}>₹</span>}
                   >
                     SR Rates
                   </Button>
