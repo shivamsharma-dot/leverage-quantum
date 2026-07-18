@@ -98,7 +98,7 @@ const KPI_ICONS = {
 const FONT_KPI = "'Plus Jakarta Sans','Inter',sans-serif"
 const KPI=({label,value,sub,accent='#1F3C84',accentBg='#EEF1FB',icon,prev,cur,invert,prorate})=>{
   const adjPrev = (prev!=null&&prorate&&prorate!==1)?prev*prorate:prev
-  const d = (adjPrev!=null&&cur!=null)?delta(cur,adjPrev):null
+  const d = (adjPrev!=null&&cur!=null&&cur!==0)?delta(cur,adjPrev):null
   const up = d==null?null:(invert?d<=0:d>=0)
   return <div className='qkpi' style={{position:'relative',background:'linear-gradient(180deg,#FFFFFF 0%,#FBFCFE 100%)',border:'1px solid #EEF1F6',borderRadius:16,padding:'16px 18px 14px',boxShadow:'0 1px 2px rgba(15,23,42,0.04),0 4px 14px -6px rgba(15,23,42,0.08)',overflow:'hidden',transition:'transform .18s ease,box-shadow .18s ease'}}>
     <div style={{position:'absolute',top:0,left:0,right:0,height:4,background:`linear-gradient(90deg,${accent},${accent}99)`}}/>
@@ -306,9 +306,7 @@ export default function MTDDashboard(){
               <KPI icon={KPI_ICONS.roas} label='ROAS' value={total.roas>0?total.roas.toFixed(2)+'x':'\u2014'} accent={roasColor(total.roas)} cur={total.roas} prev={prevTotal?.roas}/>
             </div>
 
-            <div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12,marginBottom:22}}>LoginPage.jsx
-
-
+            <div className='lq-kpi-grid' style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12,marginBottom:22}}>
               <KPI icon={KPI_ICONS.qual} label='FW Qualified' value={fmtNum(total.fwQual)} accent='#1F3C84' sub={'of '+fmtNum(total.fwQ)+' queued'} cur={total.fwQual} prev={prevTotal?.fwQual} prorate={prorate}/>
               <KPI icon={KPI_ICONS.pct} label='FW QL%' value={total.fwQL.toFixed(2)+'%'} accent='#1C9FD4' sub='Futwork quality' cur={total.fwQL} prev={prevTotal?.fwQL}/>
               <KPI icon={KPI_ICONS.qual} label='SB Qualified' value={fmtNum(total.sbQual)} accent='#29B9C3' sub={total.sbQL.toFixed(2)+'% QL'} cur={total.sbQual} prev={prevTotal?.sbQual}/>
