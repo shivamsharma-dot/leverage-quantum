@@ -338,8 +338,15 @@ const SR_EST_RATE_KEY = 'lq_overall_sr_est_rate'
 const SR_ACT_RATE_KEY = 'lq_overall_sr_act_rate'
 const SR_DEFAULT_RATE = 350000
 
-// Simple INR formatter with L/Cr suffixes, matching the app's other fmtINR helpers.
+// Full INR formatter — every rupee figure on this page displays in full (no Cr/L
+// shorthand); the abbreviated form is only ever surfaced as a hover tooltip via fmtINRShort.
 function fmtINR(n) {
+  n = parseFloat(n) || 0
+  return '₹' + Math.round(n).toLocaleString('en-IN')
+}
+// Cr/L shorthand — used ONLY for the title="" tooltip on money values, never as the
+// displayed text.
+function fmtINRShort(n) {
   n = parseFloat(n) || 0
   if (n >= 1e7) return '₹' + (n / 1e7).toFixed(2) + ' Cr'
   if (n >= 1e5) return '₹' + (n / 1e5).toFixed(1) + 'L'
@@ -1045,10 +1052,10 @@ export default function OverallDashboard() {
             <PremKPI label="OFFERS" value={fmtN(kpis.offers)} sub={pct(kpis.offers, kpis.apps) + ' of apps'} delta={deltaPct(kpis.offers, prevKpis.offers)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label="DEPOSITS" value={fmtN(kpis.deposits)} sub={pct(kpis.deposits, kpis.offers) + ' of offers'} delta={deltaPct(kpis.deposits, prevKpis.deposits)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} />
             <PremKPI label="TOTAL RAUs" value={fmtN(kpis.raus)} sub="revenue attr. units" delta={deltaPct(kpis.raus, prevKpis.raus)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
-            <PremKPI label="SPEND" value={fmtINR(kpis.spend)} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-            <PremKPI label="CPL" value={fmtINR(cpl)} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="CPQL" value={fmtINR(cpql)} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} invert accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="CPA" value={fmtINR(cpa)} sub="cost per application" delta={deltaPct(cpa, prevCpa)} invert accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.globe} />
+            <PremKPI label="SPEND" value={<span title={fmtINRShort(kpis.spend)}>{fmtINR(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+            <PremKPI label="CPL" value={<span title={fmtINRShort(cpl)}>{fmtINR(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="CPQL" value={<span title={fmtINRShort(cpql)}>{fmtINR(cpql)}</span>} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} invert accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="CPA" value={<span title={fmtINRShort(cpa)}>{fmtINR(cpa)}</span>} sub="cost per application" delta={deltaPct(cpa, prevCpa)} invert accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.globe} />
           </div>
 
           {/* FUNNEL + STAGE CONVERSION */}
@@ -1246,8 +1253,9 @@ export default function OverallDashboard() {
                         {displayCols.map(col => {
                           const v = summaryValue(g, col.key)
                           const isPct = col.key.endsWith('Pct')
+                          const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
                           return (
-                            <td key={col.key} style={{ padding:'9px 8px', textAlign:'right', color: isPct ? heatColor(v) : summaryColor(col.key), fontWeight: SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400, background: isPct ? heatBg(v) : 'transparent' }}>
+                            <td key={col.key} title={isMoney ? fmtINRShort(v) : undefined} style={{ padding:'9px 8px', textAlign:'right', color: isPct ? heatColor(v) : summaryColor(col.key), fontWeight: SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400, background: isPct ? heatBg(v) : 'transparent' }}>
                               {summaryFmt(col.key, v)}
                             </td>
                           )
