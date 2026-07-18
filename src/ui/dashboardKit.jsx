@@ -65,11 +65,12 @@ export const KPI_ICONS = {
 // useDesignStyle('kpi') -- shared render engine with components/KPICard.jsx
 // at src/ui/kpiVariants.js, so picking a variant re-skins every KPI card in
 // the app at once. This component's own prop API never changes.
-export const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon }) => {
+export const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon, invert }) => {
   const variantId = useDesignStyle('kpi')
   const up = delta != null && delta >= 0
   const deltaText = delta != null ? `${up ? '\u25B2' : '\u25BC'} ${Math.abs(delta).toFixed(1)}%` : null
-  return renderKpiVariant(variantId, { label, value, sub, deltaText, isGood: delta != null ? up : null, icon, accent })
+  const isGood = delta == null ? null : (invert ? !up : up)
+  return renderKpiVariant(variantId, { label, value, sub, deltaText, isGood, icon, accent })
 }
 
 /* ===== Ranked horizontal bar list ===== */
