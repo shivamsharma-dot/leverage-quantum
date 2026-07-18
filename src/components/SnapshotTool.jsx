@@ -499,16 +499,16 @@ export default function SnapshotTool() {
         )}
 
         <button onClick={() => (busy ? null : setOpen((o) => !o))} title="Capture panel snapshot" aria-label="Capture panel snapshot"
-          style={{ width: 52, height: 52, borderRadius: 16, border: 'none', cursor: busy ? 'wait' : 'pointer', background: `linear-gradient(135deg, ${NAVY} 0%, ${CYAN} 130%)`, boxShadow: '0 10px 26px rgba(31,60,132,0.38)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .15s ease' }}
+          style={{ width: 52, height: 52, borderRadius: 16, border: '0.5px solid var(--card-border)', cursor: busy ? 'wait' : 'pointer', background: 'var(--card)', boxShadow: '0 10px 26px -8px rgba(15,23,42,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .15s ease' }}
           onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
           onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}>
           {busy ? (
             <svg width="22" height="22" viewBox="0 0 24 24" style={{ animation: 'qspin 0.8s linear infinite' }}>
-              <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2.5"/>
-              <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+              <circle cx="12" cy="12" r="9" fill="none" stroke="#E0E5EE" strokeWidth="2.5"/>
+              <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke={NAVY} strokeWidth="2.5" strokeLinecap="round"/>
             </svg>
           ) : (
-            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
           )}
         </button>
         <style>{`@keyframes qspin{to{transform:rotate(360deg)}}`}</style>

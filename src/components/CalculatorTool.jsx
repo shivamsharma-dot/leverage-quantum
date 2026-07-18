@@ -328,21 +328,23 @@ export default function CalculatorTool() {
   )
 
   return (
-    <div data-snapshot-ignore="true" style={{ position: 'fixed', top: '38%', right: 0, transform: 'translateY(-50%)', zIndex: 700, fontFamily: FONT, display: 'flex', alignItems: 'center', flexDirection: 'row-reverse' }}>
-      {/* Edge hover-trigger tab -- always visible, half-tucked at the right edge, above the Snapshot FAB */}
-      <div
+    <div data-snapshot-ignore="true" style={{ position: 'fixed', bottom: 86, right: 22, zIndex: 700, fontFamily: FONT, display: 'flex', alignItems: 'flex-end', flexDirection: 'row-reverse' }}>
+      {/* Trigger button -- white, sits directly above the Snapshot FAB so the two form one stack */}
+      <button
         onMouseEnter={openPanel}
         onMouseLeave={scheduleClose}
         onClick={() => { setPinned(p => !p); openPanel() }}
         title="Calculator & rough sheet"
         style={{
-          width: 22, height: 64, borderRadius: '12px 0 0 12px', flexShrink: 0,
-          background: `linear-gradient(180deg, ${NAVY}, ${BLUE})`,
+          width: 52, height: 52, borderRadius: 16, flexShrink: 0, border: '0.5px solid var(--card-border)',
+          background: 'var(--card)', boxShadow: '0 10px 26px -8px rgba(15,23,42,0.22)',
           display: open ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', boxShadow: '-2px 0 10px rgba(31,60,132,0.28)',
+          cursor: 'pointer', transition: 'transform .15s ease',
         }}
+        onFocus={openPanel}
+        onMouseDown={e => (e.currentTarget.style.transform = 'translateY(-2px)')}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="4" y="2" width="16" height="20" rx="2" />
           <line x1="8" y1="6" x2="16" y2="6" />
           <line x1="8" y1="11" x2="8" y2="11" />
@@ -352,7 +354,7 @@ export default function CalculatorTool() {
           <line x1="12" y1="15" x2="12" y2="15" />
           <line x1="16" y1="15" x2="16" y2="15" />
         </svg>
-      </div>
+      </button>
 
       {open && (
         <div
