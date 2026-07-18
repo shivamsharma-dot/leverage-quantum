@@ -265,28 +265,8 @@ export default function Sidebar() {
     if (flyoutCloseTimer.current) { clearTimeout(flyoutCloseTimer.current); flyoutCloseTimer.current = null }
   }
 
-  // Auto-hide/peek: while the rail is collapsed, hovering it (or moving the
-  // cursor to the screen edge) reveals the full expanded nav as a floating
-  // overlay -- the collapsed rail itself stays in flow at 78px so no page
-  // content ever reflows; the overlay just sits on top of it, above the
-  // scrollable content. Same 150ms-close-delay pattern as the flyout above,
-  // so moving the mouse from the rail into the panel doesn't flicker-close it.
-  const [peekOpen, setPeekOpen] = React.useState(false)
-  const peekCloseTimer = React.useRef(null)
-  const openPeek = () => {
-    if (peekCloseTimer.current) { clearTimeout(peekCloseTimer.current); peekCloseTimer.current = null }
-    setPeekOpen(true)
-  }
-  const schedulePeekClose = () => {
-    if (peekCloseTimer.current) clearTimeout(peekCloseTimer.current)
-    peekCloseTimer.current = setTimeout(() => setPeekOpen(false), 220)
-  }
-  const cancelPeekClose = () => {
-    if (peekCloseTimer.current) { clearTimeout(peekCloseTimer.current); peekCloseTimer.current = null }
-  }
-
-  // Shared body for the true expanded sidebar AND the collapsed-rail peek
-  // overlay, so the two never drift out of sync -- edit the nav/footer once.
+  // Shared body for the expanded sidebar, so the true expanded render and any
+  // future variant never drift out of sync -- edit the nav/footer once.
   function renderNavBody() {
     return (
       <>
@@ -296,7 +276,7 @@ export default function Sidebar() {
         </div>
         <div className={styles.dividerLine}/>
         <div className={styles.quantumLabel}>
-          <svg width="14" height="14" viewBox="0 0 22 22" fill="none" style={{overflow:'visible'}}>
+          <svg width="19" height="19" viewBox="0 0 22 22" fill="none" style={{overflow:'visible'}}>
             <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F" style={{transformOrigin:'1px 21px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.1s both'}}/>
             <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4" style={{transformOrigin:'7px 21px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.2s both'}}/>
             <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84" style={{transformOrigin:'13px 21px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.3s both'}}/>
@@ -431,20 +411,21 @@ export default function Sidebar() {
           <div style={{flex:1,background:'rgba(0,0,0,0.3)'}}/>
         </div>
       )}
-      <aside className={styles.sidebarCollapsed} onMouseEnter={openPeek} onMouseLeave={schedulePeekClose}>
+      <aside className={styles.sidebarCollapsed}>
         {/* Quantum logo mark — visible when collapsed */}
         <div style={{
-          height: 52, display:'flex', alignItems:'center', justifyContent:'center',
+          height: 58, display:'flex', alignItems:'center', justifyContent:'center',
           flexShrink: 0, borderBottom: '0.5px solid #F3F4F6', width:'100%'
         }}>
           <div style={{
-            width:34, height:34, borderRadius:9, background:'#F0F4FF',
-            border:'0.5px solid #E0E7FF', display:'flex', alignItems:'center', justifyContent:'center'
+            width:44, height:44, borderRadius:11, background:'#fff',
+            border:'0.5px solid #EEF1F6', boxShadow:'0 1px 3px rgba(15,23,42,0.06)',
+            display:'flex', alignItems:'center', justifyContent:'center'
           }}>
-            <svg width="16" height="16" viewBox="0 0 22 22" fill="none">
-              <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/>
-              <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
-              <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84"/>
+            <svg width="24" height="24" viewBox="0 0 22 22" fill="none">
+              <rect x="3" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/>
+              <rect x="9" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
+              <rect x="15" y="4" width="4" height="17" rx="1.5" fill="#1F3C84"/>
             </svg>
           </div>
         </div>
@@ -496,15 +477,6 @@ export default function Sidebar() {
         <SnapshotTool/>
         <CalculatorTool/>
       </aside>
-      {peekOpen && (
-        <>
-        <div className={styles.sidebarPeekBackdrop} onMouseEnter={schedulePeekClose} />
-        <aside className={`${styles.sidebar} ${styles.sidebarPeek}`}
-          onMouseEnter={cancelPeekClose} onMouseLeave={schedulePeekClose}>
-          {renderNavBody()}
-        </aside>
-        </>
-      )}
       </>
     )
   }
