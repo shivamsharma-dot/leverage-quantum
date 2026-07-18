@@ -28,7 +28,7 @@ return <span style={{background:v.bg,color:v.color,fontSize:11,fontWeight:700,pa
 }
 
 const TypeTag=({t})=>{
-const map={SEARCH:{bg:C.blueBg,color:C.blue,label:'Search'},DISPLAY:{bg:C.greenBg,color:C.green,label:'Display'},SHOPPING:{bg:C.cyanBg,color:C.cyan,label:'Shopping'},VIDEO:{bg:C.navyBg,color:C.navy,label:'Video'},PERFORMANCE_MAX:{bg:C.navyBg,color:C.navy,label:'PMax'}}
+const map={SEARCH:{bg:C.blueBg,color:C.blue,label:'Search'},DISPLAY:{bg:C.greenBg,color:C.green,label:'Display'},SHOPPING:{bg:C.cyanBg,color:C.cyan,label:'Shopping'},VIDEO:{bg:C.navyBg,color:C.navy,label:'Video'},PERFORMANCE_MAX:{bg:C.navyBg,color:C.navy,label:'PMax'},DEMAND_GEN:{bg:C.cyanBg,color:C.cyan,label:'Demand Gen'},DISCOVERY:{bg:C.cyanBg,color:C.cyan,label:'Demand Gen'}}
 const v=map[t]||{bg:'#F3F4F6',color:'#6B7280',label:t||'Other'}
 return <span style={{background:v.bg,color:v.color,fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:8,fontFamily:FONT}}>{v.label}</span>
 }
