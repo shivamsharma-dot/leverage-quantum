@@ -73,6 +73,9 @@ function parseNum(v) {
 
 function mapRow(r) {
   const d = parseD(r.lead_date)
+  const humanQL = parseNum(r['Futwork Human QL'])
+  const futworkAiQl = parseNum(r['Futwork AI QL'])
+  const superbotAiQl = parseNum(r['Superbot AI QL'])
   return {
     date: d,
     mk: d ? monthKey(d) : null,
@@ -82,7 +85,9 @@ function mapRow(r) {
     floorQueued: parseNum(r.floor_queued),
     futworkQ: parseNum(r['Queued on Futwork']),
     superbotQ: parseNum(r['Queued on Superbot']),
-    humanQL: parseNum(r['Futwork Human QL']),
+    humanQL, futworkAiQl, superbotAiQl,
+    // Total QLs -- every qualification channel combined (Futwork Human + Futwork AI + Superbot AI).
+    totalQL: humanQL + futworkAiQl + superbotAiQl,
     apps: parseNum(r['Total Apps']),
     offers: parseNum(r['Total Offers']),
     deposits: parseNum(r['Total Deposits']),
@@ -309,7 +314,10 @@ const SUMMARY_COLUMNS = [
   { key:'leads', label:'Leads' },
   { key:'spend', label:'Spend' },
   { key:'queued', label:'Total Queued' },
-  { key:'humanQL', label:'Human QL' },
+  { key:'humanQL', label:'Futwork Human QL' },
+  { key:'futworkAiQl', label:'Futwork AI QL' },
+  { key:'superbotAiQl', label:'Superbot AI QL' },
+  { key:'totalQL', label:'Total QLs' },
   { key:'apps', label:'Applications' },
   { key:'offers', label:'Offers' },
   { key:'deposits', label:'Deposits' },
@@ -339,11 +347,11 @@ function fmtINR(n) {
 }
 
 function summaryValue(g, key) {
-  if (key === 'qlPct') return g.queued > 0 ? (g.humanQL / g.queued) * 100 : 0
-  if (key === 'appPct') return g.humanQL > 0 ? (g.apps / g.humanQL) * 100 : 0
+  if (key === 'qlPct') return g.queued > 0 ? (g.totalQL / g.queued) * 100 : 0
+  if (key === 'appPct') return g.totalQL > 0 ? (g.apps / g.totalQL) * 100 : 0
   if (key === 'depositPct') return g.offers > 0 ? (g.deposits / g.offers) * 100 : 0
   if (key === 'cpl') return g.leads > 0 ? g.spend / g.leads : 0
-  if (key === 'cpql') return g.humanQL > 0 ? g.spend / g.humanQL : 0
+  if (key === 'cpql') return g.totalQL > 0 ? g.spend / g.totalQL : 0
   if (key === 'cpa') return g.apps > 0 ? g.spend / g.apps : 0
   return g[key]
 }
@@ -649,18 +657,19 @@ export default function OverallDashboard() {
     return {
       leads: sum('leads'), floorQueued: sum('floorQueued'),
       futworkQ: sum('futworkQ'), superbotQ: sum('superbotQ'),
-      humanQL: sum('humanQL'), apps: sum('apps'), offers: sum('offers'),
+      humanQL: sum('humanQL'), futworkAiQl: sum('futworkAiQl'), superbotAiQl: sum('superbotAiQl'),
+      totalQL: sum('totalQL'), apps: sum('apps'), offers: sum('offers'),
       deposits: sum('deposits'), raus: sum('raus'), spend: sum('spend'),
     }
   }
   const kpis = useMemo(() => sumKpis(filtered), [filtered])
   const totalQueued = kpis.futworkQ + kpis.superbotQ
-  // Cost metrics -- CPL from total leads, CPQL from Human QL (the only "qualified lead"
-  // count this sheet tracks), CPA from total applications. 0 (not null) when the
+  // Cost metrics -- CPL from total leads, CPQL from Total QLs (Futwork Human + Futwork AI +
+  // Superbot AI combined), CPA from total applications. 0 (not null) when the
   // denominator is 0, matching how CPL/CPA are computed elsewhere in the app (Meta Ads,
   // MTD) rather than showing a dash.
   const cpl = kpis.leads > 0 ? kpis.spend / kpis.leads : 0
-  const cpql = kpis.humanQL > 0 ? kpis.spend / kpis.humanQL : 0
+  const cpql = kpis.totalQL > 0 ? kpis.spend / kpis.totalQL : 0
   const cpa = kpis.apps > 0 ? kpis.spend / kpis.apps : 0
 
   // Previous-equivalent-period comparison — same length window immediately before the
@@ -691,7 +700,7 @@ export default function OverallDashboard() {
 
   const prevKpis = useMemo(() => sumKpis(prevFiltered), [prevFiltered])
   const prevCpl = prevKpis.leads > 0 ? prevKpis.spend / prevKpis.leads : 0
-  const prevCpql = prevKpis.humanQL > 0 ? prevKpis.spend / prevKpis.humanQL : 0
+  const prevCpql = prevKpis.totalQL > 0 ? prevKpis.spend / prevKpis.totalQL : 0
   const prevCpa = prevKpis.apps > 0 ? prevKpis.spend / prevKpis.apps : 0
   const prevTotalQueued = prevKpis.futworkQ + prevKpis.superbotQ
   const deltaPct = (cur, prev) => (!prev ? null : ((cur - prev) / prev) * 100)
@@ -700,7 +709,7 @@ export default function OverallDashboard() {
     { stage:'Leads Generated', count:kpis.leads },
     { stage:'Total Queued', count:totalQueued },
     { stage:'Floor Queued', count:kpis.floorQueued },
-    { stage:'Human QL', count:kpis.humanQL },
+    { stage:'Total QL', count:kpis.totalQL },
     { stage:'Applications', count:kpis.apps },
     { stage:'Offers', count:kpis.offers },
     { stage:'Deposits', count:kpis.deposits },
@@ -711,8 +720,8 @@ export default function OverallDashboard() {
   // conversion-chain strip and to find the biggest leak for the insights row.
   const conversionChain = useMemo(() => ([
     { from:'Leads', to:'Queued', a:kpis.leads, b:totalQueued },
-    { from:'Queued', to:'Human QL', a:totalQueued, b:kpis.humanQL },
-    { from:'Human QL', to:'Apps', a:kpis.humanQL, b:kpis.apps },
+    { from:'Queued', to:'Total QL', a:totalQueued, b:kpis.totalQL },
+    { from:'Total QL', to:'Apps', a:kpis.totalQL, b:kpis.apps },
     { from:'Apps', to:'Offers', a:kpis.apps, b:kpis.offers },
     { from:'Offers', to:'Deposits', a:kpis.offers, b:kpis.deposits },
   ].map(s => ({ ...s, rate: s.a > 0 ? (s.b / s.a) * 100 : null }))), [kpis, totalQueued])
@@ -720,8 +729,9 @@ export default function OverallDashboard() {
   const bySource = useMemo(() => {
     const m = new Map()
     filtered.forEach(r => {
-      const e = m.get(r.source) || { source:r.source, leads:0, queued:0, humanQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(r.source) || { source:r.source, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
       m.set(r.source, e)
     })
@@ -729,15 +739,16 @@ export default function OverallDashboard() {
   }, [filtered])
 
   const bySourceEfficiency = useMemo(() => (
-    bySource.filter(s => s.queued >= 10).map(s => ({ ...s, qlRate: s.queued > 0 ? (s.humanQL / s.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 8)
+    bySource.filter(s => s.queued >= 10).map(s => ({ ...s, qlRate: s.queued > 0 ? (s.totalQL / s.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 8)
   ), [bySource])
 
   const byMonth = useMemo(() => {
     const m = new Map()
     filtered.forEach(r => {
       if (r.mk == null) return
-      const e = m.get(r.mk) || { mk:r.mk, label:monthLabel(r.mk), leads:0, queued:0, humanQL:0, deposits:0 }
-      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL; e.deposits += r.deposits
+      const e = m.get(r.mk) || { mk:r.mk, label:monthLabel(r.mk), leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, deposits:0 }
+      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL; e.deposits += r.deposits
       m.set(r.mk, e)
     })
     return [...m.values()].sort((a, b) => a.mk - b.mk)
@@ -750,8 +761,8 @@ export default function OverallDashboard() {
     filtered.forEach(r => {
       if (!r.date) return
       const key = dayKey(r.date)
-      const e = m.get(key) || { key, date:r.date, leads:0, queued:0, humanQL:0 }
-      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      const e = m.get(key) || { key, date:r.date, leads:0, queued:0, humanQL:0, totalQL:0 }
+      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL; e.totalQL += r.totalQL
       m.set(key, e)
     })
     return [...m.values()].sort((a, b) => a.key < b.key ? -1 : 1).slice(-30).map(d => ({ ...d, label:dayLabel(d.date) }))
@@ -761,8 +772,9 @@ export default function OverallDashboard() {
     const m = new Map()
     filtered.forEach(r => {
       if (!r.campaign) return
-      const e = m.get(r.campaign) || { campaign:r.campaign, leads:0, queued:0, humanQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(r.campaign) || { campaign:r.campaign, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
       m.set(r.campaign, e)
     })
@@ -774,8 +786,9 @@ export default function OverallDashboard() {
     filtered.forEach(r => {
       const id = classifyCorridor(r.campaign)
       const label = corridorLabel(id)
-      const e = m.get(id) || { corridor:label, leads:0, queued:0, humanQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(id) || { corridor:label, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
       m.set(id, e)
     })
@@ -789,8 +802,9 @@ export default function OverallDashboard() {
     filtered.forEach(r => {
       if (!r.date) return
       const key = dayKey(r.date)
-      const e = m.get(key) || { key, date:r.date, label:dayLabel(r.date), leads:0, queued:0, humanQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(key) || { key, date:r.date, label:dayLabel(r.date), leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
       m.set(key, e)
     })
@@ -799,26 +813,26 @@ export default function OverallDashboard() {
 
   const topCampaignsByLeads = useMemo(() => byCampaign.slice(0, 5), [byCampaign])
   const topCampaignsByEfficiency = useMemo(() => (
-    byCampaign.filter(c => c.queued >= 15).map(c => ({ ...c, qlRate: c.queued > 0 ? (c.humanQL / c.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 5)
+    byCampaign.filter(c => c.queued >= 15).map(c => ({ ...c, qlRate: c.queued > 0 ? (c.totalQL / c.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 5)
   ), [byCampaign])
 
   const grouped = useMemo(() => {
     if (grpBy === 'source') return bySource.map(s => ({
-      label:s.source, leads:s.leads, queued:s.queued, humanQL:s.humanQL, apps:s.apps, offers:s.offers, deposits:s.deposits, raus:s.raus, spend:s.spend,
+      label:s.source, leads:s.leads, queued:s.queued, humanQL:s.humanQL, futworkAiQl:s.futworkAiQl, superbotAiQl:s.superbotAiQl, totalQL:s.totalQL, apps:s.apps, offers:s.offers, deposits:s.deposits, raus:s.raus, spend:s.spend,
     }))
     if (grpBy === 'campaign') return byCampaign.map(c => ({
-      label:c.campaign, leads:c.leads, queued:c.queued, humanQL:c.humanQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
+      label:c.campaign, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
     }))
     if (grpBy === 'corridor') return byCorridor.map(c => ({
-      label:c.corridor, leads:c.leads, queued:c.queued, humanQL:c.humanQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
+      label:c.corridor, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
     }))
     if (grpBy === 'day') return byDayFull.map(d => ({
-      label:d.label, dateKey:d.key, leads:d.leads, queued:d.queued, humanQL:d.humanQL, apps:d.apps, offers:d.offers, deposits:d.deposits, raus:d.raus, spend:d.spend,
+      label:d.label, dateKey:d.key, leads:d.leads, queued:d.queued, humanQL:d.humanQL, futworkAiQl:d.futworkAiQl, superbotAiQl:d.superbotAiQl, totalQL:d.totalQL, apps:d.apps, offers:d.offers, deposits:d.deposits, raus:d.raus, spend:d.spend,
     }))
     return byMonth.map(m => {
       const full = filtered.filter(r => r.mk === m.mk)
       return {
-        label:m.label, leads:m.leads, queued:m.queued, humanQL:m.humanQL,
+        label:m.label, leads:m.leads, queued:m.queued, humanQL:m.humanQL, futworkAiQl:m.futworkAiQl, superbotAiQl:m.superbotAiQl, totalQL:m.totalQL,
         apps: full.reduce((t, r) => t + r.apps, 0), offers: full.reduce((t, r) => t + r.offers, 0),
         deposits:m.deposits, raus: full.reduce((t, r) => t + r.raus, 0),
         spend: full.reduce((t, r) => t + r.spend, 0),
@@ -836,9 +850,10 @@ export default function OverallDashboard() {
 
   const exportRows = useMemo(() => groupedWithRevenue.map(g => ({
     [grpByLabel]: g.label,
-    Leads: g.leads, Spend: fmtINR(g.spend), 'Total Queued': g.queued, 'Human QL': g.humanQL,
+    Leads: g.leads, Spend: fmtINR(g.spend), 'Total Queued': g.queued,
+    'Futwork Human QL': g.humanQL, 'Futwork AI QL': g.futworkAiQl, 'Superbot AI QL': g.superbotAiQl, 'Total QLs': g.totalQL,
     Applications: g.apps, Offers: g.offers, Deposits: g.deposits, RAUs: g.raus,
-    'QL %': pct(g.humanQL, g.queued), 'App %': pct(g.apps, g.humanQL), 'Deposit %': pct(g.deposits, g.offers),
+    'QL %': pct(g.totalQL, g.queued), 'App %': pct(g.apps, g.totalQL), 'Deposit %': pct(g.deposits, g.offers),
     CPL: fmtINR(summaryValue(g, 'cpl')), CPQL: fmtINR(summaryValue(g, 'cpql')), CPA: fmtINR(summaryValue(g, 'cpa')),
     'Est. SR Revenue': fmtINR(g.estSrRevenue), 'Actual SR Revenue': fmtINR(g.actSrRevenue),
   })), [groupedWithRevenue, grpByLabel])
@@ -1007,8 +1022,8 @@ export default function OverallDashboard() {
                   <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:8 }}>How Overall is calculated</div>
                   <div style={{ fontSize:11, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
                   <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.7 }}>
-                    <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). From there it continues <b>Human QL</b> (Futwork-qualified) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (revenue attribution units). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
-                    <b>Executive insights</b> and <b>KPI deltas</b> compare the active period against the immediately preceding period of equal length (or the previous calendar month, in month view). <b>Biggest funnel leak</b> and campaign efficiency rankings use the real conversion path (Leads → Queued → Human QL → Apps → Offers → Deposits), skipping the parallel Floor Queued branch.<br /><br />
+                    <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (revenue attribution units). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
+                    <b>Executive insights</b> and <b>KPI deltas</b> compare the active period against the immediately preceding period of equal length (or the previous calendar month, in month view). <b>Biggest funnel leak</b> and campaign efficiency rankings use the real conversion path (Leads → Queued → Total QL → Apps → Offers → Deposits), skipping the parallel Floor Queued branch.<br /><br />
                     Last Day / Last 7D / MTD and Custom filter by lead date; the Month dropdown scopes to one calendar month. Source and campaign search filter everything below.
                   </div>
                 </div>
@@ -1025,8 +1040,8 @@ export default function OverallDashboard() {
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="FLOOR QUEUED" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} delta={deltaPct(kpis.floorQueued, prevKpis.floorQueued)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label="TOTAL QUEUED" value={fmtN(totalQueued)} sub={'Futwork ' + fmtN(kpis.futworkQ) + ' · Superbot ' + fmtN(kpis.superbotQ)} delta={deltaPct(totalQueued, prevTotalQueued)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
-            <PremKPI label="HUMAN QL" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, totalQueued) + ' of queued'} delta={deltaPct(kpis.humanQL, prevKpis.humanQL)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.humanQL) + ' of QL'} delta={deltaPct(kpis.apps, prevKpis.apps)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+            <PremKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={deltaPct(kpis.totalQL, prevKpis.totalQL)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.totalQL) + ' of QL'} delta={deltaPct(kpis.apps, prevKpis.apps)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="OFFERS" value={fmtN(kpis.offers)} sub={pct(kpis.offers, kpis.apps) + ' of apps'} delta={deltaPct(kpis.offers, prevKpis.offers)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label="DEPOSITS" value={fmtN(kpis.deposits)} sub={pct(kpis.deposits, kpis.offers) + ' of offers'} delta={deltaPct(kpis.deposits, prevKpis.deposits)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} />
             <PremKPI label="TOTAL RAUs" value={fmtN(kpis.raus)} sub="revenue attr. units" delta={deltaPct(kpis.raus, prevKpis.raus)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
@@ -1064,7 +1079,7 @@ export default function OverallDashboard() {
               <RankedBars data={bySource.slice(0, 8).map(s => ({ source:s.source, count:s.leads }))} labelKey="source" max={maxSourceLeads} total={totalSourceLeads} colorFn={brandColor} showRank />
             </Card>
             <Card>
-              {sectionTitle('Source efficiency', 'queued → Human QL rate — where quality actually converts (min. 10 queued)')}
+              {sectionTitle('Source efficiency', 'queued → Total QL rate — where quality actually converts (min. 10 queued)')}
               <EfficiencyList data={bySourceEfficiency} labelKey="source" rateKey="qlRate" subKey="queued" />
             </Card>
           </div>
@@ -1072,7 +1087,7 @@ export default function OverallDashboard() {
           {/* MONTH TREND + DAILY TREND */}
           <div style={{ ...grid2, marginTop:16 }}>
             <Card>
-              {sectionTitle('Month-on-month trend', 'leads, queued and human QL by month')}
+              {sectionTitle('Month-on-month trend', 'leads, queued and total QL by month')}
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={byMonth} margin={{ left:0, right:12, top:4, bottom:4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -1082,7 +1097,7 @@ export default function OverallDashboard() {
                   <Legend wrapperStyle={{ fontSize:11, fontFamily:FONT }} />
                   <Line type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }} />
                   <Line type="monotone" dataKey="queued" name="Total Queued" stroke={C.blue} strokeWidth={2.5} dot={{ r:3 }} />
-                  <Line type="monotone" dataKey="humanQL" name="Human QL" stroke={C.cyan} strokeWidth={2.5} dot={{ r:3 }} />
+                  <Line type="monotone" dataKey="totalQL" name="Total QL" stroke={C.cyan} strokeWidth={2.5} dot={{ r:3 }} />
                   <Line type="monotone" dataKey="deposits" name="Deposits" stroke={C.green} strokeWidth={2.5} dot={{ r:3 }} />
                 </LineChart>
               </ResponsiveContainer>
@@ -1114,7 +1129,7 @@ export default function OverallDashboard() {
               <RankedBars data={topCampaignsByLeads.map(c => ({ campaign:c.campaign, count:c.leads }))} labelKey="campaign" max={topCampaignsByLeads.length ? topCampaignsByLeads[0].leads : 1} total={totalSourceLeads} colorFn={brandColor} showRank />
             </Card>
             <Card>
-              {sectionTitle('Best campaigns to scale', 'highest Human QL rate among campaigns with real volume (min. 15 queued)')}
+              {sectionTitle('Best campaigns to scale', 'highest Total QL rate among campaigns with real volume (min. 15 queued)')}
               <EfficiencyList data={topCampaignsByEfficiency} labelKey="campaign" rateKey="qlRate" subKey="queued" />
             </Card>
           </div>
