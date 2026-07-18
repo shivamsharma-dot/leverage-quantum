@@ -203,9 +203,22 @@ export function AuthProvider({ children }) {
     // (the Meta Ads access token, cached ad spend/lead data, full Ask AI conversation
     // history) that a server-side cookie clear does nothing about -- on a shared
     // machine "signed out" must actually mean gone, not just redirected.
+    //
+    // Exception: purely cosmetic device preferences (theme, sidebar layout, and the
+    // Button/KPI-card/Login-page design-system picks) are not sensitive and are meant
+    // to survive logout -- otherwise every sign-out silently resets the whole app's
+    // look back to defaults, which reads as "my Appearance choice isn't working."
+    const KEEP_ACROSS_LOGOUT = [
+      'lq_theme', 'lq_kpi_icons', 'lq_sidebar_mode', 'lq_sidebar_collapsed',
+      'lq_number_format', 'lq_default_date', 'lq_table_density',
+      'lq_button_style', 'lq_kpi_style', 'lq_login_style',
+    ]
     try {
+      const preserved = {}
+      KEEP_ACROSS_LOGOUT.forEach(k => { const v = localStorage.getItem(k); if (v != null) preserved[k] = v })
       localStorage.clear()
       sessionStorage.clear()
+      Object.entries(preserved).forEach(([k, v]) => localStorage.setItem(k, v))
       // Broadcast to any other open tabs of this app so they redirect too, instead of
       // continuing to run with stale cached state until they happen to hit a 401.
       localStorage.setItem('lq_logout_signal', String(Date.now()))
