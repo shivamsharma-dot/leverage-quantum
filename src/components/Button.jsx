@@ -1,15 +1,14 @@
 import React from 'react'
+import { useDesignStyle } from '../lib/designSettings'
+import { getButtonVariantStyle } from '../ui/buttonVariants'
 
-// Single shared button used everywhere in Quantum -- "Embossed premium" style
-// (picked from a 10-direction gallery): white surface at rest, a soft inner
-// highlight for depth, and a brand-blue focus ring that appears on hover.
-// No fill-color change on hover -- brand color only ever elevates, never fills.
-// Variants: primary (default border weight) / secondary (lighter border,
-// muted text) / danger (red ring on hover instead of blue, for destructive
-// actions) / ghost (no border/shadow until hovered -- for toolbars).
-const NAVY = '#1F3C84'
-const BLUE = '#1C9FD4'
-const RED = '#B91C1C'
+// Single shared button used everywhere in Quantum. The visual style is
+// selectable live from Settings > Appearance (20 directions) via
+// useDesignStyle('button') -- picking one there re-skins every button in
+// the app instantly, no reload. Variant 10 ("Embossed premium") is today's
+// default. Component API below never changes regardless of the selected
+// variant: variant='primary'|'secondary'|'ghost' controls emphasis, danger
+// swaps the accent to red for destructive actions.
 const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 
 const SIZES = {
@@ -22,41 +21,38 @@ export default function Button({
   children, icon, size = 'md', variant = 'primary', danger = false,
   disabled = false, type = 'button', style, onClick, title, ...rest
 }) {
+  const variantId = useDesignStyle('button')
   const s = SIZES[size] || SIZES.md
-  const ringColor = danger ? RED : BLUE
   const [hover, setHover] = React.useState(false)
-
   const isHovering = hover && !disabled
-  const restBorderColor = variant === 'ghost' ? 'transparent' : 'var(--card-border, #E2E6EF)'
-  const hoverBorderColor = variant === 'ghost' ? 'var(--card-border, #E2E6EF)' : (danger ? RED : BLUE)
-  // Always a single `border` shorthand string -- never pair it with a separate
-  // borderColor key in the same style object. Mixing shorthand + longhand in
-  // one React style object drops the shorthand's width/style silently and
-  // leaves only the longhand color applied, which is why an earlier version
-  // of this rendered a near-invisible default border instead of a real one.
-  const border = `1px solid ${isHovering ? hoverBorderColor : restBorderColor}`
-  const boxShadow = (variant === 'ghost' && !isHovering)
-    ? 'none'
-    : isHovering
-      ? `0 1px 0 rgba(255,255,255,0.6) inset, 0 0 0 3px ${ringColor}29, 0 12px 24px -14px rgba(31,60,132,0.32)`
-      : '0 1px 0 rgba(255,255,255,0.6) inset, 0 1px 2px rgba(15,27,51,0.06), 0 8px 18px -14px rgba(15,27,51,0.28)'
+
+  const { style: variantStyle, extra } = getButtonVariantStyle(variantId, {
+    mode: variant, danger, hover: isHovering, disabled,
+  })
 
   const base = {
     fontFamily: FONT, cursor: disabled ? 'default' : 'pointer',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: s.gap,
     padding: s.padding, fontSize: s.fontSize, fontWeight: 700,
-    borderRadius: 11, whiteSpace: 'nowrap',
-    background: 'var(--card, #fff)',
-    color: danger ? RED : (variant === 'secondary' ? 'var(--text-2, #5B6577)' : NAVY),
-    border, boxShadow,
+    borderRadius: 11, whiteSpace: 'nowrap', position: 'relative', overflow: 'visible',
     opacity: disabled ? 0.5 : 1,
     pointerEvents: disabled ? 'none' : 'auto',
-    transition: 'box-shadow .18s ease, transform .15s ease, border-color .15s ease',
-    transform: isHovering ? 'translateY(-1px)' : 'translateY(0)',
+    transition: 'box-shadow .18s ease, transform .15s ease, border-color .15s ease, background .18s ease',
+    ...variantStyle,
     ...style,
   }
 
-  return (
+  const wrapperStyle = extra?.spinRing
+    ? {
+        display: 'inline-block', borderRadius: 12, padding: 2,
+        background: extra.ringDanger
+          ? '#B91C1C'
+          : `conic-gradient(from 0deg, #1F3C84, #1C9FD4, #29B9C3, #4CAE6F, #1F3C84)`,
+        animation: `qBtnSpin ${extra.spinSpeed} linear infinite`,
+      }
+    : null
+
+  const btn = (
     <button
       type={type}
       onClick={onClick}
@@ -67,8 +63,39 @@ export default function Button({
       style={base}
       {...rest}
     >
-      {icon && <span style={{ display: 'flex', width: s.iconSize, height: s.iconSize, flexShrink: 0 }}>{icon}</span>}
+      {extra?.leftBar && (
+        <span style={{ position: 'absolute', left: 0, top: '10%', bottom: '10%', width: 3, borderRadius: '0 3px 3px 0', background: extra.barColor }} />
+      )}
+      {extra?.bottomBar && (
+        <span style={{ position: 'absolute', left: 0, right: 0, bottom: -3, height: 3, borderRadius: '0 0 3px 3px', background: extra.barColor }} />
+      )}
+      {extra?.cornerNotch && (
+        <span style={{ position: 'absolute', top: -14, right: -14, width: 34, height: 34, borderRadius: 8, background: extra.notchColor, transform: 'rotate(45deg)' }} />
+      )}
+      {extra?.iconChip ? (
+        <span style={{ width: 26, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: extra.chipColor, color: '#fff', flexShrink: 0 }}>
+          {icon || <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }} />}
+        </span>
+      ) : (
+        icon && <span style={{ display: 'flex', width: s.iconSize, height: s.iconSize, flexShrink: 0 }}>{icon}</span>
+      )}
+      {extra?.statusDot && (
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: extra.dotColor, flexShrink: 0, boxShadow: `0 0 0 3px ${extra.dotColor}2E` }} />
+      )}
       {children}
+      {(extra?.underline || extra?.centerUnderline) && (
+        <span style={{
+          position: 'absolute', bottom: extra.centerUnderline ? 4 : 2,
+          left: extra.centerUnderline ? '50%' : 2, right: extra.centerUnderline ? 'auto' : 2,
+          height: 2, background: extra.underlineColor,
+          width: extra.centerUnderline ? (extra.underlineOn ? 26 : 0) : 'auto',
+          transform: extra.centerUnderline ? 'translateX(-50%)' : (extra.underlineOn ? 'scaleX(1)' : 'scaleX(0)'),
+          transformOrigin: 'left', transition: 'width .2s ease, transform .2s ease',
+        }} />
+      )}
     </button>
   )
+
+  if (!wrapperStyle) return btn
+  return <span style={wrapperStyle}>{btn}</span>
 }

@@ -5,7 +5,32 @@ import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole
 import { getActivityLog } from '../components/ActivityLogger.js'
 import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
+import { useDesignStyle, setDesignStyle } from '../lib/designSettings'
+import { renderKpiVariant } from '../ui/kpiVariants.jsx'
+import { getButtonVariantStyle } from '../ui/buttonVariants'
 import styles from './SettingsPage.module.css'
+
+// Short labels for the design-system pickers below -- purely descriptive,
+// the actual visual rendering lives in buttonVariants.js / kpiVariants.jsx /
+// LoginPage.jsx itself (login is too structurally different per-variant to
+// preview meaningfully in a small swatch, so it's listed by name only).
+const BUTTON_STYLE_NAMES = [
+  'Solid navy', 'Aurora gradient', 'Frosted glass', 'Outline → fill', 'Soft tint',
+  'Gradient pill', 'Accent-bar card', 'Underline sweep', 'Gradient rounded', 'Embossed premium (default)',
+  'Hairline → glow', 'Gradient-ring border', 'Bottom accent bar', 'Colored glow only', 'Icon chip',
+  'Spinning ring', 'Corner notch', 'Status dot', 'Letterspaced underline', 'Quiet embossed',
+]
+const KPI_STYLE_NAMES = [
+  'Flat minimal', 'Accent-bar + icon (default)', 'Full gradient', 'Colored glow', 'Corner notch',
+  'Sparkline', 'Icon-left split', 'Progress ring', 'Vs-last bars', 'Frosted glass',
+  'Oversized number', 'Goal-progress bar', 'Executive dark', 'Inline trend pill', 'Compact dense',
+]
+const LOGIN_STYLE_NAMES = [
+  'Minimal card (default)', 'Split screen', 'Gradient + frosted', 'Product preview', 'Ultra-minimal',
+  'Dark console', 'Bento grid', 'Gradient orb', 'Top bar', 'Dot-grid pattern',
+  'Testimonial split', 'Onboarding steps', 'Brand ribbon', 'Diagonal split', 'Floating cards',
+  'Badge-topped', 'Illustration hero', 'Ghost dashboard', 'Dual action', 'Warm greeting',
+]
 
 const RL_SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const RL_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
@@ -792,6 +817,14 @@ export default function SettingsPage() {
                         setSheetSaving(prev => ({ ...prev, [key]: false }))
               }
       }
+
+  // Live design-system pickers (Button / KPI card / Login page) -- selecting
+  // any one calls setDesignStyle, which persists it and instantly re-skins
+  // every matching component across the whole app via a same-tab CustomEvent,
+  // no reload needed. useDesignStyle keeps this picker's own highlight in sync.
+  const buttonStyleId = useDesignStyle('button')
+  const kpiStyleId = useDesignStyle('kpi')
+  const loginStyleId = useDesignStyle('login')
 
   const [activeTheme, setActiveTheme] = useState(() => localStorage.getItem('lq_theme') || 'light')
   const applyTheme = (themeId) => {
@@ -2419,6 +2452,75 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <button onClick={()=>setActiveTab('users')} style={{padding:'7px 14px',borderRadius:8,background:'#F8FAFC',border:'0.5px solid #E2E8F0',fontSize:12,fontWeight:600,color:'#1F3C84',cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
                   User Access →
                 </button>
+              </div>
+
+              {/* DESIGN SYSTEM — Button / KPI card / Login page live pickers.
+                  Picking any one applies to the entire app instantly. */}
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Buttons</h3>
+                <p className={styles.cardDesc}>Pick a button style — applies to every button in the app immediately.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
+                  {BUTTON_STYLE_NAMES.map((name, i) => {
+                    const id = i + 1
+                    const active = buttonStyleId === id
+                    const { style } = getButtonVariantStyle(id, { mode: 'primary', danger: false, hover: false })
+                    return (
+                      <div key={id} onClick={() => setDesignStyle('button', id)} style={{
+                        cursor: 'pointer', borderRadius: 12, padding: 12, border: `1.5px solid ${active ? '#1F3C84' : '#E2E8F0'}`,
+                        background: active ? '#F0FBFF' : '#fff', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
+                        display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center',
+                      }}>
+                        <button type="button" style={{ ...style, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 700, fontSize: 11.5, padding: '6px 12px', borderRadius: style.borderRadius ?? 11, cursor: 'default', pointerEvents: 'none' }}>
+                          Preview
+                        </button>
+                        <div style={{ fontSize: 10.5, fontWeight: 600, color: active ? '#1F3C84' : '#64748B', textAlign: 'center', lineHeight: 1.3 }}>{id}. {name}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>KPI Cards</h3>
+                <p className={styles.cardDesc}>Pick a KPI card style — applies to every dashboard's metric cards immediately.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 10 }}>
+                  {KPI_STYLE_NAMES.map((name, i) => {
+                    const id = i + 1
+                    const active = kpiStyleId === id
+                    return (
+                      <div key={id} onClick={() => setDesignStyle('kpi', id)} style={{
+                        cursor: 'pointer', borderRadius: 12, padding: 10, border: `1.5px solid ${active ? '#1F3C84' : '#E2E8F0'}`,
+                        background: active ? '#F0FBFF' : '#fff', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
+                        display: 'flex', flexDirection: 'column', gap: 8,
+                      }}>
+                        <div style={{ transform: 'scale(0.82)', transformOrigin: 'top left', width: '122%', pointerEvents: 'none' }}>
+                          {renderKpiVariant(id, { label: 'Total Leads', value: '84,848', sub: 'generated', deltaText: '▼ 12.4%', isGood: false, icon: null, accent: '#1F3C84' })}
+                        </div>
+                        <div style={{ fontSize: 10.5, fontWeight: 600, color: active ? '#1F3C84' : '#64748B', textAlign: 'center' }}>{id}. {name}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Login Page</h3>
+                <p className={styles.cardDesc}>Pick a login screen layout — applies the next time anyone signs in. Sign out to preview it yourself.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
+                  {LOGIN_STYLE_NAMES.map((name, i) => {
+                    const id = i + 1
+                    const active = loginStyleId === id
+                    return (
+                      <div key={id} onClick={() => setDesignStyle('login', id)} style={{
+                        cursor: 'pointer', borderRadius: 10, padding: '10px 12px', border: `1.5px solid ${active ? '#1F3C84' : '#E2E8F0'}`,
+                        background: active ? '#F0FBFF' : '#fff', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
+                        fontSize: 11.5, fontWeight: 600, color: active ? '#1F3C84' : '#64748B', textAlign: 'center', lineHeight: 1.35,
+                      }}>
+                        {id}. {name}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
 
               {/* THEME */}

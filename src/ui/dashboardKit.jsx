@@ -5,6 +5,8 @@
 // Import from here so every page shares identical tokens + components.
 // ---------------------------------------------------------------------------
 import React from 'react';
+import { useDesignStyle } from '../lib/designSettings';
+import { renderKpiVariant } from './kpiVariants.jsx';
 
 /* ===== Tokens ===== */
 
@@ -59,32 +61,15 @@ export const KPI_ICONS = {
 }
 
 /* ===== Premium KPI card (Meta Ads main-card standard) ===== */
+// Visual style selectable live from Settings > Appearance (15 directions) via
+// useDesignStyle('kpi') -- shared render engine with components/KPICard.jsx
+// at src/ui/kpiVariants.js, so picking a variant re-skins every KPI card in
+// the app at once. This component's own prop API never changes.
 export const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon }) => {
+  const variantId = useDesignStyle('kpi')
   const up = delta != null && delta >= 0
-  return (
-    <div className="kpiCard" style={{
-      position: 'relative', overflow: 'hidden', borderRadius: 16, padding: '16px 18px',
-      background: '#fff', border: '1px solid #EEF1F6', fontFamily: FONT,
-      boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)',
-      display: 'flex', flexDirection: 'column', minWidth: 0,
-    }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: `linear-gradient(90deg, ${accent}, ${accent}99)` }} />
-      <div style={{ position: 'absolute', top: -28, right: -28, width: 96, height: 96, borderRadius: '50%', background: `linear-gradient(135deg, ${accent}14, ${accent}05)` }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, position: 'relative' }}>
-        <div style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, color: '#fff', background: `linear-gradient(135deg, ${accent}, ${accent}D9)`, boxShadow: `0 4px 10px -2px ${accent}66`, flexShrink: 0 }}>{icon}</div>
-        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', color: '#64748B', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-      </div>
-      <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.6px', color: '#0F1B33', lineHeight: 1.05, position: 'relative', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, minHeight: 18, position: 'relative' }}>
-        {delta != null && (
-          <span style={{ fontSize: 10.5, fontWeight: 700, color: up ? '#15803D' : '#1F3C84', background: up ? '#E9F8EF' : '#EEF1FB', padding: '2px 7px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 2, fontFamily: FONT, flexShrink: 0 }}>
-            {up ? '\u25B2' : '\u25BC'} {Math.abs(delta).toFixed(1)}%
-          </span>
-        )}
-        {sub && <span style={{ fontSize: 11.5, color: '#8A94A6', fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
-      </div>
-    </div>
-  )
+  const deltaText = delta != null ? `${up ? '\u25B2' : '\u25BC'} ${Math.abs(delta).toFixed(1)}%` : null
+  return renderKpiVariant(variantId, { label, value, sub, deltaText, isGood: delta != null ? up : null, icon, accent })
 }
 
 /* ===== Ranked horizontal bar list ===== */
