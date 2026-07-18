@@ -87,7 +87,7 @@ function mapRow(r) {
     offers: parseNum(r['Total Offers']),
     deposits: parseNum(r['Total Deposits']),
     raus: parseNum(r['Total RAUs']),
-    spend: parseNum(r['Total Spend']),
+    spend: parseNum(r['Total_Spends']),
   }
 }
 
