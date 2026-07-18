@@ -8,6 +8,8 @@ import Button from '../components/Button'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
+import FilterDropdown from '../components/FilterDropdown'
+import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
 import styles from './MetaAdsDashboard.module.css'
 
 const APP_ID     = '2314692909338886'
@@ -287,6 +289,8 @@ function CampaignsTab({ data }) {
   const [sortBy, setSortBy] = useState('spend')
   const [sortDir, setSortDir] = useState('desc')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [corridorFilter, setCorridorFilter] = useState('all')
+  const [corridorMenuOpen, setCorridorMenuOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState(null)
   const accSpend = parseFloat(account.spend || 0)
@@ -316,14 +320,16 @@ function CampaignsTab({ data }) {
     const avg = (accountAvgCTR || 0) * 100 || accCTRpct
     const signal = ctr > avg * 1.2 ? 'top' : (ctr < avg * 0.6 || (frequency > 4 && ctr < avg)) ? 'low' : 'average'
     const fatigueLevel = frequency > 4.5 ? 'fatigue' : frequency > 3 ? 'watch' : 'healthy'
-    return { ...c, spend, impressions, clicks, reach, frequency, ctr, cpm, cpc, leads, cpl, cplCrm, cpql, convRate, spendShare, signal, fatigueLevel }
+    const corridorId = classifyCorridor(c.name)
+    return { ...c, spend, impressions, clicks, reach, frequency, ctr, cpm, cpc, leads, cpl, cplCrm, cpql, convRate, spendShare, signal, fatigueLevel, corridorId, corridor: corridorLabel(corridorId) }
   }), [campaigns, accSpend, accCTRpct, accountAvgCTR])
   const filtered = useMemo(() => {
     let out = processed
     if (statusFilter !== 'all') out = out.filter(c => c.status?.toLowerCase() === statusFilter)
+    if (corridorFilter !== 'all') out = out.filter(c => c.corridorId === corridorFilter)
     if (search) out = out.filter(c => c.name?.toLowerCase().includes(search.toLowerCase()))
     return [...out].sort((a, b) => sortDir === 'desc' ? (b[sortBy]||0)-(a[sortBy]||0) : (a[sortBy]||0)-(b[sortBy]||0))
-  }, [processed, statusFilter, search, sortBy, sortDir])
+  }, [processed, statusFilter, corridorFilter, search, sortBy, sortDir])
   const totFatigue = useMemo(() => processed.filter(c => c.fatigueLevel === 'fatigue').length, [processed])
   const totActive = useMemo(() => processed.filter(c => c.status === 'ACTIVE').length, [processed])
   const handleSort = col => { if (sortBy === col) setSortDir(d => d==='desc'?'asc':'desc'); else { setSortBy(col); setSortDir('desc') } }
@@ -333,7 +339,7 @@ function CampaignsTab({ data }) {
   const fBadge = lv => { const m={healthy:{bg:'#E9F8EF',c:'#166534'},watch:{bg:'#FEF9C3',c:'#854D0E'},fatigue:{bg:'#FEF2F2',c:'#991B1B'}}[lv]||{bg:'#E9F8EF',c:'#166534'}; return <span style={{ background:m.bg,color:m.c,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:10,textTransform:'capitalize',whiteSpace:'nowrap' }}>{lv}</span> }
   const cplCol = v => v>300?'#1F3C84':v>150?'#1C9FD4':v>0?'#4CAE6F':'#6B7280'
   const SH = ({ col, lbl }) => <div onClick={()=>handleSort(col)} style={{ fontSize:11,fontWeight:600,color:sortBy===col?'#1F3C84':'#6B7280',cursor:'pointer',userSelect:'none',display:'flex',alignItems:'center',gap:2 }}>{lbl}<span style={{ opacity:sortBy===col?1:0.3,fontSize:9 }}>{sortBy===col?(sortDir==='desc'?'↓':'↑'):'↕'}</span></div>
-  const cols = '2.2fr 80px 70px 100px 100px 80px 75px 85px 85px 95px 70px 85px 85px 80px 70px'
+  const cols = '2.2fr 120px 80px 70px 100px 100px 80px 75px 85px 85px 95px 70px 85px 85px 80px 70px'
   return (
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
         <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:10,marginBottom:16 }}>
@@ -361,6 +367,8 @@ function CampaignsTab({ data }) {
         <div style={{ display:'flex',gap:3 }}>
           {['all','active','paused'].map(s=><button key={s} onClick={()=>setStatusFilter(s)} style={{ padding:'5px 12px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:statusFilter===s?'#1F3C84':'#fff',color:statusFilter===s?'#fff':'#6B7280' }}>{s.charAt(0).toUpperCase()+s.slice(1)}</button>)}
         </div>
+        <FilterDropdown label="Corridor" value={corridorFilter} options={[{v:'all',l:'All'},...CORRIDORS.map(c=>({v:c.id,l:c.label}))]}
+          open={corridorMenuOpen} onToggle={()=>setCorridorMenuOpen(v=>!v)} onSelect={v=>{ setCorridorFilter(v); setCorridorMenuOpen(false) }} />
         <div style={{ marginLeft:'auto',display:'flex',alignItems:'center',gap:10,position:'relative' }}>
             <div style={{ fontSize:12,color:'#9CA3AF' }}>{filtered.length} campaigns · avg CTR {accCTRpct.toFixed(2)}% · lifetime CPC ₹{Math.round(lifetimeCPC)}</div>
           </div>
@@ -368,6 +376,7 @@ function CampaignsTab({ data }) {
       <div style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden' }}>
         <div style={{ display:'grid',gridTemplateColumns:cols,padding:'10px 16px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8,alignItems:'center' }}>
           <div style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>Campaign</div>
+          <div style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>Corridor</div>
           <div style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>Status</div>
           <div style={{ fontSize:11,fontWeight:600,color:'#6B7280' }}>Signal</div>
           <SH col="spend" lbl="Spend"/><SH col="impressions" lbl="Impressions"/><SH col="clicks" lbl="Clicks"/><SH col="ctr" lbl="CTR"/><SH col="cpl" lbl="CPL (Meta)"/><SH col="cplCrm" lbl="CPL (CRM)"/><SH col="cpql" lbl="CPQL"/><SH col="leads" lbl="Leads"/><SH col="crmLeads" lbl="CRM Leads"/><SH col="humanQL" lbl="Human QL"/><SH col="aiQL" lbl="AI QL"/><SH col="frequency" lbl="Freq"/>
@@ -380,6 +389,7 @@ function CampaignsTab({ data }) {
                 <div style={{ fontSize:11,color:'#9CA3AF',marginTop:2 }}>{c.objective?.replace(/_/g,' ')} · {c.created_time?new Date(c.created_time).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'—'}</div>
                 <div style={{ marginTop:5,height:3,background:'#F3F4F6',borderRadius:2,overflow:'hidden',width:'90%' }}><div style={{ height:'100%',width:Math.min(100,c.spendShare)+'%',background:'#1F3C84',borderRadius:2 }}/></div>
               </div>
+              <div><span style={{ fontSize:11,fontWeight:600,color:c.corridorId==='unclassified'?'#9CA3AF':'#1F3C84',background:c.corridorId==='unclassified'?'#F3F4F6':'#E8EFF9',padding:'2px 8px',borderRadius:8,whiteSpace:'nowrap' }}>{c.corridor}</span></div>
               <div>{sBadge(c.status)}</div><div>{sigBadge(c.signal)}</div>
               <div><div style={{ fontSize:13,fontWeight:600,color:'#111827' }}>{fmtINR(c.spend)}</div><div style={{ fontSize:10,color:'#9CA3AF' }}>{c.spendShare.toFixed(1)}% of total</div></div>
               <div style={{ fontSize:13,color:'#374151' }}>{fmtN(c.impressions)}</div>
@@ -436,6 +446,7 @@ const CREATIVE_COLS = [
   { key:'cplCrm', label:'CPL (CRM)', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cplCol(ad.cplCrm) }}>{ad.cplCrm>0?'₹'+ad.cplCrm:'—'}</div> },
   { key:'cpql', label:'CPQL', width:100, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,fontWeight:600,color:ctx.cpqlCol(ad.cpql) }}>{ad.cpql>0?'₹'+ad.cpql:'—'}</div> },
   { key:'type', label:'Type', width:90, align:'center', render:(ad,ctx)=><span style={{ background:ctx.tBg[ad.type]||'#F3F4F6',color:ctx.tColor[ad.type]||'#374151',fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:6,textTransform:'uppercase' }}>{ad.type}</span> },
+  { key:'corridor', label:'Corridor', width:130, align:'center', render:(ad)=><span style={{ fontSize:11,fontWeight:600,color:ad.corridorId==='unclassified'?'#9CA3AF':'#1F3C84',background:ad.corridorId==='unclassified'?'#F3F4F6':'#E8EFF9',padding:'2px 8px',borderRadius:8,whiteSpace:'nowrap' }}>{ad.corridor}</span> },
   { key:'health', label:'Health', width:100, align:'center', render:(ad,ctx)=><span style={{ background:ctx.hBg[ad.fatigueLabel]||'#E9F8EF',color:ctx.hColor[ad.fatigueLabel]||'#166534',fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:8 }}>{ad.fatigueLabel}</span> },
   { key:'spend', label:'Spend', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,fontWeight:600,color:'#111827' }}>{fmtINR(ad.spend)}</div> },
   { key:'ctr', label:'CTR', width:90, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,color:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?'#1F3C84':'#374151',fontWeight:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div> },
@@ -443,32 +454,6 @@ const CREATIVE_COLS = [
   { key:'score', label:'Score', width:100, align:'center', render:(ad)=><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div> },
   { key:'wowCtr', label:'WoW CTR', width:100, align:'center', render:(ad)=><div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div> },
 ]
-function FilterDropdown({ label, value, options, open, onToggle, onSelect, accentOf }) {
-  const current = options.find(o=>o.v===value) || options[0]
-  return (
-    <div style={{ position:'relative',flexShrink:0 }}>
-      <button type="button" onClick={onToggle} style={{ display:'flex',alignItems:'center',gap:3,padding:'4px 6px',borderRadius:7,border:'0.5px solid '+(open?'#1C9FD4':'#E5E7EB'),background:'#fff',cursor:'pointer',fontSize:10.5,fontWeight:500,fontFamily:'inherit',color:'#374151',whiteSpace:'nowrap' }}>
-        <span style={{ color:'#9CA3AF',fontWeight:600 }}>{label}:</span>
-        <span style={{ fontWeight:600,color:accentOf?accentOf(value):'#374151' }}>{current.l}</span>
-        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink:0,transform:open?'rotate(180deg)':'rotate(0deg)',transition:'transform .15s' }}><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      {open && <div onClick={()=>onToggle()} style={{ position:'fixed',inset:0,zIndex:150 }}/>}
-      {open && (
-        <div style={{ position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:200,minWidth:130,background:'#fff',border:'1px solid #E5E7EB',borderRadius:10,boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)',padding:4,overflow:'hidden' }}>
-          {options.map(o => (
-            <button key={o.v} type="button" onClick={()=>onSelect(o.v)}
-              style={{ display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',textAlign:'left',padding:'7px 9px',border:'none',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:value===o.v?700:500,fontFamily:'inherit',color:value===o.v?'#1F3C84':'#374151',background:value===o.v?'#E8EFF9':'transparent' }}
-              onMouseEnter={e=>{ if(value!==o.v) e.currentTarget.style.background='#F3F4F6' }}
-              onMouseLeave={e=>{ if(value!==o.v) e.currentTarget.style.background='transparent' }}>
-              <span>{o.l}</span>
-              {value===o.v && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 function CreativesTab({ data, token }) {
   const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, prevInsightsMap = {}, crmSummary = {} } = data
   const tableScrollRef = useRef(null)
@@ -563,6 +548,7 @@ function CreativesTab({ data, token }) {
   const [adTypeFilter, setAdTypeFilter] = useState('all')
   const [healthFilter, setHealthFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [corridorFilter, setCorridorFilter] = useState('all')
   const [openFilterMenu, setOpenFilterMenu] = useState(null)
   const [sortBy, setSortBy] = useState('spend')
   const [adNameSearch, setAdNameSearch] = useState('')
@@ -606,7 +592,8 @@ function CreativesTab({ data, token }) {
     if (frequency>0) score-=Math.min(20,(frequency-1)*5)
     if (cpl>0&&accCPL>0) score+=Math.min(15,Math.max(-15,(accCPL-cpl)/accCPL*15))
     score=Math.round(Math.min(100,Math.max(0,score)))
-    return { ...ad, spend, impressions, clicks, reach, ctr, cpm, cpc, frequency, leads, cpl, cplCrm, totalQL, cpql, convRate, spendShare, ctrDelta, videoViews, hookRate, fatigueLabel, type, score }
+    const corridorId = classifyCorridor(ad.name)
+    return { ...ad, spend, impressions, clicks, reach, ctr, cpm, cpc, frequency, leads, cpl, cplCrm, totalQL, cpql, convRate, spendShare, ctrDelta, videoViews, hookRate, fatigueLabel, type, score, corridorId, corridor: corridorLabel(corridorId) }
   }), [ads,insightsMap,prevInsightsMap,accSpend,accCTRpct,accCPL])
   const filtered = useMemo(() => {
     let out=processed
@@ -616,9 +603,10 @@ function CreativesTab({ data, token }) {
     if (healthFilter==='healthy') out=out.filter(a=>a.fatigueLabel==='Healthy')
     else if (healthFilter==='moderate') out=out.filter(a=>a.fatigueLabel==='Moderate')
     else if (healthFilter==='fatigue') out=out.filter(a=>a.fatigueLabel==='High Fatigue')
+    if (corridorFilter!=='all') out=out.filter(a=>a.corridorId===corridorFilter)
     if (adNameSearch) out=out.filter(a=>a.name?.toLowerCase().includes(adNameSearch.toLowerCase()))
     return [...out].sort((a,b)=>sortBy==='score'?b.score-a.score:(b[sortBy]||0)-(a[sortBy]||0))
-  }, [processed,adTypeFilter,statusFilter,healthFilter,adNameSearch,sortBy])
+  }, [processed,adTypeFilter,statusFilter,healthFilter,corridorFilter,adNameSearch,sortBy])
   const exportRows = useMemo(() => filtered.map(ad => ({
     Creative: ad.name || '',
     Leads: ad.leads || 0,
@@ -729,6 +717,8 @@ function CreativesTab({ data, token }) {
         <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'6px 9px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:11.5,fontFamily:'inherit',outline:'none',width:90,minWidth:0,flexShrink:1,flexGrow:0,background:'#FAFAFA' }}/>
         <FilterDropdown label="Format" value={adTypeFilter} options={[{v:'all',l:'All'},{v:'video',l:'Video'},{v:'image',l:'Image'},{v:'carousel',l:'Carousel'}]}
           open={openFilterMenu==='format'} onToggle={()=>setOpenFilterMenu(v=>v==='format'?null:'format')} onSelect={v=>{ setAdTypeFilter(v); setOpenFilterMenu(null) }} />
+        <FilterDropdown label="Corridor" value={corridorFilter} options={[{v:'all',l:'All'},...CORRIDORS.map(c=>({v:c.id,l:c.label}))]}
+          open={openFilterMenu==='corridor'} onToggle={()=>setOpenFilterMenu(v=>v==='corridor'?null:'corridor')} onSelect={v=>{ setCorridorFilter(v); setOpenFilterMenu(null) }} />
         <FilterDropdown label="Health" value={healthFilter} options={[{v:'all',l:'All'},{v:'healthy',l:'Healthy'},{v:'moderate',l:'Moderate'},{v:'fatigue',l:'Fatigue'}]}
           open={openFilterMenu==='health'} onToggle={()=>setOpenFilterMenu(v=>v==='health'?null:'health')} onSelect={v=>{ setHealthFilter(v); setOpenFilterMenu(null) }}
           accentOf={v=>v==='healthy'?'#166534':v==='moderate'?'#854D0E':v==='fatigue'?'#991B1B':'#374151'} />

@@ -10,6 +10,7 @@ import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
 import { fetchCSV } from '../lib/sheetCache'
 import { getSession, setSession, getPersisted } from '../lib/sessionLoad'
+import { classifyCorridor, corridorLabel, CORRIDORS, classifyCampaignTypeFromName, isGoogleSource } from '../lib/corridors'
 import { usePresence } from '../hooks/usePresence'
 import { useAuth } from '../hooks/useAuth'
 import { resolveSheetUrl } from '../lib/dataSources'
@@ -69,6 +70,8 @@ function parseCSV(csv) {
     preferred_intake:(r[h('preferred_intake')] || '').trim(),
     highest_qual:    (r[h('highest_qualification')] || '').trim(),
     count:           1,  // one row = one qualified lead
+    corridorId:      classifyCorridor(r[h('opp_first_campaign_name')] || ''),
+    category:        isGoogleSource(r[h('source')] || '') ? classifyCampaignTypeFromName(r[h('opp_first_campaign_name')] || '') : null,
   }))
 }
 
@@ -611,6 +614,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const [selMonth, setSelMonth]     = useState('')
   const [selProvider, setSelProvider] = useState('All')
   const [selSource, setSelSource]   = useState('All')
+  const [selCorridor, setSelCorridor] = useState('All')
   const { user } = useAuth()
   const activeUsers = usePresence(user)
   const [loading, setLoading]       = useState(true)
@@ -959,8 +963,9 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   // 4. Apply provider + source dropdowns
   const filtered = useMemo(() => dateFilteredRows.filter(r =>
     (selProvider === 'All' || r.provider === selProvider) &&
-    (selSource === 'All' || r.source === selSource)
-  ), [dateFilteredRows, selProvider, selSource]);
+    (selSource === 'All' || r.source === selSource) &&
+    (selCorridor === 'All' || corridorLabel(r.corridorId) === selCorridor)
+  ), [dateFilteredRows, selProvider, selSource, selCorridor]);
 
   // Day-on-day breakdown: group filtered rows by normalized qualified_date (YYYY-MM-DD)
   const dayOnDay = useMemo(() => {
@@ -1379,7 +1384,8 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                 )}
               </div></>}
               {view === 'daily' && <><Dropdown label="Provider" options={providers} value={selProvider} minWidth={100} onChange={v => { setSelProvider(v); setPage(0) }} />
-            <Dropdown label="Source" options={sources} value={selSource} minWidth={100} onChange={v => { setSelSource(v); setPage(0) }} /></>}
+            <Dropdown label="Source" options={sources} value={selSource} minWidth={100} onChange={v => { setSelSource(v); setPage(0) }} />
+            <Dropdown label="Corridor" options={['All', ...CORRIDORS.map(c => c.label)]} value={selCorridor} minWidth={140} onChange={v => { setSelCorridor(v); setPage(0) }} /></>}
             {lastSync && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {lastSync.toLocaleTimeString()}</span>}
             <Button size="sm" variant="secondary" onClick={() => loadData(true)} disabled={loading} className="lqRefreshBtn"
               icon={
@@ -1698,7 +1704,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ background: '#F8FAFC' }}>
-                        {[['campaign','Campaign'],['provider','Provider'],['source','Source'],['country','Country'],['degree_type','Degree'],['disposition','Disposition'],['budget','Budget'],['preferred_intake','Intake']].map(([col, lbl]) => (
+                        {[['campaign','Campaign'],['corridorId','Corridor'],['category','Category'],['provider','Provider'],['source','Source'],['country','Country'],['degree_type','Degree'],['disposition','Disposition'],['budget','Budget'],['preferred_intake','Intake']].map(([col, lbl]) => (
                           <th key={col} style={thS(col)} onClick={() => sortBy(col)}>
                             {lbl} <span style={{ opacity: sortCol === col ? 1 : 0.3, fontSize: 9 }}>{sortCol === col ? (sortDir === 'desc' ? 'v' : '^') : '^v'}</span>
                           </th>
@@ -1711,6 +1717,10 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                           onMouseEnter={e => e.currentTarget.style.background = '#F0F7FF'}
                           onMouseLeave={e => e.currentTarget.style.background = i % 2 ? '#FAFBFC' : 'var(--card)'}>
                           <td style={{ padding: '9px 12px', color: C.text, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: FONT, fontWeight: 500 }} title={r.campaign}>{r.campaign || '-'}</td>
+                          <td style={{ padding: '9px 12px', fontFamily: FONT, whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: 10.5, fontWeight: 600, padding: '2px 8px', borderRadius: 8, color: r.corridorId === 'unclassified' ? C.muted : C.navy, background: r.corridorId === 'unclassified' ? '#F3F4F6' : C.navyBg }}>{corridorLabel(r.corridorId)}</span>
+                          </td>
+                          <td style={{ padding: '9px 12px', color: C.sub, fontFamily: FONT, whiteSpace: 'nowrap' }}>{r.category || '-'}</td>
                           <td style={{ padding: '9px 12px', fontFamily: FONT }}>
                             <span style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20,
                               background: r.provider === 'Futwork' ? C.navyBg : r.provider === 'Futwork AI' ? C.cyanBg : C.blueBg,

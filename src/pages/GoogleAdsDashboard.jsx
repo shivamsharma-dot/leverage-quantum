@@ -8,6 +8,8 @@ import { useAuth } from '../hooks/useAuth'
 import { usePresence } from '../hooks/usePresence'
 import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'; import { resolveSheetUrl } from '../lib/dataSources'
 import Button from '../components/Button'
+import FilterDropdown from '../components/FilterDropdown'
+import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
 
 const DATE_RANGES=[{id:'TODAY',label:'Today'},{id:'LAST_7_DAYS',label:'Last 7 days'},{id:'LAST_30_DAYS',label:'Last 30 days'},{id:'LAST_90_DAYS',label:'Last 90 days'},{id:'THIS_MONTH',label:'This month'},{id:'LAST_MONTH',label:'Last month'},{id:'CUSTOM',label:'Custom'}]
 const TABS=[{id:'campaigns',label:'Campaigns'},{id:'ads',label:'Ads'},{id:'keywords',label:'Keywords'},{id:'searchTerms',label:'Search terms'},{id:'adGroups',label:'Ad groups'},{id:'conversions',label:'Conversions'},{id:'devices',label:'Devices'},{id:'geo',label:'Locations'},{id:'audiences',label:'Audiences'},{id:'schedule',label:'Schedule'},{id:'assets',label:'Assets'}];const LEADS_CSV_DEFAULT='https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=googleleads';function parseLeadsCSV(t){const rows=[];let i=0,field='',row=[],inq=false;while(i<t.length){const c=t[i];const cc=t.charCodeAt(i);if(inq){if(c==='"'){if(t[i+1]==='"'){field+='"';i+=2;continue}inq=false;i++;continue}field+=c;i++;continue}else{if(c==='"'){inq=true;i++;continue}if(c===','){row.push(field);field='';i++;continue}if(cc===13){i++;continue}if(cc===10){row.push(field);rows.push(row);row=[];field='';i++;continue}field+=c;i++;continue}}if(field.length||row.length){row.push(field);rows.push(row)}const h=rows[0]||[];return rows.slice(1).filter(r=>r.length>1).map(r=>Object.fromEntries(h.map((k,idx)=>[k,(r[idx]||'')])))};function parseLeadDate(s){const m=String(s||'').trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);if(!m)return null;const MN={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};const mi=MN[m[2]];if(mi==null)return null;return new Date(+m[3],mi,+m[1])};function resolveDateRangeBounds(dr,cFrom,cTo){const today=new Date();const d0=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(dr==='CUSTOM'&&cFrom&&cTo){const p=cFrom.split('-'),q=cTo.split('-');return{start:new Date(+p[0],+p[1]-1,+p[2]),end:new Date(+q[0],+q[1]-1,+q[2])}}if(dr==='TODAY')return{start:d0,end:d0};if(dr==='LAST_7_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-7);return{start:s,end:e}}if(dr==='LAST_30_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-30);return{start:s,end:e}}if(dr==='LAST_90_DAYS'){const e=new Date(d0);e.setDate(e.getDate()-1);const s=new Date(d0);s.setDate(s.getDate()-90);return{start:s,end:e}}if(dr==='THIS_MONTH')return{start:new Date(d0.getFullYear(),d0.getMonth(),1),end:d0};if(dr==='LAST_MONTH'){const s=new Date(d0.getFullYear(),d0.getMonth()-1,1);const e=new Date(d0.getFullYear(),d0.getMonth(),0);return{start:s,end:e}}return{start:new Date(d0.getFullYear(),d0.getMonth(),1),end:d0}}
@@ -72,11 +74,13 @@ function CampaignsTab({data,loading,leadsByCampaign={},totalLeads=0}){
 const {sort,Th}=useSort('spend')
 const [exp,setExp]=useState(null)
 const [search,setSearch]=useState('')
+const [corridorFilter,setCorridorFilter]=useState('all')
+const [corridorMenuOpen,setCorridorMenuOpen]=useState(false)
 if(loading)return <Loader/>
 if(!data)return null
 const{campaigns=[],total={},negatives={}}=data||{}
 if(!campaigns.length&&!loading)return <NotConnected/>
-const filtered=campaigns.filter(c=>!search||c.name.toLowerCase().includes(search.toLowerCase()))
+const filtered=campaigns.filter(c=>(!search||c.name.toLowerCase().includes(search.toLowerCase()))&&(corridorFilter==='all'||classifyCorridor(c.name)===corridorFilter))
 const sorted=sort(filtered)
 const chartData=campaigns.filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend).slice(0,8).map(c=>({name:c.name.length>18?c.name.slice(0,18)+'...':c.name,spend:Math.round(c.spend/1000)}))
 return <>
@@ -106,17 +110,19 @@ return <>
 <Card title='All campaigns' sub={filtered.length+' of '+campaigns.length} action={
 <div style={{display:'flex',alignItems:'center',gap:8}}>
 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder='Search campaigns...' style={{padding:'6px 10px',border:'0.5px solid '+C.border,borderRadius:8,fontSize:12,fontFamily:FONT,outline:'none',width:220,background:'var(--card)',color:C.text}}/>
-<ExportButton data={sorted.map(c=>({Campaign:c.name,Status:c.status,Type:c.type,Leads:leadsByCampaign[c.name]??leadsByCampaign[(c.name||'').toLowerCase()]??'',Spend:c.spend,Impressions:c.impressions,Clicks:c.clicks,CTR:c.ctr,'Avg CPC':c.avgCpc,Conversions:c.conversions,CPA:c.costPerConv,'Impression Share':c.impressionShare}))} filename='google_ads_campaigns'/>
+<FilterDropdown label='Corridor' value={corridorFilter} options={[{v:'all',l:'All'},...CORRIDORS.map(cc=>({v:cc.id,l:cc.label}))]}
+  open={corridorMenuOpen} onToggle={()=>setCorridorMenuOpen(v=>!v)} onSelect={v=>{setCorridorFilter(v);setCorridorMenuOpen(false)}}/>
+<ExportButton data={sorted.map(c=>({Campaign:c.name,Status:c.status,Type:c.type,Corridor:corridorLabel(classifyCorridor(c.name)),Leads:leadsByCampaign[c.name]??leadsByCampaign[(c.name||'').toLowerCase()]??'',Spend:c.spend,Impressions:c.impressions,Clicks:c.clicks,CTR:c.ctr,'Avg CPC':c.avgCpc,Conversions:c.conversions,CPA:c.costPerConv,'Impression Share':c.impressionShare}))} filename='google_ads_campaigns'/>
 </div>
 }>
 <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}>
-<thead><tr><Th k='name'>Campaign</Th><Th k='status'>Status</Th><Th k='type'>Type</Th><th style={{padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',whiteSpace:'nowrap',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9',fontFamily:FONT}}>Leads</th><Th k='spend' right>Spend</Th><Th k='impressions' right>Impr.</Th><Th k='clicks' right>Clicks</Th><Th k='ctr' right>CTR</Th><Th k='avgCpc' right>Avg CPC</Th><Th k='conversions' right>Conv.</Th><Th k='costPerConv' right>CPA</Th><Th k='impressionShare' right>Imp Share</Th></tr></thead>
+<thead><tr><Th k='name'>Campaign</Th><Th k='status'>Status</Th><Th k='type'>Type</Th><th style={{padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'left',whiteSpace:'nowrap',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9',fontFamily:FONT}}>Corridor</th><th style={{padding:'10px 12px',fontWeight:700,color:C.muted,textAlign:'right',whiteSpace:'nowrap',fontSize:10.5,letterSpacing:'0.04em',textTransform:'uppercase',background:'#F9FAFB',borderBottom:'1px solid #F1F4F9',fontFamily:FONT}}>Leads</th><Th k='spend' right>Spend</Th><Th k='impressions' right>Impr.</Th><Th k='clicks' right>Clicks</Th><Th k='ctr' right>CTR</Th><Th k='avgCpc' right>Avg CPC</Th><Th k='conversions' right>Conv.</Th><Th k='costPerConv' right>CPA</Th><Th k='impressionShare' right>Imp Share</Th></tr></thead>
 <tbody>{sorted.map(c=>(
 <React.Fragment key={c.id}>
 <tr onClick={()=>setExp(exp===c.id?null:c.id)} style={{borderBottom:'1px solid #F8FAFC',cursor:'pointer',background:exp===c.id?'#F0F7FF':'transparent'}}>
 <td style={{padding:'9px 12px',fontSize:12.5,color:C.text,fontWeight:600,maxWidth:220,overflow:'hidden'}}><div style={{display:'flex',alignItems:'center',gap:6,overflow:'hidden'}}><span style={{fontSize:11,color:C.muted,flexShrink:0}}>{exp===c.id?'▼':'►'}</span><span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={c.name}>{c.name}</span></div></td>
 <td style={{padding:'9px 12px'}}><StatusBadge s={c.status}/></td>
-<td style={{padding:'9px 12px'}}><TypeTag t={c.type}/></td><td style={{padding:'9px 12px',textAlign:'right',fontWeight:800,color:C.green,fontSize:12.5,whiteSpace:'nowrap'}}>{(leadsByCampaign[c.name]??leadsByCampaign[(c.name||'').toLowerCase()])?fmtN(leadsByCampaign[c.name]??leadsByCampaign[(c.name||'').toLowerCase()]):'—'}</td>
+<td style={{padding:'9px 12px'}}><TypeTag t={c.type}/></td><td style={{padding:'9px 12px',fontSize:11,fontWeight:600,whiteSpace:'nowrap'}}><span style={{color:classifyCorridor(c.name)==='unclassified'?C.muted:C.navy,background:classifyCorridor(c.name)==='unclassified'?'#F3F4F6':C.navyBg,padding:'2px 8px',borderRadius:8}}>{corridorLabel(classifyCorridor(c.name))}</span></td><td style={{padding:'9px 12px',textAlign:'right',fontWeight:800,color:C.green,fontSize:12.5,whiteSpace:'nowrap'}}>{(leadsByCampaign[c.name]??leadsByCampaign[(c.name||'').toLowerCase()])?fmtN(leadsByCampaign[c.name]??leadsByCampaign[(c.name||'').toLowerCase()]):'—'}</td>
 <td style={{padding:'9px 12px',textAlign:'right',fontWeight:800,color:C.text,fontSize:12.5,whiteSpace:'nowrap'}}>{fmt(c.spend)}</td>
 <td style={{padding:'9px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtN(c.impressions)}</td>
 <td style={{padding:'9px 12px',textAlign:'right',color:C.sub,fontSize:12.5}}>{fmtN(c.clicks)}</td>
@@ -126,7 +132,7 @@ return <>
 <td style={{padding:'9px 12px',textAlign:'right',color:C.sub,fontSize:12.5,whiteSpace:'nowrap'}}>{fmt(c.costPerConv)}</td>
 <td style={{padding:'9px 12px',textAlign:'right',fontSize:12.5,color:c.impressionShare>0.8?C.green:c.impressionShare>0.5?C.blue:C.navy}}>{fmtPct(c.impressionShare)}</td>
 </tr>
-{exp===c.id&&<tr style={{borderBottom:'1px solid #F8FAFC',background:'#F8FAFF'}}><td colSpan={12} style={{padding:'12px 24px'}}>
+{exp===c.id&&<tr style={{borderBottom:'1px solid #F8FAFC',background:'#F8FAFF'}}><td colSpan={13} style={{padding:'12px 24px'}}>
 <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,fontSize:12,marginBottom:(negatives[c.id]||[]).length?16:0}}>
 {[{l:'Campaign ID',v:c.id},{l:'Channel type',v:c.type},{l:'Impression Share',v:fmtPct(c.impressionShare)},{l:'Cost per click',v:fmtCpc(c.avgCpc)},{l:'Bid strategy',v:bidLabel(c.biddingStrategy)},{l:'Target CPA',v:c.targetCpa?fmt(c.targetCpa):'—'},{l:'Target ROAS',v:c.targetRoas?c.targetRoas+'x (actual '+(c.actualRoas??'—')+'x)':(c.actualRoas!=null?'Actual '+c.actualRoas+'x':'—')},{l:'Conv. value',v:c.spend&&c.actualRoas?fmt(c.spend*c.actualRoas):'—'}].map(({l,v})=>(
 <div key={l}><div style={{fontSize:10,color:C.muted,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:3}}>{l}</div><div style={{fontWeight:700,color:C.text}}>{v}</div></div>

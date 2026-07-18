@@ -8,6 +8,7 @@ import { DashboardSkeleton } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
 import { getSession, setSession, hasLoaded, getPersisted } from '../lib/sessionLoad'
+import { classifyCorridor, corridorLabel } from '../lib/corridors'
 import {
   C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
 } from '../ui/dashboardKit'
@@ -774,6 +775,19 @@ export default function OverallDashboard() {
     return [...m.values()].sort((a, b) => b.leads - a.leads)
   }, [filtered])
 
+  const byCorridor = useMemo(() => {
+    const m = new Map()
+    filtered.forEach(r => {
+      const id = classifyCorridor(r.campaign)
+      const label = corridorLabel(id)
+      const e = m.get(id) || { corridor:label, leads:0, queued:0, humanQL:0, apps:0, offers:0, deposits:0, raus:0 }
+      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus
+      m.set(id, e)
+    })
+    return [...m.values()].sort((a, b) => b.leads - a.leads)
+  }, [filtered])
+
   // Full day-level breakdown (all metrics, no 30-day cap) for the summary table's Day
   // grouping — distinct from `byDay` above, which is the chart's lighter/capped version.
   const byDayFull = useMemo(() => {
@@ -845,6 +859,9 @@ export default function OverallDashboard() {
     if (grpBy === 'campaign') return byCampaign.map(c => ({
       label:c.campaign, leads:c.leads, queued:c.queued, humanQL:c.humanQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus,
     }))
+    if (grpBy === 'corridor') return byCorridor.map(c => ({
+      label:c.corridor, leads:c.leads, queued:c.queued, humanQL:c.humanQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus,
+    }))
     if (grpBy === 'day') return byDayFull.map(d => ({
       label:d.label, dateKey:d.key, leads:d.leads, queued:d.queued, humanQL:d.humanQL, apps:d.apps, offers:d.offers, deposits:d.deposits, raus:d.raus,
     }))
@@ -856,9 +873,9 @@ export default function OverallDashboard() {
         deposits:m.deposits, raus: full.reduce((t, r) => t + r.raus, 0),
       }
     })
-  }, [grpBy, bySource, byCampaign, byDayFull, byMonth, filtered])
+  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, filtered])
 
-  const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'day' ? 'Date' : 'Month'
+  const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'corridor' ? 'Corridor' : grpBy === 'day' ? 'Date' : 'Month'
 
   // SR Revenue — Estimated (Applications × rate) and Actual (RAUs × rate). Both rates are
   // user-configurable in the toolbar below and persist to localStorage.
@@ -1159,7 +1176,7 @@ export default function OverallDashboard() {
             <Card
               action={
                 <div style={{ display:'flex', gap:6 }}>
-                  {[['source', 'Source'], ['campaign', 'Campaign'], ['month', 'Month'], ['day', 'Day']].map(([v, l]) => (
+                  {[['source', 'Source'], ['campaign', 'Campaign'], ['corridor', 'Corridor'], ['month', 'Month'], ['day', 'Day']].map(([v, l]) => (
                     <button key={v} onClick={() => setGrpBy(v)} style={{ padding:'5px 12px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : '#E5E7EB'), background: grpBy === v ? C.navy : '#fff', color: grpBy === v ? '#fff' : '#374151', fontSize:11.5, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
                   ))}
                 </div>
