@@ -445,7 +445,23 @@ export default function CalculatorTool() {
     if (undoStackRef.current.length > MAX_UNDO) undoStackRef.current.shift()
     redoStackRef.current = []
   }
+  // In-progress cell edit: captured once when a cell/formula-bar input gains
+  // focus, committed as ONE undo step on blur -- so typing "50" is one undo
+  // step, not one per keystroke.
+  const editSnapshotRef = React.useRef(null)
+  const beginEdit = () => {
+    if (!editSnapshotRef.current) editSnapshotRef.current = { sheetId: activeSheetId, grid: grid.map(row => row.slice()) }
+  }
+  const commitEdit = () => {
+    const before = editSnapshotRef.current
+    editSnapshotRef.current = null
+    if (!before || before.sheetId !== activeSheetId) return
+    const curGrid = sheetsState.data[activeSheetId] || makeEmptySheet()
+    const changed = before.grid.some((row, ri) => row.some((v, ci) => v !== curGrid[ri][ci]))
+    if (changed) pushUndo(before.sheetId, before.grid)
+  }
   const mutateActiveGrid = (updater) => {
+    commitEdit()
     setSheetsState(prev => {
       const curGrid = prev.data[activeSheetId] || makeEmptySheet()
       pushUndo(activeSheetId, curGrid)
@@ -454,6 +470,7 @@ export default function CalculatorTool() {
     bump()
   }
   const undo = () => {
+    commitEdit()
     const last = undoStackRef.current.pop()
     if (!last) return
     setSheetsState(prev => {
@@ -464,6 +481,7 @@ export default function CalculatorTool() {
     bump()
   }
   const redo = () => {
+    commitEdit()
     const last = redoStackRef.current.pop()
     if (!last) return
     setSheetsState(prev => {
@@ -508,6 +526,12 @@ export default function CalculatorTool() {
     window.addEventListener('mouseup', up)
     return () => window.removeEventListener('mouseup', up)
   }, [])
+  // Switching sheets shouldn't carry over a stale range-selection highlight
+  // or a half-typed edit snapshot from the previous sheet.
+  React.useEffect(() => {
+    setSelection({ r1: 0, c1: 0, r2: 0, c2: 0 })
+    editSnapshotRef.current = null
+  }, [activeSheetId])
 
   const selRect = React.useMemo(() => ({
     r0: Math.min(selection.r1, selection.r2), r1: Math.max(selection.r1, selection.r2),
@@ -526,8 +550,15 @@ export default function CalculatorTool() {
     const el = cellInputRefs.current[`${r}-${c}`]
     if (el) el.focus()
   }
+  // Silent per-keystroke write -- no undo push here; beginEdit()/commitEdit()
+  // (wired to focus/blur) bundle a whole edit into a single undo step instead.
   const updateCell = (r, c, val) => {
-    mutateActiveGrid(prev => { const next = prev.map(row => row.slice()); next[r][c] = val; return next })
+    setSheetsState(prev => {
+      const curGrid = prev.data[activeSheetId] || makeEmptySheet()
+      const next = curGrid.map(row => row.slice())
+      next[r][c] = val
+      return { ...prev, data: { ...prev.data, [activeSheetId]: next } }
+    })
   }
   const clearSelectionCells = () => {
     mutateActiveGrid(prev => {
@@ -838,6 +869,8 @@ export default function CalculatorTool() {
                 <span style={{ fontStyle: 'italic', color: '#94A3B8', fontSize: 12, flexShrink: 0 }}>fx</span>
                 <input
                   value={grid[selection.r1][selection.c1]}
+                  onFocus={beginEdit}
+                  onBlur={commitEdit}
                   onChange={e => onFormulaBarChange(e.target.value)}
                   onKeyDown={onFormulaBarKeyDown}
                   placeholder="(empty)"
@@ -889,8 +922,8 @@ export default function CalculatorTool() {
                                 value={showValue}
                                 onMouseDown={e => { if (e.shiftKey) shiftSelect(r, c); else startSelect(r, c) }}
                                 onMouseEnter={() => extendSelect(r, c)}
-                                onFocus={e => { setFocusedKey(key); e.target.select() }}
-                                onBlur={() => setFocusedKey(k => (k === key ? null : k))}
+                                onFocus={e => { setFocusedKey(key); beginEdit(); e.target.select() }}
+                                onBlur={() => { setFocusedKey(k => (k === key ? null : k)); commitEdit() }}
                                 onChange={e => updateCell(r, c, e.target.value)}
                                 onKeyDown={onCellKeyDown(r, c)}
                                 style={{
