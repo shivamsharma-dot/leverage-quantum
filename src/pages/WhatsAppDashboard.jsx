@@ -297,7 +297,7 @@ export default function WhatsAppDashboard() {
 
           {tab === 'overview' && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
+              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
                 <PremKPI label='DELIVERED MESSAGES' value={fmtN(totals.delivered)} sub='all sources' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
                 <PremKPI label='MARKETING SPEND' value={fmtC(totals.mkt)} sub={pct(totals.mkt, totals.total) + ' of total spend'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe} />
                 <PremKPI label='UTILITY SPEND' value={fmtC(totals.util)} sub={pct(totals.util, totals.total) + ' of total spend'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
@@ -305,7 +305,7 @@ export default function WhatsAppDashboard() {
                 <PremKPI label='COST / DELIVERED' value={fmtC(totals.cpd)} sub='spend per message' accent={C.amber} accentBg={'#FEF3C7'} icon={KPI_ICONS.agent} />
               </div>
 
-              <div style={grid2}>
+              <div className="lq-grid2" style={grid2}>
                 <Card title='By Source' sub='Delivered messages per WhatsApp number'>
                   <div style={{ padding: '16px 20px' }}>
                     <RankedBars data={bySourceRanked} labelKey='label' max={maxBySource} showRank />

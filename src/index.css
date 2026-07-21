@@ -182,6 +182,10 @@ input:focus, textarea:focus {
   .lq-grid2 {
     grid-template-columns: 1fr !important;
   }
+  /* Three-column chart/card rows: stack to one column */
+  .lq-grid3 {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 /* Smallest screens ≤480px: single column KPI */

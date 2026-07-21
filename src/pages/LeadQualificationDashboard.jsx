@@ -1463,7 +1463,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               </div>
 
               {/* -- ROW 1: SOURCE STACKED BAR + PROVIDER DONUT -- */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, marginBottom: 16 }}>
                 <Card title="Qualified by source" sub="Stacked by provider - selected period">
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={sourceBar} margin={{ top: 4, right: 12, left: -8, bottom: 0 }} barCategoryGap="30%">
@@ -1519,7 +1519,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               </div>
 
               {/* -- ROW 2: COUNTRY + DEGREE -- */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                 <Card title="Top countries interested" sub="By qualified lead count">
                   <RankedBars data={countryBar} labelKey="country" max={countryBar[0]?.count || 0} total={totals.total} showRank />
                 </Card>
@@ -1529,7 +1529,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               </div>
 
               {/* -- ROW 3: DISPOSITION + BUDGET -- */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 16, marginBottom: 16 }}>
                 <Card title="Call disposition" sub="Outcome classification of qualifying calls">
                   <RankedBars data={dispositionBar} labelKey="disposition" max={dispositionBar[0]?.count || 0} total={totals.total} colorFn={i => [C.green, C.blue, C.navy, C.cyan][i % 4]} />
                 </Card>
@@ -1553,7 +1553,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               </div>
 
               {/* -- ROW 4: INTAKE + PASSPORT -- */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16 }}>
+              <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 16, marginBottom: 16 }}>
                 <Card title="Preferred intake" sub="When students plan to start">
                   {intakeBar.length === 0
                     ? <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No intake data</div>
@@ -1772,7 +1772,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               </Card>
             </>)}
             {view === 'monthly' && (<>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 14, marginBottom: 14 }}>
+              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 14, marginBottom: 14 }}>
                 <PremKPI label="Total Opp Count" value={fmtN(monthlyTotals.opp_count)} sub={monthlyScopeLabel} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.total} />
                 <PremKPI label="Floor Queued" value={fmtN(monthlyTotals.floor_queued)} sub={monthlyScopeLabel} accent="#1C9FD4" accentBg="#E3F4FB" icon={KPI_ICONS.total} />
                 <PremKPI label="Futwork Queued" value={fmtN(monthlyTotals.futwork_queued)} sub={monthlyScopeLabel} accent="#1F3C84" accentBg="#E8EFF9" icon={KPI_ICONS.agent} />

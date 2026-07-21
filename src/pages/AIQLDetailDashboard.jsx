@@ -509,14 +509,14 @@ export default function AIQLDetailDashboard() {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
+          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
             <PremKPI label={monthDay === 'all' ? 'Total QLs (Month)' : 'QLs on ' + fmtDateLabel(monthDay)} value={fmtN(kpi.total)} sub="AI-qualified leads" accent={C.navy} icon={KPI_ICONS.total} />
             <PremKPI label="Top Country" value={kpi.topCountry} sub={fmtN(kpi.topCountryN) + ' leads'} accent={C.blue} icon={KPI_ICONS.globe} />
             <PremKPI label="Top Disposition" value={kpi.topDisposition} sub="Most common outcome" accent={C.cyan} icon={KPI_ICONS.ai} />
             <PremKPI label="Avg Call Duration" value={fmtDur(kpi.avgDur)} sub={kpi.distinctDays + ' days covered'} accent={C.green} icon={KPI_ICONS.bot} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+          <div className="lq-grid3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
             <Card title="By Country" sub="Top destination countries">
               <RankedBars data={byCountry} labelKey="country" max={byCountry[0]?.count || 0} total={kpi.total} showRank />
             </Card>

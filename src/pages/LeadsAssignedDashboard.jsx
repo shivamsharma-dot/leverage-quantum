@@ -226,7 +226,7 @@ const base = await resolveSheetUrl('leadsAssigned', CSV_URL);
 
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
 
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(5, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(5, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
             <PremKPI label='QUALIFIED LEADS' value={fmtN(M.qualified)} sub='qualified assignments' accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
             <PremKPI label='QUALIFICATION RATE' value={M.qualRate.toFixed(1) + '%'} sub={fmtN(M.qualified) + ' of ' + fmtN(M.total)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} />
             <PremKPI label='LEADS ASSIGNED' value={fmtN(M.total)} sub='total opportunities' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
@@ -248,7 +248,7 @@ const base = await resolveSheetUrl('leadsAssigned', CSV_URL);
             </ResponsiveContainer>
           </Card>
 
-          <div style={grid2}>
+          <div className="lq-grid2" style={grid2}>
             <Card>
               {sectionTitle('Top owners by qualified leads', 'highest qualified assignments (agents + pools)')}
               <RankedBars data={M.leaderboard} labelKey='name' max={M.leaderboard[0]?.count || 0} total={M.leaderboard.reduce((a, b) => a + b.count, 0)} colorFn={brandColor} showRank />

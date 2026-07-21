@@ -297,7 +297,7 @@ export default function ReferralDashboard() {
           
 
           {/* KPI ROW */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(5, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(5, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
             <PremKPI label='TOTAL REFERRALS' value={fmtN(M.kpis.total)} sub='all sources' accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label='EMPLOYEE' value={fmtN(M.kpis.emp)} sub={pct(M.kpis.emp, M.kpis.total) + ' of total'} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label='STUDENT' value={fmtN(M.kpis.stu)} sub={pct(M.kpis.stu, M.kpis.total) + ' of total'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
@@ -323,7 +323,7 @@ export default function ReferralDashboard() {
           </Card>
 
           {/* ROW: leadgen + current vs last */}
-          <div style={grid2}>
+          <div className="lq-grid2" style={grid2}>
             <Card>
               {sectionTitle('Source-wise lead gen rate', 'leads created · yesterday / last 7 days / this month')}
               <ResponsiveContainer width='100%' height={280}>
@@ -373,7 +373,7 @@ export default function ReferralDashboard() {
           </Card>
 
           {/* ROW: intake funnel + intake conversion */}
-          <div style={grid2}>
+          <div className="lq-grid2" style={grid2}>
             <Card>
               {sectionTitle('Intake-wise funnel', 'first app / offer received / deposit made')}
               <ResponsiveContainer width='100%' height={300}>
@@ -407,7 +407,7 @@ export default function ReferralDashboard() {
           </div>
 
           {/* ROW: source split donut + status bars */}
-          <div style={grid2}>
+          <div className="lq-grid2" style={grid2}>
             <Card>
               {sectionTitle('Source split', 'employee vs student referrals')}
               <ResponsiveContainer width='100%' height={280}>
