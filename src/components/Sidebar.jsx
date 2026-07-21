@@ -281,9 +281,9 @@ export default function Sidebar() {
         <div className={styles.dividerLine}/>
         <div className={styles.quantumLabel}>
           <svg width="19" height="19" viewBox="0 0 22 22" fill="none" style={{overflow:'visible'}}>
-            <rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F" style={{transformOrigin:'1px 21px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.1s both'}}/>
-            <rect x="7" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4" style={{transformOrigin:'7px 21px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.2s both'}}/>
-            <rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1F3C84" style={{transformOrigin:'13px 21px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.3s both'}}/>
+            <rect x="3" y="10.5" width="4" height="9" rx="1.5" fill="#4CAE6F" style={{transformOrigin:'3px 19.5px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.1s both'}}/>
+            <rect x="9" y="5.5" width="4" height="14" rx="1.5" fill="#1C9FD4" style={{transformOrigin:'9px 19.5px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.2s both'}}/>
+            <rect x="15" y="2.5" width="4" height="17" rx="1.5" fill="#1F3C84" style={{transformOrigin:'15px 19.5px',animation:'barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) 0.3s both'}}/>
           </svg>
           <span>QUANTUM</span>
         </div>
@@ -390,7 +390,7 @@ export default function Sidebar() {
       <>
       <div className="lq-mobile-topbar" style={{display:'none',position:'fixed',top:0,left:0,right:0,zIndex:1000,height:52,background:'var(--sidebar-bg)',borderBottom:'0.5px solid var(--card-border)',alignItems:'center',justifyContent:'space-between',padding:'0 16px'}}>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="1" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/><rect x="7" y="7" width="4" height="14" rx="1.5" fill="#29B9C3"/><rect x="13" y="4" width="4" height="17" rx="1.5" fill="#1C9FD4"/></svg>
+          <svg width="20" height="20" viewBox="0 0 22 22" fill="none"><rect x="3" y="10.5" width="4" height="9" rx="1.5" fill="#4CAE6F"/><rect x="9" y="5.5" width="4" height="14" rx="1.5" fill="#1C9FD4"/><rect x="15" y="2.5" width="4" height="17" rx="1.5" fill="#1F3C84"/></svg>
           <span style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:'#1C9FD4',letterSpacing:'2px',textTransform:'uppercase'}}>QUANTUM</span>
         </div>
         <button onClick={()=>setMobileOpen(o=>!o)} style={{background:'none',border:'none',cursor:'pointer',padding:6,color:'#374151',display:'flex',alignItems:'center'}}>
@@ -427,9 +427,9 @@ export default function Sidebar() {
             display:'flex', alignItems:'center', justifyContent:'center'
           }}>
             <svg width="24" height="24" viewBox="0 0 22 22" fill="none">
-              <rect x="3" y="12" width="4" height="9" rx="1.5" fill="#4CAE6F"/>
-              <rect x="9" y="7" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
-              <rect x="15" y="4" width="4" height="17" rx="1.5" fill="#1F3C84"/>
+              <rect x="3" y="10.5" width="4" height="9" rx="1.5" fill="#4CAE6F"/>
+              <rect x="9" y="5.5" width="4" height="14" rx="1.5" fill="#1C9FD4"/>
+              <rect x="15" y="2.5" width="4" height="17" rx="1.5" fill="#1F3C84"/>
             </svg>
           </div>
         </div>
