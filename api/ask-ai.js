@@ -526,6 +526,26 @@ async function getMetaData(token) {
 let _baselineCache = null // { data: {meta, googleAds, metaCrm, googleCrm}, key, ts }
 const BASELINE_CACHE_TTL_MS = 75_000
 
+// Live tool-call results (query_meta_ads / query_google_ads / CRM sheet fetches)
+// change slowly relative to a chat session -- cache each exact (tool, params)
+// combination briefly so a natural follow-up ("now break that down by ad set"
+// reusing the same underlying window) doesn't pay for a second live round-trip
+// to Meta/Google. Short TTL and exact-param keying only: this replays real
+// data that was already fetched moments ago, it never estimates or reuses a
+// result across a materially different request.
+const _toolResultCache = new Map() // key -> { data, ts }
+const TOOL_CACHE_TTL_MS = 90_000
+function toolCacheKey(name, input) { return `${name}:${JSON.stringify(input || {})}` }
+function getCachedToolResult(key) {
+  const hit = _toolResultCache.get(key)
+  if (hit && (Date.now() - hit.ts) < TOOL_CACHE_TTL_MS) return hit.data
+  return null
+}
+function setCachedToolResult(key, data) {
+  if (_toolResultCache.size > 100) _toolResultCache.delete(_toolResultCache.keys().next().value)
+  _toolResultCache.set(key, { data, ts: Date.now() })
+}
+
 async function getBaselineData(metaToken) {
   const now = Date.now()
   const key = metaToken || ''
@@ -852,10 +872,20 @@ export default async function handler(req, res) {
         res.setHeader('X-Accel-Buffering', 'no')
       }
 
-      for (const toolUse of toolUseBlocks) {
+      // Tool calls within a round are independent of each other (each result is
+      // paired back to the model purely by tool_use_id, order doesn't matter),
+      // so run them concurrently instead of one at a time -- a cross-channel
+      // question that needs both Meta and Google data was previously paying
+      // for two sequential API round-trips instead of the slower of the two.
+      const CACHEABLE_TOOLS = new Set(['query_meta_ads', 'query_google_ads', 'query_meta_crm_leads', 'query_google_crm_leads'])
+      const runOneTool = async (toolUse) => {
+        const cacheKey = CACHEABLE_TOOLS.has(toolUse.name) ? toolCacheKey(toolUse.name, toolUse.input) : null
+        const cached = cacheKey ? getCachedToolResult(cacheKey) : null
         let result
         const _toolT0 = Date.now()
-        if (toolUse.name === 'query_meta_ads') {
+        if (cached) {
+          result = cached
+        } else if (toolUse.name === 'query_meta_ads') {
           result = await executeMetaQuery(metaToken, toolUse.input || {})
         } else if (toolUse.name === 'query_google_ads') {
           result = await executeGoogleAdsQuery(toolUse.input || {})
@@ -869,14 +899,13 @@ export default async function handler(req, res) {
           result = { error: 'Unknown tool: ' + toolUse.name }
         }
         const hadError = !!(result && result.error)
+        if (cacheKey && !cached && !hadError) setCachedToolResult(cacheKey, result)
         await logToolCall({ convId, userId: me.email, toolName: toolUse.name, params: toolUse.input, rowCount: resultRowCount(result), latencyMs: Date.now() - _toolT0, hadError })
         res.write(`data: ${JSON.stringify({tool_call:{name:toolUse.name, summary:buildToolSummary(toolUse.name,toolUse.input), error:hadError}})}\n\n`)
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUse.id,
-          content: JSON.stringify(result)
-        })
+        return { type: 'tool_result', tool_use_id: toolUse.id, content: JSON.stringify(result) }
       }
+      const parallelResults = await Promise.all(toolUseBlocks.map(runOneTool))
+      toolResults.push(...parallelResults)
 
       currentMessages = [
         ...currentMessages,
