@@ -260,7 +260,7 @@ export default function MTDDashboard(){
           }>
             {loading?'Refreshing':'Refresh'}
           </Button>
-          <ExportButton data={srcs} filename='mtd-by-source'/>
+          <ExportButton data={srcs} filename='mtd-by-source' dashboardId='mtd'/>
           <button onClick={()=>setCompare(v=>!v)} title='Split view: Meta vs Google by source' style={{padding:'6px 12px',borderRadius:8,border:'0.5px solid '+(compare?'#1C9FD4':'#E5E7EB'),fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit',background:compare?'#E3F5FD':'#fff',color:compare?'#1C9FD4':'#374151',display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
             <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2.5' strokeLinecap='round'><rect x='3' y='3' width='8' height='18' rx='1'/><rect x='13' y='3' width='8' height='18' rx='1'/></svg>
             Compare

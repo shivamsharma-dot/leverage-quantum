@@ -164,7 +164,7 @@ export default function ChannelMixDashboard(){
               <option value="All">All Months</option>
               {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
             </select>
-            <ExportButton data={srcBreakdown} filename="channel_mix_sources"/>
+            <ExportButton data={srcBreakdown} filename="channel_mix_sources" dashboardId="channel_mix"/>
             <InfoTooltip items={[['Total OPPs','Total raw leads across all channels.'],['Total Spend','All paid ad spend.'],['Total Revenue','AC + VAS collected.'],['Active Sources','Distinct lead sources with volume.'],['OPP Share','% of leads per channel.'],['ROAS by Channel','Revenue ÷ Spend per channel.'],['Unidentified','Leads missing UTM source — attribution gap.']]}/>
             <div className={styles.liveBadge}><span className={styles.liveDot}/>Live</div>
           </div>

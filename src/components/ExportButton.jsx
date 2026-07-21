@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { toast } from './ToastHost'
 import Button from './Button'
 
-export default function ExportButton({ data, filename, columns }) {
+export default function ExportButton({ data, filename, columns, dashboardId }) {
   const [open, setOpen] = useState(false)
   const [sheetsBusy, setSheetsBusy] = useState(false)
   const [slackBusy, setSlackBusy] = useState(false)
@@ -18,7 +18,7 @@ export default function ExportButton({ data, filename, columns }) {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'slack_export', title: filename, columns: cols, rows, sourcePage: filename }),
+        body: JSON.stringify({ type: 'slack_export', title: filename, columns: cols, rows, sourcePage: filename, dashboardId }),
       })
       const resData = await r.json()
       if (!r.ok) throw new Error(resData.error || 'Failed to post to Slack')
@@ -41,7 +41,7 @@ export default function ExportButton({ data, filename, columns }) {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows, filename }),
+        body: JSON.stringify({ rows, filename, dashboardId }),
       })
       const resData = await r.json()
       if (!r.ok) throw new Error(resData.error || 'Failed to export to Google Sheets')

@@ -1,5 +1,5 @@
 import { JWT } from 'google-auth-library'
-import { getSessionUser } from '../lib/auth.mjs'
+import { getSessionUser, canAccessDashboard } from '../lib/auth.mjs'
 
 // Creates a real Google Sheet from any export-shaped dataset (array of flat objects,
 // same shape the CSV/JSON export already uses) via a dedicated service account --
@@ -13,9 +13,14 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { rows, filename } = req.body || {}
+  const { rows, filename, dashboardId } = req.body || {}
   if (!Array.isArray(rows) || rows.length === 0) {
     return res.status(400).json({ error: 'No data to export' })
+  }
+  // dashboardId is a real PAGE_LIST id sent by ExportButton.jsx. Older/unrecognized
+  // callers with no dashboardId fall back to admin-only rather than silently allowing.
+  if (!dashboardId ? me.role !== 'admin' : !canAccessDashboard(me.role, dashboardId)) {
+    return res.status(403).json({ error: 'Forbidden' })
   }
 
   const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL

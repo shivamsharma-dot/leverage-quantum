@@ -185,7 +185,7 @@ export default function ROASDashboard(){
               {CHANNELS.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
             {prevMonth&&<div className={styles.momBadge}>↕ vs {prevMonth.replace('-2025','')}</div>}
-            <ExportButton data={filtered} filename="roas_data"/>
+            <ExportButton data={filtered} filename="roas_data" dashboardId="roas"/>
             <InfoTooltip items={[['Total Spend','Sum of all ad spend Jan–Dec 2025.'],['AC Revenue','Admission Counselling collected revenue.'],['VAS Revenue','Value Added Services revenue.'],['Total Revenue','AC + VAS collected.'],['ROAS','Revenue ÷ Spend.'],['Proj Revenue','SR Fee × RAUs × 0.9.'],['OPPs','Total raw leads.'],['QLs','Qualified leads.'],['L→Q%','QLs ÷ Total Leads.'],['CPL','Spend ÷ Total Leads.']]}/>
             <Button size='sm' onClick={() => setShowCompare(true)} icon={
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>

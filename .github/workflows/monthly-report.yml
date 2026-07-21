@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Trigger monthly report
         run: |
-          BODY=$(curl -s -w "\n%{http_code}" -X POST "https://quantum.leverageedu.com/api/send-report" -H "Content-Type: application/json" -d '{"type":"monthly","triggered_by":"cron"}')
+          BODY=$(curl -s -w "\n%{http_code}" -X POST "https://quantum.leverageedu.com/api/send-report" -H "Content-Type: application/json" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" -d '{"type":"monthly","triggered_by":"cron"}')
           STATUS=$(echo "$BODY" | tail -n1)
           JSON=$(echo "$BODY" | sed '$d')
           echo "HTTP Status: $STATUS"

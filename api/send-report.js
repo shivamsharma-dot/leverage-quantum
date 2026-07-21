@@ -188,15 +188,23 @@ async function handleSlackAnswer(req, res) {
 }
 
 async function handleSlackExport(req, res) {
-  const { getSessionUser } = await import('../lib/auth.mjs')
+  const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })
+
+  // dashboardId is sent by ExportButton.jsx (a real PAGE_LIST id, not the free-text
+  // sourcePage/filename label) so a restricted viewer can't export from a page they
+  // were never granted. Older/unrecognized callers with no dashboardId fall back to
+  // admin-only rather than silently allowing.
+  const { title, columns, rows, sourcePage, dashboardId } = req.body || {}
+  if (!dashboardId ? me.role !== 'admin' : !canAccessDashboard(me.role, dashboardId)) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
 
   const cfg = await getReportConfig()
   const webhook = cfg.slack_webhook_url || process.env.SLACK_WEBHOOK_URL
   if (!webhook) return res.status(500).json({ error: 'Slack is not connected -- add a webhook URL in Settings > Reports.' })
 
-  const { title, columns, rows, sourcePage } = req.body || {}
   if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'No rows to send' })
 
   try {
@@ -647,6 +655,25 @@ export default async function handler(req, res) {
   const triggered_by = req.body?.triggered_by || 'cron'
   const validTypes   = ['daily', 'weekly', 'monthly']
   if (!validTypes.includes(report_type)) return res.status(400).json({ error: `Invalid type. Use: ${validTypes.join(', ')}` })
+
+  // This branch previously had NO auth check at all -- a fully anonymous request
+  // could trigger a real email send to the whole recipient list, or (via
+  // triggered_by:'test' + a custom `recipients` array) to any attacker-chosen
+  // address, using the org's Resend account. The GitHub Actions cron has no user
+  // session to present, so it authenticates with a shared secret header instead;
+  // every other caller (e.g. an admin's "Send now"/"Send test" in Settings, which
+  // already sends real credentials:'include' cookies) must be a real admin session.
+  if (triggered_by === 'cron') {
+    const provided = req.headers['x-cron-secret']
+    if (!process.env.CRON_SECRET || provided !== process.env.CRON_SECRET) {
+      return res.status(401).json({ error: 'Not signed in' })
+    }
+  } else {
+    const { getSessionUser } = await import('../lib/auth.mjs')
+    const me = getSessionUser(req)
+    if (!me) return res.status(401).json({ error: 'Not signed in' })
+    if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+  }
 
   let recipients = []
   try {

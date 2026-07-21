@@ -108,7 +108,7 @@ const DASHBOARD_FALLBACK_ORDER = [
 ]
 
 function ProtectedRoute({ children, dashboardId }) {
-  const { user, loading } = useAuth()
+  const { user, loading, hiddenPages, prefsReady } = useAuth()
   const location = useLocation(); /* warm the Summary page cache once per session, as soon as we know who is logged in */ useEffect(() => { if (user && user.email) prefetchSummaryAnalysis() }, [user && user.email])
 
   // Warm every page's JS chunk in idle time once logged in, so switching sections
@@ -163,8 +163,18 @@ function ProtectedRoute({ children, dashboardId }) {
 
   if (loading) return null
   if (!user) return <Navigate to="/login" replace />
-  if (dashboardId && !canAccess(user.role, dashboardId)) {
-    const fallback = DASHBOARD_FALLBACK_ORDER.find(f => canAccess(user.role, f.id))
+  // Wait for the real, server-verified hidden_pages list before deciding anything
+  // below -- hiddenPages starts seeded from localStorage (a fast-paint cache) but
+  // that's never trustworthy enough to gate access on; prefsReady only flips once
+  // the actual /api/preferences fetch has resolved (success or failure).
+  if (!prefsReady) return null
+  // A page an admin hid from "everyone's sidebar" was previously still reachable
+  // by anyone who knew/guessed the URL -- Global Page Visibility only hid the nav
+  // link, never the route itself. Admins can still open a page they hid (e.g. to
+  // manage it), but no one else can.
+  const isHiddenForRole = dashboardId && user.role !== 'admin' && hiddenPages.includes(dashboardId)
+  if ((dashboardId && !canAccess(user.role, dashboardId)) || isHiddenForRole) {
+    const fallback = DASHBOARD_FALLBACK_ORDER.find(f => canAccess(user.role, f.id) && !hiddenPages.includes(f.id))
     return <Navigate to={fallback ? fallback.path : '/login'} replace />
   }
 

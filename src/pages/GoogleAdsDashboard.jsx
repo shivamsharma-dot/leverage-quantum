@@ -112,7 +112,7 @@ return <>
 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder='Search campaigns...' style={{padding:'6px 10px',border:'0.5px solid '+C.border,borderRadius:8,fontSize:12,fontFamily:FONT,outline:'none',width:220,background:'var(--card)',color:C.text}}/>
 <FilterDropdown label='Corridor' value={corridorFilter} options={[{v:'all',l:'All'},...CORRIDORS.map(cc=>({v:cc.id,l:cc.label}))]}
   open={corridorMenuOpen} onToggle={()=>setCorridorMenuOpen(v=>!v)} onSelect={v=>{setCorridorFilter(v);setCorridorMenuOpen(false)}}/>
-<ExportButton data={sorted.map(c=>({Campaign:c.name,Status:c.status,Type:c.type,Corridor:corridorLabel(classifyCorridor(c.name)),Leads:leadsByCampaign[c.name]??leadsByCampaign[(c.name||'').toLowerCase()]??'',Spend:c.spend,Impressions:c.impressions,Clicks:c.clicks,CTR:c.ctr,'Avg CPC':c.avgCpc,Conversions:c.conversions,CPA:c.costPerConv,'Impression Share':c.impressionShare}))} filename='google_ads_campaigns'/>
+<ExportButton data={sorted.map(c=>({Campaign:c.name,Status:c.status,Type:c.type,Corridor:corridorLabel(classifyCorridor(c.name)),Leads:leadsByCampaign[c.name]??leadsByCampaign[(c.name||'').toLowerCase()]??'',Spend:c.spend,Impressions:c.impressions,Clicks:c.clicks,CTR:c.ctr,'Avg CPC':c.avgCpc,Conversions:c.conversions,CPA:c.costPerConv,'Impression Share':c.impressionShare}))} filename='google_ads_campaigns' dashboardId='google_ads'/>
 </div>
 }>
 <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}>
@@ -181,7 +181,7 @@ return <>
 <Card title='Ads' sub={filtered.length+' of '+ads.length+' · headline, landing page &amp; ad copy'} action={
 <div style={{display:'flex',alignItems:'center',gap:8}}>
 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder='Search headline or campaign...' style={{padding:'6px 10px',border:'0.5px solid '+C.border,borderRadius:8,fontSize:12,fontFamily:FONT,outline:'none',width:240,background:'var(--card)',color:C.text}}/>
-<ExportButton data={exportRows} filename='google_ads_ads'/>
+<ExportButton data={exportRows} filename='google_ads_ads' dashboardId='google_ads'/>
 </div>
 }>
 <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',fontFamily:FONT}}>
@@ -272,7 +272,7 @@ return <>
 <Card title='Keywords' sub={filtered.length+' of '+keywords.length} action={
 <div style={{display:'flex',alignItems:'center',gap:8}}>
 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder='Search keywords...' style={{padding:'6px 10px',border:'0.5px solid '+C.border,borderRadius:8,fontSize:12,fontFamily:FONT,outline:'none',width:220,background:'var(--card)',color:C.text}}/>
-<ExportButton data={sorted.map(k=>({Keyword:k.text,Match:k.matchType,Status:k.status,'Quality Score':k.qualityScore,Impressions:k.impressions,Clicks:k.clicks,CTR:k.ctr,'Avg CPC':k.avgCpc,Spend:k.spend,Conversions:k.conversions,CPA:k.costPerConv}))} filename='google_ads_keywords'/>
+<ExportButton data={sorted.map(k=>({Keyword:k.text,Match:k.matchType,Status:k.status,'Quality Score':k.qualityScore,Impressions:k.impressions,Clicks:k.clicks,CTR:k.ctr,'Avg CPC':k.avgCpc,Spend:k.spend,Conversions:k.conversions,CPA:k.costPerConv}))} filename='google_ads_keywords' dashboardId='google_ads'/>
 </div>
 }>
 <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}>
@@ -320,7 +320,7 @@ return <>
 <Card title='Search terms' sub={filtered.length+' of '+searchTerms.length+' · actual search queries that triggered your ads'} action={
 <div style={{display:'flex',alignItems:'center',gap:8}}>
 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder='Search terms...' style={{padding:'6px 10px',border:'0.5px solid '+C.border,borderRadius:8,fontSize:12,fontFamily:FONT,outline:'none',width:220,background:'var(--card)',color:C.text}}/>
-<ExportButton data={sorted.map(s=>({'Search Term':s.text,'Ad Group':s.adGroup,Campaign:s.campaign,Impressions:s.impressions,Clicks:s.clicks,CTR:s.ctr,'Avg CPC':s.avgCpc,Spend:s.spend,Conversions:s.conversions}))} filename='google_ads_search_terms'/>
+<ExportButton data={sorted.map(s=>({'Search Term':s.text,'Ad Group':s.adGroup,Campaign:s.campaign,Impressions:s.impressions,Clicks:s.clicks,CTR:s.ctr,'Avg CPC':s.avgCpc,Spend:s.spend,Conversions:s.conversions}))} filename='google_ads_search_terms' dashboardId='google_ads'/>
 </div>
 }>
 <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}>
@@ -361,7 +361,7 @@ return <>
 <Card title='Ad groups' sub={filtered.length+' of '+adGroups.length} action={
 <div style={{display:'flex',alignItems:'center',gap:8}}>
 <input value={search} onChange={e=>setSearch(e.target.value)} placeholder='Search ad groups...' style={{padding:'6px 10px',border:'0.5px solid '+C.border,borderRadius:8,fontSize:12,fontFamily:FONT,outline:'none',width:220,background:'var(--card)',color:C.text}}/>
-<ExportButton data={sorted.map(g=>({'Ad Group':g.name,Campaign:g.campaign,Status:g.status,Spend:g.spend,Impressions:g.impressions,Clicks:g.clicks,CTR:g.ctr,'Avg CPC':g.avgCpc,Conversions:g.conversions,CPA:g.costPerConv}))} filename='google_ads_ad_groups'/>
+<ExportButton data={sorted.map(g=>({'Ad Group':g.name,Campaign:g.campaign,Status:g.status,Spend:g.spend,Impressions:g.impressions,Clicks:g.clicks,CTR:g.ctr,'Avg CPC':g.avgCpc,Conversions:g.conversions,CPA:g.costPerConv}))} filename='google_ads_ad_groups' dashboardId='google_ads'/>
 </div>
 }>
 <div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse'}}>

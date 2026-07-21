@@ -20,15 +20,22 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Not signed in' })
   }
 
-  // GET — global flag: anyone can read the global hidden_pages (needed for Sidebar)
+  // GET (authenticated) — every signed-in user needs a small set of app-wide
+  // keys regardless of role (hidden_pages for the Sidebar, the 3 design-style
+  // picks so Button/KPI/Login look consistent for everyone). Everything else
+  // in app_preferences (sheet URLs, Slack webhook, report sender config, AI
+  // budget, etc.) is admin-only config and must not leak to a non-admin viewer,
+  // including a custom viewer granted zero dashboards.
   if (req.method === 'GET') {
     const r = await supabaseAdmin(
       'app_preferences?select=key,value,updated_at&limit=50',
     )
     if (!r.ok) return res.status(500).json({ error: 'Failed to read preferences' })
     const rows = await r.json()
-    const prefs = Object.fromEntries(rows.map(row => [row.key, row.value]))
-    const meta = Object.fromEntries(rows.map(row => [row.key, row.updated_at]))
+    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'lq_login_style'])
+    const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key))
+    const prefs = Object.fromEntries(visibleRows.map(row => [row.key, row.value]))
+    const meta = Object.fromEntries(visibleRows.map(row => [row.key, row.updated_at]))
     return res.status(200).json({ prefs, meta })
   }
 

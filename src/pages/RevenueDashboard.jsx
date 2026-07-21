@@ -164,7 +164,7 @@ export default function RevenueDashboard(){
               <option value="AC">AC Only</option>
               <option value="VAS">VAS Only</option>
             </select>
-            <ExportButton data={srcPie} filename="revenue_by_source"/>
+            <ExportButton data={srcPie} filename="revenue_by_source" dashboardId="revenue"/>
             <InfoTooltip items={[['AC Revenue','Admission Counselling fees collected.'],['VAS Revenue','Value Added Services (visa, accommodation, loans).'],['Total Revenue','AC + VAS collected.'],['Projected','Total Package Value of all enrolled students.'],['Collection %','Collected ÷ Projected × 100.'],['Unidentified','Revenue from leads with no source attribution.']]}/>
             <div className={styles.liveBadge}><span className={styles.liveDot}/>CIB Data</div>
           </div>

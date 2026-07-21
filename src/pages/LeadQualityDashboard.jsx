@@ -157,7 +157,7 @@ export default function LeadQualityDashboard() {
               <option value="All">All Channels</option>
               {ALL_CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-          <ExportButton data={channelBreakdown} filename="lead_quality_channels"/>
+          <ExportButton data={channelBreakdown} filename="lead_quality_channels" dashboardId="lead_quality"/>
             <InfoTooltip items={[['Total OPPs','Total raw leads from all sources.'],['Futwork Sent','Leads sent to Futwork agents for qualification.'],['Floor Direct','Leads handled directly by counsellors.'],['QLs','Leads that passed qualification.'],['QL Rate','QLs ÷ Futwork Sent. Benchmark 35–45%.'],['Apps (STUs)','University applications submitted.'],['App/QL%','Applications ÷ Qualified Leads.'],['OPP→APP%','Applications ÷ Total Leads (end-to-end).']]}/>
           <div className={styles.liveChip}>
             <span className={styles.liveDot} />

@@ -553,7 +553,7 @@ export default function AIQLDetailDashboard() {
                   style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, border: '0.5px solid ' + C.border, cursor: 'pointer', flexShrink: 0, background: colsOpen ? C.navy : '#fff', color: colsOpen ? '#fff' : '#6B7280' }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18" /></svg>
                 </button>
-                <ExportButton data={exportRows} filename="ai_ql_detail" />
+                <ExportButton data={exportRows} filename="ai_ql_detail" dashboardId="lq_ops_ai_detail" />
                 {colsOpen && (
                   <>
                     <div onClick={() => setColsOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 98 }} />

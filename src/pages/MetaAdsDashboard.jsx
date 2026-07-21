@@ -772,7 +772,7 @@ function CreativesTab({ data, token }) {
               </div>
             </>
           )}
-          <ExportButton data={exportRows} filename="meta_ads_creatives" />
+          <ExportButton data={exportRows} filename="meta_ads_creatives" dashboardId="meta_ads" />
           {[{m:'grid',l:'⊞',t:'Grid view'},{m:'list',l:'☰',t:'List view'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} title={v.t} style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',width:32,height:32,borderRadius:8,border:'0.5px solid #E5E7EB',fontSize:15,cursor:'pointer',flexShrink:0,background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
         </div>
       </div>
