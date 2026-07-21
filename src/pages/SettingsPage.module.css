@@ -252,6 +252,9 @@
 .dashChip { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 8px; border: 0.5px solid var(--border); background: var(--card); cursor: pointer; font-size: 12.5px; font-weight: 500; color: var(--text-2); transition: all .15s; }
 .dashChip input { accent-color: var(--accent); }
 .dashChipActive { border-color: var(--accent); background: #F2FAFE; color: var(--text); font-weight: 600; }
+.dashGroupHeader { grid-column: 1/-1; font-size: 10px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: #94A3B8; margin: 4px 0 -2px; }
+.dashGroupHeader:first-child { margin-top: 0; }
+.dashChipChild { border-left: 3px solid #DCE3F1; }
 .editFieldsRow { display: flex; gap: 12px; margin-top: 16px; margin-bottom: 20px; }
 .editFieldsRow > div { flex: 1; }
 .editActions { display: flex; gap: 10px; margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--border); }
@@ -572,6 +575,17 @@
 .pvReset { margin-top:14px; display:inline-flex; align-items:center; gap:6px; font-family:inherit; font-size:12px; font-weight:600;
             color:#1F3C84; background:#F8FAFC; border:0.5px solid #E2E8F0; border-radius:8px; padding:6px 12px; cursor:pointer; transition:all .15s ease; }
 .pvReset:hover { background:#EEF1F6; border-color:#CBD5E1; }
+
+/* Group header + child indicator -- mirrors the sidebar's own parent/sub-item
+   nesting (e.g. QL Ops -> Daily/Monthly/Human-Detail/AI-Detail) so page access
+   reads as the same hierarchy an admin already sees in the nav, instead of a
+   flat unrelated list of tiles. */
+.pvGroupHeader { grid-column:1/-1; display:flex; align-items:center; gap:7px; margin-top:4px; padding-top:10px; border-top:1px dashed #E2E8F0; }
+.pvGroupHeader:first-child { margin-top:0; padding-top:0; border-top:none; }
+.pvGroupLabel { font-size:10.5px; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; color:#94A3B8; }
+.pvGroupCount { font-size:10.5px; font-weight:600; color:#B6C0CE; }
+.pvCardChild { border-left:3px solid #DCE3F1; }
+.pvCardChild.pvCardHidden { border-left-color:#E6EAF1; }
 .pvReset svg { width:12px; height:12px; }
 
 /* ============================================================

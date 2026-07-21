@@ -6,7 +6,11 @@ import SnapshotTool from './SnapshotTool'
 import CalculatorTool from './CalculatorTool'
 import { prefetchRoute } from '../lib/routePrefetch'
 
-const NAV = [
+// Exported so Settings > User Access can derive its page-visibility grouping
+// from this exact same structure (single source of truth for the sidebar's
+// parent -> sub-page hierarchy), instead of a second, hand-maintained mapping
+// that could drift out of sync with the real nav.
+export const NAV = [
   {
     label: 'Intelligence',
     items: [

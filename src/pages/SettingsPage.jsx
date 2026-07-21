@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import Sidebar, { PAGE_LIST } from '../components/Sidebar'
+import Sidebar, { PAGE_LIST, NAV } from '../components/Sidebar'
 import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole } from '../hooks/useAuth'
 import { getActivityLog } from '../components/ActivityLogger.js'
 import { toast } from '../components/ToastHost'
@@ -202,6 +202,44 @@ const getRoleMeta = (role) => {
 }
 
 const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings')
+
+// Groups the flat DASHBOARDS list to match the sidebar's real parent -> child
+// nesting (Sidebar.jsx's NAV, imported above -- single source of truth, not a
+// second hand-maintained mapping). A parent's sub-items only form a group here
+// when EVERY one of them is matchType:'route' -- a genuinely separate page with
+// its own PAGE_LIST id (e.g. QL Ops's Daily/Monthly/Human-Detail/AI-Detail).
+// Meta Ads / Google Ads are matchType:'query' (tabs on one shared page, not
+// distinct pages), so they're excluded automatically -- there's no separate
+// per-tab id to toggle yet, not a hardcoded exception. If a NEW parent+subItems
+// section is ever added the QL-Ops way (real routes), it groups here for free;
+// if it's added the Meta/Google-Ads way (query tabs), it stays a single flat
+// tile until per-tab page ids are actually built -- see CLAUDE.md.
+function buildPageAccessGroups(dashboards) {
+  const byId = Object.fromEntries(dashboards.map(d => [d.id, d]))
+  const byPath = Object.fromEntries(dashboards.map(d => [d.path, d.id]))
+  const consumed = new Set()
+  const rows = []
+  NAV.forEach(section => {
+    section.items.forEach(item => {
+      const routeSubs = (item.subItems || []).filter(s => s.matchType === 'route')
+      if (routeSubs.length && routeSubs.length === item.subItems.length) {
+        const children = routeSubs.map(s => byId[byPath[s.to]]).filter(Boolean)
+        if (children.length) {
+          children.forEach(d => consumed.add(d.id))
+          rows.push({ type: 'group', label: item.label, children })
+          return
+        }
+      }
+      const dash = dashboards.find(d => d.label === item.label)
+      if (dash && !consumed.has(dash.id)) { consumed.add(dash.id); rows.push({ type: 'single', dash }) }
+    })
+  })
+  // Anything in PAGE_LIST that isn't reachable from NAV at all (shouldn't
+  // normally happen, but fail open rather than silently drop a page).
+  dashboards.forEach(d => { if (!consumed.has(d.id)) rows.push({ type: 'single', dash: d }) })
+  return rows
+}
+const PAGE_ACCESS_GROUPS = buildPageAccessGroups(DASHBOARDS)
 
 const DATA_SOURCES = [
   { name: 'Meta Graph API',       src: 'act_641914389215638', rows: 'live', disconnectable: true },
@@ -1606,22 +1644,36 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 </div>
                 {prefLoading?<div style={{fontSize:12,color:'#94A3B8'}}>Loading…</div>:
                   <div className={styles.pvGrid}>
-                {DASHBOARDS.map(page=>{
-                  const isHidden=hiddenPages.includes(page.id)
-                  return(
-                    <div key={page.id} onClick={()=>togglePageVisibility(page.id)} className={`${styles.pvCard} ${isHidden?styles.pvCardHidden:''}`}>
-                      <div className={styles.pvIcon}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                          {isHidden?<><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}
-                        </svg>
+                {PAGE_ACCESS_GROUPS.map(row => {
+                  const renderTile = (page, isChild) => {
+                    const isHidden = hiddenPages.includes(page.id)
+                    return (
+                      <div key={page.id} onClick={()=>togglePageVisibility(page.id)} className={`${styles.pvCard} ${isHidden?styles.pvCardHidden:''} ${isChild?styles.pvCardChild:''}`}>
+                        <div className={styles.pvIcon}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                            {isHidden?<><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}
+                          </svg>
+                        </div>
+                        <div className={styles.pvBody}>
+                          <div className={styles.pvName}>{page.label}</div>
+                          <div className={styles.pvSub}>{isHidden?'Hidden — all users':'Visible to all'}</div>
+                        </div>
+                        <div className={styles.pvToggle}><div className={styles.pvKnob}/></div>
                       </div>
-                      <div className={styles.pvBody}>
-                        <div className={styles.pvName}>{page.label}</div>
-                        <div className={styles.pvSub}>{isHidden?'Hidden — all users':'Visible to all'}</div>
-                      </div>
-                      <div className={styles.pvToggle}><div className={styles.pvKnob}/></div>
-                    </div>
-                  )
+                    )
+                  }
+                  if (row.type === 'group') {
+                    return (
+                      <React.Fragment key={row.label}>
+                        <div className={styles.pvGroupHeader}>
+                          <span className={styles.pvGroupLabel}>{row.label}</span>
+                          <span className={styles.pvGroupCount}>{row.children.length} pages</span>
+                        </div>
+                        {row.children.map(page => renderTile(page, true))}
+                      </React.Fragment>
+                    )
+                  }
+                  return renderTile(row.dash, false)
                 })}
               </div>
                 }
@@ -1801,13 +1853,18 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
                           {editIsViewer && (
                             <div className={styles.dashGrid}>
-                              {DASHBOARDS.map(d => {
+                              {PAGE_ACCESS_GROUPS.flatMap(row => row.type === 'group'
+                                ? [{ isHeader: true, key: row.label, label: row.label }, ...row.children.map(d => ({ dash: d, isChild: true }))]
+                                : [{ dash: row.dash, isChild: false }]
+                              ).map((row, i) => {
+                                if (row.isHeader) return <div key={row.key} className={styles.dashGroupHeader}>{row.label}</div>
+                                const d = row.dash
                                 const checked = editIds.includes(d.id)
                                 const gHidden = hiddenPages.includes(d.id)
                                 return (
                                   <label key={d.id}
                                     title={gHidden?'Globally hidden — change in Global Page Visibility above':undefined}
-                                    className={`${styles.dashChip} ${checked&&!gHidden?styles.dashChipActive:''}`}
+                                    className={`${styles.dashChip} ${checked&&!gHidden?styles.dashChipActive:''} ${row.isChild?styles.dashChipChild:''}`}
                                     style={gHidden?{opacity:0.38,cursor:'not-allowed',filter:'grayscale(1)'}:{}}>
                                     <input type="checkbox" checked={checked&&!gHidden} disabled={gHidden}
                                       onChange={()=>!gHidden&&setEditIds(p=>checked?p.filter(x=>x!==d.id):[...p,d.id])} />
