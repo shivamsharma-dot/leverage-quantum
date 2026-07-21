@@ -343,14 +343,13 @@
 }
 .collapsedFlyoutNotch {
   position: absolute;
-  left: -6px;
+  left: -5px;
   width: 12px; height: 12px;
   background: var(--card);
   border-left: 0.5px solid var(--card-border);
   border-bottom: 0.5px solid var(--card-border);
   transform: rotate(45deg);
   border-radius: 0 0 0 3px;
-  z-index: -1;
 }
 .collapsedFlyoutHeader {
   font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
