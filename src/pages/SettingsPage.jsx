@@ -5,7 +5,7 @@ import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole
 import { getActivityLog } from '../components/ActivityLogger.js'
 import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
-import { useDesignStyle, setDesignStyle } from '../lib/designSettings'
+import { useDesignStyle, saveDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
 import styles from './SettingsPage.module.css'
 
@@ -818,12 +818,18 @@ export default function SettingsPage() {
       }
 
   // Live design-system pickers (Button / KPI card / Login page) -- selecting
-  // any one calls setDesignStyle, which persists it and instantly re-skins
-  // every matching component across the whole app via a same-tab CustomEvent,
-  // no reload needed. useDesignStyle keeps this picker's own highlight in sync.
+  // any one saves to Supabase (app_preferences, admin-only) so it applies for
+  // every signed-in user, not just this browser, then instantly re-skins every
+  // matching component locally too via a same-tab CustomEvent, no reload needed.
+  // useDesignStyle keeps this picker's own highlight in sync.
   const buttonStyleId = useDesignStyle('button')
   const kpiStyleId = useDesignStyle('kpi')
   const loginStyleId = useDesignStyle('login')
+
+  const pickDesignStyle = async (kind, id) => {
+    const { success, error } = await saveDesignStyle(kind, id)
+    if (!success) toast('Saved locally only -- ' + error, { type: 'muted' })
+  }
 
   const [activeTheme, setActiveTheme] = useState(() => localStorage.getItem('lq_theme') || 'light')
   const applyTheme = (themeId) => {
@@ -2464,7 +2470,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const id = i + 1
                     const active = buttonStyleId === id
                     return (
-                      <div key={id} onClick={() => setDesignStyle('button', id)} style={{
+                      <div key={id} onClick={() => pickDesignStyle('button', id)} style={{
                         cursor: 'pointer', borderRadius: 12, padding: 12, border: `1.5px solid ${active ? '#1F3C84' : '#E2E8F0'}`,
                         background: active ? '#F0FBFF' : '#fff', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
                         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center',
@@ -2485,7 +2491,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const id = i + 1
                     const active = kpiStyleId === id
                     return (
-                      <div key={id} onClick={() => setDesignStyle('kpi', id)} style={{
+                      <div key={id} onClick={() => pickDesignStyle('kpi', id)} style={{
                         cursor: 'pointer', borderRadius: 12, padding: 10, border: `1.5px solid ${active ? '#1F3C84' : '#E2E8F0'}`,
                         background: active ? '#F0FBFF' : '#fff', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
                         display: 'flex', flexDirection: 'column', gap: 8,
@@ -2508,7 +2514,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const id = i + 1
                     const active = loginStyleId === id
                     return (
-                      <div key={id} onClick={() => setDesignStyle('login', id)} style={{
+                      <div key={id} onClick={() => pickDesignStyle('login', id)} style={{
                         cursor: 'pointer', borderRadius: 10, padding: '10px 12px', border: `1.5px solid ${active ? '#1F3C84' : '#E2E8F0'}`,
                         background: active ? '#F0FBFF' : '#fff', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
                         fontSize: 11.5, fontWeight: 600, color: active ? '#1F3C84' : '#64748B', textAlign: 'center', lineHeight: 1.35,

@@ -42,6 +42,40 @@ export function setDesignStyle(kind, value) {
   } catch { /* ignore */ }
 }
 
+// Applies a value that just arrived from Supabase (via /api/preferences) to this
+// tab's localStorage cache + live listeners, WITHOUT re-POSTing it back to the
+// server -- used by AuthProvider's initial prefs fetch so every signed-in user's
+// browser picks up the org-wide style, not just the admin who set it.
+export function applyRemoteDesignStyle(kind, value) {
+  if (value == null) return
+  setDesignStyle(kind, value)
+}
+
+// Persists a pick to Supabase (app_preferences, same table/pattern as hidden_pages)
+// so it applies for every signed-in user, not just this browser. Admin-only on the
+// server; the Appearance tab that calls this is already admin-gated client-side.
+// Falls back to a local-only apply (with a toast) if the write fails, so the picker
+// still visibly responds instead of looking broken.
+export async function saveDesignStyle(kind, value) {
+  try {
+    const r = await fetch('/api/preferences', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: DESIGN_KEYS[kind], value }),
+    })
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}))
+      throw new Error(data.error || 'Save failed')
+    }
+    setDesignStyle(kind, value)
+    return { success: true }
+  } catch (e) {
+    setDesignStyle(kind, value) // still apply locally so the picker isn't unresponsive
+    return { success: false, error: e.message }
+  }
+}
+
 // React hook: any component (Button, KPICard, LoginPage, the Settings picker
 // itself) calls this to get the live-updating current variant id for a kind.
 export function useDesignStyle(kind) {

@@ -6,7 +6,19 @@ import { getSessionUser, supabaseAdmin } from '../lib/auth.mjs'
 
 export default async function handler(req, res) {
   const me = getSessionUser(req)
-  if (!me) return res.status(401).json({ error: 'Not signed in' })
+
+  // Unauthenticated GET ?global=1 — the login page needs its org-wide style pick
+  // before anyone has signed in. Whitelisted to ONLY the login design-style key;
+  // every other preference (hidden pages, sheet URLs, Slack webhook, etc.) still
+  // requires a real session below.
+  if (!me) {
+    if (req.method === 'GET' && req.query.global === '1') {
+      const r = await supabaseAdmin('app_preferences?select=key,value&key=eq.lq_login_style')
+      const rows = r.ok ? await r.json() : []
+      return res.status(200).json({ prefs: Object.fromEntries(rows.map(row => [row.key, row.value])) })
+    }
+    return res.status(401).json({ error: 'Not signed in' })
+  }
 
   // GET — global flag: anyone can read the global hidden_pages (needed for Sidebar)
   if (req.method === 'GET') {

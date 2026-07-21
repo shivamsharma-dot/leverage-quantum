@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GoogleLogin } from '@react-oauth/google'
 import { useAuth } from '../hooks/useAuth'
-import { useDesignStyle } from '../lib/designSettings'
+import { useDesignStyle, applyRemoteDesignStyle } from '../lib/designSettings'
 import styles from './LoginPage.module.css'
 
 const ALLOWED_DOMAIN = 'leverageedu.com'
@@ -36,6 +36,16 @@ export default function LoginPage() {
   }, [])
 
   useEffect(() => { if (user) navigate('/') }, [user, navigate])
+
+  // Pull the org-wide login style (set by an admin in Settings > Appearance) --
+  // unauthenticated at this point, so this hits the whitelisted ?global=1 path
+  // rather than the normal session-gated /api/preferences fetch.
+  useEffect(() => {
+    fetch('/api/preferences?global=1', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => applyRemoteDesignStyle('login', data?.prefs?.lq_login_style))
+      .catch(() => {}) // fail silently -- localStorage/default fallback stays
+  }, [])
 
   const handleGoogleSuccess = async (credentialResponse) => {
     setError('')
