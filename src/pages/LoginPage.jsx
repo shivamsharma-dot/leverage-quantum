@@ -183,7 +183,7 @@ export default function LoginPage() {
   switch (variant) {
     case 2: // split screen
       return (
-        <div className={styles.lScene}>
+        <div className={styles.lFullScene}>
           <div className={styles.lSplit}>
             <div className={styles.lBrandPanel}>
               <div>
@@ -223,7 +223,7 @@ export default function LoginPage() {
       )
     case 4: // product preview + narrow sign-in
       return (
-        <div className={styles.lScene}>
+        <div className={styles.lFullScene}>
           <div className={styles.lPreviewSplit}>
             <div className={styles.lPreviewPanel}>
               <div className={styles.lKpiRow}>
@@ -271,7 +271,7 @@ export default function LoginPage() {
       )
     case 7: // bento grid brand panel
       return (
-        <div className={styles.lScene}>
+        <div className={styles.lFullScene}>
           <div className={styles.lSplit}>
             <div className={styles.lBento}>
               <div className={`${styles.lBentoTile} ${styles.lBentoBrand}`}>{brandLogo(true)}<span>QUANTUM</span></div>
@@ -333,7 +333,7 @@ export default function LoginPage() {
       )
     case 11: // testimonial split
       return (
-        <div className={styles.lScene}>
+        <div className={styles.lFullScene}>
           <div className={styles.lSplit}>
             <div className={styles.lQuotePanel}>
               <blockquote>"Quantum is the first place I check every morning — everything's already there."</blockquote>
