@@ -187,9 +187,9 @@ export default function BingAdsDashboard() {
   const colsByTab = { campaigns: campaignCols, adGroups: adGroupCols, keywords: keywordCols, searchTerms: searchTermCols }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: C.bg, fontFamily: FONT }}>
+    <div className="lq-page-shell" style={{ display: 'flex', minHeight: '100vh', background: C.bg, fontFamily: FONT }}>
       <Sidebar />
-      <main style={{ flex: 1, padding: '28px 32px', overflowX: 'hidden' }}>
+      <main style={{ flex: 1, padding: '28px 32px', overflowX: 'hidden', minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
           <div style={{ width: 40, height: 40, borderRadius: 11, background: C.cyanBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <BingIcon />
@@ -201,7 +201,7 @@ export default function BingAdsDashboard() {
         </div>
 
         {!notConnected && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '22px 0 4px' }}>
+          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, margin: '22px 0 4px' }}>
             <PremKPI label="Spend" value={fmtMoney(kpiSpend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="Clicks" value={fmtN(kpiClicks)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label="Impressions" value={fmtN(kpiImpr)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} />
@@ -209,7 +209,7 @@ export default function BingAdsDashboard() {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid ' + C.border, margin: '20px 0 24px' }}>
+        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid ' + C.border, margin: '20px 0 24px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
               background: 'none', border: 'none', cursor: 'pointer', fontFamily: FONT, fontSize: 13.5,

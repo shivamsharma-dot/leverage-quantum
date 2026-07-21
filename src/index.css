@@ -178,6 +178,10 @@ input:focus, textarea:focus {
   .lq-chart-grid {
     flex-direction: column !important;
   }
+  /* Two-column chart/table grid pairs: stack to one column */
+  .lq-grid2 {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 /* Smallest screens ≤480px: single column KPI */

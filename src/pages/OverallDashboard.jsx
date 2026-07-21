@@ -923,7 +923,7 @@ export default function OverallDashboard() {
         {/* HEADER — same structure/behavior as the Daily QLs header (QL Ops): inline filter
             label in the title, LD/L7D/MTD pill group, month Dropdown, Custom calendar range,
             Source dropdown, Synced, Refresh, Export, info popover. */}
-        <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${C.border}`, padding:'0 28px', minHeight:56, height:'auto', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, overflow:'visible' }}>
+        <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${C.border}`, padding:'10px 28px', minHeight:56, height:'auto', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, overflow:'visible', flexWrap:'wrap' }}>
           <div>
             <p style={{ fontSize:10.5, color:C.muted, margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / Overall</p>
             <h1 style={{ fontSize:18, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.4px', fontFamily:FONT }}>
@@ -936,7 +936,7 @@ export default function OverallDashboard() {
                   : <span>{selMonth || '-'}</span>}
             </h1>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflow:'visible', flexShrink:1, minWidth:0 }}>
+          <div className="lq-header-controls" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflow:'visible', flexShrink:1, minWidth:0 }}>
 
             <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', background:'#F8FAFC', padding:'6px 10px', borderRadius:12, border:'0.5px solid #E5E7EB' }}>
               {isCurrentMonth && (
@@ -1043,7 +1043,7 @@ export default function OverallDashboard() {
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
 
           {/* KPI ROW — with vs-previous-period deltas */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(6, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(6, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="FLOOR QUEUED" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} delta={deltaPct(kpis.floorQueued, prevKpis.floorQueued)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             <PremKPI label="TOTAL QUEUED" value={fmtN(totalQueued)} sub={'Futwork ' + fmtN(kpis.futworkQ) + ' · Superbot ' + fmtN(kpis.superbotQ)} delta={deltaPct(totalQueued, prevTotalQueued)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
@@ -1080,7 +1080,7 @@ export default function OverallDashboard() {
           </Card>
 
           {/* SOURCE VOLUME + SOURCE EFFICIENCY */}
-          <div style={{ ...grid2, marginTop:16 }}>
+          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
             <Card>
               {sectionTitle('Leads by source', 'volume leaders this period')}
               <RankedBars data={bySource.slice(0, 8).map(s => ({ source:s.source, count:s.leads }))} labelKey="source" max={maxSourceLeads} total={totalSourceLeads} colorFn={brandColor} showRank />
@@ -1092,7 +1092,7 @@ export default function OverallDashboard() {
           </div>
 
           {/* MONTH TREND + DAILY TREND */}
-          <div style={{ ...grid2, marginTop:16 }}>
+          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
             <Card>
               {sectionTitle('Month-on-month trend', 'leads, queued and total QL by month')}
               <ResponsiveContainer width="100%" height={260}>
@@ -1130,7 +1130,7 @@ export default function OverallDashboard() {
           </div>
 
           {/* TOP MOVERS — what to scale, framed for decisions */}
-          <div style={{ ...grid2, marginTop:16 }}>
+          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
             <Card>
               {sectionTitle('Top campaigns by volume', 'where the leads are coming from right now')}
               <RankedBars data={topCampaignsByLeads.map(c => ({ campaign:c.campaign, count:c.leads }))} labelKey="campaign" max={topCampaignsByLeads.length ? topCampaignsByLeads[0].leads : 1} total={totalSourceLeads} colorFn={brandColor} showRank />

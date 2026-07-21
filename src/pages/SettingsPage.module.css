@@ -295,6 +295,18 @@
   .roleOptions { flex-direction: column; }
 }
 
+/* Mobile responsive: clear the fixed mobile top bar rendered by Sidebar */
+@media (max-width: 768px) {
+  .layout {
+    padding-top: 52px !important;
+  }
+  .tabBar {
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 /* ============================================================
    USER ACCESS — SingleInterface-style layout · Quantum brand
    ============================================================ */
