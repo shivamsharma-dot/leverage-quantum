@@ -326,26 +326,32 @@
 .collapsedFlyout {
   position: fixed;
   left: 60px;
-  min-width: 190px;
+  min-width: 224px;
   background: var(--card);
   border: 0.5px solid var(--card-border);
-  border-radius: 12px;
-  box-shadow: 0 8px 28px rgba(15,23,42,0.14), 0 2px 6px rgba(15,23,42,0.06);
-  padding: 6px;
+  border-radius: 14px;
+  box-shadow: 0 10px 32px rgba(15,23,42,0.16), 0 2px 8px rgba(15,23,42,0.07);
+  padding: 8px;
   z-index: 500;
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: 3px;
+  animation: flyoutIn .09s cubic-bezier(0.2,0.6,0.3,1) both;
+  transform-origin: left center;
+}
+@keyframes flyoutIn {
+  from { opacity: 0; transform: scale(0.96) translateX(-3px); }
+  to { opacity: 1; transform: scale(1) translateX(0); }
 }
 .collapsedFlyoutHeader {
   font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
-  font-size: 10.5px; font-weight: 700;
+  font-size: 11px; font-weight: 800;
   color: #9CA3AF;
   letter-spacing: 0.06em; text-transform: uppercase;
-  padding: 6px 10px 8px;
+  padding: 7px 12px 9px;
 }
 .collapsedFlyoutItem {
-  padding: 8px 10px; border-radius: 8px;
+  padding: 11px 12px; border-radius: 9px;
   font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
-  font-size: 13px; font-weight: 500;
+  font-size: 14.5px; font-weight: 600;
   color: #4B5563;
   cursor: pointer; transition: all .12s;
 }

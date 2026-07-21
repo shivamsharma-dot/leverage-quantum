@@ -460,7 +460,7 @@ export default function Sidebar() {
           )))}
         </div>
         {flyout && (
-          <div className={styles.collapsedFlyout} style={{ top: Math.min(flyout.top, window.innerHeight - 16 - flyout.subItems.length * 38 - 44) }}
+          <div className={styles.collapsedFlyout} style={{ top: Math.min(flyout.top, window.innerHeight - 16 - flyout.subItems.length * 44 - 48) }}
             onMouseEnter={cancelCloseFlyout} onMouseLeave={scheduleCloseFlyout}>
             <div className={styles.collapsedFlyoutHeader}>{flyout.label}</div>
             {flyout.subItems.map(sub => (
