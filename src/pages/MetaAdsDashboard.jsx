@@ -563,6 +563,19 @@ function copyAdName(e, name) {
   toast._removeT = setTimeout(()=>{ toast.remove() }, 1700)
 }
 const CREATIVE_COL_ORDER_KEY = 'lq_meta_creatives_col_order'
+// Columns whose underlying sort value isn't just `ad[key]` (a computed value, or the
+// field is named differently than the column key) get an explicit getter here.
+const CREATIVE_SORT_VALUE = {
+  name: a => a.name || '',
+  corridor: a => a.corridor || '',
+  type: a => a.type || '',
+  health: a => a.fatigueLabel || '',
+  delta: a => a.crmLeads != null ? (a.crmLeads - (a.leads || 0)) : null,
+  freq: a => a.frequency || 0,
+  wowCtr: a => a.ctrDelta,
+}
+// Categorical/text columns default to A-Z (ascending) on first click, not high-to-low.
+const CREATIVE_SORT_ALPHA = new Set(['name', 'corridor', 'type', 'health'])
 const CREATIVE_COLS = [
   { key:'leads', label:'Leads', width:90, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151' }}>{ad.leads||'—'}</div> },
   { key:'crmLeads', label:'CRM Leads', width:100, align:'center', render:(ad)=><div style={{ fontSize:12,color:'#374151',textAlign:'center' }}>{ad.crmLeads==null?'—':ad.crmLeads.toLocaleString('en-IN')}</div> },
@@ -679,6 +692,8 @@ function CreativesTab({ data, token }) {
   const [corridorFilter, setCorridorFilter] = useState('all')
   const [openFilterMenu, setOpenFilterMenu] = useState(null)
   const [sortBy, setSortBy] = useState('spend')
+  const [sortDir, setSortDir] = useState('desc')
+  const handleSort = col => { if (sortBy === col) setSortDir(d => d==='desc'?'asc':'desc'); else { setSortBy(col); setSortDir(CREATIVE_SORT_ALPHA.has(col) ? 'asc' : 'desc') } }
   const [adNameSearch, setAdNameSearch] = useState('')
   const [showBackToTop, setShowBackToTop] = useState(false)
   const backTopRef = useRef(null)
@@ -736,8 +751,17 @@ function CreativesTab({ data, token }) {
     else if (healthFilter==='fatigue') out=out.filter(a=>a.fatigueLabel==='High Fatigue')
     if (corridorFilter!=='all') out=out.filter(a=>a.corridorId===corridorFilter)
     if (adNameSearch) out=out.filter(a=>a.name?.toLowerCase().includes(adNameSearch.toLowerCase()))
-    return [...out].sort((a,b)=>sortBy==='score'?b.score-a.score:(b[sortBy]||0)-(a[sortBy]||0))
-  }, [processed,adTypeFilter,statusFilter,healthFilter,corridorFilter,adNameSearch,sortBy])
+    const getVal = CREATIVE_SORT_VALUE[sortBy] || (a => a[sortBy])
+    return [...out].sort((a,b) => {
+      let av = getVal(a), bv = getVal(b)
+      if (typeof av === 'string' || typeof bv === 'string') {
+        av = av || ''; bv = bv || ''
+        return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
+      }
+      av = av == null ? -Infinity : av; bv = bv == null ? -Infinity : bv
+      return sortDir === 'asc' ? (av - bv) : (bv - av)
+    })
+  }, [processed,adTypeFilter,statusFilter,healthFilter,corridorFilter,adNameSearch,sortBy,sortDir])
   const exportRows = useMemo(() => filtered.map(ad => ({
     Creative: ad.name || '',
     Leads: ad.leads || 0,
@@ -832,7 +856,7 @@ function CreativesTab({ data, token }) {
     return { spend, impressions, clicks, leads, cpl, cplCrm, crmLeads, humanQL, aiQL, totalQL, cpql, ctr, reach, cpm, cpc, frequency, active };
   }, [filtered, adTypeFilter, statusFilter, healthFilter, adNameSearch, accSpend, accImpr, accClicks, accLeads])
   const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
-  useEffect(() => { setPage(1) }, [adTypeFilter,healthFilter,adNameSearch,sortBy,viewMode,filtered.length])
+  useEffect(() => { setPage(1) }, [adTypeFilter,healthFilter,adNameSearch,sortBy,sortDir,viewMode,filtered.length])
   const safePage = Math.min(page, pageCount)
   const pageItems = filtered.slice((safePage-1)*PER_PAGE, safePage*PER_PAGE)
   const summary = useMemo(() => ({
@@ -869,19 +893,26 @@ function CreativesTab({ data, token }) {
   const SB=({score})=>(<div style={{ display:'flex',alignItems:'center',gap:5 }}><div style={{ flex:1,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:score+'%',background:score>65?'#4CAE6F':score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,fontWeight:700,color:'#6B7280',minWidth:22 }}>{score}</span></div>)
   return (
     <div style={{ fontFamily:"'Plus Jakarta Sans','Inter',sans-serif" }}>
-        <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:14,marginBottom:18 }}>
-          {[
-            { key:'spend', label:'PERIOD SPEND', value:fmtINR(kpiStats.spendSum), sub:((n=>n>=1e7?(n/1e7).toFixed(2)+' Cr':n>=1e5?(n/1e5).toFixed(2)+' L':n>=1e3?(n/1e3).toFixed(1)+'K':String(Math.round(n||0))))(kpiStats.imprSum)+' impressions', c1:'#1C9FD4', c2:'#29B9C3', icon:'₹' },
-            { key:'leads', label:'LEADS', value:kpiStats.leadsSum.toLocaleString('en-IN'), sub:'in selected range', c1:'#4CAE6F', c2:'#34D399', icon:'◉' },
-            { key:'cpl', label:'CPL', value:kpiStats.cpl>0?'₹'+kpiStats.cpl.toLocaleString('en-IN'):'—', sub:'cost per lead', c1:'#1F3C84', c2:'#3D5BB8', icon:'▲' },
+        {(() => {
+          const fmtShort = n => n>=1e7?(n/1e7).toFixed(2)+' Cr':n>=1e5?(n/1e5).toFixed(2)+' L':n>=1e3?(n/1e3).toFixed(1)+'K':String(Math.round(n||0))
+          const spendFull = '₹'+Math.round(kpiStats.spendSum).toLocaleString('en-IN')
+          const metaKpis = [
+            { key:'spend', label:'PERIOD SPEND', value:`${spendFull} (${fmtShort(kpiStats.spendSum)})`, sub:fmtShort(kpiStats.imprSum)+' impressions', c1:'#1C9FD4', c2:'#29B9C3', icon:'₹' },
+            { key:'impr', label:'IMPRESSIONS', value:fmtShort(kpiStats.imprSum), sub:kpiStats.clicksSum.toLocaleString('en-IN')+' clicks', c1:'#0E7490', c2:'#1C9FD4', icon:'◫' },
+            { key:'leads', label:'META LEADS', value:kpiStats.leadsSum.toLocaleString('en-IN'), sub:'in selected range', c1:'#4CAE6F', c2:'#34D399', icon:'◉' },
+            { key:'cpl', label:'META CPL', value:kpiStats.cpl>0?'₹'+kpiStats.cpl.toLocaleString('en-IN'):'—', sub:'cost per lead', c1:'#1F3C84', c2:'#3D5BB8', icon:'▲' },
             { key:'creatives', label:'CREATIVES', value:kpiStats.activeCount.toLocaleString('en-IN'), sub:'active of '+kpiStats.total.toLocaleString('en-IN')+' total', c1:'#0E7490', c2:'#22A7BC', icon:'▦' },
-            { key:'ctr', label:'AVG CTR', value:kpiStats.ctr.toFixed(2)+'%', sub:kpiStats.clicksSum.toLocaleString('en-IN')+' clicks', c1:'#2563A8', c2:'#1C9FD4', icon:'↗' }, { key:'crm', label:'CRM LEADS', value:(crmSummary.hasCrm?(crmSummary.crmTotal||0).toLocaleString('en-IN'):'—'), sub:(crmSummary.hasCrm?('vs '+(crmSummary.metaLeadsSum||0).toLocaleString('en-IN')+' Meta · '+(((crmSummary.crmTotal||0)-(crmSummary.metaLeadsSum||0))>=0?'+':'')+((crmSummary.crmTotal||0)-(crmSummary.metaLeadsSum||0)).toLocaleString('en-IN')):'no CRM match'), c1:'#1C9FD4', c2:'#29B9C3', icon:'↻' }, { key:'cplCrm', label:'CPL (CRM)', value:kpiStats.cplCrm>0?'₹'+kpiStats.cplCrm.toLocaleString('en-IN'):'—', sub:kpiStats.cpl>0?('vs ₹'+kpiStats.cpl.toLocaleString('en-IN')+' Meta CPL'):'cost per CRM lead', c1:'#1F3C84', c2:'#1C9FD4', icon:'◈' },
+            { key:'ctr', label:'AVG CTR', value:kpiStats.ctr.toFixed(2)+'%', sub:kpiStats.clicksSum.toLocaleString('en-IN')+' clicks', c1:'#2563A8', c2:'#1C9FD4', icon:'↗' },
+          ]
+          const crmKpis = [
+            { key:'crm', label:'CRM LEADS', value:(crmSummary.hasCrm?(crmSummary.crmTotal||0).toLocaleString('en-IN'):'—'), sub:(crmSummary.hasCrm?('vs '+(crmSummary.metaLeadsSum||0).toLocaleString('en-IN')+' Meta · '+(((crmSummary.crmTotal||0)-(crmSummary.metaLeadsSum||0))>=0?'+':'')+((crmSummary.crmTotal||0)-(crmSummary.metaLeadsSum||0)).toLocaleString('en-IN')):'no CRM match'), c1:'#1C9FD4', c2:'#29B9C3', icon:'↻' },
+            { key:'cplCrm', label:'CPL (CRM)', value:kpiStats.cplCrm>0?'₹'+kpiStats.cplCrm.toLocaleString('en-IN'):'—', sub:kpiStats.cpl>0?('vs ₹'+kpiStats.cpl.toLocaleString('en-IN')+' Meta CPL'):'cost per CRM lead', c1:'#1F3C84', c2:'#1C9FD4', icon:'◈' },
+            { key:'cpql', label:'CPQL', value:kpiStats.cpql>0?'₹'+kpiStats.cpql.toLocaleString('en-IN'):'—', sub:'cost per qualified lead (Human + AI)', c1:'#1F3C84', c2:'#4CAE6F', icon:'◈' },
+            { key:'totalQL', label:'TOTAL QLS', value:kpiStats.totalQL>0?kpiStats.totalQL.toLocaleString('en-IN'):'—', sub:'human + AI qualified leads', c1:'#4CAE6F', c2:'#1F3C84', icon:'✓' },
             { key:'humanQL', label:'FUTWORK HUMAN QLs', value:kpiStats.humanQLTotal>0?kpiStats.humanQLTotal.toLocaleString('en-IN'):'—', sub:'in selected range, per matched ad', c1:'#4CAE6F', c2:'#29B9C3', icon:'✓' },
             { key:'aiQL', label:'FUTWORK AI QLs', value:kpiStats.aiQLTotal>0?kpiStats.aiQLTotal.toLocaleString('en-IN'):'—', sub:'in selected range, per matched ad', c1:'#29B9C3', c2:'#1C9FD4', icon:'✓' },
-            { key:'cpql', label:'CPQL', value:kpiStats.cpql>0?'₹'+kpiStats.cpql.toLocaleString('en-IN'):'—', sub:'cost per qualified lead (Human + AI)', c1:'#1F3C84', c2:'#4CAE6F', icon:'◈' },
-            { key:'impr', label:'IMPRESSIONS', value:((n=>n>=1e7?(n/1e7).toFixed(2)+' Cr':n>=1e5?(n/1e5).toFixed(2)+' L':n>=1e3?(n/1e3).toFixed(1)+'K':String(Math.round(n||0))))(kpiStats.imprSum), sub:kpiStats.clicksSum.toLocaleString('en-IN')+' clicks', c1:'#0E7490', c2:'#1C9FD4', icon:'◫' },
-            { key:'totalQL', label:'TOTAL QLS', value:kpiStats.totalQL>0?kpiStats.totalQL.toLocaleString('en-IN'):'—', sub:'human + AI qualified leads', c1:'#4CAE6F', c2:'#1F3C84', icon:'✓' },
-          ].map(k => (
+          ]
+          const KpiCard = k => (
             <div key={k.key} style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'16px 18px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)' }}>
               <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:'linear-gradient(90deg,'+k.c1+','+k.c2+')' }} />
               <div style={{ position:'absolute', top:-28, right:-28, width:96, height:96, borderRadius:'50%', background:'linear-gradient(135deg,'+k.c1+'14,'+k.c2+'05)' }} />
@@ -889,11 +920,21 @@ function CreativesTab({ data, token }) {
                 <div style={{ width:30, height:30, borderRadius:9, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, color:'#fff', background:'linear-gradient(135deg,'+k.c1+','+k.c2+')', boxShadow:'0 4px 10px -2px '+k.c1+'66' }}>{k.icon}</div>
                 <span style={{ fontSize:10.5, fontWeight:700, letterSpacing:'0.07em', color:'#64748B', textTransform:'uppercase' }}>{k.label}</span>
               </div>
-              <div style={{ fontSize:26, fontWeight:800, letterSpacing:'-0.6px', color:'#0F1B33', lineHeight:1.05, position:'relative' }}>{k.value}</div>
+              <div style={{ fontSize:k.key==='spend'?20:26, fontWeight:800, letterSpacing:'-0.6px', color:'#0F1B33', lineHeight:1.15, position:'relative' }}>{k.value}</div>
               <div style={{ fontSize:11.5, color:'#8A94A6', marginTop:5, position:'relative' }}>{k.sub}</div>
             </div>
-          ))}
-        </div>
+          )
+          return (
+            <>
+              <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:14,marginBottom:14 }}>
+                {metaKpis.map(KpiCard)}
+              </div>
+              <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:14,marginBottom:18 }}>
+                {crmKpis.map(KpiCard)}
+              </div>
+            </>
+          )
+        })()}
       <div style={{ display:'flex',gap:6,marginBottom:14,alignItems:'center',flexWrap:'nowrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'8px 10px' }}>
         <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'7px 12px',border:'0.5px solid #E5E7EB',borderRadius:8,fontSize:12.5,fontFamily:'inherit',outline:'none',width:110,minWidth:0,flexShrink:1,flexGrow:0,background:'#FAFAFA' }}/>
         <FilterDropdown label="Format" value={adTypeFilter} options={[{v:'all',l:'All'},{v:'video',l:'Video'},{v:'image',l:'Image'},{v:'carousel',l:'Carousel'}]}
@@ -1031,7 +1072,7 @@ function CreativesTab({ data, token }) {
         <div ref={tableScrollRef} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflowX:'auto' }}>
           <div style={{ minWidth:'100%',width:'fit-content' }}>
           <div style={{ display:'grid',gridTemplateColumns:'40px 260px '+displayOrder.map(colTrackOf).join(' '),padding:'10px 14px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB',gap:8 }}>
-            <div style={{ position:'sticky',left:0,zIndex:3,background:'#F9FAFB' }}/><div style={{ position:'sticky',left:40,zIndex:3,background:'#F9FAFB',fontSize:11,fontWeight:600,color:'#6B7280' }}>Creative</div>
+            <div style={{ position:'sticky',left:0,zIndex:3,background:'#F9FAFB' }}/><div style={{ position:'sticky',left:40,zIndex:3,background:'#F9FAFB',fontSize:11,fontWeight:600,color:'#6B7280' }}><span onClick={()=>handleSort('name')} style={{ cursor:'pointer',userSelect:'none',display:'inline-flex',alignItems:'center',gap:3,color:sortBy==='name'?'#1F3C84':'#6B7280' }}>Creative<span style={{ opacity:sortBy==='name'?1:0.3,fontSize:9 }}>{sortBy==='name'?(sortDir==='desc'?'↓':'↑'):'↕'}</span></span></div>
             {displayOrder.map(k=>{
               const c=CREATIVE_COLS.find(cc=>cc.key===k)
               const isPinned = pinnedCols.includes(k)
@@ -1043,7 +1084,7 @@ function CreativesTab({ data, token }) {
                   onDrop={e=>{ e.preventDefault(); if (dragHeaderKey) reorderTo(dragHeaderKey, k); setDragHeaderKey(null) }}
                   onDragEnd={()=>setDragHeaderKey(null)}
                   style={{ position:isPinned?'sticky':'static',left:isPinned?pinnedLeftMap[k]:undefined,zIndex:isPinned?2:1,background:isPinned?'#F9FAFB':'transparent',borderRight:isPinned&&displayOrder.filter(x=>pinnedCols.includes(x)).slice(-1)[0]===k?'1px solid #E5E7EB':'none',fontSize:11,fontWeight:600,color:'#6B7280',textAlign:c&&c.align==='center'?'center':'left',display:'flex',alignItems:'center',justifyContent:c&&c.align==='center'?'center':'flex-start',gap:4,cursor:isPinned?'default':'grab',opacity:dragHeaderKey===k?0.4:1 }}>
-                  <span style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{c?c.label:k}</span>
+                  <span onClick={e=>{ e.stopPropagation(); handleSort(k) }} style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer',userSelect:'none',display:'inline-flex',alignItems:'center',gap:3,color:sortBy===k?'#1F3C84':'#6B7280' }}>{c?c.label:k}<span style={{ opacity:sortBy===k?1:0.3,fontSize:9,flexShrink:0 }}>{sortBy===k?(sortDir==='desc'?'↓':'↑'):'↕'}</span></span>
                   <span onClick={e=>{ e.stopPropagation(); setHeaderMenuKey(v=>v===k?null:k) }} style={{ cursor:'pointer',color:'#9CA3AF',fontSize:12,flexShrink:0 }}>⋮</span>
                   {headerMenuKey===k && (
                     <>
@@ -1709,17 +1750,29 @@ export default function MetaAdsDashboard() {
                        : preset === 'last_30d'  ? 'last_30d'
                        : 'last_7d'  // last_month/this_month/custom use time_range instead
 
-      // Fetch top-200-by-spend ad IDs directly via sorted insights (fixes: default /ads page
-    // order could omit high-spend ads from the 200-item window, causing missing/mismatched
-    // lead numbers for specific high-spend ads). Falls back to unsorted /ads if this fails.
-    const topAdsIns = await graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
-      fields: 'ad_id,spend',
-      level: 'ad',
-      time_range: timeRange,
-      sort: 'spend_descending',
-      limit: 200,
-    }).catch(() => ({ data: [] }))
-    const topAdIds = (topAdsIns.data || []).map(x => x.ad_id).filter(Boolean)
+      // Fetch spend for EVERY ad in the period (paginated, not capped at a fixed
+      // headcount) and keep any ad that actually spent something -- a real condition,
+      // not an arbitrary top-N-by-spend cutoff. Previously this was capped to the top
+      // 200 by spend, which silently dropped lower-spend ads (and their CRM/QL data)
+      // once the account had more than 200 ads with any spend in the period.
+      const allAdsIns = await graphGetAll(`${AD_ACCOUNT_ID}/insights`, t, {
+        fields: 'ad_id,spend',
+        level: 'ad',
+        time_range: timeRange,
+      }).catch(() => ({ data: [] }))
+      let topAdIds = (allAdsIns.data || [])
+        .filter(x => parseFloat(x.spend || 0) > 0)
+        .sort((a, b) => parseFloat(b.spend || 0) - parseFloat(a.spend || 0))
+        .map(x => x.ad_id)
+        .filter(Boolean)
+      // Safety valve only: Meta's IN-filter is passed as a query-string param, which
+      // can hit URL-length limits with an extremely large ID list. No real account
+      // should have this many ads with spend in one period -- if it ever happens,
+      // keep the biggest spenders rather than fail the whole fetch.
+      if (topAdIds.length > 500) {
+        console.warn(`[meta-ads] ${topAdIds.length} ads with spend this period -- capping IN-filter to top 500 by spend`)
+        topAdIds = topAdIds.slice(0, 500)
+      }
 
     const [accIns, lifetimeIns, campaignsSummary, campaigns, adsRaw, pixels] = await Promise.all([
         // Account-level insights for selected period
@@ -1741,12 +1794,11 @@ export default function MetaAdsDashboard() {
           fields: `name,status,objective,created_time,insights${useTimeRange ? `.time_range(${timeRange})` : `.date_preset(${metaPreset})`}{spend,impressions,clicks,ctr,reach,frequency,actions}`,
           limit: 300
         }),
-        // Ads + creatives - fetch ALL ads (paginated, progressive)
-        // We pass a placeholder promise that resolves on first page, then continues in background
-        graphGet(`${AD_ACCOUNT_ID}/ads`, t, {
+        // Ads + creatives - paginated (not capped at 200) so every ad with real
+        // spend this period is fetched, however many that turns out to be.
+        graphGetAll(`${AD_ACCOUNT_ID}/ads`, t, {
           fields: 'name,status,effective_status,creative{id,name,video_id,object_story_id,instagram_permalink_url,effective_object_story_id},campaign{id,name}',
           ...(topAdIds.length > 0 ? { filtering: JSON.stringify([{ field: 'id', operator: 'IN', value: topAdIds }]) } : {}),
-          limit: 200,
         }),
         graphGet(`${AD_ACCOUNT_ID}/adspixels`, t, { fields: 'id,name,last_fired_time' })
       ])
@@ -1875,68 +1927,9 @@ export default function MetaAdsDashboard() {
       try { localStorage.setItem('meta_cache', JSON.stringify({ d: __metaPayload, t: __ts })) } catch (e) {}
       setLastSync(new Date())
 
-      // Background: fetch remaining ad pages while user is already browsing
-      ;(async () => {
-        if (!adsRaw.paging?.next) return
-        const mkLink = (ad) => {
-          const ig = ad.creative?.instagram_permalink_url || null
-          const osId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || ''
-          const parts = osId.split('_')
-          const fb = parts.length === 2 ? 'https://www.facebook.com/' + parts[0] + '/posts/' + parts[1] : null
-          return ig || fb || 'https://www.facebook.com/ads/library/?id=' + ad.id
-        }
-        const mkPlat = (ad) => {
-          if (ad.creative?.instagram_permalink_url) return 'instagram'
-          const osId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || ''
-          return osId.split('_').length === 2 ? 'facebook' : 'library'
-        }
-        try {
-          const fetchWithTimeout = async (url, ms = 15000) => {
-            const ctrl = new AbortController()
-            const tid = setTimeout(() => ctrl.abort(), ms)
-            try { return await fetch(url, { signal: ctrl.signal }) } finally { clearTimeout(tid) }
-          }
-          let bgPages = 0
-          let nextUrl = adsRaw.paging.next
-          let allAds = adsRaw.data ? [...adsRaw.data] : []
-          while (nextUrl) {
-            if (++bgPages > 60) break
-            let res, lastErr
-            for (let attempt = 0; attempt < 3; attempt++) {
-              try { res = await fetchWithTimeout(nextUrl, 15000); break }
-              catch (err) { lastErr = err; await new Promise(r => setTimeout(r, 1200 * (attempt + 1))) }
-            }
-            if (!res) { console.warn("BG ad page timed out, stopping", lastErr && lastErr.message); break }
-            const pg = await res.json()
-            if (pg.error) break
-            allAds = allAds.concat(pg.data || [])
-            nextUrl = pg.paging?.next || null
-            const moreWithThumbs = allAds.map(ad => ({
-              ...ad,
-              creative: { ...ad.creative, _thumbUrl: creativeThumbs[ad.creative?.id] || null },
-              previewLink: mkLink(ad),
-              previewPlatform: mkPlat(ad),
-            }))
-            setData(prev => prev ? { ...prev, ads: moreWithThumbs } : prev)
-          }
-        // Fetch insights for ads loaded in background so their spend/metrics appear
-        const moreIds = allAds.map(a=>a.id).filter(id=>!(id in insightsMap))
-        if (moreIds.length) {
-          const moreChunks = []
-          for (let i=0;i<moreIds.length;i+=25) moreChunks.push(moreIds.slice(i,i+25))
-          const mInsights = { ...insightsMap }, mPrev = { ...prevInsightsMap }
-          await mapLimit(moreChunks, 3, async chunk => {
-            const [c, p] = await Promise.all([
-              graphGet(`${AD_ACCOUNT_ID}/insights`, t, { fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions', level: 'ad', ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }), filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]), limit: 50 }).catch(()=>({})),
-              graphGet(`${AD_ACCOUNT_ID}/insights`, t, { fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency', level: 'ad', time_range: prevTimeRange, filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]), limit: 50 }).catch(()=>({}))
-            ])
-            ;(c.data || []).forEach(ins => { mInsights[ins.ad_id] = ins })
-            ;(p.data || []).forEach(ins => { mPrev[ins.ad_id] = ins })
-          })
-          setData(prev => prev ? { ...prev, insightsMap: mInsights, prevInsightsMap: mPrev } : prev)
-        }
-        } catch(e) { console.warn('BG ad page fetch stopped:', e.message) }
-      })()
+      // No background-continuation pass needed here anymore -- the /ads fetch above
+      // now uses graphGetAll itself, so every ad matching topAdIds (every real spender
+      // this period) is already fetched up front, not just the first page.
       setDatePreset(preset)
     } catch (e) {
       setError(e.message)
