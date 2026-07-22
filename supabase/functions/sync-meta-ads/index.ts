@@ -6,17 +6,43 @@
 // (see supabase/sql/meta_ads_daily_cache_setup.sql) -- no GitHub Actions or
 // Vercel involved in the recurring operation.
 //
-// Two modes, both driven by the request body:
-//   { "mode": "incremental" }         -- default. Re-syncs only the last 3
-//                                        days (today's numbers are still
-//                                        moving; a couple of days back in
-//                                        case Meta revises attribution
-//                                        slightly late). This is what the
-//                                        30-minute cron schedule calls.
-//   { "mode": "backfill", "months": 6 } -- one-time (or occasional manual)
-//                                        wide historical fetch, e.g. the
-//                                        last 6 calendar months. Not meant
-//                                        to run on a tight schedule.
+// Three request-body shapes:
+//   { "mode": "incremental" }              -- default. Re-syncs only the last
+//                                             3 days (today's numbers are
+//                                             still moving; a couple of days
+//                                             back in case Meta revises
+//                                             attribution slightly late).
+//                                             This is what the 30-minute cron
+//                                             schedule calls.
+//   { "mode": "backfill", "months": 6 }    -- one-time wide historical fetch
+//                                             spanning the last N calendar
+//                                             months, ending today. Not meant
+//                                             to run on a tight schedule --
+//                                             kept mainly for reference; the
+//                                             monthOffset form below is
+//                                             preferred for real backfills
+//                                             (see note further down).
+//   { "mode": "backfill", "monthOffset": 1 } -- single-calendar-month mode:
+//                                             covers exactly ONE month per
+//                                             invocation (0 = current month
+//                                             to date, 1 = last full month,
+//                                             2 = the month before that, ...).
+//                                             A full historical backfill is
+//                                             driven as several separate,
+//                                             real-time-spaced Edge Function
+//                                             calls (monthOffset 0,1,2,...,5
+//                                             for 6 months) rather than one
+//                                             giant execution -- confirmed
+//                                             live that cramming many months
+//                                             of per-day insight fetches into
+//                                             one execution trips Meta's
+//                                             "reduce the amount of data"
+//                                             complexity error (code=100,
+//                                             subcode=1504018) even once each
+//                                             individual request's date span
+//                                             is already chunked to <=7 days;
+//                                             spacing the load across
+//                                             separate invocations avoids it.
 //
 // CRM/QL data is deliberately NOT cached here -- the existing /api/crm-leads
 // endpoint already serves any arbitrary date range directly from the Google
@@ -60,7 +86,7 @@ async function graphGet(path: string, token: string, params: Record<string, any>
       await sleep(Math.min(2000 * Math.pow(2, attempt), 30000))
       return graphGet(path, token, params, retries - 1)
     }
-    throw new Error(msg)
+    throw new Error(msg + ' | code=' + d.error.code + ' subcode=' + d.error.error_subcode + ' type=' + d.error.type + ' path=' + path + ' params=' + JSON.stringify(params).slice(0, 300))
   }
   return d
 }
@@ -102,24 +128,67 @@ Deno.serve(async (req) => {
     const today = new Date()
     let since: string, until: string
     if (mode === 'backfill') {
-      const start = new Date(today.getFullYear(), today.getMonth() - (months - 1), 1)
-      since = fmtDate(start)
-      until = fmtDate(today)
+      if (Number.isFinite(body.monthOffset)) {
+        // Single-calendar-month mode: covers exactly ONE month per
+        // invocation, so a full historical backfill can be driven as
+        // several separate, real-time-spaced Edge Function calls
+        // (monthOffset 0,1,2,...) instead of one giant execution -- see the
+        // header comment above for why.
+        const offset = Number(body.monthOffset)
+        const target = new Date(today.getFullYear(), today.getMonth() - offset, 1)
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() - offset + 1, 0)
+        const cappedEnd = monthEnd > today ? today : monthEnd
+        since = fmtDate(target)
+        until = fmtDate(cappedEnd)
+      } else {
+        const start = new Date(today.getFullYear(), today.getMonth() - (months - 1), 1)
+        since = fmtDate(start)
+        until = fmtDate(today)
+      }
     } else {
       const start = new Date(today); start.setDate(start.getDate() - 2)
       since = fmtDate(start)
       until = fmtDate(today)
     }
-    const timeRange = JSON.stringify({ since, until })
 
     const tokRes = await sb('meta_tokens?select=token,created_at&order=created_at.desc&limit=1')
     const tokRows = await tokRes.json()
     const token = tokRows?.[0]?.token
     if (!token) throw new Error('No Meta token found in meta_tokens')
 
-    // 1. Every ad with real spend anywhere in [since, until] -- paginated, no cap.
-    const allAdsIns = await graphGetAll(`${AD_ACCOUNT_ID}/insights`, token, { fields: 'ad_id,spend', level: 'ad', time_range: timeRange })
-    const topAdIds = [...new Set(allAdsIns.filter((x: any) => parseFloat(x.spend || 0) > 0).map((x: any) => x.ad_id).filter(Boolean))]
+    // Date windows (<=7 days each) reused for BOTH step 1 and step 3 below --
+    // Meta's Graph API rejects the unfiltered, all-ads, level=ad insights scan
+    // (step 1) once the requested time_range exceeds roughly a month, with a
+    // "reduce the amount of data you're asking for" complexity error --
+    // confirmed live: a 22-day window succeeded, a 30-day window failed on
+    // this exact call shape. Chopping the date span into week-sized windows
+    // keeps each individual request's size in the same safe class as the
+    // 3-day incremental window, while still covering the full range across
+    // multiple requests.
+    const dateWindows: { since: string; until: string }[] = []
+    {
+      let winStart = new Date(since + 'T00:00:00')
+      const rangeEnd = new Date(until + 'T00:00:00')
+      while (winStart <= rangeEnd) {
+        const winEnd = new Date(winStart)
+        winEnd.setDate(winEnd.getDate() + 6)
+        if (winEnd > rangeEnd) winEnd.setTime(rangeEnd.getTime())
+        dateWindows.push({ since: fmtDate(winStart), until: fmtDate(winEnd) })
+        winStart = new Date(winEnd)
+        winStart.setDate(winStart.getDate() + 1)
+      }
+    }
+
+    // 1. Every ad with real spend anywhere in [since, until] -- paginated, no
+    // cap -- chunked into the same date windows as step 3 (see note above).
+    const topAdIdSet = new Set<string>()
+    for (const win of dateWindows) {
+      const winTimeRangeStep1 = JSON.stringify(win)
+      const allAdsIns = await graphGetAll(`${AD_ACCOUNT_ID}/insights`, token, { fields: 'ad_id,spend', level: 'ad', time_range: winTimeRangeStep1 })
+      allAdsIns.filter((x: any) => parseFloat(x.spend || 0) > 0).map((x: any) => x.ad_id).filter(Boolean).forEach((id: string) => topAdIdSet.add(id))
+      await sleep(400)
+    }
+    const topAdIds = [...topAdIdSet]
 
     // 2. Ad + creative/campaign join, chunked IN-filter (500 ids/chunk), paced.
     let adsRaw: any[] = []
@@ -133,22 +202,27 @@ Deno.serve(async (req) => {
       if (i + 500 < topAdIds.length) await sleep(500)
     }
 
-    // 3. Per-ad PER-DAY insights (time_increment=1), chunked 50/request, paced.
-    // Each response can hold many rows (one per ad per day) -- graphGetAll's
-    // own pagination handles that transparently.
+    // 3. Per-ad PER-DAY insights (time_increment=1), chunked by BOTH ad ids
+    // (20/request) AND date sub-range (<=7 days/request, see dateWindows
+    // above). Each response can hold many rows (one per ad per day) --
+    // graphGetAll's own pagination handles that transparently.
     const dailyRows: any[] = []
     const adIds = adsRaw.map(a => a.id)
-    for (let i = 0; i < adIds.length; i += 50) {
-      const chunk = adIds.slice(i, i + 50)
-      const rows = await graphGetAll(`${AD_ACCOUNT_ID}/insights`, token, {
-        fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
-        level: 'ad',
-        time_range: timeRange,
-        time_increment: '1',
-        filtering: JSON.stringify([{ field: 'ad.id', operator: 'IN', value: chunk }]),
-      })
-      dailyRows.push(...rows)
-      if (i + 50 < adIds.length) await sleep(400)
+    // dateWindows already computed above (reused here for the per-day insights loop).
+    for (const win of dateWindows) {
+      const winTimeRange = JSON.stringify(win)
+      for (let i = 0; i < adIds.length; i += 20) {
+        const chunk = adIds.slice(i, i + 20)
+        const rows = await graphGetAll(`${AD_ACCOUNT_ID}/insights`, token, {
+          fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
+          level: 'ad',
+          time_range: winTimeRange,
+          time_increment: '1',
+          filtering: JSON.stringify([{ field: 'ad.id', operator: 'IN', value: chunk }]),
+        })
+        dailyRows.push(...rows)
+        await sleep(400)
+      }
     }
 
     // 4. Creative thumbnails, chunked 50/request, paced.
