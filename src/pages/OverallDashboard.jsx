@@ -475,6 +475,15 @@ export default function OverallDashboard() {
   const [showInfo, setShowInfo] = useState(false)
   const [grpBy, setGrpBy] = useState('source')
 
+  // Compare — decision-focused period comparison. 'prev' reuses the exact same
+  // previous-equivalent-period logic already computed for the KPI delta arrows
+  // (prevWindow/prevFiltered/prevKpis below); 'yoy' shifts the same window back
+  // exactly one year; 'custom' lets the marketer pick an arbitrary second range.
+  const [compareOpen, setCompareOpen] = useState(false)
+  const [compareMode, setCompareMode] = useState('prev') // 'prev' | 'yoy' | 'custom'
+  const [compareCustomFrom, setCompareCustomFrom] = useState('')
+  const [compareCustomTo, setCompareCustomTo] = useState('')
+
   // Summary table customization — search, sortable columns, show/hide + reorder columns
   // (persisted), row limit. Mirrors the Meta Ads Creatives table's "customizable" pattern.
   const [tableSearch, setTableSearch] = useState('')
@@ -711,6 +720,129 @@ export default function OverallDashboard() {
   const prevCpa = prevKpis.apps > 0 ? prevKpis.spend / prevKpis.apps : 0
   const prevTotalQueued = prevKpis.futworkQ + prevKpis.superbotQ
   const deltaPct = (cur, prev) => (!prev ? null : ((cur - prev) / prev) * 100)
+
+  // ── Compare — decision-focused period comparison ─────────────────────────
+  // Deliberately NOT an AI call: every number here is a direct sum/delta over
+  // the same rows already loaded, so it's exactly as trustworthy as the rest
+  // of the page's own KPIs, just re-sliced against a second period.
+  const compareWindow = useMemo(() => {
+    if (!compareOpen) return null
+    if (compareMode === 'prev') return prevWindow
+    if (compareMode === 'yoy') {
+      if (activeFilter === 'month') {
+        const mk = monthKeyByLabel.get(selMonth)
+        return mk == null ? null : { type:'month', mk: mk - 12 }
+      }
+      if (dateWindow) {
+        const from = new Date(dateWindow.from); from.setFullYear(from.getFullYear() - 1)
+        const to = new Date(dateWindow.to); to.setFullYear(to.getFullYear() - 1)
+        return { type:'range', from, to }
+      }
+      return null
+    }
+    return null // 'custom' handled directly in compareRows below
+  }, [compareOpen, compareMode, prevWindow, activeFilter, selMonth, monthKeyByLabel, dateWindow])
+
+  const compareRows = useMemo(() => {
+    if (!compareOpen) return []
+    if (compareMode === 'custom') {
+      if (!compareCustomFrom || !compareCustomTo) return []
+      const [fy, fm, fd] = compareCustomFrom.split('-').map(Number); const cf = new Date(fy, fm - 1, fd); cf.setHours(0, 0, 0, 0)
+      const [ty, tm, td] = compareCustomTo.split('-').map(Number); const ct = new Date(ty, tm - 1, td); ct.setHours(23, 59, 59, 999)
+      let rs = rows.filter(r => r.date && r.date >= cf && r.date <= ct)
+      if (source !== 'All') rs = rs.filter(r => r.source === source)
+      return rs
+    }
+    if (!compareWindow) return []
+    let rs = compareWindow.type === 'month' ? rows.filter(r => r.mk === compareWindow.mk) : rows.filter(r => r.date && r.date >= compareWindow.from && r.date <= compareWindow.to)
+    if (source !== 'All') rs = rs.filter(r => r.source === source)
+    return rs
+  }, [compareOpen, compareMode, compareCustomFrom, compareCustomTo, compareWindow, rows, source])
+
+  const compareLabel = useMemo(() => {
+    if (compareMode === 'prev') return prevWindow ? (prevWindow.type === 'month' ? monthLabel(prevWindow.mk) : 'previous period') : '—'
+    if (compareMode === 'yoy') return compareWindow ? (compareWindow.type === 'month' ? monthLabel(compareWindow.mk) : 'same period last year') : '—'
+    if (compareMode === 'custom') return (compareCustomFrom && compareCustomTo) ? `${compareCustomFrom} -> ${compareCustomTo}` : 'pick a range'
+    return '—'
+  }, [compareMode, prevWindow, compareWindow, compareCustomFrom, compareCustomTo])
+
+  const currentLabel = activeFilter === 'month' ? (selMonth || 'this period') : (dateWindow ? dateWindow.label : 'this period')
+
+  const compareKpis = useMemo(() => sumKpis(compareRows), [compareRows])
+  const compareCpl = compareKpis.leads > 0 ? compareKpis.spend / compareKpis.leads : 0
+  const compareCpql = compareKpis.totalQL > 0 ? compareKpis.spend / compareKpis.totalQL : 0
+  const compareCpa = compareKpis.apps > 0 ? compareKpis.spend / compareKpis.apps : 0
+
+  function groupByCorridorRaw(list) {
+    const m = new Map()
+    list.forEach(r => {
+      const id = classifyCorridor(r.campaign)
+      const e = m.get(id) || { id, corridor: corridorLabel(id), totalQL:0, spend:0, leads:0 }
+      e.totalQL += r.totalQL; e.spend += r.spend; e.leads += r.leads
+      m.set(id, e)
+    })
+    return m
+  }
+
+  // Ranked movers: which corridors contributed most to the change in Total QL
+  // between the two periods — the single metric that best answers "where do I
+  // put my next rupee" for a performance marketer, vs a flat list of every
+  // corridor's raw numbers.
+  const compareMovers = useMemo(() => {
+    if (!compareOpen || compareRows.length === 0) return []
+    const a = groupByCorridorRaw(filtered)
+    const b = groupByCorridorRaw(compareRows)
+    const ids = new Set([...a.keys(), ...b.keys()])
+    const out = []
+    ids.forEach(id => {
+      const ea = a.get(id) || { corridor: corridorLabel(id), totalQL:0, spend:0, leads:0 }
+      const eb = b.get(id) || { corridor: corridorLabel(id), totalQL:0, spend:0, leads:0 }
+      if (ea.totalQL < 3 && eb.totalQL < 3) return // skip noise from near-zero corridors on both sides
+      out.push({
+        corridor: ea.corridor,
+        aQL: ea.totalQL, bQL: eb.totalQL, deltaQL: ea.totalQL - eb.totalQL,
+        aCpql: ea.totalQL > 0 ? ea.spend / ea.totalQL : 0,
+        bCpql: eb.totalQL > 0 ? eb.spend / eb.totalQL : 0,
+      })
+    })
+    return out.sort((x, y) => Math.abs(y.deltaQL) - Math.abs(x.deltaQL)).slice(0, 5)
+  }, [compareOpen, compareRows, filtered])
+
+  const compareQlDeltaPct = deltaPct(kpis.totalQL, compareKpis.totalQL)
+  const compareCpqlDeltaPct = deltaPct(cpql, compareCpql)
+
+  const compareVerdict = useMemo(() => {
+    if (!compareOpen || compareRows.length === 0) return null
+    const qd = compareQlDeltaPct, cd = compareCpqlDeltaPct
+    const volUp = qd != null && qd > 2, volDown = qd != null && qd < -2
+    const costUp = cd != null && cd > 2, costDown = cd != null && cd < -2
+    if (volUp && costDown) return { tone:'good', text: `Total QL is up ${qd.toFixed(0)}% and it got cheaper — CPQL down ${Math.abs(cd).toFixed(0)}%. This is your best-case scenario.` }
+    if (volUp && costUp) return { tone:'warn', text: `Total QL is up ${qd.toFixed(0)}%, but you're paying ${cd.toFixed(0)}% more per QL to get there.` }
+    if (volDown && costUp) return { tone:'bad', text: `Total QL is down ${Math.abs(qd).toFixed(0)}% and CPQL is up ${cd.toFixed(0)}% — both volume and efficiency declined.` }
+    if (volDown && costDown) return { tone:'warn', text: `Total QL is down ${Math.abs(qd).toFixed(0)}%, though the QLs you did get were ${Math.abs(cd).toFixed(0)}% cheaper.` }
+    if (volUp) return { tone:'good', text: `Total QL is up ${qd.toFixed(0)}% with CPQL roughly flat.` }
+    if (volDown) return { tone:'bad', text: `Total QL is down ${Math.abs(qd).toFixed(0)}% with CPQL roughly flat.` }
+    if (costUp) return { tone:'warn', text: `Volume is flat, but CPQL rose ${cd.toFixed(0)}%.` }
+    if (costDown) return { tone:'good', text: `Volume is flat, and CPQL improved ${Math.abs(cd).toFixed(0)}%.` }
+    return { tone:'neutral', text: `Total QL and CPQL are both roughly flat vs ${compareLabel}.` }
+  }, [compareOpen, compareRows, compareQlDeltaPct, compareCpqlDeltaPct, compareLabel])
+
+  const compareAction = useMemo(() => {
+    if (!compareOpen || compareMovers.length === 0) return null
+    const worst = [...compareMovers].sort((x, y) => x.deltaQL - y.deltaQL)[0]
+    const best = [...compareMovers].sort((x, y) => y.deltaQL - x.deltaQL)[0]
+    const overallDown = compareQlDeltaPct != null && compareQlDeltaPct < -2
+    if (overallDown && worst && worst.deltaQL < 0) {
+      return `${worst.corridor} accounts for the biggest drop (${fmtN(Math.abs(worst.deltaQL))} fewer QLs). Check that corridor first before touching anything else.`
+    }
+    if (best && best.deltaQL > 0 && best.bCpql > 0 && best.aCpql <= best.bCpql) {
+      return `${best.corridor} grew ${fmtN(best.deltaQL)} QLs while holding or improving CPQL — the strongest candidate for more budget.`
+    }
+    if (best && best.deltaQL > 0) {
+      return `${best.corridor} drove the largest gain (+${fmtN(best.deltaQL)} QLs) — worth a closer look at what changed there.`
+    }
+    return null
+  }, [compareOpen, compareMovers, compareQlDeltaPct])
 
   const funnel = useMemo(() => ([
     { stage:'Leads Generated', count:kpis.leads },
@@ -1010,6 +1142,15 @@ export default function OverallDashboard() {
               <CampaignSearch value={campaignQuery} onChange={setCampaignQuery} suggestions={campaignSuggestions} />
             </div>
 
+            <Button
+              onClick={() => setCompareOpen(true)}
+              size="sm"
+              variant="secondary"
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3m0 8v3a2 2 0 002 2h3m8 0h3a2 2 0 002-2v-3m0-8V5a2 2 0 00-2-2h-3"/><line x1="8" y1="12" x2="16" y2="12"/></svg>}
+            >
+              Compare
+            </Button>
+
             {lastSync && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT }}>Synced {syncFmt.format(lastSync)}</span>}
             <Button
               onClick={() => loadData(true)}
@@ -1273,6 +1414,118 @@ export default function OverallDashboard() {
               )}
             </Card>
           </div>
+
+          {compareOpen && (
+            <div onClick={e => { if (e.target === e.currentTarget) setCompareOpen(false) }}
+              style={{ position:'fixed', inset:0, zIndex:600, background:'rgba(15,23,42,0.45)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+              <div style={{ background:'var(--card)', borderRadius:18, width:'min(720px, 100%)', maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
+                <div style={{ padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div>
+                    <div style={{ fontSize:16.5, fontWeight:800, color:C.text }}>Compare periods</div>
+                    <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{currentLabel} vs {compareLabel}</div>
+                  </div>
+                  <button onClick={() => setCompareOpen(false)} style={{ border:'none', background:'transparent', color:C.muted, cursor:'pointer', display:'flex', padding:4 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  </button>
+                </div>
+
+                <div style={{ padding:'18px 24px 24px' }}>
+                  {/* Period-B selector */}
+                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:16, flexWrap:'wrap' }}>
+                    {[['prev', 'Previous period'], ['yoy', 'Same period last year'], ['custom', 'Custom range']].map(([m, lbl]) => (
+                      <button key={m} onClick={() => setCompareMode(m)}
+                        style={{ padding:'7px 13px', borderRadius:8, border:`0.5px solid ${compareMode === m ? C.navy : C.border}`, background: compareMode === m ? C.navyBg : 'var(--card)', color: compareMode === m ? C.navy : C.sub, fontSize:12, fontWeight:700, fontFamily:FONT, cursor:'pointer' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                    {compareMode === 'custom' && (
+                      <>
+                        <input type="date" value={compareCustomFrom} onChange={e => setCompareCustomFrom(e.target.value)}
+                          style={{ padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
+                        <span style={{ color:C.muted, fontSize:12 }}>to</span>
+                        <input type="date" value={compareCustomTo} onChange={e => setCompareCustomTo(e.target.value)}
+                          style={{ padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
+                      </>
+                    )}
+                  </div>
+
+                  {compareRows.length === 0 ? (
+                    <div style={{ textAlign:'center', padding:'32px 0', color:C.muted, fontSize:13 }}>
+                      {compareMode === 'custom' ? 'Pick a start and end date to compare.' : 'No data available for that period.'}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Verdict */}
+                      {compareVerdict && (
+                        <div style={{
+                          padding:'12px 16px', borderRadius:10, marginBottom:16, fontSize:13.5, fontWeight:700, lineHeight:1.5,
+                          background: compareVerdict.tone === 'good' ? C.greenBg : compareVerdict.tone === 'bad' ? C.navyBg : compareVerdict.tone === 'warn' ? '#E3F5FD' : '#F8FAFC',
+                          color: compareVerdict.tone === 'good' ? '#2F7A4B' : compareVerdict.tone === 'bad' ? C.navy : compareVerdict.tone === 'warn' ? '#0C6E93' : C.sub,
+                        }}>
+                          {compareVerdict.text}
+                        </div>
+                      )}
+
+                      {/* KPI comparison grid */}
+                      <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3, minmax(0,1fr))', gap:10, marginBottom:18 }}>
+                        {[
+                          { label:'Total QL', a:kpis.totalQL, b:compareKpis.totalQL, fmt:fmtN },
+                          { label:'Leads', a:kpis.leads, b:compareKpis.leads, fmt:fmtN },
+                          { label:'Spend', a:kpis.spend, b:compareKpis.spend, fmt:fmtINR },
+                          { label:'CPQL', a:cpql, b:compareCpql, fmt:fmtINR, invert:true },
+                          { label:'CPL', a:cpl, b:compareCpl, fmt:fmtINR, invert:true },
+                          { label:'Applications', a:kpis.apps, b:compareKpis.apps, fmt:fmtN },
+                        ].map(m => {
+                          const d = deltaPct(m.a, m.b)
+                          const good = d == null ? null : (m.invert ? d < 0 : d > 0)
+                          return (
+                            <div key={m.label} style={{ padding:'12px 14px', borderRadius:10, border:`0.5px solid ${C.border}`, background:'var(--bg2)' }}>
+                              <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.04em', marginBottom:6 }}>{m.label}</div>
+                              <div style={{ fontSize:17, fontWeight:800, color:C.text }}>{m.fmt(m.a)}</div>
+                              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
+                                <span style={{ fontSize:11, color:C.muted }}>was {m.fmt(m.b)}</span>
+                                {d != null && (
+                                  <span style={{ fontSize:11, fontWeight:700, color: good == null ? C.muted : good ? '#2F7A4B' : C.navy }}>
+                                    {d > 0 ? '+' : ''}{d.toFixed(0)}%
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* Ranked movers */}
+                      {compareMovers.length > 0 && (
+                        <div style={{ marginBottom:16 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>What's driving it — by corridor</div>
+                          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                            {compareMovers.map(mv => (
+                              <div key={mv.corridor} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderRadius:9, background:'var(--bg2)' }}>
+                                <div style={{ flex:1, minWidth:0, fontSize:12.5, fontWeight:700, color:C.text, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{mv.corridor}</div>
+                                <div style={{ fontSize:11.5, color:C.muted }}>{fmtN(mv.bQL)} → {fmtN(mv.aQL)} QL</div>
+                                <div style={{ fontSize:12, fontWeight:800, color: mv.deltaQL > 0 ? '#2F7A4B' : mv.deltaQL < 0 ? C.navy : C.muted, minWidth:60, textAlign:'right' }}>
+                                  {mv.deltaQL > 0 ? '+' : ''}{fmtN(mv.deltaQL)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Recommended action */}
+                      {compareAction && (
+                        <div style={{ background:C.greenBg, border:'0.5px solid rgba(76,174,111,0.3)', borderRadius:10, padding:'12px 14px' }}>
+                          <div style={{ fontSize:10, fontWeight:800, letterSpacing:'0.05em', textTransform:'uppercase', color:'#2F7A4B', marginBottom:3 }}>Recommended action</div>
+                          <div style={{ fontSize:13, fontWeight:600, color:C.text, lineHeight:1.5 }}>{compareAction}</div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
       </div>
