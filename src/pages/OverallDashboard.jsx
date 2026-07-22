@@ -909,13 +909,15 @@ export default function OverallDashboard() {
     return { tone:'neutral', text: `Total QL and CPQL are both roughly flat vs ${compareLabel}.` }
   }, [compareOpen, compareRows, periodARows, compareQlDeltaPct, compareCpqlDeltaPct, compareLabel])
 
+  const compareDimWord = compareGroupBy === 'source' ? 'source' : compareGroupBy === 'campaign' ? 'campaign' : 'corridor'
+
   const compareAction = useMemo(() => {
     if (!compareOpen || compareMovers.length === 0) return null
     const worst = [...compareMovers].sort((x, y) => x.deltaQL - y.deltaQL)[0]
     const best = [...compareMovers].sort((x, y) => y.deltaQL - x.deltaQL)[0]
     const overallDown = compareQlDeltaPct != null && compareQlDeltaPct < -2
     if (overallDown && worst && worst.deltaQL < 0) {
-      return `${worst.corridor} accounts for the biggest drop (${fmtN(Math.abs(worst.deltaQL))} fewer QLs). Check that corridor first before touching anything else.`
+      return `${worst.corridor} accounts for the biggest drop (${fmtN(Math.abs(worst.deltaQL))} fewer QLs). Check that ${compareDimWord} first before touching anything else.`
     }
     if (best && best.deltaQL > 0 && best.bCpql > 0 && best.aCpql <= best.bCpql) {
       return `${best.corridor} grew ${fmtN(best.deltaQL)} QLs while holding or improving CPQL — the strongest candidate for more budget.`
@@ -924,7 +926,7 @@ export default function OverallDashboard() {
       return `${best.corridor} drove the largest gain (+${fmtN(best.deltaQL)} QLs) — worth a closer look at what changed there.`
     }
     return null
-  }, [compareOpen, compareMovers, compareQlDeltaPct])
+  }, [compareOpen, compareMovers, compareQlDeltaPct, compareDimWord])
 
   const funnel = useMemo(() => ([
     { stage:'Leads Generated', count:kpis.leads },
