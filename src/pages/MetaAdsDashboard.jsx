@@ -7,7 +7,7 @@ import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
-import { DashboardSkeleton } from '../components/SkeletonLoader'
+import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 import FilterDropdown from '../components/FilterDropdown'
 import { toast } from '../components/ToastHost'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
@@ -77,9 +77,9 @@ async function graphGet(path, token, params = {}, retries = 4) {
 }
 
 // ─── Paginated fetch — first page returns immediately, rest via callback ─
-async function graphGetAll(path, token, params = {}, maxPages = 20, onProgress = null) {
+async function graphGetAll(path, token, params = {}, maxPages = 20, onProgress = null, pageSize = 200) {
   let allData = []
-  const first = await graphGet(path, token, { ...params, limit: 200 })
+  const first = await graphGet(path, token, { ...params, limit: pageSize })
   allData = first.data || []
   // Notify caller with first-page data immediately
   if (onProgress) onProgress(allData)
@@ -929,9 +929,18 @@ function CreativesTab({ data, token }) {
               <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:14,marginBottom:14 }}>
                 {metaKpis.map(KpiCard)}
               </div>
-              <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:14,marginBottom:18 }}>
-                {crmKpis.map(KpiCard)}
-              </div>
+              {data.crmLoading ? (
+                // CRM/QL sheet hasn't resolved for the current range yet -- show this
+                // instead of the CRM cards' real (zero-looking) values, so a genuinely
+                // empty CRM response can never be mistaken for "still loading".
+                <div style={{ marginBottom:18, border:'1px solid #EEF1F6', borderRadius:16, background:'#fff' }}>
+                  <InlineLoader label="Loading CRM/QL data" height={104} />
+                </div>
+              ) : (
+                <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:14,marginBottom:18 }}>
+                  {crmKpis.map(KpiCard)}
+                </div>
+              )}
             </>
           )
         })()}
@@ -1606,6 +1615,7 @@ export default function MetaAdsDashboard() {
   const [adAccounts, setAdAccounts]     = useState([])
   const [accountPickerOpen, setAccountPickerOpen] = useState(false)
   const [loading, setLoading]       = useState(false)
+  const [loadProgress, setLoadProgress] = useState(null) // { done, total } while fetching per-ad insights, else null
   const [showInfo, setShowInfo] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [pageLoad, setPageLoad]     = useState(true)
@@ -1617,7 +1627,12 @@ export default function MetaAdsDashboard() {
   // for a fixed preset like "This Month" between clicks, so Refresh silently never touched CRM data
   // at all and stale numbers could persist indefinitely without a full page reload.
   const [crmRefreshNonce, setCrmRefreshNonce] = useState(0)
-  useEffect(() => { let ok=true; const since=data&&data.range&&data.range.since; const until=data&&data.range&&data.range.until; const qs=(since&&until)?('?since='+since+'&until='+until+'&_='+Date.now()):('?_='+Date.now()); (async()=>{ try { const r=await fetch('/api/crm-leads'+qs, { cache:'no-store' }); if(!r.ok) return; const j=await r.json(); if(ok && j && j.byName) setCrmMap(j); } catch(e){} })(); return ()=>{ ok=false; }; }, [data&&data.range&&data.range.since, data&&data.range&&data.range.until, crmRefreshNonce]);
+  // Reset to null whenever the range changes, so crmMap===null unambiguously means
+  // "still loading for the current range" -- distinct from a genuinely-empty response
+  // (crmMap.byName={}), which is a resolved answer, not a loading state. Consumers
+  // (the KPI loading gate) key off this to avoid the CRM cards popping in a moment
+  // after the Meta cards instead of both rows appearing together.
+  useEffect(() => { let ok=true; setCrmMap(null); const since=data&&data.range&&data.range.since; const until=data&&data.range&&data.range.until; const qs=(since&&until)?('?since='+since+'&until='+until+'&_='+Date.now()):('?_='+Date.now()); (async()=>{ try { const r=await fetch('/api/crm-leads'+qs, { cache:'no-store' }); if(!r.ok) return; const j=await r.json(); if(ok && j && j.byName) setCrmMap(j); } catch(e){} })(); return ()=>{ ok=false; }; }, [data&&data.range&&data.range.since, data&&data.range&&data.range.until, crmRefreshNonce]);
   const crmData = useMemo(() => {
     if(!data) return data;
     const byName = (crmMap && crmMap.byName) || {};
@@ -1651,7 +1666,7 @@ export default function MetaAdsDashboard() {
     ads.forEach(a => { metaLeadsSum += (a.leads||0); if(a.name) metaNames.add(a.name); if(a.crmLeads!=null){ adsMatched++; matchedCrm += a.crmLeads; } else { adsUnmatched++; } if(a.humanQL!=null) humanQLTotal+=a.humanQL; if(a.aiQL!=null) aiQLTotal+=a.aiQL; });
     let crmNamesNoMeta = 0; Object.keys(byName).forEach(nm => { if(!metaNames.has(nm)) crmNamesNoMeta++; });
     const crmSummary = { crmTotal, matchedCrm, metaLeadsSum, adsMatched, adsUnmatched, crmNamesNoMeta, humanQLTotal, aiQLTotal, since:(crmMap&&crmMap.since)||null, until:(crmMap&&crmMap.until)||null, hasCrm: !!(crmMap && Object.keys(byName).length) };
-    return { ...data, ads, campaigns, crmSummary };
+    return { ...data, ads, campaigns, crmSummary, crmLoading: crmMap === null };
   }, [data, crmMap]);
   const [cacheTs, setCacheTs] = useState(() => { try { const c = localStorage.getItem('meta_cache'); if (!c) return null; const pp = JSON.parse(c); return pp && pp.t ? pp.t : null; } catch (e) { return null; } })
   const [tokenExpired, setTokenExpired] = useState(false)
@@ -1732,7 +1747,7 @@ export default function MetaAdsDashboard() {
   const autoRetryCountRef = useRef(0)
   const loadAllData = async (t, preset = datePreset, fromDate = null, toDate = null, accountOverride = null, isAutoRetry = false) => {
     if (!isAutoRetry) autoRetryCountRef.current = 0
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setLoadProgress(null)
     try {
       const AD_ACCOUNT_ID = accountOverride || adAccount || DEFAULT_AD_ACCOUNT
       const range     = preset === 'custom_range' && fromDate && toDate
@@ -1755,11 +1770,14 @@ export default function MetaAdsDashboard() {
       // not an arbitrary top-N-by-spend cutoff. Previously this was capped to the top
       // 200 by spend, which silently dropped lower-spend ads (and their CRM/QL data)
       // once the account had more than 200 ads with any spend in the period.
+      // 500/page (Meta's practical max) instead of the default 200 -- this call only
+      // asks for 2 lightweight fields, so a bigger page size is safe and roughly
+      // halves the number of sequential round-trips for this step.
       const allAdsIns = await graphGetAll(`${AD_ACCOUNT_ID}/insights`, t, {
         fields: 'ad_id,spend',
         level: 'ad',
         time_range: timeRange,
-      }).catch(() => ({ data: [] }))
+      }, 20, null, 500).catch(() => ({ data: [] }))
       let topAdIds = (allAdsIns.data || [])
         .filter(x => parseFloat(x.spend || 0) > 0)
         .sort((a, b) => parseFloat(b.spend || 0) - parseFloat(a.spend || 0))
@@ -1826,7 +1844,11 @@ export default function MetaAdsDashboard() {
         try {
           const adIds = adsRawData.map(a => a.id)
           const insChunks = []
-          for (let i = 0; i < adIds.length; i += 25) insChunks.push(adIds.slice(i, i + 25))
+          // 50 per chunk (was 25) to match the limit:50 already requested below --
+          // halves the number of round-trips for this stage at no extra API cost.
+          for (let i = 0; i < adIds.length; i += 50) insChunks.push(adIds.slice(i, i + 50))
+          let insDone = 0
+          setLoadProgress({ done: 0, total: adIds.length })
 
           // Fetch current + previous period in parallel
           await mapLimit(insChunks, 3, async chunk => {
@@ -1848,6 +1870,8 @@ export default function MetaAdsDashboard() {
             ])
             ;(currRes.data || []).forEach(ins => { insightsMap[ins.ad_id] = ins })
             ;(prevRes.data || []).forEach(ins => { prevInsightsMap[ins.ad_id] = ins })
+            insDone += chunk.length
+            setLoadProgress({ done: Math.min(insDone, adIds.length), total: adIds.length })
           })
         } catch(e) { console.error('Insights fetch failed:', e.message) }
       }
@@ -1939,7 +1963,7 @@ export default function MetaAdsDashboard() {
         autoRetryCountRef.current += 1
         setTimeout(() => { loadAllData(t, preset, fromDate, toDate, accountOverride, true) }, 25000)
       }
-    } finally { setLoading(false) }
+    } finally { setLoading(false); setLoadProgress(null) }
   }
 
   const disconnect = () => { setToken(''); setData(null); setError('') }
@@ -2111,6 +2135,7 @@ export default function MetaAdsDashboard() {
                 </Button>
               </div>
             )}
+            {loading && loadProgress && <span className={styles.syncTag}>Loading ads… {loadProgress.done} of {loadProgress.total}</span>}
             {lastSync && <span className={styles.syncTag}>Synced {lastSync.toLocaleTimeString()}</span>}
             {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#4CAE6F':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
             <Button size="sm" variant="secondary" onClick={() => { loadAllData(token, datePreset); setCrmRefreshNonce(n=>n+1) }} disabled={loading}
