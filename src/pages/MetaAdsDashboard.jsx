@@ -22,6 +22,20 @@ const GROQ_KEY   = import.meta.env.VITE_GROQ_API_KEY
 
 const proxyImg = url => url ? `/api/img-proxy?url=${encodeURIComponent(url)}` : null
 
+// ── Meta Ads cache (populated by the sync-meta-ads Supabase Edge Function,
+// see supabase/functions/sync-meta-ads) -- read directly, same anon-key REST
+// pattern already used elsewhere in this app (AskAI.jsx, SettingsPage.jsx),
+// so the Creatives tab's "This Month" view can skip calling Meta entirely
+// when a fresh sync is available.
+const META_CACHE_SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
+const META_CACHE_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
+const META_CACHE_MAX_AGE_MS = 45 * 60 * 1000 // treat a sync older than this as stale, fall back to live fetch
+async function metaCacheGet(path) {
+  const r = await fetch(`${META_CACHE_SB_URL}/rest/v1/${path}`, { headers: { apikey: META_CACHE_SB_KEY, Authorization: `Bearer ${META_CACHE_SB_KEY}` } })
+  if (!r.ok) throw new Error('cache fetch failed: ' + r.status)
+  return r.json()
+}
+
 async function storeTokenInSupabase(token) {
   try {
     await fetch('/api/meta-token', {
@@ -880,21 +894,32 @@ function CreativesTab({ data, token }) {
   const [thumbCache, setThumbCache] = useState({}) // creativeId -> url|null
   const thumbFetchingRef = useRef(new Set())
   useEffect(() => {
-    const ids = [...new Set(pageItems.map(a => a.creative?.id).filter(Boolean))]
-      .filter(id => !(id in thumbCache) && !thumbFetchingRef.current.has(id))
-    if (ids.length === 0 || !token) return
-    ids.forEach(id => thumbFetchingRef.current.add(id))
+    const uncached = pageItems.filter(a => a.creative?.id && !(a.creative.id in thumbCache) && !thumbFetchingRef.current.has(a.creative.id))
+    if (uncached.length === 0) return
+    // Ads sourced from the Supabase cache already carry their thumbnail URL
+    // (fetched once by the sync-meta-ads Edge Function) -- seed those straight
+    // in, no Meta call needed at all for them.
+    const preSeeded = {}
+    const ids = []
+    uncached.forEach(a => {
+      if ('thumbnail_url' in a.creative) preSeeded[a.creative.id] = a.creative.thumbnail_url || null
+      else ids.push(a.creative.id)
+    })
+    if (Object.keys(preSeeded).length > 0) setThumbCache(prev => ({ ...prev, ...preSeeded }))
+    const dedupedIds = [...new Set(ids)]
+    if (dedupedIds.length === 0 || !token) return
+    dedupedIds.forEach(id => thumbFetchingRef.current.add(id))
     ;(async () => {
       try {
-        const qs = new URLSearchParams({ access_token: token, ids: ids.join(','), fields: 'id,thumbnail_url,image_url' }).toString()
+        const qs = new URLSearchParams({ access_token: token, ids: dedupedIds.join(','), fields: 'id,thumbnail_url,image_url' }).toString()
         const res = await fetch(`https://graph.facebook.com/v19.0?${qs}`)
         const d = await res.json()
         if (d.error) return
         const next = {}
-        ids.forEach(id => { const c = d[id]; next[id] = (c && (c.image_url || c.thumbnail_url)) || null })
+        dedupedIds.forEach(id => { const c = d[id]; next[id] = (c && (c.image_url || c.thumbnail_url)) || null })
         setThumbCache(prev => ({ ...prev, ...next }))
       } catch (e) { /* thumbnail lookup is best-effort, never blocks the page */ }
-      finally { ids.forEach(id => thumbFetchingRef.current.delete(id)) }
+      finally { dedupedIds.forEach(id => thumbFetchingRef.current.delete(id)) }
     })()
   }, [pageItems, token])
 
@@ -1803,31 +1828,68 @@ export default function MetaAdsDashboard() {
                        : preset === 'last_30d'  ? 'last_30d'
                        : 'last_7d'  // last_month/this_month/custom use time_range instead
 
-      // Fetch spend for EVERY ad in the period (paginated, not capped at a fixed
-      // headcount) and keep any ad that actually spent something -- a real condition,
-      // not an arbitrary top-N-by-spend cutoff. Previously this was capped to the top
-      // 200 by spend, which silently dropped lower-spend ads (and their CRM/QL data)
-      // once the account had more than 200 ads with any spend in the period.
-      // 500/page (Meta's practical max) instead of the default 200 -- this call only
-      // asks for 2 lightweight fields, so a bigger page size is safe and roughly
-      // halves the number of sequential round-trips for this step.
-      const allAdsIns = await graphGetAll(`${AD_ACCOUNT_ID}/insights`, t, {
-        fields: 'ad_id,spend',
-        level: 'ad',
-        time_range: timeRange,
-      }, 20, null, 500).catch(() => ({ data: [] }))
-      let topAdIds = (allAdsIns.data || [])
-        .filter(x => parseFloat(x.spend || 0) > 0)
-        .sort((a, b) => parseFloat(b.spend || 0) - parseFloat(a.spend || 0))
-        .map(x => x.ad_id)
-        .filter(Boolean)
-      // Safety valve only: Meta's IN-filter is passed as a query-string param, which
-      // can hit URL-length limits with an extremely large ID list. No real account
-      // should have this many ads with spend in one period -- if it ever happens,
-      // keep the biggest spenders rather than fail the whole fetch.
-      if (topAdIds.length > 500) {
-        console.warn(`[meta-ads] ${topAdIds.length} ads with spend this period -- capping IN-filter to top 500 by spend`)
-        topAdIds = topAdIds.slice(0, 500)
+      // Try the Supabase cache first (populated on a schedule by the sync-meta-ads
+      // Edge Function -- see supabase/functions/sync-meta-ads) for the default
+      // account's "This Month" view. When a fresh-enough sync is available this
+      // skips the entire expensive ad-level pipeline below (spend pagination, ads
+      // join, per-ad insights chunking) -- no Meta calls, no rate-limit exposure,
+      // near-instant. Campaigns/pixels are still fetched live either way (cheap,
+      // unaffected by ad count, and the Campaigns tab isn't on the cache yet).
+      let cachedAds = null, cachedInsightsMap = null, cachedAccount = null
+      if (preset === 'this_month' && !accountOverride) {
+        try {
+          const [acctRows, adRows] = await Promise.all([
+            metaCacheGet('meta_ads_account_cache?id=eq.default&select=*'),
+            metaCacheGet('meta_ads_cache?select=*'),
+          ])
+          const acct = acctRows?.[0]
+          const fresh = acct && acct.sync_status === 'ok' && acct.synced_at &&
+            (Date.now() - new Date(acct.synced_at).getTime()) < META_CACHE_MAX_AGE_MS &&
+            acct.range_since === range.since && acct.range_until === range.until
+          if (fresh) {
+            cachedAccount = acct
+            cachedInsightsMap = {}
+            cachedAds = (adRows || []).map(row => {
+              cachedInsightsMap[row.ad_id] = { spend: row.spend, impressions: row.impressions, clicks: row.clicks, ctr: row.ctr, reach: row.reach, frequency: row.frequency, actions: row.actions }
+              return {
+                id: row.ad_id, name: row.name, status: row.status, effective_status: row.effective_status,
+                creative: { id: row.creative_id, thumbnail_url: row.thumbnail_url },
+                campaign: { id: row.campaign_id, name: row.campaign_name },
+                previewLink: row.preview_link, previewPlatform: row.preview_platform,
+              }
+            })
+          }
+        } catch (e) { /* cache unavailable -- fall through to the live fetch below */ }
+      }
+
+      let topAdIds = []
+      if (!cachedAds) {
+        // Fetch spend for EVERY ad in the period (paginated, not capped at a fixed
+        // headcount) and keep any ad that actually spent something -- a real condition,
+        // not an arbitrary top-N-by-spend cutoff. Previously this was capped to the top
+        // 200 by spend, which silently dropped lower-spend ads (and their CRM/QL data)
+        // once the account had more than 200 ads with any spend in the period.
+        // 500/page (Meta's practical max) instead of the default 200 -- this call only
+        // asks for 2 lightweight fields, so a bigger page size is safe and roughly
+        // halves the number of sequential round-trips for this step.
+        const allAdsIns = await graphGetAll(`${AD_ACCOUNT_ID}/insights`, t, {
+          fields: 'ad_id,spend',
+          level: 'ad',
+          time_range: timeRange,
+        }, 20, null, 500).catch(() => ({ data: [] }))
+        topAdIds = (allAdsIns.data || [])
+          .filter(x => parseFloat(x.spend || 0) > 0)
+          .sort((a, b) => parseFloat(b.spend || 0) - parseFloat(a.spend || 0))
+          .map(x => x.ad_id)
+          .filter(Boolean)
+        // Safety valve only: Meta's IN-filter is passed as a query-string param, which
+        // can hit URL-length limits with an extremely large ID list. No real account
+        // should have this many ads with spend in one period -- if it ever happens,
+        // keep the biggest spenders rather than fail the whole fetch.
+        if (topAdIds.length > 500) {
+          console.warn(`[meta-ads] ${topAdIds.length} ads with spend this period -- capping IN-filter to top 500 by spend`)
+          topAdIds = topAdIds.slice(0, 500)
+        }
       }
 
     const [accIns, lifetimeIns, campaignsSummary, campaigns, adsRaw, pixels] = await Promise.all([
@@ -1850,9 +1912,8 @@ export default function MetaAdsDashboard() {
           fields: `name,status,objective,created_time,insights${useTimeRange ? `.time_range(${timeRange})` : `.date_preset(${metaPreset})`}{spend,impressions,clicks,ctr,reach,frequency,actions}`,
           limit: 300
         }),
-        // Ads + creatives - paginated (not capped at 200) so every ad with real
-        // spend this period is fetched, however many that turns out to be.
-        graphGetAll(`${AD_ACCOUNT_ID}/ads`, t, {
+        // Ads + creatives - skipped entirely when the cache already supplied them
+        cachedAds ? Promise.resolve({ data: [] }) : graphGetAll(`${AD_ACCOUNT_ID}/ads`, t, {
           fields: 'name,status,effective_status,creative{id,name,video_id,object_story_id,instagram_permalink_url,effective_object_story_id},campaign{id,name}',
           ...(topAdIds.length > 0 ? { filtering: JSON.stringify([{ field: 'id', operator: 'IN', value: topAdIds }]) } : {}),
         }),
@@ -1866,64 +1927,70 @@ export default function MetaAdsDashboard() {
       const activeCampaignCount = allCampaigns.filter(c => c.status === 'ACTIVE').length
       const pausedCampaignCount = allCampaigns.filter(c => c.status === 'PAUSED').length
 
-      // Fetch insights for the current period only. Previously also fetched a
-      // previous-period comparison here to power a WoW CTR column -- removed (both
-      // the fetch and the column) since fatigue/health scoring never depended on it
-      // (that's computed from frequency + CTR-vs-account-average only, unaffected by
-      // this) and it was doubling the request count for every chunk in this stage.
-      const adsRawData = adsRaw.data || []
-      let insightsMap = {}
+      let adsWithThumbs, insightsMap
+      if (cachedAds) {
+        adsWithThumbs = cachedAds
+        insightsMap = cachedInsightsMap
+      } else {
+        // Fetch insights for the current period only. Previously also fetched a
+        // previous-period comparison here to power a WoW CTR column -- removed (both
+        // the fetch and the column) since fatigue/health scoring never depended on it
+        // (that's computed from frequency + CTR-vs-account-average only, unaffected by
+        // this) and it was doubling the request count for every chunk in this stage.
+        const adsRawData = adsRaw.data || []
+        insightsMap = {}
 
-      if (adsRawData.length > 0) {
-        try {
-          const adIds = adsRawData.map(a => a.id)
-          const insChunks = []
-          // 50 per chunk (was 25) to match the limit:50 already requested below --
-          // halves the number of round-trips for this stage at no extra API cost.
-          for (let i = 0; i < adIds.length; i += 50) insChunks.push(adIds.slice(i, i + 50))
-          let insDone = 0
-          setLoadProgress({ done: 0, total: adIds.length })
+        if (adsRawData.length > 0) {
+          try {
+            const adIds = adsRawData.map(a => a.id)
+            const insChunks = []
+            // 50 per chunk (was 25) to match the limit:50 already requested below --
+            // halves the number of round-trips for this stage at no extra API cost.
+            for (let i = 0; i < adIds.length; i += 50) insChunks.push(adIds.slice(i, i + 50))
+            let insDone = 0
+            setLoadProgress({ done: 0, total: adIds.length })
 
-          await mapLimit(insChunks, 3, async chunk => {
-            const currRes = await graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
-              fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
-              level: 'ad',
-              ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }),
-              filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
-              limit: 50
+            await mapLimit(insChunks, 3, async chunk => {
+              const currRes = await graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
+                fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
+                level: 'ad',
+                ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }),
+                filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
+                limit: 50
+              })
+              ;(currRes.data || []).forEach(ins => { insightsMap[ins.ad_id] = ins })
+              insDone += chunk.length
+              setLoadProgress({ done: Math.min(insDone, adIds.length), total: adIds.length })
             })
-            ;(currRes.data || []).forEach(ins => { insightsMap[ins.ad_id] = ins })
-            insDone += chunk.length
-            setLoadProgress({ done: Math.min(insDone, adIds.length), total: adIds.length })
-          })
-        } catch(e) { console.error('Insights fetch failed:', e.message) }
-      }
-      // Thumbnails are no longer fetched here at all -- previously this batch-fetched
-      // every matched ad's creative thumbnail up front, which was the single biggest
-      // request-volume driver as the account grows. CreativesTab now fetches thumbnails
-      // lazily, only for whichever creatives are on the currently-visible page.
-      const adsWithThumbs = adsRawData.map(ad => {
-        // Smart permaLink: Instagram post → Facebook post → Ads Library
-        const igPerma = ad.creative?.instagram_permalink_url || null
-        const objectStoryId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || null
-        const fbPostUrl = objectStoryId
-          ? (() => {
-              const parts = objectStoryId.split('_')
-              return parts.length === 2
-                ? `https://www.facebook.com/${parts[0]}/posts/${parts[1]}`
-                : null
-            })()
-          : null
-        const previewLink = igPerma || fbPostUrl || `https://www.facebook.com/ads/library/?id=${ad.id}`
-        const previewPlatform = igPerma ? 'instagram' : fbPostUrl ? 'facebook' : 'library'
-        return {
-          ...ad,
-          previewLink,
-          previewPlatform
+          } catch(e) { console.error('Insights fetch failed:', e.message) }
         }
-      })
+        // Thumbnails are no longer fetched here at all -- previously this batch-fetched
+        // every matched ad's creative thumbnail up front, which was the single biggest
+        // request-volume driver as the account grows. CreativesTab now fetches thumbnails
+        // lazily, only for whichever creatives are on the currently-visible page.
+        adsWithThumbs = adsRawData.map(ad => {
+          // Smart permaLink: Instagram post → Facebook post → Ads Library
+          const igPerma = ad.creative?.instagram_permalink_url || null
+          const objectStoryId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || null
+          const fbPostUrl = objectStoryId
+            ? (() => {
+                const parts = objectStoryId.split('_')
+                return parts.length === 2
+                  ? `https://www.facebook.com/${parts[0]}/posts/${parts[1]}`
+                  : null
+              })()
+            : null
+          const previewLink = igPerma || fbPostUrl || `https://www.facebook.com/ads/library/?id=${ad.id}`
+          const previewPlatform = igPerma ? 'instagram' : fbPostUrl ? 'facebook' : 'library'
+          return {
+            ...ad,
+            previewLink,
+            previewPlatform
+          }
+        })
+      }
 
-      const __metaPayload = { account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, range, preset }
+      const __metaPayload = { account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, range, preset, fromCache: !!cachedAds }
       setData(__metaPayload)
       const __ts = Date.now(); setCacheTs(__ts)
       try { localStorage.setItem('meta_cache', JSON.stringify({ d: __metaPayload, t: __ts })) } catch (e) {}
@@ -2114,7 +2181,7 @@ export default function MetaAdsDashboard() {
               </div>
             )}
             {loading && loadProgress && <span className={styles.syncTag}>Loading ads… {loadProgress.done} of {loadProgress.total}</span>}
-            {lastSync && <span className={styles.syncTag}>Synced {lastSync.toLocaleTimeString()}</span>}
+            {lastSync && <span className={styles.syncTag}>{data?.fromCache ? 'Cached ' : 'Synced '}{lastSync.toLocaleTimeString()}</span>}
             {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#4CAE6F':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
             <Button size="sm" variant="secondary" onClick={() => { loadAllData(token, datePreset); setCrmRefreshNonce(n=>n+1) }} disabled={loading}
               icon={<span style={{display:'inline-flex', animation: loading ? 'spin .7s linear infinite' : 'none'}}>
