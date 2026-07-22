@@ -32,7 +32,10 @@ export default async function handler(req, res) {
     )
     if (!r.ok) return res.status(500).json({ error: 'Failed to read preferences' })
     const rows = await r.json()
-    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'lq_login_style'])
+    // affiliate_spend_manual must be readable by every signed-in user (not just
+    // admins) -- the Overall dashboard is viewable by non-admins too, and it
+    // needs this value to compute Affiliate's totals correctly for everyone.
+    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'lq_login_style', 'affiliate_spend_manual'])
     const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key))
     const prefs = Object.fromEntries(visibleRows.map(row => [row.key, row.value]))
     const meta = Object.fromEntries(visibleRows.map(row => [row.key, row.updated_at]))

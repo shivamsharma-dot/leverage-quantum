@@ -627,6 +627,42 @@ export default function SettingsPage() {
     const [scheduleMsg, setScheduleMsg] = useState(null)
     const [metaDisconnecting, setMetaDisconnecting] = useState(false)
     const [metaDisconnectMsg, setMetaDisconnectMsg] = useState(null)
+    // Affiliate spend has no automated feed (no ad platform, no sheet) -- an admin
+    // enters it here by month and it's merged into the Overall dashboard's own
+    // totals/channel breakdown as a synthetic row (see OverallDashboard.jsx).
+    const [affiliateSpend, setAffiliateSpend] = useState({}) // { 'YYYY-MM': amount }
+    const [affSpendMonth, setAffSpendMonth] = useState('')
+    const [affSpendAmount, setAffSpendAmount] = useState('')
+    const [affSpendSaving, setAffSpendSaving] = useState(false)
+    const [affSpendMsg, setAffSpendMsg] = useState(null)
+    const saveAffiliateSpend = async (next, successMsg) => {
+      const prev = affiliateSpend
+      setAffiliateSpend(next)
+      setAffSpendSaving(true); setAffSpendMsg(null)
+      try {
+        const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'affiliate_spend_manual', value: next }) })
+        if (!r.ok) throw new Error('Save failed')
+        setAffSpendMsg({ type: 'ok', text: successMsg || 'Saved' })
+      } catch (e) {
+        setAffiliateSpend(prev) // revert -- otherwise it looks saved but vanishes on next reload
+        setAffSpendMsg({ type: 'err', text: e.message })
+      } finally {
+        setAffSpendSaving(false)
+        setTimeout(() => setAffSpendMsg(null), 4000)
+      }
+    }
+    const addAffiliateSpendMonth = () => {
+      if (!affSpendMonth) { setAffSpendMsg({ type: 'err', text: 'Pick a month' }); return }
+      const amount = Number(affSpendAmount)
+      if (!amount || amount <= 0) { setAffSpendMsg({ type: 'err', text: 'Enter a spend amount greater than 0' }); return }
+      const next = { ...affiliateSpend, [affSpendMonth]: amount }
+      saveAffiliateSpend(next, 'Saved')
+      setAffSpendMonth(''); setAffSpendAmount('')
+    }
+    const removeAffiliateSpendMonth = (ym) => {
+      const next = { ...affiliateSpend }; delete next[ym]
+      saveAffiliateSpend(next, 'Removed')
+    }
     const disconnectMeta = async () => {
       if (!window.confirm('Disconnect the shared Meta Ads token? Meta Ads, Ask AI, and email reports will stop showing live data for everyone until an admin reconnects.')) return
       setMetaDisconnecting(true); setMetaDisconnectMsg(null)
@@ -758,6 +794,7 @@ export default function SettingsPage() {
                   if (Array.isArray(pf.custom_data_sources)) setCustomSources(pf.custom_data_sources)
                   if (pf.source_health_schedule) setHealthSchedule(pf.source_health_schedule)
                   if (pf.ask_ai_monthly_budget_usd != null) setAskaiBudgetInput(String(pf.ask_ai_monthly_budget_usd))
+                  if (pf.affiliate_spend_manual && typeof pf.affiliate_spend_manual === 'object') setAffiliateSpend(pf.affiliate_spend_manual)
       })
       .catch(() => {})
       .finally(() => setPrefLoading(false))
@@ -1619,6 +1656,49 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </div>
                   )
                 })()}
+              </div>
+
+              {/* ── AFFILIATE SPEND (MANUAL) ── Affiliate has no automated spend feed
+                  (no ad platform, no sheet) -- entered here by month, merged into the
+                  Overall dashboard's totals and channel breakdown for Affiliate only. */}
+              <div className={styles.card} style={{ marginTop: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
+                  <div>
+                    <h3 className={styles.cardTitle} style={{ marginBottom: 4 }}>Affiliate spend — manual entry</h3>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>Affiliate spend isn't tracked by any ad platform or sheet. Enter it here by month and it flows into the Overall dashboard's totals and channel breakdown for Affiliate.</p>
+                  </div>
+                  {affSpendMsg && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: affSpendMsg.type === 'ok' ? '#16A34A' : '#DC2626', background: affSpendMsg.type === 'ok' ? '#F0FDF4' : '#FEF2F2', border: '0.5px solid ' + (affSpendMsg.type === 'ok' ? '#BBF7D0' : '#FECACA'), borderRadius: 6, padding: '3px 10px', whiteSpace: 'nowrap', flexShrink: 0 }}>{affSpendMsg.text}</span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                  <input type="month" value={affSpendMonth} onChange={e => setAffSpendMonth(e.target.value)}
+                    className={styles.input} style={{ width: 160 }} />
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', fontSize: 13, fontWeight: 700, pointerEvents: 'none' }}>₹</span>
+                    <input type="number" min="0" placeholder="Spend amount" value={affSpendAmount} onChange={e => setAffSpendAmount(e.target.value)}
+                      className={styles.input} style={{ width: 160, paddingLeft: 22 }} />
+                  </div>
+                  <Button size="sm" onClick={addAffiliateSpendMonth} disabled={affSpendSaving}>{affSpendSaving ? 'Saving…' : (affiliateSpend[affSpendMonth] != null ? 'Update month' : 'Add month')}</Button>
+                </div>
+
+                {Object.keys(affiliateSpend).length === 0 ? (
+                  <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>No affiliate spend entered yet — Affiliate will show ₹0 spend on the Overall dashboard until a month is added above.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {Object.entries(affiliateSpend).sort((a, b) => b[0].localeCompare(a[0])).map(([ym, amount]) => (
+                      <div key={ym} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: '#F8FAFC', border: '0.5px solid #E5E7EB' }}>
+                        <div style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: '#0F172A' }}>{new Date(ym + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1F3C84' }}>&#8377;{Number(amount).toLocaleString('en-IN')}</div>
+                        <button type="button" onClick={() => { setAffSpendMonth(ym); setAffSpendAmount(String(amount)) }}
+                          style={{ border: 'none', background: 'transparent', color: '#1F3C84', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                        <button type="button" onClick={() => removeAffiliateSpendMonth(ym)}
+                          style={{ border: 'none', background: 'transparent', color: '#94A3B8', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
             </>

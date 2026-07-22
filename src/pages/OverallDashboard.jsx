@@ -498,8 +498,36 @@ function EfficiencyList({ data, labelKey, rateKey, subKey }) {
   )
 }
 
+// Affiliate has no automated spend feed (no ad platform, no sheet) -- an admin
+// enters it by month in Settings > Data, stored as { 'YYYY-MM': amount } via
+// /api/preferences. Turned into one synthetic all-zero-except-spend row per
+// month (anchored on the 15th so it falls inside whole-month filters) and
+// merged into `rows` below -- every existing aggregation (KPIs, by-source,
+// by-corridor, Compare, etc.) picks it up automatically with no special-casing.
+function buildSyntheticAffiliateRows(map) {
+  if (!map) return []
+  return Object.entries(map).map(([ym, spend]) => {
+    const [y, m] = ym.split('-').map(Number)
+    if (!y || !m) return null
+    const date = new Date(y, m - 1, 15)
+    return {
+      date, mk: monthKey(date), source: 'Affiliate', campaign: 'Affiliate (manual entry)',
+      leads: 0, floorQueued: 0, futworkQ: 0, superbotQ: 0, humanQL: 0, futworkAiQl: 0, superbotAiQl: 0,
+      totalQL: 0, apps: 0, offers: 0, deposits: 0, raus: 0, spend: Number(spend) || 0,
+    }
+  }).filter(Boolean)
+}
+
 export default function OverallDashboard() {
-  const [rows, setRows] = useState([])
+  const [rawRows, setRawRows] = useState([])
+  const [affiliateManual, setAffiliateManual] = useState(null)
+  useEffect(() => {
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { prefs: {} })
+      .then(data => setAffiliateManual(data.prefs?.affiliate_spend_manual || {}))
+      .catch(() => setAffiliateManual({}))
+  }, [])
+  const rows = useMemo(() => [...rawRows, ...buildSyntheticAffiliateRows(affiliateManual)], [rawRows, affiliateManual])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
@@ -596,7 +624,7 @@ export default function OverallDashboard() {
 
   const applyCsv = useCallback((txt) => {
     const mapped = parseCSV(txt).map(mapRow)
-    setRows(mapped)
+    setRawRows(mapped)
     if (!hasSetInitial.current) {
       const ms = [...new Set(mapped.filter(r => r.mk != null).map(r => r.mk))].sort((a, b) => a - b)
       if (ms.length) {
