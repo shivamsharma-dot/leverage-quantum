@@ -483,6 +483,14 @@ export default function OverallDashboard() {
   const [compareMode, setCompareMode] = useState('prev') // 'prev' | 'yoy' | 'custom'
   const [compareCustomFrom, setCompareCustomFrom] = useState('')
   const [compareCustomTo, setCompareCustomTo] = useState('')
+  // In custom mode BOTH sides must be user-editable -- otherwise "period A" silently
+  // stays locked to whatever the main page filter happens to be (e.g. the whole
+  // month), while only "period B" is the custom pick, comparing a full month
+  // against a single day and producing a nonsense delta. Prefilled from the page's
+  // active window/previous-window so the modal opens with a sane apples-to-apples
+  // comparison instead of blank fields.
+  const [compareCustomFromA, setCompareCustomFromA] = useState('')
+  const [compareCustomToA, setCompareCustomToA] = useState('')
 
   // Summary table customization — search, sortable columns, show/hide + reorder columns
   // (persisted), row limit. Mirrors the Meta Ads Creatives table's "customizable" pattern.
@@ -743,21 +751,32 @@ export default function OverallDashboard() {
     return null // 'custom' handled directly in compareRows below
   }, [compareOpen, compareMode, prevWindow, activeFilter, selMonth, monthKeyByLabel, dateWindow])
 
+  const filterRowsByDateStr = (fromStr, toStr) => {
+    if (!fromStr || !toStr) return null
+    const [fy, fm, fd] = fromStr.split('-').map(Number); const cf = new Date(fy, fm - 1, fd); cf.setHours(0, 0, 0, 0)
+    const [ty, tm, td] = toStr.split('-').map(Number); const ct = new Date(ty, tm - 1, td); ct.setHours(23, 59, 59, 999)
+    let rs = rows.filter(r => r.date && r.date >= cf && r.date <= ct)
+    if (source !== 'All') rs = rs.filter(r => r.source === source)
+    return rs
+  }
+
   const compareRows = useMemo(() => {
     if (!compareOpen) return []
-    if (compareMode === 'custom') {
-      if (!compareCustomFrom || !compareCustomTo) return []
-      const [fy, fm, fd] = compareCustomFrom.split('-').map(Number); const cf = new Date(fy, fm - 1, fd); cf.setHours(0, 0, 0, 0)
-      const [ty, tm, td] = compareCustomTo.split('-').map(Number); const ct = new Date(ty, tm - 1, td); ct.setHours(23, 59, 59, 999)
-      let rs = rows.filter(r => r.date && r.date >= cf && r.date <= ct)
-      if (source !== 'All') rs = rs.filter(r => r.source === source)
-      return rs
-    }
+    if (compareMode === 'custom') return filterRowsByDateStr(compareCustomFrom, compareCustomTo) || []
     if (!compareWindow) return []
     let rs = compareWindow.type === 'month' ? rows.filter(r => r.mk === compareWindow.mk) : rows.filter(r => r.date && r.date >= compareWindow.from && r.date <= compareWindow.to)
     if (source !== 'All') rs = rs.filter(r => r.source === source)
     return rs
   }, [compareOpen, compareMode, compareCustomFrom, compareCustomTo, compareWindow, rows, source])
+
+  // Period A (the "current" side) is normally whatever the main page filter is --
+  // correct for 'prev'/'yoy' modes, since those are explicitly "vs the period I'm
+  // looking at". But in custom mode BOTH sides need to be independently pickable
+  // (see state comment above), so period A switches to its own custom range there.
+  const periodARows = compareMode === 'custom' ? (filterRowsByDateStr(compareCustomFromA, compareCustomToA) || []) : filtered
+  const periodAKpis = useMemo(() => sumKpis(periodARows), [periodARows])
+  const periodACpl = periodAKpis.leads > 0 ? periodAKpis.spend / periodAKpis.leads : 0
+  const periodACpql = periodAKpis.totalQL > 0 ? periodAKpis.spend / periodAKpis.totalQL : 0
 
   const compareLabel = useMemo(() => {
     if (compareMode === 'prev') return prevWindow ? (prevWindow.type === 'month' ? monthLabel(prevWindow.mk) : 'previous period') : '—'
@@ -766,12 +785,31 @@ export default function OverallDashboard() {
     return '—'
   }, [compareMode, prevWindow, compareWindow, compareCustomFrom, compareCustomTo])
 
-  const currentLabel = activeFilter === 'month' ? (selMonth || 'this period') : (dateWindow ? dateWindow.label : 'this period')
+  const currentLabel = compareMode === 'custom'
+    ? ((compareCustomFromA && compareCustomToA) ? `${compareCustomFromA} -> ${compareCustomToA}` : 'pick a range')
+    : (activeFilter === 'month' ? (selMonth || 'this period') : (dateWindow ? dateWindow.label : 'this period'))
 
   const compareKpis = useMemo(() => sumKpis(compareRows), [compareRows])
   const compareCpl = compareKpis.leads > 0 ? compareKpis.spend / compareKpis.leads : 0
   const compareCpql = compareKpis.totalQL > 0 ? compareKpis.spend / compareKpis.totalQL : 0
   const compareCpa = compareKpis.apps > 0 ? compareKpis.spend / compareKpis.apps : 0
+
+  const fmtDateInput = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  // Prefill both custom ranges the first time Custom is opened, so the modal
+  // never starts on a blank/mismatched pair -- period A mirrors the page's
+  // current window, period B mirrors the already-computed previous window.
+  const prefillCustomRange = () => {
+    if (!compareCustomFromA || !compareCustomToA) {
+      if (activeFilter === 'month') {
+        const mk = monthKeyByLabel.get(selMonth)
+        if (mk != null) { const f = new Date(Math.floor(mk / 12), mk % 12, 1); const t = new Date(Math.floor(mk / 12), (mk % 12) + 1, 0); setCompareCustomFromA(fmtDateInput(f)); setCompareCustomToA(fmtDateInput(t)) }
+      } else if (dateWindow) { setCompareCustomFromA(fmtDateInput(dateWindow.from)); setCompareCustomToA(fmtDateInput(dateWindow.to)) }
+    }
+    if (!compareCustomFrom || !compareCustomTo) {
+      if (prevWindow && prevWindow.type === 'range') { setCompareCustomFrom(fmtDateInput(prevWindow.from)); setCompareCustomTo(fmtDateInput(prevWindow.to)) }
+      else if (prevWindow && prevWindow.type === 'month') { const mk = prevWindow.mk; const f = new Date(Math.floor(mk / 12), mk % 12, 1); const t = new Date(Math.floor(mk / 12), (mk % 12) + 1, 0); setCompareCustomFrom(fmtDateInput(f)); setCompareCustomTo(fmtDateInput(t)) }
+    }
+  }
 
   function groupByCorridorRaw(list) {
     const m = new Map()
@@ -789,8 +827,8 @@ export default function OverallDashboard() {
   // put my next rupee" for a performance marketer, vs a flat list of every
   // corridor's raw numbers.
   const compareMovers = useMemo(() => {
-    if (!compareOpen || compareRows.length === 0) return []
-    const a = groupByCorridorRaw(filtered)
+    if (!compareOpen || compareRows.length === 0 || periodARows.length === 0) return []
+    const a = groupByCorridorRaw(periodARows)
     const b = groupByCorridorRaw(compareRows)
     const ids = new Set([...a.keys(), ...b.keys()])
     const out = []
@@ -806,13 +844,13 @@ export default function OverallDashboard() {
       })
     })
     return out.sort((x, y) => Math.abs(y.deltaQL) - Math.abs(x.deltaQL)).slice(0, 5)
-  }, [compareOpen, compareRows, filtered])
+  }, [compareOpen, compareRows, periodARows])
 
-  const compareQlDeltaPct = deltaPct(kpis.totalQL, compareKpis.totalQL)
-  const compareCpqlDeltaPct = deltaPct(cpql, compareCpql)
+  const compareQlDeltaPct = deltaPct(periodAKpis.totalQL, compareKpis.totalQL)
+  const compareCpqlDeltaPct = deltaPct(periodACpql, compareCpql)
 
   const compareVerdict = useMemo(() => {
-    if (!compareOpen || compareRows.length === 0) return null
+    if (!compareOpen || compareRows.length === 0 || periodARows.length === 0) return null
     const qd = compareQlDeltaPct, cd = compareCpqlDeltaPct
     const volUp = qd != null && qd > 2, volDown = qd != null && qd < -2
     const costUp = cd != null && cd > 2, costDown = cd != null && cd < -2
@@ -825,7 +863,7 @@ export default function OverallDashboard() {
     if (costUp) return { tone:'warn', text: `Volume is flat, but CPQL rose ${cd.toFixed(0)}%.` }
     if (costDown) return { tone:'good', text: `Volume is flat, and CPQL improved ${Math.abs(cd).toFixed(0)}%.` }
     return { tone:'neutral', text: `Total QL and CPQL are both roughly flat vs ${compareLabel}.` }
-  }, [compareOpen, compareRows, compareQlDeltaPct, compareCpqlDeltaPct, compareLabel])
+  }, [compareOpen, compareRows, periodARows, compareQlDeltaPct, compareCpqlDeltaPct, compareLabel])
 
   const compareAction = useMemo(() => {
     if (!compareOpen || compareMovers.length === 0) return null
@@ -1431,27 +1469,39 @@ export default function OverallDashboard() {
 
                 <div style={{ padding:'18px 24px 24px' }}>
                   {/* Period-B selector */}
-                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:16, flexWrap:'wrap' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:compareMode === 'custom' ? 10 : 16, flexWrap:'wrap' }}>
                     {[['prev', 'Previous period'], ['yoy', 'Same period last year'], ['custom', 'Custom range']].map(([m, lbl]) => (
-                      <button key={m} onClick={() => setCompareMode(m)}
+                      <button key={m} onClick={() => { setCompareMode(m); if (m === 'custom') prefillCustomRange() }}
                         style={{ padding:'7px 13px', borderRadius:8, border:`0.5px solid ${compareMode === m ? C.navy : C.border}`, background: compareMode === m ? C.navyBg : 'var(--card)', color: compareMode === m ? C.navy : C.sub, fontSize:12, fontWeight:700, fontFamily:FONT, cursor:'pointer' }}>
                         {lbl}
                       </button>
                     ))}
-                    {compareMode === 'custom' && (
-                      <>
-                        <input type="date" value={compareCustomFrom} onChange={e => setCompareCustomFrom(e.target.value)}
-                          style={{ padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
-                        <span style={{ color:C.muted, fontSize:12 }}>to</span>
-                        <input type="date" value={compareCustomTo} onChange={e => setCompareCustomTo(e.target.value)}
-                          style={{ padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
-                      </>
-                    )}
                   </div>
 
-                  {compareRows.length === 0 ? (
+                  {compareMode === 'custom' && (
+                    <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:16, background:'var(--bg2)', border:`0.5px solid ${C.border}`, borderRadius:10, padding:'10px 12px' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:C.muted, width:60, flexShrink:0 }}>This:</span>
+                        <input type="date" value={compareCustomFromA} onChange={e => setCompareCustomFromA(e.target.value)}
+                          style={{ padding:'6px 9px', borderRadius:7, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
+                        <span style={{ color:C.muted, fontSize:12 }}>to</span>
+                        <input type="date" value={compareCustomToA} onChange={e => setCompareCustomToA(e.target.value)}
+                          style={{ padding:'6px 9px', borderRadius:7, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:C.muted, width:60, flexShrink:0 }}>Vs:</span>
+                        <input type="date" value={compareCustomFrom} onChange={e => setCompareCustomFrom(e.target.value)}
+                          style={{ padding:'6px 9px', borderRadius:7, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
+                        <span style={{ color:C.muted, fontSize:12 }}>to</span>
+                        <input type="date" value={compareCustomTo} onChange={e => setCompareCustomTo(e.target.value)}
+                          style={{ padding:'6px 9px', borderRadius:7, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {compareRows.length === 0 || periodARows.length === 0 ? (
                     <div style={{ textAlign:'center', padding:'32px 0', color:C.muted, fontSize:13 }}>
-                      {compareMode === 'custom' ? 'Pick a start and end date to compare.' : 'No data available for that period.'}
+                      {compareMode === 'custom' ? 'Pick both date ranges to compare.' : 'No data available for that period.'}
                     </div>
                   ) : (
                     <>
@@ -1469,12 +1519,12 @@ export default function OverallDashboard() {
                       {/* KPI comparison grid */}
                       <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(3, minmax(0,1fr))', gap:10, marginBottom:18 }}>
                         {[
-                          { label:'Total QL', a:kpis.totalQL, b:compareKpis.totalQL, fmt:fmtN },
-                          { label:'Leads', a:kpis.leads, b:compareKpis.leads, fmt:fmtN },
-                          { label:'Spend', a:kpis.spend, b:compareKpis.spend, fmt:fmtINR },
-                          { label:'CPQL', a:cpql, b:compareCpql, fmt:fmtINR, invert:true },
-                          { label:'CPL', a:cpl, b:compareCpl, fmt:fmtINR, invert:true },
-                          { label:'Applications', a:kpis.apps, b:compareKpis.apps, fmt:fmtN },
+                          { label:'Total QL', a:periodAKpis.totalQL, b:compareKpis.totalQL, fmt:fmtN },
+                          { label:'Leads', a:periodAKpis.leads, b:compareKpis.leads, fmt:fmtN },
+                          { label:'Spend', a:periodAKpis.spend, b:compareKpis.spend, fmt:fmtINR },
+                          { label:'CPQL', a:periodACpql, b:compareCpql, fmt:fmtINR, invert:true },
+                          { label:'CPL', a:periodACpl, b:compareCpl, fmt:fmtINR, invert:true },
+                          { label:'Applications', a:periodAKpis.apps, b:compareKpis.apps, fmt:fmtN },
                         ].map(m => {
                           const d = deltaPct(m.a, m.b)
                           const good = d == null ? null : (m.invert ? d < 0 : d > 0)
