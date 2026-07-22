@@ -7,6 +7,8 @@ import ExportButton from '../components/ExportButton'
 import { useAuth } from '../hooks/useAuth'
 import { usePresence } from '../hooks/usePresence'
 import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'; import { resolveSheetUrl } from '../lib/dataSources'
+import { checkShape, schemaKeyFor } from '../../shared/apiSchemas.mjs'
+import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
 import FilterDropdown from '../components/FilterDropdown'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
@@ -664,6 +666,14 @@ if(res.status===503||res.status===401){setNotConnected(true);return}
 const json=await res.json().catch(()=>({}))
 if(!res.ok)throw new Error(json.error||('API error '+res.status))
 if(json.error&&json.error.includes('credential')||json.notConnected){setNotConnected(true);return}
+if(json.error){setError(json.error);return} // was previously falling through to setData() below -- an
+                                             // error payload without the word "credential" in it used to
+                                             // get treated as valid data and silently rendered as empty.
+const {ok,issues}=checkShape(schemaKeyFor('google-ads',tab),json)
+if(!ok){
+console.error('[schema-drift][frontend][google-ads:'+tab+']',issues.join(' | '))
+toast('Google Ads '+tab+' response looks malformed -- check console (schema-drift)',{type:'muted'})
+}
 setData(p=>({...p,[tab]:json}))
 loaded.current[k]=true
 setError(null)

@@ -1,4 +1,5 @@
 import { getSessionUser, canAccessDashboard } from '../lib/auth.mjs'
+import { respond } from '../shared/apiSchemas.mjs'
 // Google Ads API - Required env vars:
 // GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_CLIENT_ID
 // GOOGLE_ADS_CLIENT_SECRET, GOOGLE_ADS_REFRESH_TOKEN, GOOGLE_ADS_CUSTOMER_ID
@@ -53,7 +54,7 @@ try{
 const negRows=await gaql(token,cid,`SELECT campaign.id,campaign_criterion.keyword.text,campaign_criterion.keyword.match_type FROM campaign_criterion WHERE campaign_criterion.negative=true AND campaign_criterion.type='KEYWORD' LIMIT 1000`)
 negRows.forEach(r=>{const cidId=r.campaign.id;if(!negatives[cidId])negatives[cidId]=[];negatives[cidId].push({text:r.campaignCriterion.keyword.text,matchType:r.campaignCriterion.keyword.matchType})})
 }catch(e){console.error('negative keywords:',e.message)}
-return res.json({campaigns,total,negatives,tab:'campaigns'})
+return respond(res,'google-ads:campaigns',{campaigns,total,negatives,tab:'campaigns'})
 }
 if(tab==='keywords'){
 const rows=await gaql(token,cid,`SELECT ad_group_criterion.keyword.text,ad_group_criterion.keyword.match_type,ad_group_criterion.quality_info.quality_score,ad_group_criterion.status,campaign.name,campaign.advertising_channel_type,ad_group.name,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion,metrics.search_impression_share FROM keyword_view WHERE ${dc} AND ad_group_criterion.status!='REMOVED' ORDER BY metrics.cost_micros DESC LIMIT 200`)
@@ -61,12 +62,12 @@ const keywords=rows.map(r=>({text:r.adGroupCriterion.keyword.text,matchType:r.ad
 const total=keywords.reduce((t,k)=>({spend:t.spend+k.spend,impressions:t.impressions+k.impressions,clicks:t.clicks+k.clicks,conversions:t.conversions+k.conversions}),{spend:0,impressions:0,clicks:0,conversions:0})
 total.ctr=total.impressions?total.clicks/total.impressions:0
 total.avgCpc=total.clicks?total.spend/total.clicks:0
-return res.json({keywords,total,tab:'keywords'})
+return respond(res,'google-ads:keywords',{keywords,total,tab:'keywords'})
 }
 if(tab==='search_terms'){
 const rows=await gaql(token,cid,`SELECT search_term_view.search_term,search_term_view.status,campaign.name,campaign.advertising_channel_type,ad_group.name,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions FROM search_term_view WHERE ${dc} ORDER BY metrics.cost_micros DESC LIMIT 500`)
 const terms=rows.map(r=>({text:r.searchTermView.searchTerm,status:r.searchTermView.status,campaign:r.campaign.name,campaignType:r.campaign.advertisingChannelType,adGroup:r.adGroup.name,spend:mic(r.metrics.costMicros),impressions:+r.metrics.impressions||0,clicks:+r.metrics.clicks||0,ctr:pct(r.metrics.ctr),avgCpc:mic(r.metrics.averageCpc),conversions:+Number(r.metrics.conversions||0).toFixed(1)}))
-return res.json({searchTerms:terms,tab:'search_terms'})
+return respond(res,'google-ads:search_terms',{searchTerms:terms,tab:'search_terms'})
 }
 if(tab==='ad_groups'){
 const rows=await gaql(token,cid,`SELECT ad_group.id,ad_group.name,ad_group.status,campaign.name,campaign.advertising_channel_type,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion FROM ad_group WHERE ${dc} AND ad_group.status!='REMOVED' ORDER BY metrics.cost_micros DESC LIMIT 200`)
@@ -74,7 +75,7 @@ const adGroups=rows.map(r=>({id:r.adGroup.id,name:r.adGroup.name,status:r.adGrou
 const total=adGroups.reduce((t,g)=>({spend:t.spend+g.spend,impressions:t.impressions+g.impressions,clicks:t.clicks+g.clicks,conversions:t.conversions+g.conversions}),{spend:0,impressions:0,clicks:0,conversions:0})
 total.ctr=total.impressions?total.clicks/total.impressions:0
 total.avgCpc=total.clicks?total.spend/total.clicks:0
-return res.json({adGroups,total,tab:'ad_groups'})
+return respond(res,'google-ads:ad_groups',{adGroups,total,tab:'ad_groups'})
 }
 if(tab==='ads'){
 const rows=await gaql(token,cid,`SELECT ad_group_ad.ad.id,ad_group_ad.ad.type,ad_group_ad.status,ad_group_ad.ad.final_urls,ad_group_ad.ad.responsive_search_ad.headlines,ad_group_ad.ad.responsive_search_ad.descriptions,campaign.name,campaign.advertising_channel_type,ad_group.name,metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion FROM ad_group_ad WHERE ${dc} AND ad_group_ad.status!='REMOVED' ORDER BY metrics.cost_micros DESC LIMIT 200`)
@@ -172,6 +173,6 @@ standard=stdRows.map(r=>({source:'Search/Display',campaign:r.campaign.name,asset
 }catch(e){console.error('standard assets:',e.message)}
 return res.json({assets:[...pmax,...standard],tab:'assets'})
 }
-if(tab==='trend'){const mode=req.query.mode==='month'?'month':'day';const seg=mode==='month'?'segments.month':'segments.date';const rows=await gaql(token,cid,`SELECT ${seg},metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion FROM customer WHERE ${dc} ORDER BY ${seg} ASC`);const points=rows.map(r=>({period:mode==='month'?r.segments.month:r.segments.date,spend:mic(r.metrics.costMicros),impressions:+r.metrics.impressions||0,clicks:+r.metrics.clicks||0,ctr:pct(r.metrics.ctr),avgCpc:mic(r.metrics.averageCpc),conversions:+Number(r.metrics.conversions||0).toFixed(1),costPerConv:mic(r.metrics.costPerConversion)}));const total=points.reduce((t,p)=>({spend:t.spend+p.spend,impressions:t.impressions+p.impressions,clicks:t.clicks+p.clicks,conversions:t.conversions+p.conversions}),{spend:0,impressions:0,clicks:0,conversions:0});total.ctr=total.impressions?total.clicks/total.impressions:0;total.avgCpc=total.clicks?total.spend/total.clicks:0;total.costPerConv=total.conversions?total.spend/total.conversions:0;return res.json({points,total,mode,tab:'trend'})}return res.status(400).json({error:'unknown tab'})
+if(tab==='trend'){const mode=req.query.mode==='month'?'month':'day';const seg=mode==='month'?'segments.month':'segments.date';const rows=await gaql(token,cid,`SELECT ${seg},metrics.cost_micros,metrics.impressions,metrics.clicks,metrics.ctr,metrics.average_cpc,metrics.conversions,metrics.cost_per_conversion FROM customer WHERE ${dc} ORDER BY ${seg} ASC`);const points=rows.map(r=>({period:mode==='month'?r.segments.month:r.segments.date,spend:mic(r.metrics.costMicros),impressions:+r.metrics.impressions||0,clicks:+r.metrics.clicks||0,ctr:pct(r.metrics.ctr),avgCpc:mic(r.metrics.averageCpc),conversions:+Number(r.metrics.conversions||0).toFixed(1),costPerConv:mic(r.metrics.costPerConversion)}));const total=points.reduce((t,p)=>({spend:t.spend+p.spend,impressions:t.impressions+p.impressions,clicks:t.clicks+p.clicks,conversions:t.conversions+p.conversions}),{spend:0,impressions:0,clicks:0,conversions:0});total.ctr=total.impressions?total.clicks/total.impressions:0;total.avgCpc=total.clicks?total.spend/total.clicks:0;total.costPerConv=total.conversions?total.spend/total.conversions:0;return respond(res,'google-ads:trend',{points,total,mode,tab:'trend'})}return res.status(400).json({error:'unknown tab'})
 }catch(e){console.error('Google Ads:',e.message);return res.status(500).json({error:e.message})}
 }
