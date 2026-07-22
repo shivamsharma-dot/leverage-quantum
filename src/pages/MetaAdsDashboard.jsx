@@ -174,7 +174,12 @@ function fmtINR(inr) {
 // file stays viewable even after Meta's own CDN links expire.
 const CREATIVE_REPORT_HEALTH_BADGE = { Healthy: 'healthy', Moderate: 'moderate', 'High Fatigue': 'fatigue' }
 const CREATIVE_REPORT_HEALTH_LABEL = { healthy: 'Healthy', moderate: 'Moderate', fatigue: 'High fatigue' }
-const CREATIVE_REPORT_MAX = 60 // hard cap so the file can't balloon to an unusable size
+// Not a real cap -- exports every currently-filtered creative by default.
+// Only exists as a last-resort safety valve for an account with an
+// implausibly large creative count (each embedded image adds ~100KB to the
+// file), so a normal export (even a full 200+ creative account) is never
+// silently truncated.
+const CREATIVE_REPORT_MAX = 1000
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]))
@@ -217,6 +222,7 @@ function buildCreativeReportHtml({ ads, totals, filterChips, truncatedCount }) {
           <div class="stat"><div class="stat-label">Spend</div><div class="stat-value">${fmtINR(ad.spend)}</div></div>
           <div class="stat"><div class="stat-label">Leads</div><div class="stat-value">${Math.round(ad.leads || 0).toLocaleString('en-IN')}</div></div>
           <div class="stat"><div class="stat-label">CPL</div><div class="stat-value accent">${ad.cpl ? fmtINR(ad.cpl) : '—'}</div></div>
+          <div class="stat"><div class="stat-label">CPQL</div><div class="stat-value accent">${ad.cpql ? fmtINR(ad.cpql) : '—'}</div></div>
           <div class="stat"><div class="stat-label">CTR</div><div class="stat-value">${(ad.ctr || 0).toFixed(2)}%</div></div>
         </div>
       </div>
@@ -234,13 +240,14 @@ body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-seri
 .report { max-width:1080px; margin:0 auto; background:#fff; border-radius:16px; border:0.5px solid #E2E8F0; padding:28px 32px 36px; box-shadow:0 1px 3px rgba(15,23,42,0.06); }
 .rep-head { display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #F1F5F9; padding-bottom:18px; margin-bottom:20px; flex-wrap:wrap; gap:14px; }
 .rep-brand { display:flex; align-items:center; gap:12px; }
-.rep-logo { width:40px; height:40px; border-radius:11px; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,0.12), 0 0 0 1px #EEF1F6; display:flex; align-items:center; justify-content:center; gap:2px; }
-.rep-logo span { display:block; width:5px; border-radius:2px; }
-.rep-title { font-size:17px; font-weight:800; color:#0F172A; margin:0; }
-.rep-sub { font-size:11.5px; color:#94A3B8; margin:2px 0 0; }
+.rep-logo { width:44px; height:44px; border-radius:12px; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,0.12), 0 0 0 1px #EEF1F6; display:flex; align-items:center; justify-content:center; gap:3px; flex-shrink:0; }
+.rep-logo span { display:block; width:6px; border-radius:2px; }
+.rep-wordmark { font-size:19px; font-weight:800; letter-spacing:0.06em; margin:0; background:linear-gradient(92deg,#1F3C84 0%,#1C9FD4 55%,#29B9C3 100%); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.rep-title { font-size:12.5px; font-weight:700; color:#64748B; margin:2px 0 0; }
+.rep-sub { font-size:11px; color:#94A3B8; margin:1px 0 0; }
 .rep-filters { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
 .rep-chip { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:6px; background:#F8FAFC; color:#64748B; border:0.5px solid #EEF1F6; }
-.rep-summary { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:24px; }
+.rep-summary { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:24px; }
 .rep-stat { background:#F8FAFC; border-radius:10px; padding:11px 14px; }
 .rep-stat-label { font-size:9.5px; font-weight:700; color:#94A3B8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px; }
 .rep-stat-value { font-size:16px; font-weight:800; color:#0F172A; }
@@ -264,8 +271,8 @@ body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-seri
 <div class="report">
   <div class="rep-head">
     <div class="rep-brand">
-      <div class="rep-logo"><span style="height:14px;background:#4CAE6F;"></span><span style="height:20px;background:#1C9FD4;"></span><span style="height:26px;background:#1F3C84;"></span></div>
-      <div><p class="rep-title">Meta Ads — Creative Report</p><p class="rep-sub">Generated ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })} &middot; Leverage Quantum</p></div>
+      <div class="rep-logo"><span style="height:15px;background:#4CAE6F;"></span><span style="height:22px;background:#1C9FD4;"></span><span style="height:29px;background:#1F3C84;"></span></div>
+      <div><p class="rep-wordmark">QUANTUM</p><p class="rep-title">Meta Ads — Creative Report</p><p class="rep-sub">Generated ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}</p></div>
     </div>
     <div class="rep-filters">${chipsHtml}</div>
   </div>
@@ -273,12 +280,13 @@ body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-seri
     <div class="rep-stat"><div class="rep-stat-label">Total spend</div><div class="rep-stat-value">${fmtINR(totals.spend)}</div></div>
     <div class="rep-stat"><div class="rep-stat-label">Total leads</div><div class="rep-stat-value">${Math.round(totals.leads || 0).toLocaleString('en-IN')}</div></div>
     <div class="rep-stat"><div class="rep-stat-label">Avg CPL</div><div class="rep-stat-value">${totals.cpl ? fmtINR(totals.cpl) : '—'}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Avg CPQL</div><div class="rep-stat-value">${totals.cpql ? fmtINR(totals.cpql) : '—'}</div></div>
     <div class="rep-stat"><div class="rep-stat-label">Avg CTR</div><div class="rep-stat-value">${(totals.ctr || 0).toFixed(2)}%</div></div>
     <div class="rep-stat"><div class="rep-stat-label">Creatives shown</div><div class="rep-stat-value">${ads.length}</div></div>
   </div>
   ${truncNote}
   <div class="grid">${cards}</div>
-  <div class="rep-foot">Exported from Leverage Quantum &middot; quantum.leverageedu.com &middot; Ad names link to the live creative on Meta</div>
+  <div class="rep-foot">Exported from <b style="color:#1F3C84;">Leverage Quantum</b> &middot; quantum.leverageedu.com &middot; Ad names link to the live creative on Meta</div>
 </div>
 </body></html>`
 }
