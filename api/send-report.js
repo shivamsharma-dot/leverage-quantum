@@ -12,8 +12,12 @@ const CYAN  = '#29B9C3'
 const GREEN = '#4CAE6F'
 const FONT  = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"
 
-// SVG logo icon (3 bars: green, cyan, blue) — inline for email
-const LOGO_ICON_SVG = `<svg width="28" height="28" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="12" width="4" height="9" rx="1.5" fill="${GREEN}"/><rect x="7" y="7" width="4" height="14" rx="1.5" fill="${CYAN}"/><rect x="13" y="4" width="4" height="17" rx="1.5" fill="${BLUE}"/></svg>`
+// Logo mark bars (green/blue/navy, heights 9/14/17px) — canonical source is
+// shared/brandLogo.mjs. Duplicated here as literals (not imported) because this
+// is a Vercel serverless .js handler and a static top-level import of an .mjs
+// file from here risks ERR_REQUIRE_ESM (see CLAUDE.md). Email uses table-cell
+// divs instead of <svg> for client compatibility, but the heights/colors/order
+// below MUST stay byte-identical to BRAND_LOGO_BARS in shared/brandLogo.mjs.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -249,8 +253,8 @@ function buildChatAnswerEmail({ question, answerHtml, askedBy }) {
             <tr><td style="padding:9px 11px">
               <table cellpadding="0" cellspacing="0"><tr>
                 <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:9px;background-color:${GREEN};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
-                <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:14px;background-color:${CYAN};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
-                <td valign="bottom"><div style="width:4px;height:17px;background-color:${BLUE};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+                <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:14px;background-color:${BLUE};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+                <td valign="bottom"><div style="width:4px;height:17px;background-color:${NAVY};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
               </tr></table>
             </td></tr>
           </table>
@@ -539,8 +543,8 @@ async function buildReport(token, reportType) {
             <tr><td style="padding:9px 11px">
               <table cellpadding="0" cellspacing="0"><tr>
                 <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:9px;background-color:${GREEN};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
-                <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:14px;background-color:${CYAN};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
-                <td valign="bottom"><div style="width:4px;height:17px;background-color:${BLUE};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+                <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:14px;background-color:${BLUE};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+                <td valign="bottom"><div style="width:4px;height:17px;background-color:${NAVY};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
               </tr></table>
             </td></tr>
           </table>

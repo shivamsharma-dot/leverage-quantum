@@ -11,6 +11,7 @@ import { DashboardSkeleton } from '../components/SkeletonLoader'
 import FilterDropdown from '../components/FilterDropdown'
 import { toast } from '../components/ToastHost'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
+import { brandLogoSvgMarkup } from '../../shared/brandLogo.mjs'
 import styles from './MetaAdsDashboard.module.css'
 
 const APP_ID     = '2314692909338886'
@@ -240,8 +241,7 @@ body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-seri
 .report { max-width:1080px; margin:0 auto; background:#fff; border-radius:16px; border:0.5px solid #E2E8F0; padding:28px 32px 36px; box-shadow:0 1px 3px rgba(15,23,42,0.06); }
 .rep-head { display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #F1F5F9; padding-bottom:18px; margin-bottom:20px; flex-wrap:wrap; gap:14px; }
 .rep-brand { display:flex; align-items:center; gap:12px; }
-.rep-logo { width:44px; height:44px; border-radius:12px; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,0.12), 0 0 0 1px #EEF1F6; display:flex; align-items:center; justify-content:center; gap:3px; flex-shrink:0; }
-.rep-logo span { display:block; width:6px; border-radius:2px; }
+.rep-logo { width:44px; height:44px; border-radius:12px; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,0.12), 0 0 0 1px #EEF1F6; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .rep-wordmark { font-size:19px; font-weight:800; letter-spacing:0.06em; margin:0; background:linear-gradient(92deg,#1F3C84 0%,#1C9FD4 55%,#29B9C3 100%); -webkit-background-clip:text; background-clip:text; color:transparent; }
 .rep-title { font-size:12.5px; font-weight:700; color:#64748B; margin:2px 0 0; }
 .rep-sub { font-size:11px; color:#94A3B8; margin:1px 0 0; }
@@ -271,7 +271,7 @@ body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-seri
 <div class="report">
   <div class="rep-head">
     <div class="rep-brand">
-      <div class="rep-logo"><span style="height:15px;background:#4CAE6F;"></span><span style="height:22px;background:#1C9FD4;"></span><span style="height:29px;background:#1F3C84;"></span></div>
+      <div class="rep-logo">${brandLogoSvgMarkup(24)}</div>
       <div><p class="rep-wordmark">QUANTUM</p><p class="rep-title">Meta Ads — Creative Report</p><p class="rep-sub">Generated ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}</p></div>
     </div>
     <div class="rep-filters">${chipsHtml}</div>
