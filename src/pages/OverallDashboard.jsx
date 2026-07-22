@@ -233,10 +233,27 @@ function CalMonth({ year, month, from, to, hovered, onSelect, onHover }) {
 
 const fmt = d => { if (!d) return ''; const y=d.getFullYear(),mo=String(d.getMonth()+1).padStart(2,'0'),dy=String(d.getDate()).padStart(2,'0'); return `${y}-${mo}-${dy}` }
 
-function DateRangePicker({ from, to, onChange }) {
+// Quick-select presets, computed relative to today — optional; only rendered
+// when a `presets` array is passed (the main page's own "Custom" filter
+// doesn't pass one, so its popover is unchanged).
+function buildDatePresets() {
   const today = new Date(); today.setHours(0, 0, 0, 0)
-  const [viewYear, setViewYear] = useState(today.getFullYear())
-  const [viewMonth, setViewMonth] = useState(today.getMonth())
+  const daysAgo = n => { const d = new Date(today); d.setDate(d.getDate() - n); return d }
+  const monthStart = (offset) => new Date(today.getFullYear(), today.getMonth() + offset, 1)
+  const monthEnd = (offset) => new Date(today.getFullYear(), today.getMonth() + offset + 1, 0)
+  return [
+    { label:'Last 7 days', from: daysAgo(6), to: today },
+    { label:'Last 30 days', from: daysAgo(29), to: today },
+    { label:'Last 90 days', from: daysAgo(89), to: today },
+    { label:'This month', from: monthStart(0), to: today },
+    { label:'Last month', from: monthStart(-1), to: monthEnd(-1) },
+  ]
+}
+
+function DateRangePicker({ from, to, onChange, presets }) {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const [viewYear, setViewYear] = useState((from || today).getFullYear())
+  const [viewMonth, setViewMonth] = useState((from || today).getMonth())
   const [hovered, setHovered] = useState(null)
   const [selFrom, setSelFrom] = useState(from || null)
   const [selTo, setSelTo] = useState(to || null)
@@ -257,22 +274,38 @@ function DateRangePicker({ from, to, onChange }) {
   const goRight = () => viewMonth === 11 ? (setViewYear(y => y + 1), setViewMonth(0)) : setViewMonth(m => m + 1)
 
   return (
-    <div style={{ padding:'16px 20px', fontFamily:FONT }}>
-      <div style={{ display:'flex', gap:8, marginBottom:14, alignItems:'center' }}>
-        <div style={{ flex:1, padding:'6px 10px', borderRadius:8, border:`1.5px solid ${step === 'from' ? C.navy : C.border}`, background: step === 'from' ? C.navyBg : '#FAFAFA', fontSize:12, fontWeight:600, color: selFrom ? C.text : C.muted, fontFamily:FONT, cursor:'pointer' }} onClick={() => setStep('from')}>{selFrom ? fmt(selFrom) : 'Start date'}</div>
-        <svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M0 5h14M10 1l4 4-4 4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        <div style={{ flex:1, padding:'6px 10px', borderRadius:8, border:`1.5px solid ${step === 'to' && selFrom ? C.navy : C.border}`, background: step === 'to' && selFrom ? C.navyBg : '#FAFAFA', fontSize:12, fontWeight:600, color: selTo ? C.text : C.muted, fontFamily:FONT, cursor: selFrom ? 'pointer' : 'default' }} onClick={() => selFrom && setStep('to')}>{selTo ? fmt(selTo) : 'End date'}</div>
-      </div>
-      <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:12 }}>
-        <NavBtn dir="left" onClick={goLeft} /><div style={{ flex:1 }} /><NavBtn dir="right" onClick={goRight} />
-      </div>
-      <div style={{ display:'flex', gap:24 }}>
-        <CalMonth year={viewYear} month={viewMonth} from={selFrom} to={selTo} hovered={step === 'to' ? hovered : null} onSelect={handleSelect} onHover={step === 'to' ? setHovered : () => {}} />
-        <CalMonth year={right.y} month={right.m} from={selFrom} to={selTo} hovered={step === 'to' ? hovered : null} onSelect={handleSelect} onHover={step === 'to' ? setHovered : () => {}} />
-      </div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:14, paddingTop:12, borderTop:'0.5px solid #F1F5F9' }}>
-        <Button onClick={() => { setSelFrom(null); setSelTo(null); setStep('from') }} variant="secondary" size="sm">Clear</Button>
-        <Button onClick={() => canApply && onChange(fmt(selFrom), fmt(selTo))} disabled={!canApply} size="sm">Apply range</Button>
+    <div style={{ padding:'16px 20px', fontFamily:FONT, display:'flex', gap:16 }}>
+      {presets && (
+        <div style={{ display:'flex', flexDirection:'column', gap:3, paddingRight:16, borderRight:`0.5px solid ${C.border}`, minWidth:120 }}>
+          {presets.map(p => {
+            const active = selFrom && selTo && fmt(selFrom) === fmt(p.from) && fmt(selTo) === fmt(p.to)
+            return (
+              <button key={p.label}
+                onClick={() => { setSelFrom(p.from); setSelTo(p.to); setViewYear(p.from.getFullYear()); setViewMonth(p.from.getMonth()); setStep('from') }}
+                style={{ textAlign:'left', padding:'7px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight: active ? 700 : 500, background: active ? C.navyBg : 'transparent', color: active ? C.navy : C.sub }}>
+                {p.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <div>
+        <div style={{ display:'flex', gap:8, marginBottom:14, alignItems:'center' }}>
+          <div style={{ flex:1, padding:'6px 10px', borderRadius:8, border:`1.5px solid ${step === 'from' ? C.navy : C.border}`, background: step === 'from' ? C.navyBg : '#FAFAFA', fontSize:12, fontWeight:600, color: selFrom ? C.text : C.muted, fontFamily:FONT, cursor:'pointer' }} onClick={() => setStep('from')}>{selFrom ? fmt(selFrom) : 'Start date'}</div>
+          <svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M0 5h14M10 1l4 4-4 4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <div style={{ flex:1, padding:'6px 10px', borderRadius:8, border:`1.5px solid ${step === 'to' && selFrom ? C.navy : C.border}`, background: step === 'to' && selFrom ? C.navyBg : '#FAFAFA', fontSize:12, fontWeight:600, color: selTo ? C.text : C.muted, fontFamily:FONT, cursor: selFrom ? 'pointer' : 'default' }} onClick={() => selFrom && setStep('to')}>{selTo ? fmt(selTo) : 'End date'}</div>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:12 }}>
+          <NavBtn dir="left" onClick={goLeft} /><div style={{ flex:1 }} /><NavBtn dir="right" onClick={goRight} />
+        </div>
+        <div style={{ display:'flex', gap:24 }}>
+          <CalMonth year={viewYear} month={viewMonth} from={selFrom} to={selTo} hovered={step === 'to' ? hovered : null} onSelect={handleSelect} onHover={step === 'to' ? setHovered : () => {}} />
+          <CalMonth year={right.y} month={right.m} from={selFrom} to={selTo} hovered={step === 'to' ? hovered : null} onSelect={handleSelect} onHover={step === 'to' ? setHovered : () => {}} />
+        </div>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:14, paddingTop:12, borderTop:'0.5px solid #F1F5F9' }}>
+          <Button onClick={() => { setSelFrom(null); setSelTo(null); setStep('from') }} variant="secondary" size="sm">Clear</Button>
+          <Button onClick={() => canApply && onChange(fmt(selFrom), fmt(selTo))} disabled={!canApply} size="sm">Apply range</Button>
+        </div>
       </div>
     </div>
   )
@@ -491,6 +524,9 @@ export default function OverallDashboard() {
   // comparison instead of blank fields.
   const [compareCustomFromA, setCompareCustomFromA] = useState('')
   const [compareCustomToA, setCompareCustomToA] = useState('')
+  const [compareGroupBy, setCompareGroupBy] = useState('corridor') // 'corridor' | 'source' | 'campaign'
+  const [showComparePickerA, setShowComparePickerA] = useState(false)
+  const [showComparePickerB, setShowComparePickerB] = useState(false)
 
   // Summary table customization — search, sortable columns, show/hide + reorder columns
   // (persisted), row limit. Mirrors the Meta Ads Creatives table's "customizable" pattern.
@@ -811,40 +847,48 @@ export default function OverallDashboard() {
     }
   }
 
-  function groupByCorridorRaw(list) {
+  // Generic grouping used by the movers list — keyed by whichever dimension the
+  // marketer picks (corridor / source / campaign), so "what's driving it" isn't
+  // locked to corridor only.
+  function groupByDimRaw(list, dim) {
+    const keyFn = dim === 'source' ? (r => r.source || 'Unknown')
+      : dim === 'campaign' ? (r => r.campaign || '(no campaign)')
+      : (r => classifyCorridor(r.campaign))
+    const labelFn = dim === 'corridor' ? corridorLabel : (id) => id
     const m = new Map()
     list.forEach(r => {
-      const id = classifyCorridor(r.campaign)
-      const e = m.get(id) || { id, corridor: corridorLabel(id), totalQL:0, spend:0, leads:0 }
+      const id = keyFn(r)
+      const e = m.get(id) || { id, corridor: labelFn(id), totalQL:0, spend:0, leads:0 }
       e.totalQL += r.totalQL; e.spend += r.spend; e.leads += r.leads
       m.set(id, e)
     })
     return m
   }
 
-  // Ranked movers: which corridors contributed most to the change in Total QL
-  // between the two periods — the single metric that best answers "where do I
-  // put my next rupee" for a performance marketer, vs a flat list of every
-  // corridor's raw numbers.
+  // Ranked movers: which segment (corridor/source/campaign) contributed most to
+  // the change in Total QL between the two periods — the single metric that
+  // best answers "where do I put my next rupee" for a performance marketer,
+  // vs a flat list of every segment's raw numbers.
   const compareMovers = useMemo(() => {
     if (!compareOpen || compareRows.length === 0 || periodARows.length === 0) return []
-    const a = groupByCorridorRaw(periodARows)
-    const b = groupByCorridorRaw(compareRows)
+    const a = groupByDimRaw(periodARows, compareGroupBy)
+    const b = groupByDimRaw(compareRows, compareGroupBy)
+    const labelFor = id => a.get(id)?.corridor || b.get(id)?.corridor || id
     const ids = new Set([...a.keys(), ...b.keys()])
     const out = []
     ids.forEach(id => {
-      const ea = a.get(id) || { corridor: corridorLabel(id), totalQL:0, spend:0, leads:0 }
-      const eb = b.get(id) || { corridor: corridorLabel(id), totalQL:0, spend:0, leads:0 }
-      if (ea.totalQL < 3 && eb.totalQL < 3) return // skip noise from near-zero corridors on both sides
+      const ea = a.get(id) || { totalQL:0, spend:0, leads:0 }
+      const eb = b.get(id) || { totalQL:0, spend:0, leads:0 }
+      if (ea.totalQL < 3 && eb.totalQL < 3) return // skip noise from near-zero segments on both sides
       out.push({
-        corridor: ea.corridor,
+        corridor: labelFor(id),
         aQL: ea.totalQL, bQL: eb.totalQL, deltaQL: ea.totalQL - eb.totalQL,
         aCpql: ea.totalQL > 0 ? ea.spend / ea.totalQL : 0,
         bCpql: eb.totalQL > 0 ? eb.spend / eb.totalQL : 0,
       })
     })
     return out.sort((x, y) => Math.abs(y.deltaQL) - Math.abs(x.deltaQL)).slice(0, 5)
-  }, [compareOpen, compareRows, periodARows])
+  }, [compareOpen, compareRows, periodARows, compareGroupBy])
 
   const compareQlDeltaPct = deltaPct(periodAKpis.totalQL, compareKpis.totalQL)
   const compareCpqlDeltaPct = deltaPct(periodACpql, compareCpql)
@@ -1478,26 +1522,45 @@ export default function OverallDashboard() {
                     ))}
                   </div>
 
-                  {compareMode === 'custom' && (
-                    <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:16, background:'var(--bg2)', border:`0.5px solid ${C.border}`, borderRadius:10, padding:'10px 12px' }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                        <span style={{ fontSize:11, fontWeight:700, color:C.muted, width:60, flexShrink:0 }}>This:</span>
-                        <input type="date" value={compareCustomFromA} onChange={e => setCompareCustomFromA(e.target.value)}
-                          style={{ padding:'6px 9px', borderRadius:7, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
-                        <span style={{ color:C.muted, fontSize:12 }}>to</span>
-                        <input type="date" value={compareCustomToA} onChange={e => setCompareCustomToA(e.target.value)}
-                          style={{ padding:'6px 9px', borderRadius:7, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
+                  {compareMode === 'custom' && (() => {
+                    const parseYmd = s => { if (!s) return null; const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d) }
+                    const daysBetween = (fromStr, toStr) => { const f = parseYmd(fromStr), t = parseYmd(toStr); return (f && t) ? Math.round((t - f) / 86400000) + 1 : null }
+                    const daysA = daysBetween(compareCustomFromA, compareCustomToA)
+                    const daysB = daysBetween(compareCustomFrom, compareCustomTo)
+                    const mismatch = daysA != null && daysB != null && daysA !== daysB
+                    const RangeField = ({ label, fromStr, toStr, open, setOpen, onApply }) => (
+                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:C.muted, width:34, flexShrink:0 }}>{label}</span>
+                        <div style={{ position:'relative' }}>
+                          <button onClick={() => setOpen(v => !v)}
+                            style={{ display:'flex', alignItems:'center', gap:7, padding:'7px 12px', borderRadius:8, border:`0.5px solid ${open ? C.navy : C.border}`, background: open ? C.navyBg : 'var(--card)', color: fromStr ? C.text : C.muted, cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight:600 }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                            {fromStr && toStr ? `${fromStr} -> ${toStr}` : 'Pick a range'}
+                          </button>
+                          {open && (
+                            <>
+                              <div onClick={() => setOpen(false)} style={{ position:'fixed', inset:0, zIndex:699 }} />
+                              <div style={{ position:'absolute', left:0, top:'calc(100% + 8px)', zIndex:700, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:14, boxShadow:'0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', overflow:'hidden' }}>
+                                <DateRangePicker from={parseYmd(fromStr)} to={parseYmd(toStr)} presets={buildDatePresets()} onChange={(f, t) => { onApply(f, t); setOpen(false) }} />
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                        <span style={{ fontSize:11, fontWeight:700, color:C.muted, width:60, flexShrink:0 }}>Vs:</span>
-                        <input type="date" value={compareCustomFrom} onChange={e => setCompareCustomFrom(e.target.value)}
-                          style={{ padding:'6px 9px', borderRadius:7, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
-                        <span style={{ color:C.muted, fontSize:12 }}>to</span>
-                        <input type="date" value={compareCustomTo} onChange={e => setCompareCustomTo(e.target.value)}
-                          style={{ padding:'6px 9px', borderRadius:7, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12, color:C.text, outline:'none' }} />
+                    )
+                    return (
+                      <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:16, background:'var(--bg2)', border:`0.5px solid ${C.border}`, borderRadius:10, padding:'12px 14px' }}>
+                        <RangeField label="This:" fromStr={compareCustomFromA} toStr={compareCustomToA} open={showComparePickerA} setOpen={setShowComparePickerA} onApply={(f, t) => { setCompareCustomFromA(f); setCompareCustomToA(t) }} />
+                        <RangeField label="Vs:" fromStr={compareCustomFrom} toStr={compareCustomTo} open={showComparePickerB} setOpen={setShowComparePickerB} onApply={(f, t) => { setCompareCustomFrom(f); setCompareCustomTo(t) }} />
+                        {daysA != null && daysB != null && (
+                          <div style={{ fontSize:11, color: mismatch ? C.navy : C.muted, fontWeight: mismatch ? 700 : 400 }}>
+                            {daysA} day{daysA === 1 ? '' : 's'} vs {daysB} day{daysB === 1 ? '' : 's'}
+                            {mismatch && ' — different lengths, deltas may look larger/smaller than a like-for-like comparison'}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    )
+                  })()}
 
                   {compareRows.length === 0 || periodARows.length === 0 ? (
                     <div style={{ textAlign:'center', padding:'32px 0', color:C.muted, fontSize:13 }}>
@@ -1548,7 +1611,17 @@ export default function OverallDashboard() {
                       {/* Ranked movers */}
                       {compareMovers.length > 0 && (
                         <div style={{ marginBottom:16 }}>
-                          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:8 }}>What's driving it — by corridor</div>
+                          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8, flexWrap:'wrap', gap:8 }}>
+                            <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em' }}>What's driving it</div>
+                            <div style={{ display:'flex', gap:4 }}>
+                              {[['corridor', 'Corridor'], ['source', 'Source'], ['campaign', 'Campaign']].map(([g, lbl]) => (
+                                <button key={g} onClick={() => setCompareGroupBy(g)}
+                                  style={{ padding:'4px 10px', borderRadius:6, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:11, fontWeight:700, background: compareGroupBy === g ? C.navy : 'var(--bg2)', color: compareGroupBy === g ? '#fff' : C.sub }}>
+                                  {lbl}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                             {compareMovers.map(mv => (
                               <div key={mv.corridor} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderRadius:9, background:'var(--bg2)' }}>
