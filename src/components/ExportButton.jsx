@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { toast } from './ToastHost'
 import Button from './Button'
 
-export default function ExportButton({ data, filename, columns, dashboardId }) {
+export default function ExportButton({ data, filename, columns, dashboardId, extraOption }) {
   const [open, setOpen] = useState(false)
   const [sheetsBusy, setSheetsBusy] = useState(false)
   const [slackBusy, setSlackBusy] = useState(false)
@@ -176,6 +176,22 @@ export default function ExportButton({ data, filename, columns, dashboardId }) {
               </svg>
               {slackBusy ? 'Posting…' : 'Send to Slack'}
             </button>
+            {extraOption && (
+              <button onClick={extraOption.onClick} disabled={extraOption.busy} style={{
+                display:'flex', alignItems:'center', gap:9, width:'100%',
+                padding:'9px 14px', border:'none', background:'none',
+                cursor: extraOption.busy ? 'default' : 'pointer', fontSize:13, fontWeight:500, color:'#111827',
+                borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
+                transition:'background .1s', opacity: extraOption.busy ? 0.6 : 1
+              }}
+              onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
+              onMouseOut={e=>e.currentTarget.style.background='none'}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+                </svg>
+                {extraOption.busy ? (extraOption.busyLabel || 'Working…') : extraOption.label}
+              </button>
+            )}
           </div>
         </>
       )}

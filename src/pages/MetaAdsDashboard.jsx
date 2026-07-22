@@ -9,6 +9,7 @@ import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import FilterDropdown from '../components/FilterDropdown'
+import { toast } from '../components/ToastHost'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
 import styles from './MetaAdsDashboard.module.css'
 
@@ -164,6 +165,122 @@ function fmtINR(inr) {
   if (n >= 1000) return '₹' + Math.round(n).toLocaleString('en-IN')
   if (n > 0 && n < 1) return '₹' + n.toFixed(2)
   return '₹' + Math.round(n)
+}
+
+// "Creative Report" export -- a self-contained HTML file (not just CSV/JSON
+// text) showing each creative's actual thumbnail embedded inline, its name as
+// a clickable link to the live ad, and its key stats. Images are pulled
+// through /api/img-proxy and converted to data URIs at export time so the
+// file stays viewable even after Meta's own CDN links expire.
+const CREATIVE_REPORT_HEALTH_BADGE = { Healthy: 'healthy', Moderate: 'moderate', 'High Fatigue': 'fatigue' }
+const CREATIVE_REPORT_HEALTH_LABEL = { healthy: 'Healthy', moderate: 'Moderate', fatigue: 'High fatigue' }
+const CREATIVE_REPORT_MAX = 60 // hard cap so the file can't balloon to an unusable size
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]))
+}
+
+async function fetchThumbAsDataUri(url) {
+  if (!url) return null
+  try {
+    const res = await fetch('/api/img-proxy?url=' + encodeURIComponent(url))
+    if (!res.ok) return null
+    const blob = await res.blob()
+    return await new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = () => resolve(null)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
+function buildCreativeReportHtml({ ads, totals, filterChips, truncatedCount }) {
+  const cards = ads.map(ad => {
+    const badgeClass = CREATIVE_REPORT_HEALTH_BADGE[ad.fatigueLabel] || 'healthy'
+    const badgeLabel = CREATIVE_REPORT_HEALTH_LABEL[badgeClass]
+    const thumb = ad._reportThumb
+      ? `<img src="${ad._reportThumb}" alt="" />`
+      : `<div class="ph" style="background:linear-gradient(135deg,#1F3C84,#1C9FD4)"></div>`
+    const playIcon = ad.type === 'video'
+      ? `<div class="playicon"><svg width="30" height="30" viewBox="0 0 24 24" fill="rgba(255,255,255,0.92)"><circle cx="12" cy="12" r="11" fill="rgba(0,0,0,0.28)"/><path d="M10 8l6 4-6 4V8z"/></svg></div>`
+      : ''
+    const link = ad.previewLink || '#'
+    return `
+    <div class="card">
+      <div class="thumb">${thumb}<span class="badge ${badgeClass}">${badgeLabel}</span>${playIcon}</div>
+      <div class="card-body">
+        <a class="card-link" href="${escapeHtml(link)}" target="_blank" rel="noreferrer" title="${escapeHtml(ad.name)}">${escapeHtml(ad.name)}</a>
+        <div class="stats-row">
+          <div class="stat"><div class="stat-label">Spend</div><div class="stat-value">${fmtINR(ad.spend)}</div></div>
+          <div class="stat"><div class="stat-label">Leads</div><div class="stat-value">${Math.round(ad.leads || 0).toLocaleString('en-IN')}</div></div>
+          <div class="stat"><div class="stat-label">CPL</div><div class="stat-value accent">${ad.cpl ? fmtINR(ad.cpl) : '—'}</div></div>
+          <div class="stat"><div class="stat-label">CTR</div><div class="stat-value">${(ad.ctr || 0).toFixed(2)}%</div></div>
+        </div>
+      </div>
+    </div>`
+  }).join('')
+
+  const chipsHtml = filterChips.map(c => `<span class="rep-chip">${escapeHtml(c)}</span>`).join('')
+  const truncNote = truncatedCount > 0
+    ? `<div class="rep-trunc">Showing top ${ads.length} of ${ads.length + truncatedCount} creatives by spend -- narrow your filters to include more.</div>`
+    : ''
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Meta Ads Creative Report</title><style>
+* { box-sizing:border-box; }
+body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-serif; background:#F4F6F9; color:#0F172A; padding:28px 32px 36px; }
+.report { max-width:1080px; margin:0 auto; background:#fff; border-radius:16px; border:0.5px solid #E2E8F0; padding:28px 32px 36px; box-shadow:0 1px 3px rgba(15,23,42,0.06); }
+.rep-head { display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid #F1F5F9; padding-bottom:18px; margin-bottom:20px; flex-wrap:wrap; gap:14px; }
+.rep-brand { display:flex; align-items:center; gap:12px; }
+.rep-logo { width:40px; height:40px; border-radius:11px; background:#fff; box-shadow:0 1px 3px rgba(15,23,42,0.12), 0 0 0 1px #EEF1F6; display:flex; align-items:center; justify-content:center; gap:2px; }
+.rep-logo span { display:block; width:5px; border-radius:2px; }
+.rep-title { font-size:17px; font-weight:800; color:#0F172A; margin:0; }
+.rep-sub { font-size:11.5px; color:#94A3B8; margin:2px 0 0; }
+.rep-filters { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.rep-chip { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:6px; background:#F8FAFC; color:#64748B; border:0.5px solid #EEF1F6; }
+.rep-summary { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:24px; }
+.rep-stat { background:#F8FAFC; border-radius:10px; padding:11px 14px; }
+.rep-stat-label { font-size:9.5px; font-weight:700; color:#94A3B8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px; }
+.rep-stat-value { font-size:16px; font-weight:800; color:#0F172A; }
+.rep-trunc { font-size:11.5px; color:#64748B; background:#F8FAFC; border-radius:8px; padding:8px 12px; margin-bottom:16px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px; }
+.card { border:0.5px solid #EEF1F6; border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(15,23,42,0.05); }
+.thumb { position:relative; width:100%; aspect-ratio:1/1; overflow:hidden; background:#F1F5F9; }
+.thumb img, .thumb .ph { width:100%; height:100%; object-fit:cover; display:block; }
+.badge { position:absolute; top:8px; left:8px; font-size:9px; font-weight:800; letter-spacing:0.03em; text-transform:uppercase; padding:3px 8px; border-radius:6px; color:#fff; }
+.badge.healthy { background:#4CAE6F; } .badge.moderate { background:#1C9FD4; } .badge.fatigue { background:#1F3C84; }
+.playicon { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+.card-body { padding:12px 13px 14px; }
+.card-link { font-size:12.5px; font-weight:700; color:#1F3C84; text-decoration:none; display:block; margin-bottom:9px; line-height:1.4; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.card-link:hover { text-decoration:underline; }
+.stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:6px 8px; }
+.stat-label { font-size:8.5px; font-weight:700; color:#94A3B8; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:2px; }
+.stat-value { font-size:12px; font-weight:800; color:#0F172A; }
+.stat-value.accent { color:#1F3C84; }
+.rep-foot { margin-top:26px; padding-top:16px; border-top:0.5px solid #F1F5F9; text-align:center; font-size:10.5px; color:#94A3B8; }
+</style></head><body>
+<div class="report">
+  <div class="rep-head">
+    <div class="rep-brand">
+      <div class="rep-logo"><span style="height:14px;background:#4CAE6F;"></span><span style="height:20px;background:#1C9FD4;"></span><span style="height:26px;background:#1F3C84;"></span></div>
+      <div><p class="rep-title">Meta Ads — Creative Report</p><p class="rep-sub">Generated ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })} &middot; Leverage Quantum</p></div>
+    </div>
+    <div class="rep-filters">${chipsHtml}</div>
+  </div>
+  <div class="rep-summary">
+    <div class="rep-stat"><div class="rep-stat-label">Total spend</div><div class="rep-stat-value">${fmtINR(totals.spend)}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Total leads</div><div class="rep-stat-value">${Math.round(totals.leads || 0).toLocaleString('en-IN')}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Avg CPL</div><div class="rep-stat-value">${totals.cpl ? fmtINR(totals.cpl) : '—'}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Avg CTR</div><div class="rep-stat-value">${(totals.ctr || 0).toFixed(2)}%</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Creatives shown</div><div class="rep-stat-value">${ads.length}</div></div>
+  </div>
+  ${truncNote}
+  <div class="grid">${cards}</div>
+  <div class="rep-foot">Exported from Leverage Quantum &middot; quantum.leverageedu.com &middot; Ad names link to the live creative on Meta</div>
+</div>
+</body></html>`
 }
 const getAction = (actions, type) => {
   if (type === 'lead') {
@@ -623,6 +740,51 @@ function CreativesTab({ data, token }) {
     'WoW CTR %': ad.ctrDelta != null ? +ad.ctrDelta.toFixed(1) : '',
     'Ad Link': ad.previewLink || '',
   })), [filtered])
+
+  const [creativeReportBusy, setCreativeReportBusy] = useState(false)
+  const exportCreativeReport = async () => {
+    if (!filtered || filtered.length === 0) return
+    setCreativeReportBusy(true)
+    try {
+      const sorted = [...filtered].sort((a, b) => (b.spend || 0) - (a.spend || 0))
+      const included = sorted.slice(0, CREATIVE_REPORT_MAX)
+      const truncatedCount = sorted.length - included.length
+
+      // Fetch thumbnails concurrently in small batches -- 200 creatives' worth of
+      // sequential fetches would be painfully slow, but firing all of them at once
+      // risks overwhelming the image proxy.
+      const BATCH = 6
+      for (let i = 0; i < included.length; i += BATCH) {
+        const batch = included.slice(i, i + BATCH)
+        await Promise.all(batch.map(async ad => {
+          ad._reportThumb = await fetchThumbAsDataUri(ad.creative?._thumbUrl)
+        }))
+      }
+
+      const filterChips = [
+        adTypeFilter !== 'all' ? adTypeFilter.charAt(0).toUpperCase() + adTypeFilter.slice(1) : 'All formats',
+        statusFilter !== 'all' ? statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1) : 'All statuses',
+        healthFilter !== 'all' ? (healthFilter === 'fatigue' ? 'Fatigue' : healthFilter.charAt(0).toUpperCase() + healthFilter.slice(1)) : 'All health',
+        corridorFilter !== 'all' ? (CORRIDORS.find(c => c.id === corridorFilter)?.label || corridorFilter) : null,
+        `${included.length} of ${processed.length} creatives`,
+      ].filter(Boolean)
+
+      const html = buildCreativeReportHtml({ ads: included, totals: filteredTotals, filterChips, truncatedCount })
+      const blob = new Blob([html], { type: 'text/html' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `meta_ads_creative_report_${new Date().toISOString().slice(0, 10)}.html`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast('Creative report downloaded', { type: 'success' })
+    } catch (e) {
+      toast('Could not build the creative report: ' + e.message, { type: 'muted' })
+    } finally {
+      setCreativeReportBusy(false)
+    }
+  }
+
   const filteredTotals = useMemo(() => {
     let spend=0, impressions=0, clicks=0, leads=0, reach=0, active=0, freqSum=0, freqW=0, crmLeads=0, humanQL=0, aiQL=0;
     for (const a of filtered) {
@@ -772,7 +934,14 @@ function CreativesTab({ data, token }) {
               </div>
             </>
           )}
-          <ExportButton data={exportRows} filename="meta_ads_creatives" dashboardId="meta_ads" />
+          <ExportButton data={exportRows} filename="meta_ads_creatives" dashboardId="meta_ads"
+            extraOption={{
+              label: 'Creative Report (with images)',
+              busyLabel: 'Building report…',
+              busy: creativeReportBusy,
+              onClick: exportCreativeReport,
+            }}
+          />
           {[{m:'grid',l:'⊞',t:'Grid view'},{m:'list',l:'☰',t:'List view'}].map(v=><button key={v.m} onClick={()=>setViewMode(v.m)} title={v.t} style={{ display:'inline-flex',alignItems:'center',justifyContent:'center',width:32,height:32,borderRadius:8,border:'0.5px solid #E5E7EB',fontSize:15,cursor:'pointer',flexShrink:0,background:viewMode===v.m?'#1F3C84':'#fff',color:viewMode===v.m?'#fff':'#6B7280' }}>{v.l}</button>)}
         </div>
       </div>
