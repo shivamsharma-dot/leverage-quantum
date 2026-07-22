@@ -572,7 +572,6 @@ const CREATIVE_SORT_VALUE = {
   health: a => a.fatigueLabel || '',
   delta: a => a.crmLeads != null ? (a.crmLeads - (a.leads || 0)) : null,
   freq: a => a.frequency || 0,
-  wowCtr: a => a.ctrDelta,
 }
 // Categorical/text columns default to A-Z (ascending) on first click, not high-to-low.
 const CREATIVE_SORT_ALPHA = new Set(['name', 'corridor', 'type', 'health'])
@@ -593,10 +592,9 @@ const CREATIVE_COLS = [
   { key:'ctr', label:'CTR', width:90, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,color:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?'#1F3C84':'#374151',fontWeight:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div> },
   { key:'freq', label:'Freq', width:80, align:'center', render:(ad)=><div style={{ fontSize:12,color:ad.frequency>4.5?'#1F3C84':ad.frequency>3?'#1C9FD4':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div> },
   { key:'score', label:'Score', width:100, align:'center', render:(ad)=><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div> },
-  { key:'wowCtr', label:'WoW CTR', width:100, align:'center', render:(ad)=><div style={{ fontSize:11,color:ad.ctrDelta===null?'#9CA3AF':ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',fontWeight:500 }}>{ad.ctrDelta===null?'—':(ad.ctrDelta>=0?'▲':'▼')+Math.abs(ad.ctrDelta).toFixed(1)+'%'}</div> },
 ]
 function CreativesTab({ data, token }) {
-  const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, prevInsightsMap = {}, crmSummary = {} } = data
+  const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, crmSummary = {} } = data
   const tableScrollRef = useRef(null)
   const [previewAd, setPreviewAd] = useState(null)
   const [previewHtml, setPreviewHtml] = useState('')
@@ -706,7 +704,6 @@ function CreativesTab({ data, token }) {
   const lifetimeSpend = parseFloat(lifetimeAccount.spend || 0)
   const processed = useMemo(() => (ads || []).map(ad => {
     const cur = insightsMap[ad.id] || ad.insights?.data?.[0] || {}
-    const prev = prevInsightsMap[ad.id] || {}
     const spend = parseFloat(cur.spend)||0, impressions = parseInt(cur.impressions)||0
     const clicks = parseInt(cur.clicks)||0, reach = parseInt(cur.reach)||0
     const ctr = parseFloat(cur.ctr)||0
@@ -721,8 +718,6 @@ function CreativesTab({ data, token }) {
     const cpql = totalQL>0 ? Math.round(spend/totalQL) : 0
     const convRate = clicks>0?(leads/clicks*100):0
     const spendShare = accSpend>0?(spend/accSpend*100):0
-    const prevCTR = parseFloat(prev.ctr)||0
-    const ctrDelta = prevCTR>0?((ctr-prevCTR)/prevCTR*100):null
     const videoViews = getAction(actions,'video_view')
     const hookRate = impressions>0&&videoViews>0?(videoViews/impressions*100):0
     let fatigueLabel = ad.fatigueLabel||'Healthy'
@@ -736,11 +731,11 @@ function CreativesTab({ data, token }) {
     if (cpl>0&&accCPL>0) score+=Math.min(15,Math.max(-15,(accCPL-cpl)/accCPL*15))
     score=Math.round(Math.min(100,Math.max(0,score)))
     const corridorId = classifyCorridor(ad.name)
-    return { ...ad, spend, impressions, clicks, reach, ctr, cpm, cpc, frequency, leads, cpl, cplCrm, totalQL, cpql, convRate, spendShare, ctrDelta, videoViews, hookRate, fatigueLabel, type, score, corridorId, corridor: corridorLabel(corridorId) }
+    return { ...ad, spend, impressions, clicks, reach, ctr, cpm, cpc, frequency, leads, cpl, cplCrm, totalQL, cpql, convRate, spendShare, videoViews, hookRate, fatigueLabel, type, score, corridorId, corridor: corridorLabel(corridorId) }
     // Drop dead-weight creatives: zero spend, zero impressions, and no CRM/QL signal
     // either -- nothing to show, nothing to analyze. Doesn't touch the top KPI cards,
     // which read from account-level accSpend/accLeads/crmSummary, not this list.
-  }).filter(p => p.spend>0 || p.impressions>0 || (p.crmLeads||0)>0 || (p.humanQL||0)>0 || (p.aiQL||0)>0), [ads,insightsMap,prevInsightsMap,accSpend,accCTRpct,accCPL])
+  }).filter(p => p.spend>0 || p.impressions>0 || (p.crmLeads||0)>0 || (p.humanQL||0)>0 || (p.aiQL||0)>0), [ads,insightsMap,accSpend,accCTRpct,accCPL])
   const filtered = useMemo(() => {
     let out=processed
     if (adTypeFilter!=='all') out=out.filter(a=>a.type===adTypeFilter)
@@ -775,7 +770,6 @@ function CreativesTab({ data, token }) {
     Spend: Math.round(ad.spend || 0),
     'CTR %': +(ad.ctr || 0).toFixed(2),
     Freq: +(ad.frequency || 0).toFixed(2), Score: ad.score || 0,
-    'WoW CTR %': ad.ctrDelta != null ? +ad.ctrDelta.toFixed(1) : '',
     'Ad Link': ad.previewLink || '',
   })), [filtered])
 
@@ -788,6 +782,25 @@ function CreativesTab({ data, token }) {
       const included = sorted.slice(0, CREATIVE_REPORT_MAX)
       const truncatedCount = sorted.length - included.length
 
+      // Thumbnails are no longer fetched eagerly for the whole list (only lazily
+      // per page view) -- resolve raw URLs for exactly the creatives in this report,
+      // reusing anything already cached from browsing so nothing gets re-fetched twice.
+      const neededIds = [...new Set(included.map(ad => ad.creative?.id).filter(id => id && !(id in thumbCache)))]
+      const freshThumbs = {}
+      if (neededIds.length > 0 && token) {
+        for (let i = 0; i < neededIds.length; i += 50) {
+          const chunk = neededIds.slice(i, i + 50)
+          try {
+            const qs = new URLSearchParams({ access_token: token, ids: chunk.join(','), fields: 'id,thumbnail_url,image_url' }).toString()
+            const res = await fetch(`https://graph.facebook.com/v19.0?${qs}`)
+            const d = await res.json()
+            if (!d.error) chunk.forEach(id => { const c = d[id]; freshThumbs[id] = (c && (c.image_url || c.thumbnail_url)) || null })
+          } catch (e) { /* best-effort -- a missing thumbnail falls back to the report's placeholder */ }
+        }
+        setThumbCache(prev => ({ ...prev, ...freshThumbs }))
+      }
+      const resolveThumb = ad => thumbCache[ad.creative?.id] ?? freshThumbs[ad.creative?.id] ?? null
+
       // Fetch thumbnails concurrently in small batches -- 200 creatives' worth of
       // sequential fetches would be painfully slow, but firing all of them at once
       // risks overwhelming the image proxy.
@@ -795,7 +808,7 @@ function CreativesTab({ data, token }) {
       for (let i = 0; i < included.length; i += BATCH) {
         const batch = included.slice(i, i + BATCH)
         await Promise.all(batch.map(async ad => {
-          ad._reportThumb = await fetchThumbAsDataUri(ad.creative?._thumbUrl)
+          ad._reportThumb = await fetchThumbAsDataUri(resolveThumb(ad))
         }))
       }
 
@@ -859,6 +872,32 @@ function CreativesTab({ data, token }) {
   useEffect(() => { setPage(1) }, [adTypeFilter,healthFilter,adNameSearch,sortBy,sortDir,viewMode,filtered.length])
   const safePage = Math.min(page, pageCount)
   const pageItems = filtered.slice((safePage-1)*PER_PAGE, safePage*PER_PAGE)
+
+  // Thumbnails are fetched lazily, only for whichever creatives are on the current
+  // page -- not eagerly for every matched ad up front. This is the single biggest
+  // request-volume saver at load time on a large account: only ~25 (PER_PAGE)
+  // thumbnail lookups happen per page view instead of one per matched ad.
+  const [thumbCache, setThumbCache] = useState({}) // creativeId -> url|null
+  const thumbFetchingRef = useRef(new Set())
+  useEffect(() => {
+    const ids = [...new Set(pageItems.map(a => a.creative?.id).filter(Boolean))]
+      .filter(id => !(id in thumbCache) && !thumbFetchingRef.current.has(id))
+    if (ids.length === 0 || !token) return
+    ids.forEach(id => thumbFetchingRef.current.add(id))
+    ;(async () => {
+      try {
+        const qs = new URLSearchParams({ access_token: token, ids: ids.join(','), fields: 'id,thumbnail_url,image_url' }).toString()
+        const res = await fetch(`https://graph.facebook.com/v19.0?${qs}`)
+        const d = await res.json()
+        if (d.error) return
+        const next = {}
+        ids.forEach(id => { const c = d[id]; next[id] = (c && (c.image_url || c.thumbnail_url)) || null })
+        setThumbCache(prev => ({ ...prev, ...next }))
+      } catch (e) { /* thumbnail lookup is best-effort, never blocks the page */ }
+      finally { ids.forEach(id => thumbFetchingRef.current.delete(id)) }
+    })()
+  }, [pageItems, token])
+
   const summary = useMemo(() => ({
     healthy:processed.filter(a=>a.fatigueLabel==='Healthy').length,
     moderate:processed.filter(a=>a.fatigueLabel==='Moderate').length,
@@ -1047,7 +1086,7 @@ function CreativesTab({ data, token }) {
           {pageItems.map((ad,i)=>(
             <div key={ad.id||i} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:12,overflow:'hidden',transition:'border-color .15s,box-shadow .15s',display:'flex',flexDirection:'column' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#1F3C84';e.currentTarget.style.boxShadow='0 2px 12px rgba(31,60,132,0.1)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#E5E7EB';e.currentTarget.style.boxShadow='none'}}>
               <div style={{ position:'relative',height:130,background:'#F3F4F6',overflow:'hidden' }}>
-                {ad.creative?._thumbUrl?<img src={proxyImg(ad.creative._thumbUrl)} alt={ad.name} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>:<div style={{ width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4 }}><span style={{ fontSize:28,opacity:0.25 }}>{ad.type==='video'?'▶':ad.type==='carousel'?'▧':'□'}</span><span style={{ fontSize:10,color:'#9CA3AF' }}>{ad.type}</span></div>}
+                {thumbCache[ad.creative?.id]?<img src={proxyImg(thumbCache[ad.creative?.id])} alt={ad.name} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>:<div style={{ width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4 }}><span style={{ fontSize:28,opacity:0.25 }}>{ad.type==='video'?'▶':ad.type==='carousel'?'▧':'□'}</span><span style={{ fontSize:10,color:'#9CA3AF' }}>{ad.type}</span></div>}
                 <button type="button" onClick={()=>openAdPreview(ad)} title="Preview ad" style={{ position:'absolute',inset:0,width:'100%',height:'100%',border:'none',background:'rgba(15,23,42,0)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'background .15s' }} onMouseEnter={e=>{e.currentTarget.style.background='rgba(15,23,42,0.32)';e.currentTarget.firstChild.style.opacity=1}} onMouseLeave={e=>{e.currentTarget.style.background='rgba(15,23,42,0)';e.currentTarget.firstChild.style.opacity=0}}>
                   <span style={{ opacity:0,transition:'opacity .15s',width:34,height:34,borderRadius:'50%',background:'#fff',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 12px rgba(0,0,0,0.25)' }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1065,7 +1104,6 @@ function CreativesTab({ data, token }) {
                 <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8 }}>
                   {[{l:'Spend',v:fmtINR(ad.spend)},{l:'CPL (Meta)',v:ad.cpl>0?'₹'+ad.cpl.toLocaleString('en-IN'):'—',w:ad.cpl>300},{l:'CPL (CRM)',v:ad.cplCrm>0?'₹'+ad.cplCrm.toLocaleString('en-IN'):'—'},{l:'CTR',v:ad.ctr.toFixed(2)+'%',w:ad.ctr<accCTRpct*0.6&&ad.ctr>0},{l:'Leads',v:ad.leads>0?ad.leads.toLocaleString('en-IN'):'\u2014'},{l:'Human QL',v:ad.humanQL!=null?ad.humanQL.toLocaleString('en-IN'):'—'},{l:'AI QL',v:ad.aiQL!=null?ad.aiQL.toLocaleString('en-IN'):'—'},{l:'CPQL',v:ad.cpql>0?'₹'+ad.cpql.toLocaleString('en-IN'):'—',w:ad.cpql>3000},{l:'Freq',v:ad.frequency>0?ad.frequency.toFixed(1):'—',w:ad.frequency>3.5},{l:'CPM',v:ad.cpm>0?'₹'+Math.round(ad.cpm):'—'}].map(m=><div key={m.l}><div style={{ fontSize:9,color:'#9CA3AF',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>{m.l}</div><div style={{ fontSize:13,fontWeight:600,color:m.w?'#1F3C84':'#111827' }}>{m.v}</div></div>)}
                 </div>
-                {ad.ctrDelta!==null&&<div style={{ fontSize:11,color:ad.ctrDelta>=0?'#4CAE6F':'#1F3C84',marginBottom:6,fontWeight:500 }}>{ad.ctrDelta>=0?'▲':'▼'} CTR {Math.abs(ad.ctrDelta).toFixed(1)}% vs last week</div>}
                 <div style={{ padding:'7px 10px',background:'#EFF6FF',borderRadius:7,marginBottom:6 }}><div style={{ fontSize:9,color:'#1D4ED8',fontWeight:600,textTransform:'uppercase',marginBottom:2,letterSpacing:'0.05em' }}>Hook Rate</div><div style={{ fontSize:14,fontWeight:700,color:'#1D4ED8' }}>{ad.hookRate>0?ad.hookRate.toFixed(1)+'%':'\u2014'}</div></div>
                 {ad.fatigueLabel!=='Healthy'&&<div style={{ padding:'6px 8px',background:hBg[ad.fatigueLabel],borderRadius:6,fontSize:10,color:hColor[ad.fatigueLabel],lineHeight:1.4 }}>{ad.fatigueLabel==='High Fatigue'?'⚠ Freq '+ad.frequency.toFixed(1)+' — needs refresh':'⚡ Freq '+ad.frequency.toFixed(1)+' — watch closely'}</div>}
               </div>
@@ -1114,7 +1152,7 @@ function CreativesTab({ data, token }) {
             <div key={ad.id||i} style={{ display:'grid',gridTemplateColumns:'40px 260px '+displayOrder.map(colTrackOf).join(' '),padding:'10px 14px',borderBottom:'0.5px solid #F3F4F6',gap:8,alignItems:'center' }}>
               <div style={{ position:'sticky',left:0,zIndex:1,background:'#fff',alignSelf:'stretch',display:'flex',alignItems:'center',justifyContent:'center' }}>
                 <button type="button" onClick={()=>openAdPreview(ad)} title="Preview ad" style={{ position:'relative',width:32,height:32,borderRadius:6,overflow:'hidden',flexShrink:0,border:'none',padding:0,cursor:'pointer',background:'#F3F4F6' }} onMouseEnter={e=>{const o=e.currentTarget.querySelector('.previewOverlay'); if(o) o.style.opacity=1}} onMouseLeave={e=>{const o=e.currentTarget.querySelector('.previewOverlay'); if(o) o.style.opacity=0}}>
-                  {ad.creative?._thumbUrl&&<img src={proxyImg(ad.creative._thumbUrl)} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}
+                  {thumbCache[ad.creative?.id]&&<img src={proxyImg(thumbCache[ad.creative?.id])} style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={e=>{e.target.style.display='none'}}/>}
                   <span className="previewOverlay" style={{ position:'absolute',inset:0,background:'rgba(15,23,42,0.4)',opacity:0,transition:'opacity .15s',display:'flex',alignItems:'center',justifyContent:'center' }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                   </span>
@@ -1828,17 +1866,13 @@ export default function MetaAdsDashboard() {
       const activeCampaignCount = allCampaigns.filter(c => c.status === 'ACTIVE').length
       const pausedCampaignCount = allCampaigns.filter(c => c.status === 'PAUSED').length
 
-      // Fetch insights for current AND previous period (for WoW comparison)
+      // Fetch insights for the current period only. Previously also fetched a
+      // previous-period comparison here to power a WoW CTR column -- removed (both
+      // the fetch and the column) since fatigue/health scoring never depended on it
+      // (that's computed from frequency + CTR-vs-account-average only, unaffected by
+      // this) and it was doubling the request count for every chunk in this stage.
       const adsRawData = adsRaw.data || []
       let insightsMap = {}
-      let prevInsightsMap = {}
-
-      // Build previous period time_range (same duration, shifted back)
-      const rangeDays = Math.round((new Date(range.until) - new Date(range.since)) / 86400000) + 1
-      const prevUntil = new Date(range.since); prevUntil.setDate(prevUntil.getDate() - 1)
-      const prevSince = new Date(prevUntil); prevSince.setDate(prevSince.getDate() - (rangeDays - 1))
-      const fmt = d => d.toISOString().slice(0,10)
-      const prevTimeRange = JSON.stringify({ since: fmt(prevSince), until: fmt(prevUntil) })
 
       if (adsRawData.length > 0) {
         try {
@@ -1850,79 +1884,25 @@ export default function MetaAdsDashboard() {
           let insDone = 0
           setLoadProgress({ done: 0, total: adIds.length })
 
-          // Fetch current + previous period in parallel
           await mapLimit(insChunks, 3, async chunk => {
-            const [currRes, prevRes] = await Promise.all([
-              graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
-                fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
-                level: 'ad',
-                ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }),
-                filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
-                limit: 50
-              }),
-              graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
-                fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency',
-                level: 'ad',
-                time_range: prevTimeRange,
-                filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
-                limit: 50
-              })
-            ])
+            const currRes = await graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
+              fields: 'ad_id,spend,impressions,clicks,ctr,reach,frequency,actions',
+              level: 'ad',
+              ...(useTimeRange ? { time_range: timeRange } : { date_preset: metaPreset }),
+              filtering: JSON.stringify([{field:'ad.id',operator:'IN',value:chunk}]),
+              limit: 50
+            })
             ;(currRes.data || []).forEach(ins => { insightsMap[ins.ad_id] = ins })
-            ;(prevRes.data || []).forEach(ins => { prevInsightsMap[ins.ad_id] = ins })
             insDone += chunk.length
             setLoadProgress({ done: Math.min(insDone, adIds.length), total: adIds.length })
           })
         } catch(e) { console.error('Insights fetch failed:', e.message) }
       }
-      const creativeIds = [...new Set(adsRawData.map(a => a.creative?.id).filter(Boolean))]
-      let creativeThumbs = {}
-      if (creativeIds.length > 0) {
-        try {
-          const chunks = []
-          for (let i = 0; i < creativeIds.length; i += 25) chunks.push(creativeIds.slice(i, i + 25))
-          await mapLimit(chunks, 3, async chunk => {
-            const qs = new URLSearchParams({
-              access_token: t,
-              ids: chunk.join(','),
-              fields: 'id,thumbnail_url,image_url'
-            }).toString()
-            const res = await fetch(`https://graph.facebook.com/v19.0?${qs}`)
-            const d = await res.json()
-            if (d.error) { console.error('Thumb batch error:', d.error.message); return }
-            Object.entries(d).forEach(([id, c]) => {
-              // Priority: image_url (static) → object_story_spec image → carousel first card → thumbnail_url (video/fallback)
-              const spec = c.object_story_spec || {}
-              const linkData = spec.link_data || {}
-              const videoData = spec.video_data || {}
-              const carouselFirst = linkData.child_attachments?.[0]?.image_url || null
-              const specImage = linkData.picture || videoData.image_url || spec.photo_data?.url || carouselFirst || null
-              creativeThumbs[id] = c.image_url || specImage || c.thumbnail_url || null
-            })
-          })
-        } catch(e) { console.error('Thumb fetch failed:', e.message) }
-      }
-
-      // Merge thumbs - video ads use video_data.image_url, static use batch image_url
+      // Thumbnails are no longer fetched here at all -- previously this batch-fetched
+      // every matched ad's creative thumbnail up front, which was the single biggest
+      // request-volume driver as the account grows. CreativesTab now fetches thumbnails
+      // lazily, only for whichever creatives are on the currently-visible page.
       const adsWithThumbs = adsRawData.map(ad => {
-        const isVideo = !!ad.creative?.video_id
-        const spec = ad.creative?.object_story_spec || {}
-        const videoImg = spec.video_data?.image_url || null
-        const staticImg = creativeThumbs[ad.creative?.id] || null
-        // Also check inline adcreatives field if present
-        const inlineCreative = ad.adcreatives?.data?.[0] || {}
-        const inlineSpec = inlineCreative.object_story_spec || {}
-        const inlineImg = inlineCreative.image_url ||
-          inlineSpec.link_data?.picture ||
-          inlineSpec.video_data?.image_url ||
-          inlineSpec.link_data?.child_attachments?.[0]?.image_url ||
-          inlineCreative.thumbnail_url || null
-        // Carousel: first child attachment image
-        const carouselImg = spec.link_data?.child_attachments?.[0]?.image_url || null
-        // Final priority chain
-        const thumbUrl = isVideo
-          ? (videoImg || staticImg || inlineImg)
-          : (staticImg || spec.link_data?.picture || carouselImg || inlineImg || videoImg)
         // Smart permaLink: Instagram post → Facebook post → Ads Library
         const igPerma = ad.creative?.instagram_permalink_url || null
         const objectStoryId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id || null
@@ -1936,16 +1916,14 @@ export default function MetaAdsDashboard() {
           : null
         const previewLink = igPerma || fbPostUrl || `https://www.facebook.com/ads/library/?id=${ad.id}`
         const previewPlatform = igPerma ? 'instagram' : fbPostUrl ? 'facebook' : 'library'
-        if (!thumbUrl) console.warn('[no thumb]', ad.name, 'creativeId:', ad.creative?.id, 'isVideo:', isVideo, 'spec keys:', Object.keys(spec))
         return {
           ...ad,
-          creative: { ...ad.creative, _thumbUrl: thumbUrl || null },
           previewLink,
           previewPlatform
         }
       })
 
-      const __metaPayload = { account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, prevInsightsMap, range, preset }
+      const __metaPayload = { account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, range, preset }
       setData(__metaPayload)
       const __ts = Date.now(); setCacheTs(__ts)
       try { localStorage.setItem('meta_cache', JSON.stringify({ d: __metaPayload, t: __ts })) } catch (e) {}
