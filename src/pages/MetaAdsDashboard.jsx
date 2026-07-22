@@ -719,7 +719,10 @@ function CreativesTab({ data, token }) {
     score=Math.round(Math.min(100,Math.max(0,score)))
     const corridorId = classifyCorridor(ad.name)
     return { ...ad, spend, impressions, clicks, reach, ctr, cpm, cpc, frequency, leads, cpl, cplCrm, totalQL, cpql, convRate, spendShare, ctrDelta, videoViews, hookRate, fatigueLabel, type, score, corridorId, corridor: corridorLabel(corridorId) }
-  }), [ads,insightsMap,prevInsightsMap,accSpend,accCTRpct,accCPL])
+    // Drop dead-weight creatives: zero spend, zero impressions, and no CRM/QL signal
+    // either -- nothing to show, nothing to analyze. Doesn't touch the top KPI cards,
+    // which read from account-level accSpend/accLeads/crmSummary, not this list.
+  }).filter(p => p.spend>0 || p.impressions>0 || (p.crmLeads||0)>0 || (p.humanQL||0)>0 || (p.aiQL||0)>0), [ads,insightsMap,prevInsightsMap,accSpend,accCTRpct,accCPL])
   const filtered = useMemo(() => {
     let out=processed
     if (adTypeFilter!=='all') out=out.filter(a=>a.type===adTypeFilter)
