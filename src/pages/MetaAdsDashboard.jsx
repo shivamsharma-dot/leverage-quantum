@@ -203,7 +203,7 @@ async function fetchThumbAsDataUri(url) {
   }
 }
 
-function buildCreativeReportHtml({ ads, totals, filterChips, truncatedCount }) {
+function buildCreativeReportHtml({ ads, totals, filterChips, truncatedCount, dateRangeLabel }) {
   const cards = ads.map(ad => {
     const badgeClass = CREATIVE_REPORT_HEALTH_BADGE[ad.fatigueLabel] || 'healthy'
     const badgeLabel = CREATIVE_REPORT_HEALTH_LABEL[badgeClass]
@@ -247,7 +247,7 @@ body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-seri
 .rep-sub { font-size:11px; color:#94A3B8; margin:1px 0 0; }
 .rep-filters { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
 .rep-chip { font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:6px; background:#F8FAFC; color:#64748B; border:0.5px solid #EEF1F6; }
-.rep-summary { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:24px; }
+.rep-summary { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; margin-bottom:24px; }
 .rep-stat { background:#F8FAFC; border-radius:10px; padding:11px 14px; }
 .rep-stat-label { font-size:9.5px; font-weight:700; color:#94A3B8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px; }
 .rep-stat-value { font-size:16px; font-weight:800; color:#0F172A; }
@@ -272,14 +272,17 @@ body { margin:0; font-family:'Plus Jakarta Sans','Inter',-apple-system,sans-seri
   <div class="rep-head">
     <div class="rep-brand">
       <div class="rep-logo">${brandLogoSvgMarkup(24)}</div>
-      <div><p class="rep-wordmark">QUANTUM</p><p class="rep-title">Meta Ads — Creative Report</p><p class="rep-sub">Generated ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}</p></div>
+      <div><p class="rep-wordmark">QUANTUM</p><p class="rep-title">Meta Ads — Creative Report</p><p class="rep-sub">${dateRangeLabel ? escapeHtml(dateRangeLabel) + ' &middot; ' : ''}Generated ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}</p></div>
     </div>
     <div class="rep-filters">${chipsHtml}</div>
   </div>
   <div class="rep-summary">
     <div class="rep-stat"><div class="rep-stat-label">Total spend</div><div class="rep-stat-value">${fmtINR(totals.spend)}</div></div>
     <div class="rep-stat"><div class="rep-stat-label">Total leads</div><div class="rep-stat-value">${Math.round(totals.leads || 0).toLocaleString('en-IN')}</div></div>
-    <div class="rep-stat"><div class="rep-stat-label">Avg CPL</div><div class="rep-stat-value">${totals.cpl ? fmtINR(totals.cpl) : '—'}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">CRM leads</div><div class="rep-stat-value">${totals.crmLeads != null ? Math.round(totals.crmLeads).toLocaleString('en-IN') : '—'}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Total QLs</div><div class="rep-stat-value">${totals.totalQL ? Math.round(totals.totalQL).toLocaleString('en-IN') : '—'}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Avg CPL (Meta)</div><div class="rep-stat-value">${totals.cpl ? fmtINR(totals.cpl) : '—'}</div></div>
+    <div class="rep-stat"><div class="rep-stat-label">Avg CPL (CRM)</div><div class="rep-stat-value">${totals.cplCrm ? fmtINR(totals.cplCrm) : '—'}</div></div>
     <div class="rep-stat"><div class="rep-stat-label">Avg CPQL</div><div class="rep-stat-value">${totals.cpql ? fmtINR(totals.cpql) : '—'}</div></div>
     <div class="rep-stat"><div class="rep-stat-label">Avg CTR</div><div class="rep-stat-value">${(totals.ctr || 0).toFixed(2)}%</div></div>
     <div class="rep-stat"><div class="rep-stat-label">Creatives shown</div><div class="rep-stat-value">${ads.length}</div></div>
@@ -780,7 +783,12 @@ function CreativesTab({ data, token }) {
         `${included.length} of ${processed.length} creatives`,
       ].filter(Boolean)
 
-      const html = buildCreativeReportHtml({ ads: included, totals: filteredTotals, filterChips, truncatedCount })
+      const fmtRangeDate = d => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : null
+      const rangeSince = fmtRangeDate(data?.range?.since)
+      const rangeUntil = fmtRangeDate(data?.range?.until)
+      const dateRangeLabel = rangeSince && rangeUntil ? (rangeSince === rangeUntil ? rangeSince : `${rangeSince} – ${rangeUntil}`) : null
+
+      const html = buildCreativeReportHtml({ ads: included, totals: filteredTotals, filterChips, truncatedCount, dateRangeLabel })
       const blob = new Blob([html], { type: 'text/html' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
