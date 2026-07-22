@@ -1828,34 +1828,56 @@ export default function MetaAdsDashboard() {
                        : preset === 'last_30d'  ? 'last_30d'
                        : 'last_7d'  // last_month/this_month/custom use time_range instead
 
-      // Try the Supabase cache first (populated on a schedule by the sync-meta-ads
-      // Edge Function -- see supabase/functions/sync-meta-ads) for the default
-      // account's "This Month" view. When a fresh-enough sync is available this
-      // skips the entire expensive ad-level pipeline below (spend pagination, ads
-      // join, per-ad insights chunking) -- no Meta calls, no rate-limit exposure,
-      // near-instant. Campaigns/pixels are still fetched live either way (cheap,
-      // unaffected by ad count, and the Campaigns tab isn't on the cache yet).
-      let cachedAds = null, cachedInsightsMap = null, cachedAccount = null
-      if (preset === 'this_month' && !accountOverride) {
+      // Try the Supabase daily cache first (populated by the sync-meta-ads Edge
+      // Function -- see supabase/functions/sync-meta-ads) for the default account.
+      // Unlike v1, this works for ANY preset/range, not just "This Month": any
+      // requested range is served by summing whichever cached days fall inside
+      // it, as long as meta_ads_sync_status confirms the full range is covered
+      // (and, if the range reaches today, that the incremental sync is recent
+      // enough). Falls through to the live-fetch pipeline below whenever the
+      // cache doesn't cover the request -- e.g. a custom range further back
+      // than the last backfill went.
+      let cachedAds = null, cachedInsightsMap = null
+      const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
+      if (!accountOverride) {
         try {
-          const [acctRows, adRows] = await Promise.all([
-            metaCacheGet('meta_ads_account_cache?id=eq.default&select=*'),
-            metaCacheGet('meta_ads_cache?select=*'),
-          ])
-          const acct = acctRows?.[0]
-          const fresh = acct && acct.sync_status === 'ok' && acct.synced_at &&
-            (Date.now() - new Date(acct.synced_at).getTime()) < META_CACHE_MAX_AGE_MS &&
-            acct.range_since === range.since && acct.range_until === range.until
-          if (fresh) {
-            cachedAccount = acct
+          const statusRows = await metaCacheGet('meta_ads_sync_status?id=eq.default&select=*')
+          const st = statusRows?.[0]
+          const rangeCovered = st && st.sync_status === 'ok' && st.oldest_synced_date && st.newest_synced_date &&
+            st.oldest_synced_date <= range.since && st.newest_synced_date >= range.until
+          const recentEnough = range.until < todayStr ||
+            (st?.last_incremental_sync_at && (Date.now() - new Date(st.last_incremental_sync_at).getTime()) < META_CACHE_MAX_AGE_MS)
+          if (rangeCovered && recentEnough) {
+            const [metaRows, dailyRows] = await Promise.all([
+              metaCacheGet('meta_ads_meta?select=*'),
+              metaCacheGet(`meta_ads_daily?select=*&date=gte.${range.since}&date=lte.${range.until}`),
+            ])
+            // Aggregate per-day rows into one totals-object per ad. Spend/impressions/
+            // clicks/reach sum cleanly across days; ctr is recomputed from the summed
+            // clicks/impressions rather than averaged; frequency is impression-weighted.
+            // Reach specifically is an approximation here (summing daily unique reach
+            // over-counts vs true multi-day unique reach), acceptable for this view.
+            const byAd = {}
+            ;(dailyRows || []).forEach(r => {
+              const a = byAd[r.ad_id] || (byAd[r.ad_id] = { spend: 0, impressions: 0, clicks: 0, reach: 0, freqWeighted: 0, freqWeight: 0, actionsMap: {} })
+              a.spend += parseFloat(r.spend || 0)
+              a.impressions += parseInt(r.impressions || 0)
+              a.clicks += parseInt(r.clicks || 0)
+              a.reach += parseInt(r.reach || 0)
+              const impr = parseInt(r.impressions || 0)
+              if (impr > 0) { a.freqWeighted += parseFloat(r.frequency || 0) * impr; a.freqWeight += impr }
+              ;(r.actions || []).forEach(act => { a.actionsMap[act.action_type] = (a.actionsMap[act.action_type] || 0) + (parseInt(act.value) || 0) })
+            })
             cachedInsightsMap = {}
-            cachedAds = (adRows || []).map(row => {
-              cachedInsightsMap[row.ad_id] = { spend: row.spend, impressions: row.impressions, clicks: row.clicks, ctr: row.ctr, reach: row.reach, frequency: row.frequency, actions: row.actions }
+            cachedAds = (metaRows || []).filter(m => byAd[m.ad_id]).map(m => {
+              const a = byAd[m.ad_id]
+              const actions = Object.entries(a.actionsMap).map(([action_type, value]) => ({ action_type, value: String(value) }))
+              cachedInsightsMap[m.ad_id] = { spend: a.spend, impressions: a.impressions, clicks: a.clicks, ctr: a.impressions > 0 ? (a.clicks / a.impressions * 100) : 0, reach: a.reach, frequency: a.freqWeight > 0 ? (a.freqWeighted / a.freqWeight) : 0, actions }
               return {
-                id: row.ad_id, name: row.name, status: row.status, effective_status: row.effective_status,
-                creative: { id: row.creative_id, thumbnail_url: row.thumbnail_url },
-                campaign: { id: row.campaign_id, name: row.campaign_name },
-                previewLink: row.preview_link, previewPlatform: row.preview_platform,
+                id: m.ad_id, name: m.name, status: m.status, effective_status: m.effective_status,
+                creative: { id: m.creative_id, thumbnail_url: m.thumbnail_url },
+                campaign: { id: m.campaign_id, name: m.campaign_name },
+                previewLink: m.preview_link, previewPlatform: m.preview_platform,
               }
             })
           }
