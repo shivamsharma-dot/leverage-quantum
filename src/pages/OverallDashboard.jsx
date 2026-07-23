@@ -576,8 +576,17 @@ export default function OverallDashboard() {
     catch { return SR_FEE_DEFAULT }
   })
   const [visibleCols, setVisibleCols] = useState(() => {
-    try { const s = localStorage.getItem(SUMMARY_COLS_STORAGE_KEY); const parsed = s ? JSON.parse(s) : null; return Array.isArray(parsed) ? parsed.filter(k => SUMMARY_COLUMN_KEYS.includes(k)) : SUMMARY_COLUMN_KEYS }
-    catch { return SUMMARY_COLUMN_KEYS }
+    // Newly-added columns (not in a previously-saved list) default to visible, same as
+    // colOrder below -- otherwise a brand new column silently never appears for a device
+    // that already has a saved visibleCols list from before that column existed.
+    try {
+      const s = localStorage.getItem(SUMMARY_COLS_STORAGE_KEY)
+      const parsed = s ? JSON.parse(s) : null
+      if (!Array.isArray(parsed)) return SUMMARY_COLUMN_KEYS
+      const base = parsed.filter(k => SUMMARY_COLUMN_KEYS.includes(k))
+      const missing = SUMMARY_COLUMN_KEYS.filter(k => !base.includes(k))
+      return [...base, ...missing]
+    } catch { return SUMMARY_COLUMN_KEYS }
   })
   const [colOrder, setColOrder] = useState(() => {
     try {
