@@ -367,9 +367,11 @@ const SUMMARY_COLUMNS = [
 const SUMMARY_COLUMN_KEYS = SUMMARY_COLUMNS.map(c => c.key)
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
 const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
-const SR_EST_RATE_KEY = 'lq_overall_sr_est_rate'
-const SR_ACT_RATE_KEY = 'lq_overall_sr_act_rate'
-const SR_DEFAULT_RATE = 350000
+// Shared with Settings > Data > SR Revenue Assumptions and the ROAS dashboard's own
+// projection — same rate, same 0.9 factor, so all three surfaces agree on one number.
+const SR_FEE_KEY = 'lq_sr_fee'
+const SR_FEE_DEFAULT = 90000
+const SR_FEE_FACTOR = 0.9
 
 // Full INR formatter — every rupee figure on this page displays in full (no Cr/L
 // shorthand); the abbreviated form is only ever surfaced as a hover tooltip via fmtINRShort.
@@ -564,10 +566,10 @@ export default function OverallDashboard() {
   const [rowLimit, setRowLimit] = useState(25)
   const [showColsPicker, setShowColsPicker] = useState(false)
   const [showRatesPicker, setShowRatesPicker] = useState(false)
-  const [estRate, setEstRate] = useState(() => { try { const s = localStorage.getItem(SR_EST_RATE_KEY); return s ? Number(s) : SR_DEFAULT_RATE } catch { return SR_DEFAULT_RATE } })
-  const [actRate, setActRate] = useState(() => { try { const s = localStorage.getItem(SR_ACT_RATE_KEY); return s ? Number(s) : SR_DEFAULT_RATE } catch { return SR_DEFAULT_RATE } })
-  useEffect(() => { try { localStorage.setItem(SR_EST_RATE_KEY, String(estRate)) } catch {} }, [estRate])
-  useEffect(() => { try { localStorage.setItem(SR_ACT_RATE_KEY, String(actRate)) } catch {} }, [actRate])
+  const [srFee] = useState(() => {
+    try { const s = localStorage.getItem(SR_FEE_KEY); const n = s ? Number(s) : SR_FEE_DEFAULT; return isNaN(n) || n <= 0 ? SR_FEE_DEFAULT : n }
+    catch { return SR_FEE_DEFAULT }
+  })
   const [visibleCols, setVisibleCols] = useState(() => {
     try { const s = localStorage.getItem(SUMMARY_COLS_STORAGE_KEY); const parsed = s ? JSON.parse(s) : null; return Array.isArray(parsed) ? parsed.filter(k => SUMMARY_COLUMN_KEYS.includes(k)) : SUMMARY_COLUMN_KEYS }
     catch { return SUMMARY_COLUMN_KEYS }
@@ -760,6 +762,14 @@ export default function OverallDashboard() {
   const cpql = kpis.totalQL > 0 ? kpis.spend / kpis.totalQL : 0
   const cpa = kpis.apps > 0 ? kpis.spend / kpis.apps : 0
 
+  // SR revenue + ROAS — Est. uses Applications (earlier funnel stage, available sooner),
+  // Actual uses RAUs (confirmed revenue units). Same shared rate/factor as Settings/ROAS.
+  const estSrRevenue = kpis.apps * srFee * SR_FEE_FACTOR
+  const actSrRevenue = kpis.raus * srFee * SR_FEE_FACTOR
+  const actualRoas = kpis.spend > 0 ? actSrRevenue / kpis.spend : 0
+  const estimatedRoas = kpis.spend > 0 ? estSrRevenue / kpis.spend : 0
+  const floorPlusFutwork = kpis.floorQueued + kpis.futworkQ
+
   // Previous-equivalent-period comparison — same length window immediately before the
   // active one (or the previous calendar month, when in month mode) — so every KPI can
   // show a real vs-last-period delta instead of a static sub-label.
@@ -791,6 +801,10 @@ export default function OverallDashboard() {
   const prevCpql = prevKpis.totalQL > 0 ? prevKpis.spend / prevKpis.totalQL : 0
   const prevCpa = prevKpis.apps > 0 ? prevKpis.spend / prevKpis.apps : 0
   const prevTotalQueued = prevKpis.futworkQ + prevKpis.superbotQ
+  const prevFloorPlusFutwork = prevKpis.floorQueued + prevKpis.futworkQ
+  const prevEstSrRevenue = prevKpis.apps * srFee * SR_FEE_FACTOR
+  const prevActSrRevenue = prevKpis.raus * srFee * SR_FEE_FACTOR
+  const prevActualRoas = prevKpis.spend > 0 ? prevActSrRevenue / prevKpis.spend : 0
   const deltaPct = (cur, prev) => (!prev ? null : ((cur - prev) / prev) * 100)
 
   // ── Compare — decision-focused period comparison ─────────────────────────
@@ -1096,8 +1110,8 @@ export default function OverallDashboard() {
   // SR Revenue — Estimated (Applications × rate) and Actual (RAUs × rate). Both rates are
   // user-configurable in the toolbar below and persist to localStorage.
   const groupedWithRevenue = useMemo(() => grouped.map(g => ({
-    ...g, estSrRevenue: g.apps * estRate, actSrRevenue: g.raus * actRate,
-  })), [grouped, estRate, actRate])
+    ...g, estSrRevenue: g.apps * srFee * SR_FEE_FACTOR, actSrRevenue: g.raus * srFee * SR_FEE_FACTOR,
+  })), [grouped, srFee])
 
   const exportRows = useMemo(() => groupedWithRevenue.map(g => ({
     [grpByLabel]: g.label,
@@ -1295,20 +1309,28 @@ export default function OverallDashboard() {
         {/* SCROLLABLE CONTENT */}
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
 
-          {/* KPI ROW — with vs-previous-period deltas */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(6, minmax(0, 1fr))', gap:14, marginBottom:20 }}>
-            <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-            <PremKPI label="FLOOR QUEUED" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} delta={deltaPct(kpis.floorQueued, prevKpis.floorQueued)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="TOTAL QUEUED" value={fmtN(totalQueued)} sub={'Futwork ' + fmtN(kpis.futworkQ) + ' · Superbot ' + fmtN(kpis.superbotQ)} delta={deltaPct(totalQueued, prevTotalQueued)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
-            <PremKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={deltaPct(kpis.totalQL, prevKpis.totalQL)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.totalQL) + ' of QL'} delta={deltaPct(kpis.apps, prevKpis.apps)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-            <PremKPI label="OFFERS" value={fmtN(kpis.offers)} sub={pct(kpis.offers, kpis.apps) + ' of apps'} delta={deltaPct(kpis.offers, prevKpis.offers)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="DEPOSITS" value={fmtN(kpis.deposits)} sub={pct(kpis.deposits, kpis.offers) + ' of offers'} delta={deltaPct(kpis.deposits, prevKpis.deposits)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} />
-            <PremKPI label="TOTAL RAUs" value={fmtN(kpis.raus)} sub="revenue attr. units" delta={deltaPct(kpis.raus, prevKpis.raus)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
-            <PremKPI label="SPEND" value={<span title={fmtINRShort(kpis.spend)}>{fmtINR(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-            <PremKPI label="CPL" value={<span title={fmtINRShort(cpl)}>{fmtINR(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="CPQL" value={<span title={fmtINRShort(cpql)}>{fmtINR(cpql)}</span>} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} invert accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+          {/* KPI ROW 1 — funnel volume, with vs-previous-period deltas */}
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(8, minmax(0, 1fr))', gap:12, marginBottom:12 }}>
+            <PremKPI label="EST. SR REVENUE" value={<span title={fmtINRShort(estSrRevenue)}>{fmtINR(estSrRevenue)}</span>} sub="apps × SR fee × 0.9" delta={deltaPct(estSrRevenue, prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+            <PremKPI label="SPEND" value={<span title={fmtINRShort(kpis.spend)}>{fmtINR(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
+            <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
+            <PremKPI label="QUEUED" value={fmtN(floorPlusFutwork)} sub={'Floor ' + fmtN(kpis.floorQueued) + ' · Futwork ' + fmtN(kpis.futworkQ)} delta={deltaPct(floorPlusFutwork, prevFloorPlusFutwork)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={deltaPct(kpis.totalQL, prevKpis.totalQL)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="FUTWORK HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.humanQL, prevKpis.humanQL)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="FUTWORK AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.futworkAiQl, prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.superbotAiQl, prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
+          </div>
+
+          {/* KPI ROW 2 — cost efficiency + downstream conversion + ROAS */}
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(8, minmax(0, 1fr))', gap:12, marginBottom:20 }}>
+            <PremKPI label="CPL" value={<span title={fmtINRShort(cpl)}>{fmtINR(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="CPQL" value={<span title={fmtINRShort(cpql)}>{fmtINR(cpql)}</span>} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.totalQL) + ' of QL'} delta={deltaPct(kpis.apps, prevKpis.apps)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
             <PremKPI label="CPA" value={<span title={fmtINRShort(cpa)}>{fmtINR(cpa)}</span>} sub="cost per application" delta={deltaPct(cpa, prevCpa)} invert accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.globe} />
+            <PremKPI label="OFFERS" value={fmtN(kpis.offers)} sub={pct(kpis.offers, kpis.apps) + ' of apps'} delta={deltaPct(kpis.offers, prevKpis.offers)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="DEPOSITS" value={fmtN(kpis.deposits)} sub={pct(kpis.deposits, kpis.offers) + ' of offers'} delta={deltaPct(kpis.deposits, prevKpis.deposits)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe} />
+            <PremKPI label="TOTAL RAUs" value={fmtN(kpis.raus)} sub="revenue attr. units" delta={deltaPct(kpis.raus, prevKpis.raus)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
+            <PremKPI label="ROAS" value={actualRoas.toFixed(2) + 'x'} sub={'Est. ROAS ' + estimatedRoas.toFixed(2) + 'x'} delta={deltaPct(actualRoas, prevActualRoas)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.total} />
           </div>
 
           {/* FUNNEL + STAGE CONVERSION */}
@@ -1449,18 +1471,20 @@ export default function OverallDashboard() {
                     variant="secondary"
                     icon={<span style={{ fontSize:13, fontWeight:800, lineHeight:1, fontFamily:FONT }}>₹</span>}
                   >
-                    SR Rates
+                    SR Fee
                   </Button>
                   {showRatesPicker && (
                     <>
                       <div onClick={() => setShowRatesPicker(false)} style={{ position:'fixed', inset:0, zIndex:399 }} />
-                      <div style={{ position:'absolute', left:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:14, minWidth:260 }}>
-                        <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>SR revenue calculator rates</div>
-                        <label style={{ fontSize:11, fontWeight:600, color:C.sub, display:'block', marginBottom:4 }}>Est. SR Revenue — ₹ per Application</label>
-                        <input type="number" value={estRate} onChange={e => setEstRate(Number(e.target.value) || 0)} style={{ width:'100%', boxSizing:'border-box', padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12.5, color:C.text, marginBottom:10, outline:'none' }} />
-                        <label style={{ fontSize:11, fontWeight:600, color:C.sub, display:'block', marginBottom:4 }}>Actual SR Revenue — ₹ per RAU</label>
-                        <input type="number" value={actRate} onChange={e => setActRate(Number(e.target.value) || 0)} style={{ width:'100%', boxSizing:'border-box', padding:'7px 10px', borderRadius:8, border:`0.5px solid ${C.border}`, fontFamily:FONT, fontSize:12.5, color:C.text, outline:'none' }} />
-                        <div style={{ fontSize:10.5, color:C.muted, marginTop:10, lineHeight:1.5 }}>Est. SR Revenue = Applications × this rate. Actual SR Revenue = RAUs × this rate. Both columns update live and are remembered on this device.</div>
+                      <div style={{ position:'absolute', left:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:14, minWidth:270 }}>
+                        <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>SR revenue formula</div>
+                        <div style={{ fontSize:20, fontWeight:800, color:C.navy, fontFamily:FONT, marginBottom:8 }}>₹{srFee.toLocaleString('en-IN')} <span style={{ fontSize:11, fontWeight:600, color:C.muted }}>per RAU (SR Fee)</span></div>
+                        <div style={{ fontSize:11, color:C.sub, lineHeight:1.7 }}>
+                          <b>Est. SR Revenue</b> = Applications × SR Fee × 0.9<br />
+                          <b>Actual SR Revenue</b> = RAUs × SR Fee × 0.9<br />
+                          <b>ROAS</b> = Actual SR Revenue ÷ Spend (Est. ROAS uses Est. SR Revenue)
+                        </div>
+                        <div style={{ fontSize:10.5, color:C.muted, marginTop:10, lineHeight:1.5 }}>This rate is shared with Settings &gt; Data &gt; SR Revenue Assumptions and the ROAS dashboard — change it there to update it everywhere.</div>
                       </div>
                     </>
                   )}
