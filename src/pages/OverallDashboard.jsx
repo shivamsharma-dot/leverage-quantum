@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
   CartesianGrid, LineChart, Line, Legend, AreaChart, Area,
+  ScatterChart, Scatter, ZAxis, ReferenceLine,
 } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
@@ -322,6 +323,25 @@ function BrandTooltip({ active, payload, label }) {
           <span style={{ fontWeight:700, fontVariantNumeric:'tabular-nums' }}>{fmtN(p.value)}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+// Quadrant classification for the CPQL-vs-Volume efficiency map -- brand colors only.
+// High CPQL is a red flag regardless of volume; low CPQL needs sufficient QL volume
+// (>= median) to count as a proven "best performer" rather than just a small, unproven sample.
+const QUADRANT_COLOR = { flag:C.navy, best:C.green, promising:C.blue }
+const QUADRANT_TAG = { flag:'High CPQL — red flag', best:'Best performer — scale', promising:'Promising — needs more volume' }
+function EfficiencyMapTooltip({ active, payload }) {
+  if (!active || !payload || !payload.length) return null
+  const d = payload[0].payload
+  return (
+    <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:10, padding:'10px 14px', fontFamily:FONT, boxShadow:'0 8px 24px rgba(15,23,42,0.12)', maxWidth:240 }}>
+      <div style={{ fontSize:11.5, fontWeight:800, color:'#0F1B33', marginBottom:6, wordBreak:'break-word' }}>{d.campaign}</div>
+      <div style={{ fontSize:11.5, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>CPQL</span><span style={{ fontWeight:700 }}>₹{Math.round(d.cpql).toLocaleString('en-IN')}</span></div>
+      <div style={{ fontSize:11.5, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>Total QLs</span><span style={{ fontWeight:700 }}>{fmtN(d.totalQL)}</span></div>
+      <div style={{ fontSize:11.5, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>Spend</span><span style={{ fontWeight:700 }}>₹{Math.round(d.spend).toLocaleString('en-IN')}</span></div>
+      <div style={{ fontSize:10.5, fontWeight:700, color:QUADRANT_COLOR[d.quadrant], marginTop:6 }}>{QUADRANT_TAG[d.quadrant]}</div>
     </div>
   )
 }
@@ -1103,6 +1123,32 @@ export default function OverallDashboard() {
     byCampaign.filter(c => c.queued >= 15).map(c => ({ ...c, qlRate: c.queued > 0 ? (c.totalQL / c.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 5)
   ), [byCampaign])
 
+  // CPQL vs. Volume efficiency map -- high CPQL is a red flag regardless of volume; low
+  // CPQL with sufficient QL volume marks the best performers (not low CPQL alone, since a
+  // handful of QLs at a lucky-low CPQL isn't proof of real efficiency at scale). Median
+  // lines (not mean) split the quadrants, since ad spend/QL volume is typically skewed by
+  // a few large campaigns -- a mean would drag the "sufficient volume" bar unreasonably high.
+  const median = arr => {
+    if (!arr.length) return 0
+    const s = [...arr].sort((a, b) => a - b)
+    const mid = Math.floor(s.length / 2)
+    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2
+  }
+  const campaignEfficiencyMap = useMemo(() => {
+    const withCpql = byCampaign
+      .filter(c => c.totalQL > 0 && c.spend > 0)
+      .map(c => ({ campaign:c.campaign, totalQL:c.totalQL, cpql:c.spend / c.totalQL, spend:c.spend }))
+      .sort((a, b) => b.totalQL - a.totalQL)
+      .slice(0, 30)
+    const medCpql = median(withCpql.map(c => c.cpql))
+    const medQL = median(withCpql.map(c => c.totalQL))
+    const points = withCpql.map(c => ({
+      ...c,
+      quadrant: c.cpql > medCpql ? 'flag' : c.totalQL >= medQL ? 'best' : 'promising',
+    }))
+    return { points, medCpql, medQL }
+  }, [byCampaign])
+
   const grouped = useMemo(() => {
     if (grpBy === 'source') return bySource.map(s => ({
       label:s.source, leads:s.leads, queued:s.queued, humanQL:s.humanQL, futworkAiQl:s.futworkAiQl, superbotAiQl:s.superbotAiQl, totalQL:s.totalQL, apps:s.apps, offers:s.offers, deposits:s.deposits, raus:s.raus, spend:s.spend,
@@ -1444,6 +1490,46 @@ export default function OverallDashboard() {
             <Card>
               {sectionTitle('Best campaigns to scale', 'highest Total QL rate among campaigns with real volume (min. 15 queued)')}
               <EfficiencyList data={topCampaignsByEfficiency} labelKey="campaign" rateKey="qlRate" subKey="queued" />
+            </Card>
+          </div>
+
+          {/* CPQL vs. VOLUME EFFICIENCY MAP — bubble size = spend. Median lines split the
+              chart into the same quadrants as the campaign-performance heuristic: high CPQL
+              is a red flag no matter the volume; low CPQL only counts as a proven best
+              performer once QL volume clears the median. */}
+          <div style={{ marginTop:16 }}>
+            <Card>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10, marginBottom:14 }}>
+                {sectionTitle('Campaign efficiency map', 'CPQL vs. Total QL volume — bubble size = spend, top 30 campaigns by volume')}
+                <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
+                  {[['best', 'Best — scale'], ['promising', 'Promising'], ['flag', 'High CPQL — flag']].map(([k, l]) => (
+                    <div key={k} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ width:9, height:9, borderRadius:99, background:QUADRANT_COLOR[k], flexShrink:0 }} />
+                      <span style={{ fontSize:10.5, fontWeight:600, color:C.muted, whiteSpace:'nowrap' }}>{l}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {campaignEfficiencyMap.points.length === 0 ? (
+                <div style={{ textAlign:'center', padding:'24px 0', color:C.muted, fontSize:13, fontFamily:FONT }}>Not enough volume yet</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={340}>
+                  <ScatterChart margin={{ top:8, right:24, bottom:8, left:8 }}>
+                    <CartesianGrid stroke={C.border} />
+                    <XAxis type="number" dataKey="totalQL" name="Total QLs" tick={axis} tickFormatter={fmtN} label={{ value:'Total QLs (volume)', position:'insideBottom', offset:-6, style:{ ...axis, fontWeight:700 } }} />
+                    <YAxis type="number" dataKey="cpql" name="CPQL" tick={axis} tickFormatter={v => fmtINRShort(v)} width={70} />
+                    <ZAxis type="number" dataKey="spend" range={[60, 600]} name="Spend" />
+                    <ReferenceLine x={campaignEfficiencyMap.medQL} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median volume', position:'top', fontSize:10, fill:C.muted }} />
+                    <ReferenceLine y={campaignEfficiencyMap.medCpql} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median CPQL', position:'right', fontSize:10, fill:C.muted }} />
+                    <Tooltip content={<EfficiencyMapTooltip />} cursor={{ strokeDasharray:'3 3' }} />
+                    <Scatter data={campaignEfficiencyMap.points}>
+                      {campaignEfficiencyMap.points.map((p, i) => (
+                        <Cell key={i} fill={QUADRANT_COLOR[p.quadrant]} fillOpacity={0.75} />
+                      ))}
+                    </Scatter>
+                  </ScatterChart>
+                </ResponsiveContainer>
+              )}
             </Card>
           </div>
 
