@@ -757,7 +757,7 @@ export default function SettingsPage() {
 
   
   // SR Fee
-  const [srFeeInput, setSrFeeInput] = useState(() => localStorage.getItem('lq_sr_fee') || '90000')
+  const [srFeeInput, setSrFeeInput] = useState(() => localStorage.getItem('lq_sr_fee') || '350000')
 
   // ── Appearance (admin only, server-backed) ────────────────────────────────
   // Server state (what's actually saved)
@@ -1424,7 +1424,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             <>
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>SR Revenue Assumptions</h3>
-                <p className={styles.cardDesc}>SR fee per RAU used in projected revenue. Formula: RAUs × SR Fee × 0.9</p>
+                <p className={styles.cardDesc}>SR fee per RAU (Registered At University) used in projected revenue. Estimated RAU = Applications × 0.9; Actual RAUs is the real count. Formula: Estimated/Actual RAUs × SR Fee</p>
                 <label className={styles.fieldLabel}>SR Fee per RAU</label>
                 <div className={styles.inputGroup}>
                   <span className={styles.prefix}>₹</span>
@@ -1432,7 +1432,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     onChange={e => setSrFeeInput(e.target.value)} />
                   <Button onClick={saveSrFee}>{srFeeSaved ? 'Saved' : 'Save'}</Button>
                 </div>
-                <p className={styles.note}>Current: ₹{parseInt(srFeeInput || 90000).toLocaleString('en-IN')} per RAU</p>
+                <p className={styles.note}>Current: ₹{parseInt(srFeeInput || 350000).toLocaleString('en-IN')} per RAU</p>
               </div>
 
               <div className={styles.card}>
