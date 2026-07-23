@@ -22,20 +22,6 @@ const GROQ_KEY   = import.meta.env.VITE_GROQ_API_KEY
 
 const proxyImg = url => url ? `/api/img-proxy?url=${encodeURIComponent(url)}` : null
 
-// ── Meta Ads cache (populated by the sync-meta-ads Supabase Edge Function,
-// see supabase/functions/sync-meta-ads) -- read directly, same anon-key REST
-// pattern already used elsewhere in this app (AskAI.jsx, SettingsPage.jsx),
-// so the Creatives tab's "This Month" view can skip calling Meta entirely
-// when a fresh sync is available.
-const META_CACHE_SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
-const META_CACHE_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
-const META_CACHE_MAX_AGE_MS = 45 * 60 * 1000 // treat a sync older than this as stale, fall back to live fetch
-async function metaCacheGet(path) {
-  const r = await fetch(`${META_CACHE_SB_URL}/rest/v1/${path}`, { headers: { apikey: META_CACHE_SB_KEY, Authorization: `Bearer ${META_CACHE_SB_KEY}` } })
-  if (!r.ok) throw new Error('cache fetch failed: ' + r.status)
-  return r.json()
-}
-
 async function storeTokenInSupabase(token) {
   try {
     await fetch('/api/meta-token', {
@@ -1828,91 +1814,17 @@ export default function MetaAdsDashboard() {
                        : preset === 'last_30d'  ? 'last_30d'
                        : 'last_7d'  // last_month/this_month/custom use time_range instead
 
-      // Try the Supabase daily cache first (populated by the sync-meta-ads Edge
-      // Function -- see supabase/functions/sync-meta-ads) for the default account.
-      // Unlike v1, this works for ANY preset/range, not just "This Month": any
-      // requested range is served by summing whichever cached days fall inside
-      // it, as long as meta_ads_sync_status confirms the full range is covered
-      // (and, if the range reaches today, that the incremental sync is recent
-      // enough). Falls through to the live-fetch pipeline below whenever the
-      // cache doesn't cover the request -- e.g. a custom range further back
-      // than the last backfill went.
-      let cachedAds = null, cachedInsightsMap = null
-      const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
-      if (!accountOverride) {
-        try {
-          const statusRows = await metaCacheGet('meta_ads_sync_status?id=eq.default&select=*')
-          const st = statusRows?.[0]
-          const rangeCovered = st && st.sync_status === 'ok' && st.oldest_synced_date && st.newest_synced_date &&
-            st.oldest_synced_date <= range.since && st.newest_synced_date >= range.until
-          const recentEnough = range.until < todayStr ||
-            (st?.last_incremental_sync_at && (Date.now() - new Date(st.last_incremental_sync_at).getTime()) < META_CACHE_MAX_AGE_MS)
-          if (rangeCovered && recentEnough) {
-            const [metaRows, dailyRows] = await Promise.all([
-              metaCacheGet('meta_ads_meta?select=*'),
-              metaCacheGet(`meta_ads_daily?select=*&date=gte.${range.since}&date=lte.${range.until}`),
-            ])
-            // Aggregate per-day rows into one totals-object per ad. Spend/impressions/
-            // clicks/reach sum cleanly across days; ctr is recomputed from the summed
-            // clicks/impressions rather than averaged; frequency is impression-weighted.
-            // Reach specifically is an approximation here (summing daily unique reach
-            // over-counts vs true multi-day unique reach), acceptable for this view.
-            const byAd = {}
-            ;(dailyRows || []).forEach(r => {
-              const a = byAd[r.ad_id] || (byAd[r.ad_id] = { spend: 0, impressions: 0, clicks: 0, reach: 0, freqWeighted: 0, freqWeight: 0, actionsMap: {} })
-              a.spend += parseFloat(r.spend || 0)
-              a.impressions += parseInt(r.impressions || 0)
-              a.clicks += parseInt(r.clicks || 0)
-              a.reach += parseInt(r.reach || 0)
-              const impr = parseInt(r.impressions || 0)
-              if (impr > 0) { a.freqWeighted += parseFloat(r.frequency || 0) * impr; a.freqWeight += impr }
-              ;(r.actions || []).forEach(act => { a.actionsMap[act.action_type] = (a.actionsMap[act.action_type] || 0) + (parseInt(act.value) || 0) })
-            })
-            cachedInsightsMap = {}
-            cachedAds = (metaRows || []).filter(m => byAd[m.ad_id]).map(m => {
-              const a = byAd[m.ad_id]
-              const actions = Object.entries(a.actionsMap).map(([action_type, value]) => ({ action_type, value: String(value) }))
-              cachedInsightsMap[m.ad_id] = { spend: a.spend, impressions: a.impressions, clicks: a.clicks, ctr: a.impressions > 0 ? (a.clicks / a.impressions * 100) : 0, reach: a.reach, frequency: a.freqWeight > 0 ? (a.freqWeighted / a.freqWeight) : 0, actions }
-              return {
-                id: m.ad_id, name: m.name, status: m.status, effective_status: m.effective_status,
-                creative: { id: m.creative_id, thumbnail_url: m.thumbnail_url },
-                campaign: { id: m.campaign_id, name: m.campaign_name },
-                previewLink: m.preview_link, previewPlatform: m.preview_platform,
-              }
-            })
-          }
-        } catch (e) { /* cache unavailable -- fall through to the live fetch below */ }
-      }
-
-      let topAdIds = []
-      if (!cachedAds) {
-        // Fetch spend for EVERY ad in the period (paginated, not capped at a fixed
-        // headcount) and keep any ad that actually spent something -- a real condition,
-        // not an arbitrary top-N-by-spend cutoff. Previously this was capped to the top
-        // 200 by spend, which silently dropped lower-spend ads (and their CRM/QL data)
-        // once the account had more than 200 ads with any spend in the period.
-        // 500/page (Meta's practical max) instead of the default 200 -- this call only
-        // asks for 2 lightweight fields, so a bigger page size is safe and roughly
-        // halves the number of sequential round-trips for this step.
-        const allAdsIns = await graphGetAll(`${AD_ACCOUNT_ID}/insights`, t, {
-          fields: 'ad_id,spend',
-          level: 'ad',
-          time_range: timeRange,
-        }, 20, null, 500).catch(() => ({ data: [] }))
-        topAdIds = (allAdsIns.data || [])
-          .filter(x => parseFloat(x.spend || 0) > 0)
-          .sort((a, b) => parseFloat(b.spend || 0) - parseFloat(a.spend || 0))
-          .map(x => x.ad_id)
-          .filter(Boolean)
-        // Safety valve only: Meta's IN-filter is passed as a query-string param, which
-        // can hit URL-length limits with an extremely large ID list. No real account
-        // should have this many ads with spend in one period -- if it ever happens,
-        // keep the biggest spenders rather than fail the whole fetch.
-        if (topAdIds.length > 500) {
-          console.warn(`[meta-ads] ${topAdIds.length} ads with spend this period -- capping IN-filter to top 500 by spend`)
-          topAdIds = topAdIds.slice(0, 500)
-        }
-      }
+      // Fetch top-200-by-spend ad IDs directly via sorted insights (fixes: default /ads page
+      // order could omit high-spend ads from the 200-item window, causing missing/mismatched
+      // lead numbers for specific high-spend ads). Falls back to unsorted /ads if this fails.
+      const topAdsIns = await graphGet(`${AD_ACCOUNT_ID}/insights`, t, {
+        fields: 'ad_id,spend',
+        level: 'ad',
+        time_range: timeRange,
+        sort: 'spend_descending',
+        limit: 200,
+      }).catch(() => ({ data: [] }))
+      const topAdIds = (topAdsIns.data || []).map(x => x.ad_id).filter(Boolean)
 
     const [accIns, lifetimeIns, campaignsSummary, campaigns, adsRaw, pixels] = await Promise.all([
         // Account-level insights for selected period
@@ -1934,10 +1846,11 @@ export default function MetaAdsDashboard() {
           fields: `name,status,objective,created_time,insights${useTimeRange ? `.time_range(${timeRange})` : `.date_preset(${metaPreset})`}{spend,impressions,clicks,ctr,reach,frequency,actions}`,
           limit: 300
         }),
-        // Ads + creatives - skipped entirely when the cache already supplied them
-        cachedAds ? Promise.resolve({ data: [] }) : graphGetAll(`${AD_ACCOUNT_ID}/ads`, t, {
+        // Ads + creatives - fetch by the top-200-by-spend IDs from above
+        graphGet(`${AD_ACCOUNT_ID}/ads`, t, {
           fields: 'name,status,effective_status,creative{id,name,video_id,object_story_id,instagram_permalink_url,effective_object_story_id},campaign{id,name}',
           ...(topAdIds.length > 0 ? { filtering: JSON.stringify([{ field: 'id', operator: 'IN', value: topAdIds }]) } : {}),
+          limit: 200,
         }),
         graphGet(`${AD_ACCOUNT_ID}/adspixels`, t, { fields: 'id,name,last_fired_time' })
       ])
@@ -1950,10 +1863,7 @@ export default function MetaAdsDashboard() {
       const pausedCampaignCount = allCampaigns.filter(c => c.status === 'PAUSED').length
 
       let adsWithThumbs, insightsMap
-      if (cachedAds) {
-        adsWithThumbs = cachedAds
-        insightsMap = cachedInsightsMap
-      } else {
+      {
         // Fetch insights for the current period only. Previously also fetched a
         // previous-period comparison here to power a WoW CTR column -- removed (both
         // the fetch and the column) since fatigue/health scoring never depended on it
@@ -2012,7 +1922,7 @@ export default function MetaAdsDashboard() {
         })
       }
 
-      const __metaPayload = { account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, range, preset, fromCache: !!cachedAds }
+      const __metaPayload = { account, lifetimeAccount, activeCampaignCount, pausedCampaignCount, campaigns: campaigns.data || [], ads: adsWithThumbs, pixels: pixels.data || [], accountAvgCTR, insightsMap, range, preset }
       setData(__metaPayload)
       const __ts = Date.now(); setCacheTs(__ts)
       try { localStorage.setItem('meta_cache', JSON.stringify({ d: __metaPayload, t: __ts })) } catch (e) {}
@@ -2203,7 +2113,7 @@ export default function MetaAdsDashboard() {
               </div>
             )}
             {loading && loadProgress && <span className={styles.syncTag}>Loading ads… {loadProgress.done} of {loadProgress.total}</span>}
-            {lastSync && <span className={styles.syncTag}>{data?.fromCache ? 'Cached ' : 'Synced '}{lastSync.toLocaleTimeString()}</span>}
+            {lastSync && <span className={styles.syncTag}>Synced {lastSync.toLocaleTimeString()}</span>}
             {sendMsg && <span style={{fontSize:12,color:sendMsg.startsWith('✓')?'#4CAE6F':'#DC2626',fontWeight:500}}>{sendMsg}</span>}
             <Button size="sm" variant="secondary" onClick={() => { loadAllData(token, datePreset); setCrmRefreshNonce(n=>n+1) }} disabled={loading}
               icon={<span style={{display:'inline-flex', animation: loading ? 'spin .7s linear infinite' : 'none'}}>
