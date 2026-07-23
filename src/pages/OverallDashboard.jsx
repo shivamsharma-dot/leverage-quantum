@@ -344,8 +344,8 @@ const heatBg = v => v == null ? 'transparent' : v >= 50 ? C.greenBg : v >= 25 ? 
 // localStorage so the layout sticks between sessions), sortable headers, search, and a
 // per-view export button — same "creative table" pattern as Meta Ads Creatives.
 const SUMMARY_COLUMNS = [
-  { key:'leads', label:'Leads' },
   { key:'spend', label:'Spend' },
+  { key:'leads', label:'Leads' },
   { key:'queued', label:'Total Queued' },
   { key:'humanQL', label:'Futwork Human QL' },
   { key:'futworkAiQl', label:'Futwork AI QL' },
@@ -364,6 +364,8 @@ const SUMMARY_COLUMNS = [
   { key:'cpa', label:'CPA' },
   { key:'estSrRevenue', label:'Est. SR Revenue' },
   { key:'actSrRevenue', label:'Actual SR Revenue' },
+  { key:'roas', label:'Actual ROAS' },
+  { key:'estimatedRoas', label:'Est. ROAS' },
 ]
 const SUMMARY_COLUMN_KEYS = SUMMARY_COLUMNS.map(c => c.key)
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
@@ -403,6 +405,7 @@ function summaryValue(g, key) {
 }
 function summaryFmt(key, v) {
   if (v == null) return '—'
+  if (key === 'roas' || key === 'estimatedRoas') return v.toFixed(2) + 'x'
   if (key.endsWith('Pct')) return v.toFixed(1) + '%'
   if (key.endsWith('SrRevenue') || key === 'spend' || key === 'cpl' || key === 'cpql' || key === 'cpa') return fmtINR(v)
   return fmtN(v)
@@ -420,9 +423,11 @@ function summaryColor(key) {
   if (key === 'cpa') return C.green
   if (key === 'estSrRevenue') return C.blue
   if (key === 'actSrRevenue') return C.green
+  if (key === 'roas') return C.green
+  if (key === 'estimatedRoas') return C.blue
   return '#475569'
 }
-const SUMMARY_BOLD_COLS = ['leads', 'spend', 'raus', 'qlPct', 'appPct', 'depositPct', 'estSrRevenue', 'actSrRevenue']
+const SUMMARY_BOLD_COLS = ['leads', 'spend', 'raus', 'qlPct', 'appPct', 'depositPct', 'estSrRevenue', 'actSrRevenue', 'roas', 'estimatedRoas']
 
 // Show/hide + reorder popover for the summary table's columns.
 function ColumnsPicker({ order, visible, onToggle, onMove, onClose, onReset }) {
@@ -1128,17 +1133,24 @@ export default function OverallDashboard() {
   // user-configurable in the toolbar below and persist to localStorage.
   const groupedWithRevenue = useMemo(() => grouped.map(g => {
     const estimatedRaus = g.apps * RAU_CONVERSION_FACTOR
-    return { ...g, estimatedRaus, estSrRevenue: estimatedRaus * srFee, actSrRevenue: g.raus * srFee }
+    const estSrRevenue = estimatedRaus * srFee
+    const actSrRevenue = g.raus * srFee
+    return {
+      ...g, estimatedRaus, estSrRevenue, actSrRevenue,
+      roas: g.spend > 0 ? actSrRevenue / g.spend : 0,
+      estimatedRoas: g.spend > 0 ? estSrRevenue / g.spend : 0,
+    }
   }), [grouped, srFee])
 
   const exportRows = useMemo(() => groupedWithRevenue.map(g => ({
     [grpByLabel]: g.label,
-    Leads: g.leads, Spend: fmtINR(g.spend), 'Total Queued': g.queued,
+    Spend: fmtINR(g.spend), Leads: g.leads, 'Total Queued': g.queued,
     'Futwork Human QL': g.humanQL, 'Futwork AI QL': g.futworkAiQl, 'Superbot AI QL': g.superbotAiQl, 'Total QLs': g.totalQL,
     Applications: g.apps, Offers: g.offers, Deposits: g.deposits, 'Actual RAUs': g.raus, 'Estimated RAU': fmtN(g.estimatedRaus),
     'QL %': pct(g.totalQL, g.queued), 'App %': pct(g.apps, g.totalQL), 'Deposit %': pct(g.deposits, g.offers),
     CPL: fmtINR(summaryValue(g, 'cpl')), CPQL: fmtINR(summaryValue(g, 'cpql')), CPA: fmtINR(summaryValue(g, 'cpa')),
     'Est. SR Revenue': fmtINR(g.estSrRevenue), 'Actual SR Revenue': fmtINR(g.actSrRevenue),
+    'Actual ROAS': g.roas.toFixed(2) + 'x', 'Est. ROAS': g.estimatedRoas.toFixed(2) + 'x',
   })), [groupedWithRevenue, grpByLabel])
 
   const maxSourceLeads = bySource.length ? Math.max(...bySource.map(s => s.leads)) : 1
