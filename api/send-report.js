@@ -341,11 +341,11 @@ async function logReport({ report_type, recipients, status, error = null, trigge
 // (Settings > Data > Data Sources -> sheet_url_human_unassigned / sheet_url_ai_unassigned),
 // same override pattern as every other sheet source in this app. Recipient is
 // fixed (not the general opt-in report-recipients list) since this is a
-// targeted operational alert, not a subscribable report.
+// targeted operational alert, not a subscribable report. Shivam is always CC'd.
 const UNASSIGNED_LEADS_RECIPIENTS = ['akash.saxena@leverageedu.com']
+const UNASSIGNED_LEADS_CC = ['shivam.sharma@leverageedu.com']
 const HUMAN_UNASSIGNED_DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/1FsfBQAAKWwnDCLFRbvamFaJiqs2nq8Wltk5e8LGAhRo/gviz/tq?tqx=out:csv&sheet=human_unassigned'
 const AI_UNASSIGNED_DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/1FsfBQAAKWwnDCLFRbvamFaJiqs2nq8Wltk5e8LGAhRo/gviz/tq?tqx=out:csv&sheet=AI_unassigned'
-const LEADSQUARED_CONTACT_URL = 'https://in21.leadsquared.com/LeadManagement/LeadDetails?LeadID='
 
 function parseCsvText(text) {
   const rows = []; let i = 0, field = '', row = [], inq = false
@@ -395,7 +395,7 @@ function parseDateLoose(s) {
 function ageDays(d) { return d ? Math.floor((Date.now() - d.getTime()) / 86400000) : null }
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
 
-function buildUnassignedLeadsEmail({ humanRows, aiRows }) {
+function buildUnassignedLeadsEmail({ humanRows, aiRows, humanUrl, aiUrl }) {
   const todayLabel = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   const human = humanRows.map(r => ({
     channel: 'Human', prospectId: r['prospect_id'] || '', date: parseDateLoose(r['ai_activity_date']),
@@ -408,6 +408,7 @@ function buildUnassignedLeadsEmail({ humanRows, aiRows }) {
   const all = [...human, ...ai].sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0))
   const oldest = all[0]
   const total = human.length + ai.length
+  const oldestAge = ageDays(oldest?.date)
 
   const statCard = (label, value, color) => `<td width="33%" style="padding:0 6px">
     <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F8FAFC;border-radius:12px;border:1px solid #EEF1F6">
@@ -418,24 +419,19 @@ function buildUnassignedLeadsEmail({ humanRows, aiRows }) {
     </table>
   </td>`
 
-  const leadRow = (r, i) => {
-    const age = ageDays(r.date)
-    const ageColor = age >= 3 ? NAVY : age >= 1 ? BLUE : '#64748B'
-    return `<tr style="background-color:${i % 2 === 0 ? '#ffffff' : '#FAFBFC'}">
-      <td style="padding:8px 10px;font-size:11.5px;color:#64748B;border-top:1px solid #F1F4F9">${r.date ? r.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}</td>
-      <td style="padding:8px 10px;font-size:11.5px;border-top:1px solid #F1F4F9">
-        <span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background-color:${r.channel === 'Human' ? '#EAF3FC' : '#EAF7EE'};color:${r.channel === 'Human' ? BLUE : GREEN}">${r.channel}</span>
-      </td>
-      <td style="padding:8px 10px;font-size:11.5px;border-top:1px solid #F1F4F9">
-        <a href="${LEADSQUARED_CONTACT_URL}${encodeURIComponent(r.prospectId)}" style="color:${NAVY};text-decoration:none;font-family:monospace">${escHtml(r.prospectId.slice(0, 10))}…</a>
-      </td>
-      <td style="padding:8px 10px;font-size:11.5px;color:#374151;border-top:1px solid #F1F4F9;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.campaign || '—')}</td>
-      <td style="padding:8px 10px;font-size:11.5px;color:#374151;border-top:1px solid #F1F4F9">${escHtml(r.country || '—')}</td>
-      <td style="padding:8px 10px;font-size:11px;color:#94A3B8;border-top:1px solid #F1F4F9;font-family:monospace">${escHtml(r.owner || '—')}</td>
-      <td style="padding:8px 10px;font-size:11.5px;font-weight:700;color:${ageColor};border-top:1px solid #F1F4F9;text-align:right">${age == null ? '—' : age + 'd'}</td>
-    </tr>`
-  }
-  const topRows = all.slice(0, 15).map(leadRow).join('')
+  const csvLinkCard = (label, count, url, color) => `<td width="50%" style="padding:0 6px">
+    <a href="${escHtml(url)}" style="display:block;text-decoration:none;background-color:#ffffff;border:1px solid #EEF1F6;border-radius:12px;padding:14px 16px">
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td>
+          <div style="font-size:12.5px;font-weight:700;color:#0F172A">${label}</div>
+          <div style="font-size:11px;color:#94A3B8;margin-top:2px">${count} rows &middot; opens as CSV</div>
+        </td>
+        <td width="24" style="text-align:right;vertical-align:middle">
+          <span style="display:inline-block;width:24px;height:24px;border-radius:7px;background-color:${color}1A;color:${color};font-size:13px;font-weight:800;line-height:24px;text-align:center">&#8595;</span>
+        </td>
+      </tr></table>
+    </a>
+  </td>`
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -477,16 +473,19 @@ function buildUnassignedLeadsEmail({ humanRows, aiRows }) {
       <div style="margin-top:22px">
         <span style="display:inline-block;padding:4px 11px;border-radius:20px;background-color:#EEF1FB;font-size:10px;font-weight:700;color:${NAVY};letter-spacing:.08em;text-transform:uppercase">Daily Ops Alert</span>
       </div>
-      <div style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.35;margin:12px 0 6px">${total} leads still need a floor owner</div>
-      <div style="font-size:12.5px;color:#94A3B8">QL Ops &middot; Human + AI Unassigned &middot; ${todayLabel}</div>
+      <div style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.35;margin:12px 0 10px">${total} leads still need a floor owner</div>
+      <div style="font-size:13.5px;color:#374151;line-height:1.7">
+        Hi Akash,<br/>
+        There are currently <strong>${total} leads</strong> without a real floor owner in LeadSquared — <strong>${human.length}</strong> from the Human calling channel and <strong>${ai.length}</strong> from the AI channel. The oldest has been sitting unassigned for <strong>${oldestAge == null ? '—' : oldestAge + ' days'}</strong>. Please review and assign owners as soon as possible.
+      </div>
 
     </td></tr>
 
-    <tr><td style="padding:0 36px 20px">
+    <tr><td style="padding:8px 36px 20px">
       <table width="100%" cellpadding="0" cellspacing="0"><tr>
         ${statCard('Human Unassigned', human.length, BLUE)}
         ${statCard('AI Unassigned', ai.length, GREEN)}
-        ${statCard('Oldest Unassigned', (ageDays(oldest?.date) ?? '—') + 'd', NAVY)}
+        ${statCard('Oldest Unassigned', (oldestAge ?? '—') + 'd', NAVY)}
       </tr></table>
     </td></tr>
 
@@ -495,25 +494,16 @@ function buildUnassignedLeadsEmail({ humanRows, aiRows }) {
     </td></tr>
 
     <tr><td style="padding:24px 36px 8px">
-      <div style="font-size:13px;font-weight:800;color:#0F172A;margin-bottom:2px">Oldest unassigned leads (top 15)</div>
-      <div style="font-size:11.5px;color:#94A3B8;margin-bottom:14px">Full lists for both channels are attached as CSV below.</div>
-      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
-        <thead><tr style="background-color:#F9FAFB">
-          <th style="padding:8px 10px;text-align:left;font-size:9.5px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.04em">Date</th>
-          <th style="padding:8px 10px;text-align:left;font-size:9.5px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.04em">Channel</th>
-          <th style="padding:8px 10px;text-align:left;font-size:9.5px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.04em">Prospect</th>
-          <th style="padding:8px 10px;text-align:left;font-size:9.5px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.04em">Campaign</th>
-          <th style="padding:8px 10px;text-align:left;font-size:9.5px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.04em">Country</th>
-          <th style="padding:8px 10px;text-align:left;font-size:9.5px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.04em">Current Owner</th>
-          <th style="padding:8px 10px;text-align:right;font-size:9.5px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.04em">Age</th>
-        </tr></thead>
-        <tbody>${topRows}</tbody>
-      </table>
+      <div style="font-size:13px;font-weight:800;color:#0F172A;margin-bottom:12px">Download the full lists</div>
+      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+        ${csvLinkCard('Human Unassigned CSV', human.length, humanUrl, BLUE)}
+        ${csvLinkCard('AI Unassigned CSV', ai.length, aiUrl, GREEN)}
+      </tr></table>
     </td></tr>
 
-    <tr><td style="padding:20px 36px 32px">
+    <tr><td style="padding:14px 36px 32px">
       <div style="padding:12px 16px;border-radius:10px;background-color:#F8FAFC;border-left:3px solid ${NAVY};font-size:12px;color:#475569;line-height:1.6">
-        &#128206; <strong>human_unassigned.csv</strong> (${human.length} rows) and <strong>ai_unassigned.csv</strong> (${ai.length} rows) are attached to this email with the full record for every unassigned lead.
+        &#128206; <strong>human_unassigned.csv</strong> and <strong>ai_unassigned.csv</strong> are also attached directly to this email.
       </div>
     </td></tr>
   </table>
@@ -554,7 +544,7 @@ async function handleUnassignedLeadsReport(req, res) {
       fetchUnassignedSheet('sheet_url_human_unassigned', HUMAN_UNASSIGNED_DEFAULT_URL),
       fetchUnassignedSheet('sheet_url_ai_unassigned', AI_UNASSIGNED_DEFAULT_URL),
     ])
-    const { html, total, humanCount, aiCount } = buildUnassignedLeadsEmail({ humanRows: human.rows, aiRows: ai.rows })
+    const { html, total, humanCount, aiCount } = buildUnassignedLeadsEmail({ humanRows: human.rows, aiRows: ai.rows, humanUrl: human.url, aiUrl: ai.url })
 
     const cfg = await getReportConfig()
     const fromAddr = cfg.report_from_email
@@ -568,6 +558,7 @@ async function handleUnassignedLeadsReport(req, res) {
       body: JSON.stringify({
         from: fromAddr,
         to: UNASSIGNED_LEADS_RECIPIENTS,
+        cc: UNASSIGNED_LEADS_CC,
         subject: `Unassigned Leads: ${total} need a floor owner — ${todayLabel}`,
         html,
         attachments: [
@@ -579,10 +570,10 @@ async function handleUnassignedLeadsReport(req, res) {
     const sendData = await sendRes.json()
     if (!sendRes.ok) throw new Error(sendData.message || JSON.stringify(sendData))
 
-    await logReport({ report_type: 'unassigned leads', recipients: UNASSIGNED_LEADS_RECIPIENTS, status: 'sent', triggered_by })
-    return res.status(200).json({ ok: true, success: true, recipients: UNASSIGNED_LEADS_RECIPIENTS, humanCount, aiCount, total, id: sendData.id })
+    await logReport({ report_type: 'unassigned leads', recipients: [...UNASSIGNED_LEADS_RECIPIENTS, ...UNASSIGNED_LEADS_CC], status: 'sent', triggered_by })
+    return res.status(200).json({ ok: true, success: true, recipients: [...UNASSIGNED_LEADS_RECIPIENTS, ...UNASSIGNED_LEADS_CC], humanCount, aiCount, total, id: sendData.id })
   } catch (e) {
-    await logReport({ report_type: 'unassigned leads', recipients: UNASSIGNED_LEADS_RECIPIENTS, status: 'failed', error: e.message, triggered_by })
+    await logReport({ report_type: 'unassigned leads', recipients: [...UNASSIGNED_LEADS_RECIPIENTS, ...UNASSIGNED_LEADS_CC], status: 'failed', error: e.message, triggered_by })
     return res.status(500).json({ error: e.message })
   }
 }

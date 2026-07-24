@@ -1144,6 +1144,9 @@ export default function SettingsPage() {
   const [rcTesting, setRcTesting] = useState(false)
   const [rcSendType, setRcSendType] = useState('daily')
   const [rcSending, setRcSending] = useState(false)
+  // --- Unassigned Leads alert (fixed recipient, not the general opt-in list) ---
+  const [unassignedSending, setUnassignedSending] = useState(false)
+  const [unassignedMsg, setUnassignedMsg] = useState('')
   // --- Slack config (webhook + auto-post toggle) ---
   const [slackWebhook, setSlackWebhook] = useState('')
   const [slackAuto, setSlackAuto] = useState(true)
@@ -1389,6 +1392,21 @@ setRcMsg('Sent to ' + (d.recipients?.length || 0) + ' recipients')
 } catch (e) { setRcMsg('\u2715 ' + e.message) }
 finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 }
+
+  const sendUnassignedNow = async () => {
+    setUnassignedSending(true); setUnassignedMsg('')
+    try {
+      const r = await fetch('/api/send-report', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'unassigned_leads', triggered_by: user?.email || 'manual' })
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Failed')
+      setUnassignedMsg('Sent \u2014 ' + (d.total ?? '?') + ' unassigned leads (' + (d.humanCount ?? '?') + ' human, ' + (d.aiCount ?? '?') + ' AI)')
+    } catch (e) { setUnassignedMsg('\u2715 ' + e.message) }
+    finally { setUnassignedSending(false); setTimeout(() => setUnassignedMsg(''), 8000) }
+  }
 
   const TABS = [
     ...(userIsAdmin ? [{ id: 'data', label: 'Data', icon: 'layers' }] : []),
@@ -2413,6 +2431,20 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <Button onClick={saveSlackConfig} disabled={slackCfgSaving}>{slackCfgSaving ? 'Saving…' : 'Save'}</Button>
                   <Button variant="secondary" onClick={sendSlackTest} disabled={slackTesting || !slackWebhook.trim()}>{slackTesting ? 'Sending…' : 'Send test message'}</Button>
                   {slackCfgMsg && <span className={styles.rcFeedback + ' ' + (slackCfgMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{slackCfgMsg}</span>}
+                </div>
+              </div>
+
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Unassigned Leads Alert</h3>
+                <p className={styles.cardDesc}>QL Ops &middot; flags leads still owned by a bot/vendor placeholder (Futwork/Futwork AI/Superbot) instead of a real floor owner. Fixed recipient, separate from the scheduled reports above — not part of the general opt-in recipient list.</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 24px', margin: '4px 0 14px', fontSize: 13 }}>
+                  <div><span style={{ color: '#94A3B8' }}>To:</span> <strong>akash.saxena@leverageedu.com</strong></div>
+                  <div><span style={{ color: '#94A3B8' }}>CC:</span> <strong>shivam.sharma@leverageedu.com</strong></div>
+                  <div><span style={{ color: '#94A3B8' }}>Schedule:</span> <strong>Daily, 9:00 AM IST</strong></div>
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <Button onClick={sendUnassignedNow} disabled={unassignedSending}>{unassignedSending ? 'Sending…' : 'Send now'}</Button>
+                  {unassignedMsg && <span className={styles.rcFeedback + ' ' + (unassignedMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{unassignedMsg}</span>}
                 </div>
               </div>
 
