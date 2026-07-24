@@ -15,6 +15,8 @@ const RevenueDashboard = lazy(COMPONENT_IMPORTS.RevenueDashboard)
 const LeadQualificationDashboard = lazy(COMPONENT_IMPORTS.LeadQualificationDashboard)
 const HumanQLDetailDashboard = lazy(COMPONENT_IMPORTS.HumanQLDetailDashboard)
 const AIQLDetailDashboard = lazy(COMPONENT_IMPORTS.AIQLDetailDashboard)
+const HumanUnassignedDashboard = lazy(COMPONENT_IMPORTS.HumanUnassignedDashboard)
+const AIUnassignedDashboard = lazy(COMPONENT_IMPORTS.AIUnassignedDashboard)
 const WhatsAppDashboard = lazy(COMPONENT_IMPORTS.WhatsAppDashboard)
 const MTDDashboard = lazy(COMPONENT_IMPORTS.MTDDashboard)
 const MetaAdsDashboard = lazy(COMPONENT_IMPORTS.MetaAdsDashboard)
@@ -43,6 +45,8 @@ const PAGE_TITLES = {
   '/dashboard/lq-ops-monthly': 'Monthly QLs',
   '/dashboard/lq-ops-detail': 'Human QL Detail',
   '/dashboard/lq-ops-ai-detail': 'AI QL Detail',
+  '/dashboard/lq-ops-human-unassigned': 'Human Unassigned',
+  '/dashboard/lq-ops-ai-unassigned': 'AI Unassigned',
   '/dashboard/whatsapp': 'WhatsApp',
   '/dashboard/referral': 'Referral',
   '/dashboard/leads-assigned': 'Leads Assigned',
@@ -235,6 +239,8 @@ export default function App() {
           <Route path="/dashboard/lq-ops-monthly" element={<ProtectedRoute dashboardId="lq_ops_monthly"> <LeadQualificationDashboard forcedView="monthly" /></ProtectedRoute>} />
           <Route path="/dashboard/lq-ops-detail" element={<ProtectedRoute dashboardId="lq_ops_detail"> <HumanQLDetailDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/lq-ops-ai-detail" element={<ProtectedRoute dashboardId="lq_ops_ai_detail"> <AIQLDetailDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/lq-ops-human-unassigned" element={<ProtectedRoute dashboardId="lq_ops_human_unassigned"> <HumanUnassignedDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/lq-ops-ai-unassigned" element={<ProtectedRoute dashboardId="lq_ops_ai_unassigned"> <AIUnassignedDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/referral" element={<ProtectedRoute dashboardId="referral"><ReferralDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/leads-assigned" element={<ProtectedRoute dashboardId="leads_assigned"><LeadsAssignedDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/whatsapp" element={<ProtectedRoute dashboardId="whatsapp"> <WhatsAppDashboard /></ProtectedRoute>} />
