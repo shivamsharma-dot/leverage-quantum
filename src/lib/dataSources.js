@@ -14,35 +14,54 @@ export const SHEET_PREF_KEYS = {
     googleLeads: 'sheet_url_googleleads',
     humanQlDetail: 'sheet_url_human_ql_detail',
     aiQlDetail: 'sheet_url_ai_ql_detail',
+    humanUnassigned: 'sheet_url_human_unassigned',
+    aiUnassigned: 'sheet_url_ai_unassigned',
 }
 
-let cached = null
-let cachedAt = 0
+// Per-key cache (60s TTL) + in-flight dedup, so pages that fire several
+// resolveSheetUrl() calls at once (e.g. summaryData.js's Promise.all) still
+// only issue one network request per key. Resolved via /api/preferences's
+// ?resolveSheetKey=<key> branch (works for ANY signed-in user, admin or
+// viewer) rather than the plain ?global=1 blob, which is filtered to a
+// PUBLIC_KEYS allowlist for non-admins and never includes sheet_url_* keys --
+// using that here would silently make a viewer's page ignore an admin's
+// saved sheet-URL override and keep loading the hardcoded default.
+const urlCache = new Map() // prefKey -> { url, at }
+const inFlight = new Map() // prefKey -> Promise<string|null>
 const TTL = 60 * 1000
 
-async function loadPrefs() {
+async function fetchResolvedUrl(prefKey) {
     const now = Date.now()
-    if (cached && now - cachedAt < TTL) return cached
-    try {
-          const r = await fetch('/api/preferences?global=1', { credentials: 'include' })
-          const data = r.ok ? await r.json() : { prefs: {} }
-                cached = data.prefs || {}
-                      cachedAt = now
-    } catch (_) {
-          cached = cached || {}
-    }
-    return cached
+    const hit = urlCache.get(prefKey)
+    if (hit && now - hit.at < TTL) return hit.url
+    if (inFlight.has(prefKey)) return inFlight.get(prefKey)
+
+    const p = (async () => {
+        try {
+            const r = await fetch(`/api/preferences?resolveSheetKey=${encodeURIComponent(prefKey)}`, { credentials: 'include' })
+            const data = r.ok ? await r.json() : { url: null }
+            urlCache.set(prefKey, { url: data.url || null, at: Date.now() })
+            return data.url || null
+        } catch (_) {
+            return null
+        } finally {
+            inFlight.delete(prefKey)
+        }
+    })()
+    inFlight.set(prefKey, p)
+    return p
 }
 
 // Returns the admin-configured URL for `sourceKey` if one has been saved,
 // otherwise falls back to `fallbackUrl` (the hard-coded default in the page).
 export async function resolveSheetUrl(sourceKey, fallbackUrl) {
-    const prefs = await loadPrefs()
     const prefKey = SHEET_PREF_KEYS[sourceKey]
-    const override = prefKey && prefs[prefKey]
+    if (!prefKey) return fallbackUrl
+    const override = await fetchResolvedUrl(prefKey)
     return (override && String(override).trim()) || fallbackUrl
 }
 
 export function invalidateSheetPrefsCache() {
-    cached = null
+    urlCache.clear()
+    inFlight.clear()
 }

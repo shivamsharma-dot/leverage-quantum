@@ -1,4 +1,7 @@
 import { getSessionUser, supabaseAdmin } from '../lib/auth.mjs'
+import { SHEET_PREF_KEYS } from '../src/lib/dataSources.js'
+
+const ALLOWED_SHEET_KEYS = new Set(Object.values(SHEET_PREF_KEYS))
 
 // GET  /api/preferences          — returns this admin's hidden_pages
 // POST /api/preferences          — saves hidden_pages (admin only)
@@ -40,6 +43,24 @@ export default async function handler(req, res) {
       if (rows2[0]?.value) return res.status(200).json({ url: rows2[0].value })
     }
     return res.status(200).json({ url: entry.defaultUrl || null })
+  }
+
+  // GET (authenticated) ?resolveSheetKey=<sheet_url_...> — any signed-in user
+  // can resolve a specific sheet-source override by key (see SHEET_PREF_KEYS in
+  // src/lib/dataSources.js). Returns ONLY that one resolved URL string, never the
+  // full preferences blob, so this doesn't reopen the exposure the PUBLIC_KEYS
+  // allowlist below is guarding against. Needed because a non-admin/viewer
+  // session's plain GET falls into the PUBLIC_KEYS-filtered branch below, which
+  // excludes every sheet_url_* key -- without this, resolveSheetUrl() on the
+  // frontend silently couldn't see an admin's saved sheet-URL override and kept
+  // falling back to the page's hardcoded default sheet (same root cause as the
+  // Overall dashboard's resolveOverallSheet=1 fix above, generalized here).
+  if (req.method === 'GET' && typeof req.query.resolveSheetKey === 'string') {
+    const key = req.query.resolveSheetKey
+    if (!ALLOWED_SHEET_KEYS.has(key)) return res.status(400).json({ error: 'Unknown sheet key' })
+    const r = await supabaseAdmin(`app_preferences?select=value&key=eq.${key}`)
+    const rows = r.ok ? await r.json() : []
+    return res.status(200).json({ url: rows[0]?.value || null })
   }
 
   // GET (authenticated) — every signed-in user needs a small set of app-wide
