@@ -259,6 +259,19 @@ export default function Sidebar() {
 
   const idMap = Object.fromEntries(PAGE_LIST.map(p => [p.label, p.id]))
 
+  // Nav parents whose subItems are real, separately-access-controlled pages (matchType
+  // 'route', e.g. QL Ops's Daily/Monthly/Human-Detail/AI-Detail) don't have their own
+  // PAGE_LIST entry -- idMap[item.label] is undefined for them, which canSee() would
+  // treat as "not granted" for any custom viewer:... role, hiding the whole group no
+  // matter which sub-pages were actually granted. (Meta Ads/Google Ads are unaffected --
+  // their subItems are matchType 'query' tabs on one shared page, and the parent label
+  // itself IS a real PAGE_LIST id.) Visible if the user can see at least one sub-page.
+  const isRouteGroup = item => item.subItems && item.subItems.every(s => s.matchType === 'route')
+  const subVisible = sub => canSee(idMap[sub.label]) && isPageVisible(sub.label)
+  const groupVisible = item => isRouteGroup(item)
+    ? item.subItems.some(subVisible)
+    : canSee(idMap[item.label]) && isPageVisible(item.label)
+
   const currentTab = new URLSearchParams(location.search).get('tab') || 'campaigns'
 
   const isSubActive = (sub) => {
@@ -279,7 +292,8 @@ export default function Sidebar() {
   const openFlyout = (item, el) => {
     if (flyoutCloseTimer.current) { clearTimeout(flyoutCloseTimer.current); flyoutCloseTimer.current = null }
     const rect = el.getBoundingClientRect()
-    setFlyout({ label: item.label, subItems: item.subItems, top: rect.top, centerY: rect.top + rect.height / 2 })
+    const visibleSubItems = item.subItems.filter(sub => sub.matchType !== 'route' || subVisible(sub))
+    setFlyout({ label: item.label, subItems: visibleSubItems, top: rect.top, centerY: rect.top + rect.height / 2 })
   }
   const scheduleCloseFlyout = () => {
     if (flyoutCloseTimer.current) clearTimeout(flyoutCloseTimer.current)
@@ -313,10 +327,10 @@ export default function Sidebar() {
       </div>
 
       <nav className={styles.nav}>
-        {NAV.map(group => (group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).length===0?null:(
+        {NAV.map(group => (group.items.filter(item => groupVisible(item)).length===0?null:(
           <div key={group.label} className={styles.group}>
             {group.label !== 'Intelligence' && <p className={styles.groupLabel}>{group.label}</p>}
-            {group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item => {
+            {group.items.filter(item => groupVisible(item)).map(item => {
               if (item.subItems) {
                 const parentActive = item.label === 'Meta Ads' ? isMetaParentActive : item.label === 'Google Ads' ? isGoogleParentActive : item.label === 'QL Ops' ? isQlOpsParentActive : false
                 return (
@@ -335,7 +349,7 @@ export default function Sidebar() {
                     </button>
                     {getExpanded(item.label) && (
                       <div className={styles.subNav}>
-                        {item.subItems.map(sub => (
+                        {item.subItems.filter(sub => sub.matchType !== 'route' || subVisible(sub)).map(sub => (
                           <button key={sub.label}
                             className={`${styles.subNavItem} ${isSubActive(sub) ? styles.subNavActive : ''}`}
                             onClick={() => navigate(sub.to)}
@@ -420,10 +434,10 @@ export default function Sidebar() {
       {mobileOpen && (
         <div style={{position:'fixed',inset:0,zIndex:999,display:'flex'}} onClick={()=>setMobileOpen(false)}>
           <div style={{width:240,height:'100%',background:'var(--sidebar-bg)',borderRight:'0.5px solid var(--card-border)',overflowY:'auto',paddingTop:'calc(60px + env(safe-area-inset-top))'}} onClick={e=>e.stopPropagation()}>
-            {NAV.map(group=>(group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).length===0?null:(
+            {NAV.map(group=>(group.items.filter(item => groupVisible(item)).length===0?null:(
               <div key={group.label} style={{marginBottom:8,padding:'0 10px'}}>
                 <div style={{fontSize:10,fontWeight:600,color:'#9CA3AF',letterSpacing:'0.08em',textTransform:'uppercase',padding:'10px 6px 4px'}}>{group.label}</div>
-                {group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item=>(
+                {group.items.filter(item => groupVisible(item)).map(item=>(
                   <a key={item.to} href={item.to} onClick={()=>setMobileOpen(false)} onTouchStart={()=>prefetchRoute(item.defaultTo || item.to)}
                     style={{display:'flex',alignItems:'center',gap:9,padding:'9px 10px',borderRadius:9,textDecoration:'none',color:'#374151',fontSize:13,fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
                     {item.icon}{item.label}
@@ -455,7 +469,7 @@ export default function Sidebar() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
         <div className={styles.collapsedNav}>
-          {NAV.map(group => group.items.filter(item => canSee(idMap[item.label]) && isPageVisible(item.label)).map(item => (
+          {NAV.map(group => group.items.filter(item => groupVisible(item)).map(item => (
             item.subItems ? (
               <div key={item.label} style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}
                 onMouseEnter={(e) => openFlyout(item, e.currentTarget)}
