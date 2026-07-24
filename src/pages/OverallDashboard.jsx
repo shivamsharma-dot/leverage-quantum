@@ -21,12 +21,16 @@ import {
 const DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/1kaoWMGBbttOtaeVfaSXhrxcs0_pe5xLXltMulG8mHG4/gviz/tq?tqx=out:csv&sheet=MainData'
 
 async function resolveOverallUrl() {
+  // Server-side resolution (any signed-in user, admin or not) -- see api/preferences.mjs's
+  // ?resolveOverallSheet=1 branch. Doing this server-side (rather than reading
+  // custom_data_sources directly, which is admin-only) means non-admin sessions still
+  // get the real admin-configured sheet instead of silently falling back to DEFAULT_URL.
   try {
-    const r = await fetch('/api/preferences?global=1', { credentials: 'include' })
-    const prefs = r.ok ? (await r.json()).prefs || {} : {}
-    const custom = Array.isArray(prefs.custom_data_sources) ? prefs.custom_data_sources : []
-    const entry = custom.find(s => /mainData/i.test(s.defaultUrl || '') || /overall/i.test(s.name || ''))
-    if (entry) return prefs[entry.editKey] || entry.defaultUrl || DEFAULT_URL
+    const r = await fetch('/api/preferences?resolveOverallSheet=1', { credentials: 'include' })
+    if (r.ok) {
+      const { url } = await r.json()
+      if (url) return url
+    }
   } catch (_) {}
   return DEFAULT_URL
 }
@@ -672,8 +676,12 @@ export default function OverallDashboard() {
         const curKey = monthKey(new Date())
         const defMk = ms.includes(curKey) ? curKey : ms[ms.length - 1]
         setSelMonth(monthLabel(defMk))
+        // Only latch once we've actually found real dated rows -- if a load ever comes
+        // back with zero (e.g. a transient fetch/parse issue), leave this unset so the
+        // next successful load can still self-heal instead of permanently sticking with
+        // an empty selMonth for the rest of the session.
+        hasSetInitial.current = true
       }
-      hasSetInitial.current = true
     }
   }, [])
 

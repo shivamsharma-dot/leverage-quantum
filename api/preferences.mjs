@@ -20,6 +20,28 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Not signed in' })
   }
 
+  // GET (authenticated) ?resolveOverallSheet=1 — any signed-in user (not just admin)
+  // can resolve the "Overall PM" sheet URL specifically, since the Overall dashboard
+  // itself is viewable by non-admins. Returns ONLY the resolved URL string -- never the
+  // raw custom_data_sources list or any other source's URL -- so this doesn't reopen
+  // the sheet-URL exposure the PUBLIC_KEYS allowlist below is deliberately guarding
+  // against. Without this, resolveOverallUrl() on the frontend silently fell back to
+  // the hardcoded DEFAULT_URL for every non-admin session, loading the wrong/stale
+  // sheet (zero real rows) instead of the admin-configured live one.
+  if (req.method === 'GET' && req.query.resolveOverallSheet === '1') {
+    const r = await supabaseAdmin('app_preferences?select=value&key=eq.custom_data_sources')
+    const rows = r.ok ? await r.json() : []
+    const custom = Array.isArray(rows[0]?.value) ? rows[0].value : []
+    const entry = custom.find(s => /mainData/i.test(s.defaultUrl || '') || /overall/i.test(s.name || ''))
+    if (!entry) return res.status(200).json({ url: null })
+    if (entry.editKey) {
+      const r2 = await supabaseAdmin(`app_preferences?select=value&key=eq.${entry.editKey}`)
+      const rows2 = r2.ok ? await r2.json() : []
+      if (rows2[0]?.value) return res.status(200).json({ url: rows2[0].value })
+    }
+    return res.status(200).json({ url: entry.defaultUrl || null })
+  }
+
   // GET (authenticated) — every signed-in user needs a small set of app-wide
   // keys regardless of role (hidden_pages for the Sidebar, the 3 design-style
   // picks so Button/KPI/Login look consistent for everyone). Everything else
