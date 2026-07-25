@@ -266,7 +266,7 @@ async function fetchOverallSheetRows() {
   if (_overallSheetInflight) return _overallSheetInflight
   _overallSheetInflight = (async () => {
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(45000) })
+      const res = await fetch(url, { signal: AbortSignal.timeout(55000) })
       if (!res.ok) return null
       const { h, rows } = parseCSV(await res.text())
       const entry = { url, rows, h, ts: Date.now() }
