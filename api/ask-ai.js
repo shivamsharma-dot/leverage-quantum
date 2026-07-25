@@ -277,8 +277,20 @@ async function fetchOverallSheetRows() {
   })()
   return _overallSheetInflight
 }
+// Raw "Source" values on the sheet -> the 5 named channels the business actually
+// thinks in (anything else -- Offline/Bing/Branding/Referral/Linkedin/etc -- buckets
+// into 'Other' rather than being silently dropped or mislabeled).
+const CHANNEL_LABELS = {
+  Facebook: 'Meta Ads',
+  Google: 'Google Ads',
+  Remarketing: 'Remarketing',
+  Affiliate: 'Affiliate',
+  'Content+Brand': 'Organic',
+}
+function mapChannel(source) { return CHANNEL_LABELS[(source || '').trim()] || 'Other' }
+
 // Phase 0 of the agent-upgrade roadmap: overall_funnel_daily is an hourly-synced Supabase
-// cache of this same sheet, pre-aggregated to (campaign, date) by .github/workflows/
+// cache of this same sheet, pre-aggregated to (campaign, date, source) by .github/workflows/
 // overall-funnel-sync.yml. Reading it is orders of magnitude faster than the live 26MB CSV
 // path below (a single indexed date-range query vs. downloading+parsing ~180k raw rows), so
 // it's tried first; the CSV path remains as a correctness-preserving fallback for as long as
@@ -286,13 +298,13 @@ async function fetchOverallSheetRows() {
 async function fetchOverallCampaignTotalsFromCache({ since, until }) {
   if (!SB_URL || !SB_KEY) return null
   try {
-    const params = new URLSearchParams({ select: 'campaign,leads,queued,total_ql,spend', order: 'campaign.asc' })
+    const params = new URLSearchParams({ select: 'campaign,source,leads,queued,total_ql,spend', order: 'campaign.asc' })
     if (since) params.set('date', `gte.${since}`)
     if (until) params.append('date', `lte.${until}`) // URLSearchParams keeps both 'date' entries -- PostgREST ANDs repeated keys
     const url = `${SB_URL}/rest/v1/overall_funnel_daily?${params.toString()}`
     // Supabase's hosted PostgREST caps every response at 1000 rows server-side
     // (db-max-rows) regardless of any client-requested `limit` -- a single
-    // request here silently truncated a 7-day window's ~7-8k (campaign,date)
+    // request here silently truncated a 7-day window's ~7-8k (campaign,date,source)
     // rows down to an arbitrary first-1000 slice, producing wrong totals in
     // whatever order the DB happened to return (not date/campaign order).
     // Paginate with the Range header until a page comes back short of 1000.
@@ -315,7 +327,7 @@ async function fetchOverallCampaignTotalsFromCache({ since, until }) {
     for (const row of allRows) {
       const campaign = (row.campaign || '').trim()
       if (!campaign) continue
-      const e = byCampaign[campaign] || { campaign, leads: 0, queued: 0, totalQL: 0, spend: 0 }
+      const e = byCampaign[campaign] || { campaign, channel: mapChannel(row.source), leads: 0, queued: 0, totalQL: 0, spend: 0 }
       e.leads += Number(row.leads) || 0
       e.queued += Number(row.queued) || 0
       e.totalQL += Number(row.total_ql) || 0
@@ -331,7 +343,7 @@ async function fetchOverallCampaignTotals({ since, until }) {
   const sheet = await fetchOverallSheetRows()
   if (!sheet) return { error: 'Overall funnel sheet fetch failed (timed out or unreachable)' }
   const { h, rows } = sheet
-  const di = h('lead_date'), ci = h('campaign_name')
+  const di = h('lead_date'), ci = h('campaign_name'), si = h('source')
   const li = h('total leads generated'), fq = h('floor_queued'), qf = h('queued on futwork'), qs = h('queued on superbot')
   const hql = h('futwork human ql'), faq = h('futwork ai ql'), saq = h('superbot ai ql'), sp = h('total_spends')
   const byCampaign = {}
@@ -342,7 +354,7 @@ async function fetchOverallCampaignTotals({ since, until }) {
     if (until && iso > until) continue
     const campaign = (row[ci] || '').trim()
     if (!campaign) continue
-    const e = byCampaign[campaign] || { campaign, leads: 0, queued: 0, totalQL: 0, spend: 0 }
+    const e = byCampaign[campaign] || { campaign, channel: mapChannel(row[si]), leads: 0, queued: 0, totalQL: 0, spend: 0 }
     e.leads += numFrom(row[li])
     e.queued += numFrom(row[fq]) + numFrom(row[qf]) + numFrom(row[qs])
     e.totalQL += numFrom(row[hql]) + numFrom(row[faq]) + numFrom(row[saq])
@@ -351,7 +363,7 @@ async function fetchOverallCampaignTotals({ since, until }) {
   }
   return { byCampaign }
 }
-async function analyzeCampaignContribution({ current_since, current_until, previous_since, previous_until, top_n }) {
+async function analyzeCampaignContribution({ current_since, current_until, previous_since, previous_until, top_n, channel }) {
   if (!current_since || !current_until || !previous_since || !previous_until) {
     return { error: 'current_since, current_until, previous_since, and previous_until are all required (YYYY-MM-DD).' }
   }
@@ -362,26 +374,47 @@ async function analyzeCampaignContribution({ current_since, current_until, previ
   if (cur.error || prev.error) return { error: cur.error || prev.error }
   const names = new Set([...Object.keys(cur.byCampaign), ...Object.keys(prev.byCampaign)])
   const empty = { leads: 0, queued: 0, totalQL: 0, spend: 0 }
-  const rows = [...names].map(name => {
+  let rows = [...names].map(name => {
     const c = cur.byCampaign[name] || empty, p = prev.byCampaign[name] || empty
+    const ch = cur.byCampaign[name]?.channel || prev.byCampaign[name]?.channel || 'Other'
     const qlRate = c.leads > 0 ? Math.round((c.totalQL / c.leads) * 1000) / 10 : null
     const cpql = c.totalQL > 0 ? Math.round(c.spend / c.totalQL) : null
-    return { campaign: name, currentQL: c.totalQL, previousQL: p.totalQL, deltaQL: c.totalQL - p.totalQL, currentSpend: Math.round(c.spend), qlRate, cpql }
+    return { campaign: name, channel: ch, currentQL: c.totalQL, previousQL: p.totalQL, deltaQL: c.totalQL - p.totalQL, currentSpend: Math.round(c.spend), qlRate, cpql }
   })
+  if (channel && channel !== 'All') rows = rows.filter(r => r.channel === channel)
   const totalAbsDelta = rows.reduce((s, r) => s + Math.abs(r.deltaQL), 0) || 1
   const median = arr => { const s = [...arr].sort((a, b) => a - b); return s.length ? s[Math.floor((s.length - 1) / 2)] : null }
-  const medianQlRate = median(rows.filter(r => r.qlRate != null).map(r => r.qlRate))
-  const medianCpql = median(rows.filter(r => r.cpql != null).map(r => r.cpql))
+  // Medians are computed PER CHANNEL, not globally -- Affiliate is naturally
+  // zero-spend at real scale (100k+ rows in the raw sheet) and a global CPQL
+  // median across all channels gets dragged toward ~0 by that volume alone,
+  // making every genuinely-paid Meta/Google campaign look artificially cheap.
+  // Comparing a campaign only against other campaigns in its own channel
+  // (mirrors the NAS spec's "same platform" benchmark rule) fixes that.
+  const channelStats = {}
+  for (const ch of new Set(rows.map(r => r.channel))) {
+    const chRows = rows.filter(r => r.channel === ch)
+    channelStats[ch] = {
+      medianQlRate: median(chRows.filter(r => r.qlRate != null).map(r => r.qlRate)),
+      medianCpql: median(chRows.filter(r => r.cpql != null).map(r => r.cpql)),
+      campaignCount: chRows.length,
+    }
+  }
   rows.forEach(r => {
+    const { medianQlRate, medianCpql } = channelStats[r.channel]
     r.shareOfChangePct = Math.round((r.deltaQL / totalAbsDelta) * 1000) / 10
-    const aboveMedianQuality = r.qlRate != null && medianQlRate != null && r.qlRate >= medianQlRate
-      && (r.cpql == null || medianCpql == null || r.cpql <= medianCpql)
-    if (r.deltaQL > 0) r.action = aboveMedianQuality ? 'Scale' : 'Monitor'
-    else if (r.deltaQL < 0) r.action = aboveMedianQuality ? 'Protect (declining but efficient)' : 'Deprioritize'
-    else r.action = 'No change'
+    const aboveMedianQlRate = r.qlRate != null && medianQlRate != null && r.qlRate >= medianQlRate
+    const atOrBelowMedianCpql = r.cpql == null || medianCpql == null || r.cpql <= medianCpql
+    const aboveMedianQuality = aboveMedianQlRate && atOrBelowMedianCpql
+    const spendWithZeroQL = r.currentQL === 0 && r.currentSpend > 0
+    const wayBelowMedianQlRate = r.qlRate != null && medianQlRate != null && r.qlRate < medianQlRate * 0.8
+    const wayAboveMedianCpql = r.cpql != null && medianCpql != null && r.cpql > medianCpql * 1.2
+    if (r.deltaQL > 0 && aboveMedianQuality && Math.abs(r.shareOfChangePct) >= 5) r.action = 'Scale'
+    else if (r.deltaQL >= 0 && aboveMedianQuality) r.action = 'Protect'
+    else if (r.deltaQL <= 0 && (spendWithZeroQL || wayBelowMedianQlRate || wayAboveMedianCpql)) r.action = 'Reduce'
+    else r.action = 'Investigate'
     const ev = []
-    if (r.qlRate != null && medianQlRate != null) ev.push(`QL rate ${r.qlRate}% ${r.qlRate >= medianQlRate ? '>=' : '<'} median ${medianQlRate}%`)
-    if (r.cpql != null && medianCpql != null) ev.push(`CPQL ₹${r.cpql} ${r.cpql <= medianCpql ? '<=' : '>'} median ₹${medianCpql}`)
+    if (r.qlRate != null && medianQlRate != null) ev.push(`QL rate ${r.qlRate}% ${r.qlRate >= medianQlRate ? '>=' : '<'} ${r.channel} median ${medianQlRate}%`)
+    if (r.cpql != null && medianCpql != null) ev.push(`CPQL ₹${r.cpql} ${r.cpql <= medianCpql ? '<=' : '>'} ${r.channel} median ₹${medianCpql}`)
     r.evidence = ev.join('; ') || 'insufficient data (zero leads or spend in current period)'
   })
   rows.sort((a, b) => Math.abs(b.deltaQL) - Math.abs(a.deltaQL))
@@ -389,12 +422,13 @@ async function analyzeCampaignContribution({ current_since, current_until, previ
   return {
     current_period: { since: current_since, until: current_until },
     previous_period: { since: previous_since, until: previous_until },
-    median_ql_rate_pct: medianQlRate, median_cpql: medianCpql,
+    channel: channel || 'All',
+    channel_medians: channelStats,
     total_current_QL: rows.reduce((s, r) => s + r.currentQL, 0),
     total_previous_QL: rows.reduce((s, r) => s + r.previousQL, 0),
     contributors: limited,
     count: limited.length,
-    summary: `Ranked ${limited.length} of ${rows.length} campaigns by |contribution| to the Total QL change between ${previous_since}..${previous_until} and ${current_since}..${current_until}.`,
+    summary: `Ranked ${limited.length} of ${rows.length} campaigns by |contribution| to the Total QL change between ${previous_since}..${previous_until} and ${current_since}..${current_until}${channel && channel !== 'All' ? ` (channel: ${channel})` : ' across all channels'}. Action verdicts compare each campaign only against other campaigns in its own channel.`,
   }
 }
 
@@ -514,7 +548,7 @@ const GOOGLE_CRM_TOOL = {
 
 const CONTRIBUTION_TOOL = {
   name: 'analyze_campaign_contribution',
-  description: `Ranks campaigns by their contribution to a change in Total QL (qualified leads) between two periods. Use this for ANY "why did QLs/leads change", "what's driving the drop/increase", or "which campaigns should I scale vs cut" question -- it replaces manually diffing two raw tool pulls yourself with a single deterministic calculation. For each campaign, computes: current vs previous Total QL, the delta, that campaign's % share of the total change, QL rate (QL/Leads), CPQL (spend/QL), and a recommended action (Scale/Monitor/Protect/Deprioritize) by comparing its QL rate and CPQL against the account-wide median for the current period -- each action comes with a cited evidence string (e.g. "QL rate 12.2% >= median 9.9%; CPQL ₹772 <= median ₹2,250"). Pulls from the same "Overall PM" funnel sheet the Overall dashboard uses (one row per lead/day/source/campaign) -- Total QL here is Quantum's authoritative figure (Futwork Human QL + Futwork AI QL + Superbot AI QL combined), not Meta's or Google's own in-platform lead/conversion count, and covers ALL channels (Meta, Google, Affiliate, Remarketing, Organic) in one call.`,
+  description: `Ranks campaigns by their contribution to a change in Total QL (qualified leads) between two periods. Use this for ANY "why did QLs/leads change", "what's driving the drop/increase", or "which campaigns should I scale vs cut" question -- it replaces manually diffing two raw tool pulls yourself with a single deterministic calculation. For each campaign, computes: current vs previous Total QL, the delta, that campaign's % share of the total change, its Channel (Meta Ads/Google Ads/Remarketing/Affiliate/Organic/Other), QL rate (QL/Leads), CPQL (spend/QL), and a recommended action (Scale/Protect/Reduce/Investigate) by comparing its QL rate and CPQL against the MEDIAN OF ITS OWN CHANNEL for the current period (not a global median -- Affiliate is naturally zero-spend at scale and would otherwise drag a global CPQL median toward zero) -- each action comes with a cited evidence string (e.g. "QL rate 12.2% >= Meta Ads median 9.9%; CPQL ₹772 <= Meta Ads median ₹2,250"). Optionally pass channel to restrict the ranking to one channel only (one of: Meta Ads, Google Ads, Remarketing, Affiliate, Organic, Other) -- omit or pass "All" to rank across every channel at once, each contributor still evaluated against its own channel's median. Pulls from the same "Overall PM" funnel sheet the Overall dashboard uses (one row per lead/day/source/campaign) -- Total QL here is Quantum's authoritative figure (Futwork Human QL + Futwork AI QL + Superbot AI QL combined), not Meta's or Google's own in-platform lead/conversion count.`,
   input_schema: {
     type: 'object',
     properties: {
@@ -522,7 +556,8 @@ const CONTRIBUTION_TOOL = {
       current_until: { type: 'string', description: 'Current period end date, YYYY-MM-DD' },
       previous_since: { type: 'string', description: 'Comparison period start date, YYYY-MM-DD' },
       previous_until: { type: 'string', description: 'Comparison period end date, YYYY-MM-DD' },
-      top_n: { type: 'integer', description: 'Max contributors to return, ranked by |change| descending. Default 15, max 30.' }
+      top_n: { type: 'integer', description: 'Max contributors to return, ranked by |change| descending. Default 15, max 30.' },
+      channel: { type: 'string', description: 'Restrict to one channel: Meta Ads, Google Ads, Remarketing, Affiliate, Organic, or Other. Omit or pass "All" for every channel at once.' }
     },
     required: ['current_since', 'current_until', 'previous_since', 'previous_until']
   }
@@ -821,7 +856,7 @@ DIAGNOSIS DISCIPLINE (why did it change / find underperformers)
 
 When a user asks you to diagnose, explain a change, or find underperformers:
 1. Quantify the metric delta between the two relevant periods (state both numbers and the % change).
-2. If the question is about Total QL / qualified leads changing (the most common "why did X change" question), call analyze_campaign_contribution FIRST with the two periods -- it deterministically computes per-campaign delta, % share of change, QL rate, CPQL, and a Scale/Monitor/Protect/Deprioritize flag with cited evidence, across ALL channels in one call. Do not hand-diff two raw query_meta_ads/query_google_ads pulls yourself when this tool answers the question -- it is more reliable and cheaper than doing the arithmetic in your head across tool calls.
+2. If the question is about Total QL / qualified leads changing (the most common "why did X change" question), call analyze_campaign_contribution FIRST with the two periods -- it deterministically computes per-campaign delta, % share of change, Channel, QL rate, CPQL, and a Scale/Protect/Reduce/Investigate flag with cited evidence (each campaign judged against its own channel's median, not a global one), across ALL channels in one call, or pass `channel` to scope it to just one. Do not hand-diff two raw query_meta_ads/query_google_ads pulls yourself when this tool answers the question -- it is more reliable and cheaper than doing the arithmetic in your head across tool calls.
 3. For anything analyze_campaign_contribution doesn't cover (spend/CTR/CPM diagnostics, single-platform-only questions), use the query tools to attribute the delta to the top 3 campaigns/adsets/breakdowns, ranked by how much each contributed to the change.
 4. Distinguish what merely correlates from the likely driver - do not present a coincidence as a cause.
 5. Close with one specific, prioritized action, using the tool's own action/evidence fields when available rather than inventing your own recommendation.
@@ -974,7 +1009,7 @@ const AGENTS = {
       const prevSince = new Date(prevUntil); prevSince.setDate(prevSince.getDate() - 6)
       return {
         since: iso(since), until: iso(until),
-        text: `Run today's autonomous marketing performance review. Compare ${iso(since)} to ${iso(until)} against the prior 7 days (${iso(prevSince)} to ${iso(prevUntil)}) using the campaign contribution tool as your primary lens, and pull whichever Meta/Google/CRM tools you need to substantiate it. Produce a report with exactly these three sections in markdown: "## Executive Summary" (2-3 sentences on the headline Total QL movement and why), "## Top Movers" (a short table: campaign, QL delta, % of change, one-line evidence), and "## Recommended Action" (ONE prioritized, concrete action -- not a list of options). Be quantitative and specific everywhere; do not hedge with vague language.`,
+        text: `Run today's autonomous marketing performance review. Compare ${iso(since)} to ${iso(until)} against the prior 7 days (${iso(prevSince)} to ${iso(prevUntil)}) using the campaign contribution tool (no channel filter, so it covers every channel at once) as your primary lens, and pull whichever Meta/Google/CRM tools you need to substantiate it. Produce a report with exactly these three sections in markdown: "## Executive Summary" (2-3 sentences on the headline Total QL movement and why), "## Top Movers" (a table: Channel, Campaign, QL delta, % of change, Action, one-line evidence -- use the tool's own Channel and Action fields for every row, since each campaign is judged against its own channel's median, not a global one), and "## Recommended Action" (ONE prioritized, concrete action -- not a list of options). Be quantitative and specific everywhere; do not hedge with vague language.`,
       }
     },
   },

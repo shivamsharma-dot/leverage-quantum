@@ -82,7 +82,7 @@ jobs:
               try: return header.index(name)
               except ValueError: return -1
 
-          di, ci = idx('lead_date'), idx('campaign_name')
+          di, ci, si = idx('lead_date'), idx('campaign_name'), idx('source')
           li, fq, qf, qs = idx('total leads generated'), idx('floor_queued'), idx('queued on futwork'), idx('queued on superbot')
           hql, faq, saq, sp = idx('futwork human ql'), idx('futwork ai ql'), idx('superbot ai ql'), idx('total_spends')
           ap, of, de, ra = idx('total apps'), idx('total offers'), idx('total deposits'), idx('total raus')
@@ -95,10 +95,11 @@ jobs:
               if not campaign: continue
               d = parse_date(cols[di].strip('"')) if 0 <= di < len(cols) else None
               if not d: continue
-              key = (campaign, d)
+              source = (cols[si].strip().strip('"') if 0 <= si < len(cols) else '') or 'Unknown'
+              key = (campaign, d, source)
               e = agg.get(key)
               if not e:
-                  e = {'campaign': campaign, 'date': d, 'leads': 0, 'queued': 0, 'total_ql': 0, 'spend': 0.0, 'apps': 0, 'offers': 0, 'deposits': 0, 'raus': 0}
+                  e = {'campaign': campaign, 'date': d, 'source': source, 'leads': 0, 'queued': 0, 'total_ql': 0, 'spend': 0.0, 'apps': 0, 'offers': 0, 'deposits': 0, 'raus': 0}
                   agg[key] = e
               g = lambda i: cols[i] if 0 <= i < len(cols) else '0'
               e['leads'] += num(g(li))
@@ -114,13 +115,13 @@ jobs:
           now_iso = datetime.utcnow().isoformat() + 'Z'
           for row in rows:
               row['synced_at'] = now_iso
-          print('Aggregated', len(lines) - 1, 'raw rows into', len(rows), '(campaign, date) rows.')
+          print('Aggregated', len(lines) - 1, 'raw rows into', len(rows), '(campaign, date, source) rows.')
 
           BATCH = 500
           for i in range(0, len(rows), BATCH):
               batch = rows[i:i+BATCH]
               req = urllib.request.Request(
-                  SB_URL + '/rest/v1/overall_funnel_daily?on_conflict=campaign,date',
+                  SB_URL + '/rest/v1/overall_funnel_daily?on_conflict=campaign,date,source',
                   data=json.dumps(batch).encode('utf-8'),
                   method='POST',
                   headers={
