@@ -1131,6 +1131,19 @@ export default async function handler(req, res) {
     return handleAgentRun(req, res, agentMe)
   }
 
+  // Raw contribution numbers with no LLM call in the path -- lets a real dashboard UI
+  // (the "Daily marketing performance" report page) render the same deterministic
+  // Channel/Action/evidence data the agent uses, without the cost/latency of a Claude
+  // round-trip on every page load or channel-selector click.
+  if (req.body && req.body.mode === 'contribution_data') {
+    const dataMe = getSessionUser(req)
+    if (!dataMe) return res.status(401).json({ error: 'Not signed in' })
+    if (!canAccessDashboard(dataMe.role, 'ask_ai')) return res.status(403).json({ error: 'Forbidden' })
+    const result = await analyzeCampaignContribution(req.body || {})
+    if (result.error) return res.status(400).json(result)
+    return res.status(200).json(result)
+  }
+
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })
   if (!canAccessDashboard(me.role, 'ask_ai')) return res.status(403).json({ error: 'Forbidden' })

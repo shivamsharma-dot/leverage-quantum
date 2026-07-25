@@ -24,6 +24,7 @@ export const COMPONENT_IMPORTS = {
   LeadsAssignedDashboard: () => import('../pages/LeadsAssignedDashboard'),
   AskAI: () => import('../pages/AskAI'),
   AgentsDashboard: () => import('../pages/AgentsDashboard'),
+  MarketingPerformanceReport: () => import('../pages/MarketingPerformanceReport'),
   SettingsPage: () => import('../pages/SettingsPage'),
 }
 
@@ -50,6 +51,7 @@ const ROUTE_COMPONENT = {
   '/dashboard/bing-ads': 'BingAdsDashboard',
   '/ask-ai': 'AskAI',
   '/dashboard/agents': 'AgentsDashboard',
+  '/dashboard/marketing-performance': 'MarketingPerformanceReport',
   '/settings': 'SettingsPage',
 }
 

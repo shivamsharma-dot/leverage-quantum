@@ -26,6 +26,7 @@ const ReferralDashboard = lazy(COMPONENT_IMPORTS.ReferralDashboard)
 const LeadsAssignedDashboard = lazy(COMPONENT_IMPORTS.LeadsAssignedDashboard)
 const AskAI = lazy(COMPONENT_IMPORTS.AskAI)
 const AgentsDashboard = lazy(COMPONENT_IMPORTS.AgentsDashboard)
+const MarketingPerformanceReport = lazy(COMPONENT_IMPORTS.MarketingPerformanceReport)
 const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
 
 // Suspense fallback — slim skeleton shown while lazy chunk loads
@@ -53,6 +54,7 @@ const PAGE_TITLES = {
   '/dashboard/leads-assigned': 'Leads Assigned',
   '/ask-ai': 'Ask AI',
   '/dashboard/agents': 'Agents',
+  '/dashboard/marketing-performance': 'Marketing Performance',
   '/settings': 'Settings',
 }
 
@@ -93,7 +95,7 @@ function canAccess(role, dashboardId) {
   const userRole = role || 'viewer'
   if (dashboardId === 'settings') return userRole === 'admin'
   if (userRole === 'admin') return true
-  if (userRole === 'viewer') return dashboardId !== 'ask_ai' && dashboardId !== 'agents'
+  if (userRole === 'viewer') return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance'
   if (userRole.startsWith('viewer:')) {
     const granted = userRole.replace('viewer:', '').split(',').filter(Boolean)
     return granted.includes(dashboardId)
@@ -103,7 +105,7 @@ function canAccess(role, dashboardId) {
     return userRole.replace('custom:', '').split(',').filter(Boolean).includes(dashboardId)
   }
   // Unknown/malformed role — fail safe (no ask-ai, no agents, no settings), not fail-open
-  return dashboardId !== 'ask_ai' && dashboardId !== 'agents'
+  return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance'
 }
 
 // Ordered fallback for a denied route — first entry the role can actually access
@@ -251,6 +253,7 @@ export default function App() {
           <Route path="/dashboard/bing-ads" element={<ProtectedRoute dashboardId="bing_ads"> <BingAdsDashboard /></ProtectedRoute>} />
           <Route path="/ask-ai" element={<ProtectedRoute dashboardId="ask_ai"> <AskAI /></ProtectedRoute>} />
           <Route path="/dashboard/agents" element={<ProtectedRoute dashboardId="agents"> <AgentsDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/marketing-performance" element={<ProtectedRoute dashboardId="marketing_performance"> <MarketingPerformanceReport /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute dashboardId="settings"> <SettingsPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
