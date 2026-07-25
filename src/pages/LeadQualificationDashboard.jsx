@@ -1283,7 +1283,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
             
             {/* Month picker */}
             {months.length > 0 && (
-              <div style={{ opacity: activeFilter!=='month' ? 0.45 : 1, transition: 'opacity .15s' }}
+              <div style={{ opacity: activeFilter!=='month' ? 0.45 : 1, transition: 'opacity .15s', position: 'relative', zIndex: 500 }}
                 title={activeFilter!=='month' ? 'Click to switch to month view' : undefined}>
               <Dropdown
                 options={[...months].reverse()}

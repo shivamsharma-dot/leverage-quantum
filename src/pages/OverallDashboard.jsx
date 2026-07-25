@@ -1318,7 +1318,7 @@ export default function OverallDashboard() {
               )}
 
               {monthOptions.length > 0 && (
-                <div style={{ opacity: activeFilter !== 'month' ? 0.45 : 1, transition:'opacity .15s' }} title={activeFilter !== 'month' ? 'Click to switch to month view' : undefined}>
+                <div style={{ opacity: activeFilter !== 'month' ? 0.45 : 1, transition:'opacity .15s', position:'relative', zIndex:500 }} title={activeFilter !== 'month' ? 'Click to switch to month view' : undefined}>
                   <Dropdown
                     options={monthOptions}
                     value={selMonth}
