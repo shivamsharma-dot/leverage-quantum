@@ -634,7 +634,8 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const [exportView, setExportView]         = useState('day')
   const [monthStartMap, setMonthStartMap] = useState({})
   const [selMonthlySource, setSelMonthlySource] = useState('All')
-  const [mDatePreset, setMDatePreset]  = useState('L30D') // 'L7D','L14D','L30D','custom'
+  const [mDatePreset, setMDatePreset]  = useState('MTD') // 'LD','L7D','MTD','L14D','L30D','ALL','custom'
+  const [mHoveredPreset, setMHoveredPreset] = useState(null)
   const [mCustomFrom, setMCustomFrom]  = useState('')
   const [mCustomTo, setMCustomTo]      = useState('')
   const [showMCustom, setShowMCustom]  = useState(false)
@@ -804,7 +805,9 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const mWin = (() => {
     const today = new Date(); today.setHours(0,0,0,0)
     const back = (n) => { const f = new Date(today); f.setDate(today.getDate() - (n-1)); return f }
+    if (mDatePreset === 'LD') { const y = new Date(today); y.setDate(y.getDate()-1); return { from: y, to: y, label: 'Last day' } }
     if (mDatePreset === 'L7D')  return { from: back(7),  to: today, label: 'Last 7 days' }
+    if (mDatePreset === 'MTD') return { from: new Date(today.getFullYear(), today.getMonth(), 1), to: today, label: 'MTD' }
     if (mDatePreset === 'L14D') return { from: back(14), to: today, label: 'Last 14 days' }
     if (mDatePreset === 'custom' && mCustomFrom && mCustomTo) {
       const [fy,fm,fd] = mCustomFrom.split('-').map(Number)
@@ -876,7 +879,9 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const mDateWindow = useMemo(() => {
     const today = new Date(); today.setHours(0,0,0,0)
     const back = (n) => { const f = new Date(today); f.setDate(today.getDate() - (n-1)); return f }
+    if (mDatePreset === 'LD') { const y = new Date(today); y.setDate(y.getDate()-1); return { from: y, to: y, label: 'Last day' } }
     if (mDatePreset === 'L7D')  return { from: back(7),  to: today, label: 'Last 7 days' }
+    if (mDatePreset === 'MTD') return { from: new Date(today.getFullYear(), today.getMonth(), 1), to: today, label: 'MTD' }
     if (mDatePreset === 'L14D') return { from: back(14), to: today, label: 'Last 14 days' }
     if (mDatePreset === 'custom' && mCustomFrom && mCustomTo) {
       const [fy,fm,fd] = mCustomFrom.split('-').map(Number)
@@ -1343,8 +1348,48 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               )}
             </div>)}
             {!forcedView && (<Dropdown label="View" options={QL_VIEWS.map(v => v.label)} value={(QL_VIEWS.find(v => v.id === view) || QL_VIEWS[0]).label} minWidth={150} onChange={lbl => { const sel = QL_VIEWS.find(v => v.label === lbl); setView(sel ? sel.id : 'daily'); setSelPeriod('all'); setPage(0) }} />)}
-              {view === 'monthly' && <><Dropdown label="Source" options={monthlySources} value={selMonthlySource} minWidth={120} onChange={v => setSelMonthlySource(v)} />
-              <Dropdown label="Days" options={['Last 7 days','Last 14 days','Last 30 days','All time','Custom']} value={mDatePreset === 'custom' ? 'Custom' : mDateWindow.label} minWidth={130} onChange={v => { if (v === 'Custom') { setMDatePreset('custom'); setShowMCustom(true) } else { setMDatePreset(v === 'Last 7 days' ? 'L7D' : v === 'Last 14 days' ? 'L14D' : v === 'All time' ? 'ALL' : 'L30D'); setShowMCustom(false) } }} />
+              {view === 'monthly' && <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: '3px' }}>
+                {[['LD','Last Day'],['L7D','Last 7D'],['MTD','MTD']].map(([key,lbl2]) => {
+                  const today2 = new Date(); today2.setHours(0,0,0,0)
+                  let tipFrom, tipTo
+                  if (key==='LD') { tipFrom=new Date(today2); tipFrom.setDate(today2.getDate()-1); tipTo=tipFrom }
+                  else if (key==='L7D') { tipTo=new Date(today2); tipTo.setDate(today2.getDate()-1); tipFrom=new Date(tipTo); tipFrom.setDate(tipTo.getDate()-6) }
+                  else { tipFrom=new Date(today2.getFullYear(),today2.getMonth(),1); tipTo=today2 }
+                  const tipLabel = fmtShort(tipFrom) + ' - ' + fmtShort(tipTo)
+                  const isHov = mHoveredPreset===key
+                  return (
+                    <div key={key} style={{position:'relative'}}>
+                      <button
+                        onClick={() => { setMDatePreset(key); setMCustomFrom(''); setMCustomTo(''); setShowMCustom(false) }}
+                        onMouseEnter={() => setMHoveredPreset(key)}
+                        onMouseLeave={() => setMHoveredPreset(null)}
+                        style={{
+                          padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                          fontSize: 12.5, fontWeight: 700, fontFamily: FONT,
+                          background: mDatePreset === key ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent',
+                          color: mDatePreset === key ? '#fff' : '#64748B',
+                          boxShadow: mDatePreset === key ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
+                          transition: 'all .15s',
+                        }}>{lbl2}</button>
+                      <div style={{
+                        position:'absolute', top:'calc(100% + 7px)', left:'50%', transform:'translateX(-50%)',
+                        background:'#1E293B', color:'var(--card)', fontSize:11, fontWeight:500, fontFamily:FONT,
+                        padding:'5px 10px', borderRadius:7, whiteSpace:'nowrap', pointerEvents:'none',
+                        boxShadow:'0 4px 14px rgba(15,23,42,0.18)', zIndex:600,
+                        opacity: isHov ? 1 : 0,
+                        transition:'opacity .15s ease',
+                      }}>{tipLabel}
+                        <div style={{
+                          position:'absolute', top:-4, left:'50%', transform:'translateX(-50%)',
+                          width:8, height:8, background:'#1E293B', borderRadius:2,
+                          clipPath:'polygon(50% 0%, 0% 100%, 100% 100%)',
+                        }}/>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
               <div style={{ position: 'relative' }}>
                 <button onClick={() => setShowMCustom(s => !s)}
                   style={{
@@ -1382,7 +1427,9 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                     </div>
                   </>
                 )}
-              </div></>}
+              </div>
+              <Dropdown label="Source" options={monthlySources} value={selMonthlySource} minWidth={120} onChange={v => setSelMonthlySource(v)} />
+              </>}
               {view === 'daily' && <><Dropdown label="Provider" options={providers} value={selProvider} minWidth={100} onChange={v => { setSelProvider(v); setPage(0) }} />
             <Dropdown label="Source" options={sources} value={selSource} minWidth={100} onChange={v => { setSelSource(v); setPage(0) }} />
             <Dropdown label="Corridor" options={['All', ...CORRIDORS.map(c => c.label)]} value={selCorridor} minWidth={140} onChange={v => { setSelCorridor(v); setPage(0) }} /></>}
