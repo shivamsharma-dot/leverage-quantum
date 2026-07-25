@@ -39,12 +39,22 @@ function parseCsvRow(line) {
   return cols
 }
 
+const MONTH_ABBR = { jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06', jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12' }
 function parseDate(raw) {
   if (!raw) return null
   const s = raw.trim()
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/)
   if (m) return m[3] + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0')
+  const dm = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/)
+  if (dm) {
+    const mon = MONTH_ABBR[dm[2].toLowerCase()]
+    if (mon) {
+      let year = dm[3]
+      if (year.length === 2) year = (Number(year) <= 69 ? '20' : '19') + year
+      return year + '-' + mon + '-' + dm[1].padStart(2, '0')
+    }
+  }
   return null
 }
 function fmtDateLabel(iso) {
