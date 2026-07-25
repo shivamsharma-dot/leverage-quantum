@@ -395,6 +395,14 @@ const SUMMARY_COLUMNS = [
 const SUMMARY_COLUMN_KEYS = SUMMARY_COLUMNS.map(c => c.key)
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
 const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
+// Bump this whenever SUMMARY_COLUMNS' declared order changes meaningfully (not just when a
+// column is added). A saved colOrder only ever gets NEW keys appended at the end, so a real
+// re-sequencing (e.g. moving Corridor next to the campaign name) would otherwise sit invisible
+// behind any already-saved order on a returning browser until someone clicks "Reset". Storing a
+// version alongside the saved order lets us detect that case and fall back to the fresh
+// declared default instead, with no manual Reset needed.
+const SUMMARY_SCHEMA_VERSION = 2
+const SUMMARY_SCHEMA_VERSION_KEY = 'lq_overall_summary_schema_version'
 // Shared with Settings > Data > SR Revenue Assumptions — same rate everywhere.
 // RAU = "Registered At University". Estimated RAUs is a projection (Applications x
 // conversion factor); Actual RAUs is the real, already-realized count from the data.
@@ -607,10 +615,15 @@ export default function OverallDashboard() {
     try { const s = localStorage.getItem(SR_FEE_KEY); const n = s ? Number(s) : SR_FEE_DEFAULT; return isNaN(n) || n <= 0 ? SR_FEE_DEFAULT : n }
     catch { return SR_FEE_DEFAULT }
   })
+  const summarySchemaStale = (() => {
+    try { return localStorage.getItem(SUMMARY_SCHEMA_VERSION_KEY) !== String(SUMMARY_SCHEMA_VERSION) }
+    catch { return false }
+  })()
   const [visibleCols, setVisibleCols] = useState(() => {
     // Newly-added columns (not in a previously-saved list) default to visible, same as
     // colOrder below -- otherwise a brand new column silently never appears for a device
     // that already has a saved visibleCols list from before that column existed.
+    if (summarySchemaStale) return SUMMARY_COLUMN_KEYS
     try {
       const s = localStorage.getItem(SUMMARY_COLS_STORAGE_KEY)
       const parsed = s ? JSON.parse(s) : null
@@ -621,6 +634,10 @@ export default function OverallDashboard() {
     } catch { return SUMMARY_COLUMN_KEYS }
   })
   const [colOrder, setColOrder] = useState(() => {
+    // A real re-sequencing of SUMMARY_COLUMNS (not just a new column) bumps
+    // SUMMARY_SCHEMA_VERSION, so a stale saved order is discarded here instead of silently
+    // keeping the old sequence forever with new columns just appended at the end.
+    if (summarySchemaStale) return SUMMARY_COLUMN_KEYS
     try {
       const s = localStorage.getItem(SUMMARY_ORDER_STORAGE_KEY)
       const parsed = s ? JSON.parse(s) : null
@@ -631,6 +648,7 @@ export default function OverallDashboard() {
   })
   useEffect(() => { try { localStorage.setItem(SUMMARY_COLS_STORAGE_KEY, JSON.stringify(visibleCols)) } catch {} }, [visibleCols])
   useEffect(() => { try { localStorage.setItem(SUMMARY_ORDER_STORAGE_KEY, JSON.stringify(colOrder)) } catch {} }, [colOrder])
+  useEffect(() => { try { localStorage.setItem(SUMMARY_SCHEMA_VERSION_KEY, String(SUMMARY_SCHEMA_VERSION)) } catch {} }, [])
   const toggleCol = key => setVisibleCols(v => v.includes(key) ? v.filter(k => k !== key) : [...v, key])
   const moveCol = (key, dir) => setColOrder(order => {
     const idx = order.indexOf(key); const swapIdx = idx + dir
@@ -1218,11 +1236,14 @@ export default function OverallDashboard() {
     colOrder.filter(k => visibleCols.includes(k)).map(k => SUMMARY_COLUMNS.find(c => c.key === k)).filter(Boolean)
   ), [colOrder, visibleCols])
 
-  const tableRows = useMemo(() => {
+  // Sorted + search-filtered, but NOT sliced to the on-screen row limit -- this is the set
+  // that export should always draw from, so "Show 10/25/50" (a display-density control) never
+  // silently truncates what you download. tableRows (below) slices this for on-screen display.
+  const sortedFilteredRows = useMemo(() => {
     let rs = groupedWithRevenue
     const q = tableSearch.trim().toLowerCase()
     if (q) rs = rs.filter(g => g.label.toLowerCase().includes(q))
-    const sorted = [...rs].sort((a, b) => {
+    return [...rs].sort((a, b) => {
       if (sortKey === 'label') {
         // Day view sorts chronologically by the underlying date key, not the display label
         const cmp = (a.dateKey && b.dateKey) ? a.dateKey.localeCompare(b.dateKey) : a.label.localeCompare(b.label)
@@ -1236,14 +1257,19 @@ export default function OverallDashboard() {
       const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv
       return sortDir === 'asc' ? an - bn : bn - an
     })
-    return rowLimit === 'all' ? sorted : sorted.slice(0, rowLimit)
-  }, [groupedWithRevenue, tableSearch, sortKey, sortDir, rowLimit])
+  }, [groupedWithRevenue, tableSearch, sortKey, sortDir])
 
-  const tableExportRows = useMemo(() => tableRows.map(g => {
+  const tableRows = useMemo(() => (
+    rowLimit === 'all' ? sortedFilteredRows : sortedFilteredRows.slice(0, rowLimit)
+  ), [sortedFilteredRows, rowLimit])
+
+  // Exports the FULL search-filtered/sorted set, not just the on-screen "Show N" slice --
+  // the row-limit control is a display density preference, not a data cap.
+  const tableExportRows = useMemo(() => sortedFilteredRows.map(g => {
     const o = { [grpByLabel]: g.label }
     displayCols.forEach(c => { o[c.label] = summaryFmt(c.key, summaryValue(g, c.key)) })
     return o
-  }), [tableRows, displayCols, grpByLabel])
+  }), [sortedFilteredRows, displayCols, grpByLabel])
 
   if (loading) {
     return (
