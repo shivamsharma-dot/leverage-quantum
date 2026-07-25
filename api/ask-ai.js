@@ -286,17 +286,33 @@ async function fetchOverallSheetRows() {
 async function fetchOverallCampaignTotalsFromCache({ since, until }) {
   if (!SB_URL || !SB_KEY) return null
   try {
-    const params = new URLSearchParams({ select: 'campaign,leads,queued,total_ql,spend', limit: '50000' })
+    const params = new URLSearchParams({ select: 'campaign,leads,queued,total_ql,spend', order: 'campaign.asc' })
     if (since) params.set('date', `gte.${since}`)
     if (until) params.append('date', `lte.${until}`) // URLSearchParams keeps both 'date' entries -- PostgREST ANDs repeated keys
-    const r = await fetch(`${SB_URL}/rest/v1/overall_funnel_daily?${params.toString()}`, {
-      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, signal: AbortSignal.timeout(8000)
-    })
-    if (!r.ok) return null
-    const rows = await r.json()
-    if (!Array.isArray(rows) || rows.length === 0) return null
+    const url = `${SB_URL}/rest/v1/overall_funnel_daily?${params.toString()}`
+    // Supabase's hosted PostgREST caps every response at 1000 rows server-side
+    // (db-max-rows) regardless of any client-requested `limit` -- a single
+    // request here silently truncated a 7-day window's ~7-8k (campaign,date)
+    // rows down to an arbitrary first-1000 slice, producing wrong totals in
+    // whatever order the DB happened to return (not date/campaign order).
+    // Paginate with the Range header until a page comes back short of 1000.
+    const PAGE = 1000
+    let offset = 0, allRows = []
+    for (let guard = 0; guard < 50; guard++) { // 50 * 1000 = 50k row safety valve
+      const r = await fetch(url, {
+        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Range: `${offset}-${offset + PAGE - 1}` },
+        signal: AbortSignal.timeout(8000),
+      })
+      if (!r.ok) return null // a mid-pagination failure must not silently return a partial total
+      const page = await r.json()
+      if (!Array.isArray(page)) return null
+      allRows = allRows.concat(page)
+      if (page.length < PAGE) break
+      offset += PAGE
+    }
+    if (allRows.length === 0) return null
     const byCampaign = {}
-    for (const row of rows) {
+    for (const row of allRows) {
       const campaign = (row.campaign || '').trim()
       if (!campaign) continue
       const e = byCampaign[campaign] || { campaign, leads: 0, queued: 0, totalQL: 0, spend: 0 }
