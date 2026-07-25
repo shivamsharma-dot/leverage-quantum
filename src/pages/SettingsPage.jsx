@@ -1444,7 +1444,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             <>
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>SR Revenue Assumptions</h3>
-                <p className={styles.cardDesc}>SR fee per RAU (Registered At University) used in projected revenue. Estimated RAU = Applications × 0.9; Actual RAUs is the real count. Formula: Estimated/Actual RAUs × SR Fee</p>
+                <p className={styles.cardDesc}>SR fee per RAU (Registered At University) used in projected revenue. Estimated RAU = Applications × 0.09; Actual RAUs is the real count. Formula: Estimated/Actual RAUs × SR Fee</p>
                 <label className={styles.fieldLabel}>SR Fee per RAU</label>
                 <div className={styles.inputGroup}>
                   <span className={styles.prefix}>₹</span>
