@@ -2,6 +2,11 @@
 
 // auth helpers are loaded via dynamic import() inside handler (ask-ai.js is bundled as CommonJS; static import of the .mjs ESM file crashes with ERR_REQUIRE_ESM)
 
+// analyze_campaign_contribution's underlying sheet fetch alone can take up to 45s (see
+// fetchOverallSheetRows) on top of multiple Claude round-trips -- match send-report.js's own
+// explicit maxDuration rather than relying on the platform default.
+export const maxDuration = 60
+
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const MODEL = 'claude-sonnet-4-5'
@@ -219,7 +224,7 @@ function crmSummaryLines(label, data) {
 // figure (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) -- not Meta's/Google's
 // own in-platform lead count. Resolution mirrors api/preferences.mjs's ?resolveOverallSheet=1
 // branch (admin can repoint the sheet from Settings > Data without a code change).
-const OVERALL_SHEET_DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/1kaoWMGBbttOtaeVfaSXhrxcs0_pe5xLXltMulG8mHG4/gviz/tq?tqx=out:csv&sheet=MainData'
+const OVERALL_SHEET_DEFAULT_URL = 'https://docs.google.com/spreadsheets/d/1kaoWMGBbttOtaeVfaSXhrxcs0_pe5xLX1tMuIG8mHG4/gviz/tq?tqx=out:csv&sheet=MainData'
 async function resolveOverallSheetUrl() {
   if (!SB_URL || !SB_KEY) return OVERALL_SHEET_DEFAULT_URL
   try {
@@ -245,11 +250,37 @@ function numFrom(v, isFloat) {
   const n = (isFloat ? parseFloat : parseInt)(String(v ?? '0').replace(isFloat ? /[^0-9.-]/g : /[^0-9-]/g, ''), 10)
   return isNaN(n) ? 0 : n
 }
-async function fetchOverallCampaignTotals({ since, until }) {
+// This sheet is ~26MB / 180k+ rows (one row per lead/day/source/campaign) -- it alone can take
+// ~25-30s to download, far past safeFetch's 9s timeout (fine for the small CRM sheets, not this
+// one). Cache the parsed rows in-memory for a short window so a single contribution call (which
+// needs the sheet twice, for the current AND previous period) shares one download instead of two,
+// and a follow-up question within the same warm Lambda instance doesn't re-download at all.
+let _overallSheetCache = null // { url, rows, h, ts }
+let _overallSheetInflight = null // Promise, so two concurrent callers (current + previous period) share one download
+const OVERALL_SHEET_CACHE_TTL_MS = 5 * 60 * 1000
+async function fetchOverallSheetRows() {
   const url = await resolveOverallSheetUrl()
-  const r = await safeFetch(url)
-  if (!r) return { error: 'Overall funnel sheet fetch failed' }
-  const { h, rows } = parseCSV(await r.text())
+  if (_overallSheetCache && _overallSheetCache.url === url && Date.now() - _overallSheetCache.ts < OVERALL_SHEET_CACHE_TTL_MS) {
+    return _overallSheetCache
+  }
+  if (_overallSheetInflight) return _overallSheetInflight
+  _overallSheetInflight = (async () => {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(45000) })
+      if (!res.ok) return null
+      const { h, rows } = parseCSV(await res.text())
+      const entry = { url, rows, h, ts: Date.now() }
+      _overallSheetCache = entry
+      return entry
+    } catch { return null }
+    finally { _overallSheetInflight = null }
+  })()
+  return _overallSheetInflight
+}
+async function fetchOverallCampaignTotals({ since, until }) {
+  const sheet = await fetchOverallSheetRows()
+  if (!sheet) return { error: 'Overall funnel sheet fetch failed (timed out or unreachable)' }
+  const { h, rows } = sheet
   const di = h('lead_date'), ci = h('campaign_name')
   const li = h('total leads generated'), fq = h('floor_queued'), qf = h('queued on futwork'), qs = h('queued on superbot')
   const hql = h('futwork human ql'), faq = h('futwork ai ql'), saq = h('superbot ai ql'), sp = h('total_spends')
