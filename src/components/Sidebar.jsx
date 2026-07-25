@@ -210,7 +210,7 @@ export default function Sidebar() {
 
   const isMetaParentActive = location.pathname.startsWith('/dashboard/meta-ads')
   const isGoogleParentActive = location.pathname.startsWith('/dashboard/google-ads')
-  const isQlOpsParentActive = location.pathname === '/dashboard/lq-ops' || location.pathname === '/dashboard/lq-ops-monthly' || location.pathname === '/dashboard/lq-ops-detail' || location.pathname === '/dashboard/lq-ops-ai-detail'
+  const isQlOpsParentActive = location.pathname === '/dashboard/lq-ops' || location.pathname === '/dashboard/lq-ops-monthly' || location.pathname === '/dashboard/lq-ops-detail' || location.pathname === '/dashboard/lq-ops-ai-detail' || location.pathname === '/dashboard/lq-ops-human-unassigned' || location.pathname === '/dashboard/lq-ops-ai-unassigned'
 
   const [metaExpanded, setMetaExpanded] = React.useState(isMetaParentActive)
   React.useEffect(() => { if (isMetaParentActive) setMetaExpanded(true) }, [isMetaParentActive])

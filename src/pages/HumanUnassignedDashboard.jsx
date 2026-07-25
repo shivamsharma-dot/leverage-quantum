@@ -63,6 +63,21 @@ function ownerName(e) {
   return local.replace(/\./g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
+function computeWindow(preset, selMonth, customFrom, customTo) {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  if (preset === 'LD') { const d = new Date(today); d.setDate(d.getDate() - 1); return { from: d, to: d } }
+  if (preset === 'L7D') { const to = new Date(today); to.setDate(to.getDate() - 1); const from = new Date(to); from.setDate(from.getDate() - 6); return { from, to } }
+  if (preset === 'MTD') { const from = new Date(today.getFullYear(), today.getMonth(), 1); return { from, to: today } }
+  if (preset === 'month' && selMonth) { const [y, m] = selMonth.split('-').map(Number); return { from: new Date(y, m - 1, 1), to: new Date(y, m, 0) } }
+  if (preset === 'custom' && customFrom && customTo) { return { from: new Date(customFrom + 'T00:00:00'), to: new Date(customTo + 'T00:00:00') } }
+  return null
+}
+function fmtMonthLabel(ym) {
+  if (!ym) return 'all'
+  const [y, m] = ym.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }).replace(' ', '-')
+}
+
 async function fetchRows() {
   const url = await resolveSheetUrl('humanUnassigned', DEFAULT_CSV)
   const res = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' })
@@ -131,17 +146,24 @@ export default function HumanUnassignedDashboard() {
   const [sortDir, setSortDir] = useState('desc')
   const [sending, setSending] = useState(false)
   const [sendMsg, setSendMsg] = useState(null)
+  const [datePreset, setDatePreset] = useState('all')
+  const [selMonth, setSelMonth] = useState('')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [showCustom, setShowCustom] = useState(false)
+  const [lastSync, setLastSync] = useState(null)
+  const [showInfo, setShowInfo] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    fetchRows().then(r => { if (!cancelled) { setRows(r); setLoading(false) } }).catch(() => { if (!cancelled) setLoading(false) })
+    fetchRows().then(r => { if (!cancelled) { setRows(r); setLoading(false); setLastSync(new Date()) } }).catch(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [])
 
   const reload = () => {
     setLoading(true)
-    fetchRows().then(r => { setRows(r); setLoading(false) }).catch(() => setLoading(false))
+    fetchRows().then(r => { setRows(r); setLoading(false); setLastSync(new Date()) }).catch(() => setLoading(false))
   }
 
   const sendNow = async () => {
@@ -159,16 +181,23 @@ export default function HumanUnassignedDashboard() {
     }
   }
 
+  const monthOptions = useMemo(() => {
+    const set = new Set(rows.map(r => r.date ? r.date.slice(0, 7) : null).filter(Boolean))
+    return [...set].sort().reverse()
+  }, [rows])
+
   const filtered = useMemo(() => {
     let out = rows
     if (countryFilter !== 'all') out = out.filter(r => r.country === countryFilter)
     if (dispositionFilter !== 'all') out = out.filter(r => r.disposition === dispositionFilter)
+    const win = computeWindow(datePreset, selMonth, customFrom, customTo)
+    if (win) out = out.filter(r => { if (!r.date) return false; const d = new Date(r.date + 'T00:00:00'); return d >= win.from && d <= win.to })
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       out = out.filter(r => r.course.toLowerCase().includes(q) || r.country.toLowerCase().includes(q) || r.campaign.toLowerCase().includes(q) || r.prospectId.toLowerCase().includes(q) || r.owner.toLowerCase().includes(q))
     }
     return out
-  }, [rows, countryFilter, dispositionFilter, search])
+  }, [rows, countryFilter, dispositionFilter, search, datePreset, selMonth, customFrom, customTo])
 
   const sorted = useMemo(() => {
     const arr = [...filtered]
@@ -272,17 +301,72 @@ export default function HumanUnassignedDashboard() {
     <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
       <Sidebar />
       <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid #EEF1F6', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-        <div style={{ background: 'var(--card)', borderBottom: '0.5px solid ' + C.border, padding: '0 28px', minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
-          <div style={{ padding: '10px 0' }}>
+        <div style={{ background: 'var(--card)', borderBottom: '0.5px solid ' + C.border, padding: '10px 28px', minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
+          <div>
             <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase' }}>QL Ops / Human Unassigned</p>
             <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px' }}>Human Unassigned</h1>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: '#F8FAFC', padding: '6px 10px', borderRadius: 12, border: '0.5px solid #E5E7EB' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: 3 }}>
+                {[['LD', 'Last Day'], ['L7D', 'Last 7D'], ['MTD', 'MTD']].map(([key, lbl]) => (
+                  <button key={key} onClick={() => { setDatePreset(key); setSelMonth(''); setCustomFrom(''); setCustomTo(''); setShowCustom(false); setPage(1) }}
+                    style={{
+                      padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
+                      background: datePreset === key ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'transparent',
+                      color: datePreset === key ? '#fff' : '#64748B',
+                      boxShadow: datePreset === key ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
+                    }}>{lbl}</button>
+                ))}
+              </div>
+              <FilterDropdown label="Month" value={selMonth ? fmtMonthLabel(selMonth) : 'all'} options={['all', ...monthOptions.map(fmtMonthLabel)]}
+                open={openMenu === 'month'} onToggle={() => setOpenMenu(v => v === 'month' ? null : 'month')}
+                onSelect={v => {
+                  if (v === 'all') { setSelMonth(''); setDatePreset('all') }
+                  else { const idx = monthOptions.map(fmtMonthLabel).indexOf(v); setSelMonth(monthOptions[idx]); setDatePreset('month') }
+                  setCustomFrom(''); setCustomTo(''); setShowCustom(false); setOpenMenu(null); setPage(1)
+                }} />
+              <button onClick={() => { setShowCustom(v => !v); setDatePreset('custom'); setSelMonth('') }}
+                style={{
+                  padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
+                  background: datePreset === 'custom' ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'transparent',
+                  color: datePreset === 'custom' ? '#fff' : '#64748B',
+                }}>Custom</button>
+              {showCustom && (
+                <>
+                  <input type="date" value={customFrom} onChange={e => { setCustomFrom(e.target.value); setPage(1) }} style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6, border: '0.5px solid ' + C.border, fontFamily: FONT, color: C.text, background: 'var(--card)' }} />
+                  <span style={{ fontSize: 11, color: C.muted }}>to</span>
+                  <input type="date" value={customTo} onChange={e => { setCustomTo(e.target.value); setPage(1) }} style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6, border: '0.5px solid ' + C.border, fontFamily: FONT, color: C.text, background: 'var(--card)' }} />
+                </>
+              )}
+              <FilterDropdown label="Country" value={countryFilter} options={countryOptions}
+                open={openMenu === 'country'} onToggle={() => setOpenMenu(v => v === 'country' ? null : 'country')}
+                onSelect={v => { setCountryFilter(v); setOpenMenu(null) }} />
+              <FilterDropdown label="Disposition" value={dispositionFilter} options={dispositionOptions}
+                open={openMenu === 'disposition'} onToggle={() => setOpenMenu(v => v === 'disposition' ? null : 'disposition')}
+                onSelect={v => { setDispositionFilter(v); setOpenMenu(null) }} />
+              {lastSync && <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>}
+              <Button onClick={reload} disabled={loading} size="sm">{loading ? 'Refreshing' : 'Refresh'}</Button>
+              <ExportButton data={exportRows} filename="human_unassigned" dashboardId="lq_ops_human_unassigned" />
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setShowInfo(v => !v)} title="Metric info" style={{ width: 24, height: 24, borderRadius: 7, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.navy, fontStyle: 'italic', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>i</button>
+                {showInfo && (
+                  <>
+                    <div onClick={() => setShowInfo(false)} style={{ position: 'fixed', inset: 0, zIndex: 300 }} />
+                    <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400, width: 280, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14, fontSize: 11.5, color: '#374151', lineHeight: 1.6 }}>
+                      <div style={{ fontWeight: 800, color: C.navy, marginBottom: 6 }}>How these metrics are calculated</div>
+                      <div><strong>Unassigned Leads</strong> — rows where the owner is still a bot/vendor placeholder (Futwork), not a real floor owner.</div>
+                      <div style={{ marginTop: 6 }}><strong>Age</strong> — days since first AI activity date.</div>
+                      <div style={{ marginTop: 6 }}>Date filters scope the table, KPIs and charts by that same activity date.</div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
             {sendMsg && <span style={{ fontSize: 11.5, fontWeight: 600, color: sendMsg.ok ? C.green : C.navy }}>{sendMsg.text}</span>}
             <Button onClick={sendNow} disabled={sending} size="sm" variant="secondary" title="Email this list to Akash right now">
               {sending ? 'Sending…' : 'Send now'}
             </Button>
-            <Button onClick={reload} disabled={loading} size="sm">{loading ? 'Refreshing' : 'Refresh'}</Button>
           </div>
         </div>
 
@@ -318,13 +402,6 @@ export default function HumanUnassignedDashboard() {
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input type="text" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
                   style={{ padding: '5px 10px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', width: 140, background: 'var(--card)', color: C.text }} />
-                <FilterDropdown label="Country" value={countryFilter} options={countryOptions}
-                  open={openMenu === 'country'} onToggle={() => setOpenMenu(v => v === 'country' ? null : 'country')}
-                  onSelect={v => { setCountryFilter(v); setOpenMenu(null) }} />
-                <FilterDropdown label="Disposition" value={dispositionFilter} options={dispositionOptions}
-                  open={openMenu === 'disposition'} onToggle={() => setOpenMenu(v => v === 'disposition' ? null : 'disposition')}
-                  onSelect={v => { setDispositionFilter(v); setOpenMenu(null) }} />
-                <ExportButton data={exportRows} filename="human_unassigned" dashboardId="lq_ops_human_unassigned" />
               </div>
             }>
             <div style={{ overflowX: 'auto' }}>
