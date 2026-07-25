@@ -826,16 +826,37 @@ async function getBaselineData(metaToken) {
   return data
 }
 
+// Human labels for every Business Context field -- keep this in sync with the FIELDS
+// config in src/pages/SettingsPage.jsx (both list the same keys; label text can differ
+// slightly but the KEYS must match, since this reads whatever the frontend saves).
+const BIZ_FIELD_LABELS = {
+  overview: 'Overview', businessModel: 'Business model', products: 'Products',
+  funnelStages: 'Funnel stages', keyMetrics: 'Conversion & key metrics', goals: 'Goals (6-12 mo)',
+  revenueRoas: 'Revenue & ROAS', sourceMarkets: 'Source markets', destinationMarkets: 'Destination markets',
+  prioritySegments: 'Priority segments', competitors: 'Competitors', seasonality: 'Seasonality',
+  whatsComing: "What's coming", numbersToTrust: 'Which numbers to trust', reportingBasis: 'Reporting basis',
+  dataSources: 'Data sources', glossary: 'Glossary', voiceGuardrails: 'Voice & writing guardrails',
+}
+function formatBusinessContext(biz) {
+  if (!biz || typeof biz !== 'object') return ''
+  const lines = []
+  for (const [key, label] of Object.entries(BIZ_FIELD_LABELS)) {
+    const v = biz[key]
+    if (v == null) continue
+    if (Array.isArray(v)) { if (v.length) lines.push(`${label}: ${v.join(', ')}`) }
+    else if (typeof v === 'string' && v.trim()) lines.push(`${label}: ${v.trim()}`)
+  }
+  if (!lines.length) return ''
+  return `\n=== BUSINESS CONTEXT (admin-configured, Settings > Ask AI) ===\nReal operating facts about the business, kept here so you interpret the data correctly and write with the right tone -- use these as real context, but never invent a number or claim beyond what the connected tools actually return.\n${lines.join('\n')}`
+}
+
 async function buildSystemPrompt(metaToken, memories) {
   const { meta, googleAds, metaCrm, googleCrm } = await getBaselineData(metaToken)
   const today = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' })
   const memoriesSection = memories?.length
     ? `\n=== REMEMBERED CONTEXT (from previous sessions) ===\n${memories.map(m=>`- ${m}`).join('\n')}`
     : ''
-  const biz = await getBusinessContext()
-  const businessSection = (biz && (biz.descriptor || biz.voice || (biz.messaging || []).length))
-    ? `\n=== BUSINESS CONTEXT (admin-configured, Settings > Ask AI) ===\nUse this to shape tone and phrasing only -- never as a source of numbers or facts.\n${biz.descriptor ? `Business: ${biz.descriptor}\n` : ''}${biz.voice ? `Voice/mission: ${biz.voice}\n` : ''}${(biz.messaging || []).length ? `Key messaging:\n${biz.messaging.map(m => `- ${m}`).join('\n')}` : ''}`
-    : ''
+  const businessSection = formatBusinessContext(await getBusinessContext())
 
   return `You are the Chief Marketing Intelligence Officer of Leverage Edu, built into Leverage Quantum, their internal analytics platform.
 

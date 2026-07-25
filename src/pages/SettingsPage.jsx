@@ -611,23 +611,68 @@ export default function SettingsPage() {
     }
   }
 
-  // Business context (Phase 2 of the agent-upgrade roadmap): mission/voice/messaging
-  // that gets folded into Ask AI's + every agent's system prompt, so narrative copy
-  // (Executive Summary wording, tone) reflects how the business actually talks about
-  // itself, without touching the app's own fixed navy/blue/cyan/green brand identity.
-  const [bizDescriptor, setBizDescriptor] = useState('')
-  const [bizVoice, setBizVoice] = useState('')
-  const [bizMessaging, setBizMessaging] = useState('')
+  // Business context (Phase 2 of the agent-upgrade roadmap): a structured knowledge
+  // base folded into Ask AI's + every agent's system prompt (see formatBusinessContext
+  // in api/ask-ai.mjs), so narrative copy interprets the data correctly and matches how
+  // the business actually talks about itself -- without touching the app's own fixed
+  // navy/blue/cyan/green brand identity (that stays hardcoded, see DESIGN_SYSTEM.md).
+  // Structure modeled on a reference tool's "Business" knowledge base (grouped sections,
+  // some free text, some tag lists), but every default VALUE below is Quantum's own
+  // already-true, already-documented fact (funnel stages, data sources, glossary terms
+  // straight from this file's own CLAUDE.md) -- never copied content, and business-
+  // judgment fields (goals, competitors, seasonality, etc) start genuinely blank for
+  // an admin to fill in, not invented on their behalf.
+  const BIZ_GROUPS = [
+    { title: 'Business', fields: [
+      { key: 'overview', label: 'Overview', type: 'textarea', placeholder: 'What Leverage Edu does, in plain language, and how the funnel works end to end.' },
+      { key: 'businessModel', label: 'Business model', type: 'textarea', placeholder: 'How revenue is actually earned (e.g. university recruitment commission vs one-off product sale).' },
+      { key: 'products', label: 'Products / lines', type: 'tags', placeholder: 'Add a product line and press Enter' },
+      { key: 'funnelStages', label: 'Funnel stages', type: 'textarea', default: 'Lead -> QL (Qualified Lead, meets disposition criteria) -> Application -> Offer -> Deposit -> RAU (Registered At University). Total QL = Futwork Human QL + Futwork AI QL + Superbot AI QL combined -- Quantum\'s own authoritative figure, not Meta/Google\'s in-platform lead count.' },
+      { key: 'keyMetrics', label: 'Conversion & key metrics', type: 'textarea', placeholder: 'Which metric actually gets optimized against (e.g. QL, not raw leads or CPA), and why.' },
+      { key: 'goals', label: 'Goals (6-12 mo)', type: 'textarea', placeholder: 'What the business is trying to move in the next two quarters.' },
+      { key: 'revenueRoas', label: 'Revenue & ROAS', type: 'textarea', default: 'Est. SR Revenue = Applications x 0.09 x SR Fee. Actual SR Revenue = Actual RAUs x SR Fee (no discount -- already realized). ROAS = SR Revenue / Spend. Caveat: the sales cycle is long, so true ROAS is only knowable months after lead-gen -- never present it as a same-day figure.' },
+    ]},
+    { title: 'Markets & competition', fields: [
+      { key: 'sourceMarkets', label: 'Source markets', type: 'tags', placeholder: 'e.g. India — add and press Enter' },
+      { key: 'destinationMarkets', label: 'Destination markets', type: 'tags', default: ['UK','Germany','Italy','Dubai','MBBS (India source)','MBBS (UK source)'], placeholder: 'Add a destination and press Enter' },
+      { key: 'prioritySegments', label: 'Priority segments', type: 'textarea', placeholder: 'Which corridor/segment matters most right now, and why.' },
+      { key: 'competitors', label: 'Competitors', type: 'tags', placeholder: 'Add a competitor and press Enter' },
+      { key: 'seasonality', label: 'Seasonality', type: 'textarea', placeholder: 'Real intake/demand cycles (e.g. Fall vs Spring vs Summer intake) so a dip is read as normal, not an anomaly.' },
+    ]},
+    { title: 'Operating rules', fields: [
+      { key: 'whatsComing', label: "What's coming", type: 'textarea', placeholder: 'Upcoming campaigns/changes agents should know about before flagging something as an anomaly.' },
+      { key: 'numbersToTrust', label: 'Which numbers to trust', type: 'textarea', default: 'Quantum\'s Overall funnel sheet (Total QL) is authoritative when it disagrees with Meta/Google\'s own in-platform lead/conversion counts -- always prefer Quantum\'s figure and say so if asked.' },
+      { key: 'reportingBasis', label: 'Reporting basis', type: 'textarea', default: 'Currency INR (₹). Timezone Asia/Kolkata (IST). Meta attribution: 7-day click. Google attribution: default GAQL conversion window.' },
+      { key: 'dataSources', label: 'Data sources', type: 'textarea', default: 'Connected: Meta Ads, Google Ads, Bing Ads, WhatsApp, QL Ops (Futwork/Superbot), CRM leads (FBleads/googleleads sheets), Overall PM funnel sheet. Referenced but NOT connected: Opportunity-level Won/Lost status -- no sheet or table tracks a real sales-pipeline outcome yet (see the disclosed gap on the Marketing Performance report).' },
+      { key: 'glossary', label: 'Glossary', type: 'textarea', default: 'QL=Qualified Lead; CPL/CPQL=Cost per Lead / per Qualified Lead; RAU=Registered At University; SR=Student Recruitment (fee per RAU); CPA=Cost per Applications.' },
+      { key: 'voiceGuardrails', label: 'Voice & writing guardrails', type: 'textarea', placeholder: 'e.g. Never invent a number, date, or claim not present in the connected data -- say so explicitly if something isn\'t tracked, rather than estimating.' },
+    ]},
+  ]
+  const bizDefaults = () => {
+    const o = {}
+    BIZ_GROUPS.forEach(g => g.fields.forEach(f => { o[f.key] = f.default != null ? f.default : (f.type === 'tags' ? [] : '') }))
+    return o
+  }
+  const [bizFields, setBizFields] = useState(bizDefaults)
+  const [bizTagDraft, setBizTagDraft] = useState({}) // per-field in-progress tag text
   const [bizSaving, setBizSaving] = useState(false)
   const [bizMsg, setBizMsg] = useState(null)
+  const setBizField = (key, val) => setBizFields(prev => ({ ...prev, [key]: val }))
+  const addBizTag = (key) => {
+    const v = (bizTagDraft[key] || '').trim()
+    if (!v) return
+    setBizFields(prev => ({ ...prev, [key]: [...(prev[key] || []), v] }))
+    setBizTagDraft(prev => ({ ...prev, [key]: '' }))
+  }
+  const removeBizTag = (key, idx) => setBizFields(prev => ({ ...prev, [key]: prev[key].filter((_, i) => i !== idx) }))
   const saveBusinessContext = async () => {
     setBizSaving(true); setBizMsg(null)
     try {
-      const value = {
-        descriptor: bizDescriptor.trim(),
-        voice: bizVoice.trim(),
-        messaging: bizMessaging.split('\n').map(l => l.trim()).filter(Boolean),
-      }
+      const value = {}
+      BIZ_GROUPS.forEach(g => g.fields.forEach(f => {
+        const v = bizFields[f.key]
+        value[f.key] = f.type === 'tags' ? (v || []) : (v || '').trim()
+      }))
       const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'business_context', value }) })
       if (!r.ok) throw new Error('Save failed')
       setBizMsg({ type: 'ok', text: 'Saved' })
@@ -825,9 +870,10 @@ export default function SettingsPage() {
                   if (pf.source_health_schedule) setHealthSchedule(pf.source_health_schedule)
                   if (pf.ask_ai_monthly_budget_usd != null) setAskaiBudgetInput(String(pf.ask_ai_monthly_budget_usd))
                   if (pf.business_context && typeof pf.business_context === 'object') {
-                    setBizDescriptor(pf.business_context.descriptor || '')
-                    setBizVoice(pf.business_context.voice || '')
-                    setBizMessaging(Array.isArray(pf.business_context.messaging) ? pf.business_context.messaging.join('\n') : '')
+                    // Merge onto the defaults rather than replacing wholesale, so a field
+                    // added after this admin last saved still shows its sensible default
+                    // instead of silently reverting to blank.
+                    setBizFields(prev => ({ ...prev, ...pf.business_context }))
                   }
                   if (pf.affiliate_spend_manual && typeof pf.affiliate_spend_manual === 'object') setAffiliateSpend(pf.affiliate_spend_manual)
       })
@@ -2663,30 +2709,46 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <div className={styles.activityHeader}>
                   <div>
                     <h3 className={styles.cardTitle}>Business Context</h3>
-                    <p className={styles.cardDesc} style={{ margin: 0 }}>Folded into Ask AI's and every agent's system prompt so narrative copy reflects how the business actually talks about itself — this does not change the app's own fixed brand colors/fonts (see Appearance), only the words Ask AI and the agents write.</p>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>A structured knowledge base folded into Ask AI's and every agent's system prompt, so answers interpret the data correctly and match how the business actually talks about itself — this does not change the app's own fixed brand colors/fonts (see Appearance), only the words Ask AI and the agents write.</p>
                   </div>
                   <Button size="sm" onClick={saveBusinessContext} disabled={bizSaving}>
-                    {bizSaving ? 'Saving…' : 'Save'}
+                    {bizSaving ? 'Saving…' : 'Save all'}
                   </Button>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 4 }}>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Business descriptor</label>
-                    <input type="text" value={bizDescriptor} onChange={e => setBizDescriptor(e.target.value)} placeholder="e.g. Leverage Edu — study abroad admissions counselling"
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif" }} />
+                {bizMsg && <div style={{ marginTop: 8 }}><span style={{ fontSize: 11, fontWeight: 700, color: bizMsg.type === 'err' ? '#1F3C84' : '#15803D' }}>{bizMsg.type === 'err' ? '✕ ' : '✓ '}{bizMsg.text}</span></div>}
+
+                {BIZ_GROUPS.map(group => (
+                  <div key={group.title} style={{ marginTop: 18 }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1F3C84', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid #EEF1F6' }}>{group.title}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      {group.fields.map(f => (
+                        <div key={f.key}>
+                          <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>{f.label}</label>
+                          {f.type === 'textarea' && (
+                            <textarea value={bizFields[f.key] || ''} onChange={e => setBizField(f.key, e.target.value)} rows={2} placeholder={f.placeholder}
+                              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", resize: 'vertical' }} />
+                          )}
+                          {f.type === 'tags' && (
+                            <div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: (bizFields[f.key] || []).length ? 7 : 0 }}>
+                                {(bizFields[f.key] || []).map((tag, i) => (
+                                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #D6E2F5', borderRadius: 999, padding: '4px 6px 4px 11px' }}>
+                                    {tag}
+                                    <span onClick={() => removeBizTag(f.key, i)} style={{ cursor: 'pointer', color: '#1C9FD4', fontWeight: 800, lineHeight: 1, padding: '0 4px' }}>×</span>
+                                  </span>
+                                ))}
+                              </div>
+                              <input type="text" value={bizTagDraft[f.key] || ''} onChange={e => setBizTagDraft(prev => ({ ...prev, [f.key]: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addBizTag(f.key) } }}
+                                placeholder={f.placeholder}
+                                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif" }} />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Brand voice / mission</label>
-                    <textarea value={bizVoice} onChange={e => setBizVoice(e.target.value)} rows={3} placeholder="e.g. Direct and data-led, never hedging; every recommendation should be one concrete action, not a menu of options."
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", resize: 'vertical' }} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Key messaging lines (one per line)</label>
-                    <textarea value={bizMessaging} onChange={e => setBizMessaging(e.target.value)} rows={3} placeholder={'e.g. We optimize for qualified leads, not raw volume.\nCPQL trumps CPL in every recommendation.'}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", resize: 'vertical' }} />
-                  </div>
-                  {bizMsg && <span style={{ fontSize: 11, fontWeight: 700, color: bizMsg.type === 'err' ? '#1F3C84' : '#15803D' }}>{bizMsg.type === 'err' ? '✕ ' : '✓ '}{bizMsg.text}</span>}
-                </div>
+                ))}
               </div>
 
               <div className={styles.card}>
