@@ -9,7 +9,7 @@ import { DashboardSkeleton } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
 import { getSession, setSession, hasLoaded, getPersisted } from '../lib/sessionLoad'
-import { classifyCorridor, corridorLabel } from '../lib/corridors'
+import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
 import {
   C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
 } from '../ui/dashboardKit'
@@ -368,6 +368,7 @@ const heatBg = v => v == null ? 'transparent' : v >= 50 ? C.greenBg : v >= 25 ? 
 // localStorage so the layout sticks between sessions), sortable headers, search, and a
 // per-view export button — same "creative table" pattern as Meta Ads Creatives.
 const SUMMARY_COLUMNS = [
+  { key:'corridor', label:'Corridor' },
   { key:'spend', label:'Spend' },
   { key:'leads', label:'Leads' },
   { key:'queued', label:'Total Queued' },
@@ -429,6 +430,7 @@ function summaryValue(g, key) {
 }
 function summaryFmt(key, v) {
   if (v == null) return '—'
+  if (key === 'corridor') return v
   if (key === 'roas' || key === 'estimatedRoas') return v.toFixed(2) + 'x'
   if (key.endsWith('Pct')) return v.toFixed(1) + '%'
   if (key.endsWith('SrRevenue') || key === 'spend' || key === 'cpl' || key === 'cpql' || key === 'cpa') return fmtINR(v)
@@ -568,6 +570,7 @@ export default function OverallDashboard() {
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
   const [source, setSource] = useState('All')
+  const [corridorFilter, setCorridorFilter] = useState('All')
   const [campaignQuery, setCampaignQuery] = useState('')
   const [showInfo, setShowInfo] = useState(false)
   const [grpBy, setGrpBy] = useState('source')
@@ -784,10 +787,11 @@ export default function OverallDashboard() {
 
   const filtered = useMemo(() => {
     let rs = source === 'All' ? dateFilteredRows : dateFilteredRows.filter(r => r.source === source)
+    if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQuery.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
     return rs
-  }, [dateFilteredRows, source, campaignQuery])
+  }, [dateFilteredRows, source, corridorFilter, campaignQuery])
 
   const sumKpis = list => {
     const sum = k => list.reduce((t, r) => t + r[k], 0)
@@ -1087,7 +1091,7 @@ export default function OverallDashboard() {
     const m = new Map()
     filtered.forEach(r => {
       if (!r.campaign) return
-      const e = m.get(r.campaign) || { campaign:r.campaign, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(r.campaign) || { campaign:r.campaign, corridor:corridorLabel(classifyCorridor(r.campaign)), leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
@@ -1162,7 +1166,7 @@ export default function OverallDashboard() {
       label:s.source, leads:s.leads, queued:s.queued, humanQL:s.humanQL, futworkAiQl:s.futworkAiQl, superbotAiQl:s.superbotAiQl, totalQL:s.totalQL, apps:s.apps, offers:s.offers, deposits:s.deposits, raus:s.raus, spend:s.spend,
     }))
     if (grpBy === 'campaign') return byCampaign.map(c => ({
-      label:c.campaign, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
+      label:c.campaign, corridor:c.corridor, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
     }))
     if (grpBy === 'corridor') return byCorridor.map(c => ({
       label:c.corridor, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
@@ -1222,6 +1226,10 @@ export default function OverallDashboard() {
       if (sortKey === 'label') {
         // Day view sorts chronologically by the underlying date key, not the display label
         const cmp = (a.dateKey && b.dateKey) ? a.dateKey.localeCompare(b.dateKey) : a.label.localeCompare(b.label)
+        return sortDir === 'asc' ? cmp : -cmp
+      }
+      if (sortKey === 'corridor') {
+        const cmp = (a.corridor || '').localeCompare(b.corridor || '')
         return sortDir === 'asc' ? cmp : -cmp
       }
       const av = summaryValue(a, sortKey), bv = summaryValue(b, sortKey)
@@ -1349,6 +1357,7 @@ export default function OverallDashboard() {
               </div>
 
               <Dropdown label="Source" options={sources} value={source} minWidth={110} onChange={setSource} />
+              <Dropdown label="Corridor" options={['All', ...CORRIDORS.map(c => c.label)]} value={corridorFilter} minWidth={140} onChange={setCorridorFilter} />
               <CampaignSearch value={campaignQuery} onChange={setCampaignQuery} suggestions={campaignSuggestions} />
             </div>
 
@@ -1640,7 +1649,7 @@ export default function OverallDashboard() {
                           title="Click to sort — drag to reorder"
                           style={{
                             padding:'9px 8px', fontSize:9.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
-                            color: sortKey === col.key ? C.navy : '#64748B', textAlign:'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
+                            color: sortKey === col.key ? C.navy : '#64748B', textAlign: col.key === 'corridor' ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
                             opacity: dragKey === col.key ? 0.35 : 1,
                             boxShadow: dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none',
                           }}>
@@ -1655,10 +1664,11 @@ export default function OverallDashboard() {
                         <td style={{ padding:'9px 12px', fontWeight:600, color:'#0F172A' }}>{g.label}</td>
                         {displayCols.map(col => {
                           const v = summaryValue(g, col.key)
+                          const isCorridor = col.key === 'corridor'
                           const isPct = col.key.endsWith('Pct')
                           const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
                           return (
-                            <td key={col.key} title={isMoney ? fmtINRShort(v) : undefined} style={{ padding:'9px 8px', textAlign:'right', color: isPct ? heatColor(v) : summaryColor(col.key), fontWeight: SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400, background: isPct ? heatBg(v) : 'transparent' }}>
+                            <td key={col.key} title={isMoney ? fmtINRShort(v) : undefined} style={{ padding:'9px 8px', textAlign: isCorridor ? 'left' : 'right', color: isCorridor ? '#64748B' : (isPct ? heatColor(v) : summaryColor(col.key)), fontWeight: isCorridor ? 500 : (SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400), background: isPct ? heatBg(v) : 'transparent', whiteSpace: isCorridor ? 'nowrap' : 'normal' }}>
                               {summaryFmt(col.key, v)}
                             </td>
                           )
