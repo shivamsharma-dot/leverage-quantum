@@ -23,6 +23,7 @@ export const COMPONENT_IMPORTS = {
   ReferralDashboard: () => import('../pages/ReferralDashboard'),
   LeadsAssignedDashboard: () => import('../pages/LeadsAssignedDashboard'),
   AskAI: () => import('../pages/AskAI'),
+  AgentsDashboard: () => import('../pages/AgentsDashboard'),
   SettingsPage: () => import('../pages/SettingsPage'),
 }
 
@@ -48,6 +49,7 @@ const ROUTE_COMPONENT = {
   '/dashboard/google-ads': 'GoogleAdsDashboard',
   '/dashboard/bing-ads': 'BingAdsDashboard',
   '/ask-ai': 'AskAI',
+  '/dashboard/agents': 'AgentsDashboard',
   '/settings': 'SettingsPage',
 }
 

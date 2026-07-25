@@ -940,6 +940,116 @@ Keep it under 180 words total. Plain text with short section headers, no markdow
   }
 }
 
+// -- Autonomous agent runs (Phase 1 of the agent-upgrade roadmap) -------------
+// A named agent runs its own fixed investigation prompt through the same tool
+// loop as an interactive question, but non-streamed (invoked by a scheduled
+// GitHub Actions job, or an admin's "Run now" click -- nobody's watching an SSE
+// connection either way) and its output is stored as a durable artifact in
+// Supabase (agent_runs) for the Agents page, instead of a chat message.
+const AGENTS = {
+  marketing_performance: {
+    label: 'Marketing Performance Agent',
+    buildPrompt() {
+      const iso = d => d.toISOString().slice(0, 10)
+      const today = new Date()
+      const until = new Date(today); until.setDate(until.getDate() - 1) // yesterday -- today's data is still incomplete
+      const since = new Date(until); since.setDate(since.getDate() - 6)
+      const prevUntil = new Date(since); prevUntil.setDate(prevUntil.getDate() - 1)
+      const prevSince = new Date(prevUntil); prevSince.setDate(prevSince.getDate() - 6)
+      return {
+        since: iso(since), until: iso(until),
+        text: `Run today's autonomous marketing performance review. Compare ${iso(since)} to ${iso(until)} against the prior 7 days (${iso(prevSince)} to ${iso(prevUntil)}) using the campaign contribution tool as your primary lens, and pull whichever Meta/Google/CRM tools you need to substantiate it. Produce a report with exactly these three sections in markdown: "## Executive Summary" (2-3 sentences on the headline Total QL movement and why), "## Top Movers" (a short table: campaign, QL delta, % of change, one-line evidence), and "## Recommended Action" (ONE prioritized, concrete action -- not a list of options). Be quantitative and specific everywhere; do not hedge with vague language.`,
+      }
+    },
+  },
+}
+
+async function runAgentToolLoop({ system, userText, tools, agentId }) {
+  let currentMessages = [{ role: 'user', content: userText }]
+  let totalInputTokens = 0, totalOutputTokens = 0, toolCallsCount = 0
+  const MAX_ROUNDS = 5
+  const runOne = async toolUse => {
+    toolCallsCount++
+    const _t0 = Date.now()
+    let result
+    if (toolUse.name === 'query_meta_ads') result = await executeMetaQuery((await getTokenFromSupabase()) || '', toolUse.input || {})
+    else if (toolUse.name === 'query_google_ads') result = await executeGoogleAdsQuery(toolUse.input || {})
+    else if (toolUse.name === 'query_meta_crm_leads') result = await fetchCrmLeads((await getSheetOverride('sheet_url_fbleads')) || FB_LEADS_SHEET, toolUse.input || {})
+    else if (toolUse.name === 'query_google_crm_leads') result = await fetchCrmLeads((await getSheetOverride('sheet_url_googleleads')) || GOOGLE_LEADS_SHEET, toolUse.input || {})
+    else if (toolUse.name === 'analyze_campaign_contribution') result = await analyzeCampaignContribution(toolUse.input || {})
+    else result = { error: 'Unknown tool: ' + toolUse.name }
+    await logToolCall({ convId: null, userId: 'agent:' + agentId, toolName: toolUse.name, params: toolUse.input, rowCount: resultRowCount(result), latencyMs: Date.now() - _t0, hadError: !!(result && result.error) })
+    return { type: 'tool_result', tool_use_id: toolUse.id, content: JSON.stringify(result) }
+  }
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const r = await fetch(ANTHROPIC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: MODEL, max_tokens: 1024, stream: false, tools, tool_choice: { type: 'auto' }, system, messages: currentMessages }),
+    })
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e?.error?.message || `Anthropic API error ${r.status}`) }
+    const response = await r.json()
+    if (response.usage) { totalInputTokens += response.usage.input_tokens || 0; totalOutputTokens += response.usage.output_tokens || 0 }
+    const toolUseBlocks = (response.content || []).filter(b => b.type === 'tool_use')
+    if (toolUseBlocks.length === 0) {
+      const text = (response.content || []).filter(b => b.type === 'text').map(b => b.text).join('')
+      return { text, totalInputTokens, totalOutputTokens, toolCallsCount }
+    }
+    const assistantMessage = { role: 'assistant', content: response.content }
+    const toolResults = await Promise.all(toolUseBlocks.map(runOne))
+    currentMessages = [...currentMessages, assistantMessage, { role: 'user', content: toolResults }]
+  }
+  // Ran out of tool rounds without a final text -- ask once more with tools disabled to force a text answer.
+  const r = await fetch(ANTHROPIC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: MODEL, max_tokens: 8192, stream: false, system, messages: currentMessages }),
+  })
+  const response = await r.json()
+  if (response.usage) { totalInputTokens += response.usage.input_tokens || 0; totalOutputTokens += response.usage.output_tokens || 0 }
+  const text = (response.content || []).filter(b => b.type === 'text').map(b => b.text).join('')
+  return { text, totalInputTokens, totalOutputTokens, toolCallsCount }
+}
+
+async function logAgentRun({ agentId, title, summary, content, status, error, toolCallsCount, startedAt, finishedAt, triggeredBy }) {
+  if (!SB_KEY) return null
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/agent_runs`, {
+      method: 'POST',
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({ agent_id: agentId, title, summary, content, status, error: error || null, tool_calls_count: toolCallsCount || 0, started_at: startedAt, finished_at: finishedAt, triggered_by: triggeredBy }),
+      signal: AbortSignal.timeout(8000),
+    })
+    const rows = await r.json().catch(() => [])
+    return rows?.[0]?.id ?? null
+  } catch { return null }
+}
+
+async function handleAgentRun(req, res, me) {
+  const agentId = req.body?.agent_id || 'marketing_performance'
+  const agent = AGENTS[agentId]
+  if (!agent) return res.status(400).json({ error: 'Unknown agent_id: ' + agentId })
+  const triggeredBy = me ? me.email : 'cron'
+  const startedAt = new Date().toISOString()
+  try {
+    const systemText = await buildSystemPrompt((await getTokenFromSupabase()) || '', [])
+    const { text: userText, since, until } = agent.buildPrompt()
+    const tools = [META_TOOL, META_CRM_TOOL, GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL, CONTRIBUTION_TOOL]
+    const { text, totalInputTokens, totalOutputTokens, toolCallsCount } = await runAgentToolLoop({
+      system: [{ type: 'text', text: systemText }], userText, tools, agentId,
+    })
+    const finishedAt = new Date().toISOString()
+    const title = `${agent.label} — ${since} to ${until}`
+    const summaryLine = (text.split('\n').find(l => l.trim() && !l.trim().startsWith('#')) || '').replace(/[*_`]/g, '').slice(0, 200)
+    const runId = await logAgentRun({ agentId, title, summary: summaryLine, content: text, status: 'ok', toolCallsCount, startedAt, finishedAt, triggeredBy })
+    await logUsage({ convId: null, userId: 'agent:' + agentId, model: MODEL, inputTokens: totalInputTokens, outputTokens: totalOutputTokens })
+    return res.status(200).json({ ok: true, runId, title })
+  } catch (e) {
+    await logAgentRun({ agentId, title: `${agent.label} — failed`, summary: e.message, content: '', status: 'error', error: e.message, toolCallsCount: 0, startedAt, finishedAt: new Date().toISOString(), triggeredBy })
+    return res.status(500).json({ error: e.message })
+  }
+}
+
 // -- handler -------------------------------------------------------------------
 export default async function handler(req, res) {
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
@@ -950,6 +1060,18 @@ export default async function handler(req, res) {
   }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' })
+
+  if (req.body && req.body.mode === 'agent_run') {
+    if (req.body.triggered_by === 'cron') {
+      const provided = req.headers['x-cron-secret']
+      if (!process.env.CRON_SECRET || provided !== process.env.CRON_SECRET) return res.status(403).json({ error: 'Forbidden' })
+      return handleAgentRun(req, res, null)
+    }
+    const agentMe = getSessionUser(req)
+    if (!agentMe) return res.status(401).json({ error: 'Not signed in' })
+    if (agentMe.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    return handleAgentRun(req, res, agentMe)
+  }
 
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })

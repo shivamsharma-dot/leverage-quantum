@@ -1,0 +1,24 @@
+name: Marketing Performance Agent
+
+on:
+  schedule:
+    # 8:00 AM IST daily -- same cron-secret-gated pattern as the other scheduled reports.
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run the Marketing Performance Agent
+        run: |
+          BODY=$(curl -s -w "\n%{http_code}" -X POST "https://quantum.leverageedu.com/api/ask-ai" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -d '{"mode":"agent_run","agent_id":"marketing_performance","triggered_by":"cron"}')
+          STATUS=$(echo "$BODY" | tail -n1)
+          JSON=$(echo "$BODY" | sed '$d')
+          echo "HTTP Status: $STATUS"
+          echo "Response: $JSON"
+          if [ "$STATUS" != "200" ]; then echo "::error::Agent run failed with status $STATUS"; exit 1; fi
+          echo "Marketing Performance Agent ran successfully."
