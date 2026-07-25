@@ -277,7 +277,41 @@ async function fetchOverallSheetRows() {
   })()
   return _overallSheetInflight
 }
+// Phase 0 of the agent-upgrade roadmap: overall_funnel_daily is an hourly-synced Supabase
+// cache of this same sheet, pre-aggregated to (campaign, date) by .github/workflows/
+// overall-funnel-sync.yml. Reading it is orders of magnitude faster than the live 26MB CSV
+// path below (a single indexed date-range query vs. downloading+parsing ~180k raw rows), so
+// it's tried first; the CSV path remains as a correctness-preserving fallback for as long as
+// the cache table doesn't exist yet or a query against it fails for any reason.
+async function fetchOverallCampaignTotalsFromCache({ since, until }) {
+  if (!SB_URL || !SB_KEY) return null
+  try {
+    const params = new URLSearchParams({ select: 'campaign,leads,queued,total_ql,spend', limit: '50000' })
+    if (since) params.set('date', `gte.${since}`)
+    if (until) params.append('date', `lte.${until}`) // URLSearchParams keeps both 'date' entries -- PostgREST ANDs repeated keys
+    const r = await fetch(`${SB_URL}/rest/v1/overall_funnel_daily?${params.toString()}`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, signal: AbortSignal.timeout(8000)
+    })
+    if (!r.ok) return null
+    const rows = await r.json()
+    if (!Array.isArray(rows) || rows.length === 0) return null
+    const byCampaign = {}
+    for (const row of rows) {
+      const campaign = (row.campaign || '').trim()
+      if (!campaign) continue
+      const e = byCampaign[campaign] || { campaign, leads: 0, queued: 0, totalQL: 0, spend: 0 }
+      e.leads += Number(row.leads) || 0
+      e.queued += Number(row.queued) || 0
+      e.totalQL += Number(row.total_ql) || 0
+      e.spend += Number(row.spend) || 0
+      byCampaign[campaign] = e
+    }
+    return { byCampaign }
+  } catch { return null }
+}
 async function fetchOverallCampaignTotals({ since, until }) {
+  const cached = await fetchOverallCampaignTotalsFromCache({ since, until })
+  if (cached) return cached
   const sheet = await fetchOverallSheetRows()
   if (!sheet) return { error: 'Overall funnel sheet fetch failed (timed out or unreachable)' }
   const { h, rows } = sheet

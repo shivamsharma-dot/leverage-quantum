@@ -1,0 +1,144 @@
+name: Overall Funnel Cache Sync
+
+on:
+  schedule:
+    # Hourly -- this is the source Ask AI's contribution/attribution tool reads, so it
+    # shouldn't lag the live sheet by more than an hour.
+    - cron: '15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch, aggregate, and upsert the Overall PM funnel sheet
+        env:
+          SB_URL: https://tsyekthwthxszmsgqfej.supabase.co
+          SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          python3 << 'PYEOF'
+          import json, urllib.request, re, os, time
+          from datetime import datetime
+
+          SB_URL = os.environ['SB_URL']
+          SB_KEY = os.environ['SB_KEY']
+          # Same sheet api/ask-ai.js and OverallDashboard.jsx read (the admin-configured
+          # override, if any, is resolved by those two at request time -- this scheduled
+          # sync intentionally uses the well-known default sheet directly, matching the
+          # convention of every other sync/health-check workflow in this repo).
+          SHEET_URL = 'https://docs.google.com/spreadsheets/d/1kaoWMGBbttOtaeVfaSXhrxcs0_pe5xLX1tMuIG8mHG4/gviz/tq?tqx=out:csv&sheet=MainData'
+
+          MONTHS = {'jan':1,'feb':2,'mar':3,'apr':4,'may':5,'jun':6,'jul':7,'aug':8,'sep':9,'oct':10,'nov':11,'dec':12}
+
+          def split_csv_line(line):
+              out, cur, q = [], '', False
+              i = 0
+              while i < len(line):
+                  ch = line[i]
+                  if q:
+                      if ch == '"':
+                          if i + 1 < len(line) and line[i+1] == '"':
+                              cur += '"'; i += 1
+                          else:
+                              q = False
+                      else:
+                          cur += ch
+                  else:
+                      if ch == '"': q = True
+                      elif ch == ',': out.append(cur); cur = ''
+                      else: cur += ch
+                  i += 1
+              out.append(cur)
+              return out
+
+          def parse_date(s):
+              s = (s or '').strip()
+              m = re.match(r'^(\d{1,2})-([A-Za-z]{3})-(\d{4})$', s)
+              if not m: return None
+              mon = MONTHS.get(m.group(2).lower())
+              if not mon: return None
+              try:
+                  return datetime(int(m.group(3)), mon, int(m.group(1))).strftime('%Y-%m-%d')
+              except ValueError:
+                  return None
+
+          def num(v, is_float=False):
+              s = re.sub(r'[^0-9.\-]' if is_float else r'[^0-9\-]', '', str(v or '0'))
+              try:
+                  return float(s) if is_float else int(s or 0)
+              except ValueError:
+                  return 0
+
+          print('Fetching sheet...')
+          req = urllib.request.Request(SHEET_URL, headers={'User-Agent': 'Mozilla/5.0'})
+          with urllib.request.urlopen(req, timeout=120) as r:
+              text = r.read().decode('utf-8', errors='replace')
+          lines = [l for l in text.split('\n') if l.strip()]
+          if not lines or lines[0].strip().startswith('<'):
+              raise SystemExit('Sheet fetch returned HTML instead of CSV -- aborting sync.')
+
+          header = [h.strip().strip('"').lower() for h in split_csv_line(lines[0])]
+          def idx(name):
+              try: return header.index(name)
+              except ValueError: return -1
+
+          di, ci = idx('lead_date'), idx('campaign_name')
+          li, fq, qf, qs = idx('total leads generated'), idx('floor_queued'), idx('queued on futwork'), idx('queued on superbot')
+          hql, faq, saq, sp = idx('futwork human ql'), idx('futwork ai ql'), idx('superbot ai ql'), idx('total_spends')
+          ap, of, de, ra = idx('total apps'), idx('total offers'), idx('total deposits'), idx('total raus')
+
+          agg = {}
+          for line in lines[1:]:
+              cols = split_csv_line(line)
+              if ci < 0 or ci >= len(cols): continue
+              campaign = cols[ci].strip().strip('"')
+              if not campaign: continue
+              d = parse_date(cols[di].strip('"')) if 0 <= di < len(cols) else None
+              if not d: continue
+              key = (campaign, d)
+              e = agg.get(key)
+              if not e:
+                  e = {'campaign': campaign, 'date': d, 'leads': 0, 'queued': 0, 'total_ql': 0, 'spend': 0.0, 'apps': 0, 'offers': 0, 'deposits': 0, 'raus': 0}
+                  agg[key] = e
+              g = lambda i: cols[i] if 0 <= i < len(cols) else '0'
+              e['leads'] += num(g(li))
+              e['queued'] += num(g(fq)) + num(g(qf)) + num(g(qs))
+              e['total_ql'] += num(g(hql)) + num(g(faq)) + num(g(saq))
+              e['spend'] += num(g(sp), True)
+              e['apps'] += num(g(ap))
+              e['offers'] += num(g(of))
+              e['deposits'] += num(g(de))
+              e['raus'] += num(g(ra))
+
+          rows = list(agg.values())
+          now_iso = datetime.utcnow().isoformat() + 'Z'
+          for row in rows:
+              row['synced_at'] = now_iso
+          print('Aggregated', len(lines) - 1, 'raw rows into', len(rows), '(campaign, date) rows.')
+
+          BATCH = 500
+          for i in range(0, len(rows), BATCH):
+              batch = rows[i:i+BATCH]
+              req = urllib.request.Request(
+                  SB_URL + '/rest/v1/overall_funnel_daily?on_conflict=campaign,date',
+                  data=json.dumps(batch).encode('utf-8'),
+                  method='POST',
+                  headers={
+                      'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+                      'Content-Type': 'application/json',
+                      'Prefer': 'resolution=merge-duplicates,return=minimal',
+                  },
+              )
+              for attempt in range(3):
+                  try:
+                      with urllib.request.urlopen(req, timeout=30) as r:
+                          r.read()
+                      break
+                  except Exception as e:
+                      print('batch', i, 'attempt', attempt, 'failed:', e)
+                      if attempt == 2: raise
+                      time.sleep(2 * (attempt + 1))
+              print('Upserted batch', i, '-', i + len(batch), 'of', len(rows))
+
+          print('Sync complete.')
+          PYEOF
