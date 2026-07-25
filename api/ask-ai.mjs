@@ -1,6 +1,14 @@
-// api/ask-ai.js -- Ask AI - Production - Claude-powered - SSE streaming - Meta/Google/CRM Tool Use
+// api/ask-ai.mjs -- Ask AI - Production - Claude-powered - SSE streaming - Meta/Google/CRM Tool Use
 
-// auth helpers are loaded via dynamic import() inside handler (ask-ai.js is bundled as CommonJS; static import of the .mjs ESM file crashes with ERR_REQUIRE_ESM)
+// Renamed .js -> .mjs (2026-07-25): as a .js file with no "type":"module" in package.json,
+// Vercel decided whether to ESM-transform this file via a fragile build-time heuristic --
+// it silently stopped doing so on one deploy (no code change explains it), crashing every
+// request with "SyntaxError: Unexpected token 'export'" in the CJS loader. A real .mjs file
+// is unambiguously ESM to Node/Vercel with no heuristic involved. Auth helpers are now a
+// normal static import (the old dynamic import() was itself a workaround for the .js/CJS
+// ambiguity, no longer needed now that this file is genuinely ESM).
+
+import { getSessionUser, canAccessDashboard } from '../lib/auth.mjs'
 
 // analyze_campaign_contribution's underlying sheet fetch alone can take up to 45s (see
 // fetchOverallSheetRows) on top of multiple Claude round-trips -- match send-report.js's own
@@ -856,7 +864,7 @@ DIAGNOSIS DISCIPLINE (why did it change / find underperformers)
 
 When a user asks you to diagnose, explain a change, or find underperformers:
 1. Quantify the metric delta between the two relevant periods (state both numbers and the % change).
-2. If the question is about Total QL / qualified leads changing (the most common "why did X change" question), call analyze_campaign_contribution FIRST with the two periods -- it deterministically computes per-campaign delta, % share of change, Channel, QL rate, CPQL, and a Scale/Protect/Reduce/Investigate flag with cited evidence (each campaign judged against its own channel's median, not a global one), across ALL channels in one call, or pass `channel` to scope it to just one. Do not hand-diff two raw query_meta_ads/query_google_ads pulls yourself when this tool answers the question -- it is more reliable and cheaper than doing the arithmetic in your head across tool calls.
+2. If the question is about Total QL / qualified leads changing (the most common "why did X change" question), call analyze_campaign_contribution FIRST with the two periods -- it deterministically computes per-campaign delta, % share of change, Channel, QL rate, CPQL, and a Scale/Protect/Reduce/Investigate flag with cited evidence (each campaign judged against its own channel's median, not a global one), across ALL channels in one call, or pass the channel param to scope it to just one. Do not hand-diff two raw query_meta_ads/query_google_ads pulls yourself when this tool answers the question -- it is more reliable and cheaper than doing the arithmetic in your head across tool calls.
 3. For anything analyze_campaign_contribution doesn't cover (spend/CTR/CPM diagnostics, single-platform-only questions), use the query tools to attribute the delta to the top 3 campaigns/adsets/breakdowns, ranked by how much each contributed to the change.
 4. Distinguish what merely correlates from the likely driver - do not present a coincidence as a cause.
 5. Close with one specific, prioritized action, using the tool's own action/evidence fields when available rather than inventing your own recommendation.
@@ -1103,7 +1111,6 @@ async function handleAgentRun(req, res, me) {
 
 // -- handler -------------------------------------------------------------------
 export default async function handler(req, res) {
-  const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
