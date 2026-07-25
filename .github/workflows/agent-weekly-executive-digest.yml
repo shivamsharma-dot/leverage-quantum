@@ -1,0 +1,25 @@
+name: Weekly Executive Digest Agent
+
+on:
+  schedule:
+    # 8:00 AM IST every Monday (30 2 * * 1 UTC) -- same cron-secret-gated pattern
+    # as the other scheduled agent/report workflows.
+    - cron: '30 2 * * 1'
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run the Weekly Executive Digest Agent
+        run: |
+          BODY=$(curl -s -w "\n%{http_code}" -X POST "https://quantum.leverageedu.com/api/ask-ai" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -d '{"mode":"agent_run","agent_id":"weekly_executive_digest","triggered_by":"cron"}')
+          STATUS=$(echo "$BODY" | tail -n1)
+          JSON=$(echo "$BODY" | sed '$d')
+          echo "HTTP Status: $STATUS"
+          echo "Response: $JSON"
+          if [ "$STATUS" != "200" ]; then echo "::error::Agent run failed with status $STATUS"; exit 1; fi
+          echo "Weekly Executive Digest Agent ran successfully."

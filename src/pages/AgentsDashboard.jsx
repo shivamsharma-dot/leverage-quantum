@@ -14,6 +14,7 @@ async function sbGet(t, q = '') { try { const r = await fetch(`${SB_URL}/rest/v1
 // bits (label/description/schedule) live here; the actual prompt/logic lives server-side.
 const AGENTS = [
   { id: 'marketing_performance', label: 'Marketing Performance Agent', description: 'Compares the last 7 days of Total QL against the prior 7 days, ranks the campaigns driving the change, and recommends one prioritized action.', schedule: 'Daily at 8:00 AM IST' },
+  { id: 'weekly_executive_digest', label: 'Weekly Executive Digest Agent', description: 'A broader 30-day-vs-prior-30-day synthesis across every channel -- trajectory, per-channel performance, biggest wins/risks, and one forward-looking strategic recommendation for the coming month.', schedule: 'Weekly, Monday 8:00 AM IST' },
 ]
 
 // Minimal, standalone sibling of AskAI.jsx's Markdown() -- kept local rather than

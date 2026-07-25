@@ -109,6 +109,24 @@ async function safeFetch(url) {
   } catch { return null }
 }
 
+// Phase 2 of the agent-upgrade roadmap: an admin-editable "how the business talks
+// about itself" block (Settings > Ask AI > Business Context), folded into every
+// system prompt so narrative copy reflects it -- deliberately NOT the app's own
+// fixed navy/blue/cyan/green brand identity (see DESIGN_SYSTEM.md), which stays
+// hardcoded on purpose.
+async function getBusinessContext() {
+  if (!SB_URL || !SB_KEY) return null
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/app_preferences?select=value&key=eq.business_context&limit=1`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }, signal: AbortSignal.timeout(5000)
+    })
+    if (!r.ok) return null
+    const d = await r.json()
+    const v = d && d[0] && d[0].value
+    return (v && typeof v === 'object') ? v : null
+  } catch { return null }
+}
+
 async function getSheetOverride(key) {
   if (!SB_URL || !SB_KEY) return null
   try {
@@ -814,6 +832,10 @@ async function buildSystemPrompt(metaToken, memories) {
   const memoriesSection = memories?.length
     ? `\n=== REMEMBERED CONTEXT (from previous sessions) ===\n${memories.map(m=>`- ${m}`).join('\n')}`
     : ''
+  const biz = await getBusinessContext()
+  const businessSection = (biz && (biz.descriptor || biz.voice || (biz.messaging || []).length))
+    ? `\n=== BUSINESS CONTEXT (admin-configured, Settings > Ask AI) ===\nUse this to shape tone and phrasing only -- never as a source of numbers or facts.\n${biz.descriptor ? `Business: ${biz.descriptor}\n` : ''}${biz.voice ? `Voice/mission: ${biz.voice}\n` : ''}${(biz.messaging || []).length ? `Key messaging:\n${biz.messaging.map(m => `- ${m}`).join('\n')}` : ''}`
+    : ''
 
   return `You are the Chief Marketing Intelligence Officer of Leverage Edu, built into Leverage Quantum, their internal analytics platform.
 
@@ -826,6 +848,7 @@ You have 40 years of combined expertise across:
 
 Today: ${today}
 ${memoriesSection}
+${businessSection}
 
 ===============================================
 LIVE DATA -- LEVERAGE EDU MARKETING
@@ -1018,6 +1041,21 @@ const AGENTS = {
       return {
         since: iso(since), until: iso(until),
         text: `Run today's autonomous marketing performance review. Compare ${iso(since)} to ${iso(until)} against the prior 7 days (${iso(prevSince)} to ${iso(prevUntil)}) using the campaign contribution tool (no channel filter, so it covers every channel at once) as your primary lens, and pull whichever Meta/Google/CRM tools you need to substantiate it. Produce a report with exactly these three sections in markdown: "## Executive Summary" (2-3 sentences on the headline Total QL movement and why), "## Top Movers" (a table: Channel, Campaign, QL delta, % of change, Action, one-line evidence -- use the tool's own Channel and Action fields for every row, since each campaign is judged against its own channel's median, not a global one), and "## Recommended Action" (ONE prioritized, concrete action -- not a list of options). Be quantitative and specific everywhere; do not hedge with vague language.`,
+      }
+    },
+  },
+  weekly_executive_digest: {
+    label: 'Weekly Executive Digest Agent',
+    buildPrompt() {
+      const iso = d => d.toISOString().slice(0, 10)
+      const today = new Date()
+      const until = new Date(today); until.setDate(until.getDate() - 1) // yesterday -- today's data is still incomplete
+      const since = new Date(until); since.setDate(since.getDate() - 29)
+      const prevUntil = new Date(since); prevUntil.setDate(prevUntil.getDate() - 1)
+      const prevSince = new Date(prevUntil); prevSince.setDate(prevSince.getDate() - 29)
+      return {
+        since: iso(since), until: iso(until),
+        text: `Run this week's autonomous executive digest -- a broader, strategic synthesis, not a daily tactical readout. Compare the last 30 days (${iso(since)} to ${iso(until)}) against the prior 30 days (${iso(prevSince)} to ${iso(prevUntil)}) using the campaign contribution tool (no channel filter) as your primary lens for QL movement, and pull whichever Meta/Google/CRM tools you need to round out the picture (spend efficiency, creative fatigue signals, cross-channel comparison). Produce a report with exactly these sections in markdown: "## 30-Day Executive Summary" (3-4 sentences on the month-over-month trajectory in Total QL, spend, and efficiency -- describe the trend, not just a single snapshot), "## Channel Performance" (a table: Channel, Spend, QL, QL rate, CPQL, one-line trend note per channel), "## Biggest Wins and Risks" (2-3 bullets, each naming a specific campaign or channel with a real number, never a vague statement), and "## Strategic Recommendation" (ONE forward-looking, budget-or-priority-level recommendation for the coming month -- not a daily tactical fix). Be quantitative and specific everywhere; do not hedge with vague language.`,
       }
     },
   },

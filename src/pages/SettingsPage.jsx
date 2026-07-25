@@ -610,6 +610,34 @@ export default function SettingsPage() {
       setTimeout(() => setAskaiBudgetMsg(null), 3000)
     }
   }
+
+  // Business context (Phase 2 of the agent-upgrade roadmap): mission/voice/messaging
+  // that gets folded into Ask AI's + every agent's system prompt, so narrative copy
+  // (Executive Summary wording, tone) reflects how the business actually talks about
+  // itself, without touching the app's own fixed navy/blue/cyan/green brand identity.
+  const [bizDescriptor, setBizDescriptor] = useState('')
+  const [bizVoice, setBizVoice] = useState('')
+  const [bizMessaging, setBizMessaging] = useState('')
+  const [bizSaving, setBizSaving] = useState(false)
+  const [bizMsg, setBizMsg] = useState(null)
+  const saveBusinessContext = async () => {
+    setBizSaving(true); setBizMsg(null)
+    try {
+      const value = {
+        descriptor: bizDescriptor.trim(),
+        voice: bizVoice.trim(),
+        messaging: bizMessaging.split('\n').map(l => l.trim()).filter(Boolean),
+      }
+      const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'business_context', value }) })
+      if (!r.ok) throw new Error('Save failed')
+      setBizMsg({ type: 'ok', text: 'Saved' })
+    } catch (e) {
+      setBizMsg({ type: 'err', text: e.message })
+    } finally {
+      setBizSaving(false)
+      setTimeout(() => setBizMsg(null), 3000)
+    }
+  }
 // Published-sheet connector (admin-configurable CSV URLs)
     const [sheetUrls, setSheetUrls] = useState({})
     const [sheetInputs, setSheetInputs] = useState({})
@@ -796,6 +824,11 @@ export default function SettingsPage() {
                   if (Array.isArray(pf.custom_data_sources)) setCustomSources(pf.custom_data_sources)
                   if (pf.source_health_schedule) setHealthSchedule(pf.source_health_schedule)
                   if (pf.ask_ai_monthly_budget_usd != null) setAskaiBudgetInput(String(pf.ask_ai_monthly_budget_usd))
+                  if (pf.business_context && typeof pf.business_context === 'object') {
+                    setBizDescriptor(pf.business_context.descriptor || '')
+                    setBizVoice(pf.business_context.voice || '')
+                    setBizMessaging(Array.isArray(pf.business_context.messaging) ? pf.business_context.messaging.join('\n') : '')
+                  }
                   if (pf.affiliate_spend_manual && typeof pf.affiliate_spend_manual === 'object') setAffiliateSpend(pf.affiliate_spend_manual)
       })
       .catch(() => {})
@@ -2624,6 +2657,36 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 {askaiDaily.length === 0 && !askaiUsageLoading && (
                   <div className={styles.empty} style={{ marginTop: 16 }}>No usage logged yet — send a message in Ask AI to start tracking.</div>
                 )}
+              </div>
+
+              <div className={styles.card}>
+                <div className={styles.activityHeader}>
+                  <div>
+                    <h3 className={styles.cardTitle}>Business Context</h3>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>Folded into Ask AI's and every agent's system prompt so narrative copy reflects how the business actually talks about itself — this does not change the app's own fixed brand colors/fonts (see Appearance), only the words Ask AI and the agents write.</p>
+                  </div>
+                  <Button size="sm" onClick={saveBusinessContext} disabled={bizSaving}>
+                    {bizSaving ? 'Saving…' : 'Save'}
+                  </Button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 4 }}>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Business descriptor</label>
+                    <input type="text" value={bizDescriptor} onChange={e => setBizDescriptor(e.target.value)} placeholder="e.g. Leverage Edu — study abroad admissions counselling"
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif" }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Brand voice / mission</label>
+                    <textarea value={bizVoice} onChange={e => setBizVoice(e.target.value)} rows={3} placeholder="e.g. Direct and data-led, never hedging; every recommendation should be one concrete action, not a menu of options."
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", resize: 'vertical' }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>Key messaging lines (one per line)</label>
+                    <textarea value={bizMessaging} onChange={e => setBizMessaging(e.target.value)} rows={3} placeholder={'e.g. We optimize for qualified leads, not raw volume.\nCPQL trumps CPL in every recommendation.'}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", resize: 'vertical' }} />
+                  </div>
+                  {bizMsg && <span style={{ fontSize: 11, fontWeight: 700, color: bizMsg.type === 'err' ? '#1F3C84' : '#15803D' }}>{bizMsg.type === 'err' ? '✕ ' : '✓ '}{bizMsg.text}</span>}
+                </div>
               </div>
 
               <div className={styles.card}>
