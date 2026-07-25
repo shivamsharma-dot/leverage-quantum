@@ -16,8 +16,17 @@ export const NAV = [
     label: 'Intelligence',
     items: [
       { to: '/ask-ai', icon: <AskAIIcon />, label: 'Ask AI', end: true },
-      { to: '/dashboard/agents', icon: <AgentsIcon />, label: 'Agents', end: false },
-      { to: '/dashboard/marketing-performance', icon: <ChartIcon />, label: 'Marketing Performance', end: false },
+      {
+        to: '/dashboard/agents',
+        icon: <AgentsIcon />,
+        label: 'Agents',
+        defaultTo: '/dashboard/agents',
+        end: false,
+        subItems: [
+          { to: '/dashboard/agents', label: 'Agent Runs', matchType: 'route' },
+          { to: '/dashboard/marketing-performance', label: 'Marketing Performance', matchType: 'route' },
+        ]
+      },
     ]
   },
   {
@@ -114,7 +123,7 @@ export const PAGE_LIST = [
   { id:'referral', label:'Referral', path:'/dashboard/referral', adminOnly:false },
   { id:'leads_assigned', label:'Leads Assigned', path:'/dashboard/leads-assigned', adminOnly:false },
   { id:'ask_ai',         label:'Ask AI',      path:'/ask-ai',                  adminOnly:true  },
-  { id:'agents',         label:'Agents',      path:'/dashboard/agents',        adminOnly:true  },
+  { id:'agents',         label:'Agent Runs',  path:'/dashboard/agents',        adminOnly:true  },
   { id:'marketing_performance', label:'Marketing Performance', path:'/dashboard/marketing-performance', adminOnly:true },
   { id:'settings',     label:'Settings',     path:'/settings',              adminOnly:true  },
 ]
@@ -147,7 +156,7 @@ const ICON_MAP = {
   'Bing Ads': <BingAdsIcon/>,
   'Referral': <ReferralIcon/>, 'Leads Assigned': <LeadsAssignedIcon/>,
   'WhatsApp': <WhatsAppIcon/>,
-  'Ask AI': <AskAIIcon/>, 'Settings': <SettingsIcon/>,
+  'Ask AI': <AskAIIcon/>, 'Settings': <SettingsIcon/>, 'Agents': <AgentsIcon/>,
   // Meta Ads / Google Ads sub-items (flyout menu icons)
   'Creatives': <ImageIcon/>, 'Campaigns': <TargetIcon/>, 'Ads': <MegaphoneIcon/>,
   'Keywords': <TagIcon/>, 'Search Terms': <SearchIcon/>, 'Ad Groups': <LayersIcon/>,
@@ -216,6 +225,7 @@ export default function Sidebar() {
   const isMetaParentActive = location.pathname.startsWith('/dashboard/meta-ads')
   const isGoogleParentActive = location.pathname.startsWith('/dashboard/google-ads')
   const isQlOpsParentActive = location.pathname === '/dashboard/lq-ops' || location.pathname === '/dashboard/lq-ops-monthly' || location.pathname === '/dashboard/lq-ops-detail' || location.pathname === '/dashboard/lq-ops-ai-detail' || location.pathname === '/dashboard/lq-ops-human-unassigned' || location.pathname === '/dashboard/lq-ops-ai-unassigned'
+  const isAgentsParentActive = location.pathname === '/dashboard/agents' || location.pathname === '/dashboard/marketing-performance'
 
   const [metaExpanded, setMetaExpanded] = React.useState(isMetaParentActive)
   React.useEffect(() => { if (isMetaParentActive) setMetaExpanded(true) }, [isMetaParentActive])
@@ -226,8 +236,11 @@ export default function Sidebar() {
   const [qlOpsExpanded, setQlOpsExpanded] = React.useState(isQlOpsParentActive)
   React.useEffect(() => { if (isQlOpsParentActive) setQlOpsExpanded(true) }, [isQlOpsParentActive])
 
-  const getExpanded = (label) => label === 'Meta Ads' ? metaExpanded : label === 'Google Ads' ? googleExpanded : label === 'QL Ops' ? qlOpsExpanded : false
-  const setExpanded = (label) => label === 'Meta Ads' ? setMetaExpanded : label === 'Google Ads' ? setGoogleExpanded : label === 'QL Ops' ? setQlOpsExpanded : () => {}
+  const [agentsExpanded, setAgentsExpanded] = React.useState(isAgentsParentActive)
+  React.useEffect(() => { if (isAgentsParentActive) setAgentsExpanded(true) }, [isAgentsParentActive])
+
+  const getExpanded = (label) => label === 'Meta Ads' ? metaExpanded : label === 'Google Ads' ? googleExpanded : label === 'QL Ops' ? qlOpsExpanded : label === 'Agents' ? agentsExpanded : false
+  const setExpanded = (label) => label === 'Meta Ads' ? setMetaExpanded : label === 'Google Ads' ? setGoogleExpanded : label === 'QL Ops' ? setQlOpsExpanded : label === 'Agents' ? setAgentsExpanded : () => {}
 
   const toggle = () => {
     const next = !collapsed
@@ -293,7 +306,8 @@ export default function Sidebar() {
   const parentActiveFor = (item) =>
     item.label === 'Meta Ads' ? isMetaParentActive :
     item.label === 'Google Ads' ? isGoogleParentActive :
-    item.label === 'QL Ops' ? isQlOpsParentActive : false
+    item.label === 'QL Ops' ? isQlOpsParentActive :
+    item.label === 'Agents' ? isAgentsParentActive : false
 
   // Collapsed-rail flyout: hovering a parent item with subItems opens a fixed-position
   // panel listing its sub-pages, since the icon-only rail has no room to show them inline.
@@ -343,7 +357,7 @@ export default function Sidebar() {
             {group.label !== 'Intelligence' && <p className={styles.groupLabel}>{group.label}</p>}
             {group.items.filter(item => groupVisible(item)).map(item => {
               if (item.subItems) {
-                const parentActive = item.label === 'Meta Ads' ? isMetaParentActive : item.label === 'Google Ads' ? isGoogleParentActive : item.label === 'QL Ops' ? isQlOpsParentActive : false
+                const parentActive = parentActiveFor(item)
                 return (
                   <div key={item.label}>
                     <button
