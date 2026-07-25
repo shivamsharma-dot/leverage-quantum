@@ -115,7 +115,7 @@ async function fetchRows() {
 function FilterDropdown({ label, value, options, open, onToggle, onSelect }) {
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
-      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 7, border: '0.5px solid ' + (open ? C.blue : C.border), background: 'var(--card)', cursor: 'pointer', fontSize: 11, fontWeight: 500, fontFamily: FONT, color: C.text, whiteSpace: 'nowrap' }}>
+      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 8, border: '0.5px solid ' + (open ? C.blue : C.border), background: 'var(--card)', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT, color: C.text, whiteSpace: 'nowrap' }}>
         <span style={{ color: C.muted, fontWeight: 600 }}>{label}:</span>
         <span style={{ fontWeight: 600 }}>{value === 'all' ? 'All' : value}</span>
         <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
@@ -324,7 +324,7 @@ export default function AIUnassignedDashboard() {
                 {[['LD', 'Last Day'], ['L7D', 'Last 7D'], ['MTD', 'MTD']].map(([key, lbl]) => (
                   <button key={key} onClick={() => { setDatePreset(key); setSelMonth(''); setCustomFrom(''); setCustomTo(''); setShowCustom(false); setPage(1) }}
                     style={{
-                      padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
+                      padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT,
                       background: datePreset === key ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'transparent',
                       color: datePreset === key ? '#fff' : '#64748B',
                       boxShadow: datePreset === key ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
@@ -340,7 +340,7 @@ export default function AIUnassignedDashboard() {
                 }} />
               <button onClick={() => { setShowCustom(v => !v); setDatePreset('custom'); setSelMonth('') }}
                 style={{
-                  padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
+                  padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT,
                   background: datePreset === 'custom' ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'transparent',
                   color: datePreset === 'custom' ? '#fff' : '#64748B',
                 }}>Custom</button>

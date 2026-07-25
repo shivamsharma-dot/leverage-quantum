@@ -265,11 +265,11 @@ const Dropdown = ({ options, value, onChange, label, minWidth = 120 }) => {
           onClick={() => setOpen(v => !v)}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            padding: '6px 10px 6px 12px', borderRadius: 8,
+            padding: '7px 14px', borderRadius: 8,
             border: `0.5px solid ${open ? C.navy : C.border}`,
             background: open ? C.navyBg : 'var(--card)',
             color: C.text, cursor: 'pointer', fontFamily: FONT,
-            fontSize: 12, fontWeight: 600, minWidth,
+            fontSize: 12.5, fontWeight: 700, minWidth,
             boxShadow: open ? `0 0 0 3px rgba(31,60,132,0.08)` : 'none',
             transition: 'all .15s', whiteSpace: 'nowrap',
           }}>
@@ -1250,8 +1250,8 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                       onMouseEnter={() => setHoveredPreset(key)}
                       onMouseLeave={() => setHoveredPreset(null)}
                       style={{
-                        padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                        fontSize: 11.5, fontWeight: 700, fontFamily: FONT,
+                        padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                        fontSize: 12.5, fontWeight: 700, fontFamily: FONT,
                         background: activeFilter==='custom' ? 'transparent' : datePreset === key ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent',
                         color: activeFilter==='custom' ? '#CBD5E1' : datePreset === key ? '#fff' : '#64748B',
                         boxShadow: activeFilter==='custom' ? 'none' : datePreset === key ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
@@ -1303,11 +1303,11 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
             {view !== 'monthly' && (<div style={{ position: 'relative' }}>
               <button onClick={() => { setShowCustom(v => !v); if (!showCustom) { setDatePreset('month') } }}
                 style={{
-                  padding: '6px 11px', borderRadius: 8,
+                  padding: '7px 14px', borderRadius: 8,
                   border: `0.5px solid ${datePreset==='custom'?C.navy:C.border}`,
                   background: datePreset==='custom'?C.navyBg:'var(--card)',
                   color: datePreset==='custom'?C.navy:C.sub,
-                  fontSize: 11.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer',
+                  fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: 5,
                   boxShadow: showCustom?`0 0 0 3px rgba(31,60,132,0.08)`:'none',
                   transition: 'all .15s',
@@ -1348,11 +1348,11 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
               <div style={{ position: 'relative' }}>
                 <button onClick={() => setShowMCustom(s => !s)}
                   style={{
-                    padding: '7px 12px', borderRadius: 8,
+                    padding: '7px 14px', borderRadius: 8,
                     border: `0.5px solid ${mDatePreset === 'custom' ? C.navy : C.border}`,
                     background: mDatePreset === 'custom' ? C.navyBg : 'var(--card)',
                     color: mDatePreset === 'custom' ? C.navy : C.sub,
-                    fontSize: 11.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer',
+                    fontSize: 12.5, fontWeight: 700, fontFamily: FONT, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: 5,
                     boxShadow: showMCustom ? `0 0 0 3px rgba(31,60,132,0.08)` : 'none',
                     transition: 'all .15s',
