@@ -987,9 +987,18 @@ function CreativesTab({ data, token }) {
                   <InlineLoader label="Loading CRM/QL data" height={104} />
                 </div>
               ) : (
-                <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:14,marginBottom:18 }}>
-                  {crmKpis.map(KpiCard)}
-                </div>
+                <>
+                  <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:14,marginBottom:crmSummary.hasCrm?18:8 }}>
+                    {crmKpis.map(KpiCard)}
+                  </div>
+                  {!crmSummary.hasCrm && (
+                    <div style={{ marginBottom:18, padding:'10px 14px', borderRadius:10, background:'#F0F7FC', border:'1px solid #D7ECF7', fontSize:12, color:'#1F3C84', lineHeight:1.5 }}>
+                      {crmSummary.crmTotal > 0
+                        ? `${crmSummary.crmTotal.toLocaleString('en-IN')} CRM/QL rows exist in the source sheet for ${crmSummary.since||'this period'} to ${crmSummary.until||'this period'}, but none matched any currently loaded ad by name (${crmSummary.crmNamesNoMeta.toLocaleString('en-IN')} sheet names have no matching ad). This looks like a naming mismatch, not missing data.`
+                        : `No CRM/QL data for ${crmSummary.since||'this period'} to ${crmSummary.until||'this period'} — the source sheet has no rows in this window. This is expected if the sheet hasn't been updated past this range yet; it is not a bug in this page.`}
+                    </div>
+                  )}
+                </>
               )}
             </>
           )
@@ -1685,8 +1694,9 @@ export default function MetaAdsDashboard() {
   const crmData = useMemo(() => {
     if(!data) return data;
     const byName = (crmMap && crmMap.byName) || {};
-    // FW_Human_QL_Count/FW_AI_QL_Count -- all-time, per-ad-name constants (never date-filtered,
-    // see api/crm-leads.js). Attached per-ad and rolled up to campaigns exactly like crmLeads.
+    // humanQL/aiQL are summed and date-filtered by since/until server-side exactly like crmLeads
+    // (see api/crm-leads.js) -- NOT all-time constants. Attached per-ad and rolled up to campaigns
+    // exactly like crmLeads.
     const humanQLByName = (crmMap && crmMap.humanQL) || {};
     const aiQLByName = (crmMap && crmMap.aiQL) || {};
     const ads = (data.ads||[]).map(a => {
