@@ -1,5 +1,7 @@
 import { GoogleLogin } from '@react-oauth/google'
 import styles from '../pages/LoginPage.module.css'
+// canonical logo geometry -- never hand-roll the mark, see shared/brandLogo.mjs
+import { BRAND_LOGO_BARS, BRAND_LOGO_VIEWBOX, BRAND_LOGO_RX } from '../../shared/brandLogo.mjs'
 
 const ALLOWED_DOMAIN = 'leverageedu.com'
 
@@ -436,20 +438,38 @@ export default function LoginScene({
         </div>
       )
     }
-    case 21: // ambient aurora -- soft drifting brand-color light behind a glassy centered card
+    case 21: // aurora glass -- flowing brand aurora behind a glass card. See the
+             // long note above .lAuroraScene in LoginPage.module.css for the
+             // opening sequence this is built around.
       return (
         <div className={styles.lAuroraScene}>
-          <div className={styles.lAuroraOrb} aria-hidden="true" />
-          <div className={`${styles.lAuroraOrb} ${styles.lAuroraOrb2}`} aria-hidden="true" />
-          <div className={`${styles.lAuroraOrb} ${styles.lAuroraOrb3}`} aria-hidden="true" />
-          <div className={styles.lAuroraFade} aria-hidden="true" />
+          <div className={styles.lAuroraField} aria-hidden="true">
+            <div className={`${styles.lAuroraRib} ${styles.lAuroraR1}`}><span /></div>
+            <div className={`${styles.lAuroraRib} ${styles.lAuroraR2}`}><span /></div>
+            <div className={`${styles.lAuroraRib} ${styles.lAuroraR3}`}><span /></div>
+            <div className={`${styles.lAuroraRib} ${styles.lAuroraR4}`}><span /></div>
+          </div>
+          <div className={styles.lAuroraVeil} aria-hidden="true" />
           <div className={styles.lAuroraCard}>
-            <div className={styles.lAuroraLogoWrap}>
-              <span className={styles.lAuroraGlow} aria-hidden="true" />
-              <span className={styles.lAuroraIconBox}>{brandLogo(false)}</span>
+            <div className={styles.lAuroraTile}>
+              <svg className={styles.lAuroraLogo} width="64" height="64" viewBox={BRAND_LOGO_VIEWBOX} fill="none" role="img" aria-label="Quantum">
+                {/* silhouette: the mark is present from the first frame at full
+                    height, so nothing ever assembles or jumps */}
+                {BRAND_LOGO_BARS.map((b, i) => (
+                  <rect key={`ghost-${i}`} x={b.x} y={b.y} width={b.w} height={b.h} rx={BRAND_LOGO_RX} fill={b.color} fillOpacity="0.15" />
+                ))}
+                {/* real colour rises through each bar, green -> blue -> navy */}
+                {BRAND_LOGO_BARS.map((b, i) => (
+                  <rect
+                    key={`fill-${i}`}
+                    className={styles.lAuroraFill}
+                    x={b.x} y={b.y} width={b.w} height={b.h} rx={BRAND_LOGO_RX} fill={b.color}
+                    style={{ animationDelay: `${0.62 + i * 0.16}s` }}
+                  />
+                ))}
+              </svg>
             </div>
-            <h1 className={styles.lAuroraHeading}>Quantum</h1>
-            <p className={styles.lAuroraSub}>Marketing intelligence, unified.</p>
+            <p className={styles.lAuroraTag}>Internal analytics for the marketing team.</p>
             {errorBlock(true)}
             {googleBlock(false)}
             {footNote(true)}

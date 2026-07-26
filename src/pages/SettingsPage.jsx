@@ -28,7 +28,7 @@ const LOGIN_STYLE_NAMES = [
   'Dark console', 'Bento grid', 'Gradient orb', 'Top bar', 'Dot-grid pattern',
   'Testimonial split', 'Onboarding steps', 'Brand ribbon', 'Diagonal split', 'Floating cards',
   'Badge-topped', 'Illustration hero', 'Ghost dashboard', 'Dual action', 'Warm greeting',
-  'Ambient aurora',
+  'Aurora glass',
 ]
 // Which small layout "glyph" each of the 21 login variants gets in the picker
 // grid below -- grouped by structural family (several variants share a shape).
