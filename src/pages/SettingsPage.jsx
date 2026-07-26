@@ -28,14 +28,16 @@ const LOGIN_STYLE_NAMES = [
   'Dark console', 'Bento grid', 'Gradient orb', 'Top bar', 'Dot-grid pattern',
   'Testimonial split', 'Onboarding steps', 'Brand ribbon', 'Diagonal split', 'Floating cards',
   'Badge-topped', 'Illustration hero', 'Ghost dashboard', 'Dual action', 'Warm greeting',
+  'Ambient aurora',
 ]
-// Which small layout "glyph" each of the 20 login variants gets in the picker
+// Which small layout "glyph" each of the 21 login variants gets in the picker
 // grid below -- grouped by structural family (several variants share a shape).
 const LOGIN_FAMILY = [
   'dark-card', 'split', 'gradient', 'split', 'minimal',
   'console', 'split', 'minimal', 'minimal', 'dotted',
   'split', 'steps', 'ribbon', 'diagonal', 'ghost',
   'minimal', 'minimal', 'modal', 'minimal', 'minimal',
+  'aurora',
 ]
 
 // Small, cheap-to-render shape diagram conveying each login layout family at
@@ -106,6 +108,13 @@ function LoginLayoutGlyph({ family }) {
     <div style={{ ...base, background: light }}>
       <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,14,28,0.7)' }} />
       <div style={{ position: 'absolute', width: 20, height: 12, borderRadius: 4, background: 'rgba(255,255,255,0.92)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }} />
+    </div>
+  )
+  if (family === 'aurora') return (
+    <div style={{ ...base, background: '#F8F7F2' }}>
+      <div style={{ position: 'absolute', width: 26, height: 26, borderRadius: '50%', background: cyan, opacity: 0.35, filter: 'blur(6px)', top: -8, left: 2 }} />
+      <div style={{ position: 'absolute', width: 22, height: 22, borderRadius: '50%', background: blue, opacity: 0.3, filter: 'blur(6px)', bottom: -6, right: 4 }} />
+      <div style={{ position: 'absolute', width: 18, height: 11, borderRadius: 5, background: 'rgba(255,255,255,0.85)', border: '0.5px solid rgba(255,255,255,0.9)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', boxShadow: '0 2px 6px rgba(31,60,132,0.15)' }} />
     </div>
   )
   // 'minimal' (and fallback) -- content directly on a plain light background, no card.

@@ -436,6 +436,26 @@ export default function LoginScene({
         </div>
       )
     }
+    case 21: // ambient aurora -- soft drifting brand-color light behind a glassy centered card
+      return (
+        <div className={styles.lAuroraScene}>
+          <div className={styles.lAuroraOrb} aria-hidden="true" />
+          <div className={`${styles.lAuroraOrb} ${styles.lAuroraOrb2}`} aria-hidden="true" />
+          <div className={`${styles.lAuroraOrb} ${styles.lAuroraOrb3}`} aria-hidden="true" />
+          <div className={styles.lAuroraFade} aria-hidden="true" />
+          <div className={styles.lAuroraCard}>
+            <div className={styles.lAuroraLogoWrap}>
+              <span className={styles.lAuroraGlow} aria-hidden="true" />
+              <span className={styles.lAuroraIconBox}>{brandLogo(false)}</span>
+            </div>
+            <h1 className={styles.lAuroraHeading}>Quantum</h1>
+            <p className={styles.lAuroraSub}>Marketing intelligence, unified.</p>
+            {errorBlock(true)}
+            {googleBlock(false)}
+            {footNote(true)}
+          </div>
+        </div>
+      )
     case 20: // dynamic warm greeting
     default: {
       const hour = new Date().getHours()
