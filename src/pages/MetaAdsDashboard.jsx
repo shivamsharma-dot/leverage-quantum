@@ -998,6 +998,11 @@ function CreativesTab({ data, token }) {
                         : `No CRM/QL data for ${crmSummary.since||'this period'} to ${crmSummary.until||'this period'} — the source sheet has no rows in this window. This is expected if the sheet hasn't been updated past this range yet; it is not a bug in this page.`}
                     </div>
                   )}
+                  {crmSummary.hasCrm && crmSummary.crmNamesNoMeta > 0 && (crmSummary.humanQLSheetTotal + crmSummary.aiQLSheetTotal) > (crmSummary.humanQLTotal + crmSummary.aiQLTotal) && (
+                    <div style={{ marginBottom:18, padding:'10px 14px', borderRadius:10, background:'#F0F7FC', border:'1px solid #D7ECF7', fontSize:12, color:'#1F3C84', lineHeight:1.5 }}>
+                      {`Total QLs here (${(crmSummary.humanQLTotal+crmSummary.aiQLTotal).toLocaleString('en-IN')}) is lower than the source sheet's full total for this period (${(crmSummary.humanQLSheetTotal+crmSummary.aiQLSheetTotal).toLocaleString('en-IN')}) because ${crmSummary.crmNamesNoMeta.toLocaleString('en-IN')} of ${crmSummary.crmSheetNameCount.toLocaleString('en-IN')} sheet campaign names have no currently loaded ad to attach to (this page only loads a capped set of ads by spend). Not a bug — a known limitation of the current ad-fetch cap.`}
+                    </div>
+                  )}
                 </>
               )}
             </>
@@ -1718,13 +1723,28 @@ export default function MetaAdsDashboard() {
     const crmTotal = (crmMap && crmMap.total) || 0;
     let metaLeadsSum=0, matchedCrm=0, adsMatched=0, adsUnmatched=0, humanQLTotal=0, aiQLTotal=0;
     const metaNames = new Set();
+    const insightsMap = data.insightsMap || {};
     // QL totals summed ONLY over ads currently loaded/matched here (data.ads), not every distinct
     // ad name that has ever appeared in the whole CRM sheet -- humanQLByName/aiQLByName can contain
     // hundreds of ad names outside the current ad set (old ads, other date ranges), and summing all
     // of them produced a KPI total with no relationship to what's actually visible in the table.
-    ads.forEach(a => { metaLeadsSum += (a.leads||0); if(a.name) metaNames.add(a.name); if(a.crmLeads!=null){ adsMatched++; matchedCrm += a.crmLeads; } else { adsUnmatched++; } if(a.humanQL!=null) humanQLTotal+=a.humanQL; if(a.aiQL!=null) aiQLTotal+=a.aiQL; });
+    ads.forEach(a => {
+      // a.leads doesn't exist on raw ad objects -- it's only computed downstream in each Tab's own
+      // `processed` step from insightsMap/actions. Recompute the same way here so "vs X Meta" in the
+      // CRM Leads KPI card doesn't always read "vs 0 Meta".
+      const cur = insightsMap[a.id] || a.insights?.data?.[0] || {};
+      const adLeads = getAction(cur.actions || [], 'lead');
+      metaLeadsSum += adLeads;
+      if(a.name) metaNames.add(a.name); if(a.crmLeads!=null){ adsMatched++; matchedCrm += a.crmLeads; } else { adsUnmatched++; } if(a.humanQL!=null) humanQLTotal+=a.humanQL; if(a.aiQL!=null) aiQLTotal+=a.aiQL;
+    });
     let crmNamesNoMeta = 0; Object.keys(byName).forEach(nm => { if(!metaNames.has(nm)) crmNamesNoMeta++; });
-    const crmSummary = { crmTotal, matchedCrm, metaLeadsSum, adsMatched, adsUnmatched, crmNamesNoMeta, humanQLTotal, aiQLTotal, since:(crmMap&&crmMap.since)||null, until:(crmMap&&crmMap.until)||null, hasCrm: !!(crmMap && Object.keys(byName).length) };
+    // Full-sheet QL totals (every campaign name in the CRM sheet for this window, whether or not it
+    // currently has a matching loaded ad) -- used only to show how much humanQLTotal/aiQLTotal above
+    // are undercounting vs. the source sheet, e.g. when the ad-fetch cap misses lower-spend ads.
+    const humanQLSheetTotal = Object.values(humanQLByName).reduce((s,v)=>s+(v||0),0);
+    const aiQLSheetTotal = Object.values(aiQLByName).reduce((s,v)=>s+(v||0),0);
+    const crmSheetNameCount = Object.keys(byName).length;
+    const crmSummary = { crmTotal, matchedCrm, metaLeadsSum, adsMatched, adsUnmatched, crmNamesNoMeta, crmSheetNameCount, humanQLTotal, aiQLTotal, humanQLSheetTotal, aiQLSheetTotal, since:(crmMap&&crmMap.since)||null, until:(crmMap&&crmMap.until)||null, hasCrm: !!(crmMap && Object.keys(byName).length) };
     return { ...data, ads, campaigns, crmSummary, crmLoading: crmMap === null };
   }, [data, crmMap]);
   const [cacheTs, setCacheTs] = useState(() => { try { const c = localStorage.getItem('meta_cache'); if (!c) return null; const pp = JSON.parse(c); return pp && pp.t ? pp.t : null; } catch (e) { return null; } })
