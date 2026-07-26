@@ -111,7 +111,11 @@
 
 .error { position: relative; z-index: 1; margin: 14px 0 0; padding: 10px 12px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #ffb4b4; background: rgba(220,80,80,0.1); border: 1px solid rgba(220,80,80,0.3); border-radius: 10px; }
 
-.footer { position: relative; z-index: 1; margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.08); text-align: center; font-size: 12.5px; color: rgba(255,255,255,0.5); }
+/* flex + gap rather than relying on whitespace between the <svg> and the text:
+   JSX strips the newline-indent between them, so the lock icon was butting
+   straight up against "Restricted..." in every variant that renders footNote(). */
+.footer { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 22px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.08); text-align: center; font-size: 12.5px; color: rgba(255,255,255,0.5); }
+.footer svg { flex-shrink: 0; }
 
 .successCard { display: flex; flex-direction: column; align-items: center; text-align: center; }
 .successIcon { width: 56px; height: 56px; margin-bottom: 18px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; background: radial-gradient(circle at 35% 30%, #6FD08D, var(--green) 70%); box-shadow: 0 0 0 8px rgba(76,174,111,0.16), 0 0 26px rgba(76,174,111,0.45); animation: popIn .55s cubic-bezier(.16,1,.3,1) both; }
@@ -358,17 +362,23 @@
 .lAuroraCard {
   position: relative; z-index: 2;
   width: 100%; max-width: 480px;
-  padding: 32px 24px 16px;
+  /* 40px sides, not the reference's 24px: in the reference the button spans the
+     content width exactly (432 = 480 - 24*2). Google caps its widget at 400, so
+     40px sides reproduce that flush relationship instead of leaving a 400px
+     button floating inside a 432px space. */
+  padding: 32px 40px 16px;
   text-align: center;
   border-radius: 28px;
   background: rgba(255,255,255,0.58);
   border: 1px solid rgba(255,255,255,0.9);
+  /* deep, but scaled back from the 132px-tile era -- the card is ~320px tall
+     now, and a 108px ambient blur on it read detached rather than lifted */
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.95),
     inset 0 -1px 0 rgba(255,255,255,0.35),
     0 2px 8px rgba(15,27,51,0.05),
-    0 18px 40px -18px rgba(31,60,132,0.20),
-    0 54px 108px -34px rgba(31,60,132,0.40);
+    0 14px 32px -14px rgba(31,60,132,0.18),
+    0 40px 82px -30px rgba(31,60,132,0.36);
   -webkit-backdrop-filter: blur(40px) saturate(200%);
   backdrop-filter: blur(40px) saturate(200%);
   opacity: 0; transform: translateY(9px) scale(.994);
@@ -383,10 +393,12 @@
   width: 80px; height: 80px; margin: 0 auto 16px;
   border-radius: 20px;
   background: linear-gradient(157deg, #FFFFFF 0%, #F6F9FC 100%);
+  /* scaled to the 80px tile -- the previous stops were tuned for 132px and at
+     this size a 64px ambient blur made the tile look unmoored from the card */
   box-shadow:
     0 1px 2px rgba(15,27,51,0.07),
-    0 10px 22px -8px rgba(31,60,132,0.22),
-    0 32px 64px -20px rgba(31,60,132,0.44);
+    0 6px 14px -4px rgba(31,60,132,0.20),
+    0 18px 36px -12px rgba(31,60,132,0.38);
   display: grid; place-items: center;
 }
 
