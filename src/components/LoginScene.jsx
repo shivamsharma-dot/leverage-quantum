@@ -61,8 +61,11 @@ export default function LoginScene({
         hosted_domain={ALLOWED_DOMAIN}
       />
       {loading && (
-        <div className={styles.googleOverlay} aria-hidden="true">
-          <span className={styles.spinner} />
+        // the default overlay is dark navy (built for the dark variant-1 scene);
+        // on a light glass card that reads as a heavy slab dropped over the
+        // button, so light scenes get a frosted-white version instead
+        <div className={`${styles.googleOverlay} ${dark ? '' : styles.googleOverlayLight}`} aria-hidden="true">
+          <span className={`${styles.spinner} ${dark ? '' : styles.spinnerLight}`} />
           <span className={styles.googleOverlayText}>Signing you in…</span>
         </div>
       )}
@@ -88,6 +91,55 @@ export default function LoginScene({
       Restricted to leverageedu.com accounts only
     </p>
   )
+
+  // ── variant 21 shell, shared by its normal and success states so signing in
+  // never cuts to a different background. Everything but the card body stays
+  // identical across the transition. ──
+  const auroraShell = (children) => (
+    <div className={styles.lAuroraScene}>
+      <div className={styles.lAuroraField} aria-hidden="true">
+        {[1, 2, 3, 4].map(n => (
+          <div key={n} className={`${styles.lAuroraRib} ${styles[`lAuroraR${n}`]}`}><span /></div>
+        ))}
+      </div>
+      <div className={styles.lAuroraVeil} aria-hidden="true" />
+      <div className={styles.lAuroraCard}>{children}</div>
+    </div>
+  )
+
+  const auroraMark = (
+    <div className={styles.lAuroraTile}>
+      {/* 52px inside the reference's 80px tile (65% fill) -- as heavy as the mark
+          can read at the matched tile size, and still a uniform scale of the
+          canonical geometry (never redrawn by hand) */}
+      <svg className={styles.lAuroraLogo} width="52" height="52" viewBox={BRAND_LOGO_VIEWBOX} fill="none" role="img" aria-label="Quantum">
+        {/* silhouette: the mark is present from the first frame at full height,
+            so nothing ever assembles or jumps */}
+        {BRAND_LOGO_BARS.map((b, i) => (
+          <rect key={`ghost-${i}`} x={b.x} y={b.y} width={b.w} height={b.h} rx={BRAND_LOGO_RX} fill={b.color} fillOpacity="0.15" />
+        ))}
+        {/* real colour rises through each bar, green -> blue -> navy */}
+        {BRAND_LOGO_BARS.map((b, i) => (
+          <rect
+            key={`fill-${i}`}
+            className={styles.lAuroraFill}
+            x={b.x} y={b.y} width={b.w} height={b.h} rx={BRAND_LOGO_RX} fill={b.color}
+            style={{ animationDelay: `${0.62 + i * 0.16}s` }}
+          />
+        ))}
+      </svg>
+    </div>
+  )
+
+  if (success && variant === 21) {
+    return auroraShell(
+      <div role="status" aria-live="polite">
+        {auroraMark}
+        <h1 className={styles.lAuroraWord}>You&apos;re in</h1>
+        <p className={styles.lAuroraTag}>Taking you to your dashboards…</p>
+      </div>
+    )
+  }
 
   if (success) {
     return (
@@ -444,46 +496,17 @@ export default function LoginScene({
     case 21: // aurora glass -- flowing brand aurora behind a glass card. See the
              // long note above .lAuroraScene in LoginPage.module.css for the
              // opening sequence this is built around.
-      return (
-        <div className={styles.lAuroraScene}>
-          <div className={styles.lAuroraField} aria-hidden="true">
-            <div className={`${styles.lAuroraRib} ${styles.lAuroraR1}`}><span /></div>
-            <div className={`${styles.lAuroraRib} ${styles.lAuroraR2}`}><span /></div>
-            <div className={`${styles.lAuroraRib} ${styles.lAuroraR3}`}><span /></div>
-            <div className={`${styles.lAuroraRib} ${styles.lAuroraR4}`}><span /></div>
-          </div>
-          <div className={styles.lAuroraVeil} aria-hidden="true" />
-          <div className={styles.lAuroraCard}>
-            <div className={styles.lAuroraTile}>
-              {/* 52px inside the reference's 80px tile (65% fill) -- as heavy as
-                  the mark can read at the matched tile size, and still a uniform
-                  scale of the canonical geometry (never redrawn by hand) */}
-              <svg className={styles.lAuroraLogo} width="52" height="52" viewBox={BRAND_LOGO_VIEWBOX} fill="none" role="img" aria-label="Quantum">
-                {/* silhouette: the mark is present from the first frame at full
-                    height, so nothing ever assembles or jumps */}
-                {BRAND_LOGO_BARS.map((b, i) => (
-                  <rect key={`ghost-${i}`} x={b.x} y={b.y} width={b.w} height={b.h} rx={BRAND_LOGO_RX} fill={b.color} fillOpacity="0.15" />
-                ))}
-                {/* real colour rises through each bar, green -> blue -> navy */}
-                {BRAND_LOGO_BARS.map((b, i) => (
-                  <rect
-                    key={`fill-${i}`}
-                    className={styles.lAuroraFill}
-                    x={b.x} y={b.y} width={b.w} height={b.h} rx={BRAND_LOGO_RX} fill={b.color}
-                    style={{ animationDelay: `${0.62 + i * 0.16}s` }}
-                  />
-                ))}
-              </svg>
-            </div>
-            <h1 className={styles.lAuroraWord}>Quantum</h1>
-            <p className={styles.lAuroraTag}>Internal analytics for the marketing team.</p>
-            {errorBlock(true)}
-            {/* the reference's button is 432px wide; Google caps its own widget at
-                400, so this is the widest match achievable with the real widget */}
-            {googleBlock(false, gsiWidth >= 360 ? 400 : gsiWidth)}
-            {footNote(true)}
-          </div>
-        </div>
+      return auroraShell(
+        <>
+          {auroraMark}
+          <h1 className={styles.lAuroraWord}>Quantum</h1>
+          <p className={styles.lAuroraTag}>Internal analytics for the marketing team.</p>
+          {errorBlock(true)}
+          {/* the reference's button is 432px wide; Google caps its own widget at
+              400, so this is the widest match achievable with the real widget */}
+          {googleBlock(false, gsiWidth >= 360 ? 400 : gsiWidth)}
+          {footNote(true)}
+        </>
       )
     case 20: // dynamic warm greeting
     default: {

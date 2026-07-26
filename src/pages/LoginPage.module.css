@@ -153,6 +153,19 @@
 
 .googleWrapLight { background: transparent; border: none; padding: 0; }
 .googleWrapLight:hover { border-color: transparent; box-shadow: none; }
+/* Frosted-white signing-in overlay for the light scenes. The default
+   .googleOverlay is dark navy -- correct on variant 1's dark scene, but on a
+   light glass card it reads as a heavy slab dropped across the button. Pill
+   radius so it matches the shape of the button it covers, rather than the
+   default 14px which lets the button's rounded ends poke out. */
+.googleOverlayLight {
+  background: rgba(255,255,255,0.86);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(15,27,51,0.08);
+}
+.googleOverlayLight .googleOverlayText { color: #46536B; }
+.spinnerLight { border-color: rgba(31,60,132,0.18); border-top-color: var(--navy, #1F3C84); }
 .errorLight { color: #B91C1C; background: rgba(185,28,28,0.08); border-color: rgba(185,28,28,0.25); }
 .footerLight { color: var(--text3); border-top-color: var(--card-border); }
 .lLinkBtn { background: none; border: none; color: var(--blue); font-size: 12.5px; font-weight: 700; cursor: pointer; padding: 2px; }
