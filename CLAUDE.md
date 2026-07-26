@@ -2389,3 +2389,37 @@ User asked to build 4 things off the earlier roadmap discussion: (1) sourcing Wo
 - Also worth noting for future sessions: verifying this page's Executive Readout numbers across a real IST-midnight boundary produced what looked like a data bug (two different "current 7 days" totals from what seemed like the same request) -- it wasn't; the page had genuinely loaded on opposite sides of a real day rollover during a long verification session, so its D-1/7-day window legitimately shifted by one day between checks. Not a bug, but worth remembering that this page's numbers are relative to "whenever it's loaded," same as any daily report.
 
 **Still queued from the "build all 4" ask**: Phase 2 (Business/brand-context settings layer) and Phase 3 (a second named agent in the roster).
+
+## 2026-07-27 -- Login: new "Aurora glass" variant (21), replacing "Ambient aurora" (commit `0358768`)
+
+User shared a competitor's login (`leverage.nas.com/login`) as a *maturity* benchmark with an explicit constraint: get inspired, do NOT copy, "or they'll think we copied them." Several rejected passes before landing this; the rejections are the useful part of this entry.
+
+**What was rejected and why (don't re-attempt these):**
+- **First attempt was a genuine copy** and had to be scrapped: glass card + white icon tile with a halo glow + pale-blue ambient wash is the reference's exact composition, merely recoloured. Recolouring is not sufficient distance.
+- **Split-screen with an animated data-viz hero** (growing bars, counting KPIs, self-drawing trend line) -- rejected as cliché.
+- **Radically minimal flat stack** (no card at all) -- rejected as too plain / not "extraordinary".
+- **"Baseline" concept** (logo bars standing on a hairline that draws out to become the page rule) -- rejected.
+- **Five-variation gallery** (Tracking / Aperture / Focus / Ledger / Viewfinder) -- all rejected.
+- **Equaliser-bounce loader** (logo bars cycling random heights) -- rejected as "awkward"; it's a jittery visualiser cliché, the opposite of sophisticated. Also rejected in the same pass: the card lurching up 78px mid-sequence, and having five separately-staged reveal events (reads fussy, not composed).
+
+**Key correction the user caught:** the centered-card archetype is NOT what made it a copy -- that's universal (Linear/Stripe/Vercel). What made it a copy was the specific *rendering*. Conversely, what makes the reference look mature is confident scale, a soft low-contrast palette, real hierarchy and generous space -- my early attempts were undersized/timid (30px headings, 13px body) which read as unfinished, not restrained.
+
+**What shipped (`src/components/LoginScene.jsx` case 21 + the `.lAurora*` block in `src/pages/LoginPage.module.css`):**
+- **Flowing aurora, not sprayed.** First aurora pass used round blobs drifting in straight lines -- user correctly called it "sprayed". Round shapes moving linearly always read as patches no matter how much blur. Rebuilt as four **elongated ribbons (170vmax x 44vmax) rotating** around centre on 52-78s loops, neighbours counter-rotating so colours keep crossing; each also swells along its length. Rotation is what produces flow.
+- **Lighter tints, not full-strength brand.** User: "too much aurora and very dark." Root cause was full-strength navy `#1F3C84` pooling into dark patches. Aurora now uses BRAND_RAMP's *tail* tints (`#3A5BA0`/`#52B5DC`/`#5BCAD2`/`#73C58E`) at 0.22 opacity, navy weakest (0.42) of the four; base lightened to `#F8FAFC`; a two-layer veil pulls the base back in so the area behind the card stays clean. Saturated brand colour now lives ONLY in the mark.
+- **Logo tile + canonical geometry.** Mark sits in a 124px white rounded tile (32px radius, soft navy-tinted shadow) -- the PWA-icon treatment. Critically: now imports `BRAND_LOGO_BARS`/`BRAND_LOGO_VIEWBOX`/`BRAND_LOGO_RX` from `shared/brandLogo.mjs`. **The local `brandLogo()` helper still in this file has WRONG geometry** (x=1/7/13, baseline 21, and it swaps in cyan/white by theme) vs canonical (x=3/9/15, baseline 19.5, green->blue->navy). Variants 3/5/6/etc still use that helper -- worth fixing them separately.
+- **No wordmark, no "Sign in to continue" heading** (both explicitly removed). Copy is one line: "Internal analytics for the marketing team."
+- **Light button, not dark.** An earlier dark filled pill was rejected -- it fought the soft palette and pulled all visual weight to the bottom of the card. Uses `googleBlock(false)` (Google's own `outline`/pill theme).
+- **Card widened 420 -> 460px** so Google's fixed-width GSI widget (`gsiWidth` = 360 on desktop) fits inside the padding instead of overflowing.
+
+**Opening sequence -- two overlapping gestures, deliberately not a staged checklist.** Derived from frame-by-frame analysis of the user's screen recording of the reference (extracted with `pyav`; reload at t=6.18s, settled ~8.0s). Their actual sequence: a small blue 3D orb alone for ~1.2s (the loader) -> orb morphs into the icon tile -> card materialises with all text at once -> rocket logo resolves inside the tile LAST. The transferable idea is **continuity: the loader becomes the logo container.** Ours applies that principle with a different mechanism:
+1. **Light arrives** -- aurora blooms 0 -> 0.22 over 2.2s on a long ease.
+2. **The mark completes itself** -- the logo silhouette is present in the very first frame at full height as pale ghost rects (`fillOpacity 0.15`); its real colour then *rises bottom-up* through each bar (`transform-box:fill-box` + `transform-origin:bottom` + `scaleY 0->1`), staggered green/blue/navy at 0.62/0.78/0.94s via inline `animationDelay`. Bars never move, resize or bounce.
+3. The card arrives as **one unit** (single fade + 9px rise, no overshoot, zero per-child stagger), overlapping the fill so it lands as one breath. Nothing repositions.
+Afterwards the only foreground motion is the mark's 8s breath; the aurora keeps flowing.
+
+**Still to do:** in the real app the colour fill should loop gently until sign-in is genuinely ready (auth check + GSI widget loaded) with a floor so it never flashes, then complete and hold -- currently fixed timing.
+
+**Verified live** on `quantum.leverageedu.com/login` (session was logged out, so previewed by setting `localStorage.lq_login_style = 21`, which is per-device and does NOT change the org-wide setting). Confirmed: field opacity 0.22 + `blur(96px) saturate(1.12)`, 4 ribbons with correct counter-rotating animations, card `backdrop-filter: blur(32px) saturate(1.8)` at 460px with the GSI widget fitting, tagline correct. Opening sequence verified deterministically by pausing `document.getAnimations()` and seeking: at 500ms the mark shows only its pale silhouette (card 69% opacity, aurora 9%); at 1150ms the three fills are at scaleY 0.94/0.84/0.61 -- staggered colour rise confirmed.
+
+**NOT made the org-wide default** -- that needs an authenticated admin POST and the session was logged out (OAuth is user-only). One click to switch on: Settings > Appearance > Login Page > "21. Aurora glass" > Use this.
