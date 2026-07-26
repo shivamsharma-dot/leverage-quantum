@@ -452,7 +452,10 @@ export default function LoginScene({
           <div className={styles.lAuroraVeil} aria-hidden="true" />
           <div className={styles.lAuroraCard}>
             <div className={styles.lAuroraTile}>
-              <svg className={styles.lAuroraLogo} width="64" height="64" viewBox={BRAND_LOGO_VIEWBOX} fill="none" role="img" aria-label="Quantum">
+              {/* 80px inside a 132px tile -- the mark reads much heavier than the
+                  earlier 64px did, while staying a uniform scale of the canonical
+                  geometry (its proportions must never be redrawn by hand) */}
+              <svg className={styles.lAuroraLogo} width="80" height="80" viewBox={BRAND_LOGO_VIEWBOX} fill="none" role="img" aria-label="Quantum">
                 {/* silhouette: the mark is present from the first frame at full
                     height, so nothing ever assembles or jumps */}
                 {BRAND_LOGO_BARS.map((b, i) => (
@@ -469,6 +472,7 @@ export default function LoginScene({
                 ))}
               </svg>
             </div>
+            <h1 className={styles.lAuroraWord}>Quantum</h1>
             <p className={styles.lAuroraTag}>Internal analytics for the marketing team.</p>
             {errorBlock(true)}
             {googleBlock(false)}

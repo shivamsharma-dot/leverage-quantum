@@ -342,27 +342,46 @@
     radial-gradient(ellipse 94% 80% at 50% 46%, transparent 26%, #F8FAFC 92%);
 }
 
-/* -- the composition arrives as one unit -- */
+/* -- the composition arrives as one unit --
+   Glass is deliberately quite transparent (0.58) with a heavy 40px blur and
+   200% saturation, so the aurora is genuinely visible moving THROUGH the
+   panel rather than the card reading as flat frosted white. The inset top
+   highlight + faint inset bottom line are what make it read as a real pane
+   of glass and not just a translucent rectangle. Shadow is a 3-stop falloff
+   (contact -> mid -> deep ambient) which lifts it much further off the page
+   than a single soft shadow can. */
 .lAuroraCard {
   position: relative; z-index: 2;
   width: 100%; max-width: 460px;
-  padding: 46px 48px 34px;
+  padding: 52px 48px 36px;
   text-align: center;
-  border-radius: 32px;
-  background: rgba(255,255,255,0.68);
-  border: 1px solid rgba(255,255,255,0.88);
-  box-shadow: 0 2px 6px rgba(15,27,51,0.04), 0 34px 74px -28px rgba(31,60,132,0.22);
-  -webkit-backdrop-filter: blur(32px) saturate(180%);
-  backdrop-filter: blur(32px) saturate(180%);
+  border-radius: 34px;
+  background: rgba(255,255,255,0.58);
+  border: 1px solid rgba(255,255,255,0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.95),
+    inset 0 -1px 0 rgba(255,255,255,0.35),
+    0 2px 8px rgba(15,27,51,0.05),
+    0 18px 40px -18px rgba(31,60,132,0.20),
+    0 54px 108px -34px rgba(31,60,132,0.40);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
   opacity: 0; transform: translateY(9px) scale(.994);
   animation: aurArrive 1.25s cubic-bezier(.22,.75,.26,1) .2s forwards;
 }
 @keyframes aurArrive { to { opacity: 1; transform: none; } }
 
+/* the tile is the heaviest object on the page -- it should sit clearly in
+   front of the glass, so it gets its own deeper 3-stop shadow, and a whisper
+   of gradient rather than flat white so it reads as a physical object */
 .lAuroraTile {
-  width: 124px; height: 124px; margin: 0 auto 26px;
-  border-radius: 32px; background: #fff;
-  box-shadow: 0 2px 4px rgba(15,27,51,0.06), 0 20px 44px -16px rgba(31,60,132,0.28);
+  width: 132px; height: 132px; margin: 0 auto 24px;
+  border-radius: 34px;
+  background: linear-gradient(157deg, #FFFFFF 0%, #F6F9FC 100%);
+  box-shadow:
+    0 1px 2px rgba(15,27,51,0.07),
+    0 10px 22px -8px rgba(31,60,132,0.22),
+    0 32px 64px -20px rgba(31,60,132,0.44);
   display: grid; place-items: center;
 }
 
@@ -377,12 +396,20 @@
 .lAuroraLogo { animation: aurBreathe 8s ease-in-out 3.4s infinite; }
 @keyframes aurBreathe { 0%, 100% { opacity: 1; } 50% { opacity: .8; } }
 
-.lAuroraTag { font-size: 14.5px; line-height: 1.55; color: #8A94A6; margin: 0 0 28px; }
+/* wordmark sits directly under the tile; ink (not navy) so the only saturated
+   brand colour on the page stays the mark itself */
+.lAuroraWord {
+  margin: 0 0 9px;
+  font-size: 32px; font-weight: 800; letter-spacing: -0.036em; line-height: 1;
+  color: #0F1B33;
+}
+.lAuroraTag { font-size: 14px; line-height: 1.55; color: #8A94A6; margin: 0 0 30px; }
 
 @media (max-width: 560px) {
-  .lAuroraCard { max-width: 100%; padding: 38px 26px 28px; border-radius: 26px; }
-  .lAuroraTile { width: 104px; height: 104px; border-radius: 27px; margin-bottom: 22px; }
-  .lAuroraLogo { width: 54px; height: 54px; }
+  .lAuroraCard { max-width: 100%; padding: 42px 26px 30px; border-radius: 28px; }
+  .lAuroraTile { width: 112px; height: 112px; border-radius: 29px; margin-bottom: 20px; }
+  .lAuroraLogo { width: 68px; height: 68px; }
+  .lAuroraWord { font-size: 27px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .lAuroraField { opacity: .22; }
