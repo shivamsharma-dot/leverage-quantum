@@ -42,7 +42,10 @@ export default function LoginScene({
   // correctly against a light or dark background (this is Google's own
   // rendered widget -- its internal colors can't be restyled beyond the
   // theme/shape/size props it already exposes).
-  const googleBlock = (dark = true) => (
+  // widthOverride lets a single variant request a wider button than the shared
+  // gsiWidth cap without changing it for the other 20 layouts (their cards are
+  // narrower and would overflow). Google itself caps the widget at 400px.
+  const googleBlock = (dark = true, widthOverride) => (
     <div
       className={`${styles.googleWrap} ${loading ? styles.googleLoading : ''} ${dark ? '' : styles.googleWrapLight}`}
       aria-busy={loading}
@@ -53,7 +56,7 @@ export default function LoginScene({
         theme={dark ? 'filled_black' : 'outline'}
         shape="pill"
         size="large"
-        width={gsiWidth}
+        width={widthOverride || gsiWidth}
         text="continue_with"
         hosted_domain={ALLOWED_DOMAIN}
       />
@@ -452,10 +455,10 @@ export default function LoginScene({
           <div className={styles.lAuroraVeil} aria-hidden="true" />
           <div className={styles.lAuroraCard}>
             <div className={styles.lAuroraTile}>
-              {/* 80px inside a 132px tile -- the mark reads much heavier than the
-                  earlier 64px did, while staying a uniform scale of the canonical
-                  geometry (its proportions must never be redrawn by hand) */}
-              <svg className={styles.lAuroraLogo} width="80" height="80" viewBox={BRAND_LOGO_VIEWBOX} fill="none" role="img" aria-label="Quantum">
+              {/* 52px inside the reference's 80px tile (65% fill) -- as heavy as
+                  the mark can read at the matched tile size, and still a uniform
+                  scale of the canonical geometry (never redrawn by hand) */}
+              <svg className={styles.lAuroraLogo} width="52" height="52" viewBox={BRAND_LOGO_VIEWBOX} fill="none" role="img" aria-label="Quantum">
                 {/* silhouette: the mark is present from the first frame at full
                     height, so nothing ever assembles or jumps */}
                 {BRAND_LOGO_BARS.map((b, i) => (
@@ -475,7 +478,9 @@ export default function LoginScene({
             <h1 className={styles.lAuroraWord}>Quantum</h1>
             <p className={styles.lAuroraTag}>Internal analytics for the marketing team.</p>
             {errorBlock(true)}
-            {googleBlock(false)}
+            {/* the reference's button is 432px wide; Google caps its own widget at
+                400, so this is the widest match achievable with the real widget */}
+            {googleBlock(false, gsiWidth >= 360 ? 400 : gsiWidth)}
             {footNote(true)}
           </div>
         </div>

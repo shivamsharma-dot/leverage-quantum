@@ -350,12 +350,17 @@
    of glass and not just a translucent rectangle. Shadow is a 3-stop falloff
    (contact -> mid -> deep ambient) which lifts it much further off the page
    than a single soft shadow can. */
+/* DIMENSIONS below are measured 1:1 off the reference login the user asked to
+   match (card 480x322 / r28 / pad 24, tile 80, h1 28px-600 lh36 track -0.588px,
+   tagline 14px-400 lh22, button 432x40 r100, vertical rhythm 32/16/4/24/12/16).
+   Sizing is matched exactly; COLOUR, glass and shadow stay ours -- those carry
+   brand identity, and copying them is what made the first attempt a clone. */
 .lAuroraCard {
   position: relative; z-index: 2;
-  width: 100%; max-width: 460px;
-  padding: 52px 48px 36px;
+  width: 100%; max-width: 480px;
+  padding: 32px 24px 16px;
   text-align: center;
-  border-radius: 34px;
+  border-radius: 28px;
   background: rgba(255,255,255,0.58);
   border: 1px solid rgba(255,255,255,0.9);
   box-shadow:
@@ -375,8 +380,8 @@
    front of the glass, so it gets its own deeper 3-stop shadow, and a whisper
    of gradient rather than flat white so it reads as a physical object */
 .lAuroraTile {
-  width: 132px; height: 132px; margin: 0 auto 24px;
-  border-radius: 34px;
+  width: 80px; height: 80px; margin: 0 auto 16px;
+  border-radius: 20px;
   background: linear-gradient(157deg, #FFFFFF 0%, #F6F9FC 100%);
   box-shadow:
     0 1px 2px rgba(15,27,51,0.07),
@@ -399,17 +404,21 @@
 /* wordmark sits directly under the tile; ink (not navy) so the only saturated
    brand colour on the page stays the mark itself */
 .lAuroraWord {
-  margin: 0 0 9px;
-  font-size: 32px; font-weight: 800; letter-spacing: -0.036em; line-height: 1;
+  margin: 0;
+  font-size: 28px; font-weight: 600; letter-spacing: -0.588px; line-height: 36px;
   color: #0F1B33;
 }
-.lAuroraTag { font-size: 14px; line-height: 1.55; color: #8A94A6; margin: 0 0 30px; }
+.lAuroraTag { margin: 4px 0 0; font-size: 14px; font-weight: 400; line-height: 22px; color: #8A94A6; }
+/* 24px from the tagline down to the sign-in button, per the measured rhythm */
+.lAuroraCard .googleWrap { margin-top: 24px; }
+/* and 16px down to the footnote (the reference has a second 40px button here) */
+.lAuroraCard .footer { margin-top: 16px; padding-top: 14px; }
 
 @media (max-width: 560px) {
-  .lAuroraCard { max-width: 100%; padding: 42px 26px 30px; border-radius: 28px; }
-  .lAuroraTile { width: 112px; height: 112px; border-radius: 29px; margin-bottom: 20px; }
-  .lAuroraLogo { width: 68px; height: 68px; }
-  .lAuroraWord { font-size: 27px; }
+  .lAuroraCard { max-width: 100%; padding: 28px 20px 14px; border-radius: 24px; }
+  .lAuroraTile { width: 72px; height: 72px; border-radius: 18px; margin-bottom: 14px; }
+  .lAuroraLogo { width: 46px; height: 46px; }
+  .lAuroraWord { font-size: 24px; line-height: 32px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .lAuroraField { opacity: .22; }
