@@ -550,18 +550,48 @@ function EfficiencyList({ data, labelKey, rateKey, subKey }) {
 // month (anchored on the 15th so it falls inside whole-month filters) and
 // merged into `rows` below -- every existing aggregation (KPIs, by-source,
 // by-corridor, Compare, etc.) picks it up automatically with no special-casing.
+// Manual affiliate spend is entered per month (Settings > Data > Affiliate spend), but it
+// has to behave like real daily spend so every date range gets its correct slice. This
+// previously emitted ONE row per month dated the 15th, which meant a range only saw
+// affiliate spend if it happened to contain that single date -- "Last 7 days" and a
+// 1-14 Jul window both reported zero, while MTD reported the entire month undivided.
+//
+// So each month is spread into one synthetic row PER DAY. The denominator differs by
+// month, because the entered figure means different things:
+//   - a PAST month is a completed total    -> divide by that month's calendar days
+//   - the CURRENT month is spend-so-far    -> divide by days elapsed including today,
+//                                             and emit nothing for days not yet reached
+//   - a FUTURE month (rare, a pre-entered budget) has no elapsed days, so it falls back
+//     to the full calendar month
+// A range spanning two months therefore prorates each month at its own daily rate and
+// sums them, which happens for free once the rows exist.
+//
+// perDay keeps full float precision and is only rounded at display, so the days always
+// reconcile exactly back to the entered month total.
 function buildSyntheticAffiliateRows(map) {
   if (!map) return []
-  return Object.entries(map).map(([ym, spend]) => {
+  const now = new Date()
+  const curY = now.getFullYear(), curM = now.getMonth() + 1, curD = now.getDate()
+  const out = []
+  Object.entries(map).forEach(([ym, rawSpend]) => {
     const [y, m] = ym.split('-').map(Number)
-    if (!y || !m) return null
-    const date = new Date(y, m - 1, 15)
-    return {
-      date, mk: monthKey(date), source: 'Affiliate', campaign: 'Affiliate (manual entry)',
-      leads: 0, floorQueued: 0, futworkQ: 0, superbotQ: 0, humanQL: 0, futworkAiQl: 0, superbotAiQl: 0,
-      totalQL: 0, apps: 0, offers: 0, deposits: 0, raus: 0, spend: Number(spend) || 0,
+    const total = Number(rawSpend) || 0
+    if (!y || !m || !total) return
+    const daysInMonth = new Date(y, m, 0).getDate()
+    const isCurrent = y === curY && m === curM
+    const days = isCurrent ? Math.min(curD, daysInMonth) : daysInMonth
+    if (days <= 0) return
+    const perDay = total / days
+    for (let d = 1; d <= days; d++) {
+      const date = new Date(y, m - 1, d)
+      out.push({
+        date, mk: monthKey(date), source: 'Affiliate', campaign: 'Affiliate (manual entry)',
+        leads: 0, floorQueued: 0, futworkQ: 0, superbotQ: 0, humanQL: 0, futworkAiQl: 0, superbotAiQl: 0,
+        totalQL: 0, apps: 0, offers: 0, deposits: 0, raus: 0, spend: perDay,
+      })
     }
-  }).filter(Boolean)
+  })
+  return out
 }
 
 export default function OverallDashboard() {
