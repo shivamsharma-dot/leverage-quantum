@@ -431,9 +431,12 @@ function summaryValue(g, key) {
   if (key === 'qlPct') return g.queued > 0 ? (g.totalQL / g.queued) * 100 : 0
   if (key === 'appPct') return g.totalQL > 0 ? (g.apps / g.totalQL) * 100 : 0
   if (key === 'depositPct') return g.offers > 0 ? (g.deposits / g.offers) * 100 : 0
-  if (key === 'cpl') return g.leads > 0 ? g.spend / g.leads : 0
-  if (key === 'cpql') return g.totalQL > 0 ? g.spend / g.totalQL : 0
-  if (key === 'cpa') return g.apps > 0 ? g.spend / g.apps : 0
+  // Cost metrics divide by PAID denominators only (leads/QLs/apps from rows that carried
+  // spend). null -- rendered as "—" -- when a row had no paid activity, since a flat ₹0
+  // reads like "free and excellent" when it actually means "no spend here at all".
+  if (key === 'cpl') return g.paidLeads > 0 ? g.spend / g.paidLeads : null
+  if (key === 'cpql') return g.paidQL > 0 ? g.spend / g.paidQL : null
+  if (key === 'cpa') return g.paidApps > 0 ? g.spend / g.paidApps : null
   return g[key]
 }
 function summaryFmt(key, v) {
@@ -853,13 +856,21 @@ export default function OverallDashboard() {
   }
   const kpis = useMemo(() => sumKpis(filtered), [filtered])
   const totalQueued = kpis.futworkQ + kpis.superbotQ
-  // Cost metrics -- CPL from total leads, CPQL from Total QLs (Futwork Human + Futwork AI +
-  // Superbot AI combined), CPA from total applications. 0 (not null) when the
-  // denominator is 0, matching how CPL/CPA are computed elsewhere in the app (Meta Ads,
-  // MTD) rather than showing a dash.
-  const cpl = kpis.leads > 0 ? kpis.spend / kpis.leads : 0
-  const cpql = kpis.totalQL > 0 ? kpis.spend / kpis.totalQL : 0
-  const cpa = kpis.apps > 0 ? kpis.spend / kpis.apps : 0
+  // ── Blended cost metrics are PAID-ONLY ────────────────────────────────────────
+  // The denominators count only leads/QLs/apps from daily rows that actually carried
+  // spend. Free channels (Referral, Content+Brand, Offline, organic...) otherwise
+  // inflate the denominator and make paid acquisition look materially cheaper than it
+  // is -- on real data this reported CPL ~₹151 when the true paid CPL was ~₹205, and
+  // CPA ~₹40,119 against a true ~₹83,323.
+  //
+  // Derived from the underlying daily rows rather than by dropping whole zero-spend
+  // groups, so the figure is identical no matter which grouping tab the table below is
+  // on. The numerator stays ALL spend -- identical either way, since excluded rows
+  // contribute zero spend by definition.
+  const paidKpis = useMemo(() => sumKpis(filtered.filter(r => r.spend > 0)), [filtered])
+  const cpl = paidKpis.leads > 0 ? kpis.spend / paidKpis.leads : 0
+  const cpql = paidKpis.totalQL > 0 ? kpis.spend / paidKpis.totalQL : 0
+  const cpa = paidKpis.apps > 0 ? kpis.spend / paidKpis.apps : 0
 
   // SR revenue + ROAS — Estimated RAUs projects Applications forward at a 0.9 conversion
   // rate (real RAUs haven't materialized yet); Actual RAUs is the real, already-realized
@@ -898,9 +909,12 @@ export default function OverallDashboard() {
   }, [rows, prevWindow, source, campaignQuery])
 
   const prevKpis = useMemo(() => sumKpis(prevFiltered), [prevFiltered])
-  const prevCpl = prevKpis.leads > 0 ? prevKpis.spend / prevKpis.leads : 0
-  const prevCpql = prevKpis.totalQL > 0 ? prevKpis.spend / prevKpis.totalQL : 0
-  const prevCpa = prevKpis.apps > 0 ? prevKpis.spend / prevKpis.apps : 0
+  // Same paid-only basis as the current period -- otherwise the delta arrows would be
+  // comparing two different definitions of CPL/CPQL/CPA against each other.
+  const prevPaidKpis = useMemo(() => sumKpis(prevFiltered.filter(r => r.spend > 0)), [prevFiltered])
+  const prevCpl = prevPaidKpis.leads > 0 ? prevKpis.spend / prevPaidKpis.leads : 0
+  const prevCpql = prevPaidKpis.totalQL > 0 ? prevKpis.spend / prevPaidKpis.totalQL : 0
+  const prevCpa = prevPaidKpis.apps > 0 ? prevKpis.spend / prevPaidKpis.apps : 0
   const prevTotalQueued = prevKpis.futworkQ + prevKpis.superbotQ
   const prevFloorPlusFutwork = prevKpis.floorQueued + prevKpis.futworkQ
   const prevEstimatedRaus = prevKpis.apps * RAU_CONVERSION_FACTOR
@@ -1096,10 +1110,12 @@ export default function OverallDashboard() {
   const bySource = useMemo(() => {
     const m = new Map()
     filtered.forEach(r => {
-      const e = m.get(r.source) || { source:r.source, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(r.source) || { source:r.source, paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
+      if (r.spend > 0) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(r.source, e)
     })
     return [...m.values()].sort((a, b) => b.leads - a.leads)
@@ -1139,10 +1155,12 @@ export default function OverallDashboard() {
     const m = new Map()
     filtered.forEach(r => {
       if (!r.campaign) return
-      const e = m.get(r.campaign) || { campaign:r.campaign, corridor:corridorLabel(classifyCorridor(r.campaign)), leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(r.campaign) || { campaign:r.campaign, corridor:corridorLabel(classifyCorridor(r.campaign)), paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
+      if (r.spend > 0) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(r.campaign, e)
     })
     return [...m.values()].sort((a, b) => b.leads - a.leads)
@@ -1153,10 +1171,12 @@ export default function OverallDashboard() {
     filtered.forEach(r => {
       const id = classifyCorridor(r.campaign)
       const label = corridorLabel(id)
-      const e = m.get(id) || { corridor:label, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(id) || { corridor:label, paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
+      if (r.spend > 0) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(id, e)
     })
     return [...m.values()].sort((a, b) => b.leads - a.leads)
@@ -1169,10 +1189,12 @@ export default function OverallDashboard() {
     filtered.forEach(r => {
       if (!r.date) return
       const key = dayKey(r.date)
-      const e = m.get(key) || { key, date:r.date, label:dayLabel(r.date), leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(key) || { key, date:r.date, label:dayLabel(r.date), paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
+      if (r.spend > 0) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(key, e)
     })
     return [...m.values()].sort((a, b) => b.key.localeCompare(a.key))
@@ -1211,16 +1233,16 @@ export default function OverallDashboard() {
 
   const grouped = useMemo(() => {
     if (grpBy === 'source') return bySource.map(s => ({
-      label:s.source, leads:s.leads, queued:s.queued, humanQL:s.humanQL, futworkAiQl:s.futworkAiQl, superbotAiQl:s.superbotAiQl, totalQL:s.totalQL, apps:s.apps, offers:s.offers, deposits:s.deposits, raus:s.raus, spend:s.spend,
+      label:s.source, paidLeads:s.paidLeads, paidQL:s.paidQL, paidApps:s.paidApps, leads:s.leads, queued:s.queued, humanQL:s.humanQL, futworkAiQl:s.futworkAiQl, superbotAiQl:s.superbotAiQl, totalQL:s.totalQL, apps:s.apps, offers:s.offers, deposits:s.deposits, raus:s.raus, spend:s.spend,
     }))
     if (grpBy === 'campaign') return byCampaign.map(c => ({
-      label:c.campaign, corridor:c.corridor, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
+      label:c.campaign, corridor:c.corridor, paidLeads:c.paidLeads, paidQL:c.paidQL, paidApps:c.paidApps, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
     }))
     if (grpBy === 'corridor') return byCorridor.map(c => ({
-      label:c.corridor, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
+      label:c.corridor, paidLeads:c.paidLeads, paidQL:c.paidQL, paidApps:c.paidApps, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
     }))
     if (grpBy === 'day') return byDayFull.map(d => ({
-      label:d.label, dateKey:d.key, leads:d.leads, queued:d.queued, humanQL:d.humanQL, futworkAiQl:d.futworkAiQl, superbotAiQl:d.superbotAiQl, totalQL:d.totalQL, apps:d.apps, offers:d.offers, deposits:d.deposits, raus:d.raus, spend:d.spend,
+      label:d.label, dateKey:d.key, paidLeads:d.paidLeads, paidQL:d.paidQL, paidApps:d.paidApps, leads:d.leads, queued:d.queued, humanQL:d.humanQL, futworkAiQl:d.futworkAiQl, superbotAiQl:d.superbotAiQl, totalQL:d.totalQL, apps:d.apps, offers:d.offers, deposits:d.deposits, raus:d.raus, spend:d.spend,
     }))
     return byMonth.map(m => {
       const full = filtered.filter(r => r.mk === m.mk)
@@ -1229,6 +1251,10 @@ export default function OverallDashboard() {
         apps: full.reduce((t, r) => t + r.apps, 0), offers: full.reduce((t, r) => t + r.offers, 0),
         deposits:m.deposits, raus: full.reduce((t, r) => t + r.raus, 0),
         spend: full.reduce((t, r) => t + r.spend, 0),
+        // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
+        paidLeads: full.reduce((t, r) => t + (r.spend > 0 ? r.leads : 0), 0),
+        paidQL: full.reduce((t, r) => t + (r.spend > 0 ? r.totalQL : 0), 0),
+        paidApps: full.reduce((t, r) => t + (r.spend > 0 ? r.apps : 0), 0),
       }
     })
   }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, filtered])
@@ -1254,7 +1280,7 @@ export default function OverallDashboard() {
     'Futwork Human QL': g.humanQL, 'Futwork AI QL': g.futworkAiQl, 'Superbot AI QL': g.superbotAiQl, 'Total QLs': g.totalQL,
     Applications: g.apps, Offers: g.offers, Deposits: g.deposits, 'Actual RAUs': g.raus, 'Estimated RAU': fmtN(g.estimatedRaus),
     'QL %': pct(g.totalQL, g.queued), 'App %': pct(g.apps, g.totalQL), 'Deposit %': pct(g.deposits, g.offers),
-    CPL: fmtINR(summaryValue(g, 'cpl')), CPQL: fmtINR(summaryValue(g, 'cpql')), CPA: fmtINR(summaryValue(g, 'cpa')),
+    CPL: summaryFmt('cpl', summaryValue(g, 'cpl')), CPQL: summaryFmt('cpql', summaryValue(g, 'cpql')), CPA: summaryFmt('cpa', summaryValue(g, 'cpa')),
     'Est. SR Revenue': fmtINR(g.estSrRevenue), 'Actual SR Revenue': fmtINR(g.actSrRevenue),
     'Actual ROAS': g.roas.toFixed(2) + 'x', 'Est. ROAS': g.estimatedRoas.toFixed(2) + 'x',
   })), [groupedWithRevenue, grpByLabel])
@@ -1309,7 +1335,9 @@ export default function OverallDashboard() {
   // a source with 3 leads and one with 30,000 would count equally.
   const SUMMARY_ADDITIVE_KEYS = ['leads', 'queued', 'humanQL', 'futworkAiQl', 'superbotAiQl',
     'totalQL', 'apps', 'offers', 'deposits', 'raus', 'spend', 'estimatedRaus',
-    'estSrRevenue', 'actSrRevenue']
+    'estSrRevenue', 'actSrRevenue',
+    // summed so the TOTAL row's CPL/CPQL/CPA derive off paid activity, matching the KPI cards
+    'paidLeads', 'paidQL', 'paidApps']
   const totalsRow = useMemo(() => {
     const t = { label: 'TOTAL', corridor: null }
     SUMMARY_ADDITIVE_KEYS.forEach(k => {
@@ -1477,6 +1505,7 @@ export default function OverallDashboard() {
                   <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.7 }}>
                     <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (Registered At University). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
                     <b>Estimated RAU</b> = Applications × 0.09 (a projection of how many current Applications will go on to register). <b>Actual RAUs</b> is the real, already-registered count — no discount applied. <b>Est./Actual SR Revenue</b> = Estimated/Actual RAUs × SR Fee.<br /><br />
+                    <b>CPL, CPQL and CPA count paid activity only.</b> Their denominators include just the leads / QLs / applications that came from days with real ad spend, so unpaid channels (Referral, Content+Brand, Offline, organic) don't dilute them — a blended CPL over every lead made paid acquisition look roughly a quarter cheaper than it is. Because that's derived from the underlying daily rows rather than by dropping whole zero-spend rows, the figure is the same on every grouping tab. A row with no paid spend shows "—" rather than ₹0.<br /><br />
                     In the summary table, the three conversion rates are each a single funnel step, not a share of all leads: <b>QL %</b> = Total QLs ÷ Total Queued, <b>App %</b> = Applications ÷ Total QLs, <b>Deposit %</b> = Deposits ÷ Offers. Because each stage is reported independently and a lead can reach a later stage in a different period from the one it was queued in, these can read above 100% on small or lagging rows. The <b>TOTAL</b> row re-derives every rate, cost and ROAS from the summed totals rather than averaging the rows, so it is weighted by volume.<br /><br />
                     <b>Executive insights</b> and <b>KPI deltas</b> compare the active period against the immediately preceding period of equal length (or the previous calendar month, in month view). <b>Biggest funnel leak</b> and campaign efficiency rankings use the real conversion path (Leads → Queued → Total QL → Apps → Offers → Deposits), skipping the parallel Floor Queued branch.<br /><br />
                     Last Day / Last 7D / MTD and Custom filter by lead date; the Month dropdown scopes to one calendar month. Source and campaign search filter everything below.
