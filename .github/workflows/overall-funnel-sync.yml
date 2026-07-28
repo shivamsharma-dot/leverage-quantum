@@ -2,8 +2,10 @@ name: Overall Funnel Cache Sync
 
 on:
   schedule:
-    # Hourly -- this is the source Ask AI's contribution/attribution tool reads, so it
-    # shouldn't lag the live sheet by more than an hour.
+    # Requests hourly, but do NOT rely on that as a freshness guarantee: GitHub heavily
+    # throttles scheduled workflows on low-activity repos, and observed run spacing here
+    # is 2-3.5 hours (e.g. 18:49, 20:43, 22:18, 00:11, 03:37, 06:40 UTC on 2026-07-27/28).
+    # Also note cron is UTC -- ':15' is :45 IST, not :15 IST.
     - cron: '15 * * * *'
   workflow_dispatch:
 
@@ -201,8 +203,14 @@ jobs:
               # Delete before insert, so reducing or removing a month's entry self-corrects
               # instead of leaving stale prorated days behind. Scoped to our own synthetic
               # campaign label, so real sheet rows are never touched.
+              #
+              # The value is percent-encoded and NOT wrapped in double quotes: PostgREST
+              # treats those quotes as literal characters in the value, so `eq."Affiliate
+              # (manual entry)"` silently matches ZERO rows while `eq.Affiliate%20%28manual
+              # %20entry%29` matches all of them -- verified live against the real table.
+              # Quoting it made this delete a no-op, which defeated the whole point.
               del_url = (SB_URL + '/rest/v1/overall_funnel_daily?campaign=eq.'
-                         + urllib.parse.quote('"' + AFF_CAMPAIGN + '"'))
+                         + urllib.parse.quote(AFF_CAMPAIGN))
               req = urllib.request.Request(del_url, method='DELETE', headers={
                   'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
                   'Prefer': 'return=minimal',
@@ -228,8 +236,15 @@ jobs:
                     len(aff_map), 'month(s).')
           except Exception as e:
               # Non-fatal on purpose -- the sheet aggregation above is the important payload,
-              # and it has already been written by this point.
-              print('::warning::manual affiliate spend sync skipped:', e)
+              # and it has already been written by this point. The response body is included
+              # because a bare HTTPError stringifies to just "HTTP Error 400: Bad Request",
+              # which is useless for diagnosing a PostgREST rejection after the fact.
+              detail = ''
+              try:
+                  if hasattr(e, 'read'): detail = ' | body: ' + e.read().decode('utf-8')[:500]
+              except Exception:
+                  pass
+              print('::warning::manual affiliate spend sync skipped:', repr(e) + detail)
 
           print('Sync complete.')
           PYEOF
