@@ -81,7 +81,7 @@ async function getRecipients(reportType) {
 async function getReportConfig() {
   const out = {}
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled,slack_webhook_url,slack_auto_reports_enabled)`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled,slack_webhook_url,slack_webhook_url_test,slack_auto_reports_enabled)`, {
       headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
     })
     const rows = (await res.json()) || []
@@ -93,6 +93,26 @@ async function getReportConfig() {
 // ── Slack (Incoming Webhook) ──────────────────────────────────────────────────
 // Webhook URL is admin-editable in Settings > Reports (app_preferences.slack_webhook_url),
 // falling back to the SLACK_WEBHOOK_URL env var -- same override pattern as report_from_email.
+//
+// A webhook is bound to a single channel, so there is no way to redirect a post at send
+// time -- testing safely means a SECOND webhook pointing at a test channel. Callers pass
+// slackTarget:'test' to use it; anything else uses the main one. Deliberately no silent
+// fallback from test to main: if the test webhook is missing we error out rather than
+// posting a test message into the team channel.
+function resolveSlackWebhook(cfg, target) {
+  if (target === 'test') {
+    return {
+      url: cfg.slack_webhook_url_test || process.env.SLACK_WEBHOOK_URL_TEST,
+      label: 'test channel',
+      missing: 'Slack test channel is not connected -- add a test webhook URL in Settings > Reports.',
+    }
+  }
+  return {
+    url: cfg.slack_webhook_url || process.env.SLACK_WEBHOOK_URL,
+    label: 'main channel',
+    missing: 'Slack is not connected -- add a webhook URL in Settings > Reports.',
+  }
+}
 
 async function postToSlack(webhookUrl, payload) {
   const res = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -132,7 +152,7 @@ function buildSlackAnswerBlocks({ question, answerMarkdown, askedBy }) {
   }
 }
 
-function buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy }) {
+function buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy, channelLabel }) {
   const cols = columns && columns.length ? columns : (rows[0] ? Object.keys(rows[0]) : [])
   const capped = rows.slice(0, 20)
   const widths = cols.map(c => Math.max(c.length, ...(capped.length ? capped.map(r => String(r[c] ?? '').length) : [0])))
@@ -144,6 +164,11 @@ function buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy }) {
   return {
     blocks: [
       { type: 'header', text: { type: 'plain_text', text: `📤 ${(title || 'Export').slice(0, 140)}`, emoji: true } },
+      // a test post says so on its face, so it can't be mistaken for a real report if
+      // someone forwards a screenshot out of the test channel
+      ...(channelLabel === 'test channel'
+        ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: ':test_tube: *Test post* -- sent to the test channel to check formatting.' }] }]
+        : []),
       { type: 'context', elements: [{ type: 'mrkdwn', text: `${sourcePage ? sourcePage + ' · ' : ''}${rows.length} row${rows.length === 1 ? '' : 's'} · shared by ${askedBy || 'a teammate'}` }] },
       { type: 'section', text: { type: 'mrkdwn', text: (table + truncNote).slice(0, 2900) } },
     ],
@@ -175,14 +200,14 @@ async function handleSlackAnswer(req, res) {
   if (!canAccessDashboard(me.role, 'ask_ai')) return res.status(403).json({ error: 'Forbidden' })
 
   const cfg = await getReportConfig()
-  const webhook = cfg.slack_webhook_url || process.env.SLACK_WEBHOOK_URL
-  if (!webhook) return res.status(500).json({ error: 'Slack is not connected -- add a webhook URL in Settings > Reports.' })
+  const hook = resolveSlackWebhook(cfg, req.body?.slackTarget)
+  if (!hook.url) return res.status(500).json({ error: hook.missing })
 
   const { question, answerMarkdown } = req.body || {}
   if (!answerMarkdown) return res.status(400).json({ error: 'No answer content to send' })
 
   try {
-    await postToSlack(webhook, buildSlackAnswerBlocks({ question, answerMarkdown, askedBy: me.email }))
+    await postToSlack(hook.url, buildSlackAnswerBlocks({ question, answerMarkdown, askedBy: me.email }))
     await logReport({ report_type: 'slack answer', recipients: ['slack'], status: 'sent', triggered_by: me.email })
     return res.status(200).json({ ok: true, success: true })
   } catch (e) {
@@ -200,23 +225,25 @@ async function handleSlackExport(req, res) {
   // sourcePage/filename label) so a restricted viewer can't export from a page they
   // were never granted. Older/unrecognized callers with no dashboardId fall back to
   // admin-only rather than silently allowing.
-  const { title, columns, rows, sourcePage, dashboardId } = req.body || {}
+  const { title, columns, rows, sourcePage, dashboardId, slackTarget } = req.body || {}
   if (!dashboardId ? me.role !== 'admin' : !canAccessDashboard(me.role, dashboardId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
 
   const cfg = await getReportConfig()
-  const webhook = cfg.slack_webhook_url || process.env.SLACK_WEBHOOK_URL
-  if (!webhook) return res.status(500).json({ error: 'Slack is not connected -- add a webhook URL in Settings > Reports.' })
+  const hook = resolveSlackWebhook(cfg, slackTarget)
+  if (!hook.url) return res.status(500).json({ error: hook.missing })
 
   if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'No rows to send' })
 
+  // the channel is recorded in the log so a test post is never mistaken for a real one
+  const logType = slackTarget === 'test' ? 'slack export (test)' : 'slack export'
   try {
-    await postToSlack(webhook, buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy: me.email }))
-    await logReport({ report_type: 'slack export', recipients: ['slack'], status: 'sent', triggered_by: me.email })
-    return res.status(200).json({ ok: true, success: true })
+    await postToSlack(hook.url, buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy: me.email, channelLabel: hook.label }))
+    await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: me.email })
+    return res.status(200).json({ ok: true, success: true, channel: hook.label })
   } catch (e) {
-    await logReport({ report_type: 'slack export', recipients: ['slack'], status: 'failed', error: e.message, triggered_by: me.email })
+    await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'failed', error: e.message, triggered_by: me.email })
     return res.status(500).json({ error: e.message })
   }
 }

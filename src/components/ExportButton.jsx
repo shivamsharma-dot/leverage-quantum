@@ -17,9 +17,13 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
   // supply the underlying numbers alongside them.
   const rawAllRows = rawData ? (rawTotalRow ? [rawTotalRow, ...rawData] : rawData) : null
 
-  const exportSlack = async () => {
+  // target is explicit rather than a single "send to Slack": an Incoming Webhook is bound to
+  // one channel, so the only safe way to test is a separate test webhook, and the confirm
+  // names the destination so the team channel is never hit by accident.
+  const exportSlack = async (target) => {
     if (!allRows.length) return
-    if (!window.confirm(`Post "${filename || 'this export'}" (${allRows.length} row${allRows.length === 1 ? '' : 's'}) to the team Slack channel?`)) return
+    const where = target === 'test' ? 'the TEST Slack channel' : 'the MAIN team Slack channel'
+    if (!window.confirm(`Post "${filename || 'this export'}" (${allRows.length} row${allRows.length === 1 ? '' : 's'}) to ${where}?`)) return
     setSlackBusy(true)
     try {
       const cols = colsOf()
@@ -28,11 +32,11 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'slack_export', title: filename, columns: cols, rows, sourcePage: filename, dashboardId }),
+        body: JSON.stringify({ type: 'slack_export', title: filename, columns: cols, rows, sourcePage: filename, dashboardId, slackTarget: target }),
       })
       const resData = await r.json()
       if (!r.ok) throw new Error(resData.error || 'Failed to post to Slack')
-      toast('Posted to Slack', { type: 'success' })
+      toast('Posted to Slack ' + (resData.channel || ''), { type: 'success' })
       setOpen(false)
     } catch (e) {
       toast(e.message || 'Could not post to Slack', { type: 'muted' })
@@ -203,7 +207,22 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
               </svg>
               {sheetsBusy ? 'Creating sheet…' : 'Export to Google Sheets'}
             </button>
-            <button onClick={exportSlack} disabled={slackBusy} style={{
+            <button onClick={() => exportSlack('test')} disabled={slackBusy} style={{
+              display:'flex', alignItems:'center', gap:9, width:'100%',
+              padding:'9px 14px', border:'none', background:'none',
+              cursor: slackBusy ? 'default' : 'pointer', fontSize:13, fontWeight:500, color:'#111827',
+              borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
+              transition:'background .1s', opacity: slackBusy ? 0.6 : 1
+            }}
+            title="Posts to the test channel -- safe for checking formatting"
+            onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
+            onMouseOut={e=>e.currentTarget.style.background='none'}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+              </svg>
+              {slackBusy ? 'Posting…' : 'Send to Slack — test channel'}
+            </button>
+            <button onClick={() => exportSlack('prod')} disabled={slackBusy} style={{
               display:'flex', alignItems:'center', gap:9, width:'100%',
               padding:'9px 14px', border:'none', background:'none',
               cursor: slackBusy ? 'default' : 'pointer', fontSize:13, fontWeight:500, color:'#111827',
@@ -215,7 +234,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4A154B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
               </svg>
-              {slackBusy ? 'Posting…' : 'Send to Slack'}
+              {slackBusy ? 'Posting…' : 'Send to Slack — main channel'}
             </button>
             {extraOption && (
               <button onClick={extraOption.onClick} disabled={extraOption.busy} style={{

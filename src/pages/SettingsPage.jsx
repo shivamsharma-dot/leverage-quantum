@@ -865,6 +865,7 @@ export default function SettingsPage() {
         if (pf.report_subjects) setRcSubjects({ daily: pf.report_subjects.daily || '', weekly: pf.report_subjects.weekly || '', monthly: pf.report_subjects.monthly || '' })
         if (pf.auto_reports_enabled != null) setRcAuto(pf.auto_reports_enabled !== false)
         if (pf.slack_webhook_url != null) setSlackWebhook(pf.slack_webhook_url)
+        if (pf.slack_webhook_url_test != null) setSlackWebhookTest(pf.slack_webhook_url_test)
         if (pf.slack_auto_reports_enabled != null) setSlackAuto(pf.slack_auto_reports_enabled !== false)
         setSavedHiddenPages(hp)
         setHiddenPages(hp)
@@ -1237,6 +1238,9 @@ export default function SettingsPage() {
   const [unassignedMsg, setUnassignedMsg] = useState('')
   // --- Slack config (webhook + auto-post toggle) ---
   const [slackWebhook, setSlackWebhook] = useState('')
+  // An Incoming Webhook is bound to one channel, so a test channel needs its own webhook --
+  // there's no way to redirect a post at send time.
+  const [slackWebhookTest, setSlackWebhookTest] = useState('')
   const [slackAuto, setSlackAuto] = useState(true)
   const [slackCfgSaving, setSlackCfgSaving] = useState(false)
   const [slackCfgMsg, setSlackCfgMsg] = useState('')
@@ -1421,6 +1425,7 @@ export default function SettingsPage() {
     try {
       const entries = [
         ['slack_webhook_url', slackWebhook.trim()],
+        ['slack_webhook_url_test', slackWebhookTest.trim()],
         ['slack_auto_reports_enabled', slackAuto],
       ]
       for (const [key, value] of entries) {
@@ -1442,7 +1447,7 @@ export default function SettingsPage() {
       const r = await fetch('/api/send-report', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'slack_answer', question: 'Slack connection test from Settings', answerMarkdown: 'This is a test message from **Leverage Quantum** — if you can see this, your Slack webhook is connected correctly.' }),
+        body: JSON.stringify({ type: 'slack_answer', question: 'Slack connection test from Settings', answerMarkdown: 'This is a test message from **Leverage Quantum** — if you can see this, your Slack webhook is connected correctly.', slackTarget: 'test' }),
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed')
@@ -2503,10 +2508,16 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>Slack</h3>
-                <p className={styles.cardDesc}>Post Ask AI answers, page exports, and a compact summary of every scheduled report to a team Slack channel. Create an Incoming Webhook in Slack (Slack app settings &gt; Incoming Webhooks &gt; Add New Webhook to Workspace) and paste the URL below.</p>
-                <label className={styles.fieldLabel}>Webhook URL</label>
+                <p className={styles.cardDesc}>Post Ask AI answers, page exports, and a compact summary of every scheduled report to Slack. Create an Incoming Webhook in Slack (Slack app settings &gt; Incoming Webhooks &gt; Add New Webhook to Workspace) and paste the URL below. A webhook is tied to <b>one</b> channel, so add a second one pointing at a test channel to try things out without posting to the team.</p>
+                <label className={styles.fieldLabel}>Test channel webhook URL</label>
                 <div className={styles.inputGroup}>
-                  <input type="text" className={styles.input} placeholder="https://hooks.slack.com/services/…" value={slackWebhook}
+                  <input type="text" className={styles.input} placeholder="https://hooks.slack.com/services/…  (test channel)" value={slackWebhookTest}
+                    onChange={e => setSlackWebhookTest(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                </div>
+                <p className={styles.cardDesc} style={{ marginTop: 6 }}>Used by “Send test message” below and by the <b>Send to Slack — test channel</b> option in every page’s Export menu. Test posts are labelled as tests in Slack.</p>
+                <label className={styles.fieldLabel} style={{ marginTop: 14 }}>Main channel webhook URL</label>
+                <div className={styles.inputGroup}>
+                  <input type="text" className={styles.input} placeholder="https://hooks.slack.com/services/…  (team channel)" value={slackWebhook}
                     onChange={e => setSlackWebhook(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0' }}>
@@ -2517,7 +2528,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <Button onClick={saveSlackConfig} disabled={slackCfgSaving}>{slackCfgSaving ? 'Saving…' : 'Save'}</Button>
-                  <Button variant="secondary" onClick={sendSlackTest} disabled={slackTesting || !slackWebhook.trim()}>{slackTesting ? 'Sending…' : 'Send test message'}</Button>
+                  <Button variant="secondary" onClick={sendSlackTest} disabled={slackTesting || !slackWebhookTest.trim()}>{slackTesting ? 'Sending…' : 'Send test message to test channel'}</Button>
                   {slackCfgMsg && <span className={styles.rcFeedback + ' ' + (slackCfgMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{slackCfgMsg}</span>}
                 </div>
               </div>
