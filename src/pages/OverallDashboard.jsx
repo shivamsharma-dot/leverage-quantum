@@ -1717,9 +1717,14 @@ export default function OverallDashboard() {
                     {/* Totals live in the header so they stay put when the body is sorted or
                         scrolled, and land in shot without needing to scroll to the bottom. */}
                     {tableRows.length > 0 && (
-                      <tr style={{ background:C.navyBg, borderBottom:`2px solid ${C.navy}` }}>
-                        <th style={{ padding:'11px 12px', fontSize:12.5, fontWeight:800, letterSpacing:'0.04em', color:C.navy, textAlign:'left', whiteSpace:'nowrap' }}>
-                          TOTAL
+                      // Deliberately quiet: a tinted, navy-underlined band here competed with
+                      // the column headers directly above it and read as a slab. Neutral ink on
+                      // the plain surface, at the same size as the body, lets it read as an
+                      // authoritative summary line while the column headers stay the only
+                      // emphasised band.
+                      <tr style={{ background:'var(--card)', borderBottom:'2px solid #CBD5E1' }}>
+                        <th style={{ padding:'10px 12px', fontSize:10.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'#64748B', textAlign:'left', whiteSpace:'nowrap' }}>
+                          Total
                         </th>
                         {displayCols.map(col => {
                           const v = summaryValue(totalsRow, col.key)
@@ -1727,7 +1732,7 @@ export default function OverallDashboard() {
                           const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
                           return (
                             <th key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
-                              style={{ padding:'11px 10px', fontSize:13.5, fontWeight:800, textAlign: isCorridor ? 'left' : 'right', color: isCorridor ? '#94A3B8' : C.navy, whiteSpace:'nowrap' }}>
+                              style={{ padding:'10px 10px', fontSize:14, fontWeight:800, textAlign: isCorridor ? 'left' : 'right', color: isCorridor ? '#CBD5E1' : '#0F172A', whiteSpace:'nowrap' }}>
                               {summaryFmt(col.key, v)}
                             </th>
                           )
