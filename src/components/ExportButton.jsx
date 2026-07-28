@@ -2,18 +2,24 @@ import { useState } from 'react'
 import { toast } from './ToastHost'
 import Button from './Button'
 
-export default function ExportButton({ data, filename, columns, dashboardId, extraOption }) {
+export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow }) {
   const [open, setOpen] = useState(false)
   const [sheetsBusy, setSheetsBusy] = useState(false)
   const [slackBusy, setSlackBusy] = useState(false)
 
+  // A totals row, when the caller has one, leads the export -- mirroring where it sits on
+  // screen (directly under the header) rather than being buried at the bottom of the file.
+  // Shared by all four export paths so CSV / JSON / Sheets / Slack can't disagree.
+  const allRows = totalRow ? [totalRow, ...(data || [])] : (data || [])
+  const colsOf = () => columns || (allRows[0] ? Object.keys(allRows[0]) : [])
+
   const exportSlack = async () => {
-    if (!data || data.length === 0) return
-    if (!window.confirm(`Post "${filename || 'this export'}" (${data.length} row${data.length === 1 ? '' : 's'}) to the team Slack channel?`)) return
+    if (!allRows.length) return
+    if (!window.confirm(`Post "${filename || 'this export'}" (${allRows.length} row${allRows.length === 1 ? '' : 's'}) to the team Slack channel?`)) return
     setSlackBusy(true)
     try {
-      const cols = columns || Object.keys(data[0])
-      const rows = data.map(r => { const o = {}; cols.forEach(c => { o[c] = r[c] ?? '' }); return o })
+      const cols = colsOf()
+      const rows = allRows.map(r => { const o = {}; cols.forEach(c => { o[c] = r[c] ?? '' }); return o })
       const r = await fetch('/api/send-report', {
         method: 'POST',
         credentials: 'include',
@@ -32,11 +38,11 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
   }
 
   const exportSheets = async () => {
-    if (!data || data.length === 0) return
+    if (!allRows.length) return
     setSheetsBusy(true)
     try {
-      const cols = columns || Object.keys(data[0])
-      const rows = data.map(r => { const o = {}; cols.forEach(c => { o[c] = r[c] ?? '' }); return o })
+      const cols = colsOf()
+      const rows = allRows.map(r => { const o = {}; cols.forEach(c => { o[c] = r[c] ?? '' }); return o })
       const r = await fetch('/api/export-to-sheets', {
         method: 'POST',
         credentials: 'include',
@@ -56,15 +62,21 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
   }
 
   const exportCSV = () => {
-    if (!data || data.length === 0) return
-    const cols = columns || Object.keys(data[0])
-    const header = cols.join(',')
-    const rows = data.map(r => cols.map(c => {
-      const v = r[c] ?? ''
-      return typeof v === 'string' && v.includes(',') ? `"${v}"` : v
-    }).join(','))
-    const csv = [header, ...rows].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
+    if (!allRows.length) return
+    const cols = colsOf()
+    // Proper RFC4180 escaping. The previous version only quoted values that happened to
+    // contain a comma and never escaped embedded double quotes, so any campaign name with a
+    // quote in it silently corrupted every following column.
+    const esc = v => {
+      const str = v == null ? '' : String(v)
+      return /[",\n\r]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str
+    }
+    const lines = [cols.map(esc).join(','), ...allRows.map(r => cols.map(c => esc(r[c])).join(','))]
+    // The leading \uFEFF is a UTF-8 BOM, and it is load-bearing: without it Excel opens the
+    // file in the system legacy encoding, where ₹ (UTF-8 E2 82 B9) renders as "‚Çπ" and an
+    // em dash as "‚Äî". The BOM is what makes Excel read it as UTF-8.
+    const csv = lines.join('\r\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -75,7 +87,8 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
   }
 
   const exportJSON = () => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    if (!allRows.length) return
+    const blob = new Blob([JSON.stringify(allRows, null, 2)], { type: 'application/json;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

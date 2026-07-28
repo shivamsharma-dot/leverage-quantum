@@ -1294,7 +1294,7 @@ export default function OverallDashboard() {
     }
   }), [grouped, srFee])
 
-  const exportRows = useMemo(() => groupedWithRevenue.map(g => ({
+  const summaryExportRow = g => ({
     [grpByLabel]: g.label,
     Spend: fmtINR(g.spend), Leads: g.leads, 'Total Queued': g.queued,
     'Futwork Human QL': g.humanQL, 'Futwork AI QL': g.futworkAiQl, 'Superbot AI QL': g.superbotAiQl, 'Total QLs': g.totalQL,
@@ -1303,7 +1303,8 @@ export default function OverallDashboard() {
     CPL: summaryFmt('cpl', summaryValue(g, 'cpl')), CPQL: summaryFmt('cpql', summaryValue(g, 'cpql')), CPA: summaryFmt('cpa', summaryValue(g, 'cpa')),
     'Est. SR Revenue': fmtINR(g.estSrRevenue), 'Actual SR Revenue': fmtINR(g.actSrRevenue),
     'Actual ROAS': g.roas.toFixed(2) + 'x', 'Est. ROAS': g.estimatedRoas.toFixed(2) + 'x',
-  })), [groupedWithRevenue, grpByLabel])
+  })
+  const exportRows = useMemo(() => groupedWithRevenue.map(summaryExportRow), [groupedWithRevenue, grpByLabel])
 
   const maxSourceLeads = bySource.length ? Math.max(...bySource.map(s => s.leads)) : 1
   const totalSourceLeads = bySource.reduce((t, s) => t + s.leads, 0)
@@ -1378,6 +1379,15 @@ export default function OverallDashboard() {
     displayCols.forEach(c => { o[c.label] = summaryFmt(c.key, summaryValue(g, c.key)) })
     return o
   }), [sortedFilteredRows, displayCols, grpByLabel])
+
+  // Exports lead with the same TOTAL the table shows, built from totalsRow through the very
+  // same formatters -- so a downloaded file can't disagree with what's on screen.
+  const tableTotalExportRow = useMemo(() => {
+    const o = { [grpByLabel]: 'TOTAL' }
+    displayCols.forEach(c => { o[c.label] = summaryFmt(c.key, summaryValue(totalsRow, c.key)) })
+    return o
+  }, [totalsRow, displayCols, grpByLabel])
+  const exportTotalRow = useMemo(() => summaryExportRow(totalsRow), [totalsRow, grpByLabel])
 
   if (loading) {
     return (
@@ -1514,7 +1524,7 @@ export default function OverallDashboard() {
             >
               {loading ? 'Refreshing' : 'Refresh'}
             </Button>
-            <ExportButton data={exportRows} filename="overall-summary" dashboardId="overall" />
+            <ExportButton data={exportRows} totalRow={exportTotalRow} filename="overall-summary" dashboardId="overall" />
             <div style={{ position:'relative' }}>
               <button onClick={() => setShowInfo(v => !v)} title="How these metrics are calculated" style={{ width:30, height:30, borderRadius:8, border:`0.5px solid ${C.border}`, background: showInfo ? C.navyBg : 'var(--card)', color:C.navy, fontSize:14, fontWeight:700, fontStyle:'italic', fontFamily:'Georgia,serif', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>i</button>
               {showInfo && <div onClick={() => setShowInfo(false)} style={{ position:'fixed', inset:0, zIndex:150 }} />}
@@ -1762,7 +1772,7 @@ export default function OverallDashboard() {
                 </div>
 
                 <div style={{ marginLeft:'auto' }}>
-                  <ExportButton data={tableExportRows} filename={'overall-' + grpBy} dashboardId="overall" />
+                  <ExportButton data={tableExportRows} totalRow={tableTotalExportRow} filename={'overall-' + grpBy} dashboardId="overall" />
                 </div>
               </div>
 
