@@ -17,8 +17,8 @@ jobs:
           SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           python3 << 'PYEOF'
-          import json, urllib.request, re, os, time
-          from datetime import datetime
+          import json, urllib.request, urllib.parse, re, os, time, calendar
+          from datetime import datetime, timezone, timedelta
 
           SB_URL = os.environ['SB_URL']
           SB_KEY = os.environ['SB_KEY']
@@ -140,6 +140,96 @@ jobs:
                       if attempt == 2: raise
                       time.sleep(2 * (attempt + 1))
               print('Upserted batch', i, '-', i + len(batch), 'of', len(rows))
+
+          # ── Manual affiliate spend ──────────────────────────────────────────────
+          # Affiliate spend is entered per month by an admin (Settings > Data > Affiliate
+          # spend) and lives in app_preferences, NOT in the sheet. Without this step every
+          # consumer of this cache -- the Marketing Performance report, both agents, and
+          # Ask AI's analyze_campaign_contribution tool -- sees Affiliate at zero spend and
+          # treats its CPQL/CPA as free, which skews per-channel comparisons.
+          #
+          # This mirrors buildSyntheticAffiliateRows() in src/pages/OverallDashboard.jsx:
+          # each month is spread across one row PER DAY, with the denominator matching what
+          # the entered figure actually means --
+          #   past month    = completed total    -> divided by that month's calendar days
+          #   current month = spend-so-far       -> divided by days elapsed, nothing after today
+          #   future month  = pre-entered budget -> divided by the full calendar month
+          # Elapsed days are counted in IST so this agrees with what the team sees in the
+          # browser rather than drifting by a day on a UTC runner.
+          # KEEP THE TWO IMPLEMENTATIONS IN STEP if either changes.
+          AFF_CAMPAIGN = 'Affiliate (manual entry)'
+          try:
+              IST = timezone(timedelta(hours=5, minutes=30))
+              now_ist = datetime.now(IST)
+              cur_y, cur_m, cur_d = now_ist.year, now_ist.month, now_ist.day
+
+              pref_url = (SB_URL + '/rest/v1/app_preferences?select=value'
+                          '&key=eq.affiliate_spend_manual&limit=1')
+              req = urllib.request.Request(pref_url, headers={
+                  'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+              })
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  pref = json.loads(r.read().decode('utf-8'))
+              aff_map = {}
+              if pref and isinstance(pref[0].get('value'), dict):
+                  aff_map = pref[0]['value']
+
+              aff_rows = []
+              for ym, raw in sorted(aff_map.items()):
+                  m_ym = re.match(r'^(\d{4})-(\d{1,2})$', str(ym).strip())
+                  if not m_ym: continue
+                  y, mo = int(m_ym.group(1)), int(m_ym.group(2))
+                  if mo < 1 or mo > 12: continue
+                  total = num(raw, True)
+                  if not total: continue
+                  days_in_month = calendar.monthrange(y, mo)[1]
+                  is_current = (y == cur_y and mo == cur_m)
+                  days = min(cur_d, days_in_month) if is_current else days_in_month
+                  if days <= 0: continue
+                  per_day = total / days
+                  for d in range(1, days + 1):
+                      aff_rows.append({
+                          'campaign': AFF_CAMPAIGN, 'source': 'Affiliate',
+                          'date': '%04d-%02d-%02d' % (y, mo, d),
+                          'leads': 0, 'queued': 0, 'total_ql': 0, 'spend': per_day,
+                          'apps': 0, 'offers': 0, 'deposits': 0, 'raus': 0,
+                          'synced_at': now_iso,
+                      })
+                  print('  %s: %s over %d day(s) -> %.2f/day%s'
+                        % (ym, total, days, per_day, ' (spend-so-far)' if is_current else ''))
+
+              # Delete before insert, so reducing or removing a month's entry self-corrects
+              # instead of leaving stale prorated days behind. Scoped to our own synthetic
+              # campaign label, so real sheet rows are never touched.
+              del_url = (SB_URL + '/rest/v1/overall_funnel_daily?campaign=eq.'
+                         + urllib.parse.quote('"' + AFF_CAMPAIGN + '"'))
+              req = urllib.request.Request(del_url, method='DELETE', headers={
+                  'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+                  'Prefer': 'return=minimal',
+              })
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  r.read()
+
+              for i in range(0, len(aff_rows), BATCH):
+                  batch = aff_rows[i:i+BATCH]
+                  req = urllib.request.Request(
+                      SB_URL + '/rest/v1/overall_funnel_daily?on_conflict=campaign,date,source',
+                      data=json.dumps(batch).encode('utf-8'),
+                      method='POST',
+                      headers={
+                          'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY,
+                          'Content-Type': 'application/json',
+                          'Prefer': 'resolution=merge-duplicates,return=minimal',
+                      },
+                  )
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      r.read()
+              print('Affiliate spend: wrote', len(aff_rows), 'prorated day rows across',
+                    len(aff_map), 'month(s).')
+          except Exception as e:
+              # Non-fatal on purpose -- the sheet aggregation above is the important payload,
+              # and it has already been written by this point.
+              print('::warning::manual affiliate spend sync skipped:', e)
 
           print('Sync complete.')
           PYEOF
