@@ -434,9 +434,9 @@ function summaryValue(g, key) {
   // Cost metrics divide by PAID denominators only (leads/QLs/apps from rows that carried
   // spend). null -- rendered as "—" -- when a row had no paid activity, since a flat ₹0
   // reads like "free and excellent" when it actually means "no spend here at all".
-  if (key === 'cpl') return g.paidLeads > 0 ? g.spend / g.paidLeads : null
-  if (key === 'cpql') return g.paidQL > 0 ? g.spend / g.paidQL : null
-  if (key === 'cpa') return g.paidApps > 0 ? g.spend / g.paidApps : null
+  if (key === 'cpl') return (g.spend > 0 && g.paidLeads > 0) ? g.spend / g.paidLeads : null
+  if (key === 'cpql') return (g.spend > 0 && g.paidQL > 0) ? g.spend / g.paidQL : null
+  if (key === 'cpa') return (g.spend > 0 && g.paidApps > 0) ? g.spend / g.paidApps : null
   return g[key]
 }
 function summaryFmt(key, v) {
@@ -863,11 +863,23 @@ export default function OverallDashboard() {
   // is -- on real data this reported CPL ~₹151 when the true paid CPL was ~₹205, and
   // CPA ~₹40,119 against a true ~₹83,323.
   //
-  // Derived from the underlying daily rows rather than by dropping whole zero-spend
-  // groups, so the figure is identical no matter which grouping tab the table below is
-  // on. The numerator stays ALL spend -- identical either way, since excluded rows
+  // "Paid" is judged per SOURCE, not per row. Spend and leads routinely land on
+  // DIFFERENT rows: manual affiliate spend arrives on synthetic rows carrying no leads
+  // at all, while Affiliate's real leads sit on sheet rows with zero spend -- and
+  // Remarketing behaves the same way. A row-level test therefore found zero paid leads
+  // for both and showed "—" on channels that plainly did spend money.
+  //
+  // Because the test is evaluated per row but keyed on the row's source, summing it
+  // across any grouping (Source / Campaign / Corridor / Month / Day) yields the same
+  // total, so the blended figure stays identical whichever tab the table is on.
+  // The numerator stays ALL spend -- identical either way, since unpaid sources
   // contribute zero spend by definition.
-  const paidKpis = useMemo(() => sumKpis(filtered.filter(r => r.spend > 0)), [filtered])
+  const paidSources = useMemo(() => {
+    const s = new Set()
+    filtered.forEach(r => { if (r.spend > 0) s.add(r.source) })
+    return s
+  }, [filtered])
+  const paidKpis = useMemo(() => sumKpis(filtered.filter(r => paidSources.has(r.source))), [filtered, paidSources])
   const cpl = paidKpis.leads > 0 ? kpis.spend / paidKpis.leads : 0
   const cpql = paidKpis.totalQL > 0 ? kpis.spend / paidKpis.totalQL : 0
   const cpa = paidKpis.apps > 0 ? kpis.spend / paidKpis.apps : 0
@@ -911,7 +923,11 @@ export default function OverallDashboard() {
   const prevKpis = useMemo(() => sumKpis(prevFiltered), [prevFiltered])
   // Same paid-only basis as the current period -- otherwise the delta arrows would be
   // comparing two different definitions of CPL/CPQL/CPA against each other.
-  const prevPaidKpis = useMemo(() => sumKpis(prevFiltered.filter(r => r.spend > 0)), [prevFiltered])
+  const prevPaidKpis = useMemo(() => {
+    const s = new Set()
+    prevFiltered.forEach(r => { if (r.spend > 0) s.add(r.source) })
+    return sumKpis(prevFiltered.filter(r => s.has(r.source)))
+  }, [prevFiltered])
   const prevCpl = prevPaidKpis.leads > 0 ? prevKpis.spend / prevPaidKpis.leads : 0
   const prevCpql = prevPaidKpis.totalQL > 0 ? prevKpis.spend / prevPaidKpis.totalQL : 0
   const prevCpa = prevPaidKpis.apps > 0 ? prevKpis.spend / prevPaidKpis.apps : 0
@@ -1114,12 +1130,13 @@ export default function OverallDashboard() {
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
-      // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
-      if (r.spend > 0) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      // paid-only denominators for CPL/CPQL/CPA -- keyed on the row's SOURCE, since spend
+      // and leads often sit on different rows (see the paidSources note above)
+      if (paidSources.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(r.source, e)
     })
     return [...m.values()].sort((a, b) => b.leads - a.leads)
-  }, [filtered])
+  }, [filtered, paidSources])
 
   const bySourceEfficiency = useMemo(() => (
     bySource.filter(s => s.queued >= 10).map(s => ({ ...s, qlRate: s.queued > 0 ? (s.totalQL / s.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 8)
@@ -1159,12 +1176,13 @@ export default function OverallDashboard() {
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
-      // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
-      if (r.spend > 0) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      // paid-only denominators for CPL/CPQL/CPA -- keyed on the row's SOURCE, since spend
+      // and leads often sit on different rows (see the paidSources note above)
+      if (paidSources.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(r.campaign, e)
     })
     return [...m.values()].sort((a, b) => b.leads - a.leads)
-  }, [filtered])
+  }, [filtered, paidSources])
 
   const byCorridor = useMemo(() => {
     const m = new Map()
@@ -1175,12 +1193,13 @@ export default function OverallDashboard() {
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
-      // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
-      if (r.spend > 0) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      // paid-only denominators for CPL/CPQL/CPA -- keyed on the row's SOURCE, since spend
+      // and leads often sit on different rows (see the paidSources note above)
+      if (paidSources.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(id, e)
     })
     return [...m.values()].sort((a, b) => b.leads - a.leads)
-  }, [filtered])
+  }, [filtered, paidSources])
 
   // Full day-level breakdown (all metrics, no 30-day cap) for the summary table's Day
   // grouping — distinct from `byDay` above, which is the chart's lighter/capped version.
@@ -1193,12 +1212,13 @@ export default function OverallDashboard() {
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
-      // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
-      if (r.spend > 0) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      // paid-only denominators for CPL/CPQL/CPA -- keyed on the row's SOURCE, since spend
+      // and leads often sit on different rows (see the paidSources note above)
+      if (paidSources.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(key, e)
     })
     return [...m.values()].sort((a, b) => b.key.localeCompare(a.key))
-  }, [filtered])
+  }, [filtered, paidSources])
 
   const topCampaignsByLeads = useMemo(() => byCampaign.slice(0, 5), [byCampaign])
   const topCampaignsByEfficiency = useMemo(() => (
@@ -1252,12 +1272,12 @@ export default function OverallDashboard() {
         deposits:m.deposits, raus: full.reduce((t, r) => t + r.raus, 0),
         spend: full.reduce((t, r) => t + r.spend, 0),
         // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
-        paidLeads: full.reduce((t, r) => t + (r.spend > 0 ? r.leads : 0), 0),
-        paidQL: full.reduce((t, r) => t + (r.spend > 0 ? r.totalQL : 0), 0),
-        paidApps: full.reduce((t, r) => t + (r.spend > 0 ? r.apps : 0), 0),
+        paidLeads: full.reduce((t, r) => t + (paidSources.has(r.source) ? r.leads : 0), 0),
+        paidQL: full.reduce((t, r) => t + (paidSources.has(r.source) ? r.totalQL : 0), 0),
+        paidApps: full.reduce((t, r) => t + (paidSources.has(r.source) ? r.apps : 0), 0),
       }
     })
-  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, filtered])
+  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, filtered, paidSources])
 
   const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'corridor' ? 'Corridor' : grpBy === 'day' ? 'Date' : 'Month'
 
@@ -1505,7 +1525,7 @@ export default function OverallDashboard() {
                   <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.7 }}>
                     <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (Registered At University). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
                     <b>Estimated RAU</b> = Applications × 0.09 (a projection of how many current Applications will go on to register). <b>Actual RAUs</b> is the real, already-registered count — no discount applied. <b>Est./Actual SR Revenue</b> = Estimated/Actual RAUs × SR Fee.<br /><br />
-                    <b>CPL, CPQL and CPA count paid activity only.</b> Their denominators include just the leads / QLs / applications that came from days with real ad spend, so unpaid channels (Referral, Content+Brand, Offline, organic) don't dilute them — a blended CPL over every lead made paid acquisition look roughly a quarter cheaper than it is. Because that's derived from the underlying daily rows rather than by dropping whole zero-spend rows, the figure is the same on every grouping tab. A row with no paid spend shows "—" rather than ₹0.<br /><br />
+                    <b>CPL, CPQL and CPA count paid channels only.</b> A row shows a cost figure only if it carried spend, divided by its own leads / QLs / applications. The <b>TOTAL</b> divides all spend by the leads from <i>sources that spent</i> — so unpaid channels (Referral, Content+Brand, Offline, organic) don't dilute the blended figure, which otherwise made paid acquisition look materially cheaper than it is. "Paid" is judged per source rather than per row, because spend and leads frequently sit on different rows: manual affiliate spend arrives on rows carrying no leads, while Affiliate's actual leads sit on rows with no spend. That keeps the blended figure identical on every grouping tab. A row with no spend of its own shows "—" rather than ₹0.<br /><br />
                     In the summary table, the three conversion rates are each a single funnel step, not a share of all leads: <b>QL %</b> = Total QLs ÷ Total Queued, <b>App %</b> = Applications ÷ Total QLs, <b>Deposit %</b> = Deposits ÷ Offers. Because each stage is reported independently and a lead can reach a later stage in a different period from the one it was queued in, these can read above 100% on small or lagging rows. The <b>TOTAL</b> row re-derives every rate, cost and ROAS from the summed totals rather than averaging the rows, so it is weighted by volume.<br /><br />
                     <b>Executive insights</b> and <b>KPI deltas</b> compare the active period against the immediately preceding period of equal length (or the previous calendar month, in month view). <b>Biggest funnel leak</b> and campaign efficiency rankings use the real conversion path (Leads → Queued → Total QL → Apps → Offers → Deposits), skipping the parallel Floor Queued branch.<br /><br />
                     Last Day / Last 7D / MTD and Custom filter by lead date; the Month dropdown scopes to one calendar month. Source and campaign search filter everything below.
