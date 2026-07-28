@@ -7,6 +7,7 @@ import {
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
+import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import Button from '../components/Button'
 import { getSession, setSession, hasLoaded, getPersisted } from '../lib/sessionLoad'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
@@ -1405,6 +1406,44 @@ export default function OverallDashboard() {
   const tableTotalExportRowRaw = useMemo(() => rawExportRow(totalsRow, 'TOTAL'),
     [totalsRow, displayCols, grpByLabel])
 
+  // Slack share for this table. Slack has no table primitive and its text blocks cap at
+  // 3000 characters, so a 24-column funnel summary can only cross over truthfully as a
+  // picture of the real table plus the full CSV. The row limit is lifted to "all" for the
+  // capture and restored right after, so the image always carries every row the current
+  // filters matched -- never just the visible 25.
+  const tableRef = useRef(null)
+  const buildSlackTableShare = useCallback(async () => {
+    const prevLimit = rowLimit
+    if (prevLimit !== 'all') { setRowLimit('all'); await nextPaint() }
+    try {
+      const node = tableRef.current
+      if (!node) throw new Error('Table is not rendered yet')
+      const shot = await captureNodePng(node)
+      const periodLabel = activeFilter === 'custom' && customFrom ? customFrom + ' to ' + customTo
+        : activeFilter === 'preset' && dateWindow ? dateWindow.label
+        : (selMonth || 'All time')
+      const stat = key => summaryFmt(key, summaryValue(totalsRow, key))
+      const csvCols = [grpByLabel, ...displayCols.map(c => c.label)]
+      return {
+        title: 'Overall \u2014 funnel summary by ' + grpByLabel.toLowerCase(),
+        subtitle: periodLabel + '  \u00b7  Source: ' + source + '  \u00b7  Corridor: ' + corridorFilter,
+        summary: [
+          { label: 'Spend', value: stat('spend') },
+          { label: 'Leads', value: stat('leads') },
+          { label: 'Total QLs', value: stat('totalQL') },
+          { label: 'CPQL', value: stat('cpql') },
+          { label: 'ROAS', value: stat('roas') },
+        ],
+        pngBase64: shot ? shot.base64 : null,
+        pixelRatio: shot ? shot.pixelRatio : null,
+        csv: rowsToCsv(csvCols, [tableTotalExportRowRaw, ...tableExportRowsRaw]),
+      }
+    } finally {
+      if (prevLimit !== 'all') setRowLimit(prevLimit)
+    }
+  }, [rowLimit, activeFilter, customFrom, customTo, dateWindow, selMonth, source, corridorFilter,
+    grpByLabel, displayCols, totalsRow, tableExportRowsRaw, tableTotalExportRowRaw])
+
   if (loading) {
     return (
       <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
@@ -1790,12 +1829,12 @@ export default function OverallDashboard() {
                 <div style={{ marginLeft:'auto' }}>
                   <ExportButton data={tableExportRows} totalRow={tableTotalExportRow}
                     rawData={tableExportRowsRaw} rawTotalRow={tableTotalExportRowRaw}
-                    filename={'overall-' + grpBy} dashboardId="overall" />
+                    filename={'overall-' + grpBy} dashboardId="overall" slackRich={buildSlackTableShare} />
                 </div>
               </div>
 
               <div style={{ overflowX:'auto' }}>
-                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT }}>
+                <table ref={tableRef} style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT }}>
                   <thead>
                     <tr style={{ background:'#F8FAFC', borderBottom:'2px solid #E2E8F0' }}>
                       <th onClick={() => handleSort('label')} style={{ padding:'11px 12px', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>

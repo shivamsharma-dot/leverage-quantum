@@ -955,6 +955,113 @@ async function buildReport(token, reportType) {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
+// ── Slack: post a dashboard table as an IMAGE + full CSV ─────────────────────────
+// The monospace-code-block export above works for narrow tables, but Slack section
+// blocks cap at 3000 characters -- Overall's funnel summary is 24 columns, so it gets
+// cut mid-row and the closing fence is lost. For an exec-facing post the table is
+// therefore rendered in the browser from the real DOM (html-to-image, see
+// src/lib/slackShare.js) and uploaded as a PNG, with the COMPLETE dataset alongside it
+// as a CSV -- nothing truncated on either side.
+//
+// Files require a BOT token: an Incoming Webhook cannot upload. Upload is Slack's
+// 3-step external flow, and both files are completed in ONE call so the result is a
+// single message: comment, image preview, CSV attachment.
+async function slackUploadFile(token, { filename, buffer, title }) {
+  const q = new URLSearchParams({ filename, length: String(buffer.length) })
+  const g = await fetch('https://slack.com/api/files.getUploadURLExternal?' + q.toString(), {
+    method: 'POST', headers: { Authorization: 'Bearer ' + token },
+  })
+  const gd = await g.json().catch(() => ({}))
+  if (!gd.ok) {
+    const why = gd.error === 'missing_scope'
+      ? 'the Slack app needs the files:write scope -- add it, then reinstall the app to the workspace'
+      : (gd.error || 'unknown error')
+    throw new Error('Slack upload URL: ' + why)
+  }
+  const put = await fetch(gd.upload_url, {
+    method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: buffer,
+  })
+  if (!put.ok) throw new Error('Slack file upload failed (' + put.status + ')')
+  return { id: gd.file_id, title: title || filename }
+}
+
+async function slackCompleteUpload(token, { files, channel, initialComment }) {
+  const res = await fetch('https://slack.com/api/files.completeUploadExternal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ files, channel_id: channel, initial_comment: initialComment }),
+  })
+  const d = await res.json().catch(() => ({}))
+  if (!d.ok) {
+    const hints = {
+      not_in_channel: 'the bot is not in ' + channel + ' yet -- run "/invite @pm_analyst" there',
+      channel_not_found: 'channel ' + channel + ' not found -- use its channel ID (e.g. C0123ABCD)',
+      missing_scope: 'the Slack app needs the files:write scope -- add it, then reinstall the app',
+    }
+    throw new Error('Slack: ' + (hints[d.error] || d.error || 'unknown error'))
+  }
+  return d
+}
+
+// The comment carries the headline numbers so the message stands on its own in the feed
+// (and in a mobile notification) before anyone opens the image.
+function buildTableShareComment({ title, subtitle, summary, rowCount, askedBy, isTest, degraded }) {
+  const lines = []
+  if (isTest) lines.push(':test_tube: *Test post* -- sent to the test channel to check formatting.')
+  lines.push('*📊 ' + title + '*')
+  if (subtitle) lines.push(subtitle)
+  const stats = (summary || []).filter(s => s && s.label).map(s => '*' + s.label + '*  ' + s.value)
+  if (stats.length) lines.push('', stats.join('   ·   '))
+  lines.push('', '_Full table attached as an image (' + rowCount + ' row' + (rowCount === 1 ? '' : 's') + ', nothing truncated) · CSV for the raw numbers · shared by ' + askedBy + '_')
+  if (degraded) lines.push('_Image scaled down to fit the upload size limit._')
+  return lines.join('\n')
+}
+
+async function handleSlackExportImage(req, res) {
+  const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+
+  // Same per-page gate as handleSlackExport: a real PAGE_LIST id from the caller, and
+  // admin-only when an older caller sends none, rather than silently allowing.
+  const { dashboardId, slackTarget, filename, title, subtitle, summary, pngBase64, csv, rowCount, pixelRatio } = req.body || {}
+  if (!dashboardId ? me.role !== 'admin' : !canAccessDashboard(me.role, dashboardId)) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  if (!pngBase64) return res.status(400).json({ error: 'No table image to send' })
+
+  const cfg = await getReportConfig()
+  const hook = resolveSlackTarget(cfg, slackTarget)
+  if (hook.mode !== 'bot' || !hook.channel) {
+    return res.status(400).json({ error: 'Posting a table image needs SLACK_BOT_TOKEN plus a channel (files:write) -- an Incoming Webhook cannot upload files.' })
+  }
+
+  const logType = slackTarget === 'test' ? 'slack table image (test)' : 'slack table image'
+  try {
+    const stamp = new Date().toISOString().slice(0, 10)
+    const base = String(filename || 'export').replace(/[^a-z0-9._-]+/gi, '-')
+    const label = title || base
+    const files = [await slackUploadFile(hook.token, {
+      filename: base + '-' + stamp + '.png', buffer: Buffer.from(pngBase64, 'base64'), title: label,
+    })]
+    if (csv) files.push(await slackUploadFile(hook.token, {
+      filename: base + '-' + stamp + '.csv', buffer: Buffer.from(String(csv), 'utf8'), title: label + ' (full data)',
+    }))
+    await slackCompleteUpload(hook.token, {
+      files, channel: hook.channel,
+      initialComment: buildTableShareComment({
+        title: label, subtitle, summary, rowCount: rowCount || 0, askedBy: me.email,
+        isTest: slackTarget === 'test', degraded: pixelRatio ? pixelRatio < 2 : false,
+      }),
+    })
+    await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: me.email })
+    return res.status(200).json({ ok: true, success: true, channel: hook.label })
+  } catch (e) {
+    await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'failed', error: e.message, triggered_by: me.email })
+    return res.status(500).json({ error: e.message })
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
@@ -966,6 +1073,9 @@ export default async function handler(req, res) {
   }
   if ((req.body?.type || req.query?.type) === 'slack_export') {
     return handleSlackExport(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'slack_export_image') {
+    return handleSlackExportImage(req, res)
   }
   if ((req.body?.type || req.query?.type) === 'unassigned_leads') {
     return handleUnassignedLeadsReport(req, res)

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { toast } from './ToastHost'
 import Button from './Button'
 
-export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow }) {
+export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow, slackRich }) {
   const [open, setOpen] = useState(false)
   const [sheetsBusy, setSheetsBusy] = useState(false)
   const [slackBusy, setSlackBusy] = useState(false)
@@ -44,6 +44,35 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
       setSlackBusy(false)
     }
   }
+
+  // When the page supplies slackRich, "Send to Slack" posts the table as a real image of
+  // the on-screen table plus the complete CSV, instead of a monospace code block that
+  // Slack truncates on wide tables. See handleSlackExportImage in api/send-report.js.
+  const exportSlackRich = async (target) => {
+    const where = target === 'test' ? 'the TEST Slack channel' : 'the MAIN team Slack channel'
+    if (!window.confirm(`Post "${filename || 'this export'}" as a table image + CSV (${allRows.length} row${allRows.length === 1 ? '' : 's'}) to ${where}?`)) return
+    setSlackBusy(true)
+    try {
+      const payload = await slackRich()
+      if (!payload || !payload.pngBase64) throw new Error('Could not render the table image \u2014 narrow the filter or use Export \u2192 CSV')
+      const r = await fetch('/api/send-report', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'slack_export_image', dashboardId, slackTarget: target, filename, rowCount: allRows.length, ...payload }),
+      })
+      const resData = await r.json()
+      if (!r.ok) throw new Error(resData.error || 'Failed to post to Slack')
+      toast('Posted to Slack ' + (resData.channel || ''), { type: 'success' })
+      setOpen(false)
+    } catch (e) {
+      toast(e.message || 'Could not post to Slack', { type: 'muted' })
+    } finally {
+      setSlackBusy(false)
+    }
+  }
+
+  const sendSlack = target => (slackRich ? exportSlackRich(target) : exportSlack(target))
 
   const exportSheets = async () => {
     if (!allRows.length) return
@@ -207,7 +236,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
               </svg>
               {sheetsBusy ? 'Creating sheet…' : 'Export to Google Sheets'}
             </button>
-            <button onClick={() => exportSlack('test')} disabled={slackBusy} style={{
+            <button onClick={() => sendSlack('test')} disabled={slackBusy} style={{
               display:'flex', alignItems:'center', gap:9, width:'100%',
               padding:'9px 14px', border:'none', background:'none',
               cursor: slackBusy ? 'default' : 'pointer', fontSize:13, fontWeight:500, color:'#111827',
@@ -222,7 +251,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
               </svg>
               {slackBusy ? 'Posting…' : 'Send to Slack — test channel'}
             </button>
-            <button onClick={() => exportSlack('prod')} disabled={slackBusy} style={{
+            <button onClick={() => sendSlack('prod')} disabled={slackBusy} style={{
               display:'flex', alignItems:'center', gap:9, width:'100%',
               padding:'9px 14px', border:'none', background:'none',
               cursor: slackBusy ? 'default' : 'pointer', fontSize:13, fontWeight:500, color:'#111827',
