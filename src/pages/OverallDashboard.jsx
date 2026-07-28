@@ -1233,8 +1233,14 @@ export default function OverallDashboard() {
   const totalSourceLeads = bySource.reduce((t, s) => t + s.leads, 0)
 
   const displayCols = useMemo(() => (
-    colOrder.filter(k => visibleCols.includes(k)).map(k => SUMMARY_COLUMNS.find(c => c.key === k)).filter(Boolean)
-  ), [colOrder, visibleCols])
+    colOrder.filter(k => visibleCols.includes(k))
+      // Corridor only carries a value when grouping by campaign. Every other grouping
+      // either has no corridor on the row at all (source / month / day -- it rendered as
+      // a column of "—") or IS the corridor already (the corridor grouping's own label
+      // column), so showing it there is pure noise.
+      .filter(k => k !== 'corridor' || grpBy === 'campaign')
+      .map(k => SUMMARY_COLUMNS.find(c => c.key === k)).filter(Boolean)
+  ), [colOrder, visibleCols, grpBy])
 
   // Sorted + search-filtered, but NOT sliced to the on-screen row limit -- this is the set
   // that export should always draw from, so "Show 10/25/50" (a display-density control) never
@@ -1262,6 +1268,30 @@ export default function OverallDashboard() {
   const tableRows = useMemo(() => (
     rowLimit === 'all' ? sortedFilteredRows : sortedFilteredRows.slice(0, rowLimit)
   ), [sortedFilteredRows, rowLimit])
+
+  // Totals row. Deliberately built over sortedFilteredRows (every row matching the
+  // current search) rather than tableRows, so the "Show 10/25/50" display-density
+  // control can never make the total silently under-report.
+  //
+  // Only genuinely additive fields are summed. Every ratio -- the three conversion
+  // percentages, CPL/CPQL/CPA and both ROAS figures -- is RE-DERIVED from those summed
+  // totals, because averaging per-row ratios gives a different (and wrong) answer:
+  // a source with 3 leads and one with 30,000 would count equally.
+  const SUMMARY_ADDITIVE_KEYS = ['leads', 'queued', 'humanQL', 'futworkAiQl', 'superbotAiQl',
+    'totalQL', 'apps', 'offers', 'deposits', 'raus', 'spend', 'estimatedRaus',
+    'estSrRevenue', 'actSrRevenue']
+  const totalsRow = useMemo(() => {
+    const t = { label: 'TOTAL', corridor: null }
+    SUMMARY_ADDITIVE_KEYS.forEach(k => {
+      t[k] = sortedFilteredRows.reduce((s, g) => s + (Number(g[k]) || 0), 0)
+    })
+    // summaryValue() derives qlPct/appPct/depositPct/cpl/cpql/cpa from these fields, so
+    // those come out correct for free. roas/estimatedRoas are stored, not derived, so
+    // they have to be recomputed here from the summed revenue and spend.
+    t.roas = t.spend > 0 ? t.actSrRevenue / t.spend : 0
+    t.estimatedRoas = t.spend > 0 ? t.estSrRevenue / t.spend : 0
+    return t
+  }, [sortedFilteredRows])
 
   // Exports the FULL search-filtered/sorted set, not just the on-screen "Show N" slice --
   // the row-limit control is a display density preference, not a data cap.
@@ -1417,6 +1447,7 @@ export default function OverallDashboard() {
                   <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.7 }}>
                     <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (Registered At University). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
                     <b>Estimated RAU</b> = Applications × 0.09 (a projection of how many current Applications will go on to register). <b>Actual RAUs</b> is the real, already-registered count — no discount applied. <b>Est./Actual SR Revenue</b> = Estimated/Actual RAUs × SR Fee.<br /><br />
+                    In the summary table, the three conversion rates are each a single funnel step, not a share of all leads: <b>QL %</b> = Total QLs ÷ Total Queued, <b>App %</b> = Applications ÷ Total QLs, <b>Deposit %</b> = Deposits ÷ Offers. Because each stage is reported independently and a lead can reach a later stage in a different period from the one it was queued in, these can read above 100% on small or lagging rows. The <b>TOTAL</b> row re-derives every rate, cost and ROAS from the summed totals rather than averaging the rows, so it is weighted by volume.<br /><br />
                     <b>Executive insights</b> and <b>KPI deltas</b> compare the active period against the immediately preceding period of equal length (or the previous calendar month, in month view). <b>Biggest funnel leak</b> and campaign efficiency rankings use the real conversion path (Leads → Queued → Total QL → Apps → Offers → Deposits), skipping the parallel Floor Queued branch.<br /><br />
                     Last Day / Last 7D / MTD and Custom filter by lead date; the Month dropdown scopes to one calendar month. Source and campaign search filter everything below.
                   </div>
@@ -1657,10 +1688,10 @@ export default function OverallDashboard() {
               </div>
 
               <div style={{ overflowX:'auto' }}>
-                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5, fontFamily:FONT }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT }}>
                   <thead>
                     <tr style={{ background:'#F8FAFC', borderBottom:'2px solid #E2E8F0' }}>
-                      <th onClick={() => handleSort('label')} style={{ padding:'9px 12px', fontSize:9.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
+                      <th onClick={() => handleSort('label')} style={{ padding:'11px 12px', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
                         {grpByLabel}{sortKey === 'label' && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                       </th>
                       {displayCols.map(col => (
@@ -1674,7 +1705,7 @@ export default function OverallDashboard() {
                           onDragEnd={() => { setDragKey(null); setDragOverKey(null) }}
                           title="Click to sort — drag to reorder"
                           style={{
-                            padding:'9px 8px', fontSize:9.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
+                            padding:'11px 10px', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
                             color: sortKey === col.key ? C.navy : '#64748B', textAlign: col.key === 'corridor' ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
                             opacity: dragKey === col.key ? 0.35 : 1,
                             boxShadow: dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none',
@@ -1683,18 +1714,38 @@ export default function OverallDashboard() {
                         </th>
                       ))}
                     </tr>
+                    {/* Totals live in the header so they stay put when the body is sorted or
+                        scrolled, and land in shot without needing to scroll to the bottom. */}
+                    {tableRows.length > 0 && (
+                      <tr style={{ background:C.navyBg, borderBottom:`2px solid ${C.navy}` }}>
+                        <th style={{ padding:'11px 12px', fontSize:12.5, fontWeight:800, letterSpacing:'0.04em', color:C.navy, textAlign:'left', whiteSpace:'nowrap' }}>
+                          TOTAL
+                        </th>
+                        {displayCols.map(col => {
+                          const v = summaryValue(totalsRow, col.key)
+                          const isCorridor = col.key === 'corridor'
+                          const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
+                          return (
+                            <th key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
+                              style={{ padding:'11px 10px', fontSize:13.5, fontWeight:800, textAlign: isCorridor ? 'left' : 'right', color: isCorridor ? '#94A3B8' : C.navy, whiteSpace:'nowrap' }}>
+                              {summaryFmt(col.key, v)}
+                            </th>
+                          )
+                        })}
+                      </tr>
+                    )}
                   </thead>
                   <tbody>
                     {tableRows.map((g, i) => (
                       <tr key={g.label} style={{ background: i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
-                        <td style={{ padding:'9px 12px', fontWeight:600, color:'#0F172A' }}>{g.label}</td>
+                        <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A' }}>{g.label}</td>
                         {displayCols.map(col => {
                           const v = summaryValue(g, col.key)
                           const isCorridor = col.key === 'corridor'
                           const isPct = col.key.endsWith('Pct')
                           const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
                           return (
-                            <td key={col.key} title={isMoney ? fmtINRShort(v) : undefined} style={{ padding:'9px 8px', textAlign: isCorridor ? 'left' : 'right', color: isCorridor ? '#64748B' : (isPct ? heatColor(v) : summaryColor(col.key)), fontWeight: isCorridor ? 500 : (SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400), background: isPct ? heatBg(v) : 'transparent', whiteSpace: isCorridor ? 'nowrap' : 'normal' }}>
+                            <td key={col.key} title={isMoney ? fmtINRShort(v) : undefined} style={{ padding:'11px 10px', textAlign: isCorridor ? 'left' : 'right', color: isCorridor ? '#64748B' : (isPct ? heatColor(v) : summaryColor(col.key)), fontWeight: isCorridor ? 500 : (SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400), background: isPct ? heatBg(v) : 'transparent', whiteSpace: isCorridor ? 'nowrap' : 'normal' }}>
                               {summaryFmt(col.key, v)}
                             </td>
                           )
