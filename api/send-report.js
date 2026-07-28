@@ -81,7 +81,7 @@ async function getRecipients(reportType) {
 async function getReportConfig() {
   const out = {}
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled,slack_webhook_url,slack_webhook_url_test,slack_auto_reports_enabled)`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled,slack_webhook_url,slack_webhook_url_test,slack_channel_main,slack_channel_test,slack_auto_reports_enabled)`, {
       headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
     })
     const rows = (await res.json()) || []
@@ -99,19 +99,66 @@ async function getReportConfig() {
 // slackTarget:'test' to use it; anything else uses the main one. Deliberately no silent
 // fallback from test to main: if the test webhook is missing we error out rather than
 // posting a test message into the team channel.
-function resolveSlackWebhook(cfg, target) {
-  if (target === 'test') {
-    return {
-      url: cfg.slack_webhook_url_test || process.env.SLACK_WEBHOOK_URL_TEST,
-      label: 'test channel',
-      missing: 'Slack test channel is not connected -- add a test webhook URL in Settings > Reports.',
-    }
+//
+// Two delivery modes, bot preferred:
+//
+//   BOT (SLACK_BOT_TOKEN, e.g. the workspace's "PM Analyst" app with chat:write) posts via
+//   chat.postMessage, so ONE credential reaches ANY channel -- the channel is just an
+//   argument. That's why test-then-production needs no second credential here.
+//
+//   WEBHOOK is the fallback for installs with no bot token. A webhook is welded to one
+//   channel, so it needs a separate URL per channel.
+//
+// The token lives ONLY in the Vercel env, never in app_preferences: that table has RLS
+// disabled and is readable with the public anon key that ships in the client bundle, so
+// anything stored there is effectively public. Channel NAMES are not secrets and are fine
+// there. (The pre-existing slack_webhook_url rows have this same exposure -- a webhook URL
+// is a posting credential. Worth migrating to env separately.)
+function resolveSlackTarget(cfg, target) {
+  const isTest = target === 'test'
+  const label = isTest ? 'test channel' : 'main channel'
+  const botToken = process.env.SLACK_BOT_TOKEN
+  if (botToken) {
+    const channel = isTest
+      ? (cfg.slack_channel_test || process.env.SLACK_CHANNEL_TEST)
+      : (cfg.slack_channel_main || process.env.SLACK_CHANNEL_MAIN)
+    if (channel) return { mode: 'bot', token: botToken, channel, label }
+    return { mode: 'bot', label, missing: `No Slack ${label} set -- add the channel in Settings > Reports.` }
   }
+  const url = isTest
+    ? (cfg.slack_webhook_url_test || process.env.SLACK_WEBHOOK_URL_TEST)
+    : (cfg.slack_webhook_url || process.env.SLACK_WEBHOOK_URL)
   return {
-    url: cfg.slack_webhook_url || process.env.SLACK_WEBHOOK_URL,
-    label: 'main channel',
-    missing: 'Slack is not connected -- add a webhook URL in Settings > Reports.',
+    mode: 'webhook', url, label,
+    missing: `Slack ${label} is not connected -- add SLACK_BOT_TOKEN plus a channel, or a webhook URL, in Settings > Reports.`,
   }
+}
+
+// chat.postMessage answers 200 with {ok:false,error:...} rather than an HTTP error, so the
+// body has to be inspected. The common failures are translated because "not_in_channel" on
+// its own tells an admin nothing about what to actually do.
+async function postToSlackBot(token, channel, payload) {
+  const res = await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ channel, ...payload }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (data.ok) return data
+  const hints = {
+    not_in_channel: `the bot isn't in ${channel} yet -- run "/invite @pm_analyst" in that channel`,
+    channel_not_found: `channel ${channel} not found -- check the name (with #) or use its channel ID`,
+    is_archived: `channel ${channel} is archived`,
+    invalid_auth: 'SLACK_BOT_TOKEN is invalid or revoked',
+    not_authed: 'SLACK_BOT_TOKEN is missing',
+    missing_scope: `the app is missing a required scope (needs chat:write); needed: ${data.needed || '?'}`,
+  }
+  throw new Error(`Slack: ${hints[data.error] || data.error || 'unknown error'}`)
+}
+
+async function deliverToSlack(hook, payload) {
+  if (hook.mode === 'bot') return postToSlackBot(hook.token, hook.channel, payload)
+  return postToSlack(hook.url, payload)
 }
 
 async function postToSlack(webhookUrl, payload) {
@@ -200,14 +247,14 @@ async function handleSlackAnswer(req, res) {
   if (!canAccessDashboard(me.role, 'ask_ai')) return res.status(403).json({ error: 'Forbidden' })
 
   const cfg = await getReportConfig()
-  const hook = resolveSlackWebhook(cfg, req.body?.slackTarget)
-  if (!hook.url) return res.status(500).json({ error: hook.missing })
+  const hook = resolveSlackTarget(cfg, req.body?.slackTarget)
+  if (!hook.url && !hook.channel) return res.status(500).json({ error: hook.missing })
 
   const { question, answerMarkdown } = req.body || {}
   if (!answerMarkdown) return res.status(400).json({ error: 'No answer content to send' })
 
   try {
-    await postToSlack(hook.url, buildSlackAnswerBlocks({ question, answerMarkdown, askedBy: me.email }))
+    await deliverToSlack(hook, buildSlackAnswerBlocks({ question, answerMarkdown, askedBy: me.email }))
     await logReport({ report_type: 'slack answer', recipients: ['slack'], status: 'sent', triggered_by: me.email })
     return res.status(200).json({ ok: true, success: true })
   } catch (e) {
@@ -231,15 +278,15 @@ async function handleSlackExport(req, res) {
   }
 
   const cfg = await getReportConfig()
-  const hook = resolveSlackWebhook(cfg, slackTarget)
-  if (!hook.url) return res.status(500).json({ error: hook.missing })
+  const hook = resolveSlackTarget(cfg, slackTarget)
+  if (!hook.url && !hook.channel) return res.status(500).json({ error: hook.missing })
 
   if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'No rows to send' })
 
   // the channel is recorded in the log so a test post is never mistaken for a real one
   const logType = slackTarget === 'test' ? 'slack export (test)' : 'slack export'
   try {
-    await postToSlack(hook.url, buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy: me.email, channelLabel: hook.label }))
+    await deliverToSlack(hook, buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy: me.email, channelLabel: hook.label }))
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: me.email })
     return res.status(200).json({ ok: true, success: true, channel: hook.label })
   } catch (e) {
@@ -1005,10 +1052,13 @@ export default async function handler(req, res) {
 
     // Cross-post a compact summary card to Slack alongside the email, if connected + enabled
     if (cfg.slack_auto_reports_enabled !== false) {
-      const hook = cfg.slack_webhook_url || process.env.SLACK_WEBHOOK_URL
-      if (hook) {
+      const hook = resolveSlackTarget(cfg, 'prod')
+      // resolveSlackTarget always returns an object, so check for an actual destination --
+      // a truthiness test on the object alone would try (and fail) to post when nothing
+      // is configured at all.
+      if (hook.channel || hook.url) {
         try {
-          await postToSlack(hook, buildSlackReportSummary({ typeLabel: reportTypeLabel, periodLabel: reportPeriodLabel, summary: reportSummary, todayLabel }))
+          await deliverToSlack(hook, buildSlackReportSummary({ typeLabel: reportTypeLabel, periodLabel: reportPeriodLabel, summary: reportSummary, todayLabel }))
         } catch (e) { console.error('[slack report]', e.message) }
       }
     }

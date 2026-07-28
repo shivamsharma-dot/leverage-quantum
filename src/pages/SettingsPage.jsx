@@ -866,6 +866,8 @@ export default function SettingsPage() {
         if (pf.auto_reports_enabled != null) setRcAuto(pf.auto_reports_enabled !== false)
         if (pf.slack_webhook_url != null) setSlackWebhook(pf.slack_webhook_url)
         if (pf.slack_webhook_url_test != null) setSlackWebhookTest(pf.slack_webhook_url_test)
+        if (pf.slack_channel_main != null) setSlackChannelMain(pf.slack_channel_main)
+        if (pf.slack_channel_test != null) setSlackChannelTest(pf.slack_channel_test)
         if (pf.slack_auto_reports_enabled != null) setSlackAuto(pf.slack_auto_reports_enabled !== false)
         setSavedHiddenPages(hp)
         setHiddenPages(hp)
@@ -1241,6 +1243,11 @@ export default function SettingsPage() {
   // An Incoming Webhook is bound to one channel, so a test channel needs its own webhook --
   // there's no way to redirect a post at send time.
   const [slackWebhookTest, setSlackWebhookTest] = useState('')
+  // Channel names only. The bot token is deliberately NOT stored here: app_preferences has
+  // RLS disabled and is readable with the public anon key from the client bundle, so it
+  // would be effectively public. It lives in the Vercel env as SLACK_BOT_TOKEN.
+  const [slackChannelMain, setSlackChannelMain] = useState('')
+  const [slackChannelTest, setSlackChannelTest] = useState('')
   const [slackAuto, setSlackAuto] = useState(true)
   const [slackCfgSaving, setSlackCfgSaving] = useState(false)
   const [slackCfgMsg, setSlackCfgMsg] = useState('')
@@ -1426,6 +1433,8 @@ export default function SettingsPage() {
       const entries = [
         ['slack_webhook_url', slackWebhook.trim()],
         ['slack_webhook_url_test', slackWebhookTest.trim()],
+        ['slack_channel_main', slackChannelMain.trim()],
+        ['slack_channel_test', slackChannelTest.trim()],
         ['slack_auto_reports_enabled', slackAuto],
       ]
       for (const [key, value] of entries) {
@@ -2508,7 +2517,23 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>Slack</h3>
-                <p className={styles.cardDesc}>Post Ask AI answers, page exports, and a compact summary of every scheduled report to Slack. Create an Incoming Webhook in Slack (Slack app settings &gt; Incoming Webhooks &gt; Add New Webhook to Workspace) and paste the URL below. A webhook is tied to <b>one</b> channel, so add a second one pointing at a test channel to try things out without posting to the team.</p>
+                <p className={styles.cardDesc}>Post Ask AI answers, page exports, and a compact summary of every scheduled report to Slack, as the workspace’s bot (<b>@pm_analyst</b>).</p>
+                <p className={styles.cardDesc} style={{ marginTop: 6 }}>
+                  <b>Preferred: bot token.</b> Set <code>SLACK_BOT_TOKEN</code> in the Vercel env (Slack app &gt; OAuth &amp; Permissions &gt; Bot User OAuth Token, needs <code>chat:write</code>), then just name the channels below — one token reaches any channel. The token is intentionally not stored here: this settings table is readable with the app’s public key, so a token kept here would be exposed. Remember to invite the bot to each channel with <code>/invite @pm_analyst</code>, or posting fails with “not in channel”.
+                </p>
+                <label className={styles.fieldLabel}>Test channel</label>
+                <div className={styles.inputGroup}>
+                  <input type="text" className={styles.input} placeholder="#pm-analyst-test  (or a channel ID like C0123ABCD)" value={slackChannelTest}
+                    onChange={e => setSlackChannelTest(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                </div>
+                <label className={styles.fieldLabel} style={{ marginTop: 14 }}>Main channel</label>
+                <div className={styles.inputGroup}>
+                  <input type="text" className={styles.input} placeholder="#performance-marketing" value={slackChannelMain}
+                    onChange={e => setSlackChannelMain(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                </div>
+                <p className={styles.cardDesc} style={{ marginTop: 14 }}>
+                  <b>Fallback: Incoming Webhooks.</b> Only used when no bot token is set. A webhook is welded to a single channel, so it needs one URL per channel.
+                </p>
                 <label className={styles.fieldLabel}>Test channel webhook URL</label>
                 <div className={styles.inputGroup}>
                   <input type="text" className={styles.input} placeholder="https://hooks.slack.com/services/…  (test channel)" value={slackWebhookTest}
@@ -2528,7 +2553,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <Button onClick={saveSlackConfig} disabled={slackCfgSaving}>{slackCfgSaving ? 'Saving…' : 'Save'}</Button>
-                  <Button variant="secondary" onClick={sendSlackTest} disabled={slackTesting || !slackWebhookTest.trim()}>{slackTesting ? 'Sending…' : 'Send test message to test channel'}</Button>
+                  <Button variant="secondary" onClick={sendSlackTest} disabled={slackTesting || (!slackChannelTest.trim() && !slackWebhookTest.trim())}>{slackTesting ? 'Sending…' : 'Send test message to test channel'}</Button>
                   {slackCfgMsg && <span className={styles.rcFeedback + ' ' + (slackCfgMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{slackCfgMsg}</span>}
                 </div>
               </div>
