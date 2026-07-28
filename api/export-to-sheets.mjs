@@ -13,7 +13,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { rows, filename, dashboardId } = req.body || {}
+  // rawRows is optional: when the caller has both a display-formatted view and the
+  // underlying numbers, the formatted one becomes the first tab (reads like the dashboard)
+  // and the raw one a second tab (Excel/Sheets can actually sum and sort it, which
+  // formatted strings like "₹2,15,05,881" cannot be).
+  const { rows, rawRows, filename, dashboardId } = req.body || {}
   if (!Array.isArray(rows) || rows.length === 0) {
     return res.status(400).json({ error: 'No data to export' })
   }
@@ -47,14 +51,35 @@ export default async function handler(req, res) {
     if (!createRes.ok) return res.status(500).json({ error: created.error?.message || 'Failed to create spreadsheet' })
     const spreadsheetId = created.spreadsheetId
 
-    const cols = Object.keys(rows[0])
-    const values = [cols, ...rows.map(r => cols.map(c => r[c] ?? ''))]
+    const hasRaw = Array.isArray(rawRows) && rawRows.length > 0
+    const grid = list => {
+      const cols = Object.keys(list[0])
+      return [cols, ...list.map(r => cols.map(c => (r[c] == null ? '' : r[c])))]
+    }
+
+    // Rename the default tab and, when raw values were supplied, add a second one.
+    const requests = [{ updateSheetProperties: { properties: { sheetId: 0, title: 'Report' }, fields: 'title' } }]
+    if (hasRaw) requests.push({ addSheet: { properties: { title: 'Raw' } } })
+    const batchRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests }),
+    })
+    if (!batchRes.ok) {
+      const e = await batchRes.json()
+      return res.status(500).json({ error: e.error?.message || 'Failed to prepare sheet tabs' })
+    }
+
+    // Formatted goes in as USER_ENTERED so Sheets still recognises percentages and dates;
+    // raw goes in as RAW so numbers land as numbers and nothing gets re-interpreted.
+    const data = [{ range: 'Report!A1', values: grid(rows) }]
+    if (hasRaw) data.push({ range: 'Raw!A1', values: grid(rawRows) })
     const updateRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sheet1!A1?valueInputOption=RAW`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
       {
-        method: 'PUT',
+        method: 'POST',
         headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values }),
+        body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data }),
       }
     )
     if (!updateRes.ok) {

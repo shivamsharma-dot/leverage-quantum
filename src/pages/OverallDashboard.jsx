@@ -1389,6 +1389,22 @@ export default function OverallDashboard() {
   }, [totalsRow, displayCols, grpByLabel])
   const exportTotalRow = useMemo(() => summaryExportRow(totalsRow), [totalsRow, grpByLabel])
 
+  // Unformatted twin of the table export: same columns and order, but the underlying
+  // numbers rather than display strings, so a spreadsheet can sum/sort them. Percentages
+  // stay as plain numbers (15.7, not "15.7%") and a "—" becomes an empty cell.
+  const rawExportRow = (g, label) => {
+    const o = { [grpByLabel]: label ?? g.label }
+    displayCols.forEach(c => {
+      const v = summaryValue(g, c.key)
+      o[c.label] = v == null ? '' : (typeof v === 'number' ? Number(v.toFixed(2)) : v)
+    })
+    return o
+  }
+  const tableExportRowsRaw = useMemo(() => sortedFilteredRows.map(g => rawExportRow(g)),
+    [sortedFilteredRows, displayCols, grpByLabel])
+  const tableTotalExportRowRaw = useMemo(() => rawExportRow(totalsRow, 'TOTAL'),
+    [totalsRow, displayCols, grpByLabel])
+
   if (loading) {
     return (
       <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
@@ -1772,7 +1788,9 @@ export default function OverallDashboard() {
                 </div>
 
                 <div style={{ marginLeft:'auto' }}>
-                  <ExportButton data={tableExportRows} totalRow={tableTotalExportRow} filename={'overall-' + grpBy} dashboardId="overall" />
+                  <ExportButton data={tableExportRows} totalRow={tableTotalExportRow}
+                    rawData={tableExportRowsRaw} rawTotalRow={tableTotalExportRowRaw}
+                    filename={'overall-' + grpBy} dashboardId="overall" />
                 </div>
               </div>
 

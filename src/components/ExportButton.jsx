@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { toast } from './ToastHost'
 import Button from './Button'
 
-export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow }) {
+export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow }) {
   const [open, setOpen] = useState(false)
   const [sheetsBusy, setSheetsBusy] = useState(false)
   const [slackBusy, setSlackBusy] = useState(false)
@@ -12,6 +12,10 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
   // Shared by all four export paths so CSV / JSON / Sheets / Slack can't disagree.
   const allRows = totalRow ? [totalRow, ...(data || [])] : (data || [])
   const colsOf = () => columns || (allRows[0] ? Object.keys(allRows[0]) : [])
+  // Optional unformatted twin of the same rows. Display values like "₹2,15,05,881" are
+  // text to a spreadsheet -- they can't be summed or sorted numerically -- so callers can
+  // supply the underlying numbers alongside them.
+  const rawAllRows = rawData ? (rawTotalRow ? [rawTotalRow, ...rawData] : rawData) : null
 
   const exportSlack = async () => {
     if (!allRows.length) return
@@ -47,7 +51,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows, filename, dashboardId }),
+        body: JSON.stringify({ rows, rawRows: rawAllRows || undefined, filename, dashboardId }),
       })
       const resData = await r.json()
       if (!r.ok) throw new Error(resData.error || 'Failed to export to Google Sheets')
@@ -63,15 +67,20 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
 
   const exportCSV = () => {
     if (!allRows.length) return
-    const cols = colsOf()
-    // Proper RFC4180 escaping. The previous version only quoted values that happened to
-    // contain a comma and never escaped embedded double quotes, so any campaign name with a
-    // quote in it silently corrupted every following column.
+    writeCsv(colsOf(), allRows, filename)
+  }
+
+  const exportCSVRaw = () => {
+    if (!rawAllRows || !rawAllRows.length) return
+    writeCsv(Object.keys(rawAllRows[0]), rawAllRows, (filename || 'export') + '-raw')
+  }
+
+  const writeCsv = (cols, list, name) => {
     const esc = v => {
       const str = v == null ? '' : String(v)
       return /[",\n\r]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str
     }
-    const lines = [cols.map(esc).join(','), ...allRows.map(r => cols.map(c => esc(r[c])).join(','))]
+    const lines = [cols.map(esc).join(','), ...list.map(r => cols.map(c => esc(r[c])).join(','))]
     // The leading \uFEFF is a UTF-8 BOM, and it is load-bearing: without it Excel opens the
     // file in the system legacy encoding, where ₹ (UTF-8 E2 82 B9) renders as "‚Çπ" and an
     // em dash as "‚Äî". The BOM is what makes Excel read it as UTF-8.
@@ -80,7 +89,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${filename || 'export'}_${new Date().toISOString().slice(0,10)}.csv`
+    a.download = `${name || 'export'}_${new Date().toISOString().slice(0,10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
     setOpen(false)
@@ -140,6 +149,25 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
               </svg>
               Export as CSV
             </button>
+            {rawAllRows && (
+              <button onClick={exportCSVRaw} style={{
+                display:'flex', alignItems:'center', gap:9, width:'100%',
+                padding:'9px 14px', border:'none', background:'none',
+                cursor:'pointer', fontSize:13, fontWeight:500, color:'#111827',
+                borderRadius:7, fontFamily:'Inter,sans-serif', textAlign:'left',
+                transition:'background .1s'
+              }}
+              title="Same rows, unformatted -- numbers a spreadsheet can sum and sort"
+              onMouseOver={e=>e.currentTarget.style.background='rgba(28,159,212,0.08)'}
+              onMouseOut={e=>e.currentTarget.style.background='none'}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0891B2" strokeWidth="2" strokeLinecap="round">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" y1="17" x2="16" y2="17"/>
+                </svg>
+                Export as CSV (raw numbers)
+              </button>
+            )}
             <button onClick={exportJSON} style={{
               display:'flex', alignItems:'center', gap:9, width:'100%',
               padding:'9px 14px', border:'none', background:'none',
