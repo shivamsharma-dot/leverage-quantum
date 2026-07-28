@@ -1,6 +1,29 @@
 # LEVERAGE QUANTUM — Claude Context File
 
-> Auto-read by Claude at every session start. Last updated: July 24, 2026.
+> Auto-read by Claude at every session start. Last updated: July 28, 2026.
+
+## >>> START HERE — EXTENSION / SESSION HANDOFF (2026-07-28, latest) <<<
+
+**This block supersedes the older `SESSION RESUME / EXTENSION HANDOFF` section further down the file** — that one still names the retired `rename-ask-ai` branch and an old HEAD. We push straight to `main` now.
+
+**Paste-this prompt for a fresh Claude extension session:**
+
+> Resume work on Leverage Quantum. Read CLAUDE.md first — the START HERE handoff block at the top of it is the current state. Repo is `shivamsharma-dot/leverage-quantum`, live at `quantum.leverageedu.com`, branch `main`, push straight to `main`, Vercel auto-deploys in about 50s. Do code work in the GitHub Codespace ("fictional telegram", terminal at `/workspaces/leverage-quantum`) so you can run `npm run build` before pushing; read source fast from `raw.githubusercontent.com/shivamsharma-dot/leverage-quantum/main/<path>` rather than scrolling the editor. Follow the PER-CHANGE SUB-WORKFLOW in this file: build before push, verify live on the real site after, then log the change back into CLAUDE.md as a dated entry at the bottom. Brand colours only (navy #1F3C84, blue #1C9FD4, cyan #29B9C3, green #4CAE6F, grey/slate for muted text — never amber, orange, red, yellow or purple). Never commit or discard `src/pages/DashboardHome.jsx`. No new files in `api/` — Vercel Hobby is at 12/12 functions. Any `.js` inside `api/` must `await import('../lib/auth.mjs')` inside the handler, never at top level, or production throws ERR_REQUIRE_ESM. Keep access control in sync across `lib/auth.mjs` canAccessDashboard, `src/App.jsx` canAccess and `Sidebar.jsx` canSee. Consider mobile responsiveness on every change. Reply short. Then pick up the OPEN ITEMS below.
+
+**State at handoff:** working tree clean, `origin/main` HEAD = `a2ff925`. Previous commit `72645aa`. Both deployed and live-verified.
+
+**What just shipped** (full detail in the dated entry at the bottom of this file, 2026-07-28 later): Settings > Reports "Send to Slack" for the Overall funnel table now uploads a PNG of the whole table plus a CSV of all 24 columns as ONE Slack message under a summary comment, instead of a truncated markdown code block. Touched `src/lib/slackShare.js` (new), `src/components/ExportButton.jsx` (optional `slackRich` prop), `src/pages/OverallDashboard.jsx` (`buildSlackTableShare`, lifts `rowLimit` to `all` for the capture then restores it), `api/send-report.js` (`slack_export_image` branch plus `handleSlackExportImage`). Verified live: test post rendered all 24 columns + TOTAL + 13 source rows, nothing truncated.
+
+**OPEN ITEMS — pick up here:**
+
+1. `Main channel` in Settings > Reports is still EMPTY, so only the test channel works. Get the channel ID from the owner, save it, and invite the bot into that channel before any CEO-facing send. Slack app is "PM Analyst" / "Sheet Reporter" with `chat:write`, `channels:read`, `files:write` already granted (adding a scope later needs Reinstall to Workspace).
+2. **Agreed in principle, NOT built — the owner said on 2026-07-28 that he would pick this up himself the next day.** Make the Slack image a CEO view rather than the full analyst grid: render roughly ten decision columns (Source, Spend, Leads, Total QLs, CPQL, Applications, Offers, Deposits, Est. SR Revenue, Est. ROAS) with the TOTAL row pinned and every source row kept, while the CSV keeps all 24 columns so nothing is lost. About 15 lines in `buildSlackTableShare` — a `ceoCols` subset handed to the capture; no API change. Same pass: delete the redundant italic footer line ("Full table attached as an image ... shared by ..."), since Slack already renders "Shared by" and the file names, and only show the `Source:` / `Corridor:` chips when a filter is actually applied instead of printing "All".
+3. The legacy text / code-block Slack export path still truncates to 2,900 chars AFTER the closing code fence has been appended, so the slice eats the fence and Slack renders a broken half-table. Fix is to slice the body first and append the fence last.
+4. Owner's standing requirements for anything CEO-facing: visually attractive, and never incomplete data.
+
+**Unresolved security note raised 2026-07-28:** this repository is public while the "Credentials & Keys" section of this file contains real secrets, and `app_preferences` rows (including `slack_webhook_url`, which is itself a posting credential) are readable with the public anon key. Rotate those and move them to Vercel environment variables. `SLACK_BOT_TOKEN` must live in Vercel env only, never in `app_preferences`.
+
+---
 
 > !! CRITICAL KNOWN ISSUE (check FIRST if Ask AI chat shows "Error") !!
 > The Ask AI agent (`api/ask-ai.js`) calls the Anthropic API. If chat returns an "Error" bubble
