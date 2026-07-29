@@ -87,7 +87,14 @@ function barPng(spec) {
   g.textAlign = 'left'
   g.fillText(ell(g, spec.title, W - 80), 40, 52)
 
-  const top = ceiling(Math.max.apply(null, series.flatMap(s => s.data.map(d => Number(d.value) || 0)).concat([0])))
+  // One corridor at fifty thousand rupees a QL flattens every other bar into a
+  // stub. So the axis is scaled to the body of the data and the outlier is drawn
+  // clipped, with its real number still written above it -- nothing is hidden.
+  const all = series.flatMap(s => s.data.map(d => Number(d.value) || 0)).filter(v => v > 0).sort((a, b) => a - b)
+  const median = all.length ? all[Math.floor(all.length / 2)] : 0
+  const body = median > 0 ? all.filter(v => v <= median * 4) : all
+  const top = ceiling(Math.max((body.length ? body[body.length - 1] : 0) || (all.length ? all[all.length - 1] : 0), 0))
+  let clipped = false
 
   g.textAlign = 'right'
   g.font = '500 16px ' + FONT
@@ -115,10 +122,22 @@ function barPng(spec) {
     series.forEach((s, si) => {
       const point = (s.data || []).find(p => p.label === cat)
       const v = point ? Number(point.value) || 0 : 0
-      const h = Math.max(3, (y1 - y0) * (top ? v / top : 0))
+      const over = v > top
+      if (over) clipped = true
+      const h = Math.max(3, (y1 - y0) * (top ? Math.min(v, top) / top : 0))
       const bx = cx - span / 2 + si * (barW + gap)
       g.fillStyle = RAMP[si % RAMP.length]
       pill(g, bx, y1 - h, barW, h, 5)
+      if (over) {
+        g.strokeStyle = '#FFFFFF'
+        g.lineWidth = 3
+        for (const off of [0, 9]) {
+          g.beginPath()
+          g.moveTo(bx, y1 - h + 16 + off)
+          g.lineTo(bx + barW, y1 - h + 6 + off)
+          g.stroke()
+        }
+      }
       g.fillStyle = INK
       g.font = '700 ' + valueFont + 'px ' + FONT
       g.textAlign = 'center'
@@ -152,6 +171,12 @@ function barPng(spec) {
     g.fillText(s.name, lx + 22, ly)
     lx += 22 + g.measureText(s.name).width + 28
   })
+  if (clipped) {
+    g.fillStyle = SUB
+    g.font = '500 14px ' + FONT
+    g.textAlign = 'right'
+    g.fillText('Striped bars run past the axis \u2014 the real figure is written above', x1, ly)
+  }
 
   return cv.toDataURL('image/png').split(',')[1]
 }
