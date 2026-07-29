@@ -2644,3 +2644,18 @@ unreadable on a small screen and off-brand.
   scale down the dearest.
 
 v3 and older are untouched; all of this is inside the v4 branch of pmReport.js.
+
+## 2026-07-29 — Corridor attribution closed out, v4 trimmed to the metrics the CEO reads
+
+Corridors (`src/lib/corridors.js`, one source of truth for Overall, Meta, Google and QL Ops):
+
+- `_DB_` / `_DXB_` as a whole name segment now resolves to **India to Dubai**. It is matched as a segment, never as a loose substring, so it cannot collide with the rest of the naming convention.
+- `Youtube` / `_YT_` / `_CTV_` now resolve to a new corridor, **YouTube Branding**. Awareness video buys reach, not a destination, and folding it into a destination made that destination's CPQL look worse than it was.
+- Every other named campaign that carries no destination token — brand search, PMax, study-abroad generic — now falls to **Catch All** instead of Unclassified. `unclassified` is reserved for a row with no campaign name at all, so seeing it in a report always means missing data, never lazy naming.
+
+Slack PM report v4 (`src/lib/pmReport.js`, edited in place — v3 and older untouched):
+
+- **Offers and RAUs removed** from the KPI grid and from the honest read (`MOVERS_V4`), and any "what we can improve" line written off Offers is dropped (`fixesV4`). Both sit downstream of deposits and read as duplicate signal.
+- **Stage-conversion chart removed** from message 1, along with `funnelChart()`.
+- **"Biggest slip in the funnel" removed.** In its place message 1 now carries `spendPace()` — projected spend to month end at the current run-rate, with the spend booked so far and the days it covers. Straight arithmetic on days that really carry data, so a month with data only to the 28th projects off 28 days rather than off today's date. `ctx.pace` is computed in `OverallDashboard.jsx` off the min/max `r.date` in the filtered rows and is null unless the whole window sits inside one month.
+- **A dearest band now appears from six eligible rows up** (`rankByCpql`, was eleven), and the two bands can no longer overlap: cheapest five, then the rest read dearest-first, capped at five. Band headers count themselves — `CHEAPEST 5 — LOWEST CPQL` / `DEAREST 3 — HIGHEST CPQL`.
