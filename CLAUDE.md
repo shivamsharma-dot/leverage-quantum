@@ -2663,3 +2663,42 @@ Slack PM report v4 (`src/lib/pmReport.js`, edited in place — v3 and older unto
 - Chart-image settle raised from 1.5s to 4s in `api/send-report.js`. At 1.5s Slack landed the shared file after the NEXT message had already posted, so every chart sat one message too low. Verified in #voxpath: pie under message 2, corridor chart under message 3, nothing trailing message 5. `maxDuration` is 60s, so the extra 7.5s is well inside budget.
 - The corridor message now names the money parked under the cut-off (`unrankedSpend()`) — e.g. "52.17 L of spend sits below the cut-off, largest is India to Dubai at 17.00 L for 3 QLs". Dubai and YouTube Branding are real corridors now but neither clears 25 QLs, so this is the honest way to show them. With five eligible corridors the single band reads `ALL 5 RANKED — CHEAPEST FIRST, DEAREST LAST`.
 - Chart-image settle raised from 1.5s to 4s in `api/send-report.js`. At 1.5s Slack landed the shared file after the NEXT message had already posted, so every chart sat one message too low. Verified in the test channel: pie under message 2, corridor chart under message 3, nothing trailing message 5. `maxDuration` is 60s, so the extra 7.5s is well inside budget.
+
+## 2026-07-30 — v4 becomes a marketing report: the post-application metrics come out
+
+Feedback was that half of v4 was reporting on numbers marketing cannot be held to and
+that are not comparable month on month anyway. Offers, deposits, RAUs and CPA all sit
+at or past the application, where a counsellor decides the outcome. v4 now stops at the
+application, and everything it says is a media lever.
+
+- `src/pages/OverallDashboard.jsx` — `CEO_IMAGE_KEYS` drops `offers` and `raus`, so the
+  Slack channel table and its image both lose those columns. `slackTable` now inserts a
+  `% of spend` column immediately after Spend, computed off the TOTAL row, which is what
+  replaces the share-of-spend pie: one number per row, in the row the reader is already
+  looking at, and no second image to wait for on a phone.
+- `src/lib/pmReport.js` (v4 tail only, v1–v3 untouched) —
+  - `kpiFields` drops Deposits and adds `Lead → QL rate` via a new `fldPP` helper. Rates
+    move in percentage points, so they get their own chip: a 7.0% rate that came off 8.4%
+    fell 1.4pp, and calling that "17%" would be true and misleading.
+  - `spendPie` is deleted. `MOVERS_V4` is now only leads / QLs / apps / CPL / CPQL.
+  - `costDirection` gains a v4 twin, `costDirectionV4`, reading CPL against CPQL rather
+    than CPL against CPA — the gap between those two IS lead quality.
+  - `spendVsOutcome` (spend vs deposits) is replaced in v4 by `spendVsQL`.
+  - `fixesV4` is replaced by `improveV4`: budget reallocation between corridors, the
+    deliberate hold on Google spend while QL optimisation runs, retiring the dearest ads
+    priced against the cheapest, and consolidating the corridors under the cut-off.
+  - New `marketingMisses` feeds "What went wrong" with media-level detail: Lead → QL rate
+    slippage in pp, CPL falling while CPQL rises, the worst CPQL riser by channel and by
+    corridor, spend that never reached a rankable corridor, and the dearest ads' price.
+  - `rankByCpql` now splits at the midpoint whenever there are 4+ ranked rows (capped at
+    five a side) instead of needing 6. With five corridors ranked the table finally shows
+    a real `DEAREST 2 — HIGHEST CPQL` band instead of one merged band claiming "dearest
+    last", which was the question asked of the last build.
+  - Message 2's insight header is now `:bulb: Key findings & recommendations`, its lines
+    lead with an emoji instead of a bullet (`eList`), and the concentration line states
+    the share of paid leads as well as of all leads. Where the top channel is Meta it also
+    says the shift was intentional while Google's CPQL is being fixed — attached only when
+    it is true, never as a blanket excuse.
+  - Message 5's three sub-headers pick up `:white_check_mark:`, `:warning:`, `:bulb:`.
+- Registry entry for v4 rewritten to describe all of the above. No new version id: the
+  brief has been "edit v4 in place" throughout, and v1–v3 still render exactly as before.
