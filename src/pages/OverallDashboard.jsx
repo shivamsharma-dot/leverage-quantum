@@ -401,7 +401,7 @@ const CEO_IMAGE_KEYS = ['corridor', 'spend', 'leads', 'cpl', 'totalQL', 'cpql', 
 // Paid means we hand a platform money for the click. Everything else --
 // remarketing, content, referral, offline, affiliate partner, NA -- is banded
 // separately so paid efficiency is not diluted by organic volume.
-const PAID_SOURCE_KEYS = ['facebook', 'google', 'affiliate', 'linkedin', 'bing']
+const PAID_SOURCE_KEYS = ['facebook', 'google', 'affiliate', 'linkedin', 'bing', 'remarketing']
 const isPaidSource = label => PAID_SOURCE_KEYS.includes(String(label || '').trim().toLowerCase())
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
 const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
