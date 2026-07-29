@@ -2585,3 +2585,40 @@ field chunks → after-section → table → chart → context, and `slackPostRe
 degrades in four steps (full → no chart → no table → plain text) so a rejected
 `data_visualization` block can never cost us the message. No new files in `api/` — the
 Vercel function count is still 12/12.
+
+## 2026-07-29 — Slack v4, second pass: brand-coloured charts with the numbers on them, built for a phone
+
+The CEO reads this on a phone and rarely opens a laptop, so the report is now
+written for a small screen first.
+
+**Charts are ours now, not Slack's.** Slack's `data_visualization` block takes no
+colour and will not print a value on a bar, so on a phone it is a shape with no
+information in it. `src/lib/chartPng.js` draws the same chart on a canvas
+instead: the `BRAND_RAMP` from DESIGN_SYSTEM.md, the figure written on every bar
+and every slice, type sized to stay legible when the image is scaled down.
+`slackPostReportMessage` uploads that PNG, references it with an `image` block
+carrying `slack_file: { id }`, and if any part of that fails it falls straight
+back to Slack's native chart, then to no chart at all. The chart spec now
+carries a `unit` (`pct` / `inr`) which only our renderer reads —
+`nativeChartBlock()` strips it, because Slack rejects a block holding a key it
+does not know.
+
+One corridor at ₹50,086 a QL used to flatten every other bar into a stub. The
+axis is now scaled to the body of the data — anything above four times the
+median is treated as an outlier — and the outlier bar is drawn clipped with two
+white stripes across it, its real figure still written above. Nothing is hidden;
+the shape just stops lying about the rest.
+
+**Every delta carries the number it moved from**, tables included. The
+`CPQL vs last` column reads `▼ 25.6% · ₹1,461` rather than the percentage alone.
+
+**Message 2 got a v4-only read.** `channelRecs()` replaces `channelInsights()`
+for v4 only, so v3 is untouched. The paid-share line is gone — paid is always
+100% of spend, so it told the reader nothing — and the cheap/dear line is now
+written as the decision it implies: scale up the cheapest QL, scale down the
+dearest.
+
+**The "Common themes" paragraph on the ads message is gone.** `adThemes()` is
+still in the file but nothing calls it.
+
+Everything above is inside v4. v3 and older still render exactly as they did.
