@@ -1217,9 +1217,21 @@ async function slackPostReportMessage(token, channel, m) {
       })
       await slackCompleteUpload(token, { files: [up], channel, threadTs: ts })
       m.chartFileId = up.id
-      await slackUpdateBlocks(token, channel, ts, fallbackText, reportBlocks(m, { table: true, chart: 'image' }))
+      m.__diag = 'fid:' + up.id
+      // Slack needs a beat to finish processing the upload before an image
+      // block will accept it, so we give it one and try twice.
+      let done = false
+      for (let i = 0; i < 3 && !done; i++) {
+        await new Promise(r => setTimeout(r, 1200))
+        try {
+          await slackUpdateBlocks(token, channel, ts, fallbackText, reportBlocks(m, { table: true, chart: 'image' }))
+          done = true
+          m.__diag += ' updated@' + i
+        } catch (e2) { m.__diag += ' upd' + i + ':' + String((e2 && e2.message) || e2) }
+      }
     } catch (e) {
       m.chartFileId = null
+      m.__diag = 'err:' + String((e && e.message) || e)
     }
   }
   return ts
@@ -1273,7 +1285,7 @@ async function handleSlackReport(req, res) {
       }
     }
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: me.email })
-    return res.status(200).json({ ok: true, success: true, channel: hook.label, posted: list.length, rowCount: rowCount || 0 })
+    return res.status(200).json({ ok: true, success: true, channel: hook.label, posted: list.length, rowCount: rowCount || 0, diag: list.map(x => x.__diag || null) })
   } catch (e) {
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'failed', error: e.message, triggered_by: me.email })
     return res.status(500).json({ error: e.message })
