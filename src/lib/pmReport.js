@@ -377,6 +377,7 @@ function rankByCpql(items, minQL) {
   return {
     best: single ? by : by.slice(0, 5),
     worst: single ? [] : by.slice(5).reverse().slice(0, 5),
+    unranked: all.filter(c => !(c.cpql != null && c.cpql > 0 && c.totalQL >= minQL)),
     skipped: all.length - eligible.length,
     eligible: by.length,
     single,
@@ -412,7 +413,7 @@ function cpqlTable(ctx, r, firstCol, wrapFirst) {
       (s.spend > 0 && s.paidQL > 0) ? ctx.fmtINR(s.spend / s.paidQL) : DASH, DASH], true)
   }
   if (r.single) {
-    band('RANKED ON CPQL ' + DASH + ' CHEAPEST FIRST', r.best)
+    band('ALL ' + r.best.length + ' RANKED ' + DASH + ' CHEAPEST FIRST, DEAREST LAST', r.best)
     r.best.forEach(c => push(line(c), false))
     return t
   }
@@ -540,6 +541,18 @@ function channelRecs(ctx) {
   return out
 }
 
+// The question a cut-off invites: how much money is sitting below it, and where.
+// Printed under the corridor table so the reader never has to wonder whether a
+// corridor is missing because it is small or because it is broken.
+function unrankedSpend(ctx, r) {
+  const u = (r.unranked || []).filter(c => c.spend > 0).sort((a, b) => b.spend - a.spend)
+  if (!u.length) return null
+  const total = u.reduce((a, c) => a + c.spend, 0)
+  const top = u[0]
+  return '_' + money(total) + ' of spend sits below the cut-off \u00b7 largest is ' + top.label
+    + ' at ' + money(top.spend) + ' for ' + nfmt(top.totalQL) + ' QLs_'
+}
+
 function buildV4(ctx) {
   const msgs = []
   const note = deltaNote(ctx)
@@ -575,10 +588,11 @@ function buildV4(ctx) {
     msgs.push({
       key: 'corridors', label: 'Corridors (' + scope + ')',
       text: [
-        '*:earth_asia: Corridors ' + DASH + (cr.single ? ' ranked on CPQL*' : ' cheapest and dearest QL*'),
+        '*:earth_asia: Corridors ' + DASH + (cr.single ? ' ranked on CPQL, cheapest first*' : ' cheapest and dearest QL*'),
         '_' + scope + ' campaigns only \u00b7 ranked on CPQL \u00b7 a corridor needs at least ' + ctx.minQL + ' QLs to be ranked'
           + (cr.skipped ? ' (' + nfmt(cr.skipped) + ' smaller corridors are not ranked)' : '') + '_',
-      ].join('\n'),
+        unrankedSpend(ctx, cr),
+      ].filter(Boolean).join('\n'),
       table: cpqlTable(ctx, cr, 'Corridor', false),
       chart: cpqlChart(ctx, cr.best.concat(cr.worst), 'CPQL by corridor'),
       context: note,
