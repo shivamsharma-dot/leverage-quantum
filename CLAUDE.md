@@ -2622,3 +2622,25 @@ dearest.
 still in the file but nothing calls it.
 
 Everything above is inside v4. v3 and older still render exactly as they did.
+
+## 2026-07-29 — Slack PM report v4: brand charts drawn as images, mobile first (commits `31b4ce2`, `6996e71`, `4f3c9d0`)
+
+The CEO reads this on a phone. Slack's own `data_visualization` block gives no
+control over colour and will not print a value on a bar, so the chart was
+unreadable on a small screen and off-brand.
+
+- `src/lib/chartPng.js` (new) draws the bar and pie charts on a canvas in the
+  BRAND_RAMP with every figure written on the mark, at 2x for retina.
+- The axis scales to the body of the data (values up to 4x the median). An
+  outlier bar is clipped with white diagonal stripes and keeps its true printed
+  value, plus a footnote, so one huge corridor cannot flatten the rest.
+- `api/send-report.js` posts the message without Slack's chart whenever we have
+  our own picture, then uploads the PNG to the channel right underneath it.
+  An `image` block pointing at the file via `slack_file` was tried first and
+  Slack answers `invalid_blocks`, so the file is shared directly instead.
+- Every comparison now carries the previous-period figure, not just the percent.
+- Removed: the paid-share-of-spend line and the whole Common themes block.
+- Message 2 now reads as a recommendation — scale up the cheapest channel,
+  scale down the dearest.
+
+v3 and older are untouched; all of this is inside the v4 branch of pmReport.js.
