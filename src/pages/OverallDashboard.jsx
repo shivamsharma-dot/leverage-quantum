@@ -399,7 +399,7 @@ const SUMMARY_COLUMN_KEYS = SUMMARY_COLUMNS.map(c => c.key)
 // The columns a CEO actually reads. Used ONLY for the Slack image, so the
 // picture stays legible on a phone. The CSV posted next to it still carries
 // every column, so nothing is lost.
-const CEO_IMAGE_KEYS = ['corridor', 'spend', 'leads', 'cpl', 'totalQL', 'cpql', 'apps', 'cpa', 'offers', 'deposits', 'raus']
+const CEO_IMAGE_KEYS = ['corridor', 'spend', 'leads', 'cpl', 'totalQL', 'cpql', 'apps', 'cpa', 'deposits']
 // Paid means we hand a platform money for the click. Everything else --
 // remarketing, content, referral, offline, affiliate partner, NA -- is banded
 // separately so paid efficiency is not diluted by organic volume.
@@ -1461,10 +1461,24 @@ export default function OverallDashboard() {
   // Every ROW is included, banded into Paid / Non-Paid with a subtotal each; the CSV
   // alongside still carries all 23 metric columns.
   const slackTable = useMemo(() => {
-    const t = { columns: [grpByLabel, ...shareCols.map(c => c.label)], rows: [], strongRows: [] }
+    // Share of spend, as a column rather than a pie. It is one number per row, the
+    // reader is already looking at the row, and a column survives a phone screen
+    // where a second image to load does not.
+    const totalSpend = Number(summaryValue(totalsRow, 'spend')) || 0
+    const cols = []
+    shareCols.forEach(c => {
+      cols.push(c)
+      if (c.key === 'spend') cols.push({ key:'__spendShare', label:'% of spend' })
+    })
+    const cell = (g, c) => {
+      if (c.key !== '__spendShare') return summaryFmt(c.key, summaryValue(g, c.key))
+      const v = Number(summaryValue(g, 'spend')) || 0
+      return totalSpend > 0 ? ((v / totalSpend) * 100).toFixed(1) + '%' : '\u2014'
+    }
+    const t = { columns: [grpByLabel, ...cols.map(c => c.label)], rows: [], strongRows: [] }
     const push = (label, g, strong) => {
       if (strong) t.strongRows.push(t.rows.length)
-      t.rows.push([label, ...shareCols.map(c => summaryFmt(c.key, summaryValue(g, c.key)))])
+      t.rows.push([label, ...cols.map(c => cell(g, c))])
     }
     push('TOTAL', totalsRow, true)
     const bands = grpBy === 'source' ? [['Paid Channels', true], ['Non-Paid Channels', false]] : [[null, null]]
