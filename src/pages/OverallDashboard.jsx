@@ -394,6 +394,10 @@ const SUMMARY_COLUMNS = [
   { key:'estimatedRoas', label:'Est. ROAS' },
 ]
 const SUMMARY_COLUMN_KEYS = SUMMARY_COLUMNS.map(c => c.key)
+// The columns a CEO actually reads. Used ONLY for the Slack image, so the
+// picture stays legible on a phone. The CSV posted next to it still carries
+// every column, so nothing is lost.
+const CEO_IMAGE_KEYS = ['corridor', 'spend', 'leads', 'totalQL', 'cpql', 'apps', 'offers', 'deposits', 'estSrRevenue', 'estimatedRoas']
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
 const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
 // Bump this whenever SUMMARY_COLUMNS' declared order changes meaningfully (not just when a
@@ -1412,9 +1416,14 @@ export default function OverallDashboard() {
   // capture and restored right after, so the image always carries every row the current
   // filters matched -- never just the visible 25.
   const tableRef = useRef(null)
+  // Non-null only for the one paint the Slack image is captured from.
+  const [captureCols, setCaptureCols] = useState(null)
   const buildSlackTableShare = useCallback(async () => {
     const prevLimit = rowLimit
-    if (prevLimit !== 'all') { setRowLimit('all'); await nextPaint() }
+    const ceoCols = displayCols.filter(c => CEO_IMAGE_KEYS.includes(c.key))
+    if (ceoCols.length) setCaptureCols(ceoCols)
+    if (prevLimit !== 'all') setRowLimit('all')
+    await nextPaint()
     try {
       const node = tableRef.current
       if (!node) throw new Error('Table is not rendered yet')
@@ -1426,7 +1435,10 @@ export default function OverallDashboard() {
       const csvCols = [grpByLabel, ...displayCols.map(c => c.label)]
       return {
         title: 'Overall \u2014 funnel summary by ' + grpByLabel.toLowerCase(),
-        subtitle: periodLabel + '  \u00b7  Source: ' + source + '  \u00b7  Corridor: ' + corridorFilter,
+        subtitle: [periodLabel,
+          source && source !== 'All' ? 'Source: ' + source : null,
+          corridorFilter && corridorFilter !== 'All' ? 'Corridor: ' + corridorFilter : null,
+        ].filter(Boolean).join('  \u00b7  '),
         summary: [
           { label: 'Spend', value: stat('spend') },
           { label: 'Leads', value: stat('leads') },
@@ -1439,10 +1451,14 @@ export default function OverallDashboard() {
         csv: rowsToCsv(csvCols, [tableTotalExportRowRaw, ...tableExportRowsRaw]),
       }
     } finally {
+      setCaptureCols(null)
       if (prevLimit !== 'all') setRowLimit(prevLimit)
     }
   }, [rowLimit, activeFilter, customFrom, customTo, dateWindow, selMonth, source, corridorFilter,
     grpByLabel, displayCols, totalsRow, tableExportRowsRaw, tableTotalExportRowRaw])
+
+  // On screen we always render displayCols. captureCols wins only mid-capture.
+  const renderCols = captureCols || displayCols
 
   if (loading) {
     return (
@@ -1840,7 +1856,7 @@ export default function OverallDashboard() {
                       <th onClick={() => handleSort('label')} style={{ padding:'11px 12px', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
                         {grpByLabel}{sortKey === 'label' && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                       </th>
-                      {displayCols.map(col => (
+                      {renderCols.map(col => (
                         <th key={col.key}
                           onClick={() => handleSort(col.key)}
                           draggable
@@ -1872,7 +1888,7 @@ export default function OverallDashboard() {
                         <th style={{ padding:'10px 12px', fontSize:10.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'#64748B', textAlign:'left', whiteSpace:'nowrap' }}>
                           Total
                         </th>
-                        {displayCols.map(col => {
+                        {renderCols.map(col => {
                           const v = summaryValue(totalsRow, col.key)
                           const isCorridor = col.key === 'corridor'
                           const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
@@ -1890,7 +1906,7 @@ export default function OverallDashboard() {
                     {tableRows.map((g, i) => (
                       <tr key={g.label} style={{ background: i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
                         <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A' }}>{g.label}</td>
-                        {displayCols.map(col => {
+                        {renderCols.map(col => {
                           const v = summaryValue(g, col.key)
                           const isCorridor = col.key === 'corridor'
                           const isPct = col.key.endsWith('Pct')
@@ -1904,7 +1920,7 @@ export default function OverallDashboard() {
                       </tr>
                     ))}
                     {tableRows.length === 0 && (
-                      <tr><td colSpan={displayCols.length + 1} style={{ padding:'20px', textAlign:'center', color:'#94A3B8' }}>No data for this selection.</td></tr>
+                      <tr><td colSpan={renderCols.length + 1} style={{ padding:'20px', textAlign:'center', color:'#94A3B8' }}>No data for this selection.</td></tr>
                     )}
                   </tbody>
                 </table>

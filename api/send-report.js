@@ -1029,7 +1029,7 @@ function buildTableShareComment({ title, subtitle, summary, rowCount, askedBy, i
   if (subtitle) lines.push(subtitle)
   const stats = (summary || []).filter(s => s && s.label).map(s => '*' + s.label + '*  ' + s.value)
   if (stats.length) lines.push('', stats.join('   ·   '))
-  lines.push('', '_Full table attached as an image (' + rowCount + ' row' + (rowCount === 1 ? '' : 's') + ', nothing truncated) · CSV for the raw numbers · shared by ' + askedBy + '_')
+  lines.push('', '_' + rowCount + ' row' + (rowCount === 1 ? '' : 's') + '  \u00b7  every column is in the attached CSV_')
   if (degraded) lines.push('_Image scaled down to fit the upload size limit._')
   return lines.join('\n')
 }
