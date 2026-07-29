@@ -17,6 +17,8 @@ const EMOJI = {
   ':test_tube:':'\uD83E\uDDEA', ':chart_with_upwards_trend:':'\uD83D\uDCC8', ':dart:':'\uD83C\uDFAF',
   ':zap:':'\u26A1', ':memo:':'\uD83D\uDCDD', ':trophy:':'\uD83C\uDFC6', ':dollar:':'\uD83D\uDCB5',
   ':rocket:':'\uD83D\uDE80', ':information_source:':'\u2139\uFE0F',
+  ':mag:':'\uD83D\uDD0D', ':bulb:':'\uD83D\uDCA1', ':pushpin:':'\uD83D\uDCCC',
+  ':white_check_mark:':'\u2705', ':warning:':'\u26A0\uFE0F', ':small_blue_diamond:':'\uD83D\uDD39',
 }
 
 const readLastSent = () => { try { return JSON.parse(localStorage.getItem(LAST_KEY) || '{}') } catch (_) { return {} } }

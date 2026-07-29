@@ -481,11 +481,15 @@ function moversWithBase(ctx, wantGood) {
 function costDirectionV4(ctx) {
   const { d, stat } = ctx
   if (d.cpl == null || d.cpql == null) return null
+  // Anything inside half a percent is flat. A price that moved 0.05% is not a story,
+  // and calling it one is how a report starts sounding like it is trying to sell.
+  const up = v => v > 0.5
+  const dn = v => v < -0.5
   const both = 'CPL ' + stat('cpl') + ' (' + mv(d.cpl) + ') and CPQL ' + stat('cpql') + ' (' + mv(d.cpql) + ')'
-  if (d.cpl < 0 && d.cpql > 0) return 'Traffic got cheaper, quality did not ' + DASH + ' ' + both + '. We bought more leads, not more QLs.'
-  if (d.cpl > 0 && d.cpql < 0) return 'Leads cost more but qualified better ' + DASH + ' ' + both + '.'
-  if (d.cpl <= 0 && d.cpql <= 0) return 'Both prices improved ' + DASH + ' ' + both + '.'
-  return 'Both prices rose ' + DASH + ' ' + both + '.'
+  if (dn(d.cpl) && up(d.cpql)) return 'Traffic got cheaper, quality did not ' + DASH + ' ' + both + '. We bought more leads, not more QLs.'
+  if (up(d.cpl) && dn(d.cpql)) return 'Leads cost more but qualified better ' + DASH + ' ' + both + '.'
+  if (!up(d.cpl) && !up(d.cpql)) return 'Both prices held or improved ' + DASH + ' ' + both + '.'
+  return 'Both prices moved against us ' + DASH + ' ' + both + '.'
 }
 
 // Money against the last stage marketing owns outright.
@@ -538,7 +542,7 @@ function channelRecs(ctx) {
       out.push(':pushpin: *' + top.label + ' alone is ' + pctText(sh) + ' of all leads*'
         + (paidSh != null ? ' (' + pctText(paidSh) + ' of paid leads)' : '') + ' ' + DASH + ' '
         + (meta
-          ? 'intentional \u2014 we shifted Google spend to Meta while we improve Google\u2019s CPQL. It does mean the number now depends on one channel holding up.'
+          ? 'this was intentional. We shifted Google spend to Meta while we improve Google\u2019s CPQL, so the number now depends on one channel holding up.'
           : 'the number depends on one channel holding up.'))
     }
   }
@@ -571,7 +575,7 @@ function marketingMisses(ctx, cr, ar) {
   if (now != null && was != null && now < was - 0.05) {
     out.push('Lead ' + TO + ' QL rate slipped to ' + pctText(now) + ' (' + ppText(now - was) + ' vs ' + pctText(was) + ') ' + DASH + ' volume came in, quality did not.')
   }
-  if (d.cpl != null && d.cpql != null && d.cpl < 0 && d.cpql > 0) {
+  if (d.cpl != null && d.cpql != null && d.cpl < -0.5 && d.cpql > 0.5) {
     out.push('CPL fell ' + abs1(d.cpl) + ' but CPQL rose ' + abs1(d.cpql) + ' ' + DASH + ' the saving went into leads that never qualified.')
   }
   // The single worst CPQL riser among the channels carrying a real QL base.
@@ -632,7 +636,7 @@ function improveV4(ctx, cr, ar) {
       const cw = sw.spend / sw.paidQL, cb = sb.spend / sb.paidQL
       if (cw > cb) {
         out.push('Retire the ' + ar.worst.length + ' dearest ads: ' + money(sw.spend) + ' at ' + ctx.fmtINR(cw)
-          + ' a QL. The same money at the cheapest ' + ar.best.length + '\u2019 ' + ctx.fmtINR(cb) + ' would buy '
+          + ' a QL. The same money at ' + ctx.fmtINR(cb) + ' a QL, what the cheapest ' + ar.best.length + ' cost, would buy '
           + nfmt(Math.round(sw.spend / cb - sw.spend / cw)) + ' more QLs.')
       }
     }
