@@ -2539,3 +2539,49 @@ summed paid QLs, never an average of averages).
 
 Still open: a mid-report failure leaves the earlier messages posted -- there is no rollback.
 Main channel in Settings > Reports is still EMPTY, so a CEO-facing send is not possible yet.
+
+## 2026-07-29 — Slack PM report v4: aligned KPI grid, native charts, comparatives (commits `53a6aaf`, `50c6231`, `7229316`)
+
+Version `v4` ("Exec report — 5 messages, charts") is now the default and the recommended
+entry in `REPORT_VERSIONS`. v3 keeps its `recommended` flag removed but stays in the
+library, because the rule still holds: append to the top, never delete or edit an old
+version.
+
+What changed, and why:
+
+- **Comparatives everywhere.** `OverallDashboard` now builds `prev`, `cmp.channels`,
+  `cmp.corridors` and `cmp.ads` by joining the current window to the same-length window
+  immediately before it. `prevFiltered` finally honours the Corridor filter — before this
+  it compared a filtered period against an unfiltered one, which quietly inflated every
+  delta. Every figure in the report carries the number it moved from.
+- **A footnote on every message.** A context block spells out that the comparison is
+  `<period>` against `<prevLabel>`, same length, same Source and Corridor filters, and
+  that CPL / CPQL / CPA divide spend by PAID leads, QLs and applications only.
+- **Message 1 is a two-column KPI grid** built from Slack `fields` (10 per section, so it
+  fits exactly), spend written in crores via `money()`, plus a native
+  `data_visualization` bar chart of stage conversion, this period against last.
+- **Message 2** keeps the Paid vs Non-Paid native table and adds a share-of-spend pie and
+  per-channel movement on the three channels carrying the money. The PNG and the
+  all-columns CSV still land in this message's thread.
+- **Message 3 is Facebook + Google campaigns only** and is a native table with no written
+  ranking, as asked. The ≥25 QL cutoff stays; the number of corridors it holds back is
+  stated out loud.
+- **Message 4 is new**: the 5 cheapest and 5 dearest ads on CPQL, with common themes
+  derived by tallying tokens in the ad names (a token must appear in at least 3 of one
+  band and at most 1 of the other before it is called a theme), plus corridor
+  concentration and how much spend each band absorbed.
+- **"What we cannot tell yet" is gone.** Message 5 is what we did right, what went wrong,
+  what we can improve — nothing else.
+- `NAS Generic` is now labelled **`Catch All`** in `src/lib/corridors.js`.
+
+`rankByCpql` returns `single: true` when 10 or fewer rows clear the cutoff. In that case
+`cpqlTable` prints one `RANKED ON CPQL — CHEAPEST FIRST` band instead of a top 5 and a
+bottom 5, and the chart is fed `best` alone. Without this, a six-corridor month printed
+four corridors twice and the chart de-duplicated them into nonsense series names like
+`Unclassified 7`.
+
+`api/send-report.js` sends blocks now, not just text: `reportBlocks()` assembles section →
+field chunks → after-section → table → chart → context, and `slackPostReportMessage`
+degrades in four steps (full → no chart → no table → plain text) so a rejected
+`data_visualization` block can never cost us the message. No new files in `api/` — the
+Vercel function count is still 12/12.
