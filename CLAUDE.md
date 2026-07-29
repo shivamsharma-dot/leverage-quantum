@@ -2500,3 +2500,42 @@ Two rounds in one day. `d72c315` first trimmed the Slack image to a CEO column s
 Verified live in the test channel: text block, native table with TOTAL / PAID CHANNELS / 4 paid rows / NON-PAID CHANNELS / 8 rows, and a thread holding the PNG plus `... (full data).csv`.
 
 **Note:** LinkedIn has no rows in the current data, so the Paid band shows Facebook, Affiliate, Google, Bing only. Nothing is dropped — `isPaidSource` just never matches a source that is not present.
+
+## 2026-07-29 — Versioned Slack PM report: four messages in one click, preview panel inside Quantum (commits `5f072d2`, `24c7426`)
+
+Remarketing now counts as a paid channel (`4a6fffc`), so the Overall table's Paid band is
+Facebook / Google / Affiliate / Linkedin / Bing / Remarketing. "Affiliate Partner" stays
+non-paid (the match is exact, not a prefix).
+
+**New: `src/lib/pmReport.js`** — the version registry plus every insight rule. Versions are
+append-only and never edited: `v3` (exec report, 4 messages), `v2` (single message + native
+table), `v1` (single message + image/CSV). Each carries a plain-English `what` list that the
+panel shows verbatim. Every insight is a RULE over numbers the dashboard already computed --
+no generated prose anywhere -- which is what makes it safe in front of a CEO.
+
+v3 posts, in order: (1) PM summary -- the four KPI lines plus cost-direction, worst funnel
+hand-off and spend-vs-outcome; (2) Paid vs Non-Paid native table with spend share, best/worst
+CPQL and concentration risk; (3) top 5 / bottom 5 corridors by CPQL, written out and repeated
+as a table with band subtotals; (4) what we did right / went wrong / can improve / cannot tell
+yet. The PNG and the all-columns CSV hang in the thread of message 2.
+
+**New: `src/components/SlackReportPanel.jsx`** — Send to Slack now has its own button next to
+Export, and Export keeps everything except Slack (`hideSlack` prop; other pages are untouched).
+The panel lists the versions, describes each one, renders a faithful mrkdwn + table preview
+built by the SAME builders the send uses, and offers Test / Main with a second deliberate click
+before the main channel. Nothing about versioning lives in Slack -- Slack only receives the one
+report somebody presses Send on. "Last sent" is localStorage; the durable record is `report_logs`.
+
+**`api/send-report.js`** — new `slack_report` branch: `handleSlackReport` posts the messages
+SEQUENTIALLY (Slack orders by arrival, so parallel would scramble them), then attaches the files
+to the thread of the message that asked for them. Capped at 6 messages, 2,900 chars each.
+
+### Gotcha worth remembering
+A table cell whose text is an empty string makes Slack reject the whole `chat.postMessage`
+(`invalid_blocks`). The first live send posted messages 1-2 and then died on the corridor table's
+band rows, which were `['CHEAPEST QL','','','','','']`. Fixed twice over: blanks now travel as
+`\u00a0`, and band rows carry their band's own totals (CPQL re-derived from summed spend over
+summed paid QLs, never an average of averages).
+
+Still open: a mid-report failure leaves the earlier messages posted -- there is no rollback.
+Main channel in Settings > Reports is still EMPTY, so a CEO-facing send is not possible yet.
