@@ -391,7 +391,7 @@ function rankByCpql(items, minQL) {
   const all = items || []
   const eligible = all.filter(c => c.cpql != null && c.cpql > 0 && c.totalQL >= minQL)
   const by = eligible.slice().sort((a, b) => a.cpql - b.cpql)
-  const single = by.length < 6
+  const single = by.length < 11
   return {
     best: single ? by : by.slice(0, 5),
     worst: single ? [] : by.slice(-5).reverse(),
@@ -427,7 +427,11 @@ function cpqlTable(ctx, r, firstCol, wrapFirst) {
     push([name, money(s.spend), nfmt(s.leads), nfmt(s.totalQL),
       (s.spend > 0 && s.paidQL > 0) ? ctx.fmtINR(s.spend / s.paidQL) : DASH, DASH], true)
   }
-  if (r.single) { r.best.forEach(c => push(line(c), false)); return t }
+  if (r.single) {
+    band('RANKED ON CPQL ' + DASH + ' CHEAPEST FIRST', r.best)
+    r.best.forEach(c => push(line(c), false))
+    return t
+  }
   band('TOP 5 ' + DASH + ' CHEAPEST QL', r.best)
   r.best.forEach(c => push(line(c), false))
   band('BOTTOM 5 ' + DASH + ' DEAREST QL', r.worst)
@@ -543,9 +547,9 @@ function buildV4(ctx) {
     msgs.push({
       key: 'corridors', label: 'Corridors (' + scope + ')',
       text: [
-        '*:earth_asia: Corridors ' + DASH + ' cheapest and dearest QL*',
+        '*:earth_asia: Corridors ' + DASH + (cr.single ? ' ranked on CPQL*' : ' cheapest and dearest QL*'),
         '_' + scope + ' campaigns only \u00b7 ranked on CPQL \u00b7 a corridor needs at least ' + ctx.minQL + ' QLs to be ranked'
-          + (cr.skipped ? ' (' + cr.skipped + ' smaller corridors are not ranked)' : '') + '_',
+          + (cr.skipped ? ' (' + nfmt(cr.skipped) + ' smaller corridors are not ranked)' : '') + '_',
       ].join('\n'),
       table: cpqlTable(ctx, cr, 'Corridor', false),
       chart: cpqlChart(ctx, cr.best.concat(cr.worst), 'CPQL by corridor'),
@@ -559,9 +563,9 @@ function buildV4(ctx) {
     const m4 = {
       key: 'ads', label: 'Ads',
       text: [
-        '*:rocket: Ads ' + DASH + ' best and worst 5 on CPQL*',
+        '*:rocket: Ads ' + DASH + (ar.single ? ' ranked on CPQL*' : ' best and worst 5 on CPQL*'),
         '_Ranked on CPQL \u00b7 an ad needs at least ' + ctx.minQL + ' QLs to be ranked'
-          + (ar.skipped ? ' (' + ar.skipped + ' smaller ads are not ranked)' : '') + '_',
+          + (ar.skipped ? ' (' + nfmt(ar.skipped) + ' smaller ads are not ranked)' : '') + '_',
       ].join('\n'),
       table: cpqlTable(ctx, ar, 'Ad', true),
       context: note,
