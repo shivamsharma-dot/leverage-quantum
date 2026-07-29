@@ -1456,11 +1456,11 @@ export default function SettingsPage() {
       const r = await fetch('/api/send-report', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'slack_answer', question: 'Slack connection test from Settings', answerMarkdown: 'This is a test message from **Leverage Quantum** — if you can see this, your Slack webhook is connected correctly.', slackTarget: 'test' }),
+        body: JSON.stringify({ type: 'slack_test', slackTarget: 'test' }),
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed')
-      setSlackCfgMsg('Test message posted ✓')
+      setSlackCfgMsg(`Posted to the ${d.channel || 'test channel'} via ${d.mode === 'bot' ? 'the bot' : 'webhook'} ✓`)
     } catch (e) { setSlackCfgMsg('✕ ' + e.message) }
     finally { setSlackTesting(false); setTimeout(() => setSlackCfgMsg(''), 6000) }
   }

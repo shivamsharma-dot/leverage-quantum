@@ -186,11 +186,14 @@ function mdToSlackText(md) {
   return text.trim()
 }
 
-function buildSlackAnswerBlocks({ question, answerMarkdown, askedBy }) {
+function buildSlackAnswerBlocks({ question, answerMarkdown, askedBy, channelLabel }) {
   const body = mdToSlackText(answerMarkdown).slice(0, 2900)
   return {
     blocks: [
       { type: 'header', text: { type: 'plain_text', text: '📊 Ask AI Answer', emoji: true } },
+      ...(channelLabel === 'test channel'
+        ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: ':test_tube: *Test post* -- sent to the test channel to check formatting.' }] }]
+        : []),
       { type: 'section', text: { type: 'mrkdwn', text: `*${(question || '').slice(0, 300)}*` } },
       { type: 'divider' },
       { type: 'section', text: { type: 'mrkdwn', text: body || '_No content_' } },
@@ -218,6 +221,20 @@ function buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy, cha
         : []),
       { type: 'context', elements: [{ type: 'mrkdwn', text: `${sourcePage ? sourcePage + ' · ' : ''}${rows.length} row${rows.length === 1 ? '' : 's'} · shared by ${askedBy || 'a teammate'}` }] },
       { type: 'section', text: { type: 'mrkdwn', text: (table + truncNote).slice(0, 2900) } },
+    ],
+  }
+}
+
+// Settings' connection test. Deliberately its own card: reusing the Ask AI answer blocks
+// headed the message "Ask AI Answer" for something that is not one, and its copy claimed a
+// "webhook" was connected even when the post had gone through the bot.
+function buildSlackTestBlocks({ askedBy, channelLabel, mode }) {
+  const via = mode === 'bot' ? 'the @pm_analyst bot' : 'an incoming webhook'
+  return {
+    blocks: [
+      { type: 'header', text: { type: 'plain_text', text: '🧪 Slack connection test', emoji: true } },
+      { type: 'section', text: { type: 'mrkdwn', text: `If you can see this, *Leverage Quantum* can post to the *${channelLabel || 'channel'}* via ${via}.` } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: `Triggered from Settings by ${askedBy || 'an admin'} · Leverage Quantum` }] },
     ],
   }
 }
@@ -254,7 +271,7 @@ async function handleSlackAnswer(req, res) {
   if (!answerMarkdown) return res.status(400).json({ error: 'No answer content to send' })
 
   try {
-    await deliverToSlack(hook, buildSlackAnswerBlocks({ question, answerMarkdown, askedBy: me.email }))
+    await deliverToSlack(hook, buildSlackAnswerBlocks({ question, answerMarkdown, askedBy: me.email, channelLabel: hook.label }))
     await logReport({ report_type: 'slack answer', recipients: ['slack'], status: 'sent', triggered_by: me.email })
     return res.status(200).json({ ok: true, success: true })
   } catch (e) {
@@ -1071,6 +1088,21 @@ export default async function handler(req, res) {
   if ((req.body?.type || req.query?.type) === 'slack_answer') {
     return handleSlackAnswer(req, res)
   }
+  if ((req.body?.type || req.query?.type) === 'slack_test') {
+    const me = getSessionUser(req)
+    if (!me) return res.status(401).json({ error: 'Not signed in' })
+    if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    const cfg = await getReportConfig()
+    const hook = resolveSlackTarget(cfg, req.body?.slackTarget || 'test')
+    if (!hook.url && !hook.channel) return res.status(500).json({ error: hook.missing })
+    try {
+      await deliverToSlack(hook, buildSlackTestBlocks({ askedBy: me.email, channelLabel: hook.label, mode: hook.mode }))
+      return res.status(200).json({ ok: true, success: true, channel: hook.label, mode: hook.mode })
+    } catch (e) {
+      return res.status(500).json({ error: e.message })
+    }
+  }
+
   if ((req.body?.type || req.query?.type) === 'slack_export') {
     return handleSlackExport(req, res)
   }
