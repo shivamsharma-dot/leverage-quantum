@@ -1187,14 +1187,14 @@ function reportBlocks(m, opts) {
 // then without the chart, then without the table, then as the lead section alone.
 async function slackPostReportMessage(token, channel, m) {
   const fallbackText = String(m.text || m.label || 'Report').slice(0, 2900)
-  // Charts are the newest block type in this file and a workspace that cannot
-  // render one rejects the whole post. So a message degrades rather than fails.
-  const attempts = [
-    { table: true, chart: true },
-    { table: true, chart: false },
-    { table: false, chart: false },
-    { bare: true },
-  ]
+  // Slack will not colour its own chart and will not print the value on a bar,
+  // and this report is read on a phone. So when we have a picture of our own --
+  // brand ramp, every number written on it -- we leave Slack's chart out of the
+  // message and post ours straight underneath, full width, no tap needed.
+  const ownChart = !!m.chartPng
+  const attempts = ownChart
+    ? [{ table: true, chart: false }, { table: false, chart: false }, { bare: true }]
+    : [{ table: true, chart: true }, { table: true, chart: false }, { table: false, chart: false }, { bare: true }]
   let ts = null
   let lastErr = null
   for (const opt of attempts) {
@@ -1203,35 +1203,16 @@ async function slackPostReportMessage(token, channel, m) {
   }
   if (!ts) throw lastErr || new Error('Slack: message rejected')
 
-  // Slack will not colour its own chart and will not print the value on a bar,
-  // and this is read on a phone. So we draw the picture ourselves in the brand
-  // ramp with every number written on, park it in the thread so the file is
-  // shared (an image block can only point at a file Slack already has in the
-  // conversation), then swap the native chart for it in place.
-  if (m.chartPng) {
+  if (ownChart) {
     try {
       const up = await slackUploadFile(token, {
         filename: 'chart-' + Date.now() + '.png',
         buffer: Buffer.from(m.chartPng, 'base64'),
         title: (m.chart && m.chart.title) || 'Chart',
       })
-      await slackCompleteUpload(token, { files: [up], channel, threadTs: ts })
-      m.chartFileId = up.id
-      m.__diag = 'fid:' + up.id
-      // Slack needs a beat to finish processing the upload before an image
-      // block will accept it, so we give it one and try twice.
-      let done = false
-      for (let i = 0; i < 3 && !done; i++) {
-        await new Promise(r => setTimeout(r, 1200))
-        try {
-          await slackUpdateBlocks(token, channel, ts, fallbackText, reportBlocks(m, { table: true, chart: 'image' }))
-          done = true
-          m.__diag += ' updated@' + i
-        } catch (e2) { m.__diag += ' upd' + i + ':' + String((e2 && e2.message) || e2) }
-      }
+      await slackCompleteUpload(token, { files: [up], channel })
     } catch (e) {
-      m.chartFileId = null
-      m.__diag = 'err:' + String((e && e.message) || e)
+      // The picture is a bonus. If Slack will not take it the report still reads.
     }
   }
   return ts
@@ -1285,7 +1266,7 @@ async function handleSlackReport(req, res) {
       }
     }
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: me.email })
-    return res.status(200).json({ ok: true, success: true, channel: hook.label, posted: list.length, rowCount: rowCount || 0, diag: list.map(x => x.__diag || null) })
+    return res.status(200).json({ ok: true, success: true, channel: hook.label, posted: list.length, rowCount: rowCount || 0 })
   } catch (e) {
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'failed', error: e.message, triggered_by: me.email })
     return res.status(500).json({ error: e.message })
