@@ -2702,3 +2702,15 @@ application, and everything it says is a media lever.
   - Message 5's three sub-headers pick up `:white_check_mark:`, `:warning:`, `:bulb:`.
 - Registry entry for v4 rewritten to describe all of the above. No new version id: the
   brief has been "edit v4 in place" throughout, and v1–v3 still render exactly as before.
+
+Follow-ups the same day, caught in the live preview rather than in Slack:
+
+- `src/components/SlackReportPanel.jsx` holds its own small shortcode → emoji map so the
+  in-Quantum preview shows what Slack will show. New v4 shortcodes have to be added there
+  or the preview prints the raw `:pushpin:` text: `:mag:`, `:bulb:`, `:pushpin:`,
+  `:white_check_mark:`, `:warning:`, `:small_blue_diamond:` are now in it. Anything added
+  to a builder in future needs the same entry.
+- `costDirectionV4` and the CPL-vs-CPQL miss now treat anything inside half a percent as
+  flat. Jul'26 CPQL moved 0.05%, and the old code turned that into "traffic got cheaper,
+  quality did not" — technically sourced, materially untrue, and exactly the kind of line
+  that makes a CEO stop trusting the rest of the message.
