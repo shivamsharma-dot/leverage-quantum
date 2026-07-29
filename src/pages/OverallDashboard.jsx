@@ -1491,7 +1491,7 @@ export default function OverallDashboard() {
       rate(prevKpis.offers, prevKpis.deposits),
     ]
     const withCost = g => ({
-      label: g.label, spend: g.spend, leads: g.leads, totalQL: g.totalQL, apps: g.apps,
+      label: g.label, spend: g.spend, leads: g.leads, totalQL: g.totalQL, apps: g.apps, paidQL: g.paidQL,
       cpl: summaryValue(g, 'cpl'), cpql: summaryValue(g, 'cpql'), cpa: summaryValue(g, 'cpa'),
     })
     const paidRows = sortedFilteredRows.filter(r => isPaidSource(r.label))

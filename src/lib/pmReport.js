@@ -106,11 +106,21 @@ function corridorTable(ctx, cr) {
   const t = { columns: ['Corridor', 'Spend', 'Leads', 'Total QLs', 'CPQL', 'Apps'], rows: [], strongRows: [] }
   const push = (cells, strong) => { if (strong) t.strongRows.push(t.rows.length); t.rows.push(cells) }
   const line = c => [c.label, ctx.fmtINR(c.spend), ctx.fmtN(c.leads), ctx.fmtN(c.totalQL), c.cpql == null ? DASH : ctx.fmtINR(c.cpql), ctx.fmtN(c.apps)]
-  const band = name => push([name, '', '', '', '', ''], true)
+  // A band row carries the band's own totals. CPQL is re-derived from summed spend
+  // over summed paid QLs -- averaging five per-corridor CPQLs would be a wrong number.
+  const band = (name, list) => {
+    const s = list.reduce((a, c) => ({
+      spend: a.spend + (c.spend || 0), leads: a.leads + (c.leads || 0),
+      totalQL: a.totalQL + (c.totalQL || 0), apps: a.apps + (c.apps || 0),
+      paidQL: a.paidQL + (c.paidQL || 0),
+    }), { spend:0, leads:0, totalQL:0, apps:0, paidQL:0 })
+    push([name, ctx.fmtINR(s.spend), ctx.fmtN(s.leads), ctx.fmtN(s.totalQL),
+      (s.spend > 0 && s.paidQL > 0) ? ctx.fmtINR(s.spend / s.paidQL) : DASH, ctx.fmtN(s.apps)], true)
+  }
   if (cr.single) { cr.best.forEach(c => push(line(c), false)); return t }
-  band('CHEAPEST QL')
+  band('TOP 5 — CHEAPEST QL', cr.best)
   cr.best.forEach(c => push(line(c), false))
-  band('MOST EXPENSIVE QL')
+  band('BOTTOM 5 — DEAREST QL', cr.worst)
   cr.worst.forEach(c => push(line(c), false))
   return t
 }

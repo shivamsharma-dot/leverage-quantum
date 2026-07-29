@@ -1046,9 +1046,12 @@ function buildTableShareComment({ title, subtitle, summary, rowCount, askedBy, i
 // sends a trimmed column set. Header, TOTAL and the band subtotals go through
 // rich_text so they can be bold; every other cell is cheap raw_text.
 async function slackPostTable(token, channel, text, table) {
+  // Slack rejects an empty text run inside a table cell, so a blank travels as a
+  // non-breaking space instead of failing the whole post.
+  const txt = v => { const t = String(v == null ? '' : v); return t === '' ? '\u00a0' : t }
   const cell = (v, strong) => strong
-    ? { type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: String(v == null ? '' : v), style: { bold: true } }] }] }
-    : { type: 'raw_text', text: String(v == null ? '' : v) }
+    ? { type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: txt(v), style: { bold: true } }] }] }
+    : { type: 'raw_text', text: txt(v) }
   const cols = table.columns || []
   const strong = new Set(table.strongRows || [])
   const rows = [cols.map(c => cell(c, true))]
