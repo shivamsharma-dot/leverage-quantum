@@ -1124,6 +1124,77 @@ async function handleSlackExportImage(req, res) {
   }
 }
 
+// A report is a SEQUENCE of messages posted top-level, in order, from a single click.
+// Each one may carry its own native table. The image and the CSV hang in the thread of
+// whichever message asked for them, so the channel itself stays readable.
+async function slackPostReportMessage(token, channel, text, table) {
+  if (table && Array.isArray(table.rows) && table.rows.length) {
+    return slackPostTable(token, channel, text, table)
+  }
+  const res = await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ channel, text, blocks: [{ type: 'section', text: { type: 'mrkdwn', text } }] }),
+  })
+  const d = await res.json().catch(() => ({}))
+  if (!d.ok) throw new Error('Slack: ' + (d.error || 'message rejected'))
+  return d.ts
+}
+
+async function handleSlackReport(req, res) {
+  const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+
+  // Same per-page gate as every other Slack path: a real PAGE_LIST id from the
+  // caller, and admin-only when an older caller sends none.
+  const { dashboardId, slackTarget, filename, versionId, messages, pngBase64, csv, pixelRatio, rowCount } = req.body || {}
+  if (!dashboardId ? me.role !== 'admin' : !canAccessDashboard(me.role, dashboardId)) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  const list = Array.isArray(messages) ? messages.filter(m => m && m.text) : []
+  if (!list.length) return res.status(400).json({ error: 'Nothing to post' })
+  if (list.length > 6) return res.status(400).json({ error: 'A report is capped at 6 messages' })
+
+  const cfg = await getReportConfig()
+  const hook = resolveSlackTarget(cfg, slackTarget)
+  if (hook.mode !== 'bot' || !hook.channel) {
+    return res.status(400).json({ error: 'Posting a report needs SLACK_BOT_TOKEN plus a channel (files:write) -- an Incoming Webhook cannot upload files.' })
+  }
+
+  const logType = 'slack pm report ' + (versionId || 'v?') + (slackTarget === 'test' ? ' (test)' : '')
+  try {
+    // Sequential on purpose: Slack orders by arrival, so posting in parallel would
+    // let message 3 land above message 1.
+    let attachTs = null
+    for (const m of list) {
+      const ts = await slackPostReportMessage(hook.token, hook.channel, String(m.text).slice(0, 2900), m.table)
+      if (m.attach && !attachTs) attachTs = ts
+    }
+    if (pngBase64 || csv) {
+      const stamp = new Date().toISOString().slice(0, 10)
+      const base = String(filename || 'overall').replace(/[^a-z0-9._-]+/gi, '-')
+      const files = []
+      if (pngBase64) files.push(await slackUploadFile(hook.token, {
+        filename: base + '-' + stamp + '.png', buffer: Buffer.from(pngBase64, 'base64'), title: 'PM summary table',
+      }))
+      if (csv) files.push(await slackUploadFile(hook.token, {
+        filename: base + '-' + stamp + '.csv', buffer: Buffer.from(String(csv), 'utf8'), title: 'PM summary (full data)',
+      }))
+      if (files.length) {
+        const note = (pixelRatio && pixelRatio < 2) ? '_Image scaled down to fit the upload size limit._' : null
+        await slackCompleteUpload(hook.token, {
+          files, channel: hook.channel, threadTs: attachTs, initialComment: attachTs ? null : note,
+        })
+      }
+    }
+    await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: me.email })
+    return res.status(200).json({ ok: true, success: true, channel: hook.label, posted: list.length, rowCount: rowCount || 0 })
+  } catch (e) {
+    await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'failed', error: e.message, triggered_by: me.email })
+    return res.status(500).json({ error: e.message })
+  }
+}
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
@@ -1153,6 +1224,9 @@ export default async function handler(req, res) {
   }
   if ((req.body?.type || req.query?.type) === 'slack_export_image') {
     return handleSlackExportImage(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'slack_report') {
+    return handleSlackReport(req, res)
   }
   if ((req.body?.type || req.query?.type) === 'unassigned_leads') {
     return handleUnassignedLeadsReport(req, res)

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { toast } from './ToastHost'
 import Button from './Button'
 
-export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow, slackRich }) {
+export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow, slackRich, hideSlack }) {
   const [open, setOpen] = useState(false)
   const [sheetsBusy, setSheetsBusy] = useState(false)
   const [slackBusy, setSlackBusy] = useState(false)
@@ -236,6 +236,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
               </svg>
               {sheetsBusy ? 'Creating sheet…' : 'Export to Google Sheets'}
             </button>
+        {!hideSlack && (<>
             <button onClick={() => sendSlack('test')} disabled={slackBusy} style={{
               display:'flex', alignItems:'center', gap:9, width:'100%',
               padding:'9px 14px', border:'none', background:'none',
@@ -265,6 +266,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
               </svg>
               {slackBusy ? 'Posting…' : 'Send to Slack — main channel'}
             </button>
+        </>)}
             {extraOption && (
               <button onClick={extraOption.onClick} disabled={extraOption.busy} style={{
                 display:'flex', alignItems:'center', gap:9, width:'100%',

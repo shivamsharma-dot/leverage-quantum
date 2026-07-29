@@ -7,6 +7,8 @@ import {
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
+import SlackReportPanel from '../components/SlackReportPanel'
+import { CORRIDOR_MIN_QL } from '../lib/pmReport'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import Button from '../components/Button'
 import { getSession, setSession, hasLoaded, getPersisted } from '../lib/sessionLoad'
@@ -1438,64 +1440,112 @@ export default function OverallDashboard() {
   const tableRef = useRef(null)
   // Non-null only for the one paint the Slack image is captured from.
   const [captureCols, setCaptureCols] = useState(null)
-  const buildSlackTableShare = useCallback(async () => {
+  const [slackPanelOpen, setSlackPanelOpen] = useState(false)
+
+  // The columns a CEO actually reads, when they are on screen at all.
+  const ceoCols = useMemo(() => displayCols.filter(c => CEO_IMAGE_KEYS.includes(c.key)), [displayCols])
+  const shareCols = ceoCols.length ? ceoCols : displayCols
+
+  const periodLabel = useMemo(() => (
+    activeFilter === 'custom' && customFrom ? customFrom + ' to ' + customTo
+      : activeFilter === 'preset' && dateWindow ? dateWindow.label
+        : (selMonth || 'All time')
+  ), [activeFilter, customFrom, customTo, dateWindow, selMonth])
+
+  const filterLine = useMemo(() => (
+    'Filtered by -> ' + [periodLabel, 'Source: ' + source, 'Corridor: ' + corridorFilter].join('  \u00b7  ')
+  ), [periodLabel, source, corridorFilter])
+
+  // Slack's own table block caps a row at 20 cells, so it carries the CEO column set.
+  // Every ROW is included, banded into Paid / Non-Paid with a subtotal each; the CSV
+  // alongside still carries all 23 metric columns.
+  const slackTable = useMemo(() => {
+    const t = { columns: [grpByLabel, ...shareCols.map(c => c.label)], rows: [], strongRows: [] }
+    const push = (label, g, strong) => {
+      if (strong) t.strongRows.push(t.rows.length)
+      t.rows.push([label, ...shareCols.map(c => summaryFmt(c.key, summaryValue(g, c.key)))])
+    }
+    push('TOTAL', totalsRow, true)
+    const bands = grpBy === 'source' ? [['Paid Channels', true], ['Non-Paid Channels', false]] : [[null, null]]
+    bands.forEach(([band, wantPaid]) => {
+      const rows = band === null ? sortedFilteredRows : sortedFilteredRows.filter(r => isPaidSource(r.label) === wantPaid)
+      if (!rows.length) return
+      if (band) push(band.toUpperCase(), aggregateRows(rows, band), true)
+      rows.forEach(g => push(g.label, g, false))
+    })
+    return t
+  }, [grpByLabel, shareCols, totalsRow, grpBy, sortedFilteredRows, aggregateRows])
+
+  // Everything the Slack report builders need, and nothing they could invent. Deltas
+  // reuse the same previous-equivalent-period basis as the KPI cards, so a sentence in
+  // Slack can never disagree with an arrow on this page. Floor-queued is deliberately
+  // absent everywhere: it produces no QLs of its own, so it is not part of the story.
+  const buildReportContext = useCallback(() => {
+    const rate = (a, b) => (a > 0 ? (b / a) * 100 : null)
+    const prevQueued = prevKpis.futworkQ + prevKpis.superbotQ
+    const prevChain = [
+      rate(prevKpis.leads, prevQueued),
+      rate(prevQueued, prevKpis.totalQL),
+      rate(prevKpis.totalQL, prevKpis.apps),
+      rate(prevKpis.apps, prevKpis.offers),
+      rate(prevKpis.offers, prevKpis.deposits),
+    ]
+    const withCost = g => ({
+      label: g.label, spend: g.spend, leads: g.leads, totalQL: g.totalQL, apps: g.apps,
+      cpl: summaryValue(g, 'cpl'), cpql: summaryValue(g, 'cpql'), cpa: summaryValue(g, 'cpa'),
+    })
+    const paidRows = sortedFilteredRows.filter(r => isPaidSource(r.label))
+    const freeRows = sortedFilteredRows.filter(r => !isPaidSource(r.label))
+    return {
+      grpByLabel, periodLabel, filterLine, rowCount: sortedFilteredRows.length,
+      minQL: CORRIDOR_MIN_QL, fmtINR, fmtN,
+      stat: key => summaryFmt(key, summaryValue(totalsRow, key)),
+      num: key => Number(summaryValue(totalsRow, key)) || 0,
+      d: {
+        spend: deltaPct(kpis.spend, prevKpis.spend), leads: deltaPct(kpis.leads, prevKpis.leads),
+        totalQL: deltaPct(kpis.totalQL, prevKpis.totalQL), apps: deltaPct(kpis.apps, prevKpis.apps),
+        offers: deltaPct(kpis.offers, prevKpis.offers), deposits: deltaPct(kpis.deposits, prevKpis.deposits),
+        raus: deltaPct(kpis.raus, prevKpis.raus),
+        cpl: deltaPct(cpl, prevCpl), cpql: deltaPct(cpql, prevCpql), cpa: deltaPct(cpa, prevCpa),
+      },
+      chain: conversionChain.map((s, i) => ({ ...s, prevRate: prevChain[i] })),
+      channels: bySource.map(s => withCost({ ...s, label: s.source })),
+      corridors: byCorridor.map(c => withCost({ ...c, label: c.corridor })),
+      bands: {
+        total: totalsRow,
+        paid: paidRows.length ? aggregateRows(paidRows, 'Paid Channels') : null,
+        nonPaid: freeRows.length ? aggregateRows(freeRows, 'Non-Paid Channels') : null,
+      },
+      table: slackTable,
+      estimatedRaus,
+      hasPrev: prevKpis.leads > 0 || prevKpis.spend > 0,
+      partialPeriod: activeFilter === 'month' ? isCurrentMonth : activeFilter === 'preset',
+    }
+  }, [grpByLabel, periodLabel, filterLine, sortedFilteredRows, totalsRow, kpis, prevKpis,
+    cpl, cpql, cpa, prevCpl, prevCpql, prevCpa, conversionChain, bySource, byCorridor,
+    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth])
+
+  // The picture of the table plus the all-columns CSV. The row limit is lifted to
+  // "all" for the capture and restored right after, so the image always carries every
+  // row the current filters matched -- never just the visible 25.
+  const captureReportFiles = useCallback(async () => {
     const prevLimit = rowLimit
-    const ceoCols = displayCols.filter(c => CEO_IMAGE_KEYS.includes(c.key))
     if (ceoCols.length) setCaptureCols(ceoCols)
     if (prevLimit !== 'all') setRowLimit('all')
     await nextPaint()
     try {
       const node = tableRef.current
-      if (!node) throw new Error('Table is not rendered yet')
-      const shot = await captureNodePng(node)
-      const periodLabel = activeFilter === 'custom' && customFrom ? customFrom + ' to ' + customTo
-        : activeFilter === 'preset' && dateWindow ? dateWindow.label
-        : (selMonth || 'All time')
-      const stat = key => summaryFmt(key, summaryValue(totalsRow, key))
-      const csvCols = [grpByLabel, ...displayCols.map(c => c.label)]
-      // Slack's own table block caps a row at 20 cells, so it carries the CEO column
-      // set. Every ROW is included, banded into Paid / Non-Paid with a subtotal each;
-      // the CSV alongside still has all 23 metric columns.
-      const shareCols = ceoCols.length ? ceoCols : displayCols
-      const slackTable = { columns: [grpByLabel, ...shareCols.map(c => c.label)], rows: [], strongRows: [] }
-      const pushShareRow = (label, g, strong) => {
-        if (strong) slackTable.strongRows.push(slackTable.rows.length)
-        slackTable.rows.push([label, ...shareCols.map(c => summaryFmt(c.key, summaryValue(g, c.key)))])
-      }
-      pushShareRow('TOTAL', totalsRow, true)
-      const bands = grpBy === 'source'
-        ? [['Paid Channels', true], ['Non-Paid Channels', false]]
-        : [[null, null]]
-      bands.forEach(([band, wantPaid]) => {
-        const rows = band === null ? sortedFilteredRows
-          : sortedFilteredRows.filter(r => isPaidSource(r.label) === wantPaid)
-        if (!rows.length) return
-        if (band) pushShareRow(band.toUpperCase(), aggregateRows(rows, band), true)
-        rows.forEach(g => pushShareRow(g.label, g, false))
-      })
+      const shot = node ? await captureNodePng(node) : null
       return {
-        title: 'Overall - PM Summary by ' + grpByLabel,
-        subtitle: 'Filtered by -> ' + [periodLabel, 'Source: ' + source, 'Corridor: ' + corridorFilter].join('  \u00b7  '),
-        // One inner array per line of the Slack message, so spend/volume, quality,
-        // application and downstream economics each read on their own row.
-        summary: [
-          [{ label: 'Spend', value: stat('spend') }, { label: 'Leads', value: stat('leads') }, { label: 'CPL', value: stat('cpl') }],
-          [{ label: 'Total QLs', value: stat('totalQL') }, { label: 'CPQL', value: stat('cpql') }],
-          [{ label: 'Apps', value: stat('apps') }, { label: 'CPA', value: stat('cpa') }],
-          [{ label: 'Offers', value: stat('offers') }, { label: 'Deposits', value: stat('deposits') }, { label: 'RAUs', value: stat('raus') }],
-        ],
-        table: slackTable,
         pngBase64: shot ? shot.base64 : null,
         pixelRatio: shot ? shot.pixelRatio : null,
-        csv: rowsToCsv(csvCols, [tableTotalExportRowRaw, ...tableExportRowsRaw]),
+        csv: rowsToCsv([grpByLabel, ...displayCols.map(c => c.label)], [tableTotalExportRowRaw, ...tableExportRowsRaw]),
       }
     } finally {
       setCaptureCols(null)
       if (prevLimit !== 'all') setRowLimit(prevLimit)
     }
-  }, [rowLimit, activeFilter, customFrom, customTo, dateWindow, selMonth, source, corridorFilter,
-    grpByLabel, displayCols, totalsRow, tableExportRowsRaw, tableTotalExportRowRaw,
-    grpBy, sortedFilteredRows, aggregateRows])
+  }, [rowLimit, ceoCols, grpByLabel, displayCols, tableTotalExportRowRaw, tableExportRowsRaw])
 
   // On screen we always render displayCols. captureCols wins only mid-capture.
   const renderCols = captureCols || displayCols
@@ -1882,11 +1932,24 @@ export default function OverallDashboard() {
                   )}
                 </div>
 
-                <div style={{ marginLeft:'auto' }}>
-                  <ExportButton data={tableExportRows} totalRow={tableTotalExportRow}
-                    rawData={tableExportRowsRaw} rawTotalRow={tableTotalExportRowRaw}
-                    filename={'overall-' + grpBy} dashboardId="overall" slackRich={buildSlackTableShare} />
-                </div>
+            <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
+              <Button size="sm" variant="secondary" onClick={() => setSlackPanelOpen(true)}
+                icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>}>
+                Send to Slack
+              </Button>
+              <ExportButton data={tableExportRows} totalRow={tableTotalExportRow}
+                rawData={tableExportRowsRaw} rawTotalRow={tableTotalExportRowRaw}
+                filename={'overall-' + grpBy} dashboardId="overall" hideSlack />
+              <SlackReportPanel
+                open={slackPanelOpen}
+                onClose={() => setSlackPanelOpen(false)}
+                buildContext={buildReportContext}
+                captureFiles={captureReportFiles}
+                dashboardId="overall"
+                filename={'overall-' + grpBy}
+                rowCount={sortedFilteredRows.length}
+              />
+            </div>
               </div>
 
               <div style={{ overflowX:'auto' }}>
