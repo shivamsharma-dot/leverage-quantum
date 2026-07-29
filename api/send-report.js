@@ -1213,7 +1213,7 @@ async function slackPostReportMessage(token, channel, m) {
       await slackCompleteUpload(token, { files: [up], channel })
       // Slack lands a shared file a beat after it says yes. Without this the
       // pictures all pile up at the end instead of sitting under their message.
-      await new Promise(r => setTimeout(r, 1500))
+      await new Promise(r => setTimeout(r, 4000))
     } catch (e) {
       // The picture is a bonus. If Slack will not take it the report still reads.
     }
