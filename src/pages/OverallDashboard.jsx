@@ -927,10 +927,11 @@ export default function OverallDashboard() {
     if (!prevWindow) return []
     let rs = prevWindow.type === 'month' ? rows.filter(r => r.mk === prevWindow.mk) : rows.filter(r => r.date && r.date >= prevWindow.from && r.date <= prevWindow.to)
     if (source !== 'All') rs = rs.filter(r => r.source === source)
+    if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQuery.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
     return rs
-  }, [rows, prevWindow, source, campaignQuery])
+  }, [rows, prevWindow, source, corridorFilter, campaignQuery])
 
   const prevKpis = useMemo(() => sumKpis(prevFiltered), [prevFiltered])
   // Same paid-only basis as the current period -- otherwise the delta arrows would be
@@ -1480,6 +1481,77 @@ export default function OverallDashboard() {
   // reuse the same previous-equivalent-period basis as the KPI cards, so a sentence in
   // Slack can never disagree with an arrow on this page. Floor-queued is deliberately
   // absent everywhere: it produces no QLs of its own, so it is not part of the story.
+  // ── Report-only breakdowns, with the previous equivalent period joined on ────
+  // The page's own byCorridor / byCampaign only ever cover the CURRENT period and
+  // every source. A report that quotes movement needs the same shapes for both
+  // periods, and corridors are only meaningful on the two channels whose campaign
+  // names actually carry one -- affiliate and organic names do not, so including
+  // them would rank a corridor called Unclassified against real ones. Cost metrics
+  // keep the page's paid-only denominators, so nothing here can disagree with a
+  // number on screen.
+  const CORRIDOR_SCOPE_LABEL = 'Facebook + Google'
+  const corridorScopeSet = useMemo(() => new Set(['facebook', 'google']), [])
+  const prevPaidSources = useMemo(() => {
+    const s = new Set()
+    prevFiltered.forEach(r => { if (r.spend > 0) s.add(r.source) })
+    return s
+  }, [prevFiltered])
+
+  const aggReport = useCallback((list, keyFn, paidSet) => {
+    const m = new Map()
+    list.forEach(r => {
+      const k = keyFn(r)
+      if (k == null || k === '') return
+      const e = m.get(k) || { label:k, leads:0, queued:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, paidLeads:0, paidQL:0, paidApps:0 }
+      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.totalQL += r.totalQL
+      e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      if (paidSet.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      m.set(k, e)
+    })
+    return [...m.values()].map(e => ({
+      ...e,
+      cpl: e.paidLeads > 0 ? e.spend / e.paidLeads : null,
+      cpql: e.paidQL > 0 ? e.spend / e.paidQL : null,
+      cpa: e.paidApps > 0 ? e.spend / e.paidApps : null,
+    }))
+  }, [])
+
+  // A row with no match in the previous period carries prev:null, which the report
+  // prints as "new" rather than inventing a movement against zero.
+  const joinPrev = useCallback((cur, prev) => {
+    const m = new Map(prev.map(x => [x.label, x]))
+    return cur.map(c => {
+      const x = m.get(c.label)
+      return { ...c, prev: x ? { spend:x.spend, leads:x.leads, totalQL:x.totalQL, apps:x.apps, cpl:x.cpl, cpql:x.cpql, cpa:x.cpa } : null }
+    })
+  }, [])
+
+  const reportCmp = useMemo(() => {
+    const corridorOf = r => corridorLabel(classifyCorridor(r.campaign))
+    const inScope = r => corridorScopeSet.has(String(r.source || '').toLowerCase())
+    const tagCorridor = rowsIn => rowsIn.map(c => ({ ...c, corridor: corridorLabel(classifyCorridor(c.label)) }))
+    return {
+      channels: joinPrev(
+        aggReport(filtered, r => r.source, paidSources),
+        aggReport(prevFiltered, r => r.source, prevPaidSources)),
+      corridors: joinPrev(
+        aggReport(filtered.filter(inScope), corridorOf, paidSources),
+        aggReport(prevFiltered.filter(inScope), corridorOf, prevPaidSources)),
+      ads: joinPrev(
+        tagCorridor(aggReport(filtered, r => r.campaign, paidSources)),
+        aggReport(prevFiltered, r => r.campaign, prevPaidSources)),
+      corridorScope: CORRIDOR_SCOPE_LABEL,
+    }
+  }, [filtered, prevFiltered, paidSources, prevPaidSources, aggReport, joinPrev, corridorScopeSet])
+
+  // What the deltas are measured against, spelled out, so every Slack message can
+  // print it instead of leaving the reader to assume which period it is.
+  const prevLabel = useMemo(() => {
+    if (!prevWindow) return null
+    if (prevWindow.type === 'month') return monthLabel(prevWindow.mk)
+    return dayLabel(prevWindow.from) + ' to ' + dayLabel(prevWindow.to)
+  }, [prevWindow])
+
   const buildReportContext = useCallback(() => {
     const rate = (a, b) => (a > 0 ? (b / a) * 100 : null)
     const prevQueued = prevKpis.futworkQ + prevKpis.superbotQ
@@ -1509,6 +1581,13 @@ export default function OverallDashboard() {
         cpl: deltaPct(cpl, prevCpl), cpql: deltaPct(cpql, prevCpql), cpa: deltaPct(cpa, prevCpa),
       },
       chain: conversionChain.map((s, i) => ({ ...s, prevRate: prevChain[i] })),
+      prevLabel,
+      prev: {
+        spend: prevKpis.spend, leads: prevKpis.leads, totalQL: prevKpis.totalQL, apps: prevKpis.apps,
+        offers: prevKpis.offers, deposits: prevKpis.deposits, raus: prevKpis.raus,
+        cpl: prevCpl, cpql: prevCpql, cpa: prevCpa,
+      },
+      cmp: reportCmp,
       channels: bySource.map(s => withCost({ ...s, label: s.source })),
       corridors: byCorridor.map(c => withCost({ ...c, label: c.corridor })),
       bands: {
@@ -1523,7 +1602,7 @@ export default function OverallDashboard() {
     }
   }, [grpByLabel, periodLabel, filterLine, sortedFilteredRows, totalsRow, kpis, prevKpis,
     cpl, cpql, cpa, prevCpl, prevCpql, prevCpa, conversionChain, bySource, byCorridor,
-    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth])
+    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, reportCmp])
 
   // The picture of the table plus the all-columns CSV. The row limit is lifted to
   // "all" for the capture and restored right after, so the image always carries every

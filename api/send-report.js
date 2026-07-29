@@ -1045,7 +1045,7 @@ function buildTableShareComment({ title, subtitle, summary, rowCount, askedBy, i
 // all table cells in one message at 10,000 characters -- the caller therefore
 // sends a trimmed column set. Header, TOTAL and the band subtotals go through
 // rich_text so they can be bold; every other cell is cheap raw_text.
-async function slackPostTable(token, channel, text, table) {
+function slackTableBlock(table) {
   // Slack rejects an empty text run inside a table cell, so a blank travels as a
   // non-breaking space instead of failing the whole post.
   const txt = v => { const t = String(v == null ? '' : v); return t === '' ? '\u00a0' : t }
@@ -1056,21 +1056,27 @@ async function slackPostTable(token, channel, text, table) {
   const strong = new Set(table.strongRows || [])
   const rows = [cols.map(c => cell(c, true))]
   ;(table.rows || []).slice(0, 99).forEach((r, i) => rows.push(r.map(v => cell(v, strong.has(i)))))
+  // Long first-column labels (ad names) must wrap or the table scrolls off-screen;
+  // short ones (channel, corridor) read better on a single line.
+  return { type: 'table', column_settings: cols.map((_, i) => (i === 0 ? { is_wrapped: !!table.wrapFirst } : { align: 'right' })), rows }
+}
+
+async function slackPostBlocks(token, channel, text, blocks) {
   const res = await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({
-      channel,
-      text,
-      blocks: [
-        { type: 'section', text: { type: 'mrkdwn', text } },
-        { type: 'table', column_settings: cols.map((_, i) => (i === 0 ? { is_wrapped: false } : { align: 'right' })), rows },
-      ],
-    }),
+    body: JSON.stringify({ channel, text, blocks }),
   })
   const d = await res.json().catch(() => ({}))
-  if (!d.ok) throw new Error('Slack: ' + (d.error || 'table post rejected'))
+  if (!d.ok) throw new Error('Slack: ' + (d.error || 'message rejected'))
   return d.ts
+}
+
+async function slackPostTable(token, channel, text, table) {
+  return slackPostBlocks(token, channel, text, [
+    { type: 'section', text: { type: 'mrkdwn', text } },
+    slackTableBlock(table),
+  ])
 }
 
 async function handleSlackExportImage(req, res) {
@@ -1130,18 +1136,44 @@ async function handleSlackExportImage(req, res) {
 // A report is a SEQUENCE of messages posted top-level, in order, from a single click.
 // Each one may carry its own native table. The image and the CSV hang in the thread of
 // whichever message asked for them, so the channel itself stays readable.
-async function slackPostReportMessage(token, channel, text, table) {
-  if (table && Array.isArray(table.rows) && table.rows.length) {
-    return slackPostTable(token, channel, text, table)
+// A report message can carry, in this order: a lead-in section, a two-column field
+// grid, a follow-up section, Slack's own table, a native chart and a small context
+// footer. Fields are what keeps the KPI grid aligned -- Slack lays them out itself,
+// so it survives a phone screen in a way space-padded text does not.
+function reportBlocks(m, opts) {
+  const clip = t => String(t || '').slice(0, 2900)
+  const blocks = []
+  if (m.text) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: clip(m.text) } })
+  if (opts.bare) return blocks.length ? blocks : [{ type: 'section', text: { type: 'mrkdwn', text: clip(m.label || 'Report') } }]
+  // A section takes at most 10 fields, so a longer grid simply continues in the next.
+  const fields = Array.isArray(m.fields) ? m.fields.filter(Boolean).slice(0, 20) : []
+  for (let i = 0; i < fields.length; i += 10) {
+    blocks.push({ type: 'section', fields: fields.slice(i, i + 10).map(f => ({ type: 'mrkdwn', text: String(f).slice(0, 2000) })) })
   }
-  const res = await fetch('https://slack.com/api/chat.postMessage', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({ channel, text, blocks: [{ type: 'section', text: { type: 'mrkdwn', text } }] }),
-  })
-  const d = await res.json().catch(() => ({}))
-  if (!d.ok) throw new Error('Slack: ' + (d.error || 'message rejected'))
-  return d.ts
+  if (m.after) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: clip(m.after) } })
+  if (opts.table && m.table && Array.isArray(m.table.rows) && m.table.rows.length) blocks.push(slackTableBlock(m.table))
+  if (opts.chart && m.chart && m.chart.type === 'data_visualization') blocks.push(m.chart)
+  if (m.context) blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: clip(m.context) }] })
+  return blocks
+}
+
+// Charts are the newest block type in this file and a workspace that cannot render
+// one rejects the whole post. So a message degrades rather than fails: full layout,
+// then without the chart, then without the table, then as the lead section alone.
+async function slackPostReportMessage(token, channel, m) {
+  const fallbackText = String(m.text || m.label || 'Report').slice(0, 2900)
+  const attempts = [
+    { table: true, chart: true },
+    { table: true, chart: false },
+    { table: false, chart: false },
+    { bare: true },
+  ]
+  let lastErr = null
+  for (const opt of attempts) {
+    try { return await slackPostBlocks(token, channel, fallbackText, reportBlocks(m, opt)) }
+    catch (e) { lastErr = e }
+  }
+  throw lastErr || new Error('Slack: message rejected')
 }
 
 async function handleSlackReport(req, res) {
@@ -1171,7 +1203,7 @@ async function handleSlackReport(req, res) {
     // let message 3 land above message 1.
     let attachTs = null
     for (const m of list) {
-      const ts = await slackPostReportMessage(hook.token, hook.channel, String(m.text).slice(0, 2900), m.table)
+      const ts = await slackPostReportMessage(hook.token, hook.channel, m)
       if (m.attach && !attachTs) attachTs = ts
     }
     if (pngBase64 || csv) {

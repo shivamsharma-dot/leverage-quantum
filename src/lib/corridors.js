@@ -21,7 +21,7 @@ export const CORRIDORS = [
   { id: 'india-germany', label: 'India to Germany' },
   { id: 'malaysia-germany', label: 'Malaysia to Germany' },
   { id: 'india-dubai', label: 'India to Dubai' },
-  { id: 'nas-generic', label: 'NAS Generic' },
+  { id: 'nas-generic', label: 'Catch All' },
   { id: 'mbbs-india', label: 'MBBS (India source)' },
   { id: 'mbbs-uk', label: 'MBBS (UK source)' },
   { id: 'ivy100', label: 'IVY100' },
