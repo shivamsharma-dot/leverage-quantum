@@ -310,9 +310,7 @@ function kpiFields(ctx) {
     fld(':zap:', 'CPQL', ctx.stat('cpql'), d.cpql, was(ctx.fmtINR(p.cpql))),
     fld(':memo:', 'Applications', ctx.stat('apps'), d.apps, was(nfmt(p.apps))),
     fld(':zap:', 'CPA', ctx.stat('cpa'), d.cpa, was(ctx.fmtINR(p.cpa))),
-    fld(':trophy:', 'Offers', ctx.stat('offers'), d.offers, was(nfmt(p.offers))),
     fld(':dollar:', 'Deposits', ctx.stat('deposits'), d.deposits, was(nfmt(p.deposits))),
-    fld(':bar_chart:', 'RAUs', ctx.stat('raus'), d.raus, was(nfmt(p.raus))),
   ]
 }
 
@@ -332,27 +330,6 @@ const uniqCats = arr => {
   })
 }
 const seriesName = (a, b) => (b === a ? cap('prev ' + b, 20) : b)
-
-function funnelChart(ctx) {
-  const chain = (ctx.chain || []).filter(s => s.rate != null && s.prevRate != null)
-  if (chain.length < 2) return null
-  const cats = uniqCats(chain.map(s => s.from + TO + s.to))
-  const now = cap(ctx.periodLabel, 20)
-  const pts = key => chain.map((s, i) => ({ label: cats[i], value: Number(Number(s[key]).toFixed(1)) }))
-  return {
-    type: 'data_visualization',
-    title: cap('Stage conversion %', 50),
-    unit: 'pct',
-    chart: {
-      type: 'bar',
-      series: [
-        { name: now, data: pts('rate') },
-        { name: seriesName(now, cap(ctx.prevLabel, 20)), data: pts('prevRate') },
-      ],
-      axis_config: { categories: cats, x_label: 'Funnel stage', y_label: 'Conversion %' },
-    },
-  }
-}
 
 function spendPie(ctx) {
   const segs = (ctx.channels || []).filter(c => c.spend > 0).sort((a, b) => b.spend - a.spend).slice(0, 12)
@@ -394,10 +371,12 @@ function rankByCpql(items, minQL) {
   const all = items || []
   const eligible = all.filter(c => c.cpql != null && c.cpql > 0 && c.totalQL >= minQL)
   const by = eligible.slice().sort((a, b) => a.cpql - b.cpql)
-  const single = by.length < 11
+  // Six eligible rows is enough to be worth splitting: the cheapest five, then the
+  // rest read dearest-first. The two bands never overlap, so no row is quoted twice.
+  const single = by.length < 6
   return {
     best: single ? by : by.slice(0, 5),
-    worst: single ? [] : by.slice(-5).reverse(),
+    worst: single ? [] : by.slice(5).reverse().slice(0, 5),
     skipped: all.length - eligible.length,
     eligible: by.length,
     single,
@@ -437,9 +416,9 @@ function cpqlTable(ctx, r, firstCol, wrapFirst) {
     r.best.forEach(c => push(line(c), false))
     return t
   }
-  band('TOP 5 ' + DASH + ' CHEAPEST QL', r.best)
+  band('CHEAPEST ' + r.best.length + ' ' + DASH + ' LOWEST CPQL', r.best)
   r.best.forEach(c => push(line(c), false))
-  band('BOTTOM 5 ' + DASH + ' DEAREST QL', r.worst)
+  band('DEAREST ' + r.worst.length + ' ' + DASH + ' HIGHEST CPQL', r.worst)
   r.worst.forEach(c => push(line(c), false))
   return t
 }
@@ -501,6 +480,14 @@ function adThemes(ctx, r) {
 
 // movers(), but every line carries the figure it moved from, so nothing in the
 // honest read is a percentage the reader has to take on trust.
+// v4 does not report Offers or RAUs -- both sit downstream of deposits and read as
+// duplicate signal -- so they cannot appear in the honest read either.
+const MOVERS_V4 = MOVERS.filter(m => m.key !== 'offers' && m.key !== 'raus')
+
+// fixes(), minus any action written off Offers: an instruction that quotes a number
+// the reader can no longer see anywhere in the report is worse than no instruction.
+const fixesV4 = (ctx, cr) => fixes(ctx, cr).filter(x => !/offer/i.test(x))
+
 function moversWithBase(ctx, wantGood) {
   const p = ctx.prev || {}
   const base = {
@@ -508,7 +495,7 @@ function moversWithBase(ctx, wantGood) {
     deposits: nfmt(p.deposits), raus: nfmt(p.raus),
     cpl: ctx.fmtINR(p.cpl), cpql: ctx.fmtINR(p.cpql), cpa: ctx.fmtINR(p.cpa),
   }
-  return MOVERS
+  return MOVERS_V4
     .map(m => ({ m, v: ctx.d[m.key] }))
     .filter(({ m, v }) => v != null && Math.abs(v) >= 0.5 && ((m.up ? v > 0 : v < 0) === wantGood))
     .sort((a, b) => Math.abs(b.v) - Math.abs(a.v))
@@ -518,6 +505,20 @@ function moversWithBase(ctx, wantGood) {
 // v4's read on the channel table. The paid-share line is gone -- paid is always
 // 100% of the spend, so it told the reader nothing -- and the cheap/dear line is
 // now written as the decision it implies rather than as an observation.
+// Projected spend at the current run-rate. Straight arithmetic on days that really
+// carry data -- spend so far, divided by days elapsed, times the days in the month.
+// It is an extrapolation the reader can redo on a napkin, never a forecast, and it
+// is only printed while the period is still running.
+function spendPace(ctx) {
+  const p = ctx.pace
+  const spend = ctx.num('spend')
+  if (!p || !(spend > 0) || !(p.daysDone > 0) || p.daysDone >= p.daysInMonth) return null
+  const perDay = spend / p.daysDone
+  return 'Projected spend to ' + p.monthEndLabel + ': ' + money(perDay * p.daysInMonth)
+    + ' at the current run-rate ' + DASH + ' ' + money(spend) + ' is booked through day '
+    + p.daysDone + ' of ' + p.daysInMonth + ', ' + money(perDay) + ' a day.'
+}
+
 function channelRecs(ctx) {
   const out = []
   const { channels, bands, minQL, fmtINR, fmtN } = ctx
@@ -550,10 +551,8 @@ function buildV4(ctx) {
     text: [testLine(ctx), '*:bar_chart: ' + title(ctx) + '*', ctx.filterLine].filter(Boolean).join('\n'),
     fields: kpiFields(ctx), context: note,
   }
-  const ins1 = [costDirection(ctx), worstStage(ctx), spendVsOutcome(ctx)].filter(Boolean)
+  const ins1 = [costDirection(ctx), spendPace(ctx), spendVsOutcome(ctx)].filter(Boolean)
   if (ins1.length) m1.after = '*What the numbers say*\n' + list(ins1)
-  const fc = funnelChart(ctx)
-  if (fc) m1.chart = fc
   msgs.push(m1)
 
   // 2 -- where the money went, as the dashboard's own table plus the spend split.
@@ -613,7 +612,7 @@ function buildV4(ctx) {
   const wrong = moversWithBase(ctx, false).slice(0, 3)
   if (right.length) parts.push('*What we did right*\n' + list(right))
   if (wrong.length) parts.push('*What went wrong*\n' + list(wrong))
-  const fx = fixes(ctx, cr)
+  const fx = fixesV4(ctx, cr)
   if (fx.length) parts.push('*What we can improve*\n' + list(fx))
   if (parts.length) m5.after = parts.join('\n\n')
   msgs.push(m5)
@@ -628,13 +627,13 @@ export const REPORT_VERSIONS = [
   {
     id: 'v4',
     name: 'Exec report ' + DASH + ' 5 messages, charts',
-    tagline: 'Aligned KPI grid, native charts, Facebook + Google corridors, ad winners and losers.',
+    tagline: 'Aligned KPI grid, brand charts, Facebook + Google corridors, ad winners and losers.',
     recommended: true,
     what: [
-      'Message 1 ' + DASH + ' executive summary as a two-column KPI grid: every figure carries the number it moved from, spend in crores, plus a stage-conversion chart',
+      'Message 1 ' + DASH + ' executive summary as a two-column KPI grid: every figure carries the number it moved from, spend in crores, plus the projected spend to month end at the current run-rate',
       'Message 2 ' + DASH + ' Paid vs Non-Paid channel table, a share-of-spend pie, and what moved on the three channels carrying the money',
       'Message 3 ' + DASH + ' corridors on Facebook + Google campaigns only, as a native table and a CPQL chart. No written ranking',
-      'Message 4 ' + DASH + ' the 5 cheapest and 5 dearest ads on CPQL, with the themes their names have in common',
+      'Message 4 ' + DASH + ' the cheapest and the dearest ads on CPQL, as a native table',
       'Message 5 ' + DASH + ' what we did right, what went wrong, what we can improve',
       'Every message states in a footer exactly how its deltas were calculated',
       'Table image and the all-columns CSV land in the thread of message 2',

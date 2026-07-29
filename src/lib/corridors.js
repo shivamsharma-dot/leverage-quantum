@@ -22,6 +22,7 @@ export const CORRIDORS = [
   { id: 'malaysia-germany', label: 'Malaysia to Germany' },
   { id: 'india-dubai', label: 'India to Dubai' },
   { id: 'nas-generic', label: 'Catch All' },
+  { id: 'youtube-branding', label: 'YouTube Branding' },
   { id: 'mbbs-india', label: 'MBBS (India source)' },
   { id: 'mbbs-uk', label: 'MBBS (UK source)' },
   { id: 'ivy100', label: 'IVY100' },
@@ -38,6 +39,10 @@ export function classifyCorridor(name) {
   if (!n.trim()) return 'unclassified'
 
   const has = (...tokens) => tokens.some(t => n.includes(t))
+  // Short codes only count as whole underscore/hyphen separated segments. 'db' as a
+  // loose substring would match half the naming convention; '..._DB_...' really is Dubai.
+  const segs = new Set(n.split(/[^a-z0-9]+/).filter(Boolean))
+  const seg = (...tokens) => tokens.some(t => segs.has(t))
 
   if (has('mbbs')) return has('uksource', 'uk_source', 'uk source') ? 'mbbs-uk' : 'mbbs-india'
   if (has('ivy100')) return 'ivy100'
@@ -48,12 +53,18 @@ export function classifyCorridor(name) {
     if (has('ger', 'germany')) return 'malaysia-germany'
     return 'malaysia-uk'
   }
-  if (has('dubai')) return 'india-dubai'
+  if (has('dubai') || seg('db', 'dxb')) return 'india-dubai'
   if (has('ger', 'germany')) return 'india-germany'
   if (has('ita', 'italy')) return 'india-italy'
   if (has('uk')) return 'india-uk'
-  if (has('nas')) return 'nas-generic'
-  return 'unclassified'
+  // Awareness video sits on its own: it buys reach, not a corridor, and mixing it
+  // into a destination would make that destination's CPQL look worse than it is.
+  if (has('youtube') || seg('yt', 'ctv')) return 'youtube-branding'
+  // Everything left is a correctly named campaign that simply carries no destination
+  // token -- brand search, PMax, study-abroad generic. Those belong in Catch All.
+  // 'Unclassified' is now reserved for a row with no campaign name at all, so seeing
+  // it in a report always means missing data rather than lazy naming.
+  return 'nas-generic'
 }
 
 /** Human-readable label for a corridor id (falls back to the id itself). */

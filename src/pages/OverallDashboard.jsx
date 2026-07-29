@@ -1597,10 +1597,23 @@ export default function OverallDashboard() {
       },
       table: slackTable,
       estimatedRaus,
+      // Run-rate for the projected-spend line. Built off the dates actually present in
+      // the filtered rows, so a month with data only to the 28th projects off 28 days
+      // rather than off today's date. Null unless the whole window sits in one month.
+      pace: (() => {
+        let lo = Infinity, hi = -Infinity
+        for (const r of filtered) { const v = r.date ? +r.date : 0; if (!v) continue; if (v < lo) lo = v; if (v > hi) hi = v }
+        if (!isFinite(lo) || !isFinite(hi)) return null
+        const first = new Date(lo), last = new Date(hi)
+        if (first.getFullYear() !== last.getFullYear() || first.getMonth() !== last.getMonth()) return null
+        const end = new Date(last.getFullYear(), last.getMonth() + 1, 0)
+        return { daysDone: last.getDate(), daysInMonth: end.getDate(),
+          monthEndLabel: end.toLocaleDateString('en-IN', { day:'numeric', month:'short' }) }
+      })(),
       hasPrev: prevKpis.leads > 0 || prevKpis.spend > 0,
       partialPeriod: activeFilter === 'month' ? isCurrentMonth : activeFilter === 'preset',
     }
-  }, [grpByLabel, periodLabel, filterLine, sortedFilteredRows, totalsRow, kpis, prevKpis,
+  }, [grpByLabel, periodLabel, filterLine, filtered, sortedFilteredRows, totalsRow, kpis, prevKpis,
     cpl, cpql, cpa, prevCpl, prevCpql, prevCpa, conversionChain, bySource, byCorridor,
     aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, reportCmp])
 
