@@ -1179,6 +1179,7 @@ async function slackPostReportMessage(token, channel, m) {
   // Slack will not colour its own chart and will not print the value on a
   // bar, and this is read on a phone. So we send the picture we drew --
   // brand ramp, every number written on -- and keep Slack's chart behind it.
+  m.__diag = m.chartPng ? ('png:' + m.chartPng.length) : 'nopng'
   if (m.chartPng) {
     try {
       const up = await slackUploadFile(token, {
@@ -1190,6 +1191,7 @@ async function slackPostReportMessage(token, channel, m) {
       m.chartFileId = up.id
     } catch (e) {
       m.chartFileId = null
+      m.__diag += ' upErr:' + String((e && e.message) || e)
     }
   }
   const attempts = [
@@ -1201,8 +1203,11 @@ async function slackPostReportMessage(token, channel, m) {
   ]
   let lastErr = null
   for (const opt of attempts) {
-    try { return await slackPostBlocks(token, channel, fallbackText, reportBlocks(m, opt)) }
-    catch (e) { lastErr = e }
+    try {
+      const r = await slackPostBlocks(token, channel, fallbackText, reportBlocks(m, opt))
+      m.__diag += ' ok:' + JSON.stringify(opt) + ' fid:' + String(m.chartFileId)
+      return r
+    } catch (e) { lastErr = e; m.__diag += ' fail:' + JSON.stringify(opt) + ':' + String((e && e.message) || e) }
   }
   throw lastErr || new Error('Slack: message rejected')
 }
@@ -1255,7 +1260,7 @@ async function handleSlackReport(req, res) {
       }
     }
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: me.email })
-    return res.status(200).json({ ok: true, success: true, channel: hook.label, posted: list.length, rowCount: rowCount || 0 })
+    return res.status(200).json({ ok: true, success: true, channel: hook.label, posted: list.length, rowCount: rowCount || 0, diag: list.map(x => x.__diag || null) })
   } catch (e) {
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'failed', error: e.message, triggered_by: me.email })
     return res.status(500).json({ error: e.message })
