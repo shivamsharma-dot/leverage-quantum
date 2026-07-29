@@ -11,7 +11,12 @@ const FONT = 'Inter,-apple-system,BlinkMacSystemFont,sans-serif'
 const LAST_KEY = 'lq_slack_report_last_sent'
 
 // The handful of shortcodes the builders use, so the preview shows what Slack shows.
-const EMOJI = { ':bar_chart:':'\uD83D\uDCCA', ':moneybag:':'\uD83D\uDCB0', ':earth_asia:':'\uD83C\uDF0F', ':compass:':'\uD83E\uDDED', ':test_tube:':'\uD83E\uDDEA' }
+const EMOJI = {
+  ':bar_chart:':'\uD83D\uDCCA', ':moneybag:':'\uD83D\uDCB0', ':earth_asia:':'\uD83C\uDF0F', ':compass:':'\uD83E\uDDED',
+  ':test_tube:':'\uD83E\uDDEA', ':chart_with_upwards_trend:':'\uD83D\uDCC8', ':dart:':'\uD83C\uDFAF',
+  ':zap:':'\u26A1', ':memo:':'\uD83D\uDCDD', ':trophy:':'\uD83C\uDFC6', ':dollar:':'\uD83D\uDCB5',
+  ':rocket:':'\uD83D\uDE80', ':information_source:':'\u2139\uFE0F',
+}
 
 const readLastSent = () => { try { return JSON.parse(localStorage.getItem(LAST_KEY) || '{}') } catch (_) { return {} } }
 const writeLastSent = (id, entry) => {
@@ -75,7 +80,11 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'slack_report', dashboardId, slackTarget: target, filename, versionId, rowCount,
-          messages: messages.map(m => ({ text: m.text, table: m.table || null, attach: !!m.attach })),
+          messages: messages.map(x => ({
+            text: x.text, after: x.after || null, fields: x.fields || null,
+            table: x.table || null, chart: x.chart || null, context: x.context || null,
+            label: x.label || null, attach: !!x.attach,
+          })),
           pngBase64: files ? files.pngBase64 : null,
           pixelRatio: files ? files.pixelRatio : null,
           csv: files ? files.csv : null,
@@ -183,7 +192,13 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
                   <span style={{ fontSize:11, color:C.muted, fontWeight:600 }}>{m.label}</span>
                 </div>
                 <div style={{ fontSize:12.5, lineHeight:1.8, color:C.ink, wordBreak:'break-word' }} dangerouslySetInnerHTML={{ __html: mrkdwn(m.text) }} />
+                {Array.isArray(m.fields) && m.fields.length > 0 && <FieldGrid fields={m.fields} />}
+                {m.after && <div style={{ fontSize:12.5, lineHeight:1.8, color:C.ink, wordBreak:'break-word', marginTop:11 }} dangerouslySetInnerHTML={{ __html: mrkdwn(m.after) }} />}
                 {m.table && <TablePreview table={m.table} />}
+                {m.chart && <ChartPreview chart={m.chart} />}
+                {m.context && (
+                  <div style={{ fontSize:10.5, lineHeight:1.65, color:C.muted, marginTop:11, paddingTop:9, borderTop:`1px solid ${C.border}` }} dangerouslySetInnerHTML={{ __html: mrkdwn(m.context) }} />
+                )}
                 {m.attach && (
                   <div style={{ display:'flex', gap:7, flexWrap:'wrap', marginTop:11, paddingTop:10, borderTop:`1px dashed ${C.border}` }}>
                     <span style={{ fontSize:10.5, color:C.muted, fontWeight:700 }}>In the thread:</span>
@@ -252,6 +267,75 @@ function TablePreview({ table }) {
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+// Slack's two-column field grid. The whole reason the KPIs travel as fields rather
+// than space-padded text is that Slack aligns them itself and keeps doing so on a
+// phone, so the preview mirrors that instead of pretending they are a paragraph.
+function FieldGrid({ fields }) {
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:8, marginTop:11 }}>
+      {fields.map((f, i) => {
+        const parts = String(f).split('\n')
+        const moved = /[\u25b2\u25bc]/.test(parts[2] || '')
+        return (
+          <div key={i} style={{ border:`1px solid ${C.border}`, borderRadius:9, padding:'8px 10px', background:'#FBFCFD' }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.sub }} dangerouslySetInnerHTML={{ __html: mrkdwn(parts[0] || '') }} />
+            <div style={{ fontSize:16, fontWeight:800, color:C.ink, letterSpacing:'-0.01em', margin:'3px 0 2px' }}>{parts[1] || ''}</div>
+            <div style={{ fontSize:10.5, fontWeight:600, color: moved ? C.navy : C.muted }}>{parts[2] || ''}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// The native chart Slack will draw, previewed off the very same payload that gets
+// posted. Deliberately not a pixel copy of Slack's renderer -- it is here so nobody
+// sends a chart they have not looked at first.
+function ChartPreview({ chart }) {
+  const c = chart.chart || {}
+  const bars = []
+  if (c.type === 'pie') {
+    const segs = c.segments || []
+    const total = segs.reduce((t, x) => t + (Number(x.value) || 0), 0) || 1
+    segs.forEach(x => {
+      const share = ((Number(x.value) || 0) / total) * 100
+      bars.push({ label: x.label, pct: share, note: share.toFixed(1) + '%' })
+    })
+  } else {
+    const series = c.series || []
+    const cats = (c.axis_config && c.axis_config.categories) || []
+    let max = 1
+    series.forEach(sr => (sr.data || []).forEach(d => { if (Number(d.value) > max) max = Number(d.value) }))
+    cats.forEach((cat, i) => series.forEach(sr => {
+      const d = (sr.data || [])[i]
+      if (!d) return
+      bars.push({
+        label: cat + (series.length > 1 ? ' \u00b7 ' + sr.name : ''),
+        pct: (Number(d.value) / max) * 100,
+        note: Number(d.value).toLocaleString('en-IN'),
+      })
+    }))
+  }
+  if (!bars.length) return null
+  return (
+    <div style={{ marginTop:12, border:`1px solid ${C.border}`, borderRadius:9, padding:'11px 12px', background:'#FBFCFD' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:9, flexWrap:'wrap' }}>
+        <span style={{ fontSize:9.5, fontWeight:800, letterSpacing:'0.06em', textTransform:'uppercase', color:C.cyan }}>Native Slack chart</span>
+        <span style={{ fontSize:11.5, fontWeight:700, color:C.ink }}>{chart.title}</span>
+      </div>
+      {bars.slice(0, 24).map((b, i) => (
+        <div key={i} style={{ display:'flex', alignItems:'center', gap:9, marginBottom:5 }}>
+          <div style={{ width:'38%', flexShrink:0, fontSize:10.5, color:C.sub, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.label}</div>
+          <div style={{ flex:1, height:8, background:'#EDF1F6', borderRadius:5, overflow:'hidden' }}>
+            <div style={{ width: Math.max(2, Math.min(100, b.pct)) + '%', height:'100%', background: i % 2 === 0 ? C.navy : C.cyan, borderRadius:5 }} />
+          </div>
+          <div style={{ width:74, textAlign:'right', flexShrink:0, fontSize:10.5, fontWeight:700, color:C.ink }}>{b.note}</div>
+        </div>
+      ))}
     </div>
   )
 }
