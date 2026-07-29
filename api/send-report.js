@@ -1072,6 +1072,17 @@ async function slackPostBlocks(token, channel, text, blocks) {
   return d.ts
 }
 
+async function slackUpdateBlocks(token, channel, ts, text, blocks) {
+  const res = await fetch('https://slack.com/api/chat.update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ channel, ts, text, blocks }),
+  })
+  const d = await res.json().catch(() => ({}))
+  if (!d.ok) throw new Error('Slack update: ' + (d.error || 'rejected'))
+  return d.ts
+}
+
 async function slackPostTable(token, channel, text, table) {
   return slackPostBlocks(token, channel, text, [
     { type: 'section', text: { type: 'mrkdwn', text } },
@@ -1176,10 +1187,27 @@ function reportBlocks(m, opts) {
 // then without the chart, then without the table, then as the lead section alone.
 async function slackPostReportMessage(token, channel, m) {
   const fallbackText = String(m.text || m.label || 'Report').slice(0, 2900)
-  // Slack will not colour its own chart and will not print the value on a
-  // bar, and this is read on a phone. So we send the picture we drew --
-  // brand ramp, every number written on -- and keep Slack's chart behind it.
-  m.__diag = m.chartPng ? ('png:' + m.chartPng.length) : 'nopng'
+  // Charts are the newest block type in this file and a workspace that cannot
+  // render one rejects the whole post. So a message degrades rather than fails.
+  const attempts = [
+    { table: true, chart: true },
+    { table: true, chart: false },
+    { table: false, chart: false },
+    { bare: true },
+  ]
+  let ts = null
+  let lastErr = null
+  for (const opt of attempts) {
+    try { ts = await slackPostBlocks(token, channel, fallbackText, reportBlocks(m, opt)); break }
+    catch (e) { lastErr = e }
+  }
+  if (!ts) throw lastErr || new Error('Slack: message rejected')
+
+  // Slack will not colour its own chart and will not print the value on a bar,
+  // and this is read on a phone. So we draw the picture ourselves in the brand
+  // ramp with every number written on, park it in the thread so the file is
+  // shared (an image block can only point at a file Slack already has in the
+  // conversation), then swap the native chart for it in place.
   if (m.chartPng) {
     try {
       const up = await slackUploadFile(token, {
@@ -1187,29 +1215,14 @@ async function slackPostReportMessage(token, channel, m) {
         buffer: Buffer.from(m.chartPng, 'base64'),
         title: (m.chart && m.chart.title) || 'Chart',
       })
-      await slackCompleteUpload(token, { files: [up] })
+      await slackCompleteUpload(token, { files: [up], channel, threadTs: ts })
       m.chartFileId = up.id
+      await slackUpdateBlocks(token, channel, ts, fallbackText, reportBlocks(m, { table: true, chart: 'image' }))
     } catch (e) {
       m.chartFileId = null
-      m.__diag += ' upErr:' + String((e && e.message) || e)
     }
   }
-  const attempts = [
-    { table: true, chart: 'image' },
-    { table: true, chart: true },
-    { table: true, chart: false },
-    { table: false, chart: false },
-    { bare: true },
-  ]
-  let lastErr = null
-  for (const opt of attempts) {
-    try {
-      const r = await slackPostBlocks(token, channel, fallbackText, reportBlocks(m, opt))
-      m.__diag += ' ok:' + JSON.stringify(opt) + ' fid:' + String(m.chartFileId)
-      return r
-    } catch (e) { lastErr = e; m.__diag += ' fail:' + JSON.stringify(opt) + ':' + String((e && e.message) || e) }
-  }
-  throw lastErr || new Error('Slack: message rejected')
+  return ts
 }
 
 async function handleSlackReport(req, res) {
@@ -1260,7 +1273,7 @@ async function handleSlackReport(req, res) {
       }
     }
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: me.email })
-    return res.status(200).json({ ok: true, success: true, channel: hook.label, posted: list.length, rowCount: rowCount || 0, diag: list.map(x => x.__diag || null) })
+    return res.status(200).json({ ok: true, success: true, channel: hook.label, posted: list.length, rowCount: rowCount || 0 })
   } catch (e) {
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'failed', error: e.message, triggered_by: me.email })
     return res.status(500).json({ error: e.message })
