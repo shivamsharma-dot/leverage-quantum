@@ -1140,6 +1140,12 @@ async function handleSlackExportImage(req, res) {
 // grid, a follow-up section, Slack's own table, a native chart and a small context
 // footer. Fields are what keeps the KPI grid aligned -- Slack lays them out itself,
 // so it survives a phone screen in a way space-padded text does not.
+// The chart object carries a `unit` that only our own canvas renderer reads.
+// Slack rejects a block holding a key it does not know, so it is dropped here.
+function nativeChartBlock(c) {
+  return { type: 'data_visualization', title: c.title, chart: c.chart }
+}
+
 function reportBlocks(m, opts) {
   const clip = t => String(t || '').slice(0, 2900)
   const blocks = []
@@ -1152,7 +1158,15 @@ function reportBlocks(m, opts) {
   }
   if (m.after) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: clip(m.after) } })
   if (opts.table && m.table && Array.isArray(m.table.rows) && m.table.rows.length) blocks.push(slackTableBlock(m.table))
-  if (opts.chart && m.chart && m.chart.type === 'data_visualization') blocks.push(m.chart)
+  if (opts.chart === 'image' && m.chartFileId) {
+    blocks.push({
+      type: 'image',
+      slack_file: { id: m.chartFileId },
+      alt_text: String((m.chart && m.chart.title) || 'Chart').slice(0, 200),
+    })
+  } else if (opts.chart && m.chart && m.chart.type === 'data_visualization') {
+    blocks.push(nativeChartBlock(m.chart))
+  }
   if (m.context) blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: clip(m.context) }] })
   return blocks
 }
@@ -1162,7 +1176,24 @@ function reportBlocks(m, opts) {
 // then without the chart, then without the table, then as the lead section alone.
 async function slackPostReportMessage(token, channel, m) {
   const fallbackText = String(m.text || m.label || 'Report').slice(0, 2900)
+  // Slack will not colour its own chart and will not print the value on a
+  // bar, and this is read on a phone. So we send the picture we drew --
+  // brand ramp, every number written on -- and keep Slack's chart behind it.
+  if (m.chartPng) {
+    try {
+      const up = await slackUploadFile(token, {
+        filename: 'chart-' + Date.now() + '.png',
+        buffer: Buffer.from(m.chartPng, 'base64'),
+        title: (m.chart && m.chart.title) || 'Chart',
+      })
+      await slackCompleteUpload(token, { files: [up] })
+      m.chartFileId = up.id
+    } catch (e) {
+      m.chartFileId = null
+    }
+  }
   const attempts = [
+    { table: true, chart: 'image' },
     { table: true, chart: true },
     { table: true, chart: false },
     { table: false, chart: false },

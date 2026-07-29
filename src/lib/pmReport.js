@@ -342,6 +342,7 @@ function funnelChart(ctx) {
   return {
     type: 'data_visualization',
     title: cap('Stage conversion %', 50),
+    unit: 'pct',
     chart: {
       type: 'bar',
       series: [
@@ -360,6 +361,7 @@ function spendPie(ctx) {
   return {
     type: 'data_visualization',
     title: cap('Share of spend by channel', 50),
+    unit: 'inr',
     chart: { type: 'pie', segments: segs.map((c, i) => ({ label: labels[i], value: Math.round(c.spend) })) },
   }
 }
@@ -379,6 +381,7 @@ function cpqlChart(ctx, items, heading) {
   return {
     type: 'data_visualization',
     title: cap(heading, 50),
+    unit: 'inr',
     chart: { type: 'bar', series, axis_config: { categories: cats, y_label: 'CPQL (INR)' } },
   }
 }
@@ -417,9 +420,11 @@ function cpqlTable(ctx, r, firstCol, wrapFirst) {
   const push = (cells, strong) => { if (strong) t.strongRows.push(t.rows.length); t.rows.push(cells) }
   const vs = c => {
     if (!c.prev || c.prev.cpql == null || c.cpql == null) return 'new'
+    const was = ctx.fmtINR(c.prev.cpql)
     const d = pctOf(c.cpql, c.prev.cpql)
-    if (d == null) return DASH
-    return Math.abs(d) < 0.05 ? 'flat' : (d >= 0 ? '\u25b2 ' : '\u25bc ') + abs1(d)
+    if (d == null) return was
+    const move = Math.abs(d) < 0.05 ? 'flat' : (d >= 0 ? '\u25b2 ' : '\u25bc ') + abs1(d)
+    return move + ' \u00b7 ' + was
   }
   const line = c => [c.label, money(c.spend), nfmt(c.leads), nfmt(c.totalQL), ctx.fmtINR(c.cpql), vs(c)]
   const band = (name, rows) => {
@@ -510,6 +515,30 @@ function moversWithBase(ctx, wantGood) {
     .map(({ m, v }) => m.label + ' ' + mv(v) + ' to ' + ctx.stat(m.key) + (ctx.hasPrev ? ' (from ' + base[m.key] + ')' : ''))
 }
 
+// v4's read on the channel table. The paid-share line is gone -- paid is always
+// 100% of the spend, so it told the reader nothing -- and the cheap/dear line is
+// now written as the decision it implies rather than as an observation.
+function channelRecs(ctx) {
+  const out = []
+  const { channels, bands, minQL, fmtINR, fmtN } = ctx
+  const ranked = (channels || []).filter(c => c.cpql != null && c.totalQL >= minQL)
+  if (ranked.length >= 2) {
+    const by = ranked.slice().sort((a, b) => a.cpql - b.cpql)
+    const best = by[0]
+    const worst = by[by.length - 1]
+    out.push('Scale up ' + best.label + ' ' + DASH + ' ' + fmtINR(best.cpql) + ' a QL on '
+      + fmtN(best.totalQL) + ' QLs, the cheapest we buy. Scale down ' + worst.label + ' ' + DASH
+      + ' ' + fmtINR(worst.cpql) + ' a QL on ' + fmtN(worst.totalQL) + ' QLs, the dearest.')
+  }
+  const top = (channels || []).slice().sort((a, b) => b.leads - a.leads)[0]
+  if (top && bands && bands.total && bands.total.leads > 0) {
+    const sh = shareOf(top.leads, bands.total.leads)
+    if (sh >= 40) out.push(top.label + ' alone is ' + pctText(sh) + ' of all leads ' + DASH
+      + ' the number depends on one channel holding up.')
+  }
+  return out
+}
+
 function buildV4(ctx) {
   const msgs = []
   const note = deltaNote(ctx)
@@ -533,7 +562,7 @@ function buildV4(ctx) {
     text: ['*:moneybag: Channel mix ' + DASH + ' Paid vs Non-Paid*', ctx.filterLine].join('\n'),
     table: ctx.table, attach: true, context: note,
   }
-  const ins2 = channelInsights(ctx).concat(channelMovement(ctx, cmp.channels))
+  const ins2 = channelRecs(ctx).concat(channelMovement(ctx, cmp.channels))
   m2.after = (ins2.length ? '*What changed*\n' + list(ins2) + '\n\n' : '') + csvNote(ctx)
   const pie = spendPie(ctx)
   if (pie) m2.chart = pie
@@ -570,8 +599,6 @@ function buildV4(ctx) {
       table: cpqlTable(ctx, ar, 'Ad', true),
       context: note,
     }
-    const th = adThemes(ctx, ar)
-    if (th.length) m4.after = '*Common themes*\n' + list(th)
     msgs.push(m4)
   }
 

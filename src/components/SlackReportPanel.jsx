@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { chartPng, chartPngUrl } from '../lib/chartPng'
 import { toast } from './ToastHost'
 import { REPORT_VERSIONS, DEFAULT_VERSION_ID, buildReportMessages } from '../lib/pmReport'
 
@@ -83,6 +84,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
           messages: messages.map(x => ({
             text: x.text, after: x.after || null, fields: x.fields || null,
             table: x.table || null, chart: x.chart || null, context: x.context || null,
+            chartPng: chartPng(x.chart) || null,
             label: x.label || null, attach: !!x.attach,
           })),
           pngBase64: files ? files.pngBase64 : null,
@@ -195,7 +197,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
                 {Array.isArray(m.fields) && m.fields.length > 0 && <FieldGrid fields={m.fields} />}
                 {m.after && <div style={{ fontSize:12.5, lineHeight:1.8, color:C.ink, wordBreak:'break-word', marginTop:11 }} dangerouslySetInnerHTML={{ __html: mrkdwn(m.after) }} />}
                 {m.table && <TablePreview table={m.table} />}
-                {m.chart && <ChartPreview chart={m.chart} />}
+                {m.chart && <ChartImage chart={m.chart} />}
                 {m.context && (
                   <div style={{ fontSize:10.5, lineHeight:1.65, color:C.muted, marginTop:11, paddingTop:9, borderTop:`1px solid ${C.border}` }} dangerouslySetInnerHTML={{ __html: mrkdwn(m.context) }} />
                 )}
@@ -336,6 +338,23 @@ function ChartPreview({ chart }) {
           <div style={{ width:74, textAlign:'right', flexShrink:0, fontSize:10.5, fontWeight:700, color:C.ink }}>{b.note}</div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// The chart exactly as Slack will receive it: our own canvas render, brand ramp,
+// the value written on every bar and slice, because the CEO reads this on a
+// phone. If the canvas is unavailable we fall back to the plain bar list, which
+// is what Slack's own chart block would show.
+function ChartImage({ chart }) {
+  const src = useMemo(() => chartPngUrl(chart), [chart])
+  if (!src) return <ChartPreview chart={chart} />
+  return (
+    <div style={{ marginTop:12, border:`1px solid ${C.border}`, borderRadius:9, padding:10, background:'#FFFFFF' }}>
+      <div style={{ fontSize:9.5, fontWeight:800, letterSpacing:'0.06em', textTransform:'uppercase', color:C.cyan, marginBottom:8 }}>
+        Chart sent as an image
+      </div>
+      <img src={src} alt={chart.title || 'Chart'} style={{ display:'block', width:'100%', height:'auto', borderRadius:6 }} />
     </div>
   )
 }
