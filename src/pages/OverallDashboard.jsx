@@ -397,7 +397,12 @@ const SUMMARY_COLUMN_KEYS = SUMMARY_COLUMNS.map(c => c.key)
 // The columns a CEO actually reads. Used ONLY for the Slack image, so the
 // picture stays legible on a phone. The CSV posted next to it still carries
 // every column, so nothing is lost.
-const CEO_IMAGE_KEYS = ['corridor', 'spend', 'leads', 'totalQL', 'cpql', 'apps', 'offers', 'deposits', 'estSrRevenue', 'estimatedRoas']
+const CEO_IMAGE_KEYS = ['corridor', 'spend', 'leads', 'cpl', 'totalQL', 'cpql', 'apps', 'cpa', 'offers', 'deposits', 'raus']
+// Paid means we hand a platform money for the click. Everything else --
+// remarketing, content, referral, offline, affiliate partner, NA -- is banded
+// separately so paid efficiency is not diluted by organic volume.
+const PAID_SOURCE_KEYS = ['facebook', 'google', 'affiliate', 'linkedin', 'bing']
+const isPaidSource = label => PAID_SOURCE_KEYS.includes(String(label || '').trim().toLowerCase())
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
 const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
 // Bump this whenever SUMMARY_COLUMNS' declared order changes meaningfully (not just when a
@@ -1364,18 +1369,33 @@ export default function OverallDashboard() {
     'estSrRevenue', 'actSrRevenue',
     // summed so the TOTAL row's CPL/CPQL/CPA derive off paid activity, matching the KPI cards
     'paidLeads', 'paidQL', 'paidApps']
-  const totalsRow = useMemo(() => {
-    const t = { label: 'TOTAL', corridor: null }
+  const aggregateRows = useCallback((rows, label) => {
+    const t = { label, corridor: null }
     SUMMARY_ADDITIVE_KEYS.forEach(k => {
-      t[k] = sortedFilteredRows.reduce((s, g) => s + (Number(g[k]) || 0), 0)
+      t[k] = rows.reduce((sum, g) => sum + (Number(g[k]) || 0), 0)
     })
-    // summaryValue() derives qlPct/appPct/depositPct/cpl/cpql/cpa from these fields, so
-    // those come out correct for free. roas/estimatedRoas are stored, not derived, so
-    // they have to be recomputed here from the summed revenue and spend.
     t.roas = t.spend > 0 ? t.actSrRevenue / t.spend : 0
     t.estimatedRoas = t.spend > 0 ? t.estSrRevenue / t.spend : 0
     return t
-  }, [sortedFilteredRows])
+  }, [])
+  const totalsRow = useMemo(() => aggregateRows(sortedFilteredRows, 'TOTAL'), [aggregateRows, sortedFilteredRows])
+
+  // Paid / Non-Paid banding, source view only. Band subtotals are computed over
+  // the whole filtered set -- like TOTAL, and unlike the "Show N" slice -- so a
+  // band can never silently under-report what is above it.
+  const tableBodyRows = useMemo(() => {
+    const flat = tableRows.map((row, i) => ({ kind: 'row', row, i }))
+    if (grpBy !== 'source') return flat
+    const out = []
+    ;[['Paid Channels', true], ['Non-Paid Channels', false]].forEach(([name, wantPaid]) => {
+      const shown = tableRows.filter(r => isPaidSource(r.label) === wantPaid)
+      if (!shown.length) return
+      const all = sortedFilteredRows.filter(r => isPaidSource(r.label) === wantPaid)
+      out.push({ kind: 'band', label: name, row: aggregateRows(all, name) })
+      shown.forEach((row, i) => out.push({ kind: 'row', row, i }))
+    })
+    return out
+  }, [grpBy, tableRows, sortedFilteredRows, aggregateRows])
 
   // Exports the FULL search-filtered/sorted set, not just the on-screen "Show N" slice --
   // the row-limit control is a display density preference, not a data cap.
@@ -1433,19 +1453,38 @@ export default function OverallDashboard() {
         : (selMonth || 'All time')
       const stat = key => summaryFmt(key, summaryValue(totalsRow, key))
       const csvCols = [grpByLabel, ...displayCols.map(c => c.label)]
+      // Slack's own table block caps a row at 20 cells, so it carries the CEO column
+      // set. Every ROW is included, banded into Paid / Non-Paid with a subtotal each;
+      // the CSV alongside still has all 23 metric columns.
+      const shareCols = ceoCols.length ? ceoCols : displayCols
+      const slackTable = { columns: [grpByLabel, ...shareCols.map(c => c.label)], rows: [], strongRows: [] }
+      const pushShareRow = (label, g, strong) => {
+        if (strong) slackTable.strongRows.push(slackTable.rows.length)
+        slackTable.rows.push([label, ...shareCols.map(c => summaryFmt(c.key, summaryValue(g, c.key)))])
+      }
+      pushShareRow('TOTAL', totalsRow, true)
+      const bands = grpBy === 'source'
+        ? [['Paid Channels', true], ['Non-Paid Channels', false]]
+        : [[null, null]]
+      bands.forEach(([band, wantPaid]) => {
+        const rows = band === null ? sortedFilteredRows
+          : sortedFilteredRows.filter(r => isPaidSource(r.label) === wantPaid)
+        if (!rows.length) return
+        if (band) pushShareRow(band.toUpperCase(), aggregateRows(rows, band), true)
+        rows.forEach(g => pushShareRow(g.label, g, false))
+      })
       return {
-        title: 'Overall \u2014 funnel summary by ' + grpByLabel.toLowerCase(),
-        subtitle: [periodLabel,
-          source && source !== 'All' ? 'Source: ' + source : null,
-          corridorFilter && corridorFilter !== 'All' ? 'Corridor: ' + corridorFilter : null,
-        ].filter(Boolean).join('  \u00b7  '),
+        title: 'Overall - PM Summary by ' + grpByLabel,
+        subtitle: 'Filtered by -> ' + [periodLabel, 'Source: ' + source, 'Corridor: ' + corridorFilter].join('  \u00b7  '),
+        // One inner array per line of the Slack message, so spend/volume, quality,
+        // application and downstream economics each read on their own row.
         summary: [
-          { label: 'Spend', value: stat('spend') },
-          { label: 'Leads', value: stat('leads') },
-          { label: 'Total QLs', value: stat('totalQL') },
-          { label: 'CPQL', value: stat('cpql') },
-          { label: 'ROAS', value: stat('roas') },
+          [{ label: 'Spend', value: stat('spend') }, { label: 'Leads', value: stat('leads') }, { label: 'CPL', value: stat('cpl') }],
+          [{ label: 'Total QLs', value: stat('totalQL') }, { label: 'CPQL', value: stat('cpql') }],
+          [{ label: 'Apps', value: stat('apps') }, { label: 'CPA', value: stat('cpa') }],
+          [{ label: 'Offers', value: stat('offers') }, { label: 'Deposits', value: stat('deposits') }, { label: 'RAUs', value: stat('raus') }],
         ],
+        table: slackTable,
         pngBase64: shot ? shot.base64 : null,
         pixelRatio: shot ? shot.pixelRatio : null,
         csv: rowsToCsv(csvCols, [tableTotalExportRowRaw, ...tableExportRowsRaw]),
@@ -1455,7 +1494,8 @@ export default function OverallDashboard() {
       if (prevLimit !== 'all') setRowLimit(prevLimit)
     }
   }, [rowLimit, activeFilter, customFrom, customTo, dateWindow, selMonth, source, corridorFilter,
-    grpByLabel, displayCols, totalsRow, tableExportRowsRaw, tableTotalExportRowRaw])
+    grpByLabel, displayCols, totalsRow, tableExportRowsRaw, tableTotalExportRowRaw,
+    grpBy, sortedFilteredRows, aggregateRows])
 
   // On screen we always render displayCols. captureCols wins only mid-capture.
   const renderCols = captureCols || displayCols
@@ -1903,11 +1943,26 @@ export default function OverallDashboard() {
                     )}
                   </thead>
                   <tbody>
-                    {tableRows.map((g, i) => (
-                      <tr key={g.label} style={{ background: i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
-                        <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A' }}>{g.label}</td>
+                    {tableBodyRows.map(item => item.kind === 'band' ? (
+                      <tr key={'band-' + item.label} style={{ background:'#EEF3FA', borderTop:'2px solid #D8E3F0', borderBottom:'1px solid #E2E8F0' }}>
+                        <td style={{ padding:'9px 12px', fontSize:10.5, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.08em', color:C.navy, whiteSpace:'nowrap' }}>{item.label}</td>
                         {renderCols.map(col => {
-                          const v = summaryValue(g, col.key)
+                          const v = summaryValue(item.row, col.key)
+                          const isCorridor = col.key === 'corridor'
+                          const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
+                          return (
+                            <td key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
+                              style={{ padding:'9px 10px', fontSize:13, fontWeight:800, textAlign: isCorridor ? 'left' : 'right', color: isCorridor ? '#CBD5E1' : C.navy, whiteSpace:'nowrap' }}>
+                              {summaryFmt(col.key, v)}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ) : (
+                      <tr key={item.row.label} style={{ background: item.i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
+                        <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A' }}>{item.row.label}</td>
+                        {renderCols.map(col => {
+                          const v = summaryValue(item.row, col.key)
                           const isCorridor = col.key === 'corridor'
                           const isPct = col.key.endsWith('Pct')
                           const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'

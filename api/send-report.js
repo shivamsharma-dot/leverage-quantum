@@ -1002,11 +1002,13 @@ async function slackUploadFile(token, { filename, buffer, title }) {
   return { id: gd.file_id, title: title || filename }
 }
 
-async function slackCompleteUpload(token, { files, channel, initialComment }) {
+async function slackCompleteUpload(token, { files, channel, initialComment, threadTs }) {
   const res = await fetch('https://slack.com/api/files.completeUploadExternal', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({ files, channel_id: channel, initial_comment: initialComment }),
+    body: JSON.stringify(Object.assign({ files, channel_id: channel },
+      initialComment ? { initial_comment: initialComment } : {},
+      threadTs ? { thread_ts: threadTs } : {})),
   })
   const d = await res.json().catch(() => ({}))
   if (!d.ok) {
@@ -1027,11 +1029,45 @@ function buildTableShareComment({ title, subtitle, summary, rowCount, askedBy, i
   if (isTest) lines.push(':test_tube: *Test post* -- sent to the test channel to check formatting.')
   lines.push('*📊 ' + title + '*')
   if (subtitle) lines.push(subtitle)
-  const stats = (summary || []).filter(s => s && s.label).map(s => '*' + s.label + '*  ' + s.value)
-  if (stats.length) lines.push('', stats.join('   ·   '))
+  // summary is either a flat list of {label,value} or, now, a list of lists --
+  // one inner list per line of the message.
+  const groups = Array.isArray(summary) && Array.isArray(summary[0]) ? summary : [summary || []]
+  const rendered = groups
+    .map(g => (g || []).filter(s => s && s.label).map(s => '*' + s.label + '*  ' + s.value).join('   \u00b7   '))
+    .filter(Boolean)
+  if (rendered.length) lines.push('', ...rendered)
   lines.push('', '_' + rowCount + ' row' + (rowCount === 1 ? '' : 's') + '  \u00b7  every column is in the attached CSV_')
   if (degraded) lines.push('_Image scaled down to fit the upload size limit._')
   return lines.join('\n')
+}
+
+// Slack's own table block. A row is capped at 20 cells, a table at 100 rows, and
+// all table cells in one message at 10,000 characters -- the caller therefore
+// sends a trimmed column set. Header, TOTAL and the band subtotals go through
+// rich_text so they can be bold; every other cell is cheap raw_text.
+async function slackPostTable(token, channel, text, table) {
+  const cell = (v, strong) => strong
+    ? { type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: String(v == null ? '' : v), style: { bold: true } }] }] }
+    : { type: 'raw_text', text: String(v == null ? '' : v) }
+  const cols = table.columns || []
+  const strong = new Set(table.strongRows || [])
+  const rows = [cols.map(c => cell(c, true))]
+  ;(table.rows || []).slice(0, 99).forEach((r, i) => rows.push(r.map(v => cell(v, strong.has(i)))))
+  const res = await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({
+      channel,
+      text,
+      blocks: [
+        { type: 'section', text: { type: 'mrkdwn', text } },
+        { type: 'table', column_settings: cols.map((_, i) => (i === 0 ? { is_wrapped: false } : { align: 'right' })), rows },
+      ],
+    }),
+  })
+  const d = await res.json().catch(() => ({}))
+  if (!d.ok) throw new Error('Slack: ' + (d.error || 'table post rejected'))
+  return d.ts
 }
 
 async function handleSlackExportImage(req, res) {
@@ -1041,7 +1077,7 @@ async function handleSlackExportImage(req, res) {
 
   // Same per-page gate as handleSlackExport: a real PAGE_LIST id from the caller, and
   // admin-only when an older caller sends none, rather than silently allowing.
-  const { dashboardId, slackTarget, filename, title, subtitle, summary, pngBase64, csv, rowCount, pixelRatio } = req.body || {}
+  const { dashboardId, slackTarget, filename, title, subtitle, summary, pngBase64, csv, rowCount, pixelRatio, table } = req.body || {}
   if (!dashboardId ? me.role !== 'admin' : !canAccessDashboard(me.role, dashboardId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
@@ -1064,12 +1100,21 @@ async function handleSlackExportImage(req, res) {
     if (csv) files.push(await slackUploadFile(hook.token, {
       filename: base + '-' + stamp + '.csv', buffer: Buffer.from(String(csv), 'utf8'), title: label + ' (full data)',
     }))
+    const comment = buildTableShareComment({
+      title: label, subtitle, summary, rowCount: rowCount || 0, askedBy: me.email,
+      isTest: slackTarget === 'test', degraded: pixelRatio ? pixelRatio < 2 : false,
+    })
+    // Lead with Slack's own table so the numbers are readable and copyable in the
+    // client, then hang the PNG and the all-columns CSV in that message's thread. If
+    // the table block is rejected, fall back to the old files-with-comment post so a
+    // send never fails outright.
+    let threadTs = null
+    if (table && Array.isArray(table.rows) && table.rows.length) {
+      try { threadTs = await slackPostTable(hook.token, hook.channel, comment, table) } catch (_) { threadTs = null }
+    }
     await slackCompleteUpload(hook.token, {
-      files, channel: hook.channel,
-      initialComment: buildTableShareComment({
-        title: label, subtitle, summary, rowCount: rowCount || 0, askedBy: me.email,
-        isTest: slackTarget === 'test', degraded: pixelRatio ? pixelRatio < 2 : false,
-      }),
+      files, channel: hook.channel, threadTs,
+      initialComment: threadTs ? null : comment,
     })
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: me.email })
     return res.status(200).json({ ok: true, success: true, channel: hook.label })
