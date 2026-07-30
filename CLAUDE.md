@@ -2746,3 +2746,26 @@ sets a fresh one.
 
 No new `api/*` file - the PIN lives as `type: 'ceo_pin'` inside
 `api/send-report.js`, since Vercel Hobby is at 12/12 functions.
+
+## 2026-07-30 - PIN field behaviour, and Auto vs Manual in Report Activity
+
+`src/components/PinInput.jsx` is the one PIN box used in Settings > Reports and
+in Send to Slack. It is deliberately **not** `<input type="password">`: Chrome's
+password manager only offers to save and re-fill password fields, and the CEO
+PIN must never be stored by a browser or a shared profile. It is a text input
+with `autocomplete=off`, a random `name`, and the `data-lpignore`,
+`data-1p-ignore`, `data-bwignore` and `data-form-type=other` opt-outs. Masking
+is done with `-webkit-text-security: disc`, which draws exactly one dot per real
+character, so the dot count always equals the number of digits typed. There is
+an eye button to show or hide. If a browser lacks `-webkit-text-security` it
+falls back to a password field rather than showing the digits.
+
+Report Activity now answers "did this fire itself or did somebody fire it": the
+TRIGGER column shows an **Auto** tag for `triggered_by = cron` with "Scheduled
+run - GitHub Actions cron" under it, and a **Manual** tag with the person's
+email (or "Test send from Settings") otherwise. The destination is already in
+the TYPE column, e.g. "slack pm report v4 (CEO group)".
+
+Standing rule reinforced: **no emojis anywhere in Quantum's own UI.** Emojis are
+only for the content of the Slack report itself. The lock emoji that was on the
+CEO group label and in the send panel has been removed.
