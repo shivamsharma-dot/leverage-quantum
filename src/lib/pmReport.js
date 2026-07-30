@@ -434,7 +434,7 @@ const eList = arr => arr.filter(Boolean).join('\n')
 function deltaNote(ctx) {
   if (!ctx.hasPrev) return ':information_source: No comparable previous period is loaded, so no movement is shown.'
   return ':information_source: *How to read the \u25b2\u25bc* ' + DASH + ' *' + ctx.periodLabel + '* against *' + ctx.prevLabel
-    + '*, the same-length period immediately before it, on the same Source and Corridor filters. CPL / CPQL / CPA divide spend by PAID leads / QLs / applications only, so free channels never make acquisition look cheaper than it was.'
+    + '*, the same-length period immediately before it, on the same Source and Corridor filters. CPL and CPQL divide spend by PAID leads and PAID QLs only, so free channels never make acquisition look cheaper than it was.'
 }
 
 // The KPI grid: two columns, eight cells, every one carrying its own previous-period
@@ -455,8 +455,6 @@ function kpiFields(ctx) {
     fld(':zap:', 'CPL', ctx.stat('cpl'), d.cpl, was(ctx.fmtINR(p.cpl))),
     fld(':zap:', 'CPQL', ctx.stat('cpql'), d.cpql, was(ctx.fmtINR(p.cpql))),
     fldPP(':mag:', 'Lead ' + TO + ' QL rate', qlNow, qlWas),
-    fld(':memo:', 'Applications', ctx.stat('apps'), d.apps, was(nfmt(p.apps))),
-    fld(':zap:', 'CPA', ctx.stat('cpa'), d.cpa, was(ctx.fmtINR(p.cpa))),
   ]
 }
 
@@ -583,14 +581,14 @@ function channelMovement(ctx, channels) {
 // movers(), but every line carries the figure it moved from, so nothing in the honest
 // read is a percentage the reader has to take on trust. v4 keeps only the metrics that
 // are genuinely comparable month on month and that marketing is answerable for --
-// Offers, Deposits, RAUs and CPA all sit at or past the application, where the number
+// Applications, CPA, Offers, Deposits and RAUs all sit at or past the application, where the number
 // moves for reasons the media buy cannot be judged on.
-const MOVERS_V4 = MOVERS.filter(m => ['leads', 'totalQL', 'apps', 'cpl', 'cpql'].indexOf(m.key) >= 0)
+const MOVERS_V4 = MOVERS.filter(m => ['leads', 'totalQL', 'cpl', 'cpql'].indexOf(m.key) >= 0)
 
 function moversWithBase(ctx, wantGood) {
   const p = ctx.prev || {}
   const base = {
-    leads: nfmt(p.leads), totalQL: nfmt(p.totalQL), apps: nfmt(p.apps),
+    leads: nfmt(p.leads), totalQL: nfmt(p.totalQL),
     cpl: ctx.fmtINR(p.cpl), cpql: ctx.fmtINR(p.cpql),
   }
   return MOVERS_V4
@@ -938,6 +936,18 @@ if (qa > 0 && qb > 0) bits.push('CPQL ' + ctx.fmtINR(sa / qa) + ' ' + mv(pctOf(s
 return 'Last ' + a.length + ' complete days against the ' + b.length + ' before them: ' + bits.join(', ') + '.'
 }
 
+// v4 stops at the QL, so the application columns come out of the channel table too.
+// Matching on the label rather than the key keeps this working whichever column set the
+// dashboard hands over, and the attached CSV still carries every column untouched.
+const V4_DROP = ['applications', 'apps', 'cpa']
+function dropCols(t, kill) {
+if (!t || !t.columns) return t
+const bad = t.columns.map((c, i) => (kill.indexOf(String(c).trim().toLowerCase()) >= 0 ? i : -1)).filter(i => i >= 0)
+if (!bad.length) return t
+const keep = arr => arr.filter((_, i) => bad.indexOf(i) < 0)
+return { ...t, columns: keep(t.columns), rows: (t.rows || []).map(keep) }
+}
+
 function buildV4(ctx) {
   const msgs = []
   const note = deltaNote(ctx)
@@ -960,7 +970,7 @@ function buildV4(ctx) {
   const m2 = {
     key: 'channels', label: 'Channel mix',
     text: ['*:moneybag: Channel mix ' + DASH + ' Paid vs Non-Paid*', ctx.filterLine].join('\n'),
-    table: ctx.table, attach: true, context: note,
+    table: dropCols(ctx.table, V4_DROP), attach: true, context: note,
   }
   const ins2 = channelRecs(ctx).concat(channelMovement(ctx, cmp.channels)).concat([channelDayShift(ctx)].filter(Boolean))
   m2.after = (ins2.length ? '*:bulb: Key findings & recommendations*\n' + eList(ins2) + '\n\n' : '') + csvNote(ctx)
@@ -1071,7 +1081,7 @@ id: 'v4',
     tagline: 'Marketing-only KPI grid, share of spend inside the table, Facebook + Google corridors, ad winners and losers.',
     recommended: true,
     what: [
-      'Message 1 — executive summary as a two-column KPI grid: spend, leads, QLs, CPL, CPQL, the Lead to QL rate, applications and CPA, each carrying the number it moved from, plus the projected spend to month end at the current run-rate',
+      'Message 1 — executive summary as a two-column KPI grid: spend, leads, QLs, CPL, CPQL, and the Lead to QL rate, each carrying the number it moved from, plus the projected spend to month end at the current run-rate',
       'Message 2 — Paid vs Non-Paid channel table with its own % of spend column, then key findings and recommendations. No pie chart, no Offers or RAUs columns',
       'Message 3 — corridors on Facebook + Google campaigns only, split into a cheapest and a dearest band, as a native table and a CPQL chart',
       'Message 4 — the cheapest and the dearest ads on CPQL, as a native table',
