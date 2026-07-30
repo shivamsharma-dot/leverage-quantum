@@ -870,11 +870,11 @@ if (rows.length < 2) return null
 const scored = rows.map(r => {
 const g = r.g
 const p = g.prev || null
-return { label: r.label, g, dv: p ? pctOf(Number(g.spend), Number(p.spend)) : null, was: p ? Number(p.spend) : null }
-}).filter(x => x.dv != null && Math.abs(x.dv) >= 5)
+return { label: r.label, g, dv: p ? pctOf(Number(g.spend), Number(p.spend)) : null, dd: p ? Number(g.spend) - Number(p.spend) : null, was: p ? Number(p.spend) : null }
+}).filter(x => x.dv != null && x.dd != null && Math.abs(x.dd) >= Math.max(25000, (Number(d.totalSpend) || 0) * 0.02))
 if (!scored.length) return null
-const w = scored.sort((a, b) => Math.abs(b.dv) - Math.abs(a.dv))[0]
-return ':calendar: *Biggest single-day shift, ' + d.label + '*: ' + w.label + ' spend ' + money(w.g.spend) + ' (' + chip(w.dv, money(w.was)) + ' the day before) for ' + nfmt(w.g.totalQL || 0) + ' QLs at ' + (w.g.cpql != null ? ctx.fmtINR(w.g.cpql) : DASH) + ' a QL.'
+const w = scored.sort((a, b) => Math.abs(b.dd) - Math.abs(a.dd))[0]
+return ':calendar: *Biggest single-day shift, ' + d.label + '*: ' + w.label + ' spend ' + money(w.g.spend) + ', ' + (w.dd >= 0 ? 'up ' : 'down ') + money(Math.abs(w.dd)) + ' (' + chip(w.dv, money(w.was)) + ' the day before) for ' + nfmt(w.g.totalQL || 0) + ' QLs at ' + (w.g.cpql != null ? ctx.fmtINR(w.g.cpql) : DASH) + ' a QL.'
 }
 
 // Rank now against rank on last period's CPQL, inside the same ranked set. A corridor
