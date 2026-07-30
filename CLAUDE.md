@@ -2801,3 +2801,33 @@ the calendar day before, even when that day sits outside the window on screen.
 V1, V3 and V4 render exactly as before: the new comparison tables are new ctx
 fields (`cmpRows`, `day`, `dow`, `now`, `scopeLine`), and `ctx.table` was left
 untouched.
+
+## 2026-07-30 — Overall page: CPQL-first quality sections
+
+The Overall page read almost entirely on lead volume; only the campaign
+efficiency map spoke about cost. Everything the CEO Slack report carries
+(other than the written insights) now has its own visual section on the
+page, in `src/components/QualitySections.jsx`:
+
+- `CpqlBySource` — paid sources, cheapest CPQL first, with spend, share of
+  spend, QLs, share of QLs, CPQL, CPQL against the previous period, and an
+  index (QL share ÷ spend share). An ALL PAID row carries the blended CPQL.
+- `SpendVsQuality` — share of spend against share of QLs, paired bars, with
+  the same index as a multiple.
+- `CostTrendMonth` / `CostTrendDay` — CPQL and CPL month on month and day by
+  day. Today is dropped from the day series (a half-finished day is not a
+  collapse). `byMonth` carries no spend, so `costByMonth` is aggregated
+  separately in OverallDashboard via `aggReport` over `filtered`.
+- `CorridorRanking` — Facebook + Google only, `CORRIDOR_MIN_QL` (25) cut-off
+  kept, cheapest first, ALL n RANKED total row, and a footer stating how many
+  corridors are unranked and how much spend sits below the cut-off.
+- `AdRanking` — cheapest and dearest bands on CPQL, same 4-row split rule as
+  `rankByCpql` in pmReport.js.
+- `NotPerforming` — spend that has not cleared the QL cut-off (largest first)
+  and the ranked ads whose CPQL rose the most.
+
+All of it is driven off the existing `reportCmp` memo, so the page and the
+Slack report can never disagree. Deltas are the same rule as the report:
+same-length previous period, `±0.5%` is flat, `new` when there is no base.
+Cost metrics are inverted so a fall is green. Brand colours only, no emojis,
+and every rupee figure prints in full with Cr/L only as a hover title.
