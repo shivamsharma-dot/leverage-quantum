@@ -296,9 +296,14 @@ function v2Vs(ctx, g, key) {
   const p = g.prev || null
   const cur = g[key]
   const was = p ? p[key] : null
-  if (cur == null || was == null || !(Math.abs(Number(was)) > 0)) return 'new'
-  const d = pctOf(cur, was)
-  if (d == null) return 'new'
+  // Nothing in either period is not news, it is an empty row. Only a real
+  // figure appearing where there was none before is "new".
+  if (cur == null && was == null) return DASH
+  const c = Number(cur || 0)
+  const w = Number(was || 0)
+  if (!(Math.abs(w) > 0)) return Math.abs(c) > 0 ? 'new' : DASH
+  const d = pctOf(c, w)
+  if (d == null) return DASH
   const move = Math.abs(d) < 0.05 ? 'flat' : (d >= 0 ? '\u25b2 ' : '\u25bc ') + abs1(d)
   return move + ' \u00b7 ' + v2Fmt(ctx, key, was)
 }

@@ -32,7 +32,7 @@ const GATE_INPUT = {
 // The handful of shortcodes the builders use, so the preview shows what Slack shows.
 const EMOJI = {
   ':bar_chart:':'\uD83D\uDCCA', ':moneybag:':'\uD83D\uDCB0', ':earth_asia:':'\uD83C\uDF0F', ':compass:':'\uD83E\uDDED',
-  ':test_tube:':'\uD83E\uDDEA', ':chart_with_upwards_trend:':'\uD83D\uDCC8', ':dart:':'\uD83C\uDFAF',
+  ':calendar:':'\uD83D\uDCC5', ':test_tube:':'\uD83E\uDDEA', ':chart_with_upwards_trend:':'\uD83D\uDCC8', ':dart:':'\uD83C\uDFAF',
   ':zap:':'\u26A1', ':memo:':'\uD83D\uDCDD', ':trophy:':'\uD83C\uDFC6', ':dollar:':'\uD83D\uDCB5',
   ':rocket:':'\uD83D\uDE80', ':information_source:':'\u2139\uFE0F',
   ':mag:':'\uD83D\uDD0D', ':bulb:':'\uD83D\uDCA1', ':pushpin:':'\uD83D\uDCCC',
