@@ -2989,3 +2989,29 @@ is actually lost - it is the report that stops at the QL, not the export. Deposi
 still in the table; nobody asked for it to go.
 
 Commit: 4403420.
+
+### 30 Jul 2026 - CEO PIN could not be set, so no report could reach the CEO group (fixed, `0ba8ae3`)
+
+Symptom: Settings > Reports > Set PIN returned `No server pepper available - set SLACK_CEO_PIN_PEPPER in Vercel.`
+and the Send to Slack panel refused the CEO group with `No PIN is set yet. An admin has to set one in Settings > Reports first.`
+Both were the same single bug.
+
+`api/send-report.js` line 5 already defines the module constant
+`const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_KEY`.
+Every other call site uses that bare constant. But `pinPepper()` and `pepperFor()` wrote
+`process.env.SUPABASE_SERVICE_KEY` - with a `process.env.` prefix in front of a name that is a local
+constant, not an env var. Vercel only has `SUPABASE_SERVICE_ROLE_KEY` (checked: `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` are the only Supabase vars, and `SLACK_CEO_PIN_PEPPER` does not exist).
+So the pepper resolved to `''`, the endpoint failed closed with a 500, no PIN could ever be stored,
+and the CEO group was permanently unreachable.
+
+Fix: dropped the `process.env.` prefix in both functions so they read the constant. Two characters of
+intent, zero extra setup - which is what the comment above `pinPepper()` always promised.
+
+Notes for later:
+- The stored row records `id: 'svc'`, so a dedicated `SLACK_CEO_PIN_PEPPER` can be added in Vercel any
+  time without invalidating the live PIN. `pepperFor('svc')` keeps resolving old records.
+- Consequence of using the service role key as the pepper: rotating `SUPABASE_SERVICE_ROLE_KEY`
+  silently invalidates the PIN and it has to be re-set. Adding the dedicated pepper removes that coupling.
+- Rule: never write `process.env.X` when `X` is also a module constant in the same file. Grep for the
+  bare name first.
