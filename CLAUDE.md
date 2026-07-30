@@ -2714,3 +2714,35 @@ Follow-ups the same day, caught in the live preview rather than in Slack:
   flat. Jul'26 CPQL moved 0.05%, and the old code turned that into "traffic got cheaper,
   quality did not" — technically sourced, materially untrue, and exactly the kind of line
   that makes a CEO stop trusting the rest of the message.
+
+## 2026-07-30 - Two Slack destinations, and a locked CEO group
+
+Send to Slack now has three destinations instead of two: the test channel, the
+team channel (`team-performance-marketing`, pref `slack_channel_main`) and the
+CEO group (`performance_mktg_core`, pref `slack_channel_ceo`). Both channels are
+set in Settings > Reports.
+
+The CEO group is guarded. `resolveSlackTarget` refuses to resolve it unless the
+caller passes `allowGuarded`, and only the report send path does, after the gate
+passes - so scheduled reports, Ask AI and table exports can never reach it.
+There is no webhook fallback and no channel fallback for it: blank channel means
+nothing can post there.
+
+The gate is three independent checks, all re-done on the server: the caller is
+an admin, the caller sent the exact phrase `SEND TO CEO GROUP`, and the PIN
+verifies. On top of that the UI needs a second, separate confirm click.
+
+PIN storage, given that `app_preferences` is readable with the public anon key:
+the PIN is never stored. What is stored is PBKDF2-SHA512(pin, salt, 310k) run
+through HMAC-SHA256 with a server-only pepper (`SLACK_CEO_PIN_PEPPER`, falling
+back to the service key so it works with no setup). The whole record, counters
+included, is HMAC-signed, so editing the row to clear a lockout invalidates it -
+and an invalid record fails closed. Escalating lockout at 5 wrong tries: 15, 30,
+then 60 min. Weak PINs are refused. Every attempt is audit-logged to
+`report_logs`. `slack_ceo_pin` is in a SECRET_KEYS blocklist in
+`api/preferences.mjs`, so it is stripped from GET and rejected by the generic
+upsert. Forgot the PIN: rotate `SLACK_CEO_PIN_PEPPER` in Vercel, then an admin
+sets a fresh one.
+
+No new `api/*` file - the PIN lives as `type: 'ceo_pin'` inside
+`api/send-report.js`, since Vercel Hobby is at 12/12 functions.
