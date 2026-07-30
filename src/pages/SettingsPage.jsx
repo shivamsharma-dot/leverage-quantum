@@ -868,6 +868,7 @@ export default function SettingsPage() {
         if (pf.slack_webhook_url_test != null) setSlackWebhookTest(pf.slack_webhook_url_test)
         if (pf.slack_channel_main != null) setSlackChannelMain(pf.slack_channel_main)
         if (pf.slack_channel_test != null) setSlackChannelTest(pf.slack_channel_test)
+        if (pf.slack_channel_ceo != null) setSlackChannelCeo(pf.slack_channel_ceo)
         if (pf.slack_auto_reports_enabled != null) setSlackAuto(pf.slack_auto_reports_enabled !== false)
         setSavedHiddenPages(hp)
         setHiddenPages(hp)
@@ -1248,6 +1249,15 @@ export default function SettingsPage() {
   // would be effectively public. It lives in the Vercel env as SLACK_BOT_TOKEN.
   const [slackChannelMain, setSlackChannelMain] = useState('')
   const [slackChannelTest, setSlackChannelTest] = useState('')
+  const [slackChannelCeo, setSlackChannelCeo] = useState('')
+  // The CEO PIN is managed through its own endpoint, never through preferences,
+  // so nothing about it is ever held in this page's state except its status.
+  const [ceoPinInfo, setCeoPinInfo] = useState(null)
+  const [ceoPinCur, setCeoPinCur] = useState('')
+  const [ceoPinNew, setCeoPinNew] = useState('')
+  const [ceoPinNew2, setCeoPinNew2] = useState('')
+  const [ceoPinBusy, setCeoPinBusy] = useState(false)
+  const [ceoPinMsg, setCeoPinMsg] = useState('')
   const [slackAuto, setSlackAuto] = useState(true)
   const [slackCfgSaving, setSlackCfgSaving] = useState(false)
   const [slackCfgMsg, setSlackCfgMsg] = useState('')
@@ -1427,6 +1437,46 @@ export default function SettingsPage() {
     finally { setRcSaving(false); setTimeout(() => setRcMsg(''), 5000) }
   }
 
+  // Status only: whether a PIN exists, who set it, and whether we are locked out.
+  // Never the PIN, never the hash, never the salt or the pepper.
+  const loadCeoPin = async () => {
+    try {
+      const r = await fetch('/api/send-report', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'ceo_pin', action: 'status' }),
+      })
+      setCeoPinInfo(r.ok ? await r.json() : { set: false, denied: true })
+    } catch { setCeoPinInfo({ set: false, denied: true }) }
+  }
+  useEffect(() => { loadCeoPin() }, [])
+
+  const saveCeoPin = async () => {
+    setCeoPinMsg('')
+    if (ceoPinNew !== ceoPinNew2) { setCeoPinMsg('x The two PINs do not match'); return }
+    setCeoPinBusy(true)
+    try {
+      const r = await fetch('/api/send-report', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'ceo_pin', action: 'set', pin: ceoPinNew, currentPin: ceoPinCur }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error([
+        d.error || 'Could not save the PIN',
+        d.failsLeft != null ? d.failsLeft + ' tries left' : null,
+        d.lockedForSec ? 'locked for ' + Math.ceil(d.lockedForSec / 60) + ' min' : null,
+      ].filter(Boolean).join(' \u2014 '))
+      setCeoPinCur(''); setCeoPinNew(''); setCeoPinNew2('')
+      setCeoPinMsg('\u2713 PIN saved')
+      loadCeoPin()
+    } catch (e) {
+      setCeoPinMsg('x ' + e.message)
+    } finally {
+      setCeoPinBusy(false); setTimeout(() => setCeoPinMsg(''), 8000)
+    }
+  }
+
   const saveSlackConfig = async () => {
     setSlackCfgSaving(true); setSlackCfgMsg('')
     try {
@@ -1435,6 +1485,7 @@ export default function SettingsPage() {
         ['slack_webhook_url_test', slackWebhookTest.trim()],
         ['slack_channel_main', slackChannelMain.trim()],
         ['slack_channel_test', slackChannelTest.trim()],
+        ['slack_channel_ceo', slackChannelCeo.trim()],
         ['slack_auto_reports_enabled', slackAuto],
       ]
       for (const [key, value] of entries) {
@@ -2526,11 +2577,63 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <input type="text" className={styles.input} placeholder="#pm-analyst-test  (or a channel ID like C0123ABCD)" value={slackChannelTest}
                     onChange={e => setSlackChannelTest(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
                 </div>
-                <label className={styles.fieldLabel} style={{ marginTop: 14 }}>Main channel</label>
-                <div className={styles.inputGroup}>
-                  <input type="text" className={styles.input} placeholder="#performance-marketing" value={slackChannelMain}
-                    onChange={e => setSlackChannelMain(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
-                </div>
+          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>Team channel &middot; the whole team reads it</label>
+          <div className={styles.inputGroup}>
+            <input type="text" className={styles.input} placeholder="#team-performance-marketing" value={slackChannelMain}
+              onChange={e => setSlackChannelMain(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+          </div>
+          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO group &middot; locked {'\uD83D\uDD12'}</label>
+          <div className={styles.inputGroup}>
+            <input type="text" className={styles.input} placeholder="#performance_mktg_core" value={slackChannelCeo}
+              onChange={e => setSlackChannelCeo(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+          </div>
+          <p className={styles.cardDesc} style={{ marginTop: 6 }}>
+            Posting here needs an admin, the exact phrase <b>SEND TO CEO GROUP</b>, the PIN below, and then a second
+            confirm \u2014 every single time. Leave this blank and nothing can reach the CEO group at all. Scheduled
+            reports, Ask AI and table exports can never post here.
+          </p>
+
+          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO group PIN</label>
+          <p className={styles.cardDesc} style={{ marginTop: 4 }}>
+            {ceoPinInfo === null ? 'Checking\u2026'
+              : ceoPinInfo.denied ? 'Only an admin can manage this PIN.'
+              : ceoPinInfo.invalid ? 'The stored PIN record does not verify, so the CEO group is sealed. Set a new PIN below to repair it.'
+              : !ceoPinInfo.set ? 'No PIN is set yet, so nothing can be posted to the CEO group.'
+              : 'A ' + ceoPinInfo.digits + '-digit PIN is set'
+                + (ceoPinInfo.setBy ? ' by ' + ceoPinInfo.setBy : '')
+                + (ceoPinInfo.setAt ? ' on ' + new Date(ceoPinInfo.setAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
+                + '. ' + (ceoPinInfo.locked
+                  ? 'Locked right now for ' + Math.ceil((ceoPinInfo.lockedForSec || 0) / 60) + ' more min.'
+                  : ceoPinInfo.failsLeft + ' wrong tries left before it locks itself.')}
+          </p>
+          <p className={styles.cardDesc} style={{ marginTop: 4 }}>
+            The PIN is never stored anywhere \u2014 only a salted, 310,000-round hash of it, signed with a key that
+            lives in the Vercel env and never in the database. 6 to 12 digits, at least 3 different ones, no counting
+            runs and no repeated halves. 5 wrong tries locks it for 15 min, then 30, then 60.
+          </p>
+          {ceoPinInfo && ceoPinInfo.set && !ceoPinInfo.invalid && (
+            <div className={styles.inputGroup}>
+              <input type="password" className={styles.input} placeholder="Current PIN" value={ceoPinCur} autoComplete="off"
+                onChange={e => setCeoPinCur(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))}
+                style={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
+            </div>
+          )}
+          <div className={styles.inputGroup} style={{ marginTop: 8 }}>
+            <input type="password" className={styles.input} placeholder="New PIN" value={ceoPinNew} autoComplete="new-password"
+              onChange={e => setCeoPinNew(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))}
+              style={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
+          </div>
+          <div className={styles.inputGroup} style={{ marginTop: 8 }}>
+            <input type="password" className={styles.input} placeholder="Repeat the new PIN" value={ceoPinNew2} autoComplete="new-password"
+              onChange={e => setCeoPinNew2(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))}
+              style={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
+            <Button variant="secondary" onClick={saveCeoPin} disabled={ceoPinBusy || ceoPinNew.length < 6}>
+              {ceoPinBusy ? 'Saving\u2026' : (ceoPinInfo && ceoPinInfo.set ? 'Change PIN' : 'Set PIN')}
+            </Button>
+            {ceoPinMsg && <span className={styles.rcFeedback + ' ' + (ceoPinMsg.charAt(0) === 'x' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{ceoPinMsg}</span>}
+          </div>
                 <p className={styles.cardDesc} style={{ marginTop: 14 }}>
                   <b>Fallback: Incoming Webhooks.</b> Only used when no bot token is set. A webhook is welded to a single channel, so it needs one URL per channel.
                 </p>

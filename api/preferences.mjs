@@ -69,12 +69,17 @@ export default async function handler(req, res) {
   // in app_preferences (sheet URLs, Slack webhook, report sender config, AI
   // budget, etc.) is admin-only config and must not leak to a non-admin viewer,
   // including a custom viewer granted zero dashboards.
+  // Server-only rows. The CEO PIN record is a verifier rather than a PIN, but it
+  // is still never handed to a browser, and it can never be written through this
+  // generic key/value upsert -- it only moves through its own guarded endpoint.
+  const SECRET_KEYS = new Set(['slack_ceo_pin'])
+
   if (req.method === 'GET') {
     const r = await supabaseAdmin(
-      'app_preferences?select=key,value,updated_at&limit=50',
+      'app_preferences?select=key,value,updated_at&limit=200',
     )
     if (!r.ok) return res.status(500).json({ error: 'Failed to read preferences' })
-    const rows = await r.json()
+    const rows = ((await r.json()) || []).filter(row => !SECRET_KEYS.has(row.key))
     // affiliate_spend_manual must be readable by every signed-in user (not just
     // admins) -- the Overall dashboard is viewable by non-admins too, and it
     // needs this value to compute Affiliate's totals correctly for everyone.
@@ -96,6 +101,7 @@ export default async function handler(req, res) {
 
   const { key, value } = req.body || {}
   if (!key) return res.status(400).json({ error: 'key is required' })
+  if (SECRET_KEYS.has(key)) return res.status(403).json({ error: 'That key is only settable through its own endpoint' })
 
   // Upsert into app_preferences
   const r = await supabaseAdmin('app_preferences', {

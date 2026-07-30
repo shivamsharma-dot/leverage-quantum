@@ -10,6 +10,23 @@ import { REPORT_VERSIONS, DEFAULT_VERSION_ID, buildReportMessages } from '../lib
 const C = { navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', border:'#E2E8F0', muted:'#64748B', sub:'#475569', ink:'#0F172A' }
 const FONT = 'Inter,-apple-system,BlinkMacSystemFont,sans-serif'
 const LAST_KEY = 'lq_slack_report_last_sent'
+const CEO_PHRASE = 'SEND TO CEO GROUP'
+
+// Three destinations, in rising order of who sees it. The CEO group is the only
+// one behind a gate: the phrase, the PIN, and then a second click.
+const DESTS = [
+  { key: 'test', label: 'Test channel', hint: 'Safe: posts to the test channel only.' },
+  { key: 'internal', label: 'Team channel', hint: 'Posts to team-performance-marketing, which the whole team reads.' },
+  { key: 'ceo', label: 'CEO group', hint: 'Posts to performance_mktg_core. Needs the phrase and the PIN.' },
+]
+const DEST_HINT = k => (DESTS.find(d => d.key === k) || DESTS[0]).hint
+
+const GATE_INPUT = {
+  width: '100%', boxSizing: 'border-box', border: `1px solid ${C.border}`, borderRadius: 8,
+  padding: '7px 10px', fontSize: 12, fontFamily: FONT, color: C.ink, background: '#fff',
+  letterSpacing: 0.4, outline: 'none',
+}
+
 
 // The handful of shortcodes the builders use, so the preview shows what Slack shows.
 const EMOJI = {
@@ -48,11 +65,35 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   // The main channel needs a second, deliberate click. No browser confirm dialog:
   // the preview above IS the confirmation, this just stops a stray click.
   const [armed, setArmed] = useState(false)
+  const [phrase, setPhrase] = useState('')
+  const [pin, setPin] = useState('')
+  const [pinInfo, setPinInfo] = useState(null)
+  const [gateErr, setGateErr] = useState('')
   const [lastSent, setLastSent] = useState({})
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 940)
 
   useEffect(() => { if (open) { setLastSent(readLastSent()); setArmed(false) } }, [open])
-  useEffect(() => { setArmed(false) }, [target, versionId])
+  useEffect(() => {
+    setArmed(false); setPhrase(''); setPin(''); setGateErr('')
+  }, [target, versionId])
+
+  // The PIN status is read fresh every time the CEO tab is opened. It never
+  // carries the PIN or the hash, only whether one is set and whether we are
+  // locked out, so it is safe to hold in component state.
+  const loadPinInfo = async () => {
+    try {
+      const r = await fetch('/api/send-report', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'ceo_pin', action: 'status' }),
+      })
+      setPinInfo(r.ok ? await r.json() : { set: false, denied: true })
+    } catch { setPinInfo({ set: false, denied: true }) }
+  }
+  useEffect(() => {
+    if (!open || target !== 'ceo') return
+    setPinInfo(null); loadPinInfo()
+  }, [open, target])
   useEffect(() => {
     const onResize = () => setNarrow(window.innerWidth < 940)
     window.addEventListener('resize', onResize)
@@ -73,7 +114,18 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   }, [open, versionId, target, buildContext])
 
   const send = async () => {
-    if (target === 'prod' && !armed) { setArmed(true); return }
+    // Team channel keeps the plain two-step. The CEO group needs the exact
+    // phrase and the PIN typed first, and then a second, separate click. The
+    // server re-checks all three, so nothing here is the real protection.
+    if (target === 'internal' && !armed) { setArmed(true); return }
+    if (target === 'ceo') {
+      if (!(pinInfo && pinInfo.set)) { setGateErr('No CEO PIN is set. An admin has to set it in Settings > Reports.'); return }
+      if (pinInfo.locked) { setGateErr('Locked after too many wrong PINs. Try again later.'); return }
+      if (phrase.trim().toUpperCase() !== CEO_PHRASE) { setGateErr('Type ' + CEO_PHRASE + ' exactly, to confirm.'); return }
+      if (!/^[0-9]{6,12}$/.test(pin)) { setGateErr('Enter the CEO PIN.'); return }
+      if (!armed) { setGateErr(''); setArmed(true); return }
+    }
+    setGateErr('')
     setBusy(true)
     try {
       const files = await captureFiles()
@@ -83,6 +135,8 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'slack_report', dashboardId, slackTarget: target, filename, versionId, rowCount,
+        confirm: target === 'ceo' ? CEO_PHRASE : undefined,
+        ceoPin: target === 'ceo' ? pin : undefined,
           messages: messages.map(x => ({
             text: x.text, after: x.after || null, fields: x.fields || null,
             table: x.table || null, chart: x.chart || null, context: x.context || null,
@@ -95,10 +149,18 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
         }),
       })
       const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d.error || 'Failed to post to Slack')
+      if (!r.ok) {
+        if (target === 'ceo') { setPin(''); setArmed(false); loadPinInfo() }
+        throw new Error([
+          d.error || 'Failed to post to Slack',
+          d.failsLeft != null ? d.failsLeft + ' tries left' : null,
+          d.lockedForSec ? 'locked for ' + Math.ceil(d.lockedForSec / 60) + ' min' : null,
+        ].filter(Boolean).join(' \u2014 '))
+      }
       const entry = { at: new Date().toISOString(), channel: d.channel || target }
       writeLastSent(versionId, entry)
       setLastSent(m => ({ ...m, [versionId]: entry }))
+      setPin(''); setPhrase('')
       toast('Report posted to Slack ' + (d.channel || ''), { type: 'success' })
       onClose()
     } catch (e) {
@@ -215,27 +277,52 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
           </div>
         </div>
 
-        <div style={{ padding:'12px 16px', borderTop:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-          <div style={{ display:'flex', background:'#F1F5F9', borderRadius:9, padding:3, minWidth:230 }}>
-            <button onClick={() => setTarget('test')} style={pill(target === 'test')}>Test channel</button>
-            <button onClick={() => setTarget('prod')} style={pill(target === 'prod')}>Main channel</button>
+        <div style={{ padding:'12px 16px', borderTop:`1px solid ${C.border}`, display:'flex', flexDirection:'column', gap:10 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+            <div style={{ display:'flex', background:'#F1F5F9', borderRadius:9, padding:3 }}>
+              {DESTS.map(d => (
+                <button key={d.key} onClick={() => setTarget(d.key)} style={pill(target === d.key)}>{d.label}</button>
+              ))}
+            </div>
+            <div style={{ fontSize:11, color: target === 'test' ? C.muted : C.navy, fontWeight: target === 'test' ? 500 : 700, flex:1, minWidth:170 }}>
+              {DEST_HINT(target)}
+            </div>
           </div>
-          <div style={{ fontSize:11, color: target === 'prod' ? C.navy : C.muted, fontWeight: target === 'prod' ? 700 : 500, flex:1, minWidth:180 }}>
-            {target === 'prod'
-              ? (armed ? 'Click Confirm to post to the main channel.' : 'This posts to the team channel everyone reads.')
-              : 'Safe: posts to the test channel only.'}
+
+          {target === 'ceo' && (
+            <div style={{ border:`1px solid ${C.border}`, borderRadius:10, padding:'10px 12px', background:'#FAFCFE', display:'flex', flexDirection:'column', gap:7 }}>
+              <div style={{ fontSize:11, fontWeight:800, color:C.navy }}>{'\uD83D\uDD12'} performance_mktg_core is locked</div>
+              <div style={{ fontSize:10.5, color:C.sub, lineHeight:1.55 }}>
+                {!pinInfo ? 'Checking the PIN\u2026'
+                  : pinInfo.denied ? 'Only an admin can post to the CEO group.'
+                  : pinInfo.invalid ? 'The PIN record does not verify. An admin has to set the PIN again in Settings \u203A Reports.'
+                  : !pinInfo.set ? 'No PIN is set yet. An admin has to set one in Settings \u203A Reports first.'
+                  : pinInfo.locked ? 'Locked after too many wrong PINs. Try again in ' + Math.ceil((pinInfo.lockedForSec || 0) / 60) + ' min.'
+                  : 'Type the phrase, then the PIN, then confirm.' + (pinInfo.failsLeft != null ? ' ' + pinInfo.failsLeft + ' tries left before a lockout.' : '')}
+              </div>
+              <input value={phrase} onChange={e => { setPhrase(e.target.value); setGateErr('') }}
+                placeholder={CEO_PHRASE} spellCheck={false} autoComplete="off" style={GATE_INPUT} />
+              <input value={pin} onChange={e => { setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 12)); setGateErr('') }}
+                type="password" inputMode="numeric" placeholder="CEO PIN" autoComplete="off" name="lq-ceo-pin" style={GATE_INPUT} />
+              {gateErr && <div style={{ fontSize:10.5, fontWeight:700, color:C.navy }}>{gateErr}</div>}
+            </div>
+          )}
+
+          <div style={{ display:'flex', alignItems:'center', gap:10, justifyContent:'flex-end' }}>
+            <button onClick={onClose} disabled={busy} style={{
+              border:`1px solid ${C.border}`, background:'#fff', borderRadius:9, padding:'8px 14px',
+              fontSize:12.5, fontWeight:700, color:C.sub, cursor: busy ? 'default' : 'pointer', fontFamily:FONT,
+            }}>Cancel</button>
+            <button onClick={send} disabled={busy || !messages.length} style={{
+              border:'none', borderRadius:9, padding:'8px 18px', fontSize:12.5, fontWeight:800, color:'#fff',
+              background: busy ? C.muted : (armed ? C.green : C.navy), cursor: busy ? 'default' : 'pointer',
+              fontFamily:FONT, boxShadow:'0 1px 2px rgba(15,23,42,0.10)',
+            }}>
+              {busy ? 'Sending\u2026'
+                : armed ? (target === 'ceo' ? 'Confirm \u2014 post to the CEO group' : 'Confirm \u2014 post to the team channel')
+                : 'Send ' + messages.length + (messages.length === 1 ? ' message' : ' messages')}
+            </button>
           </div>
-          <button onClick={onClose} disabled={busy} style={{
-            border:`1px solid ${C.border}`, background:'#fff', borderRadius:9, padding:'8px 14px',
-            fontSize:12.5, fontWeight:700, color:C.sub, cursor: busy ? 'default' : 'pointer', fontFamily:FONT,
-          }}>Cancel</button>
-          <button onClick={send} disabled={busy || !messages.length} style={{
-            border:'none', borderRadius:9, padding:'8px 18px', fontSize:12.5, fontWeight:800, color:'#fff',
-            background: busy ? C.muted : (armed ? C.green : C.navy), cursor: busy ? 'default' : 'pointer',
-            fontFamily:FONT, boxShadow:'0 1px 2px rgba(15,23,42,0.10)',
-          }}>
-            {busy ? 'Sending\u2026' : armed ? 'Confirm \u2014 post to main' : 'Send ' + messages.length + (messages.length === 1 ? ' message' : ' messages')}
-          </button>
         </div>
       </div>
     </div>

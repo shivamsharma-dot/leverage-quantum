@@ -81,7 +81,7 @@ async function getRecipients(reportType) {
 async function getReportConfig() {
   const out = {}
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled,slack_webhook_url,slack_webhook_url_test,slack_channel_main,slack_channel_test,slack_auto_reports_enabled)`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled,slack_webhook_url,slack_webhook_url_test,slack_channel_main,slack_channel_test,slack_channel_internal,slack_channel_ceo,slack_auto_reports_enabled)`, {
       headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
     })
     const rows = (await res.json()) || []
@@ -114,22 +114,68 @@ async function getReportConfig() {
 // anything stored there is effectively public. Channel NAMES are not secrets and are fine
 // there. (The pre-existing slack_webhook_url rows have this same exposure -- a webhook URL
 // is a posting credential. Worth migrating to env separately.)
-function resolveSlackTarget(cfg, target) {
-  const isTest = target === 'test'
-  const label = isTest ? 'test channel' : 'main channel'
+// Three destinations, not two:
+//   test     -- the sandbox channel. Safe, one click.
+//   internal -- team-performance-marketing, the PM team's own channel. Two clicks.
+//   ceo      -- performance_mktg_core, the CEO group. GUARDED: admin only, an
+//               explicit confirmation and a PIN, both checked on the server before
+//               a single Slack call is made.
+// 'prod', 'main', '' and anything unrecognised still resolve to internal, which is
+// exactly where they resolved before this existed -- the scheduler and the older
+// callers behave identically.
+const SLACK_TARGETS = {
+  test: {
+    label: 'test channel',
+    pref: 'slack_channel_test', env: 'SLACK_CHANNEL_TEST',
+    hookPref: 'slack_webhook_url_test', hookEnv: 'SLACK_WEBHOOK_URL_TEST',
+  },
+  internal: {
+    label: 'team channel',
+    pref: 'slack_channel_internal', env: 'SLACK_CHANNEL_INTERNAL',
+    altPref: 'slack_channel_main', altEnv: 'SLACK_CHANNEL_MAIN',
+    hookPref: 'slack_webhook_url', hookEnv: 'SLACK_WEBHOOK_URL',
+  },
+  ceo: {
+    label: 'CEO channel',
+    pref: 'slack_channel_ceo', env: 'SLACK_CHANNEL_CEO',
+    guarded: true,
+  },
+}
+
+function normaliseTarget(target) {
+  const t = String(target || '').toLowerCase()
+  if (t === 'test') return 'test'
+  if (t === 'ceo') return 'ceo'
+  return 'internal'
+}
+
+function resolveSlackTarget(cfg, target, opts) {
+  const key = normaliseTarget(target)
+  const spec = SLACK_TARGETS[key]
+  const label = spec.label
+  // A guarded destination is unreachable unless the caller states, in so many
+  // words, that it has already run the PIN gate. Ask AI, the table exports and
+  // the scheduler all call this without that flag, so none of them can be talked
+  // into reaching the CEO group.
+  if (spec.guarded && !(opts && opts.allowGuarded)) {
+    return { mode: 'bot', key, label, guarded: true, missing: 'The CEO channel is only reachable from Send to Slack, after the PIN check.' }
+  }
   const botToken = process.env.SLACK_BOT_TOKEN
   if (botToken) {
-    const channel = isTest
-      ? (cfg.slack_channel_test || process.env.SLACK_CHANNEL_TEST)
-      : (cfg.slack_channel_main || process.env.SLACK_CHANNEL_MAIN)
-    if (channel) return { mode: 'bot', token: botToken, channel, label }
-    return { mode: 'bot', label, missing: `No Slack ${label} set -- add the channel in Settings > Reports.` }
+    const channel = cfg[spec.pref] || process.env[spec.env]
+      || (spec.altPref ? (cfg[spec.altPref] || process.env[spec.altEnv]) : '')
+    if (channel) return { mode: 'bot', key, token: botToken, channel, label, guarded: !!spec.guarded }
+    return { mode: 'bot', key, label, guarded: !!spec.guarded, missing: `No Slack ${label} set -- add the channel in Settings > Reports.` }
   }
-  const url = isTest
-    ? (cfg.slack_webhook_url_test || process.env.SLACK_WEBHOOK_URL_TEST)
-    : (cfg.slack_webhook_url || process.env.SLACK_WEBHOOK_URL)
+  // No webhook fallback for the CEO group on purpose: a webhook cannot upload the
+  // chart images this report is built around, so it could only ever post a
+  // half-report to the one audience that must not receive one.
+  if (spec.guarded) {
+    return { mode: 'bot', key, label, guarded: true, missing: 'The CEO channel needs SLACK_BOT_TOKEN -- an Incoming Webhook cannot post this report.' }
+  }
+  const url = cfg[spec.hookPref] || process.env[spec.hookEnv]
   return {
-    mode: 'webhook', url, label,
+    mode: 'webhook', key, url, label,
     missing: `Slack ${label} is not connected -- add SLACK_BOT_TOKEN plus a channel, or a webhook URL, in Settings > Reports.`,
   }
 }
@@ -1221,6 +1267,221 @@ async function slackPostReportMessage(token, channel, m) {
   return ts
 }
 
+// -- The CEO-channel PIN ------------------------------------------------------
+// Threat model, and why it is built exactly this way:
+//  * app_preferences is readable with the app's public key, so the PIN itself is
+//    never stored. What is stored is a PBKDF2-SHA512 verifier, and that verifier
+//    is then HMACd with a pepper that only ever exists in the server env.
+//    Reading the row therefore buys an attacker nothing: without the pepper a
+//    six-digit space cannot be walked offline.
+//  * The whole record -- verifier AND failure counters -- is signed with the same
+//    pepper. Editing the row to wipe a lockout invalidates the signature, and an
+//    invalid record fails CLOSED: no PIN, no send.
+//  * 310k PBKDF2 iterations put real cost on every online guess, on top of a
+//    five-strike lockout that doubles in length each time it trips.
+//  * The PIN travels once, in the POST body of the send itself, over HTTPS. It is
+//    never a query parameter, never logged, never persisted in the browser, and
+//    never echoed back in any response.
+//  * Every attempt, pass or fail, lands in report_logs against the signed-in
+//    email, so there is an audit trail without the PIN ever appearing in it.
+const CEO_PIN_KEY = 'slack_ceo_pin'
+const CEO_CONFIRM_PHRASE = 'SEND TO CEO GROUP'
+const PIN_ITER = 310000
+const PIN_KEYLEN = 32
+const PIN_MAX_FAILS = 5
+const PIN_LOCK_BASE_MIN = 15
+const PIN_MIN_LEN = 6
+const PIN_MAX_LEN = 12
+
+// A dedicated pepper is the right answer; SUPABASE_SERVICE_KEY is the fallback so
+// this works with zero extra setup. The record notes which one was used, so moving
+// to a dedicated pepper later cannot silently invalidate a live PIN.
+function pinPepper() {
+  if (process.env.SLACK_CEO_PIN_PEPPER) return { key: process.env.SLACK_CEO_PIN_PEPPER, id: 'env' }
+  return { key: process.env.SUPABASE_SERVICE_KEY || '', id: 'svc' }
+}
+function pepperFor(id) {
+  if (id === 'env') return process.env.SLACK_CEO_PIN_PEPPER || ''
+  return process.env.SUPABASE_SERVICE_KEY || ''
+}
+async function pinDerive(crypto, pin, salt, iter, pepId) {
+  const raw = await new Promise((resolve, reject) => {
+    crypto.pbkdf2(String(pin), Buffer.from(String(salt), 'base64'), iter, PIN_KEYLEN, 'sha512',
+      (e, k) => (e ? reject(e) : resolve(k)))
+  })
+  return crypto.createHmac('sha256', pepperFor(pepId)).update(raw).digest('base64')
+}
+function pinSign(crypto, b64Body, pepId) {
+  return crypto.createHmac('sha256', pepperFor(pepId)).update(b64Body).digest('hex')
+}
+function pinSame(crypto, a, b) {
+  const x = Buffer.from(String(a)), y = Buffer.from(String(b))
+  if (x.length !== y.length) return false
+  return crypto.timingSafeEqual(x, y)
+}
+
+async function prefRead(key) {
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=value&key=eq.${encodeURIComponent(key)}&limit=1`, {
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+    })
+    const rows = (await r.json()) || []
+    return rows[0] ? rows[0].value : null
+  } catch { return null }
+}
+async function prefWrite(key, value, byEmail) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify({ key, value, updated_by: byEmail || 'system', updated_at: new Date().toISOString() }),
+  })
+  if (!r.ok) throw new Error('Could not write the PIN record')
+}
+async function pinRecordRead(crypto) {
+  const raw = await prefRead(CEO_PIN_KEY)
+  if (!raw) return { state: 'unset' }
+  let outer, body
+  try { outer = typeof raw === 'string' ? JSON.parse(raw) : raw } catch { return { state: 'invalid' } }
+  if (!outer || !outer.b || !outer.t) return { state: 'invalid' }
+  try { body = JSON.parse(Buffer.from(String(outer.b), 'base64').toString('utf8')) } catch { return { state: 'invalid' } }
+  if (!body || !body.hash || !body.salt) return { state: 'invalid' }
+  if (!pinSame(crypto, outer.t, pinSign(crypto, String(outer.b), body.pep))) return { state: 'invalid' }
+  return { state: 'ok', body }
+}
+async function pinRecordWrite(crypto, body, byEmail) {
+  const b = Buffer.from(JSON.stringify(body), 'utf8').toString('base64')
+  await prefWrite(CEO_PIN_KEY, JSON.stringify({ b, t: pinSign(crypto, b, body.pep) }), byEmail)
+}
+function pinLockMs(body) {
+  const until = body && body.lockUntil ? Date.parse(body.lockUntil) : 0
+  return until > Date.now() ? until - Date.now() : 0
+}
+
+// Turns away the PINs a guesser tries first, rather than letting somebody put
+// 123456 on the one channel that matters most.
+function pinWeakness(pin) {
+  const t = String(pin || '')
+  if (!/^[0-9]+$/.test(t)) return 'Digits only.'
+  if (t.length < PIN_MIN_LEN) return `Use at least ${PIN_MIN_LEN} digits.`
+  if (t.length > PIN_MAX_LEN) return `Use at most ${PIN_MAX_LEN} digits.`
+  if (new Set(t.split('')).size < 3) return 'Use at least 3 different digits.'
+  const run = step => t.split('').every((c, i) => i === 0 || ((Number(c) - Number(t[i - 1]) + 10) % 10) === step)
+  if (run(1) || run(9)) return 'Runs like 123456 or 654321 are the first thing anyone tries.'
+  if (t.length % 2 === 0 && t.slice(0, t.length / 2) === t.slice(t.length / 2)) return 'A repeated half is too easy to guess.'
+  if (['112233', '121212', '123123', '147258', '159753', '696969', '778899'].includes(t)) return 'That PIN is on every guess list.'
+  return ''
+}
+
+// { ok:true } or { ok:false, code, message, failsLeft?, lockedForSec? }.
+// Fails closed on every unexpected condition.
+async function verifyCeoPin(pin, byEmail) {
+  const crypto = await import('node:crypto')
+  const rec = await pinRecordRead(crypto)
+  if (rec.state === 'unset') {
+    return { ok: false, code: 'no_pin', message: 'No CEO PIN is set yet. An admin has to set it in Settings > Reports before this channel can be used.' }
+  }
+  if (rec.state === 'invalid') {
+    return { ok: false, code: 'tampered', message: 'The CEO PIN record does not verify. An admin has to set the PIN again in Settings > Reports.' }
+  }
+  const body = rec.body
+  const held = pinLockMs(body)
+  if (held > 0) {
+    return { ok: false, code: 'locked', lockedForSec: Math.ceil(held / 1000), message: 'Too many wrong PINs. Locked for ' + Math.ceil(held / 60000) + ' more minute(s).' }
+  }
+  if (!/^[0-9]{4,20}$/.test(String(pin || ''))) {
+    return { ok: false, code: 'wrong', failsLeft: Math.max(0, PIN_MAX_FAILS - (body.fails || 0)), message: 'Enter the PIN.' }
+  }
+  const got = await pinDerive(crypto, pin, body.salt, body.it || PIN_ITER, body.pep)
+  if (pinSame(crypto, got, body.hash)) {
+    body.fails = 0
+    body.lockUntil = null
+    body.lastOkAt = new Date().toISOString()
+    body.lastOkBy = byEmail || null
+    await pinRecordWrite(crypto, body, byEmail)
+    return { ok: true }
+  }
+  body.fails = (body.fails || 0) + 1
+  body.lastFailAt = new Date().toISOString()
+  let lockedForSec = 0
+  if (body.fails >= PIN_MAX_FAILS) {
+    body.lockLevel = Math.min((body.lockLevel || 0) + 1, 3)
+    const mins = PIN_LOCK_BASE_MIN * Math.pow(2, body.lockLevel - 1)
+    body.lockUntil = new Date(Date.now() + mins * 60000).toISOString()
+    body.fails = 0
+    lockedForSec = mins * 60
+  }
+  await pinRecordWrite(crypto, body, byEmail)
+  if (lockedForSec) {
+    return { ok: false, code: 'locked', lockedForSec, message: 'Too many wrong PINs. Locked for ' + Math.round(lockedForSec / 60) + ' minutes.' }
+  }
+  return { ok: false, code: 'wrong', failsLeft: Math.max(0, PIN_MAX_FAILS - body.fails), message: 'That PIN is not right.' }
+}
+
+// Admin-only. Reports status and sets/changes the PIN. Never returns the hash,
+// the salt, the pepper, or anything derived from the PIN.
+async function handleCeoPin(req, res) {
+  const { getSessionUser } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+  const crypto = await import('node:crypto')
+  const action = String((req.body && req.body.action) || 'status')
+
+  if (action === 'status') {
+    const rec = await pinRecordRead(crypto)
+    if (rec.state !== 'ok') return res.status(200).json({ set: false, invalid: rec.state === 'invalid' })
+    const held = pinLockMs(rec.body)
+    return res.status(200).json({
+      set: true,
+      setBy: rec.body.setBy || null,
+      setAt: rec.body.setAt || null,
+      digits: rec.body.len || null,
+      pepper: rec.body.pep === 'env' ? 'dedicated' : 'service key',
+      locked: held > 0,
+      lockedForSec: Math.ceil(held / 1000),
+      failsLeft: Math.max(0, PIN_MAX_FAILS - (rec.body.fails || 0)),
+      lastOkAt: rec.body.lastOkAt || null,
+      lastFailAt: rec.body.lastFailAt || null,
+    })
+  }
+
+  if (action === 'set') {
+    const pin = String((req.body && req.body.pin) || '')
+    const bad = pinWeakness(pin)
+    if (bad) return res.status(400).json({ error: bad })
+    const rec = await pinRecordRead(crypto)
+    // Changing a live PIN needs the live PIN. The recovery path for a forgotten
+    // one is to rotate SLACK_CEO_PIN_PEPPER in Vercel: the record then stops
+    // verifying, which lets an admin set a fresh PIN and locks out everyone who
+    // only had the old one.
+    if (rec.state === 'ok') {
+      const chk = await verifyCeoPin(String((req.body && req.body.currentPin) || ''), me.email)
+      if (!chk.ok) {
+        await logReport({ report_type: 'ceo pin change refused', recipients: [me.email], status: 'failed', error: chk.code, triggered_by: me.email })
+        return res.status(chk.code === 'locked' ? 429 : 401).json({
+          error: chk.code === 'locked' ? chk.message : 'The current PIN is not right.',
+          code: chk.code, failsLeft: chk.failsLeft || null, lockedForSec: chk.lockedForSec || null,
+        })
+      }
+    }
+    const pep = pinPepper()
+    if (!pep.key) return res.status(500).json({ error: 'No server pepper available -- set SLACK_CEO_PIN_PEPPER in Vercel.' })
+    const salt = crypto.randomBytes(16).toString('base64')
+    const hash = await pinDerive(crypto, pin, salt, PIN_ITER, pep.id)
+    await pinRecordWrite(crypto, {
+      v: 1, alg: 'pbkdf2-sha512', it: PIN_ITER, salt, hash, pep: pep.id, len: pin.length,
+      setBy: me.email, setAt: new Date().toISOString(), fails: 0, lockUntil: null, lockLevel: 0,
+    }, me.email)
+    await logReport({ report_type: 'ceo pin set', recipients: [me.email], status: 'sent', triggered_by: me.email })
+    return res.status(200).json({ ok: true })
+  }
+
+  return res.status(400).json({ error: 'Unknown action' })
+}
+
 async function handleSlackReport(req, res) {
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
@@ -1228,7 +1489,7 @@ async function handleSlackReport(req, res) {
 
   // Same per-page gate as every other Slack path: a real PAGE_LIST id from the
   // caller, and admin-only when an older caller sends none.
-  const { dashboardId, slackTarget, filename, versionId, messages, pngBase64, csv, pixelRatio, rowCount } = req.body || {}
+  const { dashboardId, slackTarget, filename, versionId, messages, pngBase64, csv, pixelRatio, rowCount, ceoPin, confirm } = req.body || {}
   if (!dashboardId ? me.role !== 'admin' : !canAccessDashboard(me.role, dashboardId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
@@ -1236,13 +1497,37 @@ async function handleSlackReport(req, res) {
   if (!list.length) return res.status(400).json({ error: 'Nothing to post' })
   if (list.length > 6) return res.status(400).json({ error: 'A report is capped at 6 messages' })
 
+  // The CEO group is the one destination that is guarded. Three independent things
+  // have to be true, all checked here on the server: the caller is an admin, the
+  // caller sent the exact confirmation phrase, and the PIN verifies. Nothing
+  // touches Slack until all three pass.
+  const wantsCeo = normaliseTarget(slackTarget) === 'ceo'
+  if (wantsCeo) {
+    if (me.role !== 'admin') {
+      await logReport({ report_type: 'ceo report blocked', recipients: [me.email], status: 'failed', error: 'not an admin', triggered_by: me.email })
+      return res.status(403).json({ error: 'Only an admin can post to the CEO group.' })
+    }
+    if (String(confirm || '') !== CEO_CONFIRM_PHRASE) {
+      return res.status(400).json({ error: 'Confirm the CEO send first.', code: 'need_confirm' })
+    }
+    const chk = await verifyCeoPin(ceoPin, me.email)
+    if (!chk.ok) {
+      await logReport({ report_type: 'ceo report pin failed', recipients: [me.email], status: 'failed', error: chk.code, triggered_by: me.email })
+      return res.status(chk.code === 'locked' ? 429 : 401).json({
+        error: chk.message, code: chk.code,
+        failsLeft: chk.failsLeft === undefined ? null : chk.failsLeft,
+        lockedForSec: chk.lockedForSec === undefined ? null : chk.lockedForSec,
+      })
+    }
+  }
+
   const cfg = await getReportConfig()
-  const hook = resolveSlackTarget(cfg, slackTarget)
+  const hook = resolveSlackTarget(cfg, slackTarget, { allowGuarded: wantsCeo })
   if (hook.mode !== 'bot' || !hook.channel) {
     return res.status(400).json({ error: 'Posting a report needs SLACK_BOT_TOKEN plus a channel (files:write) -- an Incoming Webhook cannot upload files.' })
   }
 
-  const logType = 'slack pm report ' + (versionId || 'v?') + (slackTarget === 'test' ? ' (test)' : '')
+  const logType = 'slack pm report ' + (versionId || 'v?') + (hook.key === 'test' ? ' (test)' : hook.key === 'ceo' ? ' (CEO group)' : ' (team)')
   try {
     // Sequential on purpose: Slack orders by arrival, so posting in parallel would
     // let message 3 land above message 1.
@@ -1304,6 +1589,9 @@ export default async function handler(req, res) {
   }
   if ((req.body?.type || req.query?.type) === 'slack_export_image') {
     return handleSlackExportImage(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'ceo_pin') {
+    return handleCeoPin(req, res)
   }
   if ((req.body?.type || req.query?.type) === 'slack_report') {
     return handleSlackReport(req, res)
