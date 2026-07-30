@@ -886,12 +886,11 @@ if (set.length < 3) return null
 const now = set.slice().sort((a, b) => a.cpql - b.cpql).map(c => c.label)
 const was = set.slice().sort((a, b) => a.prev.cpql - b.prev.cpql).map(c => c.label)
 const moves = set.map(c => ({ c, m: was.indexOf(c.label) - now.indexOf(c.label) })).filter(x => Math.abs(x.m) >= 2)
-if (!moves.length) return null
-const up = moves.slice().sort((a, b) => b.m - a.m)[0]
-const dn = moves.slice().sort((a, b) => a.m - b.m)[0]
+const up = moves.slice().sort((a, b) => b.m - a.m)[0] || null
+const dn = moves.slice().sort((a, b) => a.m - b.m)[0] || null
 const out = []
-if (up.m >= 2) out.push('biggest climber ' + up.c.label + ', up ' + up.m + ' places to ' + (now.indexOf(up.c.label) + 1) + ' of ' + now.length + ' at ' + ctx.fmtINR(up.c.cpql) + ' from ' + ctx.fmtINR(up.c.prev.cpql))
-if (dn.m <= -2 && dn.c.label !== up.c.label) out.push('biggest faller ' + dn.c.label + ', down ' + Math.abs(dn.m) + ' to ' + (now.indexOf(dn.c.label) + 1) + ' at ' + ctx.fmtINR(dn.c.cpql) + ' from ' + ctx.fmtINR(dn.c.prev.cpql))
+if (up && up.m >= 2) out.push('biggest climber ' + up.c.label + ', up ' + up.m + ' places to ' + (now.indexOf(up.c.label) + 1) + ' of ' + now.length + ' at ' + ctx.fmtINR(up.c.cpql) + ' from ' + ctx.fmtINR(up.c.prev.cpql))
+if (dn && dn.m <= -2 && (!up || dn.c.label !== up.c.label)) out.push('biggest faller ' + dn.c.label + ', down ' + Math.abs(dn.m) + ' to ' + (now.indexOf(dn.c.label) + 1) + ' at ' + ctx.fmtINR(dn.c.cpql) + ' from ' + ctx.fmtINR(dn.c.prev.cpql))
 if (!out.length) {
 const moved = set.map(c => ({ c, dv: pctOf(c.cpql, c.prev.cpql) })).filter(x => x.dv != null && Math.abs(x.dv) >= 1)
 if (!moved.length) return null
