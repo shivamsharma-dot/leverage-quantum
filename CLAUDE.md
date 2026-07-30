@@ -2930,3 +2930,35 @@ and it holds CPQL flat as spend moves, which will not hold in practice. Ceiling,
 
 `DEFAULT_VERSION_ID` is still `v4` and V4 still carries RECOMMENDED. V4 was not touched.
 The 27 Jul spike is deliberately left unannotated, per instruction.
+
+### 30 Jul 2026 - V4 freshness layer (same report, sent two days running, must not read the same)
+
+V4 was month-to-date only, so a send on consecutive days moved by a percent or two and
+read as a repeat. V4 now carries a freshness read on every message, themed to that
+message, built from `ctx.day` and `ctx.dow` - day-level context the dashboard already
+computed and V4 simply never used. No new data source, no new query, nothing modelled.
+
+- M1 exec summary - `What moved since the last report`: the last complete day against
+  its own trailing 7 days on spend, QLs and CPQL (only metrics off by 2%+ print), any
+  CPQL streak of 3+ consecutive days in one direction, and where the day ranks on CPQL
+  inside the window (a genuine high or low is called out as such).
+- M2 channel mix - the largest single-day channel spend shift (5%+ threshold) with the
+  QLs and CPQL that came with it. Month-level channel shares barely move; the daily
+  split is where a shift shows first.
+- M3 corridors - rank now against rank on last period's CPQL inside the same ranked
+  set: biggest climber and biggest faller (2+ places). If ranks hold it falls back to
+  the biggest CPQL move so the line is never silent.
+- M4 ads - ranked ads with no last-period CPQL, and the share of ranked ad spend the
+  three largest ads carry (prints at 40%+).
+- M5 - `Momentum`: last 7 complete days against the 7 before them on spend, QLs, CPQL.
+
+`daySeriesOf()` does not trust the dow row order. It orients the series by checking
+which end matches the last complete day the report already names, and reverses if
+needed, so a change to that memo cannot silently invert every insight here.
+
+Emoji: use only shortcodes the in-app preview actually renders. `:new:`, `:clock3:`,
+`:hourglass_flowing_sand:` and `:arrows_counterclockwise:` all render as raw text in
+the Quantum preview - they were swapped for `:calendar:`, `:mag:` and
+`:chart_with_upwards_trend:`. Check the preview, not just the build.
+
+Commits: 6c378e4 (layer), 25f88e0 (emoji + corridor fallback).
