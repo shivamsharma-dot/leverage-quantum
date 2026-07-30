@@ -874,7 +874,7 @@ return { label: r.label, g, dv: p ? pctOf(Number(g.spend), Number(p.spend)) : nu
 }).filter(x => x.dv != null && Math.abs(x.dv) >= 5)
 if (!scored.length) return null
 const w = scored.sort((a, b) => Math.abs(b.dv) - Math.abs(a.dv))[0]
-return ':clock3: *Biggest single-day shift, ' + d.label + '*: ' + w.label + ' spend ' + money(w.g.spend) + ' (' + chip(w.dv, money(w.was)) + ' the day before) for ' + nfmt(w.g.totalQL || 0) + ' QLs at ' + (w.g.cpql != null ? ctx.fmtINR(w.g.cpql) : DASH) + ' a QL.'
+return ':calendar: *Biggest single-day shift, ' + d.label + '*: ' + w.label + ' spend ' + money(w.g.spend) + ' (' + chip(w.dv, money(w.was)) + ' the day before) for ' + nfmt(w.g.totalQL || 0) + ' QLs at ' + (w.g.cpql != null ? ctx.fmtINR(w.g.cpql) : DASH) + ' a QL.'
 }
 
 // Rank now against rank on last period's CPQL, inside the same ranked set. A corridor
@@ -882,7 +882,7 @@ return ':clock3: *Biggest single-day shift, ' + d.label + '*: ' + w.label + ' sp
 // is the part of this table that actually differs between two sends.
 function rankShift(ctx, r, noun) {
 const set = (r.best || []).concat(r.worst || []).filter(c => c.cpql != null && c.prev && c.prev.cpql != null && c.prev.cpql > 0)
-if (set.length < 4) return null
+if (set.length < 3) return null
 const now = set.slice().sort((a, b) => a.cpql - b.cpql).map(c => c.label)
 const was = set.slice().sort((a, b) => a.prev.cpql - b.prev.cpql).map(c => c.label)
 const moves = set.map(c => ({ c, m: was.indexOf(c.label) - now.indexOf(c.label) })).filter(x => Math.abs(x.m) >= 2)
@@ -892,7 +892,12 @@ const dn = moves.slice().sort((a, b) => a.m - b.m)[0]
 const out = []
 if (up.m >= 2) out.push('biggest climber ' + up.c.label + ', up ' + up.m + ' places to ' + (now.indexOf(up.c.label) + 1) + ' of ' + now.length + ' at ' + ctx.fmtINR(up.c.cpql) + ' from ' + ctx.fmtINR(up.c.prev.cpql))
 if (dn.m <= -2 && dn.c.label !== up.c.label) out.push('biggest faller ' + dn.c.label + ', down ' + Math.abs(dn.m) + ' to ' + (now.indexOf(dn.c.label) + 1) + ' at ' + ctx.fmtINR(dn.c.cpql) + ' from ' + ctx.fmtINR(dn.c.prev.cpql))
-if (!out.length) return null
+if (!out.length) {
+const moved = set.map(c => ({ c, dv: pctOf(c.cpql, c.prev.cpql) })).filter(x => x.dv != null && Math.abs(x.dv) >= 1)
+if (!moved.length) return null
+const bm = moved.sort((x, y) => x.dv - y.dv)[0]
+out.push('ranks held; the biggest price move is ' + bm.c.label + ' ' + (bm.dv < 0 ? 'down' : 'up') + ' ' + Math.abs(bm.dv).toFixed(1) + '% to ' + ctx.fmtINR(bm.c.cpql) + ' from ' + ctx.fmtINR(bm.c.prev.cpql))
+}
 return '_' + noun + ' movement against last period ' + DASH + ' ' + out.join('; ') + '_'
 }
 
@@ -905,7 +910,7 @@ const set = (r.best || []).concat(r.worst || [])
 const fresh = set.filter(c => c.spend > 0 && (!c.prev || c.prev.cpql == null)).sort((a, b) => a.cpql - b.cpql)
 if (fresh.length) {
 const f = fresh[0]
-out.push(':new: *' + nfmt(fresh.length) + ' ranked ad' + (fresh.length > 1 ? 's have' : ' has') + ' no last-period CPQL to read against* ' + DASH + ' cheapest of them is ' + f.label + ' at ' + ctx.fmtINR(f.cpql) + ' on ' + money(f.spend) + '.')
+out.push(':mag: *' + nfmt(fresh.length) + ' ranked ad' + (fresh.length > 1 ? 's have' : ' has') + ' no last-period CPQL to read against* ' + DASH + ' cheapest of them is ' + f.label + ' at ' + ctx.fmtINR(f.cpql) + ' on ' + money(f.spend) + '.')
 }
 const byS = set.slice().sort((a, b) => (b.spend || 0) - (a.spend || 0))
 const tot = byS.reduce((a, c) => a + (c.spend || 0), 0)
@@ -948,7 +953,7 @@ function buildV4(ctx) {
   const ins1 = [costDirectionV4(ctx), spendPace(ctx), spendVsQL(ctx)].filter(Boolean)
   if (ins1.length) m1.after = '*What the numbers say*\n' + list(ins1)
   const fresh1 = [dayPulse(ctx), cpqlStreak(ctx), dayExtreme(ctx)].filter(Boolean)
-  if (fresh1.length) m1.after = (m1.after ? m1.after + '\n\n' : '') + '*:hourglass_flowing_sand: What moved since the last report*\n' + list(fresh1)
+  if (fresh1.length) m1.after = (m1.after ? m1.after + '\n\n' : '') + '*:calendar: What moved since the last report*\n' + list(fresh1)
   msgs.push(m1)
 
   // 2 -- where the money went: the dashboard's own table, now carrying its own share of
@@ -1006,7 +1011,7 @@ function buildV4(ctx) {
   }
   const parts = []
   const wm = weekMomentum(ctx)
-  if (wm) parts.push('*:arrows_counterclockwise: Momentum ' + DASH + ' last seven complete days*\n' + list([wm]))
+  if (wm) parts.push('*:chart_with_upwards_trend: Momentum ' + DASH + ' last seven complete days*\n' + list([wm]))
   const right = moversWithBase(ctx, true).slice(0, 3)
   const wrong = moversWithBase(ctx, false).slice(0, 2).concat(marketingMisses(ctx, cr, ar)).slice(0, 5)
   if (right.length) parts.push('*:white_check_mark: What we did right*\n' + list(right))
