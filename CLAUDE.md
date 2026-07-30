@@ -2966,3 +2966,26 @@ A percentage rank puts a 3,467 rupee channel at the top of a CEO message. Rank o
 
 Commits: 6c378e4 (layer), 25f88e0 (emoji + corridor fallback), e5a47d5 (fallback was
 unreachable behind an earlier return), 16f4f6a (rupee ranking on the day shift).
+
+### 30 Jul 2026 - V4 stops at the QL: Applications and CPA removed
+
+Applications and CPA are out of V4 entirely, on the CEO's ask. Removed in five places,
+because taking them out of the KPI grid alone would have left them elsewhere:
+
+- `kpiFields` - the Applications and CPA cells are gone; the grid is now six cells
+  (Spend, Leads, Total QLs, CPL, CPQL, Lead to QL rate).
+- `MOVERS_V4` - `apps` dropped, so no application line can reach "what we did right"
+  or "what went wrong". `moversWithBase` lost its `apps` base too.
+- `deltaNote` - the footer said "CPL / CPQL / CPA divide spend by PAID leads / QLs /
+  applications only". Now "CPL and CPQL divide spend by PAID leads and PAID QLs only".
+- The M2 channel table - `dropCols(ctx.table, V4_DROP)` strips the Applications and CPA
+  columns for V4 only. `ctx.table` is shared with V1/V2/V3, so it must NOT be edited at
+  source; matching on the column LABEL rather than the key means a change to
+  CEO_IMAGE_KEYS in OverallDashboard cannot silently put the columns back.
+- The V4 registry notes no longer promise applications and CPA in message 1.
+
+The attached CSV is deliberately untouched and still carries every column, so nothing
+is actually lost - it is the report that stops at the QL, not the export. Deposits is
+still in the table; nobody asked for it to go.
+
+Commit: 4403420.
