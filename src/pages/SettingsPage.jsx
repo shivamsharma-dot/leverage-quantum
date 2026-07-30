@@ -5,6 +5,7 @@ import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole
 import { getActivityLog } from '../components/ActivityLogger.js'
 import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
+import PinInput from '../components/PinInput'
 import { useDesignStyle, saveDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
 import LoginScene from '../components/LoginScene'
@@ -2582,7 +2583,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             <input type="text" className={styles.input} placeholder="#team-performance-marketing" value={slackChannelMain}
               onChange={e => setSlackChannelMain(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
           </div>
-          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO group &middot; locked {'\uD83D\uDD12'}</label>
+          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO group &middot; locked</label>
           <div className={styles.inputGroup}>
             <input type="text" className={styles.input} placeholder="#performance_mktg_core" value={slackChannelCeo}
               onChange={e => setSlackChannelCeo(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
@@ -2613,20 +2614,14 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           </p>
           {ceoPinInfo && ceoPinInfo.set && !ceoPinInfo.invalid && (
             <div className={styles.inputGroup}>
-              <input type="password" className={styles.input} placeholder="Current PIN" value={ceoPinCur} autoComplete="off"
-                onChange={e => setCeoPinCur(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))}
-                style={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
+              <PinInput value={ceoPinCur} onChange={setCeoPinCur} placeholder="Current PIN" className={styles.input} inputStyle={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
             </div>
           )}
           <div className={styles.inputGroup} style={{ marginTop: 8 }}>
-            <input type="password" className={styles.input} placeholder="New PIN" value={ceoPinNew} autoComplete="new-password"
-              onChange={e => setCeoPinNew(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))}
-              style={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
+            <PinInput value={ceoPinNew} onChange={setCeoPinNew} placeholder="New PIN" className={styles.input} inputStyle={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
           </div>
           <div className={styles.inputGroup} style={{ marginTop: 8 }}>
-            <input type="password" className={styles.input} placeholder="Repeat the new PIN" value={ceoPinNew2} autoComplete="new-password"
-              onChange={e => setCeoPinNew2(e.target.value.replace(/[^0-9]/g, '').slice(0, 12))}
-              style={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
+            <PinInput value={ceoPinNew2} onChange={setCeoPinNew2} placeholder="Repeat the new PIN" className={styles.input} inputStyle={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
             <Button variant="secondary" onClick={saveCeoPin} disabled={ceoPinBusy || ceoPinNew.length < 6}>
@@ -2696,7 +2691,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <table className={styles.alTable}>
                       <thead className={styles.alHead}>
                         <tr>
-                          {['TYPE','STATUS','TRIGGERED BY','RECIPIENTS','SENT AT','DETAIL'].map(h=>(
+                          {['TYPE','STATUS','TRIGGER','RECIPIENTS','SENT AT','DETAIL'].map(h=>(
                             <th key={h}>{h}</th>
                           ))}
                         </tr>
@@ -2709,7 +2704,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             failed:  { c:'#1F3C84', bg:'#E8EFF9', label:'Failed' },
                           }
                           const s = STATUS[log.status] || { c:'#64748B', bg:'#F1F5F9', label: log.status||'Unknown' }
-                          const triggeredLabel = log.triggered_by === 'cron' ? 'Cron (GitHub Actions)' : log.triggered_by === 'test' ? 'Test' : (log.triggered_by || 'Manual')
+                          const isAuto = log.triggered_by === 'cron'
+                          const trigMode = isAuto ? 'Auto' : 'Manual'
+                          const trigWho = isAuto ? 'Scheduled run \u00b7 GitHub Actions cron'
+                            : log.triggered_by === 'test' ? 'Test send from Settings'
+                            : (log.triggered_by || 'Unknown')
+                          const trigTag = isAuto ? { c: '#1C9FD4', bg: '#E8F6FA' } : { c: '#1F3C84', bg: '#EAEEF8' }
                           const dt = log.sent_at ? new Date(log.sent_at) : null
                           const dateStr = dt ? dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'
                           const timeStr = dt ? dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}) : ''
@@ -2720,7 +2720,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                               <td className={styles.alTd}>
                                 <span className={styles.alTag} style={{background:s.bg,color:s.c}}>{s.label}</span>
                               </td>
-                              <td className={styles.alTd}>{triggeredLabel}</td>
+                              <td className={styles.alTd}><span className={styles.alTag} style={{ background: trigTag.bg, color: trigTag.c }}>{trigMode}</span><div style={{ fontSize: 10.5, color: '#8A94A6', marginTop: 3, textTransform: 'none', letterSpacing: 0 }}>{trigWho}</div></td>
                               <td className={styles.alTd}>{rcptCount > 0 ? `${rcptCount} recipient${rcptCount!==1?'s':''}` : '—'}</td>
                               <td className={styles.alTd}>{dateStr}{timeStr ? ` \u00b7 ${timeStr}` : ''}</td>
                               <td className={`${styles.alTd} ${styles.alDetail}`} title={log.error||''}>{log.error || '—'}</td>

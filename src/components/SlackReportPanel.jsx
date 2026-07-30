@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { chartPng, chartPngUrl } from '../lib/chartPng'
 import { toast } from './ToastHost'
+import PinInput from './PinInput'
 import { REPORT_VERSIONS, DEFAULT_VERSION_ID, buildReportMessages } from '../lib/pmReport'
 
 // Send to Slack, with the version library and the preview living entirely inside
@@ -291,7 +292,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
 
           {target === 'ceo' && (
             <div style={{ border:`1px solid ${C.border}`, borderRadius:10, padding:'10px 12px', background:'#FAFCFE', display:'flex', flexDirection:'column', gap:7 }}>
-              <div style={{ fontSize:11, fontWeight:800, color:C.navy }}>{'\uD83D\uDD12'} performance_mktg_core is locked</div>
+              <div style={{ fontSize:11, fontWeight:800, color:C.navy }}>performance_mktg_core is locked</div>
               <div style={{ fontSize:10.5, color:C.sub, lineHeight:1.55 }}>
                 {!pinInfo ? 'Checking the PIN\u2026'
                   : pinInfo.denied ? 'Only an admin can post to the CEO group.'
@@ -302,8 +303,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
               </div>
               <input value={phrase} onChange={e => { setPhrase(e.target.value); setGateErr('') }}
                 placeholder={CEO_PHRASE} spellCheck={false} autoComplete="off" style={GATE_INPUT} />
-              <input value={pin} onChange={e => { setPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 12)); setGateErr('') }}
-                type="password" inputMode="numeric" placeholder="CEO PIN" autoComplete="off" name="lq-ceo-pin" style={GATE_INPUT} />
+              <PinInput value={pin} onChange={v => { setPin(v); setGateErr('') }} placeholder="CEO PIN" inputStyle={GATE_INPUT} iconColor={C.muted} />
               {gateErr && <div style={{ fontSize:10.5, fontWeight:700, color:C.navy }}>{gateErr}</div>}
             </div>
           )}
