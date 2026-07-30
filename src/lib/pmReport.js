@@ -780,6 +780,160 @@ function improveV4(ctx, cr, ar) {
   return out.slice(0, 4)
 }
 
+// -- v4 freshness layer -------------------------------------------------------
+// An MTD report read two days running says nearly the same thing twice: one extra
+// day moves a month-to-date figure by a percent or two. Everything below reads the
+// LAST COMPLETE DAY and the day-by-day series the dashboard already computed, so
+// every send carries something that was not true yesterday. No new data is fetched
+// and nothing is modelled -- the same figures, cut by day instead of by month.
+
+// dow rows arrive newest first. Rather than trust that, the series is oriented by
+// checking which end matches the last complete day the report already names.
+const daySeriesOf = ctx => {
+const rows = ((ctx.dow && ctx.dow.rows) || []).map(r => (r && r.g) || null).filter(Boolean)
+if (rows.length < 2 || !ctx.day || !ctx.day.now) return rows
+const target = Number(ctx.day.now.spend)
+if (!isFinite(target)) return rows
+const near = (a, b) => Math.abs(a - b) <= Math.max(1, Math.abs(b) * 0.001)
+if (near(Number(rows[0].spend), target)) return rows
+if (near(Number(rows[rows.length - 1].spend), target)) return rows.slice().reverse()
+return rows
+}
+const meanOf = (rows, key) => {
+const v = rows.map(r => Number(r[key])).filter(n => isFinite(n) && n > 0)
+return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null
+}
+const sumOf = (rows, key) => rows.reduce((a, r) => a + (Number(r[key]) || 0), 0)
+
+// One day against one other day is noise. One day against its own trailing week is
+// the smallest movement worth putting in front of anybody, so that is the read.
+function dayPulse(ctx) {
+const s = daySeriesOf(ctx)
+const d = ctx.day
+if (!d || !d.now || s.length < 4) return null
+const trail = s.slice(1, 8)
+if (trail.length < 3) return null
+const cur = s[0]
+const bits = []
+const one = (key, label, fmt) => {
+const now = Number(cur[key])
+const av = meanOf(trail, key)
+if (!isFinite(now) || !(now > 0) || av == null) return
+const dv = pctOf(now, av)
+if (dv == null || Math.abs(dv) < 2) return
+bits.push(label + ' ' + fmt(now) + ' ' + mv(dv) + ' on a ' + fmt(av) + ' average')
+}
+one('spend', 'spend', money)
+one('totalQL', 'QLs', v => nfmt(Math.round(v)))
+one('cpql', 'CPQL', ctx.fmtINR)
+if (!bits.length) return d.label + ' sat within 2% of its own trailing ' + trail.length + '-day average on spend, QLs and CPQL ' + DASH + ' a flat day.'
+return d.label + ' against its trailing ' + trail.length + ' days: ' + bits.join(', ') + '.'
+}
+
+// Direction held across consecutive days. One day is a reading; three or more the
+// same way is the thing that actually changed since the last report went out.
+function cpqlStreak(ctx) {
+const v = daySeriesOf(ctx).map(r => Number(r.cpql)).filter(n => isFinite(n) && n > 0)
+if (v.length < 4) return null
+const dir = v[0] < v[1] ? -1 : (v[0] > v[1] ? 1 : 0)
+if (!dir) return null
+let n = 1
+while (n + 1 < v.length && ((dir < 0 && v[n] < v[n + 1]) || (dir > 0 && v[n] > v[n + 1]))) n++
+if (n < 3) return null
+return 'CPQL has ' + (dir < 0 ? 'fallen' : 'risen') + ' ' + n + ' days running, ' + ctx.fmtINR(v[n]) + ' ' + TO + ' ' + ctx.fmtINR(v[0]) + '.'
+}
+
+// Where the last complete day sits inside the window. An extreme is news; the middle
+// of the pack is still a fresh sentence because the rank moves every single day.
+function dayExtreme(ctx) {
+const d = ctx.day
+const v = daySeriesOf(ctx).map(r => Number(r.cpql)).filter(n => isFinite(n) && n > 0)
+if (!d || v.length < 5) return null
+const cur = v[0]
+const rest = v.slice(1)
+const lo = Math.min.apply(null, rest)
+const hi = Math.max.apply(null, rest)
+if (cur < lo) return d.label + ' was the cheapest QL day of the last ' + v.length + ' at ' + ctx.fmtINR(cur) + ', under the previous best of ' + ctx.fmtINR(lo) + '.'
+if (cur > hi) return d.label + ' was the dearest QL day of the last ' + v.length + ' at ' + ctx.fmtINR(cur) + ', over the previous worst of ' + ctx.fmtINR(hi) + '.'
+const sorted = rest.concat([cur]).sort((a, b) => a - b)
+return d.label + ' at ' + ctx.fmtINR(cur) + ' ranks ' + (sorted.indexOf(cur) + 1) + ' cheapest of the last ' + sorted.length + ' days.'
+}
+
+// The channel cut of the same day. A month-level channel share barely moves; the
+// daily split is where a shift shows up first, which is what earns it this message.
+function channelDayShift(ctx) {
+const d = ctx.day
+if (!d || !d.rows || !d.rows.length) return null
+const skip = /^(TOTAL|PAID CHANNELS|NON-PAID|NON PAID)/i
+const rows = d.rows.filter(r => r && r.g && !skip.test(String(r.label)) && Number(r.g.spend) > 0)
+if (rows.length < 2) return null
+const scored = rows.map(r => {
+const g = r.g
+const p = g.prev || null
+return { label: r.label, g, dv: p ? pctOf(Number(g.spend), Number(p.spend)) : null, was: p ? Number(p.spend) : null }
+}).filter(x => x.dv != null && Math.abs(x.dv) >= 5)
+if (!scored.length) return null
+const w = scored.sort((a, b) => Math.abs(b.dv) - Math.abs(a.dv))[0]
+return ':clock3: *Biggest single-day shift, ' + d.label + '*: ' + w.label + ' spend ' + money(w.g.spend) + ' (' + chip(w.dv, money(w.was)) + ' the day before) for ' + nfmt(w.g.totalQL || 0) + ' QLs at ' + (w.g.cpql != null ? ctx.fmtINR(w.g.cpql) : DASH) + ' a QL.'
+}
+
+// Rank now against rank on last period's CPQL, inside the same ranked set. A corridor
+// that climbed six places is a different story from one that is simply cheap, and it
+// is the part of this table that actually differs between two sends.
+function rankShift(ctx, r, noun) {
+const set = (r.best || []).concat(r.worst || []).filter(c => c.cpql != null && c.prev && c.prev.cpql != null && c.prev.cpql > 0)
+if (set.length < 4) return null
+const now = set.slice().sort((a, b) => a.cpql - b.cpql).map(c => c.label)
+const was = set.slice().sort((a, b) => a.prev.cpql - b.prev.cpql).map(c => c.label)
+const moves = set.map(c => ({ c, m: was.indexOf(c.label) - now.indexOf(c.label) })).filter(x => Math.abs(x.m) >= 2)
+if (!moves.length) return null
+const up = moves.slice().sort((a, b) => b.m - a.m)[0]
+const dn = moves.slice().sort((a, b) => a.m - b.m)[0]
+const out = []
+if (up.m >= 2) out.push('biggest climber ' + up.c.label + ', up ' + up.m + ' places to ' + (now.indexOf(up.c.label) + 1) + ' of ' + now.length + ' at ' + ctx.fmtINR(up.c.cpql) + ' from ' + ctx.fmtINR(up.c.prev.cpql))
+if (dn.m <= -2 && dn.c.label !== up.c.label) out.push('biggest faller ' + dn.c.label + ', down ' + Math.abs(dn.m) + ' to ' + (now.indexOf(dn.c.label) + 1) + ' at ' + ctx.fmtINR(dn.c.cpql) + ' from ' + ctx.fmtINR(dn.c.prev.cpql))
+if (!out.length) return null
+return '_' + noun + ' movement against last period ' + DASH + ' ' + out.join('; ') + '_'
+}
+
+// Ads with no last-period figure, and how much of the ranked money the top three
+// carry. Both change every time a creative goes live, so this is the message's own
+// moving part rather than a restatement of the table above it.
+function adFresh(ctx, r) {
+const out = []
+const set = (r.best || []).concat(r.worst || [])
+const fresh = set.filter(c => c.spend > 0 && (!c.prev || c.prev.cpql == null)).sort((a, b) => a.cpql - b.cpql)
+if (fresh.length) {
+const f = fresh[0]
+out.push(':new: *' + nfmt(fresh.length) + ' ranked ad' + (fresh.length > 1 ? 's have' : ' has') + ' no last-period CPQL to read against* ' + DASH + ' cheapest of them is ' + f.label + ' at ' + ctx.fmtINR(f.cpql) + ' on ' + money(f.spend) + '.')
+}
+const byS = set.slice().sort((a, b) => (b.spend || 0) - (a.spend || 0))
+const tot = byS.reduce((a, c) => a + (c.spend || 0), 0)
+if (byS.length >= 4 && tot > 0) {
+const t3 = byS.slice(0, 3)
+const sh = shareOf(t3.reduce((a, c) => a + (c.spend || 0), 0), tot)
+if (sh >= 40) out.push(':pushpin: *The 3 largest ads carry ' + pctText(sh) + ' of all ranked ad spend* ' + DASH + ' ' + t3.map(c => c.label + ' at ' + ctx.fmtINR(c.cpql) + ' a QL').join(', ') + '.')
+}
+return out
+}
+
+// Last seven complete days against the seven before them. Same arithmetic the KPI
+// grid does, on a window short enough to move between two sends.
+function weekMomentum(ctx) {
+const s = daySeriesOf(ctx)
+if (s.length < 8) return null
+const a = s.slice(0, 7)
+const b = s.slice(7, 14)
+if (b.length < 4) return null
+const sa = sumOf(a, 'spend'), sb = sumOf(b, 'spend')
+const qa = sumOf(a, 'totalQL'), qb = sumOf(b, 'totalQL')
+if (!(sa > 0) || !(sb > 0)) return null
+const bits = ['spend ' + money(sa) + ' ' + mv(pctOf(sa, sb)) + ' vs ' + money(sb)]
+bits.push('QLs ' + nfmt(qa) + (qb > 0 ? ' ' + mv(pctOf(qa, qb)) + ' vs ' + nfmt(qb) : ''))
+if (qa > 0 && qb > 0) bits.push('CPQL ' + ctx.fmtINR(sa / qa) + ' ' + mv(pctOf(sa / qa, sb / qb)) + ' vs ' + ctx.fmtINR(sb / qb))
+return 'Last ' + a.length + ' complete days against the ' + b.length + ' before them: ' + bits.join(', ') + '.'
+}
+
 function buildV4(ctx) {
   const msgs = []
   const note = deltaNote(ctx)
@@ -793,6 +947,8 @@ function buildV4(ctx) {
   }
   const ins1 = [costDirectionV4(ctx), spendPace(ctx), spendVsQL(ctx)].filter(Boolean)
   if (ins1.length) m1.after = '*What the numbers say*\n' + list(ins1)
+  const fresh1 = [dayPulse(ctx), cpqlStreak(ctx), dayExtreme(ctx)].filter(Boolean)
+  if (fresh1.length) m1.after = (m1.after ? m1.after + '\n\n' : '') + '*:hourglass_flowing_sand: What moved since the last report*\n' + list(fresh1)
   msgs.push(m1)
 
   // 2 -- where the money went: the dashboard's own table, now carrying its own share of
@@ -802,7 +958,7 @@ function buildV4(ctx) {
     text: ['*:moneybag: Channel mix ' + DASH + ' Paid vs Non-Paid*', ctx.filterLine].join('\n'),
     table: ctx.table, attach: true, context: note,
   }
-  const ins2 = channelRecs(ctx).concat(channelMovement(ctx, cmp.channels))
+  const ins2 = channelRecs(ctx).concat(channelMovement(ctx, cmp.channels)).concat([channelDayShift(ctx)].filter(Boolean))
   m2.after = (ins2.length ? '*:bulb: Key findings & recommendations*\n' + eList(ins2) + '\n\n' : '') + csvNote(ctx)
   msgs.push(m2)
 
@@ -818,6 +974,7 @@ function buildV4(ctx) {
         '_' + scope + ' campaigns only \u00b7 ranked on CPQL \u00b7 a corridor needs at least ' + ctx.minQL + ' QLs to be ranked'
           + (cr.skipped ? ' (' + nfmt(cr.skipped) + ' smaller corridors are not ranked)' : '') + '_',
         unrankedSpend(ctx, cr),
+        rankShift(ctx, cr, 'Corridor'),
       ].filter(Boolean).join('\n'),
       table: cpqlTable(ctx, cr, 'Corridor', false),
       chart: cpqlChart(ctx, cr.best.concat(cr.worst), 'CPQL by corridor'),
@@ -835,6 +992,7 @@ function buildV4(ctx) {
           + (ar.skipped ? ' (' + nfmt(ar.skipped) + ' smaller ads are not ranked)' : '') + '_',
       ].join('\n'),
       table: cpqlTable(ctx, ar, 'Ad', true),
+      after: (function () { const a = adFresh(ctx, ar); return a.length ? '*:bulb: Ad-level movement*\n' + eList(a) : undefined })(),
       context: note,
     })
   }
@@ -847,6 +1005,8 @@ function buildV4(ctx) {
     context: note,
   }
   const parts = []
+  const wm = weekMomentum(ctx)
+  if (wm) parts.push('*:arrows_counterclockwise: Momentum ' + DASH + ' last seven complete days*\n' + list([wm]))
   const right = moversWithBase(ctx, true).slice(0, 3)
   const wrong = moversWithBase(ctx, false).slice(0, 2).concat(marketingMisses(ctx, cr, ar)).slice(0, 5)
   if (right.length) parts.push('*:white_check_mark: What we did right*\n' + list(right))
@@ -912,6 +1072,7 @@ id: 'v4',
       'Message 3 — corridors on Facebook + Google campaigns only, split into a cheapest and a dearest band, as a native table and a CPQL chart',
       'Message 4 — the cheapest and the dearest ads on CPQL, as a native table',
       'Message 5 — what we did right, what went wrong, what we can improve, every line a marketing lever and nothing past the application',
+      'Every message also carries a freshness read off the last complete day and the day-by-day series: yesterday against its own trailing week, any CPQL streak, where the day ranks in the window, the largest single-day channel shift, corridor and ad rank movement, and the last seven days against the seven before',
       'Every message states in a footer exactly how its deltas were calculated',
       'Table image and the all-columns CSV land in the thread of message 2',
     ],
