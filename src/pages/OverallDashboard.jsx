@@ -1697,6 +1697,93 @@ export default function OverallDashboard() {
       }))
   }, [byDayFull])
   
+  // V5 report context. Built here rather than off the filtered rows for two reasons: V5 is
+  // Facebook + Google only, measured against the 10 L a day budget, and it is complete days
+  // only. daySeries already drops the current day, so nothing below can pick up a
+  // half-finished today, and none of it moves when the date filter on screen changes.
+  const v5Report = useMemo(() => {
+    const BUDGET = 1000000
+    const WINDOW = 30
+    const SHOWN = 7
+    const BREACH_MULT = 1.5
+    const MIN_BREACH_SPEND = 25000
+    const ZERO_QL_SPEND = 25000
+    const SOURCES = new Set(['facebook', 'google'])
+    const onPlatform = r => SOURCES.has(String(r.source || '').trim().toLowerCase())
+    const roll = rows => {
+      let spend = 0, leads = 0, totalQL = 0
+      for (const r of rows) { spend += r.spend || 0; leads += r.leads || 0; totalQL += r.totalQL || 0 }
+      return { spend, leads, totalQL, cpql: totalQL > 0 ? spend / totalQL : null, cpl: leads > 0 ? spend / leads : null }
+    }
+    const rowsOf = src => src.reduce((acc, e) => acc.concat(e.rows.filter(onPlatform)), [])
+    const groupBy = (rows, keyFn) => {
+      const m = new Map()
+      for (const r of rows) {
+        const k = keyFn(r)
+        if (!k) continue
+        const e = m.get(k) || { label: k, spend: 0, leads: 0, totalQL: 0 }
+        e.spend += r.spend || 0; e.leads += r.leads || 0; e.totalQL += r.totalQL || 0
+        m.set(k, e)
+      }
+      return [...m.values()].map(e => ({ ...e, cpql: e.totalQL > 0 ? e.spend / e.totalQL : null }))
+    }
+    const days = daySeries.map(e => ({ key: e.key, date: e.date, label: dayLabelOf(e.date), ...roll(e.rows.filter(onPlatform)) }))
+    if (!days.length) return null
+    const last = days[days.length - 1]
+    const win = daySeries.slice(-WINDOW)
+    const winRows = rowsOf(win)
+    const winTot = roll(winRows)
+    const blended = winTot.cpql
+    const campaigns = groupBy(winRows, r => (r.campaign || '').trim())
+    const corridors = groupBy(winRows, r => corridorLabel(classifyCorridor(r.campaign)))
+    const qualifies = (c, base) => c.totalQL >= CORRIDOR_MIN_QL && c.cpql != null && base != null && c.cpql <= base
+    const eligible = campaigns.filter(c => qualifies(c, blended)).sort((a, b) => a.cpql - b.cpql)
+    // The benchmark applies the same qualifying rule, but frozen: it reads the 30 complete
+    // days that ended the moment this month began, so it only recomputes when the month
+    // turns and the target cannot drift day to day. Nothing needs persisting for that.
+    const monthStartKey = dayKeyOf(new Date(last.date.getFullYear(), last.date.getMonth(), 1))
+    const before = daySeries.filter(e => e.key < monthStartKey).slice(-WINDOW)
+    const benchmarkFrozen = before.length >= 10
+    const benchDays = benchmarkFrozen ? before : win
+    const benchRows = rowsOf(benchDays)
+    const benchTot = roll(benchRows)
+    const benchElig = groupBy(benchRows, r => (r.campaign || '').trim()).filter(c => qualifies(c, benchTot.cpql))
+    const benchSpend = benchElig.reduce((s, c) => s + c.spend, 0)
+    const benchQL = benchElig.reduce((s, c) => s + c.totalQL, 0)
+    const benchmarkCpql = benchQL > 0 ? benchSpend / benchQL : benchTot.cpql
+    // A bonus day: under budget, CPQL at or below the frozen benchmark, and still at or
+    // above its own trailing seven-day QL average.
+    const flagged = days.map((d, i) => {
+      const prev = days.slice(Math.max(0, i - SHOWN), i)
+      const avgQL = prev.length ? prev.reduce((s, x) => s + x.totalQL, 0) / prev.length : null
+      const bonus = d.spend > 0 && d.spend < BUDGET && d.cpql != null && benchmarkCpql != null
+        && d.cpql <= benchmarkCpql && avgQL != null && d.totalQL >= avgQL
+      return { ...d, avgQL, bonus }
+    })
+    const overLine = c => c.cpql != null && blended != null && c.cpql > blended * BREACH_MULT && c.spend >= MIN_BREACH_SPEND
+    return {
+      budget: BUDGET, window: WINDOW, minQL: CORRIDOR_MIN_QL, breachMult: BREACH_MULT,
+      minBreachSpend: MIN_BREACH_SPEND, zeroQLFloor: ZERO_QL_SPEND,
+      lastLabel: last.label,
+      monthLabel: last.date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+      yday: flagged[flagged.length - 1],
+      days: flagged.slice(-SHOWN).slice().reverse(),
+      dayCount: Math.min(WINDOW, flagged.length),
+      last7: roll(rowsOf(daySeries.slice(-SHOWN))),
+      prev7: roll(rowsOf(daySeries.slice(-SHOWN * 2, -SHOWN))),
+      bonus7: flagged.slice(-SHOWN).filter(d => d.bonus).length,
+      bonus30: flagged.slice(-WINDOW).filter(d => d.bonus).length,
+      blended, benchmarkCpql, benchmarkFrozen,
+      benchmarkLabel: benchDays.length ? benchDays[0].key + ' to ' + benchDays[benchDays.length - 1].key : null,
+      targetQL: benchmarkCpql > 0 ? BUDGET / benchmarkCpql : null,
+      winSpend: winTot.spend, winQL: winTot.totalQL,
+      eligible, campaigns, corridors,
+      breachCamp: campaigns.filter(overLine).sort((a, b) => b.cpql - a.cpql),
+      breachCorr: corridors.filter(overLine).sort((a, b) => b.cpql - a.cpql),
+      zeroQL: campaigns.filter(c => c.totalQL === 0 && c.spend >= ZERO_QL_SPEND).sort((a, b) => b.spend - a.spend),
+    }
+  }, [daySeries])
+
   const buildReportContext = useCallback(() => {
     const rate = (a, b) => (a > 0 ? (b / a) * 100 : null)
     const prevQueued = prevKpis.futworkQ + prevKpis.superbotQ
@@ -1732,6 +1819,7 @@ export default function OverallDashboard() {
         offers: prevKpis.offers, deposits: prevKpis.deposits, raus: prevKpis.raus,
         cpl: prevCpl, cpql: prevCpql, cpa: prevCpa,
       },
+      v5: v5Report,
       cmp: reportCmp,
       scopeLine: 'Source: ' + source + ' \u00b7 Corridor: ' + corridorFilter,
       now: { ...kpis, cpl, cpql, cpa },
@@ -1766,7 +1854,7 @@ export default function OverallDashboard() {
     }
   }, [grpByLabel, periodLabel, filterLine, filtered, sortedFilteredRows, totalsRow, kpis, prevKpis,
     cpl, cpql, cpa, prevCpl, prevCpql, prevCpa, conversionChain, bySource, byCorridor,
-    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, reportCmp, source, corridorFilter, mtdCmp, ydayCmp, dowCmp])
+    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, reportCmp, v5Report, source, corridorFilter, mtdCmp, ydayCmp, dowCmp])
 
   // The picture of the table plus the all-columns CSV. The row limit is lifted to
   // "all" for the capture and restored right after, so the image always carries every

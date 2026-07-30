@@ -862,7 +862,25 @@ function buildV4(ctx) {
 // -- The registry ------------------------------------------------------------
 // Append new versions to the TOP. Never delete or edit an old one: the panel is the
 // only history there is, and an entry that changes silently is worse than no entry.
+import { buildV5 } from './pmReportV5'
+
 export const REPORT_VERSIONS = [
+  {
+    id: 'v5',
+    code: 'V5',
+    msgKeys: ['budget', 'best', 'breach'],
+    name: 'Budget and QL efficiency ' + DASH + ' 3 messages',
+    tagline: 'Facebook + Google against the 10 L a day budget, the best optimised campaigns, and every CPQL running high. Complete days only, so it always reads to D-1.',
+    recommended: false,
+    what: [
+      'Message 1 — budget scorecard: yesterday against the 10 L a day cap, with QLs, CPQL, the target QLs a day, whether it was a bonus day and which condition failed when it was not, the last seven complete days against the seven before them, and a day-by-day table carrying a bonus column.',
+      'Message 2 — best optimised campaigns: the qualifying set over a rolling 30 complete days, cheapest CPQL first, with spend, share of spend, QLs and CPQL, an ALL QUALIFYING total row, and the corridors ranked cheapest first underneath.',
+      'Message 3 — CPQL running high: every campaign above 1.5x the blended CPQL, dearest first, then the corridors over the same line, then the spend that produced no QLs at all.',
+      'A bonus day spends under the cap, holds CPQL at or below the benchmark, and still clears its own trailing seven-day QL average. The benchmark is the qualifying set blended CPQL, frozen for the month so a target cannot drift day to day.',
+      'Scope is Facebook + Google only, and QLs come from the Overall sheet, so campaign and corridor are the finest levels available — there is no ad-level or keyword-level QL attribution to police. No Meta or Google platform metrics, and no projections: V5 reports what happened and nothing else.',
+    ],
+    build: buildV5,
+  },
   {
 id: 'v4',
     code: 'V4',
