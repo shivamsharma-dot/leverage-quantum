@@ -1298,11 +1298,11 @@ const PIN_MAX_LEN = 12
 // to a dedicated pepper later cannot silently invalidate a live PIN.
 function pinPepper() {
   if (process.env.SLACK_CEO_PIN_PEPPER) return { key: process.env.SLACK_CEO_PIN_PEPPER, id: 'env' }
-  return { key: process.env.SUPABASE_SERVICE_KEY || '', id: 'svc' }
+  return { key: SUPABASE_SERVICE_KEY || '', id: 'svc' }
 }
 function pepperFor(id) {
   if (id === 'env') return process.env.SLACK_CEO_PIN_PEPPER || ''
-  return process.env.SUPABASE_SERVICE_KEY || ''
+  return SUPABASE_SERVICE_KEY || ''
 }
 async function pinDerive(crypto, pin, salt, iter, pepId) {
   const raw = await new Promise((resolve, reject) => {
