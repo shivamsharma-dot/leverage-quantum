@@ -9,6 +9,10 @@ import { DashboardSkeleton } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
 import SlackReportPanel from '../components/SlackReportPanel'
 import { CORRIDOR_MIN_QL } from '../lib/pmReport'
+import {
+  CpqlBySource, SpendVsQuality, CostTrendMonth, CostTrendDay,
+  CorridorRanking, AdRanking, NotPerforming
+} from '../components/QualitySections'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import Button from '../components/Button'
 import { getSession, setSession, hasLoaded, getPersisted } from '../lib/sessionLoad'
@@ -1669,6 +1673,30 @@ export default function OverallDashboard() {
     return out.reverse().slice(0, 31)
   }, [daySeries, filtered, aggReport, joinPrev])
 
+  // Cost per QL month on month. byMonth carries volume only, so the
+  // cost series is aggregated separately over the same filtered rows.
+  const costByMonth = useMemo(() => {
+    const rows = aggReport(filtered, r => (r.mk == null ? null : r.mk), paidSources)
+    return rows.map(r => ({
+      mk: Number(r.label), label: monthLabel(Number(r.label)), spend: r.spend,
+      cpql: r.cpql == null ? null : Math.round(r.cpql),
+      cpl: r.cpl == null ? null : Math.round(r.cpl)
+    })).sort((a, b) => a.mk - b.mk)
+  }, [filtered, paidSources, aggReport])
+  
+  // The same one level down. Today is dropped on purpose: it is still
+  // filling up, and half a day reads as a collapse that never happened.
+  const costByDay = useMemo(() => {
+    const t = dayKey(new Date())
+    return (byDayFull || []).filter(d => d.key !== t).slice()
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map(d => ({
+        label: d.label,
+        cpql: d.paidQL > 0 ? Math.round(d.spend / d.paidQL) : null,
+        cpl: d.paidLeads > 0 ? Math.round(d.spend / d.paidLeads) : null
+      }))
+  }, [byDayFull])
+  
   const buildReportContext = useCallback(() => {
     const rate = (a, b) => (a > 0 ? (b / a) * 100 : null)
     const prevQueued = prevKpis.futworkQ + prevKpis.superbotQ
@@ -1982,6 +2010,15 @@ export default function OverallDashboard() {
             </Card>
           </div>
 
+          {/* COST AND QUALITY BY SOURCE - the same cuts the CEO report carries */}
+          <div style={{ marginTop:16 }}>
+            <CpqlBySource cmp={reportCmp} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
+          </div>
+          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
+            <SpendVsQuality cmp={reportCmp} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
+            <CostTrendMonth data={costByMonth} fmtINR={fmtINR} />
+          </div>
+
           {/* MONTH TREND + DAILY TREND */}
           <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
             <Card>
@@ -2018,6 +2055,11 @@ export default function OverallDashboard() {
                 </AreaChart>
               </ResponsiveContainer>
             </Card>
+          </div>
+
+          {/* COST TREND, DAY BY DAY - the cost twin of the daily pulse above */}
+          <div style={{ marginTop:16 }}>
+            <CostTrendDay data={costByDay} fmtINR={fmtINR} />
           </div>
 
           {/* TOP MOVERS — what to scale, framed for decisions */}
@@ -2071,6 +2113,13 @@ export default function OverallDashboard() {
               )}
             </Card>
           </div>
+
+          {/* CORRIDORS AND ADS ON CPQL, THEN WHAT IS NOT WORKING */}
+          <div style={{ marginTop:16 }}>
+            <CorridorRanking cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
+          </div>
+          <AdRanking cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
+          <NotPerforming cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
 
           {/* GROUPED SUMMARY TABLE — customizable: search, sortable columns, show/hide +
               reorder columns (persisted), row limit, and a per-view export. */}
