@@ -2769,3 +2769,35 @@ the TYPE column, e.g. "slack pm report v4 (CEO group)".
 Standing rule reinforced: **no emojis anywhere in Quantum's own UI.** Emojis are
 only for the content of the Slack report itself. The lock emoji that was on the
 CEO group label and in the send panel has been removed.
+
+## 2026-07-30 - Report IDs, and V2 split into MTD / YTD / day-on-day
+
+Every view in the Send to Slack library now carries a permanent public code
+(V1..V4) and every message inside it a permanent slot ID (V2-M1, V2-M2, ...).
+The code sits on the version card and the message ID on each preview card, so a
+change can be requested by ID. Slots come from `msgKeys` in the registry, not
+from array position, so a conditional message never shifts another one's ID.
+IDs are Quantum-only and are never posted to Slack.
+
+V2 (`Summary + table - MTD, YTD, day on day`) now posts three messages:
+
+- `V2-M1` MTD Performance - KPI stack plus the banded native table
+- `V2-M2` YTD Performance - yesterday, read against the day before it
+- `V2-M3` Day on Day Performance - one row per day, newest first
+
+Every metric column in those tables is followed by a `vs` column carrying the
+movement AND the figure it moved from (`25.6% down - 1,461`), the pattern the
+corridor table already used. 12 columns with the spend-share column, 11 without,
+both inside Slack's 20-cell row cap. The full 23-column table still ships as the
+PNG and the CSV in the thread of M1, so nothing was dropped to make room.
+
+Day windows ignore the date filter on screen - yesterday is yesterday whatever
+month is selected - but still honour source, corridor and campaign search. Only
+closed days with activity qualify, so a half-finished today never reads as a
+collapse. When the newest closed day is not literally yesterday the message says
+so instead of quietly reporting a different day. Day-on-day rows compare against
+the calendar day before, even when that day sits outside the window on screen.
+
+V1, V3 and V4 render exactly as before: the new comparison tables are new ctx
+fields (`cmpRows`, `day`, `dow`, `now`, `scopeLine`), and `ctx.table` was left
+untouched.
