@@ -2838,3 +2838,38 @@ CPQL on the left axis and CPL on the right. And `Affiliate (manual entry)`
 is a synthesised source-level spend row with no ad-level leads, so it is
 excluded from the not-performing list; otherwise it reads as the third
 biggest failing ad while affiliate is in fact the cheapest source on CPQL.
+
+## 2026-07-30 - V5: budget and QL efficiency, complete days only (commit eb1036a)
+
+A new registry entry, built to answer three standing questions and nothing else. V4 is
+untouched: `DEFAULT_VERSION_ID` is still `v4`, V4 stays the recommended view, and the V5
+builder lives in its own file sharing no helper with the rest of `pmReport.js`.
+
+- `src/lib/pmReportV5.js` (new): three messages. M1 budget scorecard, M2 best optimised
+  campaigns, M3 CPQL running high. Two insertions into `src/lib/pmReport.js` (an import and
+  the registry entry) and one memo plus two references in `src/pages/OverallDashboard.jsx`.
+- Scope is Facebook + Google only, the two source labels that carry essentially all spend.
+  QLs come from the Overall sheet, so campaign and corridor are the finest units available -
+  what V4 calls its "ad" ranking is in fact `r.campaign` aggregation. There is no ad-level or
+  keyword-level QL attribution anywhere in this path, so V5 does not pretend to police one.
+- Built off `daySeries`, which already drops the current day. Every V5 figure is therefore a
+  complete-day number and none of it moves when the date filter on screen changes.
+- Budget 10 L a day. A bonus day spends under the cap, holds CPQL at or below the benchmark,
+  and still clears its own trailing seven-day QL average.
+- Eligible campaign: 25 or more QLs and CPQL at or below blended, over a rolling 30 complete
+  days. The benchmark applies the same rule to the 30 complete days that ended when the month
+  began, so it is frozen for the month and needs nothing persisted to stay stable.
+- Breach flag at 1.5x blended with a 25,000 spend floor, campaign and corridor. Zero-QL
+  campaigns have no CPQL to rank, so spend above 25,000 with no QLs gets its own list.
+- Campaign names carry underscores, which Slack reads as italics. Names in bullet lists are
+  wrapped in backticks. Native table cells are not markdown-parsed and were already fine.
+- Live verified on the deployed bundle: 29 Jul'26 reads 12,03,209 of 10,00,000 (120% of
+  budget), 455 QLs, CPQL 2,644; the last seven complete days read 72,89,991 and 3,157 QLs at
+  2,309. Both cross-checked by hand against MainData before trusting the panel.
+- OPEN, needs an owner decision: the frozen benchmark computes to 813, because the qualifying
+  subset is by construction cheaper than blended - June blended was 2,399. The target
+  therefore reads 1,230 QLs a day against an actual 450, and no day in the last 30 scores as
+  a bonus day. A rule that never fires is not a signal. The likely fix is to score bonus days
+  against the frozen month's blended CPQL and leave the qualifying-set figure in M2.
+- The 27 Jul QL spike (996 against a 260-470 norm) was a backfill of leads that missed the
+  API. Left exactly as it is, with no note and no highlight, per explicit instruction.

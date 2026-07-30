@@ -193,7 +193,7 @@ function msgBreach(ctx) {
   }
   if (v.zeroQL && v.zeroQL.length) {
     const sp = v.zeroQL.reduce((s, c) => s + c.spend, 0)
-    parts.push('*Spend with no QLs at all*\n' + list(v.zeroQL.slice(0, 6).map(c => '*' + c.label + '* '
+    parts.push('*Spend with no QLs at all*\n' + list(v.zeroQL.slice(0, 6).map(c => '`' + c.label + '` '
       + inr(ctx, c.spend) + ', zero QLs'))
       + '\n_' + v.zeroQL.length + ' campaigns, ' + inr(ctx, sp) + ' in total. These have no CPQL to rank, so they sit outside the flag above._')
   }
