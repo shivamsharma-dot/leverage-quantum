@@ -2942,7 +2942,8 @@ computed and V4 simply never used. No new data source, no new query, nothing mod
   its own trailing 7 days on spend, QLs and CPQL (only metrics off by 2%+ print), any
   CPQL streak of 3+ consecutive days in one direction, and where the day ranks on CPQL
   inside the window (a genuine high or low is called out as such).
-- M2 channel mix - the largest single-day channel spend shift (5%+ threshold) with the
+- M2 channel mix - the largest single-day channel spend shift, ranked by RUPEES moved
+  (floor: the greater of 25,000 and 2% of the day's spend), never by percentage, with the
   QLs and CPQL that came with it. Month-level channel shares barely move; the daily
   split is where a shift shows first.
 - M3 corridors - rank now against rank on last period's CPQL inside the same ranked
@@ -2961,4 +2962,7 @@ Emoji: use only shortcodes the in-app preview actually renders. `:new:`, `:clock
 the Quantum preview - they were swapped for `:calendar:`, `:mag:` and
 `:chart_with_upwards_trend:`. Check the preview, not just the build.
 
-Commits: 6c378e4 (layer), 25f88e0 (emoji + corridor fallback).
+A percentage rank puts a 3,467 rupee channel at the top of a CEO message. Rank on rupees.
+
+Commits: 6c378e4 (layer), 25f88e0 (emoji + corridor fallback), e5a47d5 (fallback was
+unreachable behind an earlier return), 6cd0a5a (rupee ranking on the day shift).
