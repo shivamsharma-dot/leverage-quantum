@@ -863,8 +863,24 @@ function buildV4(ctx) {
 // Append new versions to the TOP. Never delete or edit an old one: the panel is the
 // only history there is, and an entry that changes silently is worse than no entry.
 import { buildV5 } from './pmReportV5'
+import { buildV6 } from './pmReportV6'
 
 export const REPORT_VERSIONS = [
+  {
+    id: 'v6',
+    code: 'V6',
+    msgKeys: ['capacity'],
+    name: 'Capacity check ' + DASH + ' 1 message',
+    tagline: 'What 10 L a day could buy if it went to the cheapest qualifying campaigns first, each one capped at a daily spend it has already reached. Observation only, not a CEO send.',
+    recommended: false,
+    what: [
+      'Message 1 - capacity check: the modelled QLs a day at the 10 L cap against what the last seven complete days actually produced, the campaigns the budget would fill and in what order, each capped at its 90th percentile daily spend over the rolling 30 complete days, and any budget that could not be placed.',
+      'Observation only. It models a reallocation nobody has run yet, so it is not built for the CEO channel.',
+      'Every CPQL is a campaign own realised figure over the window and every ceiling is a daily spend it has already reached, so no input is extrapolated past the data.',
+      'CPQL is held flat as spend moves onto a campaign. In practice it rises, so the headline is a ceiling on what a reallocation could reach rather than a forecast.',
+    ],
+    build: buildV6,
+  },
   {
     id: 'v5',
     code: 'V5',

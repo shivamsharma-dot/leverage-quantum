@@ -1705,15 +1705,22 @@ export default function OverallDashboard() {
     const BUDGET = 1000000
     const WINDOW = 30
     const SHOWN = 7
+    const MIN_QUEUED = 25
+    const TARGET_LOW = 550
+    const TARGET_HIGH = 600
     const BREACH_MULT = 1.5
     const MIN_BREACH_SPEND = 25000
     const ZERO_QL_SPEND = 25000
     const SOURCES = new Set(['facebook', 'google'])
     const onPlatform = r => SOURCES.has(String(r.source || '').trim().toLowerCase())
+    const queuedOf = r => (r.futworkQ || 0) + (r.superbotQ || 0)
     const roll = rows => {
-      let spend = 0, leads = 0, totalQL = 0
-      for (const r of rows) { spend += r.spend || 0; leads += r.leads || 0; totalQL += r.totalQL || 0 }
-      return { spend, leads, totalQL, cpql: totalQL > 0 ? spend / totalQL : null, cpl: leads > 0 ? spend / leads : null }
+      let spend = 0, leads = 0, totalQL = 0, queued = 0
+      for (const r of rows) {
+        spend += r.spend || 0; leads += r.leads || 0; totalQL += r.totalQL || 0
+        queued += queuedOf(r)
+      }
+      return { spend, leads, totalQL, queued, cpql: totalQL > 0 ? spend / totalQL : null }
     }
     const rowsOf = src => src.reduce((acc, e) => acc.concat(e.rows.filter(onPlatform)), [])
     const groupBy = (rows, keyFn) => {
@@ -1721,8 +1728,9 @@ export default function OverallDashboard() {
       for (const r of rows) {
         const k = keyFn(r)
         if (!k) continue
-        const e = m.get(k) || { label: k, spend: 0, leads: 0, totalQL: 0 }
+        const e = m.get(k) || { label: k, spend: 0, leads: 0, totalQL: 0, queued: 0 }
         e.spend += r.spend || 0; e.leads += r.leads || 0; e.totalQL += r.totalQL || 0
+        e.queued += queuedOf(r)
         m.set(k, e)
       }
       return [...m.values()].map(e => ({ ...e, cpql: e.totalQL > 0 ? e.spend / e.totalQL : null }))
@@ -1734,36 +1742,65 @@ export default function OverallDashboard() {
     const winRows = rowsOf(win)
     const winTot = roll(winRows)
     const blended = winTot.cpql
-    const campaigns = groupBy(winRows, r => (r.campaign || '').trim())
-    const corridors = groupBy(winRows, r => corridorLabel(classifyCorridor(r.campaign)))
-    const qualifies = (c, base) => c.totalQL >= CORRIDOR_MIN_QL && c.cpql != null && base != null && c.cpql <= base
-    const eligible = campaigns.filter(c => qualifies(c, blended)).sort((a, b) => a.cpql - b.cpql)
-    // The benchmark applies the same qualifying rule, but frozen: it reads the 30 complete
-    // days that ended the moment this month began, so it only recomputes when the month
-    // turns and the target cannot drift day to day. Nothing needs persisting for that.
+    // The qualifying track. A campaign only earns a cost per QL judgement if its leads were
+    // actually sent for qualification: at least MIN_QUEUED of them reached Futwork or Superbot
+    // inside the window. Campaigns routed straight to the floor never had a chance to produce a
+    // QL, so a CPQL against them measures nothing at all. Every campaign and corridor list
+    // below reads the qualifying track only, and message 1 states the rest of the spend on its
+    // own line so the all-in CPQL still reconciles against the full budget.
+    const queuedByCampaign = new Map()
+    for (const r of winRows) {
+      const k = (r.campaign || '').trim()
+      if (!k) continue
+      queuedByCampaign.set(k, (queuedByCampaign.get(k) || 0) + queuedOf(r))
+    }
+    const onTrack = r => (queuedByCampaign.get((r.campaign || '').trim()) || 0) >= MIN_QUEUED
+    const trackRows = winRows.filter(onTrack)
+    const trackTot = roll(trackRows)
+    const trackCpql = trackTot.cpql
+    const floorOnlySpend = winTot.spend - trackTot.spend
+    const campaigns = groupBy(trackRows, r => (r.campaign || '').trim())
+    const corridors = groupBy(trackRows, r => corridorLabel(classifyCorridor(r.campaign)))
+    // Best optimised: enough QLs to be real, enough spend to be real, and cheaper than the
+    // qualifying track average. The spend floor keeps out campaigns that carry QLs with no
+    // spend attached, which would otherwise sit at the top of the list on a CPQL of zero.
+    const qualifies = (c, base) => c.totalQL >= CORRIDOR_MIN_QL && c.spend >= MIN_BREACH_SPEND
+      && c.cpql !== null && base !== null && c.cpql <= base
+    const eligible = campaigns.filter(c => qualifies(c, trackCpql)).sort((a, b) => a.cpql - b.cpql)
+    const eligSpend = eligible.reduce((s, c) => s + c.spend, 0)
+    const eligQL = eligible.reduce((s, c) => s + c.totalQL, 0)
+    const eligCpql = eligQL > 0 ? eligSpend / eligQL : null
+    // The bonus benchmark is frozen on the 30 complete days that ended the moment this month
+    // began, so it cannot drift day to day. It is the all-in CPQL of those days, because the
+    // day being tested is also measured all-in: both sides of the test have to cover the same
+    // spend or the comparison is not a comparison.
     const monthStartKey = dayKeyOf(new Date(last.date.getFullYear(), last.date.getMonth(), 1))
     const before = daySeries.filter(e => e.key < monthStartKey).slice(-WINDOW)
     const benchmarkFrozen = before.length >= 10
     const benchDays = benchmarkFrozen ? before : win
-    const benchRows = rowsOf(benchDays)
-    const benchTot = roll(benchRows)
-    const benchElig = groupBy(benchRows, r => (r.campaign || '').trim()).filter(c => qualifies(c, benchTot.cpql))
-    const benchSpend = benchElig.reduce((s, c) => s + c.spend, 0)
-    const benchQL = benchElig.reduce((s, c) => s + c.totalQL, 0)
-    const benchmarkCpql = benchQL > 0 ? benchSpend / benchQL : benchTot.cpql
-    // A bonus day: under budget, CPQL at or below the frozen benchmark, and still at or
-    // above its own trailing seven-day QL average.
+    const benchTot = roll(rowsOf(benchDays))
+    const benchmarkCpql = benchTot.cpql
     const flagged = days.map((d, i) => {
       const prev = days.slice(Math.max(0, i - SHOWN), i)
       const avgQL = prev.length ? prev.reduce((s, x) => s + x.totalQL, 0) / prev.length : null
-      const bonus = d.spend > 0 && d.spend < BUDGET && d.cpql != null && benchmarkCpql != null
-        && d.cpql <= benchmarkCpql && avgQL != null && d.totalQL >= avgQL
+      const bonus = d.spend > 0 && d.spend < BUDGET && d.cpql !== null && benchmarkCpql !== null
+        && d.cpql <= benchmarkCpql && avgQL !== null && d.totalQL >= avgQL
       return { ...d, avgQL, bonus }
     })
-    const overLine = c => c.cpql != null && blended != null && c.cpql > blended * BREACH_MULT && c.spend >= MIN_BREACH_SPEND
+    // Ranked by the rupees a campaign spent above what the qualifying track would have charged
+    // for the same QLs, so the list leads on money at stake rather than on a ratio. A campaign
+    // on two QLs can post a huge multiple and still be a rounding error.
+    const overLine = c => c.cpql !== null && trackCpql !== null
+      && c.cpql > trackCpql * BREACH_MULT && c.spend >= MIN_BREACH_SPEND
+    const withExcess = arr => arr
+      .map(c => ({ ...c, excess: c.spend - c.totalQL * trackCpql }))
+      .sort((a, b) => b.excess - a.excess)
+    const breachCamp = withExcess(campaigns.filter(overLine))
+    const breachCorr = withExcess(corridors.filter(overLine))
     return {
-      budget: BUDGET, window: WINDOW, minQL: CORRIDOR_MIN_QL, breachMult: BREACH_MULT,
-      minBreachSpend: MIN_BREACH_SPEND, zeroQLFloor: ZERO_QL_SPEND,
+      budget: BUDGET, window: WINDOW, minQL: CORRIDOR_MIN_QL, minQueued: MIN_QUEUED,
+      breachMult: BREACH_MULT, minBreachSpend: MIN_BREACH_SPEND, zeroQLFloor: ZERO_QL_SPEND,
+      targetLow: TARGET_LOW, targetHigh: TARGET_HIGH,
       lastLabel: last.label,
       monthLabel: last.date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
       yday: flagged[flagged.length - 1],
@@ -1773,14 +1810,101 @@ export default function OverallDashboard() {
       prev7: roll(rowsOf(daySeries.slice(-SHOWN * 2, -SHOWN))),
       bonus7: flagged.slice(-SHOWN).filter(d => d.bonus).length,
       bonus30: flagged.slice(-WINDOW).filter(d => d.bonus).length,
-      blended, benchmarkCpql, benchmarkFrozen,
+      blended, trackCpql, benchmarkCpql, benchmarkFrozen,
       benchmarkLabel: benchDays.length ? benchDays[0].key + ' to ' + benchDays[benchDays.length - 1].key : null,
-      targetQL: benchmarkCpql > 0 ? BUDGET / benchmarkCpql : null,
+      impliedQL: trackCpql > 0 ? BUDGET / trackCpql : null,
       winSpend: winTot.spend, winQL: winTot.totalQL,
-      eligible, campaigns, corridors,
-      breachCamp: campaigns.filter(overLine).sort((a, b) => b.cpql - a.cpql),
-      breachCorr: corridors.filter(overLine).sort((a, b) => b.cpql - a.cpql),
+      trackSpend: trackTot.spend, trackQL: trackTot.totalQL,
+      trackCampaignCount: campaigns.length, floorOnlySpend,
+      eligible, eligSpend, eligQL, eligCpql, campaigns, corridors,
+      breachCamp, breachCorr,
+      excessTotal: breachCamp.reduce((s, c) => s + c.excess, 0),
       zeroQL: campaigns.filter(c => c.totalQL === 0 && c.spend >= ZERO_QL_SPEND).sort((a, b) => b.spend - a.spend),
+    }
+  }, [daySeries])
+
+  // V6 report context. Capacity arithmetic, kept for observation rather than for the CEO: if
+  // the 10 L a day went to the cheapest qualifying campaigns first, and no campaign were
+  // pushed past a daily spend it has already absorbed at least once, how many QLs would the
+  // day produce? The ceiling per campaign is its 90th percentile daily spend across the
+  // window, so every ceiling is a level that campaign actually reached rather than a
+  // projection, and the answer stays inside what the accounts have already demonstrated.
+  const v6Report = useMemo(() => {
+    const BUDGET = 1000000
+    const WINDOW = 30
+    const RECENT = 7
+    const MIN_QUEUED = 25
+    const PCTL = 0.9
+    const SOURCES = new Set(['facebook', 'google'])
+    const onPlatform = r => SOURCES.has(String(r.source || '').trim().toLowerCase())
+    const queuedOf = r => (r.futworkQ || 0) + (r.superbotQ || 0)
+    const win = daySeries.slice(-WINDOW)
+    if (!win.length) return null
+    const lastDay = win[win.length - 1]
+    const recentKeys = new Set(daySeries.slice(-RECENT).map(e => e.key))
+    const byCamp = new Map()
+    for (const e of win) {
+      for (const r of e.rows) {
+        if (!onPlatform(r)) continue
+        const k = (r.campaign || '').trim()
+        if (!k) continue
+        const c = byCamp.get(k) || { label: k, spend: 0, totalQL: 0, queued: 0, days: new Map(), recent: false }
+        c.spend += r.spend || 0
+        c.totalQL += r.totalQL || 0
+        c.queued += queuedOf(r)
+        c.days.set(e.key, (c.days.get(e.key) || 0) + (r.spend || 0))
+        if ((r.spend || 0) > 0 && recentKeys.has(e.key)) c.recent = true
+        byCamp.set(k, c)
+      }
+    }
+    // Only campaigns that were sent for qualification, produced QLs, carried spend, and were
+    // still running in the last seven days. A campaign that stopped a fortnight ago cannot be
+    // part of an answer about what tomorrow can deliver.
+    const pool = [...byCamp.values()]
+      .filter(c => c.queued >= MIN_QUEUED && c.totalQL > 0 && c.spend > 0 && c.recent)
+      .map(c => {
+        const daily = [...c.days.values()].filter(v => v > 0).sort((a, b) => a - b)
+        const ceiling = daily.length ? (daily[Math.floor(daily.length * PCTL)] || daily[daily.length - 1]) : 0
+        return {
+          label: c.label, cpql: c.spend / c.totalQL, totalQL: c.totalQL,
+          spend: c.spend, ceiling, activeDays: daily.length,
+        }
+      })
+      .filter(c => c.ceiling > 0)
+      .sort((a, b) => a.cpql - b.cpql)
+    if (!pool.length) return null
+    let left = BUDGET, modelQL = 0, used = 0
+    const picks = []
+    for (const c of pool) {
+      if (left <= 0) break
+      const allocated = Math.min(c.ceiling, left)
+      const qlAt = allocated / c.cpql
+      picks.push({ ...c, allocated, qlAt })
+      modelQL += qlAt
+      used += allocated
+      left -= allocated
+    }
+    let actSpend = 0, actQL = 0
+    for (const e of daySeries.slice(-RECENT)) {
+      for (const r of e.rows) {
+        if (!onPlatform(r)) continue
+        actSpend += r.spend || 0
+        actQL += r.totalQL || 0
+      }
+    }
+    return {
+      budget: BUDGET, window: WINDOW, recent: RECENT, minQueued: MIN_QUEUED,
+      pctlLabel: '90th percentile',
+      lastLabel: dayLabelOf(lastDay.date),
+      poolCount: pool.length,
+      usedCount: picks.length,
+      modelQL, modelSpend: used, unspent: left,
+      modelCpql: modelQL > 0 ? used / modelQL : null,
+      picks: picks.slice(0, 12),
+      actualQLPerDay: actQL / RECENT,
+      actualSpendPerDay: actSpend / RECENT,
+      actualCpql: actQL > 0 ? actSpend / actQL : null,
+      headroomQL: modelQL - (actQL / RECENT),
     }
   }, [daySeries])
 
@@ -1820,6 +1944,7 @@ export default function OverallDashboard() {
         cpl: prevCpl, cpql: prevCpql, cpa: prevCpa,
       },
       v5: v5Report,
+      v6: v6Report,
       cmp: reportCmp,
       scopeLine: 'Source: ' + source + ' \u00b7 Corridor: ' + corridorFilter,
       now: { ...kpis, cpl, cpql, cpa },
@@ -1854,7 +1979,7 @@ export default function OverallDashboard() {
     }
   }, [grpByLabel, periodLabel, filterLine, filtered, sortedFilteredRows, totalsRow, kpis, prevKpis,
     cpl, cpql, cpa, prevCpl, prevCpql, prevCpa, conversionChain, bySource, byCorridor,
-    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, reportCmp, v5Report, source, corridorFilter, mtdCmp, ydayCmp, dowCmp])
+    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, reportCmp, v5Report, v6Report, source, corridorFilter, mtdCmp, ydayCmp, dowCmp])
 
   // The picture of the table plus the all-columns CSV. The row limit is lifted to
   // "all" for the capture and restored right after, so the image always carries every
