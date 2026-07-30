@@ -891,8 +891,10 @@ export const REPORT_VERSIONS = [
     what: [
       'Message 1 — budget scorecard: yesterday against the 10 L a day cap, with QLs, CPQL, the target QLs a day, whether it was a bonus day and which condition failed when it was not, the last seven complete days against the seven before them, and a day-by-day table carrying a bonus column.',
       'Message 2 — best optimised campaigns: the qualifying set over a rolling 30 complete days, cheapest CPQL first, with spend, share of spend, QLs and CPQL, an ALL QUALIFYING total row, and the corridors ranked cheapest first underneath.',
-      'Message 3 — CPQL running high: every campaign above 1.5x the blended CPQL, dearest first, then the corridors over the same line, then the spend that produced no QLs at all.',
-      'A bonus day spends under the cap, holds CPQL at or below the benchmark, and still clears its own trailing seven-day QL average. The benchmark is the qualifying set blended CPQL, frozen for the month so a target cannot drift day to day.',
+      'Message 3 — CPQL running high: every campaign above 1.5x the qualifying-track CPQL, ordered by the rupees it spent above that rate rather than by the multiple, then the corridors over the same line, then any spend that produced no QLs at all.',
+      'A bonus day spends under the cap, holds CPQL at or below the benchmark, and still clears its own trailing seven-day QL average. The benchmark is the all-in CPQL of the 30 complete days that ended when the month began, frozen so it cannot drift day to day.',
+      'Only campaigns whose leads were actually sent for qualification, 25 or more queued inside the window, are judged on cost per QL. Campaigns routed straight to the floor cannot produce a QL, so they are out of every campaign and corridor list here, and message 1 states their spend on its own line so the all-in CPQL still reconciles to the full budget.',
+      'The QL a day target is a band the team sets, currently 550 to 600. The line under it says what the qualifying-track CPQL supports at the 10 L cap, so the band is never presented as though it fell out of the data.',
       'Scope is Facebook + Google only, and QLs come from the Overall sheet, so campaign and corridor are the finest levels available — there is no ad-level or keyword-level QL attribution to police. No Meta or Google platform metrics, and no projections: V5 reports what happened and nothing else.',
     ],
     build: buildV5,

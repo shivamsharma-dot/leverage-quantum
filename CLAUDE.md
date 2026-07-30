@@ -2873,3 +2873,60 @@ builder lives in its own file sharing no helper with the rest of `pmReport.js`.
   against the frozen month's blended CPQL and leave the qualifying-set figure in M2.
 - The 27 Jul QL spike (996 against a 260-470 norm) was a backfill of leads that missed the
   API. Left exactly as it is, with no note and no highlight, per explicit instruction.
+
+## 30 Jul 2026 — V5 reworked around the qualifying track, and V6 added
+
+Two things came out of reading the zero-QL list with Shivam: the biggest "waste" entries were
+not waste at all, and the target the report was printing was nonsense.
+
+**The qualifying track.** Nigeria, Dubai and the direct MBBS campaigns are never sent for
+qualification — their leads are distributed straight over the floor. Nigeria and Dubai are
+absolute zero, MBBS had a small batch queued as a test. Judging any of them on cost per QL
+measures nothing, because they were never given the chance to make one. The sheet already
+carries the evidence: `Queued on Futwork` and `Queued on Superbot` against `floor_queued`.
+Dubai showed 6,441 of 6,442 leads going to the floor, Nigeria 4,588 of 4,588.
+
+So V5 now derives a qualifying track: a campaign is judged only if 25 or more of its leads
+reached Futwork or Superbot inside the window. Every campaign and corridor list in messages 2
+and 3 reads that track only. Nothing is excluded by name — the filter is the data.
+
+The effects, on the rolling 30 days to 29 Jul:
+- All-in CPQL ₹2,439 on ₹2,90,98,634. Qualifying track ₹1,736 on ₹2,01,26,000 across 108
+  campaigns. The other ₹89,72,634 is floor-direct and message 1 now states it on its own line,
+  so the all-in CPQL still reconciles to the whole budget rather than looking unexplained.
+- The zero-QL block emptied out. It was 339 campaigns and ₹74,01,521 of apparent waste; on the
+  qualifying track nothing clears the ₹25,000 floor. That is the honest read.
+- India to Dubai stopped being the worst corridor. Only MBBS (India source) is still over the
+  line, at ₹43,210 a QL — which is the answer to whether the MBBS test worked. It did not.
+
+**Ranking by money, not by ratio.** Message 3 used to sort by CPQL multiple, which put
+one-QL campaigns on top. It now sorts by rupees spent above what the track rate would have
+charged for the same QLs. 41 campaigns, ₹62,79,049 between them, biggest first.
+
+**The target.** The old target was ₹10 L divided by the eligible-set benchmark, which computed
+to ₹813 and so printed 1,230 QLs a day against an actual 455. Useless. The target is now the
+band Shivam set, 550 to 600, with a line underneath saying what the data supports: at the
+₹1,736 track CPQL the ₹10 L cap supports 576 QLs a day. The band is stated as a business
+target and never dressed up as a derived number.
+
+The bonus-day benchmark moved to the all-in CPQL of the 30 complete days before the month
+began, frozen. Both sides of that test are now all-in, where before a day's all-in CPQL was
+being compared against an eligible-set figure. Six of the last thirty days score as bonus days
+instead of none.
+
+**Also fixed:** campaigns carrying QLs with no spend attached were sorting to the top of the
+best-optimised list on a CPQL of ₹0. There is now a ₹25,000 spend floor to qualify.
+
+**V6, capacity check, one message, observation only.** New file `src/lib/pmReportV6.js`, new
+`v6Report` memo, top of the registry. It answers the "how many QLs can 10 L a day buy"
+question: pool the qualifying campaigns still running in the last 7 days, order by their own
+realised CPQL, fill the budget cheapest first, and cap each campaign at its 90th percentile
+daily spend across the window so no ceiling sits above a level it has already reached. Reads
+623 QLs a day at ₹1,605 against an actual 451 at ₹2,309, using 50 of 60 campaigns with the
+whole budget placed. It independently brackets the 550-600 band from above.
+
+It is not a CEO report and says so in its own text: it models a reallocation nobody has run,
+and it holds CPQL flat as spend moves, which will not hold in practice. Ceiling, not forecast.
+
+`DEFAULT_VERSION_ID` is still `v4` and V4 still carries RECOMMENDED. V4 was not touched.
+The 27 Jul spike is deliberately left unannotated, per instruction.
