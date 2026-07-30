@@ -27,6 +27,7 @@ const MID = '\u00b7'
 const UP = '\u25b2'
 const DOWN = '\u25bc'
 const TRACK = '#F1F5F9'
+const MANUAL = 'Affiliate (manual entry)'
 
 const sectionTitle = (t, s) => (
   <div style={{ marginBottom: 14 }}>
@@ -254,19 +255,20 @@ export function CostTrendMonth({ data, fmtINR }) {
   const rows = (data || []).filter(d => d.cpql != null || d.cpl != null)
   return (
     <Card>
-      {sectionTitle('Cost per QL, month on month', 'CPQL and CPL on paid sources, inside the current filters')}
-      {rows.length < 2 ? <Empty>One month of data. Widen the range to see a trend.</Empty> : (
+      {sectionTitle('Cost per QL, month on month', 'paid sources, inside the current filters ' + MID + ' CPQL on the left axis, CPL on the right')}
+      {!rows.length ? <Empty>No paid spend in this selection.</Empty> : (
         <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={rows} margin={{ left: 0, right: 14, top: 18, bottom: 4 }}>
+          <LineChart data={rows} margin={{ left: 0, right: 8, top: 18, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
             <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} />
-            <YAxis tick={axis} axisLine={false} tickLine={false} width={66} tickFormatter={v => fmtINR(v)} />
+            <YAxis yAxisId="l" tick={axis} axisLine={false} tickLine={false} width={66} tickFormatter={v => fmtINR(v)} />
+            <YAxis yAxisId="r" orientation="right" tick={axis} axisLine={false} tickLine={false} width={56} tickFormatter={v => fmtINR(v)} />
             <Tooltip content={<MoneyTip fmtINR={fmtINR} />} />
             <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} />
-            <Line type="monotone" dataKey="cpql" name="CPQL" stroke={C.navy} strokeWidth={2.5} dot={{ r: 3 }} connectNulls>
+            <Line yAxisId="l" type="monotone" dataKey="cpql" name="CPQL" stroke={C.navy} strokeWidth={2.5} dot={{ r: 3 }} connectNulls>
               <LabelList dataKey="cpql" position="top" formatter={v => (v == null ? '' : fmtINR(v))} style={{ fontSize: 10, fontWeight: 700, fill: C.sub }} />
             </Line>
-            <Line type="monotone" dataKey="cpl" name="CPL" stroke={C.cyan} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
+            <Line yAxisId="r" type="monotone" dataKey="cpl" name="CPL" stroke={C.cyan} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
           </LineChart>
         </ResponsiveContainer>
       )}
@@ -279,17 +281,18 @@ export function CostTrendDay({ data, fmtINR }) {
   const rows = (data || []).filter(d => d.cpql != null || d.cpl != null)
   return (
     <Card>
-      {sectionTitle('Cost per QL, day by day', 'closed days only, so a half-finished today never reads as a collapse')}
+      {sectionTitle('Cost per QL, day by day', 'closed days only, so a half-finished today never reads as a collapse ' + MID + ' CPQL on the left axis, CPL on the right')}
       {!rows.length ? <Empty>No closed day with paid spend in this selection.</Empty> : (
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={rows} margin={{ left: 0, right: 14, top: 8, bottom: 4 }}>
+          <LineChart data={rows} margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
             <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-            <YAxis tick={axis} axisLine={false} tickLine={false} width={66} tickFormatter={v => fmtINR(v)} />
+            <YAxis yAxisId="l" tick={axis} axisLine={false} tickLine={false} width={66} tickFormatter={v => fmtINR(v)} />
+            <YAxis yAxisId="r" orientation="right" tick={axis} axisLine={false} tickLine={false} width={56} tickFormatter={v => fmtINR(v)} />
             <Tooltip content={<MoneyTip fmtINR={fmtINR} />} />
             <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} />
-            <Line type="monotone" dataKey="cpql" name="CPQL" stroke={C.navy} strokeWidth={2.5} dot={false} connectNulls />
-            <Line type="monotone" dataKey="cpl" name="CPL" stroke={C.cyan} strokeWidth={2.5} dot={false} connectNulls />
+            <Line yAxisId="l" type="monotone" dataKey="cpql" name="CPQL" stroke={C.navy} strokeWidth={2.5} dot={false} connectNulls />
+            <Line yAxisId="r" type="monotone" dataKey="cpl" name="CPL" stroke={C.cyan} strokeWidth={2.5} dot={false} connectNulls />
           </LineChart>
         </ResponsiveContainer>
       )}
@@ -444,7 +447,7 @@ export function AdRanking({ cmp, minQL, prevLabel, fmtINR, fmtINRShort }) {
 export function NotPerforming({ cmp, minQL, prevLabel, fmtINR, fmtINRShort }) {
   const all = (cmp && cmp.ads) || []
   const money = v => fmtINR(Math.round(v))
-  const dead = all.filter(a => (a.spend || 0) > 0 && !isRanked(a, minQL))
+  const dead = all.filter(a => (a.spend || 0) > 0 && a.label !== MANUAL && !isRanked(a, minQL))
     .sort((a, b) => (b.spend || 0) - (a.spend || 0))
   const deadSpend = dead.reduce((t, a) => t + (a.spend || 0), 0)
   const deadTop = dead.slice(0, 8)
@@ -477,6 +480,7 @@ export function NotPerforming({ cmp, minQL, prevLabel, fmtINR, fmtINRShort }) {
         ))}
         <Note>
           Below the cut-off a CPQL is not a number worth quoting, so these ads are read on the money they have taken instead.
+          Affiliate spend is booked as a single manual entry at source level, not against an ad, so it is left out of this list.
         </Note>
       </Card>
       <Card>
