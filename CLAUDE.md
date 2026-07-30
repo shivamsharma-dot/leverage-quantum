@@ -2831,3 +2831,10 @@ Slack report can never disagree. Deltas are the same rule as the report:
 same-length previous period, `±0.5%` is flat, `new` when there is no base.
 Cost metrics are inverted so a fall is green. Brand colours only, no emojis,
 and every rupee figure prints in full with Cr/L only as a hover title.
+
+Two things learned while building the above. CPL sits an order of magnitude
+below CPQL, so on a shared axis it flatlines — both cost charts now carry
+CPQL on the left axis and CPL on the right. And `Affiliate (manual entry)`
+is a synthesised source-level spend row with no ad-level leads, so it is
+excluded from the not-performing list; otherwise it reads as the third
+biggest failing ad while affiliate is in fact the cheapest source on CPQL.
