@@ -2589,7 +2589,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           </div>
           <p className={styles.cardDesc} style={{ marginTop: 6 }}>
             Posting here needs an admin, the exact phrase <b>SEND TO CEO GROUP</b>, the PIN below, and then a second
-            confirm \u2014 every single time. Leave this blank and nothing can reach the CEO group at all. Scheduled
+            confirm — every single time. Leave this blank and nothing can reach the CEO group at all. Scheduled
             reports, Ask AI and table exports can never post here.
           </p>
 
@@ -2607,7 +2607,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   : ceoPinInfo.failsLeft + ' wrong tries left before it locks itself.')}
           </p>
           <p className={styles.cardDesc} style={{ marginTop: 4 }}>
-            The PIN is never stored anywhere \u2014 only a salted, 310,000-round hash of it, signed with a key that
+            The PIN is never stored anywhere — only a salted, 310,000-round hash of it, signed with a key that
             lives in the Vercel env and never in the database. 6 to 12 digits, at least 3 different ones, no counting
             runs and no repeated halves. 5 wrong tries locks it for 15 min, then 30, then 60.
           </p>
