@@ -2965,4 +2965,4 @@ the Quantum preview - they were swapped for `:calendar:`, `:mag:` and
 A percentage rank puts a 3,467 rupee channel at the top of a CEO message. Rank on rupees.
 
 Commits: 6c378e4 (layer), 25f88e0 (emoji + corridor fallback), e5a47d5 (fallback was
-unreachable behind an earlier return), 6cd0a5a (rupee ranking on the day shift).
+unreachable behind an earlier return), 16f4f6a (rupee ranking on the day shift).
