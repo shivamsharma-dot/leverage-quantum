@@ -245,9 +245,129 @@ function buildV3(ctx) {
   return msgs
 }
 
+// ---- v2: MTD, YTD (yesterday) and day on day -------------------------------
+// One click posts three separate messages. Every one has the same shape: a KPI
+// stack where each figure carries its own comparison, then a native Slack table
+// where each metric column is followed by a "vs" column holding both the
+// movement AND the actual number it moved from. Nobody has to open a second
+// message to find out what "up 4%" was up from.
+const V2_MONTH_KPIS = [
+  { label:'Spend', key:'spend' },
+  { label:'Leads', key:'leads' },
+  { label:'Total QLs', key:'totalQL' },
+  { label:'CPL', key:'cpl' },
+  { label:'CPQL', key:'cpql' },
+  { label:'Applications', key:'apps' },
+  { label:'Offers', key:'offers' },
+  { label:'Deposits', key:'deposits' },
+  { label:'RAUs', key:'raus' },
+]
+// A single day is a small number. Offers, deposits and RAUs land days or weeks
+// after the click that earned them, so day on day they are noise, not news.
+const V2_DAY_KPIS = V2_MONTH_KPIS.slice(0, 5)
+const V2_METRICS = [
+  { key:'spend', label:'Spend' },
+  { key:'leads', label:'Leads' },
+  { key:'totalQL', label:'QLs' },
+  { key:'cpl', label:'CPL' },
+  { key:'cpql', label:'CPQL' },
+]
+
+function v2Fmt(ctx, key, v) {
+  if (v == null || !isFinite(Number(v))) return DASH
+  if (key === 'spend') return money(v)
+  if (key === 'cpl' || key === 'cpql' || key === 'cpa') return ctx.fmtINR(v)
+  return nfmt(v)
+}
+
+function v2KpiLines(ctx, now, prev, keys) {
+  if (!now) return []
+  return keys.map(k => {
+    const cur = now[k.key]
+    if (cur == null) return null
+    const was = prev ? prev[k.key] : null
+    return '*' + k.label + '*  ' + v2Fmt(ctx, k.key, cur) + '   ' + chip(pctOf(cur, was), v2Fmt(ctx, k.key, was))
+  }).filter(Boolean)
+}
+
+// A vs cell never shows a bare percentage. It shows the movement and then the
+// figure it moved from, so the row is self-explaining on a phone screen.
+function v2Vs(ctx, g, key) {
+  const p = g.prev || null
+  const cur = g[key]
+  const was = p ? p[key] : null
+  if (cur == null || was == null || !(Math.abs(Number(was)) > 0)) return 'new'
+  const d = pctOf(cur, was)
+  if (d == null) return 'new'
+  const move = Math.abs(d) < 0.05 ? 'flat' : (d >= 0 ? '\u25b2 ' : '\u25bc ') + abs1(d)
+  return move + ' \u00b7 ' + v2Fmt(ctx, key, was)
+}
+
+function v2CmpTable(ctx, firstCol, entries, totalSpend, vsLabel, withShare) {
+  const cols = [firstCol]
+  V2_METRICS.forEach(m => {
+    cols.push(m.label)
+    if (withShare && m.key === 'spend') cols.push('% of spend')
+    cols.push(m.label + ' ' + vsLabel)
+  })
+  const t = { columns: cols, rows: [], strongRows: [], wrapFirst: true }
+  ;(entries || []).forEach(e => {
+    const g = e.g || {}
+    const cells = [e.label]
+    V2_METRICS.forEach(m => {
+      cells.push(v2Fmt(ctx, m.key, g[m.key]))
+      if (withShare && m.key === 'spend') cells.push(totalSpend > 0 ? (((g.spend || 0) / totalSpend) * 100).toFixed(1) + '%' : DASH)
+      cells.push(v2Vs(ctx, g, m.key))
+    })
+    if (e.strong) t.strongRows.push(t.rows.length)
+    t.rows.push(cells)
+  })
+  return t
+}
+
 function buildV2(ctx) {
-  const lines = [testLine(ctx), '*:bar_chart: ' + title(ctx) + '*', ctx.filterLine, '', ...kpiBlock(ctx), '', csvNote(ctx)]
-  return [{ key:'summary', label:'Summary + table', text: lines.filter(l => l != null).join('\n'), table: ctx.table, attach: true }]
+  const msgs = []
+  const vsLast = 'vs ' + (ctx.prevLabel || 'last')
+  const one = [
+    testLine(ctx),
+    '*:bar_chart: ' + title(ctx) + '*',
+    '*MTD Performance*',
+    ctx.filterLine,
+    '',
+    ...v2KpiLines(ctx, ctx.now, ctx.prev, V2_MONTH_KPIS),
+    '',
+    '_Every movement reads ' + (ctx.periodLabel || 'this period') + ' against ' + (ctx.prevLabel || 'the period before it') + ', the same-length window immediately before it. The figure after the arrow is what it moved from._',
+    csvNote(ctx),
+  ]
+  msgs.push({ key:'mtd', label:'MTD performance', text: one.filter(l => l != null).join('\n'), table: v2CmpTable(ctx, 'Source', ctx.cmpRows, ctx.cmpTotalSpend, vsLast, true), attach: true })
+
+  const d = ctx.day
+  if (d && d.now) {
+    const two = [
+      '*:calendar: YTD Performance*',
+      '*Yesterday \u00b7 ' + d.label + '*',
+      (d.prevLabel ? 'Against ' + d.prevLabel + ' \u00b7 ' : '') + (ctx.scopeLine || ''),
+      d.isYesterday ? null : '_' + d.label + ' is the most recent day carrying data, so it is the day reported._',
+      '',
+      ...v2KpiLines(ctx, d.now, d.prev, V2_DAY_KPIS),
+      '',
+      '_Every movement reads ' + d.label + ' against ' + (d.prevLabel || 'the day before') + '. The figure after the arrow is what it moved from._',
+    ]
+    msgs.push({ key:'yday', label:'YTD performance', text: two.filter(l => l != null).join('\n'), table: v2CmpTable(ctx, 'Source', d.rows, d.totalSpend, 'vs ' + (d.prevLabel || 'prev day'), true) })
+  }
+
+  const dow = ctx.dow
+  if (dow && dow.rows && dow.rows.length) {
+    const three = [
+      '*:chart_with_upwards_trend: Day on Day Performance*',
+      (dow.periodLabel ? dow.periodLabel + ' \u00b7 ' : '') + dow.rows.length + ' days \u00b7 newest first',
+      ctx.scopeLine || '',
+      '',
+      '_Each row is one day, and each vs cell is that day against the calendar day before it. A run of the same arrow is a trend; one row on its own is not._',
+    ]
+    msgs.push({ key:'dow', label:'Day on day performance', text: three.filter(l => l != null).join('\n'), table: v2CmpTable(ctx, 'Date', dow.rows, 0, 'vs prev day', false) })
+  }
+  return msgs
 }
 
 function buildV1(ctx) {
@@ -740,6 +860,8 @@ function buildV4(ctx) {
 export const REPORT_VERSIONS = [
   {
 id: 'v4',
+    code: 'V4',
+    msgKeys: ['summary', 'channels', 'corridors', 'ads', 'insights'],
     name: 'Exec report ' + DASH + ' 5 messages, charts',
     tagline: 'Marketing-only KPI grid, share of spend inside the table, Facebook + Google corridors, ad winners and losers.',
     recommended: true,
@@ -756,6 +878,8 @@ id: 'v4',
   },
   {
     id: 'v3',
+    code: 'V3',
+    msgKeys: ['summary', 'channels', 'corridors', 'insights'],
     name: 'Exec report ' + DASH + ' 4 messages',
     tagline: 'Summary, channel mix, corridors, then the honest read.',
     what: [
@@ -769,18 +893,23 @@ id: 'v4',
   },
   {
     id: 'v2',
-    name: 'Single message ' + DASH + ' summary + table',
-    tagline: 'The four KPI lines and the native table, nothing else.',
+    code: 'V2',
+    msgKeys: ['mtd', 'yday', 'dow'],
+    name: 'Summary + table ' + DASH + ' MTD, YTD, day on day',
+    tagline: 'Three messages: month to date, yesterday, and every day against the day before.',
     what: [
-      'One message: title, filter line, the four KPI lines',
-      'Paid vs Non-Paid native Slack table underneath',
-      'Table image and the all-columns CSV in the thread',
-      'No insights, no corridor ranking',
+      'Message 1 ' + DASH + ' MTD Performance: the KPI stack and the Paid vs Non-Paid native table',
+      'Message 2 ' + DASH + ' YTD Performance: yesterday, read against the day before it',
+      'Message 3 ' + DASH + ' Day on Day Performance: one row per day, newest first',
+      'Every metric column is followed by a vs column carrying the movement AND the figure it moved from',
+      'Table image and the all-columns CSV in the thread of message 1',
     ],
     build: buildV2,
   },
   {
     id: 'v1',
+    code: 'V1',
+    msgKeys: ['summary'],
     name: 'Single message ' + DASH + ' image + CSV',
     tagline: 'The original: a picture of the table and the CSV.',
     what: [
@@ -803,5 +932,10 @@ export function getVersion(id) {
 // API reject the post) keeps a send from failing on an unusually long insight list.
 export function buildReportMessages(versionId, ctx) {
   const trim = t => (typeof t === 'string' && t.length > 2900 ? t.slice(0, 2897) + '...' : t)
-  return getVersion(versionId).build(ctx).map(m => ({ ...m, text: trim(m.text), after: trim(m.after) }))
+  const v = getVersion(versionId)
+  const order = v.msgKeys || []
+  return v.build(ctx).map((m, i) => {
+    const slot = order.indexOf(m.key)
+    return { ...m, id: (v.code || String(v.id).toUpperCase()) + '-M' + (slot >= 0 ? slot + 1 : i + 1), viewCode: v.code || String(v.id).toUpperCase(), text: trim(m.text), after: trim(m.after) }
+  })
 }

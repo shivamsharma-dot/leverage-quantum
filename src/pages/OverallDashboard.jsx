@@ -1566,6 +1566,109 @@ export default function OverallDashboard() {
     return dayLabel(prevWindow.from) + ' to ' + dayLabel(prevWindow.to)
   }, [prevWindow])
 
+  // --- Day-level windows for the three-message v2 report --------------------
+  // "Yesterday" has to mean yesterday whatever month is picked on screen, so
+  // these windows ignore the date filter. Every other filter (source, corridor,
+  // campaign search) still applies, so the numbers agree with the page.
+  const dayKeyOf = (d) => {
+    if (!d) return ''
+    const pad = n => (n < 10 ? '0' : '') + n
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+  }
+  const dayLabelOf = (d) => d.toLocaleDateString('en-IN', { day:'numeric', month:'short' }) + "'" + String(d.getFullYear()).slice(2)
+
+  const nonDateRows = useMemo(() => {
+    let rs = rows
+    if (source !== 'All') rs = rs.filter(r => r.source === source)
+    if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
+    const q = campaignQuery.trim().toLowerCase()
+    if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
+    return rs
+  }, [rows, source, corridorFilter, campaignQuery])
+
+  // Only closed days count. Today is still filling up, and half a day sitting
+  // next to a full one reads as a collapse that never happened.
+  const daySeries = useMemo(() => {
+    const m = new Map()
+    for (const r of nonDateRows) {
+      if (!r.date) continue
+      const k = dayKeyOf(r.date)
+      let e = m.get(k)
+      if (!e) { e = { key:k, date:r.date, rows:[], act:0 }; m.set(k, e) }
+      e.rows.push(r)
+      e.act += (r.leads || 0) + (r.spend || 0)
+    }
+    const today = dayKeyOf(new Date())
+    return [...m.values()].filter(e => e.key < today && e.act > 0).sort((a, b) => (a.key < b.key ? -1 : 1))
+  }, [nonDateRows])
+
+  // One banded comparison set: TOTAL, the paid band and its sources, then the
+  // non-paid band and its sources, every row carrying its own previous figures.
+  const cmpEntries = useCallback((curRows, prevRows) => {
+    const paidOf = list => { const st = new Set(); list.forEach(r => { if (r.spend > 0) st.add(r.source) }); return st }
+    const pc = paidOf(curRows)
+    const pp = paidOf(prevRows)
+    const band = (label, keep) => {
+      const c = aggReport(curRows.filter(keep), () => label, pc)
+      if (!c.length) return null
+      return joinPrev(c, aggReport(prevRows.filter(keep), () => label, pp))[0]
+    }
+    const srcs = joinPrev(aggReport(curRows, r => r.source, pc), aggReport(prevRows, r => r.source, pp))
+    const out = []
+    const total = band('TOTAL', () => true)
+    if (total) out.push({ label:'TOTAL', strong:true, g:total })
+    const paidBand = band('PAID CHANNELS', r => isPaidSource(r.source))
+    if (paidBand) out.push({ label:'PAID CHANNELS', strong:true, g:paidBand })
+    srcs.filter(x => isPaidSource(x.label)).sort((a, b) => (b.spend || 0) - (a.spend || 0))
+      .forEach(x => out.push({ label:x.label, strong:false, g:x }))
+    const freeBand = band('NON-PAID CHANNELS', r => !isPaidSource(r.source))
+    if (freeBand) out.push({ label:'NON-PAID CHANNELS', strong:true, g:freeBand })
+    srcs.filter(x => !isPaidSource(x.label)).sort((a, b) => (b.leads || 0) - (a.leads || 0))
+      .forEach(x => out.push({ label:x.label, strong:false, g:x }))
+    return { rows: out, totalSpend: total ? (total.spend || 0) : 0 }
+  }, [aggReport, joinPrev])
+
+  const mtdCmp = useMemo(() => cmpEntries(filtered, prevFiltered), [cmpEntries, filtered, prevFiltered])
+
+  const ydayCmp = useMemo(() => {
+    const last = daySeries[daySeries.length - 1] || null
+    if (!last) return null
+    const prior = daySeries[daySeries.length - 2] || null
+    const b = cmpEntries(last.rows, prior ? prior.rows : [])
+    const total = b.rows.length ? b.rows[0].g : null
+    const y = new Date()
+    y.setDate(y.getDate() - 1)
+    return {
+      label: dayLabelOf(last.date),
+      prevLabel: prior ? dayLabelOf(prior.date) : null,
+      isYesterday: last.key === dayKeyOf(y),
+      rows: b.rows,
+      totalSpend: b.totalSpend,
+      now: total,
+      prev: total ? total.prev : null,
+    }
+  }, [daySeries, cmpEntries])
+
+  // Day on day: the days inside the window on screen, each read against the
+  // calendar day before it even when that day sits outside the window.
+  const dowCmp = useMemo(() => {
+    const inWindow = new Set()
+    for (const r of filtered) { if (r.date) inWindow.add(dayKeyOf(r.date)) }
+    const paidOf = list => { const st = new Set(); list.forEach(r => { if (r.spend > 0) st.add(r.source) }); return st }
+    const out = []
+    for (let i = 0; i < daySeries.length; i++) {
+      const e = daySeries[i]
+      if (!inWindow.has(e.key)) continue
+      const label = dayLabelOf(e.date)
+      const c = aggReport(e.rows, () => label, paidOf(e.rows))
+      if (!c.length) continue
+      const pr = daySeries[i - 1] || null
+      const g = joinPrev(c, pr ? aggReport(pr.rows, () => label, paidOf(pr.rows)) : [])[0]
+      out.push({ label, key: e.key, g })
+    }
+    return out.reverse().slice(0, 31)
+  }, [daySeries, filtered, aggReport, joinPrev])
+
   const buildReportContext = useCallback(() => {
     const rate = (a, b) => (a > 0 ? (b / a) * 100 : null)
     const prevQueued = prevKpis.futworkQ + prevKpis.superbotQ
@@ -1602,6 +1705,12 @@ export default function OverallDashboard() {
         cpl: prevCpl, cpql: prevCpql, cpa: prevCpa,
       },
       cmp: reportCmp,
+      scopeLine: 'Source: ' + source + ' \u00b7 Corridor: ' + corridorFilter,
+      now: { ...kpis, cpl, cpql, cpa },
+      cmpRows: mtdCmp.rows,
+      cmpTotalSpend: mtdCmp.totalSpend,
+      day: ydayCmp,
+      dow: { rows: dowCmp, periodLabel },
       channels: bySource.map(s => withCost({ ...s, label: s.source })),
       corridors: byCorridor.map(c => withCost({ ...c, label: c.corridor })),
       bands: {
@@ -1629,7 +1738,7 @@ export default function OverallDashboard() {
     }
   }, [grpByLabel, periodLabel, filterLine, filtered, sortedFilteredRows, totalsRow, kpis, prevKpis,
     cpl, cpql, cpa, prevCpl, prevCpql, prevCpa, conversionChain, bySource, byCorridor,
-    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, reportCmp])
+    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, reportCmp, source, corridorFilter, mtdCmp, ydayCmp, dowCmp])
 
   // The picture of the table plus the all-columns CSV. The row limit is lifted to
   // "all" for the capture and restored right after, so the image always carries every

@@ -224,6 +224,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
                   boxShadow: sel ? 'none' : '0 1px 2px rgba(15,23,42,0.03)', transition:'border .12s, background .12s',
                 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:3 }}>
+                    <span style={{ fontSize:9.5, fontWeight:800, letterSpacing:'0.06em', color:C.navy, background:'rgba(31,60,132,0.07)', padding:'2px 6px', borderRadius:5 }}>{v.code || v.id}</span>
                     <span style={{ fontSize:12.5, fontWeight:800, color: sel ? C.navy : C.ink }}>{v.name}</span>
                     {v.recommended && (
                       <span style={{ fontSize:9, fontWeight:800, letterSpacing:'0.05em', textTransform:'uppercase', color:'#fff', background:C.cyan, padding:'2px 6px', borderRadius:4 }}>Recommended</span>
@@ -235,7 +236,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
               )
             })}
             <div style={{ fontSize:10.5, color:C.muted, lineHeight:1.65, marginTop:10 }}>
-              Versions are never removed from this list, so an older layout can always be previewed and re-sent.
+              Versions are never removed from this list, so an older layout can always be previewed and re-sent. Every view and every message inside it carries a fixed ID, so any change can be asked for by ID.
             </div>
           </div>
 
@@ -256,7 +257,8 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
                   <span style={{ fontSize:9.5, fontWeight:800, letterSpacing:'0.06em', textTransform:'uppercase', color:C.navy, background:'rgba(31,60,132,0.07)', padding:'3px 7px', borderRadius:5 }}>
                     Message {i + 1} of {messages.length}
                   </span>
-                  <span style={{ fontSize:11, color:C.muted, fontWeight:600 }}>{m.label}</span>
+                  <span style={{ fontSize:10, fontWeight:800, letterSpacing:'0.06em', color:'#fff', background:C.navy, padding:'2px 7px', borderRadius:5 }}>{m.id}</span>
+                    <span style={{ fontSize:11, color:C.muted, fontWeight:600 }}>{m.label}</span>
                 </div>
                 <div style={{ fontSize:12.5, lineHeight:1.8, color:C.ink, wordBreak:'break-word' }} dangerouslySetInnerHTML={{ __html: mrkdwn(m.text) }} />
                 {Array.isArray(m.fields) && m.fields.length > 0 && <FieldGrid fields={m.fields} />}
