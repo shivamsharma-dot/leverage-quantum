@@ -45,8 +45,13 @@ function fmtDate(s) { return s ? String(s).slice(0, 16) : '—' }
 // "{keyvalueinfo}{FirstName{=}Jane{next}EmailAddress{=}jane@x.com{next}}" --
 // not real JSON. Best-effort parse for display; not guaranteed byte-perfect
 // for every edge case, but good enough to show what actually happened.
+// Only some activity types use the {keyvalueinfo} blob (e.g. "Lead Capture") --
+// others (e.g. "Manual Lead Qualification - Futwork") carry a plain string instead
+// (verified live: "Call queued successfully at Futwork"), so a plain string is kept
+// as-is under a "Note" key rather than silently parsing to nothing.
 function parseActivityNote(note) {
   if (!note || typeof note !== 'string') return {}
+  if (!note.startsWith('{keyvalueinfo}')) return { Note: note }
   const body = note.replace(/^\{keyvalueinfo\}/, '')
   const out = {}
   body.split('{next}').forEach(pair => {
@@ -267,7 +272,21 @@ function ActivitiesTab() {
   const statusOptions = useMemo(() => ['All', ...Array.from(new Set(rows.map(r => r.Status).filter(Boolean))).sort()], [rows])
   const actorOptions = useMemo(() => ['All', ...Array.from(new Set(rows.map(r => r.CreatedByName).filter(Boolean))).sort()], [rows])
 
-  const parsed = useMemo(() => rows.map(r => ({ ...r, _note: parseActivityNote(r.ActivityEvent_Note) })), [rows])
+  // Every Activity Type has its own custom-field schema (same as Opportunities), and
+  // there's no universal "details" field across all of them -- ActivityEvent_Note alone
+  // isn't enough (e.g. "Manual Lead Qualification - Futwork" carries its real detail in
+  // mx_Custom_N fields, verified live: mx_Custom_14="University", mx_Custom_37="Lead
+  // Submitted to QL"). Rather than fetch per-type field metadata just to get display
+  // names, any populated mx_Custom_* field not already captured is merged in under its
+  // raw key -- less pretty than a resolved label, but real data instead of a blank cell.
+  const parsed = useMemo(() => rows.map(r => {
+    const note = parseActivityNote(r.ActivityEvent_Note)
+    const extra = {}
+    Object.keys(r).forEach(k => {
+      if (k.startsWith('mx_Custom_') && !(k in note) && r[k] != null && r[k] !== '' && r[k] !== r.ActivityEvent_Note) extra[k] = r[k]
+    })
+    return { ...r, _note: { ...note, ...extra } }
+  }), [rows])
 
   const filtered = useMemo(() => parsed.filter(r => {
     if (status !== 'All' && r.Status !== status) return false
