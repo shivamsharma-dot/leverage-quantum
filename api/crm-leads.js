@@ -202,8 +202,14 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, p
   if (since) rows = rows.filter(r => !r.CreatedOn || r.CreatedOn >= since + ' 00:00:00')
   if (until) rows = rows.filter(r => !r.CreatedOn || r.CreatedOn <= until + ' 23:59:59')
   if (status) rows = rows.filter(r => r.Status === status)
-  const ownerMap = await fetchLeadSquaredUsersMap(creds)
-  rows.forEach(r => { if (r.Owner) r.OwnerName = ownerMap[r.Owner] || r.Owner })
+  const [ownerMap, contactNames] = await Promise.all([
+    fetchLeadSquaredUsersMap(creds),
+    fetchLeadSquaredContactNames(creds, rows.map(r => r.RelatedProspectId)),
+  ])
+  rows.forEach(r => {
+    if (r.Owner) r.OwnerName = ownerMap[r.Owner] || r.Owner
+    r.ContactName = contactNames[r.RelatedProspectId] || null
+  })
   return { rows, count: rows.length, since, until }
 }
 
@@ -222,6 +228,60 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, p
 // LeadSquared's own Manage Activity screen already requires you to filter by Activity Type.
 // Also returns CreatedByName/CreatedByEmailAddress (the real actor), which the dropped
 // all-types feed never carried anyway.
+// CustomActivity/GetActivitySetting -- real field schema (SchemaName -> DisplayName) for
+// ONE Activity Type, same idea as GetOpportunityTypeMetadata but for activities. Without
+// this, custom fields only come back as raw mx_Custom_N keys, which is meaningless in a
+// UI -- LeadSquared's own Manage Activities screen shows real column names ("Country
+// Interested", "Disposition", "Preferred Course", ...) resolved from exactly this endpoint.
+// Cached per activity type per cold start (same reasoning as the opportunity-meta cache:
+// this schema is effectively static, it only changes if someone edits the activity type
+// in LeadSquared's own Settings).
+const _lsqActivityMetaCache = {}
+async function fetchLeadSquaredActivityTypeMeta(creds, eventCode) {
+  const code = String(eventCode)
+  if (_lsqActivityMetaCache[code]) return _lsqActivityMetaCache[code]
+  const data = await leadsquaredGet('/v2/ProspectActivity.svc/CustomActivity/GetActivitySetting', creds, { code })
+  _lsqActivityMetaCache[code] = data
+  return data
+}
+
+// Leads/Retrieve/ByIds -- resolves RelatedProspectId GUIDs into real contact names. Same
+// reasoning as the Owner-name resolution: LeadSquared's own Manage Activities screen shows
+// a real "Contacts Name" column, not a bare GUID, and the activity response itself only
+// ever carries the GUID.
+async function fetchLeadSquaredContactNames(creds, ids) {
+  const unique = Array.from(new Set(ids.filter(Boolean)))
+  if (!unique.length) return {}
+  const body = {
+    SearchParameters: { LeadIds: unique },
+    Columns: { Include_CSV: 'ProspectID,FirstName,LastName' },
+    Paging: { PageIndex: 1, PageSize: 1000 },
+  }
+  const data = await leadsquaredPost('/v2/LeadManagement.svc/Leads/Retrieve/ByIds', creds, body)
+  const rows = (data && data.Leads) || []
+  const map = {}
+  rows.forEach(r => { if (r.ProspectID) map[r.ProspectID] = [r.FirstName, r.LastName].filter(Boolean).join(' ').trim() || null })
+  return map
+}
+
+// A minority of activity types carry a plain string in ActivityEvent_Note (verified live:
+// "Call queued successfully at Futwork" for "Manual Lead Qualification - Futwork") rather
+// than the {keyvalueinfo}{...} blob "Lead Capture" uses. Both are folded into the same
+// Fields dict below so the frontend never has to know which shape a given type uses.
+function parseKeyValueNote(note) {
+  if (!note || typeof note !== 'string' || !note.startsWith('{keyvalueinfo}')) return {}
+  const body = note.replace(/^\{keyvalueinfo\}/, '')
+  const out = {}
+  body.split('{next}').forEach(pair => {
+    const idx = pair.indexOf('{=}')
+    if (idx === -1) return
+    const k = pair.slice(0, idx).replace(/^\{/, '').trim()
+    const v = pair.slice(idx + 3).replace(/\}+$/, '').trim()
+    if (k) out[k] = v
+  })
+  return out
+}
+
 async function fetchLeadSquaredActivities(creds, { leadId, since, until, eventCode, pageIndex, pageSize }) {
   if (leadId) {
     const body = { Parameter: {}, Paging: { Offset: '0', RowCount: String(Math.min(pageSize || 50, 1000)) } }
@@ -240,7 +300,36 @@ async function fetchLeadSquaredActivities(creds, { leadId, since, until, eventCo
   }
   const data = await leadsquaredPost('/v2/ProspectActivity.svc/CustomActivity/RetrieveByActivityEvent', creds, body)
   const rows = (data && data.List) || []
-  return { rows, count: (data && data.RecordCount) || rows.length, since: win.since, until: win.until, eventCode: code }
+
+  // Resolve everything LeadSquared's own Manage Activities screen would show, so the
+  // frontend never has to render a raw GUID or a raw mx_Custom_N key.
+  const [typeMeta, contactNames] = await Promise.all([
+    fetchLeadSquaredActivityTypeMeta(creds, code).catch(() => null),
+    fetchLeadSquaredContactNames(creds, rows.map(r => r.RelatedProspectId)),
+  ])
+  const fieldOrder = []
+  const fieldLabels = {}
+  if (typeMeta && Array.isArray(typeMeta.Fields)) {
+    typeMeta.Fields
+      .filter(f => f.SchemaName && f.SchemaName.startsWith('mx_Custom_'))
+      .sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0))
+      .forEach(f => { fieldLabels[f.SchemaName] = f.DisplayName || f.SchemaName; fieldOrder.push(f.DisplayName || f.SchemaName) })
+  }
+  rows.forEach(r => {
+    r.ContactName = contactNames[r.RelatedProspectId] || null
+    const fields = { ...parseKeyValueNote(r.ActivityEvent_Note) }
+    if (r.ActivityEvent_Note && !r.ActivityEvent_Note.startsWith('{keyvalueinfo}')) fields['Note'] = r.ActivityEvent_Note
+    Object.keys(r).forEach(k => {
+      if (k.startsWith('mx_Custom_') && r[k] != null && r[k] !== '') {
+        fields[fieldLabels[k] || k] = r[k]
+      }
+    })
+    r.Fields = fields
+  })
+  return {
+    rows, count: (data && data.RecordCount) || rows.length, since: win.since, until: win.until, eventCode: code,
+    fieldColumns: fieldOrder,
+  }
 }
 
 // ActivityTypes.Get -- lists every activity type configured on this account (code + real

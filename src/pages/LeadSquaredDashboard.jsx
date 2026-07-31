@@ -41,29 +41,6 @@ function todayIso() { return new Date().toISOString().slice(0, 10) }
 function short(id) { return id ? String(id).slice(0, 8) + '…' : '—' }
 function fmtDate(s) { return s ? String(s).slice(0, 16) : '—' }
 
-// ActivityEvent_Note comes back as a hand-rolled key-value blob, e.g.
-// "{keyvalueinfo}{FirstName{=}Jane{next}EmailAddress{=}jane@x.com{next}}" --
-// not real JSON. Best-effort parse for display; not guaranteed byte-perfect
-// for every edge case, but good enough to show what actually happened.
-// Only some activity types use the {keyvalueinfo} blob (e.g. "Lead Capture") --
-// others (e.g. "Manual Lead Qualification - Futwork") carry a plain string instead
-// (verified live: "Call queued successfully at Futwork"), so a plain string is kept
-// as-is under a "Note" key rather than silently parsing to nothing.
-function parseActivityNote(note) {
-  if (!note || typeof note !== 'string') return {}
-  if (!note.startsWith('{keyvalueinfo}')) return { Note: note }
-  const body = note.replace(/^\{keyvalueinfo\}/, '')
-  const out = {}
-  body.split('{next}').forEach(pair => {
-    const idx = pair.indexOf('{=}')
-    if (idx === -1) return
-    const k = pair.slice(0, idx).replace(/^\{/, '').trim()
-    const v = pair.slice(idx + 3).replace(/\}+$/, '').trim()
-    if (k) out[k] = v
-  })
-  return out
-}
-
 async function fetchJson(url) {
   const r = await fetch(url, { credentials: 'include' })
   const d = await r.json()
@@ -138,9 +115,9 @@ function StatusPill({ value }) {
   return <span style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 6, fontSize: 11.5, fontWeight: 700, background: c.bg, color: c.fg, whiteSpace: 'nowrap' }}>{value || '—'}</span>
 }
 
-function ContactLink({ id }) {
+function ContactLink({ id, name }) {
   if (!id) return <span style={{ color: C.muted }}>—</span>
-  return <a href={LEADSQUARED_CONTACT_URL + id} target="_blank" rel="noreferrer" title={id} style={{ color: '#1C9FD4', fontWeight: 600, fontSize: 12 }}>{short(id)}</a>
+  return <a href={LEADSQUARED_CONTACT_URL + id} target="_blank" rel="noreferrer" title={id} style={{ color: '#1C9FD4', fontWeight: 600, fontSize: 12 }}>{name || short(id)}</a>
 }
 
 // ------------------------------------------------------------------- Leads
@@ -240,6 +217,7 @@ function ActivitiesTab() {
   const [types, setTypes] = useState([])
   const [eventCode, setEventCode] = useState(DEFAULT_ACTIVITY_EVENT_CODE)
   const [rows, setRows] = useState([])
+  const [fieldColumns, setFieldColumns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [since, setSince] = useState(isoDaysAgo(7))
@@ -259,7 +237,13 @@ function ActivitiesTab() {
     try {
       const d = await fetchJson(`${API}&mode=activities&eventCode=${eventCode}&since=${since}&until=${until}&pageSize=1000`)
       setRows(d.rows || [])
-    } catch (e) { setError(e.message); setRows([]) }
+      // Every Activity Type has its own custom-field schema (same as Opportunities) --
+      // fieldColumns is the real, ordered list of field labels this specific type uses,
+      // resolved server-side via GetActivitySetting, e.g. "Country Interested",
+      // "Disposition", "Preferred Course" for Manual Lead Qualification - not a fixed
+      // column set, so the table below renders columns dynamically per selected type.
+      setFieldColumns(d.fieldColumns || [])
+    } catch (e) { setError(e.message); setRows([]); setFieldColumns([]) }
     finally { setLoading(false) }
   }, [eventCode, since, until])
 
@@ -272,32 +256,16 @@ function ActivitiesTab() {
   const statusOptions = useMemo(() => ['All', ...Array.from(new Set(rows.map(r => r.Status).filter(Boolean))).sort()], [rows])
   const actorOptions = useMemo(() => ['All', ...Array.from(new Set(rows.map(r => r.CreatedByName).filter(Boolean))).sort()], [rows])
 
-  // Every Activity Type has its own custom-field schema (same as Opportunities), and
-  // there's no universal "details" field across all of them -- ActivityEvent_Note alone
-  // isn't enough (e.g. "Manual Lead Qualification - Futwork" carries its real detail in
-  // mx_Custom_N fields, verified live: mx_Custom_14="University", mx_Custom_37="Lead
-  // Submitted to QL"). Rather than fetch per-type field metadata just to get display
-  // names, any populated mx_Custom_* field not already captured is merged in under its
-  // raw key -- less pretty than a resolved label, but real data instead of a blank cell.
-  const parsed = useMemo(() => rows.map(r => {
-    const note = parseActivityNote(r.ActivityEvent_Note)
-    const extra = {}
-    Object.keys(r).forEach(k => {
-      if (k.startsWith('mx_Custom_') && !(k in note) && r[k] != null && r[k] !== '' && r[k] !== r.ActivityEvent_Note) extra[k] = r[k]
-    })
-    return { ...r, _note: { ...note, ...extra } }
-  }), [rows])
-
-  const filtered = useMemo(() => parsed.filter(r => {
+  const filtered = useMemo(() => rows.filter(r => {
     if (status !== 'All' && r.Status !== status) return false
     if (actor !== 'All' && r.CreatedByName !== actor) return false
     if (search) {
       const q = search.toLowerCase()
-      const hay = Object.values(r._note).join(' ').toLowerCase() + ' ' + (r.CreatedByName || '').toLowerCase()
+      const hay = [r.ContactName, r.CreatedByName, ...Object.values(r.Fields || {})].filter(Boolean).join(' ').toLowerCase()
       if (!hay.includes(q)) return false
     }
     return true
-  }), [parsed, status, actor, search])
+  }), [rows, status, actor, search])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_ROWS))
   const pageRows = filtered.slice((page - 1) * PAGE_ROWS, page * PAGE_ROWS)
@@ -309,7 +277,7 @@ function ActivitiesTab() {
           ? <span style={{ fontSize: 12, color: C.muted, fontStyle: 'italic' }}>Loading activity types…</span>
           : <FilterDropdown label="Activity Type" value={String(eventCode)} options={typeOptions} open={openDD === 'type'} onToggle={() => setOpenDD(openDD === 'type' ? null : 'type')} onSelect={v => { setEventCode(v); setOpenDD(null) }} />}
         <DateRangeRow since={since} until={until} onSince={setSince} onUntil={setUntil} />
-        <SearchBox value={search} onChange={setSearch} placeholder="Search details, actor…" />
+        <SearchBox value={search} onChange={setSearch} placeholder="Search contact, details, actor…" />
         <FilterDropdown label="Status" value={status} options={statusOptions.map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} />
         <FilterDropdown label="Actor" value={actor} options={actorOptions.map(o => ({ v: o, l: o }))} open={openDD === 'actor'} onToggle={() => setOpenDD(openDD === 'actor' ? null : 'actor')} onSelect={v => { setActor(v); setOpenDD(null) }} />
         <Button size="sm" variant="secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</Button>
@@ -323,23 +291,19 @@ function ActivitiesTab() {
           <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 12 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                <Th>Activity Date</Th><Th>Contact</Th><Th>Actor</Th><Th>Status</Th><Th width="40%">Details</Th>
+                <Th>Activity Date</Th><Th>Contact</Th><Th>Actor</Th><Th>Status</Th>
+                {fieldColumns.map(col => <Th key={col}>{col}</Th>)}
               </tr></thead>
               <tbody>
-                {pageRows.map(r => {
-                  const noteEntries = Object.entries(r._note)
-                  const summary = noteEntries.slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')
-                  const full = noteEntries.map(([k, v]) => `${k}: ${v}`).join('\n')
-                  return (
-                    <tr key={r.ProspectActivityId}>
-                      <Td>{fmtDate(r.CreatedOn)}</Td>
-                      <Td><ContactLink id={r.RelatedProspectId} /></Td>
-                      <Td>{r.CreatedByName || '—'}</Td>
-                      <Td><StatusPill value={r.Status} /></Td>
-                      <Td style={{ color: C.muted, maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={full || undefined}>{summary || '—'}</Td>
-                    </tr>
-                  )
-                })}
+                {pageRows.map(r => (
+                  <tr key={r.ProspectActivityId}>
+                    <Td>{fmtDate(r.CreatedOn)}</Td>
+                    <Td><ContactLink id={r.RelatedProspectId} name={r.ContactName} /></Td>
+                    <Td>{r.CreatedByName || '—'}</Td>
+                    <Td><StatusPill value={r.Status} /></Td>
+                    {fieldColumns.map(col => <Td key={col} style={{ color: C.muted }}>{(r.Fields && r.Fields[col]) || '—'}</Td>)}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -421,7 +385,7 @@ function OpportunitiesTab() {
                 {pageRows.map(r => (
                   <tr key={r.OpportunityId}>
                     <Td style={{ fontWeight: 700 }}><a href={LEADSQUARED_OPPORTUNITY_URL + r.OpportunityId} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: 'none' }}>{r.mx_Custom_1 || '—'}</a></Td>
-                    <Td><ContactLink id={r.RelatedProspectId} /></Td>
+                    <Td><ContactLink id={r.RelatedProspectId} name={r.ContactName} /></Td>
                     <Td><StatusPill value={r.Status} /></Td>
                     <Td>{r.mx_Custom_2 || '—'}</Td>
                     <Td>{r.OwnerName || '—'}</Td>
