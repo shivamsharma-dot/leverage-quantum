@@ -657,7 +657,7 @@ with urllib.request.urlopen(req2) as r:
 ## Pending / In Progress
 
 - Resend domain verification for `noreply@leverageedu.com` — required for email delivery
-- BigQuery integration (requirements drafted)
+- BigQuery integration -- credentials live, code lost and never committed. See "RECOVERED - BigQuery direct integration (2026-07-31)" at the bottom of this file.
 - `app_preferences` Supabase table — needs manual SQL creation if not done
 - Google Ads dashboard — connected but data source is live
 - Ask AI memories / chat persistence improvements
@@ -3237,3 +3237,77 @@ left open in the V7 entry above.
 
 Open, not touched: Summary, Meta Ads, Google Ads and QL Ops each build their own
 rows and were not audited for this. Ask before changing them.
+
+---
+
+## RECOVERED - BigQuery direct integration (2026-07-31)
+
+The BigQuery work done with the Claude extension on 2026-07-28 was NEVER COMMITTED.
+Checked: `git log --all`, `git reflog`, `git stash list`, working tree, and all four
+remote branches (main, settings-premium-polish, claude/inspiring-fermat-ikpbzm,
+claude/issue-3-20260615-1317). No BigQuery code exists anywhere in the repo. Vercel
+deployment history is 100% from `main`, so it was never deployed either. The code is
+gone for good. Everything EXCEPT the code survived, and it is all written down below
+so this cannot happen a second time.
+
+### Credentials - already live, do not regenerate
+Vercel env vars, Production + Preview, added Jul 28:
+- `BIGQUERY_CLIENT_ID`
+- `BIGQUERY_CLIENT_SECRET`
+- `BIGQUERY_REFRESH_TOKEN`
+These are a USER OAuth grant on shivam.sharma@leverageedu.com with scope
+`https://www.googleapis.com/auth/bigquery.readonly`, obtained through the Google
+OAuth 2.0 Playground. Deliberately NOT a service account: we only hold viewer rights
+on the dataset and cannot mint a service account in `leverage-production`. That is the
+whole trick that made this possible - borrow the human's read access.
+
+Token refresh: POST https://oauth2.googleapis.com/token with client_id, client_secret,
+refresh_token, grant_type=refresh_token -> access_token valid 1 hour. Cache in module
+scope, same pattern as `api/refresh-meta.mjs` / `api/google-ads.mjs` already use.
+
+### The call that is proven to work
+POST https://bigquery.googleapis.com/bigquery/v2/projects/leverage-production/queries
+Authorization: Bearer <access_token>
+Body: {"query":"...","useLegacySql":false,"location":"asia-south1"}
+`location: asia-south1` is MANDATORY - the dataset is regional and the call fails
+without it. Response is `bigquery#queryResponse` with `rows[].f[].v` string values.
+
+### Source table
+`leverage-production.chatbot_marketing.marketing_table_v1` (location asia-south1).
+Columns used: date_of_transaction, source_1, campaign_name, destination_country,
+total_spends, count_opps, fut_human_queued, superbot_queued.
+This is the SAME table that feeds the Connected Sheets Quantum reads today, so going
+direct just removes the sheet as a middleman. Neighbouring datasets seen in the
+explorer: chatbot_marketing (lsq_careers_opprtunities, lsq_fly_homes_opportunities,
+lsq_ivy100_opportunities, marketing_table_v1, remarketing_spends, source_attribution_v3)
+and fly_analyst (application_dump, bookings, countries, ad_wise_daily_spends_loans, ...).
+
+### Verified numbers - job_ONKU3JcWejDNdYMMhow6iyZ4OM_B, Jul 28 22:18
+raw rows 332,671 | rows grouped by date|source_1|campaign_name 319,325 | 12 countries
+spend 406,608,316.92 | leads 2,466,179 | date range 2025-04-01 to 2026-07-29
+32.7 MB scanned per full-table pass, ~1.1 s wall clock.
+
+### What the six REST jobs on Jul 28 were doing
+All still readable in BigQuery > Job history > Personal history, owner
+shivam.sharma@leverageedu.com, job id prefix `job_` (the `bquxjob_` ones are console
+clicks, ignore those). Filter with "Created before 07/29/2026".
+- 21:47 `SELECT 1 AS ok` - token and connectivity smoke test
+- 21:55 row count, campaign count, date range for dates after 2025-12-31
+- 21:56 cardinality by date / date+source_1 / date+source_1+destination_country
+- 22:00 lead concentration - top 200 / 500 / 2000 campaigns vs total, campaign-month grain
+- 22:01 the July 2026 slice - campaigns, campaigns with queued >= 15, leads, full grain
+- 22:18 the parity check quoted above
+Read together this was a PAYLOAD SIZING exercise. Full grain barely compresses (319k of
+332k rows survive grouping), so the open design question was which grain to ship to the
+browser and whether to truncate to the top N campaigns by leads.
+
+### Hard constraint that still applies
+`api/` is at 12 of 12 functions on Vercel Hobby (ask-ai, auth, bing-ads, crm-leads,
+export-to-sheets, google-ads, img-proxy, meta-token, preferences, refresh-meta,
+send-report, users). A BigQuery route CANNOT be a new file. It has to be a mode inside
+an existing handler, e.g. `api/crm-leads.js?src=bigquery`, plus a `lib/bigquery.mjs`
+helper (lib/ is not counted as a function).
+
+### Status
+Requirements and credentials ready, ZERO code. Next session starts from this entry.
+Do not re-derive the auth trick, it is written above.
