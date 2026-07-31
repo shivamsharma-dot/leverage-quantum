@@ -136,14 +136,32 @@ async function fetchLeadSquaredLeads(creds, { since, until, pageIndex, pageSize 
   // until isn't expressible as a second SqlOperator in one Parameter block (the API takes
   // one field/operator/value triple) -- filtered client-side on the page returned instead.
   const filtered = until ? rows.filter(r => !r.CreatedOn || r.CreatedOn <= until + ' 23:59:59') : rows
+  const ownerMap = await fetchLeadSquaredUsersMap(creds)
+  filtered.forEach(r => { if (r.Owner) r.OwnerName = ownerMap[r.Owner] || r.Owner })
   return { rows: filtered, count: filtered.length, since, until }
+}
+
+// UserManagement.svc/Users.Get -- resolves a GUID like Owner/CreatedBy into a real display
+// name. LeadSquared's own UI shows real names in these columns (verified live: "Futwork AI",
+// "JULIUS ALICE MAUYON"), not raw GUIDs, so this is needed for parity, not a nice-to-have.
+// Cached in-memory per cold start -- same pattern as the opportunity-metadata cache below,
+// since the user list is effectively static within a session.
+let _lsqUsersCache = null
+async function fetchLeadSquaredUsersMap(creds) {
+  if (_lsqUsersCache) return _lsqUsersCache
+  const data = await leadsquaredGet('/v2/UserManagement.svc/Users.Get', creds)
+  const rows = Array.isArray(data) ? data : []
+  const byId = {}
+  rows.forEach(u => { byId[u.ID] = [u.FirstName, u.LastName].filter(Boolean).join(' ').trim() || u.EmailAddress || u.ID })
+  _lsqUsersCache = byId
+  return byId
 }
 
 // Opportunity/Retrieve/BySearchParameter -- OpportunityEventCode is account-specific;
 // 12003 is the code this same LeadSquared account already uses elsewhere in this app
 // (see LEADSQUARED_OPPORTUNITY_EVENT in HumanQLDetailDashboard.jsx) for opportunity deep
 // links, so it's reused here as the default rather than guessed fresh.
-async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, pageSize, eventCode }) {
+async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, pageSize, eventCode, status }) {
   const code = Number(eventCode) || 12003
   // First real error hit against the live account: "AdvancedSearch criteria does not match
   // ActivityEvent passed" -- this search REQUIRES the AdvancedSearch to restate the same
@@ -160,6 +178,12 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, p
       Operator: 'between', RSO: (since || '1900-01-01') + ',' + (until || '2999-12-31'),
     })
   }
+  // Status ('Open'/'Won'/'Lost', confirmed via GetOpportunityTypeMetadata for this exact
+  // account's ec=12003 type) stacks onto the same RowCondition array -- AdvancedSearch
+  // supports multiple ANDed conditions here, unlike Leads.Get's single-filter limit.
+  if (status) {
+    rowCondition.push({ SubConOp: 'And', LSO: 'Status', LSO_Type: 'PAField', Operator: 'eq', RSO: status })
+  }
   const advancedSearch = {
     GrpConOp: 'And',
     Conditions: [{ Type: 'Activity', ConOp: 'and', RowCondition: rowCondition }],
@@ -173,6 +197,8 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, p
   }
   const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, body)
   const rows = Array.isArray(data) ? data : (data && (data.Opportunities || data.RecordSet)) || []
+  const ownerMap = await fetchLeadSquaredUsersMap(creds)
+  rows.forEach(r => { if (r.Owner) r.OwnerName = ownerMap[r.Owner] || r.Owner })
   return { rows, count: rows.length, since, until }
 }
 
@@ -245,8 +271,8 @@ async function handleLeadSquared(req, res, me) {
   if (!creds.accessKey || !creds.secretKey) {
     return res.status(500).json({ error: 'LeadSquared is not configured -- set LEADSQUARED_ACCESS_KEY and LEADSQUARED_SECRET_KEY in Vercel env.' })
   }
-  const { mode, since, until, leadId, eventCode, pageIndex, pageSize } = req.query || {}
-  const p = { since, until, leadId, eventCode, pageIndex: Number(pageIndex) || undefined, pageSize: Number(pageSize) || undefined }
+  const { mode, since, until, leadId, eventCode, pageIndex, pageSize, status } = req.query || {}
+  const p = { since, until, leadId, eventCode, status, pageIndex: Number(pageIndex) || undefined, pageSize: Number(pageSize) || undefined }
   try {
     if (mode === 'opportunities') return res.status(200).json(await fetchLeadSquaredOpportunities(creds, p))
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
