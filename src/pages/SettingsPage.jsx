@@ -1414,7 +1414,7 @@ export default function SettingsPage() {
       setBqRes({ ...d, ms: Date.now() - t0 })
       setBqArmed('')
     } catch (e) {
-      setBqRes(null); setBqErr(e.message)
+      setBqRes(null); setBqEst(null); setBqErr(e.message)
     } finally {
       setBqBusy('')
     }
@@ -1778,7 +1778,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               </div>
               {bqWarn && <p className={styles.note} style={{ color: '#1F3C84' }}>{bqWarn}</p>}
               {bqErr && <p className={styles.note} style={{ color: '#c0392b' }}>{'\u2715'} {bqErr}</p>}
-              {bqEst && !bqRes && (
+              {bqEst && !bqRes && !bqWarn && (
                 <p className={styles.note}>Dry run only: this query would scan {bqBytes(bqEst.totalBytesProcessed)} ({bqCost(bqEst.totalBytesProcessed)}). Nothing was billed.</p>
               )}
               {bqRes && (
