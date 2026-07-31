@@ -3311,3 +3311,20 @@ helper (lib/ is not counted as a function).
 ### Status
 Requirements and credentials ready, ZERO code. Next session starts from this entry.
 Do not re-derive the auth trick, it is written above.
+
+### How the grant was actually made (OAuth Playground config, verified 2026-07-31)
+NOTE: this repo is PUBLIC. No client ids, secrets or tokens are recorded here. The live
+values live only in Vercel env vars. Only the reproducible SETTINGS are below.
+
+Google OAuth 2.0 Playground, gear icon > OAuth 2.0 configuration:
+- OAuth flow: Server-side
+- OAuth endpoints: Google
+- Authorization endpoint: https://accounts.google.com/o/oauth2/v2/auth
+- Token endpoint: https://oauth2.googleapis.com/token
+- Access token location: Authorization header w/ Bearer prefix
+- Access type: OFFLINE   <- this is what makes it return a refresh_token at all
+- Force prompt: Consent Screen
+- "Use your own OAuth credentials": CHECKED, using our own client id + secret
+Step 1 scope: https://www.googleapis.com/auth/bigquery.readonly
+Authorized as: shivam.sharma@leverageedu.com - the same identity that owns the
+BigQuery jobs, which is exactly why this works with only viewer rights.
