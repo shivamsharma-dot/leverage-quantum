@@ -1351,6 +1351,14 @@ export default function SettingsPage() {
   const [bqEst, setBqEst] = useState(null)
   const [bqRes, setBqRes] = useState(null)
   const [bqArmed, setBqArmed] = useState('')
+  const BQ_SAVED_KEY = 'bq_saved_queries'
+  const bqSlug = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60)
+  const [bqSaved, setBqSaved] = useState([])
+  const [bqName, setBqName] = useState('')
+  const [bqPick, setBqPick] = useState('')
+  const [bqSaveMsg, setBqSaveMsg] = useState('')
+  const [bqSaveBusy, setBqSaveBusy] = useState(false)
+  const [bqDelArmed, setBqDelArmed] = useState('')
   const bqBytes = (n) => {
     const b = Number(n || 0)
     if (b < 1024) return b + ' B'
@@ -1420,6 +1428,78 @@ export default function SettingsPage() {
     }
   }
 
+  const bqFetchSaved = async () => {
+    try {
+      const r = await fetch('/api/preferences', { credentials: 'include' })
+      const d = r.ok ? await r.json() : { prefs: {} }
+      const list = d && d.prefs ? d.prefs[BQ_SAVED_KEY] : null
+      setBqSaved(Array.isArray(list) ? list : [])
+    } catch (e) {
+      setBqSaved([])
+    }
+  }
+  React.useEffect(() => {
+    if (userIsAdmin) bqFetchSaved()
+  }, [userIsAdmin])
+  const bqPersist = async (list) => {
+    const r = await fetch('/api/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ key: BQ_SAVED_KEY, value: list }),
+    })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok || d.error) throw new Error(d.error || 'Save failed')
+  }
+  const bqSave = async () => {
+    const sql = String(bqSql || '').trim()
+    const name = String(bqName || '').trim()
+    if (!sql) { setBqSaveMsg('Nothing to save.'); return }
+    if (!name) { setBqSaveMsg('Give the query a name first.'); return }
+    const id = bqSlug(name)
+    if (!id) { setBqSaveMsg('That name needs at least one letter or number.'); return }
+    setBqSaveBusy(true); setBqSaveMsg('')
+    try {
+      const next = bqSaved
+        .filter((q) => q && q.id !== id)
+        .concat([{ id, name, sql, updatedAt: new Date().toISOString() }])
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+      await bqPersist(next)
+      setBqSaved(next); setBqPick(id); setBqDelArmed('')
+      setBqSaveMsg('Saved as \u201C' + name + '\u201D \u00B7 id ' + id)
+    } catch (e) {
+      setBqSaveMsg(e.message)
+    } finally {
+      setBqSaveBusy(false)
+    }
+  }
+  const bqLoad = (id) => {
+    const q = bqSaved.find((x) => x && x.id === id)
+    if (!q) return
+    setBqSql(String(q.sql || '')); setBqName(String(q.name || ''))
+    setBqRes(null); setBqEst(null); setBqErr(''); setBqWarn(''); setBqArmed('')
+    setBqSaveMsg('Loaded \u201C' + q.name + '\u201D \u2014 nothing has run yet.')
+  }
+  const bqRemove = async (id) => {
+    const q = bqSaved.find((x) => x && x.id === id)
+    if (!q) return
+    if (bqDelArmed !== id) {
+      setBqDelArmed(id)
+      setBqSaveMsg('Press Remove again to drop \u201C' + q.name + '\u201D from the list.')
+      return
+    }
+    setBqSaveBusy(true)
+    try {
+      const next = bqSaved.filter((x) => x && x.id !== id)
+      await bqPersist(next)
+      setBqSaved(next); setBqPick(''); setBqDelArmed('')
+      setBqSaveMsg('Removed \u201C' + q.name + '\u201D. The SQL is still in the box above.')
+    } catch (e) {
+      setBqSaveMsg(e.message)
+    } finally {
+      setBqSaveBusy(false)
+    }
+  }
   const [editReportOpen, setEditReportOpen] = useState(false)
   const [sendReportOpen, setSendReportOpen] = useState(false)
   const [recipientsOpen, setRecipientsOpen] = useState(false)
@@ -1756,6 +1836,33 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             <div className={styles.card}>
               <h3 className={styles.cardTitle}>BigQuery Console</h3>
               <p className={styles.cardDesc}>Read-only SQL against the connected warehouse. Only SELECT and WITH are accepted, so nothing typed here can change data. Estimate first when you are not sure how much a query will scan.</p>
+              {/* Saved queries: named SQL kept in app_preferences (admin only) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+                <select
+                  className={styles.input}
+                  style={{ minWidth: 230 }}
+                  value={bqPick}
+                  onChange={(e) => { setBqPick(e.target.value); setBqDelArmed(''); if (e.target.value) bqLoad(e.target.value) }}
+                >
+                  <option value="">Saved queries ({bqSaved.length})</option>
+                  {bqSaved.map((q) => (
+                    <option key={q.id} value={q.id}>{q.name}</option>
+                  ))}
+                </select>
+                <input
+                  className={styles.input}
+                  style={{ minWidth: 210 }}
+                  placeholder="Name this query"
+                  value={bqName}
+                  onChange={(e) => { setBqName(e.target.value); setBqSaveMsg('') }}
+                />
+                <Button size="sm" variant="secondary" onClick={bqSave} disabled={bqSaveBusy}>{bqSaveBusy ? 'Saving...' : 'Save'}</Button>
+                {bqPick && (
+                  <Button size="sm" variant="secondary" onClick={() => bqRemove(bqPick)} disabled={bqSaveBusy}>{bqDelArmed === bqPick ? 'Confirm remove' : 'Remove'}</Button>
+                )}
+                {String(bqName || '').trim() && <span className={styles.bqType}>id: {bqSlug(bqName)}</span>}
+              </div>
+              {bqSaveMsg && <p className={styles.note} style={{ color: '#94A3B8', marginTop: 0 }}>{bqSaveMsg}</p>}
               <textarea
                 className={styles.sqlEditor}
                 spellCheck={false}
