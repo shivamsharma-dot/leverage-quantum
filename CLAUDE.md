@@ -3015,3 +3015,47 @@ Notes for later:
   silently invalidates the PIN and it has to be re-set. Adding the dedicated pepper removes that coupling.
 - Rule: never write `process.env.X` when `X` is also a module constant in the same file. Grep for the
   bare name first.
+
+### 31 Jul 2026 - RUNBOOK: CEO group PIN and "cannot send to CEO group"
+
+Read this first whenever the CEO PIN or the CEO-group send misbehaves. Almost every failure here is a
+pepper problem, not a typo.
+
+**How the PIN is stored.** `api/send-report.js`. The PIN is never saved. It is salted, run through
+PBKDF2-SHA512 at 310,000 rounds, then HMACd with a *pepper* that only lives in the server env. The row
+also carries an HMAC signature, so editing it in the DB to wipe a lockout invalidates it. The row lives
+in `app_preferences` under key `slack_ceo_pin` - and that table is readable with the app's public key,
+which is exactly why the pepper has to be secret. A 6-digit PIN is only a million guesses, so the pepper
+is the real protection, not the iteration count.
+
+**Which pepper is in use.** `pinPepper()` returns `SLACK_CEO_PIN_PEPPER` tagged `id: 'env'` when that
+var exists, otherwise the `SUPABASE_SERVICE_KEY` module constant tagged `id: 'svc'`. The tag is stored
+on the row and `pepperFor(id)` replays it, so old and new PINs coexist and adding a pepper never breaks
+a live PIN.
+
+**Symptom to cause:**
+- `No server pepper available - set SLACK_CEO_PIN_PEPPER in Vercel.` (500 on POST /api/send-report)
+  -> neither pepper resolved. Either both env vars are missing, or someone reintroduced the
+  `process.env.` prefix in front of the `SUPABASE_SERVICE_KEY` constant (that was the 30 Jul bug, `0ba8ae3`).
+- `No PIN is set yet. An admin has to set one in Settings > Reports first.` in the Send to Slack panel
+  -> downstream of the above. No PIN could be stored, so the panel fails closed. Fix the pepper, not the panel.
+- PIN suddenly reads as wrong when nobody changed it -> the pepper it was created under has changed.
+  For an `svc` row that means `SUPABASE_SERVICE_ROLE_KEY` was rotated. For an `env` row it means
+  `SLACK_CEO_PIN_PEPPER` was edited or deleted. There is no recovery: set a new PIN. Do not keep
+  retrying, 5 wrong tries locks it 15 min, then 30, then 60.
+
+**Where to look, in order:** Vercel > Settings > Environment Variables (does `SLACK_CEO_PIN_PEPPER`
+exist, Production + Preview, Sensitive?) -> Vercel > Logs, filter `/api/send-report`, open any 500 and
+read the message -> `grep -n "process.env.SUPABASE_SERVICE_KEY" api/send-report.js` (must return nothing;
+the bare constant is correct, the `process.env.` version is the bug).
+
+**Rules to keep it working:**
+- Never delete or edit `SLACK_CEO_PIN_PEPPER` once a PIN exists under it.
+- Env changes need a redeploy. Vercel does not push new env into existing deployments.
+- Never write `process.env.X` when `X` is already a module constant in the same file.
+- Adding the pepper var does nothing on its own. The existing row stays tagged `svc` and keeps using the
+  service key. You have to set a NEW PIN after the redeploy for it to be tagged `env`.
+
+**State as of 31 Jul 2026:** `SLACK_CEO_PIN_PEPPER` added in Vercel (Sensitive, Production + Preview)
+and a redeploy of the then-current production build went out after it. PIN rules unchanged: 6-12 digits,
+at least 3 distinct, no counting runs, no repeated halves.
