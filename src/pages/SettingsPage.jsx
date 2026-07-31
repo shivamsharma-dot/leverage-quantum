@@ -1263,6 +1263,21 @@ export default function SettingsPage() {
   const [slackCfgSaving, setSlackCfgSaving] = useState(false)
   const [slackCfgMsg, setSlackCfgMsg] = useState('')
   const [slackTesting, setSlackTesting] = useState(false)
+  const [lsqTesting, setLsqTesting] = useState(false)
+  const [lsqMsg, setLsqMsg] = useState(null)
+  // Round-trips through /api/crm-leads?source=leadsquared so an admin can validate the
+  // LEADSQUARED_ACCESS_KEY/SECRET_KEY/API_HOST env vars without me ever seeing the actual
+  // keys -- I can't test this integration myself for the same reason.
+  const testLeadSquared = async mode => {
+    setLsqTesting(true); setLsqMsg(null)
+    try {
+      const r = await fetch(`/api/crm-leads?source=leadsquared&mode=${mode}&pageSize=5`, { credentials: 'include' })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Failed')
+      setLsqMsg({ type: 'ok', text: `${mode}: got ${d.count ?? (d.rows || []).length} record(s) ✓` })
+    } catch (e) { setLsqMsg({ type: 'err', text: e.message }) }
+    finally { setLsqTesting(false) }
+  }
   const [editReportOpen, setEditReportOpen] = useState(false)
   const [sendReportOpen, setSendReportOpen] = useState(false)
   const [recipientsOpen, setRecipientsOpen] = useState(false)
@@ -1856,6 +1871,27 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                   <Button size="sm" onClick={addAffiliateSpendMonth} disabled={affSpendSaving}>{affSpendSaving ? 'Saving…' : (affiliateSpend[affSpendMonth] != null ? 'Update month' : 'Add month')}</Button>
                 </div>
+              </div>
+
+              {/* LeadSquared -- read-only API connection, merged into api/crm-leads.js
+                  (?source=leadsquared) rather than a new /api file, since the account is
+                  at the Vercel Hobby 12-function cap. The access/secret keys live in
+                  Vercel env only (never here) -- this card just proves they work. */}
+              <div className={styles.card} style={{ marginTop: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
+                  <div>
+                    <h3 className={styles.cardTitle} style={{ marginBottom: 4 }}>LeadSquared — API connection</h3>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>Reads Leads, Opportunities and per-lead Activity directly from LeadSquared's live API. Set <code>LEADSQUARED_ACCESS_KEY</code> / <code>LEADSQUARED_SECRET_KEY</code> in Vercel env, then test each mode below — a failure here usually means the wrong regional API host (LeadSquared's own error names the correct one) or a key that hasn't been generated yet in LeadSquared &gt; Settings &gt; API.</p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <Button size="sm" variant="secondary" onClick={() => testLeadSquared('leads')} disabled={lsqTesting}>{lsqTesting ? 'Testing…' : 'Test: Leads'}</Button>
+                  <Button size="sm" variant="secondary" onClick={() => testLeadSquared('opportunities')} disabled={lsqTesting}>{lsqTesting ? 'Testing…' : 'Test: Opportunities'}</Button>
+                  {lsqMsg && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: lsqMsg.type === 'ok' ? '#16A34A' : '#DC2626', background: lsqMsg.type === 'ok' ? '#F0FDF4' : '#FEF2F2', border: '0.5px solid ' + (lsqMsg.type === 'ok' ? '#BBF7D0' : '#FECACA'), borderRadius: 6, padding: '3px 10px' }}>{lsqMsg.text}</span>
+                  )}
+                </div>
+                <p className={styles.cardDesc} style={{ margin: '10px 0 0' }}>Activities require a specific lead's ProspectID (<code>/api/crm-leads?source=leadsquared&amp;mode=activities&amp;leadId=...</code>) — not testable with a generic button here; try it once Leads returns real ProspectIDs.</p>
 
                 {Object.keys(affiliateSpend).length === 0 ? (
                   <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>No affiliate spend entered yet — Affiliate will show ₹0 spend on the Overall dashboard until a month is added above.</p>

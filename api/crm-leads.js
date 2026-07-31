@@ -59,10 +59,138 @@ function splitCsvLine(line) {
   return out;
 }
 
+// ── LeadSquared (live API) ──────────────────────────────────────────────────
+// Merged into this endpoint rather than a new /api file -- Vercel Hobby is at the
+// 12-function cap. Reached via ?source=leadsquared&mode=leads|opportunities|activities.
+//
+// Credentials: LEADSQUARED_ACCESS_KEY / LEADSQUARED_SECRET_KEY, Vercel env only (never
+// app_preferences -- that table is readable with the public anon key, see the Slack bot
+// token note elsewhere in this repo for the same reasoning).
+//
+// Host: LeadSquared's API host is region-specific and different from the account's UI
+// subdomain. The UI links elsewhere in this app point at in21.leadsquared.com, which per
+// LeadSquared's own host table (https://apidocs.leadsquared.com/api-host/) maps to the
+// India-Mumbai API host below. LEADSQUARED_API_HOST overrides this if it's wrong --
+// LeadSquared's own 401 response names the correct host when you guess wrong, so a
+// mismatch here is self-diagnosing, not a dead end.
+const LEADSQUARED_DEFAULT_HOST = 'https://api-in21.leadsquared.com'
+
+function leadsquaredCreds() {
+  const accessKey = process.env.LEADSQUARED_ACCESS_KEY
+  const secretKey = process.env.LEADSQUARED_SECRET_KEY
+  const host = process.env.LEADSQUARED_API_HOST || LEADSQUARED_DEFAULT_HOST
+  return { accessKey, secretKey, host }
+}
+
+async function leadsquaredPost(path, { accessKey, secretKey, host }, body, extraQuery) {
+  const qs = new URLSearchParams({ accessKey, secretKey, ...(extraQuery || {}) })
+  const url = host.replace(/\/$/, '') + path + '?' + qs.toString()
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const text = await r.text()
+  let data
+  try { data = JSON.parse(text) } catch { data = text }
+  if (!r.ok) {
+    // LeadSquared's 401 on a wrong regional host names the right one in the body --
+    // surface that verbatim instead of a generic "unauthorized" so it's actionable.
+    const msg = (data && (data.ExceptionMessage || data.Message)) || (typeof data === 'string' ? data.slice(0, 300) : JSON.stringify(data).slice(0, 300))
+    throw new Error(`LeadSquared ${r.status}: ${msg}`)
+  }
+  return data
+}
+
+// Leads.Get (advanced search by lead criteria) -- filters mirror what LeadSquared's own
+// "Manage Leads" grid filters on: a field name (LookupName), an operator, and a value.
+// since/until filter on CreatedOn, matching the date-range convention every other data
+// source in this app already uses.
+async function fetchLeadSquaredLeads(creds, { since, until, pageIndex, pageSize }) {
+  const body = {
+    Parameter: since || until
+      ? { LookupName: 'CreatedOn', LookupValue: (since || '1900-01-01') + ' 00:00:00', SqlOperator: '>=' }
+      : { LookupName: 'CreatedOn', LookupValue: '1900-01-01 00:00:00', SqlOperator: '>=' },
+    Columns: { Include_CSV: 'ProspectID,FirstName,LastName,EmailAddress,Phone,Mobile,LeadType,Source,Status,ProspectStage,Owner,CreatedOn,ModifiedOn' },
+    Sorting: { ColumnName: 'CreatedOn', Direction: '1' },
+    Paging: { PageIndex: pageIndex || 1, PageSize: Math.min(pageSize || 200, 1000) },
+  }
+  const data = await leadsquaredPost('/v2/LeadManagement.svc/Leads.Get', creds, body)
+  const rows = Array.isArray(data) ? data : (data && data.Leads) || []
+  // until isn't expressible as a second SqlOperator in one Parameter block (the API takes
+  // one field/operator/value triple) -- filtered client-side on the page returned instead.
+  const filtered = until ? rows.filter(r => !r.CreatedOn || r.CreatedOn <= until + ' 23:59:59') : rows
+  return { rows: filtered, count: filtered.length, since, until }
+}
+
+// Opportunity/Retrieve/BySearchParameter -- OpportunityEventCode is account-specific;
+// 12003 is the code this same LeadSquared account already uses elsewhere in this app
+// (see LEADSQUARED_OPPORTUNITY_EVENT in HumanQLDetailDashboard.jsx) for opportunity deep
+// links, so it's reused here as the default rather than guessed fresh.
+async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, pageSize, eventCode }) {
+  const advancedSearch = {
+    GrpConOp: 'And',
+    Conditions: (since || until) ? [{
+      Type: 'Activity', ConOp: 'and',
+      RowCondition: [{
+        SubConOp: 'And', LSO: 'CreatedOn', LSO_Type: 'PAField',
+        Operator: 'between', RSO: (since || '1900-01-01') + ',' + (until || '2999-12-31'),
+      }],
+    }] : [],
+    QueryTimeZone: 'India Standard Time',
+  }
+  const body = {
+    OpportunityEventCode: Number(eventCode) || 12003,
+    AdvancedSearch: JSON.stringify(advancedSearch),
+    Paging: { PageIndex: pageIndex || 1, PageSize: Math.min(pageSize || 200, 1000) },
+    Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
+  }
+  const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, body)
+  const rows = Array.isArray(data) ? data : (data && (data.Opportunities || data.RecordSet)) || []
+  return { rows, count: rows.length, since, until }
+}
+
+// ProspectActivity.svc/Retrieve -- single-lead activity timeline. The bulk cross-lead
+// search (Activity/Retrieve/BySearchParameter) requires a specific ActivityEvent code AND
+// admin-level API credentials per LeadSquared's own docs; without knowing which activity
+// types this account tracks under which codes, per-lead retrieval is the reliable path.
+// leadId is required for this mode.
+async function fetchLeadSquaredActivities(creds, { leadId, pageSize }) {
+  if (!leadId) throw new Error('activities mode requires a leadId (ProspectID)')
+  const body = { Parameter: {}, Paging: { Offset: '0', RowCount: String(Math.min(pageSize || 50, 1000)) } }
+  const data = await leadsquaredPost('/v2/ProspectActivity.svc/Retrieve', creds, body, { leadId })
+  const rows = (data && data.ProspectActivities) || []
+  return { rows, count: (data && data.RecordCount) || rows.length, leadId }
+}
+
+async function handleLeadSquared(req, res, me) {
+  // Opportunities and activities are pipeline/ops data, gated the same as QL Ops rather
+  // than the meta_ads/google_ads gate the sheet-based CRM path below uses.
+  if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, 'lq_ops')) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  const creds = leadsquaredCreds()
+  if (!creds.accessKey || !creds.secretKey) {
+    return res.status(500).json({ error: 'LeadSquared is not configured -- set LEADSQUARED_ACCESS_KEY and LEADSQUARED_SECRET_KEY in Vercel env.' })
+  }
+  const { mode, since, until, leadId, eventCode, pageIndex, pageSize } = req.query || {}
+  const p = { since, until, leadId, eventCode, pageIndex: Number(pageIndex) || undefined, pageSize: Number(pageSize) || undefined }
+  try {
+    if (mode === 'opportunities') return res.status(200).json(await fetchLeadSquaredOpportunities(creds, p))
+    if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
+    return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
+  } catch (e) {
+    return res.status(502).json({ error: String((e && e.message) || e) })
+  }
+}
+
 export default async function handler(req, res) {
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })
+
+  if ((req.query && req.query.source) === 'leadsquared') return handleLeadSquared(req, res, me)
+
   if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
     return res.status(403).json({ error: 'Forbidden' })
   }
