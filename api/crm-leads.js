@@ -128,19 +128,29 @@ async function fetchLeadSquaredLeads(creds, { since, until, pageIndex, pageSize 
 // (see LEADSQUARED_OPPORTUNITY_EVENT in HumanQLDetailDashboard.jsx) for opportunity deep
 // links, so it's reused here as the default rather than guessed fresh.
 async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, pageSize, eventCode }) {
+  const code = Number(eventCode) || 12003
+  // First real error hit against the live account: "AdvancedSearch criteria does not match
+  // ActivityEvent passed" -- this search REQUIRES the AdvancedSearch to restate the same
+  // OpportunityEventCode as its own condition (LSO:"ActivityEvent"/LSO_Type:"PAEvent"), it
+  // is not implied by OpportunityEventCode alone. This condition is now always present.
+  // A date-range RowCondition is added alongside it on the same "and" when since/until are
+  // given -- best-effort by analogy with the Activity search example in the docs, since no
+  // worked date-range example exists for this specific endpoint; if the API rejects it,
+  // drop back to filtering by CreatedOn client-side on the returned page instead.
+  const rowCondition = [{ SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) }]
+  if (since || until) {
+    rowCondition.push({
+      SubConOp: 'And', LSO: 'CreatedOn', LSO_Type: 'PAField',
+      Operator: 'between', RSO: (since || '1900-01-01') + ',' + (until || '2999-12-31'),
+    })
+  }
   const advancedSearch = {
     GrpConOp: 'And',
-    Conditions: (since || until) ? [{
-      Type: 'Activity', ConOp: 'and',
-      RowCondition: [{
-        SubConOp: 'And', LSO: 'CreatedOn', LSO_Type: 'PAField',
-        Operator: 'between', RSO: (since || '1900-01-01') + ',' + (until || '2999-12-31'),
-      }],
-    }] : [],
+    Conditions: [{ Type: 'Activity', ConOp: 'and', RowCondition: rowCondition }],
     QueryTimeZone: 'India Standard Time',
   }
   const body = {
-    OpportunityEventCode: Number(eventCode) || 12003,
+    OpportunityEventCode: code,
     AdvancedSearch: JSON.stringify(advancedSearch),
     Paging: { PageIndex: pageIndex || 1, PageSize: Math.min(pageSize || 200, 1000) },
     Sorting: { ColumnName: 'CreatedOn', Direction: 1 },

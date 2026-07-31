@@ -264,6 +264,12 @@ const DATA_SOURCES = [
   { name: 'AI QL Detail Sheet', editKey: 'sheet_url_ai_ql_detail', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=AIDetailedQL' },
   { name: 'Human Unassigned Sheet', editKey: 'sheet_url_human_unassigned', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1FsfBQAAKWwnDCLFRbvamFaJiqs2nq8Wltk5e8LGAhRo/gviz/tq?tqx=out:csv&sheet=human_unassigned' },
   { name: 'AI Unassigned Sheet', editKey: 'sheet_url_ai_unassigned', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1FsfBQAAKWwnDCLFRbvamFaJiqs2nq8Wltk5e8LGAhRo/gviz/tq?tqx=out:csv&sheet=AI_unassigned' },
+  // Live API, not a sheet -- credentials are Vercel env only (LEADSQUARED_ACCESS_KEY/
+  // SECRET_KEY), never app_preferences. No editKey/defaultUrl, so this falls into the same
+  // 'api' category as Meta Graph API / Google Ads API (see sourceCategory()) and gets the
+  // lighter apiTestMode test button instead of the sheet-URL edit/diagnostics UI.
+  { name: 'LeadSquared — Leads', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'leads' },
+  { name: 'LeadSquared — Opportunities', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'opportunities' },
     ]
 
 // Official brand marks (Meta logo + 2026 Google Sheets icon), embedded verbatim from their
@@ -1263,20 +1269,22 @@ export default function SettingsPage() {
   const [slackCfgSaving, setSlackCfgSaving] = useState(false)
   const [slackCfgMsg, setSlackCfgMsg] = useState('')
   const [slackTesting, setSlackTesting] = useState(false)
-  const [lsqTesting, setLsqTesting] = useState(false)
-  const [lsqMsg, setLsqMsg] = useState(null)
+  // Keyed by mode ('leads'/'opportunities') so the two LeadSquared rows in Data Sources
+  // (below) can each show independent test state, same pattern as sheetTest/sheetMsg.
+  const [lsqTesting, setLsqTesting] = useState(null)
+  const [lsqMsg, setLsqMsg] = useState({})
   // Round-trips through /api/crm-leads?source=leadsquared so an admin can validate the
   // LEADSQUARED_ACCESS_KEY/SECRET_KEY/API_HOST env vars without me ever seeing the actual
   // keys -- I can't test this integration myself for the same reason.
   const testLeadSquared = async mode => {
-    setLsqTesting(true); setLsqMsg(null)
+    setLsqTesting(mode); setLsqMsg(m => ({ ...m, [mode]: null }))
     try {
       const r = await fetch(`/api/crm-leads?source=leadsquared&mode=${mode}&pageSize=5`, { credentials: 'include' })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed')
-      setLsqMsg({ type: 'ok', text: `${mode}: got ${d.count ?? (d.rows || []).length} record(s) ✓` })
-    } catch (e) { setLsqMsg({ type: 'err', text: e.message }) }
-    finally { setLsqTesting(false) }
+      setLsqMsg(m => ({ ...m, [mode]: { type: 'ok', text: `Got ${d.count ?? (d.rows || []).length} record(s)` } }))
+    } catch (e) { setLsqMsg(m => ({ ...m, [mode]: { type: 'err', text: e.message } })) }
+    finally { setLsqTesting(null) }
   }
   const [editReportOpen, setEditReportOpen] = useState(false)
   const [sendReportOpen, setSendReportOpen] = useState(false)
@@ -1723,7 +1731,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div className={styles.dsName}>{s.name}</div>
                                             <div className={styles.dsMeta} title={s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || '') : ''} style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.editKey ? (() => { const u = sheetUrls[s.editKey] || s.defaultUrl; if (!u) return 'No default set'; const m = u.match(/[?&]sheet=([^&]+)/); return 'Google Sheet' + (m ? ' \u00b7 ' + decodeURIComponent(m[1].replace(/\+/g, ' ')) : ''); })() : (s.src + ' \u2014 ' + s.rows + ' rows')}</div>
                     </div>
-                    <span className={styles.dsStatus} data-st={s.editKey ? (sheetUrls[s.editKey] ? 'custom' : 'default') : 'live'}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Live'}</span>{s.editKey && (<Button size="sm" variant="secondary" onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</Button>)}{s.editKey && userIsAdmin && (<Button size="sm" onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</Button>)}{s.custom && userIsAdmin && (<Button size="sm" danger onClick={() => removeCustomSource(s.editKey)}>Remove</Button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><Button size="sm" onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</Button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}{s.disconnectable && userIsAdmin && (<Button size="sm" danger onClick={disconnectMeta} disabled={metaDisconnecting}>{metaDisconnecting ? 'Disconnecting...' : 'Disconnect'}</Button>)}{s.disconnectable && metaDisconnectMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: metaDisconnectMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{metaDisconnectMsg.type === 'err' ? '✕ ' : '✓ '}{metaDisconnectMsg.text}</p>)}
+                    <span className={styles.dsStatus} data-st={s.editKey ? (sheetUrls[s.editKey] ? 'custom' : 'default') : 'live'}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Live'}</span>{s.apiTestMode && (<Button size="sm" variant="secondary" onClick={() => testLeadSquared(s.apiTestMode)} disabled={lsqTesting === s.apiTestMode}>{lsqTesting === s.apiTestMode ? 'Testing...' : 'Test connection'}</Button>)}{s.apiTestMode && lsqMsg[s.apiTestMode] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: lsqMsg[s.apiTestMode].type === 'err' ? '#c0392b' : '#15803D' }}>{lsqMsg[s.apiTestMode].type === 'err' ? '✕ ' : '✓ '}{lsqMsg[s.apiTestMode].text}</p>)}{s.editKey && (<Button size="sm" variant="secondary" onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</Button>)}{s.editKey && userIsAdmin && (<Button size="sm" onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</Button>)}{s.custom && userIsAdmin && (<Button size="sm" danger onClick={() => removeCustomSource(s.editKey)}>Remove</Button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><Button size="sm" onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</Button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}{s.disconnectable && userIsAdmin && (<Button size="sm" danger onClick={disconnectMeta} disabled={metaDisconnecting}>{metaDisconnecting ? 'Disconnecting...' : 'Disconnect'}</Button>)}{s.disconnectable && metaDisconnectMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: metaDisconnectMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{metaDisconnectMsg.type === 'err' ? '✕ ' : '✓ '}{metaDisconnectMsg.text}</p>)}
                     {s.editKey && sheetTest[s.editKey] && !sheetTest[s.editKey].loading && (
                       <div style={{ position: 'relative', flexBasis: '100%', width: '100%', marginTop: 8, padding: '10px 36px 10px 12px', borderRadius: 8, border: '1px solid ' + (sheetTest[s.editKey].error ? '#FECACA' : '#DCFCE7'), background: sheetTest[s.editKey].error ? '#FEF2F2' : '#F0FDF4' }}>
                         <button type="button" onClick={() => setSheetTest(prev => { const next = { ...prev }; delete next[s.editKey]; return next })} title="Close" style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 5, border: 'none', background: 'transparent', color: '#6B7280', fontSize: 14, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
@@ -1871,27 +1879,6 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                   <Button size="sm" onClick={addAffiliateSpendMonth} disabled={affSpendSaving}>{affSpendSaving ? 'Saving…' : (affiliateSpend[affSpendMonth] != null ? 'Update month' : 'Add month')}</Button>
                 </div>
-              </div>
-
-              {/* LeadSquared -- read-only API connection, merged into api/crm-leads.js
-                  (?source=leadsquared) rather than a new /api file, since the account is
-                  at the Vercel Hobby 12-function cap. The access/secret keys live in
-                  Vercel env only (never here) -- this card just proves they work. */}
-              <div className={styles.card} style={{ marginTop: 18 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
-                  <div>
-                    <h3 className={styles.cardTitle} style={{ marginBottom: 4 }}>LeadSquared — API connection</h3>
-                    <p className={styles.cardDesc} style={{ margin: 0 }}>Reads Leads, Opportunities and per-lead Activity directly from LeadSquared's live API. Set <code>LEADSQUARED_ACCESS_KEY</code> / <code>LEADSQUARED_SECRET_KEY</code> in Vercel env, then test each mode below — a failure here usually means the wrong regional API host (LeadSquared's own error names the correct one) or a key that hasn't been generated yet in LeadSquared &gt; Settings &gt; API.</p>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <Button size="sm" variant="secondary" onClick={() => testLeadSquared('leads')} disabled={lsqTesting}>{lsqTesting ? 'Testing…' : 'Test: Leads'}</Button>
-                  <Button size="sm" variant="secondary" onClick={() => testLeadSquared('opportunities')} disabled={lsqTesting}>{lsqTesting ? 'Testing…' : 'Test: Opportunities'}</Button>
-                  {lsqMsg && (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: lsqMsg.type === 'ok' ? '#16A34A' : '#DC2626', background: lsqMsg.type === 'ok' ? '#F0FDF4' : '#FEF2F2', border: '0.5px solid ' + (lsqMsg.type === 'ok' ? '#BBF7D0' : '#FECACA'), borderRadius: 6, padding: '3px 10px' }}>{lsqMsg.text}</span>
-                  )}
-                </div>
-                <p className={styles.cardDesc} style={{ margin: '10px 0 0' }}>Activities require a specific lead's ProspectID (<code>/api/crm-leads?source=leadsquared&amp;mode=activities&amp;leadId=...</code>) — not testable with a generic button here; try it once Leads returns real ProspectIDs.</p>
 
                 {Object.keys(affiliateSpend).length === 0 ? (
                   <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>No affiliate spend entered yet — Affiliate will show ₹0 spend on the Overall dashboard until a month is added above.</p>
