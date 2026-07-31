@@ -3328,3 +3328,31 @@ Google OAuth 2.0 Playground, gear icon > OAuth 2.0 configuration:
 Step 1 scope: https://www.googleapis.com/auth/bigquery.readonly
 Authorized as: shivam.sharma@leverageedu.com - the same identity that owns the
 BigQuery jobs, which is exactly why this works with only viewer rights.
+
+### The OAuth client behind it (verified in console 2026-07-31)
+GCP project: "Leverage Quantum" (leverage-quantum-498506) - a SEPARATE project from
+`leverage-production`, which is where the data lives. The client project needs no
+BigQuery rights at all; it only mints tokens. Access comes from the human identity.
+
+Google Auth Platform > Clients > "Leverage Quantum Ads API (Playground)"
+- Type: Web application, created 2026-07-08
+- Authorized redirect URIs: https://developers.google.com/oauthplayground  (the only one)
+  This is why the Playground works. If the refresh token ever has to be regenerated,
+  that URI must still be listed or Step 2 fails with redirect_uri_mismatch.
+- Client secret: enabled, created 2026-07-08. Google no longer lets you view it again -
+  if it is lost you must ADD a new secret, you cannot recover the old one.
+
+Google Auth Platform > Audience > User type: **INTERNAL**
+This is important and good: internal apps have no "Testing" publishing state, so the
+refresh token does NOT expire after 7 days and no Google verification is needed. The
+token is durable. It only dies if the secret is rotated, the client is deleted, the
+grant is revoked, or the account is suspended.
+
+### Shared-client warning
+The client is literally named "Ads API (Playground)" and predates the BigQuery work by
+three weeks, so the Google Ads integration almost certainly uses the SAME OAuth client.
+That means `GOOGLE_ADS_CLIENT_ID`/`_SECRET` and `BIGQUERY_CLIENT_ID`/`_SECRET` in Vercel
+likely hold identical values, and the two refresh tokens differ only by scope. Before
+rotating that secret or deleting that client, remember it takes Google Ads down with
+BigQuery. Compare the two env values first. Also: Google deletes OAuth clients that go
+unused for 6 months, so this client must not go idle.
