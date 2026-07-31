@@ -120,7 +120,99 @@ function ContactLink({ id, name }) {
   return <a href={LEADSQUARED_CONTACT_URL + id} target="_blank" rel="noreferrer" title={id} style={{ color: '#1C9FD4', fontWeight: 600, fontSize: 12 }}>{name || short(id)}</a>
 }
 
+// Persists which columns are hidden, keyed per tab (and per Activity Type for the
+// Activities tab, since each type has its own field set). Stores the HIDDEN set rather
+// than the visible one, matching this repo's established pattern elsewhere (visibleCols
+// merge-missing-keys convention) -- any brand-new column a future field-schema change
+// introduces defaults to visible automatically, never silently missing.
+function useHiddenColumns(storageKey) {
+  const [hidden, setHiddenState] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(storageKey) || '[]')) } catch { return new Set() }
+  })
+  // Re-read from localStorage whenever the key itself changes -- needed for the Activities
+  // tab, whose key includes the selected Activity Type: useState's initializer only runs
+  // once on mount, so without this a hidden-columns choice made for one type would keep
+  // being applied after switching to a completely different type.
+  useEffect(() => {
+    try { setHiddenState(new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'))) } catch { setHiddenState(new Set()) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey])
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, JSON.stringify(Array.from(hidden))) } catch {}
+  }, [hidden, storageKey])
+  return [hidden, setHiddenState]
+}
+
+function ColumnPickerIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="8" y1="3" x2="8" y2="21" /><line x1="12" y1="3" x2="12" y2="21" /><line x1="16" y1="3" x2="16" y2="21" /></svg>
+}
+
+// Deep-dived LeadSquared's own real "Select fields to view in grid" modal (the ||| icon at
+// the end of every real Manage screen's filter row) before building this -- same
+// interaction: a field search box, an All/Selected view toggle, a checkbox list, and
+// Cancel/Restore Default/Show Selected actions. Not pixel-identical, but the same real
+// functionality, present on all three tabs here exactly like the real product.
+function ColumnPickerButton({ columns, hidden, onApply }) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState(hidden)
+  const [search, setSearch] = useState('')
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false)
+
+  const openModal = () => { setDraft(new Set(hidden)); setSearch(''); setShowSelectedOnly(false); setOpen(true) }
+  const toggle = (col) => setDraft(prev => {
+    const next = new Set(prev)
+    if (next.has(col)) next.delete(col); else next.add(col)
+    return next
+  })
+  const list = columns.filter(c => {
+    if (search && !c.toLowerCase().includes(search.toLowerCase())) return false
+    if (showSelectedOnly && draft.has(c)) return false
+    return true
+  })
+
+  return (
+    <>
+      <button type="button" onClick={openModal} title="Select Columns"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.muted, cursor: 'pointer', flexShrink: 0 }}>
+        <ColumnPickerIcon />
+      </button>
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(15,23,42,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 14, width: 420, maxHeight: '70vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 60px -12px rgba(15,23,42,0.35)', fontFamily: FONT }}>
+            <div style={{ padding: '18px 20px 12px' }}>
+              <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 800, color: C.text }}>Select fields to view in grid</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <SearchBox value={search} onChange={setSearch} placeholder="Search Fields" />
+                <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: 'nowrap' }}>
+                  Show: <button type="button" onClick={() => setShowSelectedOnly(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: !showSelectedOnly ? 800 : 500, color: !showSelectedOnly ? C.text : C.muted, padding: 0, fontFamily: FONT, fontSize: 11.5 }}>All</button>
+                  {' | '}
+                  <button type="button" onClick={() => setShowSelectedOnly(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: showSelectedOnly ? 800 : 500, color: showSelectedOnly ? C.text : C.muted, padding: 0, fontFamily: FONT, fontSize: 11.5 }}>Selected</button>
+                </span>
+              </div>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px', borderTop: '1px solid ' + C.border, borderBottom: '1px solid ' + C.border }}>
+              {list.length === 0 ? <p style={{ fontSize: 12, color: C.muted, padding: '16px 0' }}>No fields match.</p> : list.map(col => (
+                <label key={col} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', fontSize: 13, color: C.text, cursor: 'pointer', borderBottom: '1px solid #F1F5F9' }}>
+                  <input type="checkbox" checked={!draft.has(col)} onChange={() => toggle(col)} />
+                  {col}
+                </label>
+              ))}
+            </div>
+            <div style={{ padding: '14px 20px', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <Button size="sm" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button size="sm" variant="secondary" onClick={() => setDraft(new Set())}>Restore Default</Button>
+              <Button size="sm" onClick={() => { onApply(draft); setOpen(false) }}>Show Selected</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 // ------------------------------------------------------------------- Leads
+
+const LEADS_COLUMNS = ['Name', 'Email', 'Phone', 'Type', 'Source', 'Status', 'Stage', 'Owner', 'Created On', 'Modified On']
 
 function LeadsTab() {
   const [rows, setRows] = useState([])
@@ -134,6 +226,7 @@ function LeadsTab() {
   const [owner, setOwner] = useState('All')
   const [openDD, setOpenDD] = useState(null)
   const [page, setPage] = useState(1)
+  const [hiddenCols, setHiddenCols] = useHiddenColumns('lq_columns_leads')
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -176,6 +269,7 @@ function LeadsTab() {
         <FilterDropdown label="Stage" value={stage} options={stageOptions.map(o => ({ v: o, l: o }))} open={openDD === 'stage'} onToggle={() => setOpenDD(openDD === 'stage' ? null : 'stage')} onSelect={v => { setStage(v); setOpenDD(null) }} />
         <FilterDropdown label="Owner" value={owner} options={ownerOptions.map(o => ({ v: o, l: o }))} open={openDD === 'owner'} onToggle={() => setOpenDD(openDD === 'owner' ? null : 'owner')} onSelect={v => { setOwner(v); setOpenDD(null) }} />
         <Button size="sm" variant="secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</Button>
+        <ColumnPickerButton columns={LEADS_COLUMNS} hidden={hiddenCols} onApply={setHiddenCols} />
       </Toolbar>
       {error && <ErrorNote message={error} />}
       {loading ? <InlineLoader label="Loading Leads from LeadSquared" /> : filtered.length === 0 ? <EmptyNote label="No leads match these filters." /> : (
@@ -183,22 +277,30 @@ function LeadsTab() {
           <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 12 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                <Th>Name</Th><Th>Email</Th><Th>Phone</Th><Th>Type</Th><Th>Source</Th>
-                <Th>Status</Th><Th>Stage</Th><Th>Owner</Th><Th>Created On</Th><Th>Modified On</Th>
+                {!hiddenCols.has('Name') && <Th>Name</Th>}
+                {!hiddenCols.has('Email') && <Th>Email</Th>}
+                {!hiddenCols.has('Phone') && <Th>Phone</Th>}
+                {!hiddenCols.has('Type') && <Th>Type</Th>}
+                {!hiddenCols.has('Source') && <Th>Source</Th>}
+                {!hiddenCols.has('Status') && <Th>Status</Th>}
+                {!hiddenCols.has('Stage') && <Th>Stage</Th>}
+                {!hiddenCols.has('Owner') && <Th>Owner</Th>}
+                {!hiddenCols.has('Created On') && <Th>Created On</Th>}
+                {!hiddenCols.has('Modified On') && <Th>Modified On</Th>}
               </tr></thead>
               <tbody>
                 {pageRows.map(r => (
                   <tr key={r.ProspectID}>
-                    <Td style={{ fontWeight: 700 }}><a href={LEADSQUARED_CONTACT_URL + r.ProspectID} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: 'none' }}>{[r.FirstName, r.LastName].filter(Boolean).join(' ') || '—'}</a></Td>
-                    <Td>{r.EmailAddress || '—'}</Td>
-                    <Td>{r.Phone || r.Mobile || '—'}</Td>
-                    <Td>{r.LeadType || '—'}</Td>
-                    <Td>{r.Source || '—'}</Td>
-                    <Td><StatusPill value={r.Status} /></Td>
-                    <Td>{r.ProspectStage || '—'}</Td>
-                    <Td>{r.OwnerName || '—'}</Td>
-                    <Td>{fmtDate(r.CreatedOn)}</Td>
-                    <Td>{fmtDate(r.ModifiedOn)}</Td>
+                    {!hiddenCols.has('Name') && <Td style={{ fontWeight: 700 }}><a href={LEADSQUARED_CONTACT_URL + r.ProspectID} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: 'none' }}>{[r.FirstName, r.LastName].filter(Boolean).join(' ') || '—'}</a></Td>}
+                    {!hiddenCols.has('Email') && <Td>{r.EmailAddress || '—'}</Td>}
+                    {!hiddenCols.has('Phone') && <Td>{r.Phone || r.Mobile || '—'}</Td>}
+                    {!hiddenCols.has('Type') && <Td>{r.LeadType || '—'}</Td>}
+                    {!hiddenCols.has('Source') && <Td>{r.Source || '—'}</Td>}
+                    {!hiddenCols.has('Status') && <Td><StatusPill value={r.Status} /></Td>}
+                    {!hiddenCols.has('Stage') && <Td>{r.ProspectStage || '—'}</Td>}
+                    {!hiddenCols.has('Owner') && <Td>{r.OwnerName || '—'}</Td>}
+                    {!hiddenCols.has('Created On') && <Td>{fmtDate(r.CreatedOn)}</Td>}
+                    {!hiddenCols.has('Modified On') && <Td>{fmtDate(r.ModifiedOn)}</Td>}
                   </tr>
                 ))}
               </tbody>
@@ -212,6 +314,8 @@ function LeadsTab() {
 }
 
 // -------------------------------------------------------------- Activities
+
+const ACTIVITIES_BASE_COLUMNS = ['Activity Date', 'Contact', 'Actor', 'Status']
 
 function ActivitiesTab() {
   const [types, setTypes] = useState([])
@@ -227,6 +331,10 @@ function ActivitiesTab() {
   const [actor, setActor] = useState('All')
   const [openDD, setOpenDD] = useState(null)
   const [page, setPage] = useState(1)
+  // Keyed per Activity Type -- each type has its own field set, so a hidden-column
+  // choice made for one type shouldn't silently apply to a completely different type.
+  const [hiddenCols, setHiddenCols] = useHiddenColumns(`lq_columns_activities_${eventCode}`)
+  const allColumns = useMemo(() => [...ACTIVITIES_BASE_COLUMNS, ...fieldColumns], [fieldColumns])
 
   useEffect(() => {
     fetchJson(`${API}&mode=activity_types`).then(d => setTypes(d.rows || [])).catch(() => setTypes([]))
@@ -281,6 +389,7 @@ function ActivitiesTab() {
         <FilterDropdown label="Status" value={status} options={statusOptions.map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} />
         <FilterDropdown label="Actor" value={actor} options={actorOptions.map(o => ({ v: o, l: o }))} open={openDD === 'actor'} onToggle={() => setOpenDD(openDD === 'actor' ? null : 'actor')} onSelect={v => { setActor(v); setOpenDD(null) }} />
         <Button size="sm" variant="secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</Button>
+        <ColumnPickerButton columns={allColumns} hidden={hiddenCols} onApply={setHiddenCols} />
       </Toolbar>
       <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 12px' }}>
         LeadSquared's own Manage Activities screen is scoped to one Activity Type at a time too — this isn't a Quantum limitation. Showing <strong style={{ color: C.text }}>{activityTypeName}</strong>.
@@ -291,17 +400,20 @@ function ActivitiesTab() {
           <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 12 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                <Th>Activity Date</Th><Th>Contact</Th><Th>Actor</Th><Th>Status</Th>
-                {fieldColumns.map(col => <Th key={col}>{col}</Th>)}
+                {!hiddenCols.has('Activity Date') && <Th>Activity Date</Th>}
+                {!hiddenCols.has('Contact') && <Th>Contact</Th>}
+                {!hiddenCols.has('Actor') && <Th>Actor</Th>}
+                {!hiddenCols.has('Status') && <Th>Status</Th>}
+                {fieldColumns.filter(col => !hiddenCols.has(col)).map(col => <Th key={col}>{col}</Th>)}
               </tr></thead>
               <tbody>
                 {pageRows.map(r => (
                   <tr key={r.ProspectActivityId}>
-                    <Td>{fmtDate(r.CreatedOn)}</Td>
-                    <Td><ContactLink id={r.RelatedProspectId} name={r.ContactName} /></Td>
-                    <Td>{r.CreatedByName || '—'}</Td>
-                    <Td><StatusPill value={r.Status} /></Td>
-                    {fieldColumns.map(col => <Td key={col} style={{ color: C.muted }}>{(r.Fields && r.Fields[col]) || '—'}</Td>)}
+                    {!hiddenCols.has('Activity Date') && <Td>{fmtDate(r.CreatedOn)}</Td>}
+                    {!hiddenCols.has('Contact') && <Td><ContactLink id={r.RelatedProspectId} name={r.ContactName} /></Td>}
+                    {!hiddenCols.has('Actor') && <Td>{r.CreatedByName || '—'}</Td>}
+                    {!hiddenCols.has('Status') && <Td><StatusPill value={r.Status} /></Td>}
+                    {fieldColumns.filter(col => !hiddenCols.has(col)).map(col => <Td key={col} style={{ color: C.muted }}>{(r.Fields && r.Fields[col]) || '—'}</Td>)}
                   </tr>
                 ))}
               </tbody>
@@ -316,6 +428,8 @@ function ActivitiesTab() {
 
 // ----------------------------------------------------------- Opportunities
 
+const OPPORTUNITIES_COLUMNS = ['Opportunity Name', 'Contact', 'Status', 'Stage', 'Owner', 'Source', 'Intake', 'Last Disposition', 'Created On']
+
 function OpportunitiesTab() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -328,6 +442,7 @@ function OpportunitiesTab() {
   const [owner, setOwner] = useState('All')
   const [openDD, setOpenDD] = useState(null)
   const [page, setPage] = useState(1)
+  const [hiddenCols, setHiddenCols] = useHiddenColumns('lq_columns_opportunities')
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -368,6 +483,7 @@ function OpportunitiesTab() {
         <FilterDropdown label="Stage" value={stage} options={stageOptions.map(o => ({ v: o, l: o }))} open={openDD === 'stage'} onToggle={() => setOpenDD(openDD === 'stage' ? null : 'stage')} onSelect={v => { setStage(v); setOpenDD(null) }} />
         <FilterDropdown label="Owner" value={owner} options={ownerOptions.map(o => ({ v: o, l: o }))} open={openDD === 'owner'} onToggle={() => setOpenDD(openDD === 'owner' ? null : 'owner')} onSelect={v => { setOwner(v); setOpenDD(null) }} />
         <Button size="sm" variant="secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</Button>
+        <ColumnPickerButton columns={OPPORTUNITIES_COLUMNS} hidden={hiddenCols} onApply={setHiddenCols} />
       </Toolbar>
       <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 12px' }}>
         Showing <strong style={{ color: C.text }}>University Admission Opportunity</strong> — this account also tracks Fly Compass, Fly Homes, Forex, Ivy100 and others as separate Opportunity Types, not wired up here yet.
@@ -378,21 +494,28 @@ function OpportunitiesTab() {
           <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 12 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                <Th>Opportunity Name</Th><Th>Contact</Th><Th>Status</Th><Th>Stage</Th><Th>Owner</Th>
-                <Th>Source</Th><Th>Intake</Th><Th width="20%">Last Disposition</Th><Th>Created On</Th>
+                {!hiddenCols.has('Opportunity Name') && <Th>Opportunity Name</Th>}
+                {!hiddenCols.has('Contact') && <Th>Contact</Th>}
+                {!hiddenCols.has('Status') && <Th>Status</Th>}
+                {!hiddenCols.has('Stage') && <Th>Stage</Th>}
+                {!hiddenCols.has('Owner') && <Th>Owner</Th>}
+                {!hiddenCols.has('Source') && <Th>Source</Th>}
+                {!hiddenCols.has('Intake') && <Th>Intake</Th>}
+                {!hiddenCols.has('Last Disposition') && <Th width="20%">Last Disposition</Th>}
+                {!hiddenCols.has('Created On') && <Th>Created On</Th>}
               </tr></thead>
               <tbody>
                 {pageRows.map(r => (
                   <tr key={r.OpportunityId}>
-                    <Td style={{ fontWeight: 700 }}><a href={LEADSQUARED_OPPORTUNITY_URL + r.OpportunityId} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: 'none' }}>{r.mx_Custom_1 || '—'}</a></Td>
-                    <Td><ContactLink id={r.RelatedProspectId} name={r.ContactName} /></Td>
-                    <Td><StatusPill value={r.Status} /></Td>
-                    <Td>{r.mx_Custom_2 || '—'}</Td>
-                    <Td>{r.OwnerName || '—'}</Td>
-                    <Td>{r.mx_Custom_3 || '—'}</Td>
-                    <Td>{r.mx_Custom_32 || '—'}</Td>
-                    <Td style={{ color: C.muted }}>{r.mx_Custom_100 || r.mx_Custom_81 || '—'}</Td>
-                    <Td>{fmtDate(r.CreatedOn)}</Td>
+                    {!hiddenCols.has('Opportunity Name') && <Td style={{ fontWeight: 700 }}><a href={LEADSQUARED_OPPORTUNITY_URL + r.OpportunityId} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: 'none' }}>{r.mx_Custom_1 || '—'}</a></Td>}
+                    {!hiddenCols.has('Contact') && <Td><ContactLink id={r.RelatedProspectId} name={r.ContactName} /></Td>}
+                    {!hiddenCols.has('Status') && <Td><StatusPill value={r.Status} /></Td>}
+                    {!hiddenCols.has('Stage') && <Td>{r.mx_Custom_2 || '—'}</Td>}
+                    {!hiddenCols.has('Owner') && <Td>{r.OwnerName || '—'}</Td>}
+                    {!hiddenCols.has('Source') && <Td>{r.mx_Custom_3 || '—'}</Td>}
+                    {!hiddenCols.has('Intake') && <Td>{r.mx_Custom_32 || '—'}</Td>}
+                    {!hiddenCols.has('Last Disposition') && <Td style={{ color: C.muted }}>{r.mx_Custom_100 || r.mx_Custom_81 || '—'}</Td>}
+                    {!hiddenCols.has('Created On') && <Td>{fmtDate(r.CreatedOn)}</Td>}
                   </tr>
                 ))}
               </tbody>
