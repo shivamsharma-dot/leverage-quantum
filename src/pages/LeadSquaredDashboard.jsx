@@ -210,9 +210,157 @@ function ColumnPickerButton({ columns, hidden, onApply }) {
   )
 }
 
+// Deep-dived LeadSquared's own real "Advanced Search" modal before building this: a
+// field/operator/value criteria builder (multiple stacked rows, "+ Add" to add another,
+// "Reset" to clear), an Any Criteria / All Criteria match-mode toggle, and a live
+// human-readable summary sentence of the current search ("Activity of the Contacts is X
+// and Y is Z"). Client-side by design -- the backend's own AdvancedSearch RowCondition
+// support is narrow and already got two real 400s from wrong guesses on other fields (see
+// api/crm-leads.js), so arbitrary multi-field search here runs against the rows already
+// loaded for the active date window, exactly like the toolbar's simpler filters already do.
+const ADV_OPERATORS = [
+  { v: 'is', l: 'Is' },
+  { v: 'isnot', l: 'Is Not' },
+  { v: 'contains', l: 'Contains' },
+  { v: 'isempty', l: 'Is Empty' },
+  { v: 'isnotempty', l: 'Is Not Empty' },
+]
+
+function evalCriterion(actual, op, target) {
+  const a = (actual == null ? '' : String(actual)).toLowerCase()
+  const t = (target == null ? '' : String(target)).toLowerCase().trim()
+  switch (op) {
+    case 'is': return a === t
+    case 'isnot': return a !== t
+    case 'contains': return !!t && a.includes(t)
+    case 'isempty': return a === ''
+    case 'isnotempty': return a !== ''
+    default: return true
+  }
+}
+
+function matchesAdvSearch(row, getValue, advSearch) {
+  if (!advSearch || !advSearch.criteria.length) return true
+  const results = advSearch.criteria.map(c => evalCriterion(getValue(row, c.field), c.op, c.value))
+  return advSearch.matchMode === 'any' ? results.some(Boolean) : results.every(Boolean)
+}
+
+function summarizeAdvSearch(advSearch) {
+  if (!advSearch || !advSearch.criteria.length) return ''
+  const glue = advSearch.matchMode === 'any' ? ' or ' : ' and '
+  return advSearch.criteria.map(c => {
+    const opLabel = (ADV_OPERATORS.find(o => o.v === c.op) || {}).l || c.op
+    if (c.op === 'isempty' || c.op === 'isnotempty') return `${c.field} ${opLabel}`
+    return `${c.field} ${opLabel} "${c.value}"`
+  }).join(glue)
+}
+
+function AdvancedSearchButton({ fields, advSearch, onApply, onClear }) {
+  const [open, setOpen] = useState(false)
+  const [criteria, setCriteria] = useState([{ field: fields[0], op: 'is', value: '' }])
+  const [matchMode, setMatchMode] = useState('all')
+  const [openDD, setOpenDD] = useState(null)
+
+  const openModal = () => {
+    setCriteria(advSearch ? advSearch.criteria.map(c => ({ ...c })) : [{ field: fields[0], op: 'is', value: '' }])
+    setMatchMode(advSearch ? advSearch.matchMode : 'all')
+    setOpenDD(null)
+    setOpen(true)
+  }
+  const addRow = () => setCriteria(prev => [...prev, { field: fields[0], op: 'is', value: '' }])
+  const removeRow = (i) => setCriteria(prev => prev.filter((_, idx) => idx !== i))
+  const updateRow = (i, patch) => setCriteria(prev => prev.map((c, idx) => idx === i ? { ...c, ...patch } : c))
+  const reset = () => { setCriteria([{ field: fields[0], op: 'is', value: '' }]); setMatchMode('all') }
+
+  const draftSummary = summarizeAdvSearch({ criteria, matchMode })
+
+  const find = () => {
+    const applied = criteria.filter(c => c.op === 'isempty' || c.op === 'isnotempty' || (c.value || '').trim())
+    if (!applied.length) { onClear(); setOpen(false); return }
+    onApply({ criteria: applied, matchMode })
+    setOpen(false)
+  }
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button type="button" onClick={openModal}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 8, border: '0.5px solid ' + (advSearch ? '#1C9FD4' : C.border), background: 'var(--card)', color: advSearch ? '#1C9FD4' : C.muted, fontSize: 12.5, fontWeight: 600, fontFamily: FONT, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="7" y1="12" x2="17" y2="12" /><line x1="10" y1="18" x2="14" y2="18" /></svg>
+          Advanced Search
+        </button>
+        {advSearch && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 8, background: '#EEF1F6', color: C.text, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap' }} title={summarizeAdvSearch(advSearch)}>
+            Advanced search results
+            <span onClick={onClear} style={{ cursor: 'pointer', color: C.muted, fontWeight: 800 }}>✕</span>
+          </span>
+        )}
+      </div>
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(15,23,42,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 14, width: 640, maxHeight: '78vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 60px -12px rgba(15,23,42,0.35)', fontFamily: FONT }}>
+            <div style={{ padding: '18px 20px 0' }}>
+              <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800, color: C.text }}>Advanced Search</h3>
+              <p style={{ margin: '0 0 14px', fontSize: 11.5, color: C.muted }}>Select Search Criteria</p>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px', display: 'flex', gap: 18 }}>
+              <div style={{ flex: '0 0 260px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {criteria.map((c, i) => (
+                  <div key={i} style={{ border: '0.5px solid ' + C.border, borderRadius: 10, padding: 10, display: 'flex', flexDirection: 'column', gap: 6, position: 'relative' }}>
+                    {criteria.length > 1 && (
+                      <span onClick={() => removeRow(i)} style={{ position: 'absolute', top: 6, right: 8, cursor: 'pointer', color: C.muted, fontSize: 12, fontWeight: 800 }}>✕</span>
+                    )}
+                    <FilterDropdown label="Field" value={c.field} options={fields.map(f => ({ v: f, l: f }))} open={openDD === 'field-' + i} onToggle={() => setOpenDD(openDD === 'field-' + i ? null : 'field-' + i)} onSelect={v => { updateRow(i, { field: v }); setOpenDD(null) }} />
+                    <FilterDropdown label="Op" value={c.op} options={ADV_OPERATORS} open={openDD === 'op-' + i} onToggle={() => setOpenDD(openDD === 'op-' + i ? null : 'op-' + i)} onSelect={v => { updateRow(i, { op: v }); setOpenDD(null) }} />
+                    {c.op !== 'isempty' && c.op !== 'isnotempty' && (
+                      <input value={c.value} onChange={e => updateRow(i, { value: e.target.value })} placeholder="Value" style={{ ...inputStyle, width: '100%' }} />
+                    )}
+                  </div>
+                ))}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button size="sm" variant="secondary" onClick={addRow}>+ Add</Button>
+                  <Button size="sm" variant="secondary" onClick={reset}>Reset</Button>
+                </div>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: '0 0 10px', fontSize: 12.5, fontWeight: 700, color: C.text }}>
+                  Search for records that match{' '}
+                  <label style={{ fontWeight: 500, marginRight: 10, cursor: 'pointer' }}><input type="radio" checked={matchMode === 'any'} onChange={() => setMatchMode('any')} /> Any Criteria</label>
+                  <label style={{ fontWeight: 500, cursor: 'pointer' }}><input type="radio" checked={matchMode === 'all'} onChange={() => setMatchMode('all')} /> All Criteria</label>
+                </p>
+                <div style={{ background: '#F8FAFC', border: '0.5px solid ' + C.border, borderRadius: 10, padding: 14, fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
+                  {draftSummary || <span style={{ color: C.muted }}>No criteria added yet.</span>}
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <Button size="sm" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={find}>Find</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 // ------------------------------------------------------------------- Leads
 
 const LEADS_COLUMNS = ['Name', 'Email', 'Phone', 'Type', 'Source', 'Status', 'Stage', 'Owner', 'Created On', 'Modified On']
+
+function getLeadFieldValue(r, field) {
+  switch (field) {
+    case 'Name': return [r.FirstName, r.LastName].filter(Boolean).join(' ')
+    case 'Email': return r.EmailAddress
+    case 'Phone': return r.Phone || r.Mobile
+    case 'Type': return r.LeadType
+    case 'Source': return r.Source
+    case 'Status': return r.Status
+    case 'Stage': return r.ProspectStage
+    case 'Owner': return r.OwnerName
+    default: return ''
+  }
+}
 
 function LeadsTab() {
   const [rows, setRows] = useState([])
@@ -227,6 +375,7 @@ function LeadsTab() {
   const [openDD, setOpenDD] = useState(null)
   const [page, setPage] = useState(1)
   const [hiddenCols, setHiddenCols] = useHiddenColumns('lq_columns_leads')
+  const [advSearch, setAdvSearch] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -238,7 +387,7 @@ function LeadsTab() {
   }, [since, until])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { setPage(1) }, [search, status, stage, owner])
+  useEffect(() => { setPage(1) }, [search, status, stage, owner, advSearch])
 
   const opts = (key) => ['All', ...Array.from(new Set(rows.map(r => r[key]).filter(Boolean))).sort()]
   const statusOptions = useMemo(() => opts('Status'), [rows])
@@ -254,8 +403,9 @@ function LeadsTab() {
       const hay = [r.FirstName, r.LastName, r.EmailAddress, r.Phone, r.Mobile].filter(Boolean).join(' ').toLowerCase()
       if (!hay.includes(q)) return false
     }
+    if (!matchesAdvSearch(r, getLeadFieldValue, advSearch)) return false
     return true
-  }), [rows, status, stage, owner, search])
+  }), [rows, status, stage, owner, search, advSearch])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_ROWS))
   const pageRows = filtered.slice((page - 1) * PAGE_ROWS, page * PAGE_ROWS)
@@ -265,6 +415,7 @@ function LeadsTab() {
       <Toolbar>
         <DateRangeRow since={since} until={until} onSince={setSince} onUntil={setUntil} />
         <SearchBox value={search} onChange={setSearch} placeholder="Search name, email, phone…" />
+        <AdvancedSearchButton fields={LEADS_COLUMNS} advSearch={advSearch} onApply={setAdvSearch} onClear={() => setAdvSearch(null)} />
         <FilterDropdown label="Status" value={status} options={statusOptions.map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} />
         <FilterDropdown label="Stage" value={stage} options={stageOptions.map(o => ({ v: o, l: o }))} open={openDD === 'stage'} onToggle={() => setOpenDD(openDD === 'stage' ? null : 'stage')} onSelect={v => { setStage(v); setOpenDD(null) }} />
         <FilterDropdown label="Owner" value={owner} options={ownerOptions.map(o => ({ v: o, l: o }))} open={openDD === 'owner'} onToggle={() => setOpenDD(openDD === 'owner' ? null : 'owner')} onSelect={v => { setOwner(v); setOpenDD(null) }} />
@@ -317,6 +468,14 @@ function LeadsTab() {
 
 const ACTIVITIES_BASE_COLUMNS = ['Activity Date', 'Contact', 'Actor', 'Status']
 
+function getActivityFieldValue(r, field) {
+  if (field === 'Activity Date') return r.CreatedOn
+  if (field === 'Contact') return r.ContactName
+  if (field === 'Actor') return r.CreatedByName
+  if (field === 'Status') return r.Status
+  return (r.Fields && r.Fields[field]) || ''
+}
+
 function ActivitiesTab() {
   const [types, setTypes] = useState([])
   const [eventCode, setEventCode] = useState(DEFAULT_ACTIVITY_EVENT_CODE)
@@ -335,6 +494,7 @@ function ActivitiesTab() {
   // choice made for one type shouldn't silently apply to a completely different type.
   const [hiddenCols, setHiddenCols] = useHiddenColumns(`lq_columns_activities_${eventCode}`)
   const allColumns = useMemo(() => [...ACTIVITIES_BASE_COLUMNS, ...fieldColumns], [fieldColumns])
+  const [advSearch, setAdvSearch] = useState(null)
 
   useEffect(() => {
     fetchJson(`${API}&mode=activity_types`).then(d => setTypes(d.rows || [])).catch(() => setTypes([]))
@@ -356,7 +516,13 @@ function ActivitiesTab() {
   }, [eventCode, since, until])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { setPage(1) }, [search, status, actor, eventCode])
+  useEffect(() => { setPage(1) }, [search, status, actor, eventCode, advSearch])
+  // Each Activity Type has its own field set -- a saved Advanced Search built against one
+  // type's fields (e.g. "Preferred Course") would silently match nothing on a different
+  // type, which reads as a bug rather than the real reason ("that field doesn't exist
+  // here"). Clearing it on type switch is more honest than a search that quietly stops
+  // matching for no visible reason.
+  useEffect(() => { setAdvSearch(null) }, [eventCode])
 
   const typeOptions = useMemo(() => types.map(t => ({ v: String(t.code), l: t.name })), [types])
   const activityTypeName = (typeOptions.find(o => o.v === String(eventCode)) || {}).l || 'Activity Type'
@@ -372,8 +538,9 @@ function ActivitiesTab() {
       const hay = [r.ContactName, r.CreatedByName, ...Object.values(r.Fields || {})].filter(Boolean).join(' ').toLowerCase()
       if (!hay.includes(q)) return false
     }
+    if (!matchesAdvSearch(r, getActivityFieldValue, advSearch)) return false
     return true
-  }), [rows, status, actor, search])
+  }), [rows, status, actor, search, advSearch])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_ROWS))
   const pageRows = filtered.slice((page - 1) * PAGE_ROWS, page * PAGE_ROWS)
@@ -386,6 +553,7 @@ function ActivitiesTab() {
           : <FilterDropdown label="Activity Type" value={String(eventCode)} options={typeOptions} open={openDD === 'type'} onToggle={() => setOpenDD(openDD === 'type' ? null : 'type')} onSelect={v => { setEventCode(v); setOpenDD(null) }} />}
         <DateRangeRow since={since} until={until} onSince={setSince} onUntil={setUntil} />
         <SearchBox value={search} onChange={setSearch} placeholder="Search contact, details, actor…" />
+        <AdvancedSearchButton fields={allColumns} advSearch={advSearch} onApply={setAdvSearch} onClear={() => setAdvSearch(null)} />
         <FilterDropdown label="Status" value={status} options={statusOptions.map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} />
         <FilterDropdown label="Actor" value={actor} options={actorOptions.map(o => ({ v: o, l: o }))} open={openDD === 'actor'} onToggle={() => setOpenDD(openDD === 'actor' ? null : 'actor')} onSelect={v => { setActor(v); setOpenDD(null) }} />
         <Button size="sm" variant="secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</Button>
@@ -430,6 +598,20 @@ function ActivitiesTab() {
 
 const OPPORTUNITIES_COLUMNS = ['Opportunity Name', 'Contact', 'Status', 'Stage', 'Owner', 'Source', 'Intake', 'Last Disposition', 'Created On']
 
+function getOpportunityFieldValue(r, field) {
+  switch (field) {
+    case 'Opportunity Name': return r.mx_Custom_1
+    case 'Contact': return r.ContactName
+    case 'Status': return r.Status
+    case 'Stage': return r.mx_Custom_2
+    case 'Owner': return r.OwnerName
+    case 'Source': return r.mx_Custom_3
+    case 'Intake': return r.mx_Custom_32
+    case 'Last Disposition': return r.mx_Custom_100 || r.mx_Custom_81
+    default: return ''
+  }
+}
+
 function OpportunitiesTab() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -443,6 +625,7 @@ function OpportunitiesTab() {
   const [openDD, setOpenDD] = useState(null)
   const [page, setPage] = useState(1)
   const [hiddenCols, setHiddenCols] = useHiddenColumns('lq_columns_opportunities')
+  const [advSearch, setAdvSearch] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -455,7 +638,7 @@ function OpportunitiesTab() {
   }, [since, until, status])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { setPage(1) }, [search, stage, owner])
+  useEffect(() => { setPage(1) }, [search, stage, owner, advSearch])
 
   const stageOptions = useMemo(() => ['All', ...Array.from(new Set(rows.map(r => r.mx_Custom_2).filter(Boolean))).sort()], [rows])
   const ownerOptions = useMemo(() => ['All', ...Array.from(new Set(rows.map(r => r.OwnerName).filter(Boolean))).sort()], [rows])
@@ -468,8 +651,9 @@ function OpportunitiesTab() {
       const hay = [r.mx_Custom_1, r.mx_Custom_3, r.OwnerName].filter(Boolean).join(' ').toLowerCase()
       if (!hay.includes(q)) return false
     }
+    if (!matchesAdvSearch(r, getOpportunityFieldValue, advSearch)) return false
     return true
-  }), [rows, stage, owner, search])
+  }), [rows, stage, owner, search, advSearch])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_ROWS))
   const pageRows = filtered.slice((page - 1) * PAGE_ROWS, page * PAGE_ROWS)
@@ -479,6 +663,7 @@ function OpportunitiesTab() {
       <Toolbar>
         <DateRangeRow since={since} until={until} onSince={setSince} onUntil={setUntil} />
         <SearchBox value={search} onChange={setSearch} placeholder="Search name, source…" />
+        <AdvancedSearchButton fields={OPPORTUNITIES_COLUMNS} advSearch={advSearch} onApply={setAdvSearch} onClear={() => setAdvSearch(null)} />
         <FilterDropdown label="Status" value={status} options={['All', 'Open', 'Won', 'Lost'].map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} />
         <FilterDropdown label="Stage" value={stage} options={stageOptions.map(o => ({ v: o, l: o }))} open={openDD === 'stage'} onToggle={() => setOpenDD(openDD === 'stage' ? null : 'stage')} onSelect={v => { setStage(v); setOpenDD(null) }} />
         <FilterDropdown label="Owner" value={owner} options={ownerOptions.map(o => ({ v: o, l: o }))} open={openDD === 'owner'} onToggle={() => setOpenDD(openDD === 'owner' ? null : 'owner')} onSelect={v => { setOwner(v); setOpenDD(null) }} />
