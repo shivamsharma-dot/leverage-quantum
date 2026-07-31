@@ -3476,3 +3476,39 @@ layer, multi-touch attribution, lead maturation curves, marginal-CPQL budget
 allocation, anomaly detection, and nightly reconciliation against Main Data
 Quantum. Read-only access blocks none of these; only views, BQML training and
 BigQuery-side scheduled queries are genuinely out of reach.
+
+---
+
+## 1 Aug 2026 - BigQuery saved queries (the save + name layer)
+
+**What shipped.** The BigQuery Console in Settings > Data can now save the SQL
+in the box under a name. The list lives in the Supabase `app_preferences` table
+under the key `bq_saved_queries`, written through the existing
+`api/preferences.mjs` upsert - no new file in `api/`, so Vercel stays at 12/12
+functions.
+
+**Stored shape** (JSON array, one object per query): `{ id, name, sql, updatedAt }`.
+`id` is the name slugged to `[a-z0-9_]` by `bqSlug`, capped at 60 chars, and it is
+the handle a page will use later to ask for a query by name. Saving a name that
+slugs to an existing id overwrites that entry - that is the intended edit path.
+
+**UI.** One row above the editor: saved-query picker, name box, Save, Remove.
+Remove arms on the first press and only drops the entry on the second. Picking
+from the list loads the SQL and clears the previous result, estimate, error and
+the armed cost confirmation, so a loaded query always starts from a clean run.
+
+**Verified live** on quantum.leverageedu.com/settings: saved "Tables and views in
+leverage_direct", reloaded the page, the picker showed "Saved queries (1)",
+loading restored the SQL, and Run returned 125 rows / 10.0 MB / 1102 ms. Every
+one of those 125 objects in leverage_direct is a VIEW.
+
+**Still open, deliberately.** A page cannot yet call a saved query by name.
+`bq_saved_queries` is admin-only in the preferences GET (it is not in
+PUBLIC_KEYS) and `handleBigQuery` has no `mode=saved`. When wiring a saved query
+into a dashboard, prefer the nightly `api/export-to-sheets.mjs` path and let the
+page read the sheet: running a view-heavy query on every page view is real money
+(COUNT(*) on `source_attribution_v3` scans 12.6 GB, about Rs 7). Saved queries
+also still have to be pasted in once - console "(Classic) Queries" are not
+reachable over REST.
+
+**Commits.** 5f1ada8 feature, 576b051 one-row layout fix.
