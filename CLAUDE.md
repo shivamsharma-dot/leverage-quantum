@@ -3189,3 +3189,51 @@ Hard lessons from building it, worth keeping:
 Open question for Shivam, not touched: ctx.pace reports "31 of 31 days" on 31 Jul while
 the data only runs to 30 Jul. That off-by-one is pre-existing in V4's pace block, not
 new to V7, so it was left alone rather than changed unasked.
+
+## 31 Jul 2026 - CEO report language and the D-1 rule (dd37e60, 759ee23)
+
+Shivam, on reading a sent report: "why are we telling our ceo this is v4 and that
+was v7 etc etc / dont you think this is irrelvant / just talk about what you're
+showing and not about what you're not showing". Plus: 550-600 is always the QL
+band, the report goes out at NIGHT, and the current day is never in it.
+
+Rule now standing for every CEO-facing message, all versions:
+1. No version name in any string a reader sees. Registry code, desc, tagline and
+   the M1/M2 badge in the preview are internal picker labels, they never leave
+   the app - checked: the send payload carries text, after, fields, table, chart,
+   label, attach only. versionId goes to the audit log, not to Slack.
+2. No sentence about what the report does NOT contain. Removed from V7: the
+   applications/CPA disclaimer and the corridor footnote that pointed at V4.
+   Kept: "N smaller corridors are not ranked", because dropping it would make a
+   partial list read as complete, which is a number problem, not a wording one.
+
+QL band 550-600 is permanent and now prints on every send, met or missed:
+- V7 M1, per day, three state - short by N / inside the band / N over the top.
+- V4 M1, month to date, divided by complete days so the band is comparable:
+  "14,654 QLs over 30 complete days is 488 a day against the 550 to 600 daily
+  target - 62 a day short." New qlTargetV4(ctx), first line of ins1.
+
+The real bug found while checking his claim. He said "what we are sening
+currently 1-30th July data". It was not. 31 Jul was in the July window with
+1,24,249 spend, 863 leads and 0 QLs, so MTD spend, leads, CPL, CPQL, QL a day
+and the run-rate were all polluted by a half finished day. Only the day-over-day
+block was right, because daySeriesOf already dropped today.
+
+Fix, one line at the source, OverallDashboard.jsx const rows (was line 625):
+the merge of rawRows and the synthetic affiliate rows now filters out anything
+dated on or after today's local midnight. rows feeds dateFilteredRows, filtered,
+prevFiltered, compareRows, months and pace, so the whole page and every report
+version is D-1 with no per-caller opt in.
+
+Safe because the presets already ended at D-1: LD is today minus 1, L7D is the
+seven days ending yesterday. Only MTD and the month presets were reaching into
+today. MTD keeps to: today, it just finds nothing there now.
+
+Verified live after deploy - leads 2,07,552 to 2,06,689 (exactly the 863),
+spend 3,05,87,346 to 3,04,63,097 (exactly the 1,24,249), QLs unchanged at
+14,654 because 31 Jul had none, CPQL 2,204 to 2,195, applications 748 to 747.
+Pace now reads "30 of 31 days" instead of "31 of 31", which closes the off-by-one
+left open in the V7 entry above.
+
+Open, not touched: Summary, Meta Ads, Google Ads and QL Ops each build their own
+rows and were not audited for this. Ask before changing them.
