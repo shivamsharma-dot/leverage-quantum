@@ -657,7 +657,7 @@ with urllib.request.urlopen(req2) as r:
 ## Pending / In Progress
 
 - Resend domain verification for `noreply@leverageedu.com` — required for email delivery
-- BigQuery integration -- credentials live, code lost and never committed. See "RECOVERED - BigQuery direct integration (2026-07-31)" at the bottom of this file.
+- BigQuery integration -- DONE 2026-08-01, see the entry at the bottom of this file. Live at `/api/crm-leads?source=bigquery` with `lib/bigquery.mjs`; connection is testable from Settings -> Data Sources.
 - `app_preferences` Supabase table — needs manual SQL creation if not done
 - Google Ads dashboard — connected but data source is live
 - Ask AI memories / chat persistence improvements
@@ -3356,3 +3356,67 @@ likely hold identical values, and the two refresh tokens differ only by scope. B
 rotating that secret or deleting that client, remember it takes Google Ads down with
 BigQuery. Compare the two env values first. Also: Google deletes OAuth clients that go
 unused for 6 months, so this client must not go idle.
+
+---
+
+## 2026-08-01 - BigQuery is wired into the app (Settings -> Data Sources)
+
+The integration that was lost before it could be committed is now rebuilt and
+live. Commit `ae42f60`.
+
+### What was added
+
+**`lib/bigquery.mjs`** (171 lines, 7 exports) - the whole BigQuery surface:
+- `bigQueryCreds()` / `bigQueryConfigured()` - reads the three Vercel env vars
+  (`BIGQUERY_CLIENT_ID`, `BIGQUERY_CLIENT_SECRET`, `BIGQUERY_REFRESH_TOKEN`)
+  plus optional `BIGQUERY_PROJECT_ID` (default `leverage-production`) and
+  `BIGQUERY_LOCATION` (default `asia-south1`).
+- `bigQueryAccessToken()` - refresh-token grant against `oauth2.googleapis.com`.
+  Caches the token in module scope until 2 min before expiry, so a warm lambda
+  does not re-mint one on every call.
+- `bigQuerySelect(sql, opts)` - POSTs to
+  `/bigquery/v2/projects/<project>/queries` with `useLegacySql:false`. Supports
+  `dryRun`, `maxResults`, `timeoutMs`, `maxBytes`. Returns
+  `{ rows, fields, totalRows, totalBytesProcessed, cacheHit, jobId, ... }`.
+- `decodeRows(schema, rows)` - BigQuery returns every scalar as a STRING inside
+  `{ f: [{ v }] }`. This maps them to real JS types using the schema. This is
+  why the old parity check showed `4.0660831692071205E8` instead of a number.
+  NULLs stay `null`; REPEATED fields come back as arrays.
+- `assertReadOnly(sql)` - rejects anything that is not `SELECT` / `WITH` / `(`.
+  Belt and braces: the account only has viewer access anyway.
+- `bigQueryDatasets()` - metadata-only dataset list, scans zero bytes.
+
+**`api/crm-leads.js`** - gained `handleBigQuery()` and one route line. Reached at
+`/api/crm-leads?source=bigquery&mode=ping|datasets|query`. Admin-only via
+`canAccessDashboard(me.role, 'settings')`.
+
+**`src/pages/SettingsPage.jsx`** - a `Google BigQuery` row in Data Sources
+(`bqTest: true` flag), a `BigQueryIcon` brand mark, a `sourceIconClass` branch,
+and a `testBigQuery()` handler with an admin-only `Test connection` button.
+`sourceCategory()` needs no change: no `editKey`, so it lands under API
+Connections (count went 5 -> 6). CSS: `.dsIconWrapBrand svg.dsIconBq`.
+
+### Verified live on 2026-08-01
+
+- `mode=ping` -> 200, `leverage-production` / `asia-south1`, 748 ms.
+- `mode=datasets` -> 5 datasets: `chatbot_marketing`, `fly_analyst`,
+  `leverage_direct`, `leverage_partners`, +1 more.
+- Real query -> INTEGER/FLOAT/BOOLEAN/DATE all decode to correct JS types.
+- `DELETE ...` -> 502 `Only read-only SELECT/WITH queries are allowed.`
+- Dry run on `leverage_direct.source_attribution_v3` -> 13,554,854,097 bytes.
+
+### Things to remember
+
+- **No new files in `api/`.** Still 12/12. Any further BigQuery endpoint must be
+  another `mode` on `handleBigQuery`, not a new route file.
+- **Most `leverage_direct` objects are VIEWS, not tables.** That is why
+  `COUNT(*)` on `source_attribution_v3` costs ~13.5 GB instead of 0 bytes - the
+  view expands and scans the underlying data. Always `dryRun` first to see the
+  bill before running anything new against these.
+- **Never put credentials in this repo** - it is public. All three BigQuery
+  secrets are Vercel env only, and the OAuth client is Internal on
+  `leverage-quantum-498506` so the refresh token does not expire.
+- The saved "(Classic) Queries" in the console (34 of them, e.g. `Overall PM`
+  at 13.07 GB, `Marketing Query V6` at 15.03 GB) are NOT reachable over the
+  REST API - saved queries are console-only objects. To reuse one, paste its SQL
+  into a `mode=query` call or move it into a view.
