@@ -3059,3 +3059,31 @@ the bare constant is correct, the `process.env.` version is the bug).
 **State as of 31 Jul 2026:** `SLACK_CEO_PIN_PEPPER` added in Vercel (Sensitive, Production + Preview)
 and a redeploy of the then-current production build went out after it. PIN rules unchanged: 6-12 digits,
 at least 3 distinct, no counting runs, no repeated halves.
+
+### 31 Jul 2026 - Chart card footers now sit in the footer (`037ec14`)
+
+Complaint: on Overall the explanatory notes under charts floated directly beneath the content, so in a
+two-up row the left and right notes sat at different heights and the shorter card ended in a block of
+dead white space.
+
+Measured before the fix (dead space between the last painted child and the card's bottom edge):
+Source efficiency 86px, Cost per QL month on month 113px, Ads whose cost per QL rose the most 82px.
+The card shells were already equal height - the grid stretches them - so the bug was purely internal:
+the card body was `display: block`, which gives a child no way to push itself to the bottom.
+
+Fix, two files:
+- `src/ui/dashboardKit.jsx` - `Card` shell gets `height: 100%` + `display: flex` + `flexDirection: column`,
+  and the body div gets `flex: 1, minHeight: 0` and becomes a column flex container.
+- `src/components/QualitySections.jsx` - `Note` is now an outer div with `marginTop: 'auto'` and
+  `paddingTop: 12` wrapping the original bordered div. The auto margin pins it to the bottom; the outer
+  padding guarantees the old 12px breathing room above the rule, which a bare `marginTop: 'auto'` would
+  have collapsed to zero on a full card.
+
+After: all 18 cards on Overall report <= 1px of dead space. Verified live, not just built.
+
+Notes:
+- `Card` is shared by OverallDashboard (8 uses) and QualitySections (11), so this is global. All 5 `Note`
+  instances live in QualitySections.
+- Making the body a flex column also pulled the two note-less cards flush, because their last block now
+  stretches instead of leaving a gap. Charts were checked for distortion - none.
+- If a future card needs its content NOT to stretch, wrap the children rather than reverting the Card.
