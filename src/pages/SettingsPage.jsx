@@ -5,6 +5,7 @@ import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole
 import { getActivityLog } from '../components/ActivityLogger.js'
 import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
+import Dropdown from '../components/Dropdown'
 import PinInput from '../components/PinInput'
 import { useDesignStyle, saveDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
@@ -365,40 +366,6 @@ function sourceCategory(s) {
   return (s.editKey || s.custom) ? 'sheets' : 'api'
 }
 
-// Small custom-styled dropdown (never a native <select> -- house design rule).
-function Dropdown({ options, value, onChange, minWidth = 100, disabled }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-  useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
-  const current = options.find(o => (o.value ?? o) === value)
-  return (
-    <div style={{ position: 'relative', display: 'inline-block' }} ref={ref}>
-      <button type="button" disabled={disabled} onClick={() => setOpen(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 6, border: '0.5px solid ' + (open ? '#1F3C84' : '#E5E7EB'), background: '#fff', color: '#374151', cursor: disabled ? 'default' : 'pointer', fontSize: 12, fontFamily: 'inherit', minWidth, whiteSpace: 'nowrap' }}>
-        <span style={{ flex: 1, textAlign: 'left' }}>{current ? (current.label ?? current) : value}</span>
-        <svg width="9" height="6" viewBox="0 0 10 6" fill="none" style={{ flexShrink: 0, transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }}><path d="M1 1l4 4 4-4" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      </button>
-      {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200, background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 10, boxShadow: '0 12px 32px rgba(15,23,42,0.14)', padding: 5, minWidth: Math.max(minWidth, 140), maxHeight: 260, overflowY: 'auto' }}>
-          {options.map(opt => {
-            const v = opt.value ?? opt
-            const isActive = v === value
-            return (
-              <button key={v} type="button" onClick={() => { onChange(v); setOpen(false) }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: isActive ? 700 : 400, background: isActive ? '#E8EFF9' : 'transparent', color: isActive ? '#1F3C84' : '#374151' }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#F8FAFC' }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
-                {opt.label ?? opt}
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
 
 // Mini SVG icon renderer for KPI icon picker
 function KpiIconPreview({ name, color = '#94A3B8' }) {
@@ -1838,17 +1805,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <p className={styles.cardDesc}>Read-only SQL against the connected warehouse. Only SELECT and WITH are accepted, so nothing typed here can change data. Estimate first when you are not sure how much a query will scan.</p>
               {/* Saved queries: named SQL kept in app_preferences (admin only) */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-                <select
-                  className={styles.input}
-                  style={{ width: 250, flex: '0 0 auto' }}
-                  value={bqPick}
-                  onChange={(e) => { setBqPick(e.target.value); setBqDelArmed(''); if (e.target.value) bqLoad(e.target.value) }}
-                >
-                  <option value="">Saved queries ({bqSaved.length})</option>
-                  {bqSaved.map((q) => (
-                    <option key={q.id} value={q.id}>{q.name}</option>
-                  ))}
-                </select>
+                <Dropdown minWidth={250} value={bqPick} options={[{ value: '', label: 'Saved queries (' + bqSaved.length + ')' }].concat(bqSaved.map((q) => ({ value: q.id, label: q.name })))} onChange={(v) => { setBqPick(v); setBqDelArmed(''); if (v) bqLoad(v) }} />
                 <input
                   className={styles.input}
                   style={{ width: 240, flex: '0 0 auto' }}
@@ -1873,12 +1830,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
                 <Button size="sm" onClick={bqRun} disabled={!!bqBusy}>{bqBusy === 'run' ? 'Running...' : 'Run'}</Button>
                 <Button size="sm" variant="secondary" onClick={bqEstimate} disabled={!!bqBusy}>{bqBusy === 'est' ? 'Estimating...' : 'Estimate'}</Button>
-                <select className={styles.input} style={{ width: 132 }} value={bqLimit} onChange={e => setBqLimit(e.target.value)}>
-                  <option value="100">100 rows</option>
-                  <option value="500">500 rows</option>
-                  <option value="2000">2,000 rows</option>
-                  <option value="10000">10,000 rows</option>
-                </select>
+                <Dropdown minWidth={132} value={bqLimit} options={[{ value: '100', label: '100 rows' }, { value: '500', label: '500 rows' }, { value: '2000', label: '2,000 rows' }, { value: '10000', label: '10,000 rows' }]} onChange={(v) => setBqLimit(v)} />
                 {(bqRes || bqEst || bqErr || bqWarn) && (
                   <button type="button" className={styles.bqClear} onClick={() => { setBqRes(null); setBqEst(null); setBqErr(''); setBqWarn('') }}>Clear</button>
                 )}

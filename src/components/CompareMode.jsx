@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import Dropdown from './Dropdown'
 
 const MONTHS = ['Jan-2025','Feb-2025','Mar-2025','Apr-2025','May-2025','Jun-2025',
   'Jul-2025','Aug-2025','Sep-2025','Oct-2025','Nov-2025','Dec-2025']
@@ -60,25 +61,16 @@ export default function CompareMode({ monthlyData, onClose }) {
           <div style={{display:'flex',gap:12,marginBottom:20,alignItems:'center',flexWrap:'wrap'}}>
             <div>
               <p style={{fontSize:10,fontWeight:600,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:5}}>Month A</p>
-              <select value={m1} onChange={e=>setM1(e.target.value)}
-                style={{padding:'8px 32px 8px 12px',border:'2px solid #6366F1',borderRadius:8,fontSize:13,fontFamily:'Inter,sans-serif',color:'#111827',outline:'none',background:'#EEF2FF',fontWeight:600,appearance:'none'}}>
-                {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
-              </select>
+              <Dropdown minWidth={130} value={m1} options={MONTHS} onChange={(v) => setM1(v)} />
             </div>
             <div style={{fontSize:18,color:'#9CA3AF',marginTop:16}}>vs</div>
             <div>
               <p style={{fontSize:10,fontWeight:600,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:5}}>Month B</p>
-              <select value={m2} onChange={e=>setM2(e.target.value)}
-                style={{padding:'8px 32px 8px 12px',border:'2px solid #10B981',borderRadius:8,fontSize:13,fontFamily:'Inter,sans-serif',color:'#111827',outline:'none',background:'#ECFDF5',fontWeight:600,appearance:'none'}}>
-                {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
-              </select>
+              <Dropdown minWidth={130} value={m2} options={MONTHS} onChange={(v) => setM2(v)} />
             </div>
             <div style={{marginLeft:'auto'}}>
               <p style={{fontSize:10,fontWeight:600,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:5}}>Chart Metric</p>
-              <select value={metric} onChange={e=>setMetric(e.target.value)}
-                style={{padding:'8px 12px',border:'1px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'Inter,sans-serif',color:'#111827',outline:'none',background:'#fff'}}>
-                {METRICS.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}
-              </select>
+              <Dropdown minWidth={150} value={metric} options={METRICS.map((m) => ({ value: m.id, label: m.label }))} onChange={(v) => setMetric(v)} />
             </div>
           </div>
 

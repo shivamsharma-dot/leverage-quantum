@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, AreaChart, Area } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import Dropdown from '../components/Dropdown'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
@@ -155,15 +156,8 @@ export default function RevenueDashboard(){
             <h1 className={styles.pageTitle}>Revenue</h1>
           </div>
           <div className={styles.headerRight}>
-            <select className={styles.fsel} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>
-              <option value="All">All Months</option>
-              {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
-            </select>
-            <select className={styles.fsel} value={selType} onChange={e=>setSelType(e.target.value)}>
-              <option value="All">AC + VAS</option>
-              <option value="AC">AC Only</option>
-              <option value="VAS">VAS Only</option>
-            </select>
+            <Dropdown minWidth={130} value={selMonth} options={[{ value: 'All', label: 'All Months' }].concat(MONTHS.map((m) => ({ value: m, label: m })))} onChange={(v) => setSelMonth(v)} />
+            <Dropdown minWidth={120} value={selType} options={[{ value: 'All', label: 'AC + VAS' }, { value: 'AC', label: 'AC Only' }, { value: 'VAS', label: 'VAS Only' }]} onChange={(v) => setSelType(v)} />
             <ExportButton data={srcPie} filename="revenue_by_source" dashboardId="revenue"/>
             <InfoTooltip items={[['AC Revenue','Admission Counselling fees collected.'],['VAS Revenue','Value Added Services (visa, accommodation, loans).'],['Total Revenue','AC + VAS collected.'],['Projected','Total Package Value of all enrolled students.'],['Collection %','Collected ÷ Projected × 100.'],['Unidentified','Revenue from leads with no source attribution.']]}/>
             <div className={styles.liveBadge}><span className={styles.liveDot}/>CIB Data</div>

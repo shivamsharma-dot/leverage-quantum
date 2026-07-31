@@ -6,6 +6,7 @@ import {
   PieChart, Pie, Cell, ComposedChart, Line, CartesianGrid, Legend, LabelList,
 } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import Dropdown from '../components/Dropdown'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import {
   C, FONT, BRAND_RAMP, brandColor, PAGE_SIZE,
@@ -269,15 +270,9 @@ export default function WhatsAppDashboard() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '10px 0' }}>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, letterSpacing: 0.5 }}>SOURCE</span>
-            <select value={selSource} onChange={(e) => { setSelSource(e.target.value); setPage(0) }} style={selectStyle}>
-              <option value='All'>All sources</option>
-              {sourceList.map((s) => <option key={s} value={s}>{shortSource(s)}</option>)}
-            </select>
+            <Dropdown minWidth={150} value={selSource} options={[{ value: 'All', label: 'All sources' }].concat(sourceList.map((s) => ({ value: s, label: shortSource(s) })))} onChange={(v) => { setSelSource(v); setPage(0) }} />
             <span style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, letterSpacing: 0.5, marginLeft: 6 }}>MONTH</span>
-            <select value={selMonth} onChange={(e) => { setSelMonth(e.target.value); setPage(0) }} style={selectStyle}>
-              <option value='All'>All months</option>
-              {monthList.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <Dropdown minWidth={130} value={selMonth} options={[{ value: 'All', label: 'All months' }].concat(monthList.map((m) => ({ value: m, label: m })))} onChange={(v) => { setSelMonth(v); setPage(0) }} />
             {lastSync && <span style={{ fontSize: 11, color: C.muted, marginLeft: 4 }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>}
             <Button size='sm' variant='secondary' onClick={handleRefresh} disabled={refreshing}>
               {refreshing ? 'Refreshing' : 'Refresh'}

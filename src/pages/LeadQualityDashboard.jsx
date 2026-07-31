@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import Dropdown from '../components/Dropdown'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
@@ -149,14 +150,8 @@ export default function LeadQualityDashboard() {
             <h1 className={styles.title}>Lead Quality</h1>
           </div>
           <div className={styles.headerRight}>
-          <select className={styles.fsel} value={selMonth} onChange={e => setSelMonth(e.target.value)}>
-              <option value="All">All Months</option>
-              {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <select className={styles.fsel} value={selChannel} onChange={e => setSelChannel(e.target.value)}>
-              <option value="All">All Channels</option>
-              {ALL_CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+          <Dropdown minWidth={130} value={selMonth} options={[{ value: 'All', label: 'All Months' }].concat(MONTHS.map((m) => ({ value: m, label: m })))} onChange={(v) => setSelMonth(v)} />
+            <Dropdown minWidth={140} value={selChannel} options={[{ value: 'All', label: 'All Channels' }].concat(ALL_CHANNELS.map((c) => ({ value: c, label: c })))} onChange={(v) => setSelChannel(v)} />
           <ExportButton data={channelBreakdown} filename="lead_quality_channels" dashboardId="lead_quality"/>
             <InfoTooltip items={[['Total OPPs','Total raw leads from all sources.'],['Futwork Sent','Leads sent to Futwork agents for qualification.'],['Floor Direct','Leads handled directly by counsellors.'],['QLs','Leads that passed qualification.'],['QL Rate','QLs ÷ Futwork Sent. Benchmark 35–45%.'],['Apps (STUs)','University applications submitted.'],['App/QL%','Applications ÷ Qualified Leads.'],['OPP→APP%','Applications ÷ Total Leads (end-to-end).']]}/>
           <div className={styles.liveChip}>

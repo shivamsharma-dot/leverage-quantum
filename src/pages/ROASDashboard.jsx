@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, CartesianGrid } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import Dropdown from '../components/Dropdown'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
@@ -176,14 +177,8 @@ export default function ROASDashboard(){
             <h1 className={styles.pageTitle}>ROAS</h1>
           </div>
           <div className={styles.headerRight}>
-            <select className={styles.filterSelect} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>
-              <option value="All">All Months</option>
-              {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
-            </select>
-            <select className={styles.filterSelect} value={selChannel} onChange={e=>setSelChannel(e.target.value)}>
-              <option value="All">All Channels</option>
-              {CHANNELS.map(c=><option key={c} value={c}>{c}</option>)}
-            </select>
+            <Dropdown minWidth={130} value={selMonth} options={[{ value: 'All', label: 'All Months' }].concat(MONTHS.map((m) => ({ value: m, label: m })))} onChange={(v) => setSelMonth(v)} />
+            <Dropdown minWidth={140} value={selChannel} options={[{ value: 'All', label: 'All Channels' }].concat(CHANNELS.map((c) => ({ value: c, label: c })))} onChange={(v) => setSelChannel(v)} />
             {prevMonth&&<div className={styles.momBadge}>↕ vs {prevMonth.replace('-2025','')}</div>}
             <ExportButton data={filtered} filename="roas_data" dashboardId="roas"/>
             <InfoTooltip items={[['Total Spend','Sum of all ad spend Jan–Dec 2025.'],['AC Revenue','Admission Counselling collected revenue.'],['VAS Revenue','Value Added Services revenue.'],['Total Revenue','AC + VAS collected.'],['ROAS','Revenue ÷ Spend.'],['Proj Revenue','SR Fee × RAUs × 0.9.'],['OPPs','Total raw leads.'],['QLs','Qualified leads.'],['L→Q%','QLs ÷ Total Leads.'],['CPL','Spend ÷ Total Leads.']]}/>

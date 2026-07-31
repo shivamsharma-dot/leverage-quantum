@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, AreaChart, Area } from 'recharts'
 import Sidebar from '../components/Sidebar'
+import Dropdown from '../components/Dropdown'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
@@ -160,10 +161,7 @@ export default function ChannelMixDashboard(){
             <h1 className={styles.pageTitle}>Channel Mix</h1>
           </div>
           <div className={styles.headerRight}>
-            <select className={styles.fsel} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>
-              <option value="All">All Months</option>
-              {MONTHS.map(m=><option key={m} value={m}>{m}</option>)}
-            </select>
+            <Dropdown minWidth={130} value={selMonth} options={[{ value: 'All', label: 'All Months' }].concat(MONTHS.map((m) => ({ value: m, label: m })))} onChange={(v) => setSelMonth(v)} />
             <ExportButton data={srcBreakdown} filename="channel_mix_sources" dashboardId="channel_mix"/>
             <InfoTooltip items={[['Total OPPs','Total raw leads across all channels.'],['Total Spend','All paid ad spend.'],['Total Revenue','AC + VAS collected.'],['Active Sources','Distinct lead sources with volume.'],['OPP Share','% of leads per channel.'],['ROAS by Channel','Revenue ÷ Spend per channel.'],['Unidentified','Leads missing UTM source — attribution gap.']]}/>
             <div className={styles.liveBadge}><span className={styles.liveDot}/>Live</div>
