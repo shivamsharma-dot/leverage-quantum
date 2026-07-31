@@ -104,27 +104,19 @@ async function leadsquaredRequest(method, path, { accessKey, secretKey, host }, 
 async function leadsquaredPost(path, creds, body, extraQuery) { return leadsquaredRequest('POST', path, creds, body, extraQuery) }
 async function leadsquaredGet(path, creds, extraQuery) { return leadsquaredRequest('GET', path, creds, undefined, extraQuery) }
 
-// Just today, when no since/until is given for the all-activity-types feed (see the cap
-// below for why). This endpoint (unlike Leads/Opportunities) requires a bounded window
-// rather than defaulting to all-time.
+// Last 7 complete days -- the default window for the by-event-code activity feed below.
 function defaultRecentWindow() {
   const toIso = d => d.toISOString().slice(0, 10)
-  const today = toIso(new Date())
-  return { since: today, until: today }
+  const until = new Date()
+  const since = new Date(until.getTime() - 7 * 86400000)
+  return { since: toIso(since), until: toIso(until) }
 }
 
-// RetrieveRecentlyModified (the all-activity-types feed, used when no eventCode narrows
-// the query) genuinely 500s on this account once the window gets wide -- verified live:
-// a 1-day window succeeds, a 7-day window fails with LeadSquared's own generic "There was
-// an error processing the request" (their backend choking on volume, not a malformed
-// request -- this account logs ~78k rows for ONE activity type alone in 7 days, so an
-// all-125-types scan over the same window is plausibly in the millions). Capped here at
-// 2 days -- conservative, since the real breaking point between 1 and 7 days is unknown --
-// with a clear error instead of forwarding a confusing opaque 500. Narrowing to one
-// Activity Type (eventCode) does NOT hit this limit -- verified live with a 7-day,
-// eventCode-scoped query returning 78,350 matching rows without error -- so a wide window
-// is only a problem for the "all types" case.
-const ALL_TYPES_MAX_WINDOW_DAYS = 2
+// LeadSquared's own "Lead Capture" event (code 23) -- fires for every new lead regardless
+// of source, so it's a safe, always-populated default Activity Type when the caller hasn't
+// picked one yet (e.g. a bare connection test, or a fresh page load before the user has
+// chosen a type from the activity_types dropdown).
+const DEFAULT_ACTIVITY_EVENT_CODE = 23
 
 // Leads.Get (advanced search by lead criteria) -- filters mirror what LeadSquared's own
 // "Manage Leads" grid filters on: a field name (LookupName), an operator, and a value.
@@ -185,14 +177,20 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, p
 }
 
 // ProspectActivity.svc/Retrieve -- single-lead activity timeline (leadId given), OR the
-// bulk cross-lead "Manage Activity" feed (no leadId) -- two real LeadSquared endpoints:
-//  - RetrieveRecentlyModified: all activity types in one date window, standard creds.
-//  - CustomActivity/RetrieveByActivityEvent: one specific type (eventCode) + date window,
-//    also returns CreatedByName/CreatedByEmailAddress (the real actor) which the all-types
-//    feed does not carry -- used when the caller narrows to a single Activity Type.
-// Verified against apidocs.leadsquared.com before building (not guessed): both bulk
-// endpoints need Parameter{FromDate,ToDate,...} + Paging{PageIndex,PageSize} +
-// Sorting{ColumnName,Direction} as three separate top-level objects.
+// bulk cross-lead "Manage Activity" feed (no leadId), always scoped to one Activity Type
+// via CustomActivity/RetrieveByActivityEvent.
+//
+// RetrieveRecentlyModified (the "all activity types combined" feed) was tried first and
+// DROPPED -- verified live against this real account that it fails with LeadSquared's own
+// generic "There was an error processing the request. Please contact administrator." on
+// EVERY window tested, including a single day, not just wide ones. CustomActivity/
+// RetrieveByActivityEvent (one Activity Type + date window) works reliably and even
+// handles a 7-day window fine, returning real data (verified: 78,350 rows for eventCode 23
+// "Lead Capture" over 7 days) -- so this account can browse activity, just not "all types
+// at once"; the caller must pick a type (via the activity_types mode) exactly like
+// LeadSquared's own Manage Activity screen already requires you to filter by Activity Type.
+// Also returns CreatedByName/CreatedByEmailAddress (the real actor), which the dropped
+// all-types feed never carried anyway.
 async function fetchLeadSquaredActivities(creds, { leadId, since, until, eventCode, pageIndex, pageSize }) {
   if (leadId) {
     const body = { Parameter: {}, Paging: { Offset: '0', RowCount: String(Math.min(pageSize || 50, 1000)) } }
@@ -203,24 +201,15 @@ async function fetchLeadSquaredActivities(creds, { leadId, since, until, eventCo
   const win = (!since && !until) ? defaultRecentWindow() : { since, until }
   const fromDate = (win.since || defaultRecentWindow().since) + ' 00:00:00'
   const toDate = (win.until || defaultRecentWindow().until) + ' 23:59:59'
-  const paging = { PageIndex: pageIndex || 1, PageSize: Math.min(pageSize || 200, 1000) }
-  const sorting = { ColumnName: 'CreatedOn', Direction: 1 }
-  if (!eventCode) {
-    const spanDays = (new Date(toDate) - new Date(fromDate)) / 86400000
-    if (spanDays > ALL_TYPES_MAX_WINDOW_DAYS) {
-      throw new Error(`The all-activity-types feed is limited to a ${ALL_TYPES_MAX_WINDOW_DAYS}-day window on this account (LeadSquared's own backend errors on a wider all-type scan at this account's volume) -- narrow the date range, or pick a specific Activity Type (eventCode) instead, which has no such limit.`)
-    }
+  const code = Number(eventCode) || DEFAULT_ACTIVITY_EVENT_CODE
+  const body = {
+    Parameter: { FromDate: fromDate, ToDate: toDate, ActivityEvent: code, RemoveEmptyValue: true },
+    Paging: { PageIndex: pageIndex || 1, PageSize: Math.min(pageSize || 200, 1000) },
+    Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
   }
-  if (eventCode) {
-    const body = { Parameter: { FromDate: fromDate, ToDate: toDate, ActivityEvent: Number(eventCode), RemoveEmptyValue: true }, Paging: paging, Sorting: sorting }
-    const data = await leadsquaredPost('/v2/ProspectActivity.svc/CustomActivity/RetrieveByActivityEvent', creds, body)
-    const rows = (data && data.List) || []
-    return { rows, count: (data && data.RecordCount) || rows.length, since: win.since, until: win.until, eventCode: Number(eventCode) }
-  }
-  const body = { Parameter: { FromDate: fromDate, ToDate: toDate, IncludeCustomFields: 0 }, Paging: paging, Sorting: sorting }
-  const data = await leadsquaredPost('/v2/ProspectActivity.svc/RetrieveRecentlyModified', creds, body)
-  const rows = (data && data.ProspectActivities) || []
-  return { rows, count: (data && data.RecordCount) || rows.length, since: win.since, until: win.until }
+  const data = await leadsquaredPost('/v2/ProspectActivity.svc/CustomActivity/RetrieveByActivityEvent', creds, body)
+  const rows = (data && data.List) || []
+  return { rows, count: (data && data.RecordCount) || rows.length, since: win.since, until: win.until, eventCode: code }
 }
 
 // ActivityTypes.Get -- lists every activity type configured on this account (code + real
