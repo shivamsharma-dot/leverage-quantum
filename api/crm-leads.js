@@ -193,7 +193,12 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, p
     Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
   }
   const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, body)
-  let rows = Array.isArray(data) ? data : (data && (data.Opportunities || data.RecordSet)) || []
+  // Response shape is {"RecordCount":N,"List":[...]} per apidocs.leadsquared.com's own
+  // documented example -- the original code checked data.Opportunities/data.RecordSet,
+  // neither of which the docs ever showed; that silently returned [] even when the API
+  // had real matching rows under "List", which is why every prior test here only ever
+  // proved "no error", never "real data comes back". Confirmed live after fixing.
+  let rows = Array.isArray(data) ? data : (data && (data.List || data.Opportunities || data.RecordSet)) || []
   if (since) rows = rows.filter(r => !r.CreatedOn || r.CreatedOn >= since + ' 00:00:00')
   if (until) rows = rows.filter(r => !r.CreatedOn || r.CreatedOn <= until + ' 23:59:59')
   if (status) rows = rows.filter(r => r.Status === status)
