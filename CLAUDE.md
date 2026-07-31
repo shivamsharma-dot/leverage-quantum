@@ -3512,3 +3512,31 @@ also still have to be pasted in once - console "(Classic) Queries" are not
 reachable over REST.
 
 **Commits.** 5f1ada8 feature, 576b051 one-row layout fix.
+
+---
+
+## 1 Aug 2026 - No native dropdowns anywhere
+
+The house rule is now enforced in code. `src/components/Dropdown.jsx` is the
+single dropdown primitive, promoted out of SettingsPage where it already lived.
+It closes on outside click, takes `{ options, value, onChange, minWidth,
+disabled }`, and accepts either plain values or `{ value, label }` objects.
+
+Fourteen native selects were replaced: CompareMode 3, WhatsApp 2, Revenue 2,
+ROAS 2, LeadQuality 2, ChannelMix 1, Settings 2 - the last two being the ones I
+had just added for the BigQuery console, which broke the rule. A repo-wide grep
+for a native select now returns only two hits and both are comments.
+
+Side effect worth keeping: CompareMode's month pickers carried off-palette
+borders (#6366F1 and #10B981). They went out with the native selects.
+
+Still outstanding: LeadQualificationDashboard defines its own local Dropdown
+with an extra `label` prop. It is not a native select so the rule holds, but it
+is the last duplicate if someone wants to unify later.
+
+Verified live: ROAS month and channel filters (picked Jul-2025, KPIs and the
+"vs Jun" badge updated), CompareMode's three pickers, the WhatsApp source list
+with shortSource labels intact, and both Settings pickers including loading a
+saved query.
+
+Commit 20e59ad.
