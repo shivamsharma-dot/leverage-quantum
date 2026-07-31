@@ -271,6 +271,10 @@ const DATA_SOURCES = [
   { name: 'LeadSquared — Leads', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'leads' },
   { name: 'LeadSquared — Activity', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'activities' },
   { name: 'LeadSquared — Opportunities', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'opportunities' },
+  // Google BigQuery, reached through /api/crm-leads?source=bigquery. Read-only:
+  // the authorising account holds viewer access, and lib/bigquery.mjs refuses
+  // anything that is not a SELECT/WITH. Credentials are Vercel env only.
+  { name: 'Google BigQuery', src: 'BigQuery REST API (env-configured)', rows: 'live', bqTest: true },
     ]
 
 // Official brand marks (Meta logo + 2026 Google Sheets icon), embedded verbatim from their
@@ -334,11 +338,24 @@ const LeadSquaredIcon = () => (
 // Sheet-backed sources (anything with editKey) get the real Sheets mark; Meta Graph API and
 // Google Ads API get their real brand marks; custom sources keep the generic glyph (they're
 // arbitrary user-registered sheets, not a specific named service).
+// BigQuery mark -- the Google Cloud product glyph: a ring with a magnifier
+// handle at the lower right and three column bars inside, in Google's product
+// blues. Reconstructed from the published icon geometry, NOT copied verbatim
+// from the vendor asset like the Meta/Sheets/LeadSquared marks above -- if we
+// later get the real SVG, swap these two paths and nothing else changes.
+const BigQueryIcon = () => (
+  <svg viewBox="0 0 24 24" className={styles.dsIconBq}>
+    <path fill="#4386FA" d="M10.44 1.5a8.94 8.94 0 1 0 5.2 16.22l4.53 4.53a1.2 1.2 0 0 0 1.7-1.7l-4.53-4.53A8.94 8.94 0 0 0 10.44 1.5Zm0 2.4a6.54 6.54 0 1 1 0 13.08 6.54 6.54 0 0 1 0-13.08Z" />
+    <path fill="#669DF6" d="M7.3 9.66h1.63v3.4H7.3zm2.33-2.2h1.63v5.6H9.63zm2.33 3.3h1.63v2.3h-1.63z" />
+  </svg>
+)
+
 function sourceIconClass(s) {
   if (s.editKey) return { Icon: SheetsIcon, wrap: styles.dsIconWrapSheets }
   if (s.name === 'Meta Graph API') return { Icon: MetaIcon, wrap: styles.dsIconWrapBrand }
   if (s.name === 'Google Ads API') return { Icon: GoogleIcon, wrap: styles.dsIconWrapBrand }
   if (s.apiTestMode) return { Icon: LeadSquaredIcon, wrap: styles.dsIconWrapBrand }
+  if (s.bqTest) return { Icon: BigQueryIcon, wrap: styles.dsIconWrapBrand }
   return { Icon: GenericSourceIcon, wrap: '' }
 }
 
@@ -1296,6 +1313,28 @@ export default function SettingsPage() {
     } catch (e) { setLsqMsg(m => ({ ...m, [mode]: { type: 'err', text: e.message } })) }
     finally { setLsqTesting(null) }
   }
+  // BigQuery connection test. Same shape as sheetTest/lsqMsg above. Uses the
+  // 'datasets' mode because it is metadata-only -- it proves the refresh token,
+  // the project and the region all work while scanning zero bytes, so an admin
+  // can hammer this button without ever running up a query bill.
+  const [bqTesting, setBqTesting] = useState(false)
+  const [bqMsg, setBqMsg] = useState(null)
+  const testBigQuery = async () => {
+    setBqTesting(true); setBqMsg(null)
+    try {
+      const r = await fetch('/api/crm-leads?source=bigquery&mode=datasets', { credentials: 'include' })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Failed')
+      const shown = (d.datasets || []).slice(0, 4).join(', ')
+      const more = d.count > 4 ? ' +' + (d.count - 4) + ' more' : ''
+      setBqMsg({ type: 'ok', text: 'Connected to ' + d.projectId + ' (' + d.location + ') - ' + d.count + ' dataset(s)' + (shown ? ': ' + shown + more : '') })
+    } catch (e) {
+      setBqMsg({ type: 'err', text: e.message })
+    } finally {
+      setBqTesting(false)
+    }
+  }
+
   const [editReportOpen, setEditReportOpen] = useState(false)
   const [sendReportOpen, setSendReportOpen] = useState(false)
   const [recipientsOpen, setRecipientsOpen] = useState(false)
@@ -1741,7 +1780,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div className={styles.dsName}>{s.name}</div>
                                             <div className={styles.dsMeta} title={s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || '') : ''} style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.editKey ? (() => { const u = sheetUrls[s.editKey] || s.defaultUrl; if (!u) return 'No default set'; const m = u.match(/[?&]sheet=([^&]+)/); return 'Google Sheet' + (m ? ' \u00b7 ' + decodeURIComponent(m[1].replace(/\+/g, ' ')) : ''); })() : (s.src + ' \u2014 ' + s.rows + ' rows')}</div>
                     </div>
-                    <span className={styles.dsStatus} data-st={s.editKey ? (sheetUrls[s.editKey] ? 'custom' : 'default') : 'live'}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Live'}</span>{s.apiTestMode && (<Button size="sm" variant="secondary" onClick={() => testLeadSquared(s.apiTestMode)} disabled={lsqTesting === s.apiTestMode}>{lsqTesting === s.apiTestMode ? 'Testing...' : 'Test connection'}</Button>)}{s.apiTestMode && lsqMsg[s.apiTestMode] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: lsqMsg[s.apiTestMode].type === 'err' ? '#c0392b' : '#15803D' }}>{lsqMsg[s.apiTestMode].type === 'err' ? '✕ ' : '✓ '}{lsqMsg[s.apiTestMode].text}</p>)}{s.editKey && (<Button size="sm" variant="secondary" onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</Button>)}{s.editKey && userIsAdmin && (<Button size="sm" onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</Button>)}{s.custom && userIsAdmin && (<Button size="sm" danger onClick={() => removeCustomSource(s.editKey)}>Remove</Button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><Button size="sm" onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</Button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}{s.disconnectable && userIsAdmin && (<Button size="sm" danger onClick={disconnectMeta} disabled={metaDisconnecting}>{metaDisconnecting ? 'Disconnecting...' : 'Disconnect'}</Button>)}{s.disconnectable && metaDisconnectMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: metaDisconnectMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{metaDisconnectMsg.type === 'err' ? '✕ ' : '✓ '}{metaDisconnectMsg.text}</p>)}
+                    <span className={styles.dsStatus} data-st={s.editKey ? (sheetUrls[s.editKey] ? 'custom' : 'default') : 'live'}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Live'}</span>{s.bqTest && userIsAdmin && (<Button size="sm" variant="secondary" onClick={() => testBigQuery()} disabled={bqTesting}>{bqTesting ? 'Testing...' : 'Test connection'}</Button>)}{s.bqTest && bqMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: bqMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{bqMsg.type === 'err' ? '\u2715 ' : '\u2713 '}{bqMsg.text}</p>)}{s.apiTestMode && (<Button size="sm" variant="secondary" onClick={() => testLeadSquared(s.apiTestMode)} disabled={lsqTesting === s.apiTestMode}>{lsqTesting === s.apiTestMode ? 'Testing...' : 'Test connection'}</Button>)}{s.apiTestMode && lsqMsg[s.apiTestMode] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: lsqMsg[s.apiTestMode].type === 'err' ? '#c0392b' : '#15803D' }}>{lsqMsg[s.apiTestMode].type === 'err' ? '✕ ' : '✓ '}{lsqMsg[s.apiTestMode].text}</p>)}{s.editKey && (<Button size="sm" variant="secondary" onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</Button>)}{s.editKey && userIsAdmin && (<Button size="sm" onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</Button>)}{s.custom && userIsAdmin && (<Button size="sm" danger onClick={() => removeCustomSource(s.editKey)}>Remove</Button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste published/gviz CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><Button size="sm" onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</Button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}{s.disconnectable && userIsAdmin && (<Button size="sm" danger onClick={disconnectMeta} disabled={metaDisconnecting}>{metaDisconnecting ? 'Disconnecting...' : 'Disconnect'}</Button>)}{s.disconnectable && metaDisconnectMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: metaDisconnectMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{metaDisconnectMsg.type === 'err' ? '✕ ' : '✓ '}{metaDisconnectMsg.text}</p>)}
                     {s.editKey && sheetTest[s.editKey] && !sheetTest[s.editKey].loading && (
                       <div style={{ position: 'relative', flexBasis: '100%', width: '100%', marginTop: 8, padding: '10px 36px 10px 12px', borderRadius: 8, border: '1px solid ' + (sheetTest[s.editKey].error ? '#FECACA' : '#DCFCE7'), background: sheetTest[s.editKey].error ? '#FEF2F2' : '#F0FDF4' }}>
                         <button type="button" onClick={() => setSheetTest(prev => { const next = { ...prev }; delete next[s.editKey]; return next })} title="Close" style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 5, border: 'none', background: 'transparent', color: '#6B7280', fontSize: 14, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>

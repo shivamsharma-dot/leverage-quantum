@@ -258,12 +258,60 @@ async function handleLeadSquared(req, res, me) {
   }
 }
 
+// BigQuery lives behind this handler rather than its own file because the
+// Vercel Hobby plan is pinned at 12/12 serverless functions. Reached via
+// ?source=bigquery&mode=ping|datasets|query. Admin-only: it is configured
+// from the Settings page and can run arbitrary read-only SQL.
+async function handleBigQuery(req, res, me) {
+  const auth = await import('../lib/auth.mjs')
+  if (!auth.canAccessDashboard(me.role, 'settings')) {
+    return res.status(403).json({ error: 'Forbidden' })
+  }
+  const bq = await import('../lib/bigquery.mjs')
+  const creds = bq.bigQueryCreds()
+  if (!bq.bigQueryConfigured(creds)) {
+    return res.status(500).json({
+      error: 'BigQuery is not configured -- set BIGQUERY_CLIENT_ID, BIGQUERY_CLIENT_SECRET and BIGQUERY_REFRESH_TOKEN in Vercel env.',
+      configured: false,
+    })
+  }
+  const mode = (req.query && req.query.mode) || 'ping'
+  try {
+    if (mode === 'datasets') {
+      const d = await bq.bigQueryDatasets()
+      return res.status(200).json({ configured: true, ...d, count: d.datasets.length })
+    }
+    if (mode === 'query') {
+      const sql = (req.body && req.body.sql) || (req.query && req.query.sql) || ''
+      const out = await bq.bigQuerySelect(sql, {
+        dryRun: String((req.query && req.query.dryRun) || '') === '1',
+        maxResults: req.query && req.query.maxResults,
+      })
+      return res.status(200).json({ configured: true, ...out })
+    }
+    // Default 'ping': a dry run costs zero bytes and zero rupees, but still
+    // exercises the whole chain -- refresh token, access token, project, region.
+    const t0 = Date.now()
+    await bq.bigQuerySelect('SELECT 1', { dryRun: true })
+    return res.status(200).json({
+      configured: true,
+      ok: true,
+      projectId: creds.projectId,
+      location: creds.location,
+      ms: Date.now() - t0,
+    })
+  } catch (e) {
+    return res.status(502).json({ configured: true, ok: false, error: String((e && e.message) || e) })
+  }
+}
+
 export default async function handler(req, res) {
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })
 
   if ((req.query && req.query.source) === 'leadsquared') return handleLeadSquared(req, res, me)
+  if ((req.query && req.query.source) === 'bigquery') return handleBigQuery(req, res, me)
 
   if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
     return res.status(403).json({ error: 'Forbidden' })
