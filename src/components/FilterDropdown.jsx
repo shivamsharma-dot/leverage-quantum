@@ -5,7 +5,10 @@ import React from 'react'
 // promoted here so Google Ads / QL Ops / Overall can reuse the exact same
 // control for the new Corridor/Category filters instead of copy-pasting it.
 export default function FilterDropdown({ label, value, options, open, onToggle, onSelect, accentOf }) {
-  const current = options.find(o => o.v === value) || options[0]
+  // Defensive: a caller populating options asynchronously (e.g. from an API call still in
+  // flight) can render this with an empty array for a frame -- options[0] would be
+  // undefined and current.l would throw. Falls back to a harmless placeholder instead.
+  const current = options.find(o => o.v === value) || options[0] || { v: value, l: '…' }
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
       <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: '0.5px solid ' + (open ? '#1C9FD4' : '#E5E7EB'), background: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', color: '#374151', whiteSpace: 'nowrap' }}>
