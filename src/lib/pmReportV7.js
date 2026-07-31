@@ -45,7 +45,7 @@ export function buildV7(ctx) {
     msgs.push({
       key: 'yesterday', label: 'Yesterday',
       text: eList([test, '*:warning: No complete day in this selection*',
-        'V7 reads the last finished day. Widen the date filter so at least one complete day falls inside it.']),
+        'This report reads the last finished day. Widen the date filter so at least one complete day falls inside it.']),
     })
     return msgs
   }
@@ -125,9 +125,14 @@ export function buildV7(ctx) {
     verdict.push(':warning: Not a bonus day ' + DASH + ' ' + missed.join(', and ') + '.')
   }
   if (qlY != null) {
-    verdict.push((qlY >= QL_TARGET_LO ? ':white_check_mark: ' : ':warning: ')
-      + cnt(qlY) + ' QLs against the ' + QL_TARGET_LO + '\u2013' + QL_TARGET_HI + ' daily target'
-      + (qlY >= QL_TARGET_LO ? '.' : ' ' + DASH + ' short by ' + cnt(QL_TARGET_LO - qlY) + '.'))
+    const tgt = cnt(qlY) + ' QLs against the ' + QL_TARGET_LO + ' to '
+      + QL_TARGET_HI + ' daily target'
+    verdict.push(qlY < QL_TARGET_LO
+      ? ':warning: ' + tgt + ' ' + DASH + ' short by ' + cnt(QL_TARGET_LO - qlY) + '.'
+      : qlY > QL_TARGET_HI
+      ? ':white_check_mark: ' + tgt + ' ' + DASH + ' ' + cnt(qlY - QL_TARGET_HI)
+        + ' over the top of the band.'
+      : ':white_check_mark: ' + tgt + ' ' + DASH + ' inside the band.')
   }
 
   const week = []
@@ -228,7 +233,7 @@ export function buildV7(ctx) {
     ],
     table: dropped, attach: true,
     context: 'Month to date against ' + (ctx.prevLabel || 'the previous period')
-      + '. Applications and CPA are not carried anywhere in V7. Every column is in the attached CSV.',
+      + '. Every column is in the attached CSV.',
   }
 
   const monthNotes = []
@@ -250,7 +255,6 @@ export function buildV7(ctx) {
 
   m3.after = eList([
     monthNotes.length ? '*:information_source: Month to date, for context only*\n' + bullets(monthNotes) : null,
-    '\n_Corridor and ad detail is not in this report. The dashboard only builds those month to date, so they would read the same every morning. V4 carries them when you want the full picture._',
   ])
   msgs.push(m3)
 

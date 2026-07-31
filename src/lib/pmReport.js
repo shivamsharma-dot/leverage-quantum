@@ -636,6 +636,23 @@ function spendPace(ctx) {
     + p.daysDone + ' of ' + p.daysInMonth + ', ' + money(perDay) + ' a day.'
 }
 
+// The QL a day band the team runs to. Month to date is a sum over complete
+// days only, so dividing by days done gives the per day number the band is
+// about. Printed every time, whether the band is met or missed.
+function qlTargetV4(ctx) {
+  const LO = 550, HI = 600
+  const p = ctx.pace
+  const ql = ctx.num('totalQL')
+  if (!p || !(p.daysDone > 0) || !(ql > 0)) return null
+  const per = Math.round(ql / p.daysDone)
+  const base = nfmt(ql) + ' QLs over ' + p.daysDone + ' complete '
+    + (p.daysDone === 1 ? 'day' : 'days') + ' is ' + nfmt(per)
+    + ' a day against the ' + LO + ' to ' + HI + ' daily target'
+  if (per < LO) return base + ' ' + DASH + ' ' + nfmt(LO - per) + ' a day short.'
+  if (per > HI) return base + ' ' + DASH + ' ' + nfmt(per - HI) + ' a day over the band.'
+  return base + ' ' + DASH + ' inside the band.'
+}
+
 // v4's read on the channel table, written as the decision each number implies rather
 // than as an observation, and led by an emoji so the important line is findable at a
 // glance on a phone. The paid-share line is gone -- paid is always 100% of the spend,
@@ -959,7 +976,7 @@ function buildV4(ctx) {
     text: [testLine(ctx), '*:bar_chart: ' + title(ctx) + '*', ctx.filterLine].filter(Boolean).join('\n'),
     fields: kpiFields(ctx), context: note,
   }
-  const ins1 = [costDirectionV4(ctx), spendPace(ctx), spendVsQL(ctx)].filter(Boolean)
+  const ins1 = [qlTargetV4(ctx), costDirectionV4(ctx), spendPace(ctx), spendVsQL(ctx)].filter(Boolean)
   if (ins1.length) m1.after = '*What the numbers say*\n' + list(ins1)
   const fresh1 = [dayPulse(ctx), cpqlStreak(ctx), dayExtreme(ctx)].filter(Boolean)
   if (fresh1.length) m1.after = (m1.after ? m1.after + '\n\n' : '') + '*:calendar: What moved since the last report*\n' + list(fresh1)
