@@ -3420,3 +3420,59 @@ Connections (count went 5 -> 6). CSS: `.dsIconWrapBrand svg.dsIconBq`.
   at 13.07 GB, `Marketing Query V6` at 15.03 GB) are NOT reachable over the
   REST API - saved queries are console-only objects. To reuse one, paste its SQL
   into a `mode=query` call or move it into a view.
+
+---
+
+## 1 Aug 2026 - BigQuery Console in Settings (read-only SQL)
+
+Commits `e63cee5` (build) and `ea0f88a` (polish).
+
+**What shipped**
+- `Settings > Data` now opens with a **BigQuery Console** card: monospace SQL
+  textarea, `Run`, `Estimate`, a row-limit select (100 / 500 / 2,000 / 10,000)
+  and a `Clear` link. Results render in a scrollable table with sticky headers
+  that also show each column's BigQuery type, plus a footer line carrying the
+  job id, project and region for audit.
+- **No new file in `api/`.** The console posts to the existing route
+  `/api/crm-leads?source=bigquery&mode=query`. Still 12/12 Vercel functions.
+- `api/crm-leads.js` gained exactly one line: `maxBytes` is passed through to
+  `bigQuerySelect()`, which turns it into `maximumBytesBilled`.
+- New CSS in `SettingsPage.module.css`: `.sqlEditor`, `.bqTh`, `.bqType`,
+  `.bqTd`, `.bqClear`.
+
+**Cost safety - the part worth remembering**
+- Every `Run` fires a dry run first. If the estimate exceeds **2 GB** the click
+  does not execute; it prints "This scans X (about Rs Y). Press Run again to go
+  ahead." Pressing Run again with the same SQL executes it. Editing the SQL
+  disarms the confirmation.
+- The real call always carries `maxBytes = 20 GB` so a wrong estimate cannot
+  run away with the bill.
+- Cost is shown at USD 6.25 per TiB scanned converted at a flat Rs 88. It is
+  deliberately approximate - the point is the order of magnitude.
+
+**Verified live on quantum.leverageedu.com/settings**
+- `INFORMATION_SCHEMA.TABLES` on `leverage_direct`: 12 rows, 10.0 MB, 1294 ms.
+- `DELETE FROM leverage_direct.ap_leads WHERE 1=1`: refused with "Only
+  read-only SELECT/WITH queries are allowed." The guard is `assertReadOnly()`
+  on the server, not the UI, so it cannot be bypassed from the browser.
+- `SELECT COUNT(*) FROM source_attribution_v3`: dry run 12.6 GB (about Rs 7),
+  the gate held and the query was never executed.
+
+**Gotchas learned here**
+- Settings lives at `/settings`, NOT `/dashboard/settings`.
+- Most `leverage_direct` objects are VIEWS, so `COUNT(*)` expands the view and
+  scans gigabytes. Estimate first, always.
+- `grep -c` counts matching LINES, not occurrences. A patch post-condition
+  that counts a substring also present on the Clear button reads 2, not 1 -
+  that produced one false FAIL here.
+- Post-conditions must run BEFORE `writeFileSync`, or a wrong assertion leaves
+  the file already patched and the script un-rerunnable.
+- Always pass `tabId` to the computer tool. A batch without it typed a heredoc
+  into the wrong tab and silently lost the whole file.
+
+**Not built yet** (asked for and deliberately deferred)
+Natural-language to SQL via `ask-ai.mjs`, saved query definitions as a metrics
+layer, multi-touch attribution, lead maturation curves, marginal-CPQL budget
+allocation, anomaly detection, and nightly reconciliation against Main Data
+Quantum. Read-only access blocks none of these; only views, BQML training and
+BigQuery-side scheduled queries are genuinely out of reach.
