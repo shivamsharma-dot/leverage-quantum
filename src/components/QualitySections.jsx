@@ -66,10 +66,12 @@ const Empty = ({ children }) => (
 )
 
 const Note = ({ children }) => (
-  <div style={{
-    marginTop: 12, paddingTop: 10, borderTop: '1px solid #F1F5F9',
-    fontSize: 10.5, color: C.muted, fontFamily: FONT, lineHeight: 1.6
-  }}>{children}</div>
+  <div style={{ marginTop: 'auto', paddingTop: 12 }}>
+    <div style={{
+      paddingTop: 10, borderTop: '1px solid #F1F5F9',
+      fontSize: 10.5, color: C.muted, fontFamily: FONT, lineHeight: 1.6
+    }}>{children}</div>
+  </div>
 )
 
 function shareOf(a, b) { return b > 0 ? (a / b) * 100 : null }
