@@ -166,24 +166,21 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, p
   // First real error hit against the live account: "AdvancedSearch criteria does not match
   // ActivityEvent passed" -- this search REQUIRES the AdvancedSearch to restate the same
   // OpportunityEventCode as its own condition (LSO:"ActivityEvent"/LSO_Type:"PAEvent"), it
-  // is not implied by OpportunityEventCode alone. This condition is now always present.
-  // A date-range RowCondition is added alongside it on the same "and" when since/until are
-  // given -- best-effort by analogy with the Activity search example in the docs, since no
-  // worked date-range example exists for this specific endpoint; if the API rejects it,
-  // drop back to filtering by CreatedOn client-side on the returned page instead.
+  // is not implied by OpportunityEventCode alone. This condition is now always present and
+  // is the ONLY RowCondition sent -- it's the one shape actually confirmed to work.
+  //
+  // A CreatedOn "between" RowCondition was tried here next and turned out to be a wrong
+  // guess -- it 400'd with "request body contains malformed or unexpected JSON" on every
+  // real attempt. Root-caused by intercepting LeadSquared's OWN frontend request (its
+  // internal ActivityGrid endpoint) while changing the date filter in the real UI: date
+  // range there is sent as separate top-level DateRangeFrom/DateRangeTo fields, NOT as an
+  // AdvancedSearch RowCondition at all -- so there was never a matching RowCondition shape
+  // to find, on this endpoint, for a plain date field. Status was never verified as a
+  // RowCondition either (only ActivityEvent has a confirmed-working example) so it's not
+  // risked here. Both since/until and status are filtered on the returned page client-side
+  // instead -- safe because Sorting below is newest-first, so the top `pageSize` rows are
+  // exactly the most recent ones a date-window filter would want anyway.
   const rowCondition = [{ SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) }]
-  if (since || until) {
-    rowCondition.push({
-      SubConOp: 'And', LSO: 'CreatedOn', LSO_Type: 'PAField',
-      Operator: 'between', RSO: (since || '1900-01-01') + ',' + (until || '2999-12-31'),
-    })
-  }
-  // Status ('Open'/'Won'/'Lost', confirmed via GetOpportunityTypeMetadata for this exact
-  // account's ec=12003 type) stacks onto the same RowCondition array -- AdvancedSearch
-  // supports multiple ANDed conditions here, unlike Leads.Get's single-filter limit.
-  if (status) {
-    rowCondition.push({ SubConOp: 'And', LSO: 'Status', LSO_Type: 'PAField', Operator: 'eq', RSO: status })
-  }
   const advancedSearch = {
     GrpConOp: 'And',
     Conditions: [{ Type: 'Activity', ConOp: 'and', RowCondition: rowCondition }],
@@ -196,7 +193,10 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, p
     Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
   }
   const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, body)
-  const rows = Array.isArray(data) ? data : (data && (data.Opportunities || data.RecordSet)) || []
+  let rows = Array.isArray(data) ? data : (data && (data.Opportunities || data.RecordSet)) || []
+  if (since) rows = rows.filter(r => !r.CreatedOn || r.CreatedOn >= since + ' 00:00:00')
+  if (until) rows = rows.filter(r => !r.CreatedOn || r.CreatedOn <= until + ' 23:59:59')
+  if (status) rows = rows.filter(r => r.Status === status)
   const ownerMap = await fetchLeadSquaredUsersMap(creds)
   rows.forEach(r => { if (r.Owner) r.OwnerName = ownerMap[r.Owner] || r.Owner })
   return { rows, count: rows.length, since, until }
