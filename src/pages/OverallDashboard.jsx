@@ -622,7 +622,15 @@ export default function OverallDashboard() {
       .then(data => setAffiliateManual(data.prefs?.affiliate_spend_manual || {}))
       .catch(() => setAffiliateManual({}))
   }, [])
-  const rows = useMemo(() => [...rawRows, ...buildSyntheticAffiliateRows(affiliateManual)], [rawRows, affiliateManual])
+  // The current day is never a complete day, so it is dropped here, once,
+  // before anything reads the data. Every card, chart, table and report on
+  // this page therefore runs to D-1 and no further.
+  const rows = useMemo(() => {
+    const cut = new Date(); cut.setHours(0, 0, 0, 0)
+    const t = cut.getTime()
+    return [...rawRows, ...buildSyntheticAffiliateRows(affiliateManual)]
+      .filter(r => !(r && r.date && +r.date >= t))
+  }, [rawRows, affiliateManual])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
