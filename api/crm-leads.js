@@ -61,7 +61,7 @@ function splitCsvLine(line) {
 
 // ── LeadSquared (live API) ──────────────────────────────────────────────────
 // Merged into this endpoint rather than a new /api file -- Vercel Hobby is at the
-// 12-function cap. Reached via ?source=leadsquared&mode=leads|opportunities|activities.
+// 12-function cap. Reached via ?source=leadsquared&mode=leads|opportunities|opportunity_meta|activities|activity_types.
 //
 // Credentials: LEADSQUARED_ACCESS_KEY / LEADSQUARED_SECRET_KEY, Vercel env only (never
 // app_preferences -- that table is readable with the public anon key, see the Slack bot
@@ -82,10 +82,10 @@ function leadsquaredCreds() {
   return { accessKey, secretKey, host }
 }
 
-async function leadsquaredPost(path, { accessKey, secretKey, host }, body, extraQuery) {
+async function leadsquaredRequest(method, path, { accessKey, secretKey, host }, body, extraQuery) {
   const qs = new URLSearchParams({ accessKey, secretKey, ...(extraQuery || {}) })
   const url = host.replace(/\/$/, '') + path + '?' + qs.toString()
-  const r = await fetch(url, {
+  const r = await fetch(url, method === 'GET' ? undefined : {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -100,6 +100,18 @@ async function leadsquaredPost(path, { accessKey, secretKey, host }, body, extra
     throw new Error(`LeadSquared ${r.status}: ${msg}`)
   }
   return data
+}
+async function leadsquaredPost(path, creds, body, extraQuery) { return leadsquaredRequest('POST', path, creds, body, extraQuery) }
+async function leadsquaredGet(path, creds, extraQuery) { return leadsquaredRequest('GET', path, creds, undefined, extraQuery) }
+
+// Last 7 complete days, matching a sensible "Manage Activity" default view when no
+// since/until is given -- this endpoint (unlike Leads/Opportunities) requires a bounded
+// date window rather than defaulting to all-time.
+function defaultRecentWindow() {
+  const toIso = d => d.toISOString().slice(0, 10)
+  const until = new Date()
+  const since = new Date(until.getTime() - 7 * 86400000)
+  return { since: toIso(since), until: toIso(until) }
 }
 
 // Leads.Get (advanced search by lead criteria) -- filters mirror what LeadSquared's own
@@ -160,17 +172,60 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, p
   return { rows, count: rows.length, since, until }
 }
 
-// ProspectActivity.svc/Retrieve -- single-lead activity timeline. The bulk cross-lead
-// search (Activity/Retrieve/BySearchParameter) requires a specific ActivityEvent code AND
-// admin-level API credentials per LeadSquared's own docs; without knowing which activity
-// types this account tracks under which codes, per-lead retrieval is the reliable path.
-// leadId is required for this mode.
-async function fetchLeadSquaredActivities(creds, { leadId, pageSize }) {
-  if (!leadId) throw new Error('activities mode requires a leadId (ProspectID)')
-  const body = { Parameter: {}, Paging: { Offset: '0', RowCount: String(Math.min(pageSize || 50, 1000)) } }
-  const data = await leadsquaredPost('/v2/ProspectActivity.svc/Retrieve', creds, body, { leadId })
+// ProspectActivity.svc/Retrieve -- single-lead activity timeline (leadId given), OR the
+// bulk cross-lead "Manage Activity" feed (no leadId) -- two real LeadSquared endpoints:
+//  - RetrieveRecentlyModified: all activity types in one date window, standard creds.
+//  - CustomActivity/RetrieveByActivityEvent: one specific type (eventCode) + date window,
+//    also returns CreatedByName/CreatedByEmailAddress (the real actor) which the all-types
+//    feed does not carry -- used when the caller narrows to a single Activity Type.
+// Verified against apidocs.leadsquared.com before building (not guessed): both bulk
+// endpoints need Parameter{FromDate,ToDate,...} + Paging{PageIndex,PageSize} +
+// Sorting{ColumnName,Direction} as three separate top-level objects.
+async function fetchLeadSquaredActivities(creds, { leadId, since, until, eventCode, pageIndex, pageSize }) {
+  if (leadId) {
+    const body = { Parameter: {}, Paging: { Offset: '0', RowCount: String(Math.min(pageSize || 50, 1000)) } }
+    const data = await leadsquaredPost('/v2/ProspectActivity.svc/Retrieve', creds, body, { leadId })
+    const rows = (data && data.ProspectActivities) || []
+    return { rows, count: (data && data.RecordCount) || rows.length, leadId }
+  }
+  const win = (!since && !until) ? defaultRecentWindow() : { since, until }
+  const fromDate = (win.since || defaultRecentWindow().since) + ' 00:00:00'
+  const toDate = (win.until || defaultRecentWindow().until) + ' 23:59:59'
+  const paging = { PageIndex: pageIndex || 1, PageSize: Math.min(pageSize || 200, 1000) }
+  const sorting = { ColumnName: 'CreatedOn', Direction: 1 }
+  if (eventCode) {
+    const body = { Parameter: { FromDate: fromDate, ToDate: toDate, ActivityEvent: Number(eventCode), RemoveEmptyValue: true }, Paging: paging, Sorting: sorting }
+    const data = await leadsquaredPost('/v2/ProspectActivity.svc/CustomActivity/RetrieveByActivityEvent', creds, body)
+    const rows = (data && data.List) || []
+    return { rows, count: (data && data.RecordCount) || rows.length, since: win.since, until: win.until, eventCode: Number(eventCode) }
+  }
+  const body = { Parameter: { FromDate: fromDate, ToDate: toDate, IncludeCustomFields: 0 }, Paging: paging, Sorting: sorting }
+  const data = await leadsquaredPost('/v2/ProspectActivity.svc/RetrieveRecentlyModified', creds, body)
   const rows = (data && data.ProspectActivities) || []
-  return { rows, count: (data && data.RecordCount) || rows.length, leadId }
+  return { rows, count: (data && data.RecordCount) || rows.length, since: win.since, until: win.until }
+}
+
+// ActivityTypes.Get -- lists every activity type configured on this account (code + real
+// display name), used to power an Activity Type filter dropdown matching LeadSquared's own
+// Manage Activity screen instead of showing raw numeric EventCodes.
+async function fetchLeadSquaredActivityTypes(creds) {
+  const data = await leadsquaredGet('/v2/ProspectActivity.svc/ActivityTypes.Get', creds)
+  const rows = Array.isArray(data) ? data : []
+  const types = rows.map(t => ({ code: t.ActivityEvent, name: t.DisplayName || t.ActivityEventName, eventType: t.EventType }))
+  return { rows: types, count: types.length }
+}
+
+// GetOpportunityTypeMetadata -- real Status/Stage option lists + custom-field display names
+// for this account's opportunity type, so a filter UI can show "Stage" / "Won" / "Lost"
+// instead of raw mx_Custom_2 / opaque values. Cached in-memory per cold start (metadata is
+// effectively static -- it only changes if someone edits Settings > Opportunities in LSQ).
+let _lsqOppMetaCache = null
+async function fetchLeadSquaredOpportunityMeta(creds, { eventCode }) {
+  const code = Number(eventCode) || 12003
+  if (_lsqOppMetaCache && _lsqOppMetaCache.code === code) return _lsqOppMetaCache.data
+  const data = await leadsquaredGet('/v2/OpportunityManagement.svc/GetOpportunityTypeMetadata', creds, { code: String(code) })
+  _lsqOppMetaCache = { code, data }
+  return data
 }
 
 async function handleLeadSquared(req, res, me) {
@@ -187,7 +242,9 @@ async function handleLeadSquared(req, res, me) {
   const p = { since, until, leadId, eventCode, pageIndex: Number(pageIndex) || undefined, pageSize: Number(pageSize) || undefined }
   try {
     if (mode === 'opportunities') return res.status(200).json(await fetchLeadSquaredOpportunities(creds, p))
+    if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
+    if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })

@@ -269,6 +269,7 @@ const DATA_SOURCES = [
   // 'api' category as Meta Graph API / Google Ads API (see sourceCategory()) and gets the
   // lighter apiTestMode test button instead of the sheet-URL edit/diagnostics UI.
   { name: 'LeadSquared — Leads', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'leads' },
+  { name: 'LeadSquared — Activity', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'activities' },
   { name: 'LeadSquared — Opportunities', src: 'LeadSquared API (env-configured)', rows: 'live', apiTestMode: 'opportunities' },
     ]
 
