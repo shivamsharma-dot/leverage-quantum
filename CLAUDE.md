@@ -3113,3 +3113,33 @@ Still open (proposed, NOT built): split Overall into Summary vs Diagnostics as t
 on the same /dashboard/overall route rather than two pages, because a new route means
 syncing PAGE_LIST across lib/auth.mjs, src/App.jsx and Sidebar.jsx, and Overall is the
 deep-link target used by the Slack reports.
+
+### 31 Jul 2026 - Card: removed height:100% (fixes the blank space under the funnel)
+
+Regression introduced by the 30 Jul footer-alignment patch. That patch added
+`height: '100%'` to the Card shell in src/ui/dashboardKit.jsx. For Cards nested inside
+`lq-grid2` rows this was harmless but also redundant - CSS grid already stretches items
+to equal row height. For Cards that are DIRECT children of the page scroll container it
+was destructive: that container has a definite height (clientHeight 939px), so 100%
+resolved against it and every standalone Card was forced to full viewport height.
+
+Visible symptom: the Overall funnel card measured 899px with only 462px of content
+(title 42 + chart 300 + stage-to-stage footer 120), leaving ~400px of white space under
+the conversion chips.
+
+Fix (/tmp/pf9.cjs): deleted `height: '100%',` from the Card shell only. Kept the flex
+column shell, the `flex:1 / minHeight:0` body and the `marginTop:auto` Note wrapper -
+those are what actually pin footers to the bottom.
+
+Verified live after deploy: funnel card 899px -> 543px, page 6,938px -> 6,582px, and
+every grid pair still measures identical heights (438/438, 491/491, 380/380, 317/317,
+451/451, 771/771) so footer alignment is intact.
+
+Two rules from this:
+1. Never use height:100% on a shared card primitive. Let grid/flex stretch do it.
+   dashboardKit.jsx still has one legitimate height:100% at the progress-bar fill - that
+   one is inside a fixed-height track and must stay.
+2. The dead-space metric used on 30 Jul (deepest descendant bottom vs card bottom) is
+   NOT a valid check for over-tall cards, because marginTop:auto pushes the footer to
+   the bottom and the number reads 0 either way. Compare card height against the SUM of
+   its body children instead.
