@@ -1038,8 +1038,25 @@ function buildV4(ctx) {
 // only history there is, and an entry that changes silently is worse than no entry.
 import { buildV5 } from './pmReportV5'
 import { buildV6 } from './pmReportV6'
+import { buildV7 } from './pmReportV7'
 
 export const REPORT_VERSIONS = [
+  {
+    id: 'v7',
+    code: 'V7',
+    msgKeys: ['yesterday', 'movers', 'month'],
+    name: 'Daily read ' + DASH + ' 3 messages',
+    tagline: 'Yesterday first: the last complete day against the day before it and against its own trailing week, then what moved by channel, then the month as context.',
+    recommended: false,
+    what: [
+      'Built for a daily send. The headline is the last complete day rather than the month, so the figures are genuinely different every morning without a word being reworded.',
+      'Message 1 - yesterday: spend, leads, QLs, CPL, CPQL and the Lead to QL rate, each against the day before. Then the verdict - the 10 L daily budget, the bonus-day test, the 550-600 QL target - and the same day against its own trailing 7 days.',
+      'Message 2 - what moved yesterday, by channel: the source table for that one day, then the three movers picked on money at stake multiplied by the size of the move, so the names change as the data changes.',
+      'Message 3 - the month, demoted to context: the channel table, the run-rate to month end and the two positions that matter. Table image and the all-columns CSV land in this thread.',
+      'No applications and no CPA anywhere. No corridor or ad detail either - the dashboard only builds those month to date, so they would repeat every morning. The current day is always excluded.',
+    ],
+    build: buildV7,
+  },
   {
     id: 'v6',
     code: 'V6',
