@@ -3087,3 +3087,29 @@ Notes:
 - Making the body a flex column also pulled the two note-less cards flush, because their last block now
   stretches instead of leaving a gap. Charts were checked for distortion - none.
 - If a future card needs its content NOT to stretch, wrap the children rather than reverting the Card.
+
+### 31 Jul 2026 - Overall: funnel summary table promoted above the source charts
+
+Problem: on /dashboard/overall the grouped Funnel summary table (the single most-read
+object on the page) rendered dead last. Measured on the live page: scroll container
+6,938px tall, table top at 6,499px - roughly seven screens of scrolling before the
+numbers appeared.
+
+Fix: moved the whole `GROUPED SUMMARY TABLE` JSX block (191 lines: wrapper div + Card
++ grouping tabs + toolbar + table) from just after `NotPerforming` to immediately after
+the `Overall funnel` Card, i.e. directly above the `SOURCE VOLUME + SOURCE EFFICIENCY`
+grid. Pure move - no markup, styling or data logic changed. Applied with /tmp/pf8.cjs
+using unique-anchor assertions plus a line-count-drift check.
+
+Result (verified live): table top now 1,664px instead of 6,499px. Page height unchanged
+at 6,938px. Order is now KPI rows -> Overall funnel -> Funnel summary table -> source
+charts -> trends -> campaigns -> corridors -> ads.
+
+Rule: this block is anchored by the comment `GROUPED SUMMARY TABLE` and closes on the
+first `</Card>` immediately followed by `</div>`. Keep that comment - the move script
+and any future reorder depend on it being unique.
+
+Still open (proposed, NOT built): split Overall into Summary vs Diagnostics as two tabs
+on the same /dashboard/overall route rather than two pages, because a new route means
+syncing PAGE_LIST across lib/auth.mjs, src/App.jsx and Sidebar.jsx, and Overall is the
+deep-link target used by the Slack reports.
