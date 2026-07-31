@@ -104,15 +104,27 @@ async function leadsquaredRequest(method, path, { accessKey, secretKey, host }, 
 async function leadsquaredPost(path, creds, body, extraQuery) { return leadsquaredRequest('POST', path, creds, body, extraQuery) }
 async function leadsquaredGet(path, creds, extraQuery) { return leadsquaredRequest('GET', path, creds, undefined, extraQuery) }
 
-// Last 7 complete days, matching a sensible "Manage Activity" default view when no
-// since/until is given -- this endpoint (unlike Leads/Opportunities) requires a bounded
-// date window rather than defaulting to all-time.
+// Just today, when no since/until is given for the all-activity-types feed (see the cap
+// below for why). This endpoint (unlike Leads/Opportunities) requires a bounded window
+// rather than defaulting to all-time.
 function defaultRecentWindow() {
   const toIso = d => d.toISOString().slice(0, 10)
-  const until = new Date()
-  const since = new Date(until.getTime() - 7 * 86400000)
-  return { since: toIso(since), until: toIso(until) }
+  const today = toIso(new Date())
+  return { since: today, until: today }
 }
+
+// RetrieveRecentlyModified (the all-activity-types feed, used when no eventCode narrows
+// the query) genuinely 500s on this account once the window gets wide -- verified live:
+// a 1-day window succeeds, a 7-day window fails with LeadSquared's own generic "There was
+// an error processing the request" (their backend choking on volume, not a malformed
+// request -- this account logs ~78k rows for ONE activity type alone in 7 days, so an
+// all-125-types scan over the same window is plausibly in the millions). Capped here at
+// 2 days -- conservative, since the real breaking point between 1 and 7 days is unknown --
+// with a clear error instead of forwarding a confusing opaque 500. Narrowing to one
+// Activity Type (eventCode) does NOT hit this limit -- verified live with a 7-day,
+// eventCode-scoped query returning 78,350 matching rows without error -- so a wide window
+// is only a problem for the "all types" case.
+const ALL_TYPES_MAX_WINDOW_DAYS = 2
 
 // Leads.Get (advanced search by lead criteria) -- filters mirror what LeadSquared's own
 // "Manage Leads" grid filters on: a field name (LookupName), an operator, and a value.
@@ -193,6 +205,12 @@ async function fetchLeadSquaredActivities(creds, { leadId, since, until, eventCo
   const toDate = (win.until || defaultRecentWindow().until) + ' 23:59:59'
   const paging = { PageIndex: pageIndex || 1, PageSize: Math.min(pageSize || 200, 1000) }
   const sorting = { ColumnName: 'CreatedOn', Direction: 1 }
+  if (!eventCode) {
+    const spanDays = (new Date(toDate) - new Date(fromDate)) / 86400000
+    if (spanDays > ALL_TYPES_MAX_WINDOW_DAYS) {
+      throw new Error(`The all-activity-types feed is limited to a ${ALL_TYPES_MAX_WINDOW_DAYS}-day window on this account (LeadSquared's own backend errors on a wider all-type scan at this account's volume) -- narrow the date range, or pick a specific Activity Type (eventCode) instead, which has no such limit.`)
+    }
+  }
   if (eventCode) {
     const body = { Parameter: { FromDate: fromDate, ToDate: toDate, ActivityEvent: Number(eventCode), RemoveEmptyValue: true }, Paging: paging, Sorting: sorting }
     const data = await leadsquaredPost('/v2/ProspectActivity.svc/CustomActivity/RetrieveByActivityEvent', creds, body)
