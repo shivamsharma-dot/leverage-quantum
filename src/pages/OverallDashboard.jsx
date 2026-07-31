@@ -2211,129 +2211,6 @@ export default function OverallDashboard() {
             </div>
           </Card>
 
-          {/* SOURCE VOLUME + SOURCE EFFICIENCY */}
-          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
-            <Card>
-              {sectionTitle('Leads by source', 'volume leaders this period')}
-              <RankedBars data={bySource.slice(0, 8).map(s => ({ source:s.source, count:s.leads }))} labelKey="source" max={maxSourceLeads} total={totalSourceLeads} colorFn={brandColor} showRank />
-            </Card>
-            <Card>
-              {sectionTitle('Source efficiency', 'queued → Total QL rate — where quality actually converts (min. 10 queued)')}
-              <EfficiencyList data={bySourceEfficiency} labelKey="source" rateKey="qlRate" subKey="queued" />
-            </Card>
-          </div>
-
-          {/* COST AND QUALITY BY SOURCE - the same cuts the CEO report carries */}
-          <div style={{ marginTop:16 }}>
-            <CpqlBySource cmp={reportCmp} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
-          </div>
-          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
-            <SpendVsQuality cmp={reportCmp} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
-            <CostTrendMonth data={costByMonth} fmtINR={fmtINR} />
-          </div>
-
-          {/* MONTH TREND + DAILY TREND */}
-          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
-            <Card>
-              {sectionTitle('Month-on-month trend', 'leads, queued and total QL by month')}
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={byMonth} margin={{ left:0, right:12, top:4, bottom:4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} />
-                  <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
-                  <Tooltip content={<BrandTooltip />} />
-                  <Legend wrapperStyle={{ fontSize:11, fontFamily:FONT }} />
-                  <Line type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }} />
-                  <Line type="monotone" dataKey="queued" name="Total Queued" stroke={C.blue} strokeWidth={2.5} dot={{ r:3 }} />
-                  <Line type="monotone" dataKey="totalQL" name="Total QL" stroke={C.cyan} strokeWidth={2.5} dot={{ r:3 }} />
-                  <Line type="monotone" dataKey="deposits" name="Deposits" stroke={C.green} strokeWidth={2.5} dot={{ r:3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </Card>
-            <Card>
-              {sectionTitle('Daily pulse', 'last 30 days of lead volume in the active selection')}
-              <ResponsiveContainer width="100%" height={260}>
-                <AreaChart data={byDay} margin={{ left:0, right:12, top:4, bottom:4 }}>
-                  <defs>
-                    <linearGradient id="ovLeadsFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.navy} stopOpacity={0.35} />
-                      <stop offset="100%" stopColor={C.navy} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                  <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                  <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
-                  <Tooltip content={<BrandTooltip />} />
-                  <Area type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} fill="url(#ovLeadsFill)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </Card>
-          </div>
-
-          {/* COST TREND, DAY BY DAY - the cost twin of the daily pulse above */}
-          <div style={{ marginTop:16 }}>
-            <CostTrendDay data={costByDay} fmtINR={fmtINR} />
-          </div>
-
-          {/* TOP MOVERS — what to scale, framed for decisions */}
-          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
-            <Card>
-              {sectionTitle('Top campaigns by volume', 'where the leads are coming from right now')}
-              <RankedBars data={topCampaignsByLeads.map(c => ({ campaign:c.campaign, count:c.leads }))} labelKey="campaign" max={topCampaignsByLeads.length ? topCampaignsByLeads[0].leads : 1} total={totalSourceLeads} colorFn={brandColor} showRank />
-            </Card>
-            <Card>
-              {sectionTitle('Best campaigns to scale', 'highest Total QL rate among campaigns with real volume (min. 15 queued)')}
-              <EfficiencyList data={topCampaignsByEfficiency} labelKey="campaign" rateKey="qlRate" subKey="queued" />
-            </Card>
-          </div>
-
-          {/* CPQL vs. VOLUME EFFICIENCY MAP — bubble size = spend. Median lines split the
-              chart into the same quadrants as the campaign-performance heuristic: high CPQL
-              is a red flag no matter the volume; low CPQL only counts as a proven best
-              performer once QL volume clears the median. */}
-          <div style={{ marginTop:16 }}>
-            <Card>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10, marginBottom:14 }}>
-                {sectionTitle('Campaign efficiency map', 'CPQL vs. Total QL volume — bubble size = spend, top 30 campaigns by volume')}
-                <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
-                  {[['best', 'Best — scale'], ['promising', 'Promising'], ['flag', 'High CPQL — flag']].map(([k, l]) => (
-                    <div key={k} style={{ display:'flex', alignItems:'center', gap:6 }}>
-                      <span style={{ width:9, height:9, borderRadius:99, background:QUADRANT_COLOR[k], flexShrink:0 }} />
-                      <span style={{ fontSize:10.5, fontWeight:600, color:C.muted, whiteSpace:'nowrap' }}>{l}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {campaignEfficiencyMap.points.length === 0 ? (
-                <div style={{ textAlign:'center', padding:'24px 0', color:C.muted, fontSize:13, fontFamily:FONT }}>Not enough volume yet</div>
-              ) : (
-                <ResponsiveContainer width="100%" height={340}>
-                  <ScatterChart margin={{ top:8, right:24, bottom:8, left:8 }}>
-                    <CartesianGrid stroke={C.border} />
-                    <XAxis type="number" dataKey="totalQL" name="Total QLs" tick={axis} tickFormatter={fmtN} label={{ value:'Total QLs (volume)', position:'insideBottom', offset:-6, style:{ ...axis, fontWeight:700 } }} />
-                    <YAxis type="number" dataKey="cpql" name="CPQL" tick={axis} tickFormatter={v => fmtINRShort(v)} width={70} />
-                    <ZAxis type="number" dataKey="spend" range={[60, 600]} name="Spend" />
-                    <ReferenceLine x={campaignEfficiencyMap.medQL} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median volume', position:'top', fontSize:10, fill:C.muted }} />
-                    <ReferenceLine y={campaignEfficiencyMap.medCpql} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median CPQL', position:'right', fontSize:10, fill:C.muted }} />
-                    <Tooltip content={<EfficiencyMapTooltip />} cursor={{ strokeDasharray:'3 3' }} />
-                    <Scatter data={campaignEfficiencyMap.points}>
-                      {campaignEfficiencyMap.points.map((p, i) => (
-                        <Cell key={i} fill={QUADRANT_COLOR[p.quadrant]} fillOpacity={0.75} />
-                      ))}
-                    </Scatter>
-                  </ScatterChart>
-                </ResponsiveContainer>
-              )}
-            </Card>
-          </div>
-
-          {/* CORRIDORS AND ADS ON CPQL, THEN WHAT IS NOT WORKING */}
-          <div style={{ marginTop:16 }}>
-            <CorridorRanking cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
-          </div>
-          <AdRanking cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
-          <NotPerforming cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
-
           {/* GROUPED SUMMARY TABLE — customizable: search, sortable columns, show/hide +
               reorder columns (persisted), row limit, and a per-view export. */}
           <div style={{ marginTop:16 }}>
@@ -2525,6 +2402,130 @@ export default function OverallDashboard() {
               )}
             </Card>
           </div>
+
+          {/* SOURCE VOLUME + SOURCE EFFICIENCY */}
+          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
+            <Card>
+              {sectionTitle('Leads by source', 'volume leaders this period')}
+              <RankedBars data={bySource.slice(0, 8).map(s => ({ source:s.source, count:s.leads }))} labelKey="source" max={maxSourceLeads} total={totalSourceLeads} colorFn={brandColor} showRank />
+            </Card>
+            <Card>
+              {sectionTitle('Source efficiency', 'queued → Total QL rate — where quality actually converts (min. 10 queued)')}
+              <EfficiencyList data={bySourceEfficiency} labelKey="source" rateKey="qlRate" subKey="queued" />
+            </Card>
+          </div>
+
+          {/* COST AND QUALITY BY SOURCE - the same cuts the CEO report carries */}
+          <div style={{ marginTop:16 }}>
+            <CpqlBySource cmp={reportCmp} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
+          </div>
+          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
+            <SpendVsQuality cmp={reportCmp} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
+            <CostTrendMonth data={costByMonth} fmtINR={fmtINR} />
+          </div>
+
+          {/* MONTH TREND + DAILY TREND */}
+          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
+            <Card>
+              {sectionTitle('Month-on-month trend', 'leads, queued and total QL by month')}
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={byMonth} margin={{ left:0, right:12, top:4, bottom:4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} />
+                  <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
+                  <Tooltip content={<BrandTooltip />} />
+                  <Legend wrapperStyle={{ fontSize:11, fontFamily:FONT }} />
+                  <Line type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }} />
+                  <Line type="monotone" dataKey="queued" name="Total Queued" stroke={C.blue} strokeWidth={2.5} dot={{ r:3 }} />
+                  <Line type="monotone" dataKey="totalQL" name="Total QL" stroke={C.cyan} strokeWidth={2.5} dot={{ r:3 }} />
+                  <Line type="monotone" dataKey="deposits" name="Deposits" stroke={C.green} strokeWidth={2.5} dot={{ r:3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </Card>
+            <Card>
+              {sectionTitle('Daily pulse', 'last 30 days of lead volume in the active selection')}
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={byDay} margin={{ left:0, right:12, top:4, bottom:4 }}>
+                  <defs>
+                    <linearGradient id="ovLeadsFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={C.navy} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={C.navy} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
+                  <Tooltip content={<BrandTooltip />} />
+                  <Area type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} fill="url(#ovLeadsFill)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </Card>
+          </div>
+
+          {/* COST TREND, DAY BY DAY - the cost twin of the daily pulse above */}
+          <div style={{ marginTop:16 }}>
+            <CostTrendDay data={costByDay} fmtINR={fmtINR} />
+          </div>
+
+          {/* TOP MOVERS — what to scale, framed for decisions */}
+          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
+            <Card>
+              {sectionTitle('Top campaigns by volume', 'where the leads are coming from right now')}
+              <RankedBars data={topCampaignsByLeads.map(c => ({ campaign:c.campaign, count:c.leads }))} labelKey="campaign" max={topCampaignsByLeads.length ? topCampaignsByLeads[0].leads : 1} total={totalSourceLeads} colorFn={brandColor} showRank />
+            </Card>
+            <Card>
+              {sectionTitle('Best campaigns to scale', 'highest Total QL rate among campaigns with real volume (min. 15 queued)')}
+              <EfficiencyList data={topCampaignsByEfficiency} labelKey="campaign" rateKey="qlRate" subKey="queued" />
+            </Card>
+          </div>
+
+          {/* CPQL vs. VOLUME EFFICIENCY MAP — bubble size = spend. Median lines split the
+              chart into the same quadrants as the campaign-performance heuristic: high CPQL
+              is a red flag no matter the volume; low CPQL only counts as a proven best
+              performer once QL volume clears the median. */}
+          <div style={{ marginTop:16 }}>
+            <Card>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10, marginBottom:14 }}>
+                {sectionTitle('Campaign efficiency map', 'CPQL vs. Total QL volume — bubble size = spend, top 30 campaigns by volume')}
+                <div style={{ display:'flex', gap:14, flexWrap:'wrap' }}>
+                  {[['best', 'Best — scale'], ['promising', 'Promising'], ['flag', 'High CPQL — flag']].map(([k, l]) => (
+                    <div key={k} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ width:9, height:9, borderRadius:99, background:QUADRANT_COLOR[k], flexShrink:0 }} />
+                      <span style={{ fontSize:10.5, fontWeight:600, color:C.muted, whiteSpace:'nowrap' }}>{l}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {campaignEfficiencyMap.points.length === 0 ? (
+                <div style={{ textAlign:'center', padding:'24px 0', color:C.muted, fontSize:13, fontFamily:FONT }}>Not enough volume yet</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={340}>
+                  <ScatterChart margin={{ top:8, right:24, bottom:8, left:8 }}>
+                    <CartesianGrid stroke={C.border} />
+                    <XAxis type="number" dataKey="totalQL" name="Total QLs" tick={axis} tickFormatter={fmtN} label={{ value:'Total QLs (volume)', position:'insideBottom', offset:-6, style:{ ...axis, fontWeight:700 } }} />
+                    <YAxis type="number" dataKey="cpql" name="CPQL" tick={axis} tickFormatter={v => fmtINRShort(v)} width={70} />
+                    <ZAxis type="number" dataKey="spend" range={[60, 600]} name="Spend" />
+                    <ReferenceLine x={campaignEfficiencyMap.medQL} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median volume', position:'top', fontSize:10, fill:C.muted }} />
+                    <ReferenceLine y={campaignEfficiencyMap.medCpql} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median CPQL', position:'right', fontSize:10, fill:C.muted }} />
+                    <Tooltip content={<EfficiencyMapTooltip />} cursor={{ strokeDasharray:'3 3' }} />
+                    <Scatter data={campaignEfficiencyMap.points}>
+                      {campaignEfficiencyMap.points.map((p, i) => (
+                        <Cell key={i} fill={QUADRANT_COLOR[p.quadrant]} fillOpacity={0.75} />
+                      ))}
+                    </Scatter>
+                  </ScatterChart>
+                </ResponsiveContainer>
+              )}
+            </Card>
+          </div>
+
+          {/* CORRIDORS AND ADS ON CPQL, THEN WHAT IS NOT WORKING */}
+          <div style={{ marginTop:16 }}>
+            <CorridorRanking cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
+          </div>
+          <AdRanking cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
+          <NotPerforming cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
+
 
           {compareOpen && (
             <div onClick={e => { if (e.target === e.currentTarget) setCompareOpen(false) }}
