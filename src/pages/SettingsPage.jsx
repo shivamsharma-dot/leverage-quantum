@@ -1840,7 +1840,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
                 <select
                   className={styles.input}
-                  style={{ minWidth: 230 }}
+                  style={{ width: 250, flex: '0 0 auto' }}
                   value={bqPick}
                   onChange={(e) => { setBqPick(e.target.value); setBqDelArmed(''); if (e.target.value) bqLoad(e.target.value) }}
                 >
@@ -1851,7 +1851,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 </select>
                 <input
                   className={styles.input}
-                  style={{ minWidth: 210 }}
+                  style={{ width: 240, flex: '0 0 auto' }}
                   placeholder="Name this query"
                   value={bqName}
                   onChange={(e) => { setBqName(e.target.value); setBqSaveMsg('') }}
