@@ -1335,6 +1335,91 @@ export default function SettingsPage() {
     }
   }
 
+  // BigQuery console state. The real safety net is assertReadOnly() in
+  // lib/bigquery.mjs -- anything that is not SELECT / WITH is refused
+  // server-side, so nothing typed here can change a row. Every Run is
+  // preceded by a dry run so the scan cost is known before a rupee is
+  // spent, and maxBytes travels with the real call as a hard ceiling in
+  // case the estimate turns out to be wrong.
+  const BQ_MAX_BYTES = 21474836480
+  const BQ_CONFIRM_BYTES = 2147483648
+  const [bqSql, setBqSql] = useState('')
+  const [bqLimit, setBqLimit] = useState('500')
+  const [bqBusy, setBqBusy] = useState('')
+  const [bqErr, setBqErr] = useState('')
+  const [bqWarn, setBqWarn] = useState('')
+  const [bqEst, setBqEst] = useState(null)
+  const [bqRes, setBqRes] = useState(null)
+  const [bqArmed, setBqArmed] = useState('')
+  const bqBytes = (n) => {
+    const b = Number(n || 0)
+    if (b < 1024) return b + ' B'
+    const u = ['KB', 'MB', 'GB', 'TB']
+    let i = -1, v = b
+    while (v >= 1024 && i < 3) { v = v / 1024; i++ }
+    return v.toFixed(v < 10 ? 2 : 1) + ' ' + u[i]
+  }
+  // On-demand BigQuery bills roughly USD 6.25 per TiB scanned. Shown in
+  // rupees at a flat 88 so the number means something locally. It is an
+  // approximation on purpose -- the point is the order of magnitude.
+  const bqCost = (n) => {
+    const rs = (Number(n || 0) / 1099511627776) * 6.25 * 88
+    if (rs < 0.01) return 'under 1 paisa'
+    return 'about \u20B9' + (rs < 1 ? rs.toFixed(2) : Math.round(rs).toLocaleString('en-IN'))
+  }
+  const bqCell = (v) => {
+    if (v === null || v === undefined) return '\u2014'
+    if (typeof v === 'object') return JSON.stringify(v)
+    if (typeof v === 'boolean') return v ? 'true' : 'false'
+    if (typeof v === 'number') return v.toLocaleString('en-IN', { maximumFractionDigits: 6 })
+    return String(v)
+  }
+  const bqCall = async (extra) => {
+    const r = await fetch('/api/crm-leads?source=bigquery&mode=query' + extra, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ sql: bqSql }),
+    })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok || d.error) throw new Error(d.error || ('Request failed (' + r.status + ')'))
+    return d
+  }
+  const bqEstimate = async () => {
+    if (!String(bqSql || '').trim()) { setBqErr('Nothing to estimate.'); return }
+    setBqErr(''); setBqWarn(''); setBqRes(null); setBqBusy('est')
+    try {
+      setBqEst(await bqCall('&dryRun=1'))
+    } catch (e) {
+      setBqEst(null); setBqErr(e.message)
+    } finally {
+      setBqBusy('')
+    }
+  }
+  const bqRun = async () => {
+    const sql = String(bqSql || '').trim()
+    if (!sql) { setBqErr('Nothing to run.'); return }
+    setBqErr(''); setBqWarn(''); setBqBusy('run')
+    try {
+      const est = await bqCall('&dryRun=1')
+      const bytes = Number(est.totalBytesProcessed || 0)
+      setBqEst(est)
+      if (bytes > BQ_CONFIRM_BYTES && bqArmed !== sql) {
+        setBqArmed(sql)
+        setBqWarn('This scans ' + bqBytes(bytes) + ' (' + bqCost(bytes) + '). Press Run again to go ahead.')
+        return
+      }
+      const t0 = Date.now()
+      const d = await bqCall('&maxResults=' + bqLimit + '&maxBytes=' + BQ_MAX_BYTES)
+      setBqRes({ ...d, ms: Date.now() - t0 })
+      setBqArmed('')
+    } catch (e) {
+      setBqRes(null); setBqErr(e.message)
+    } finally {
+      setBqBusy('')
+    }
+  }
+
   const [editReportOpen, setEditReportOpen] = useState(false)
   const [sendReportOpen, setSendReportOpen] = useState(false)
   const [recipientsOpen, setRecipientsOpen] = useState(false)
@@ -1668,6 +1753,74 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           {/* ---------------- DATA ---------------- */}
           {activeTab === 'data' && userIsAdmin && (
             <>
+            <div className={styles.card}>
+              <h3 className={styles.cardTitle}>BigQuery Console</h3>
+              <p className={styles.cardDesc}>Read-only SQL against the connected warehouse. Only SELECT and WITH are accepted, so nothing typed here can change data. Estimate first when you are not sure how much a query will scan.</p>
+              <textarea
+                className={styles.sqlEditor}
+                spellCheck={false}
+                placeholder="SELECT CURRENT_DATE() AS today"
+                value={bqSql}
+                onChange={e => { setBqSql(e.target.value); setBqArmed(''); setBqWarn('') }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 10 }}>
+                <Button size="sm" onClick={bqRun} disabled={!!bqBusy}>{bqBusy === 'run' ? 'Running...' : 'Run'}</Button>
+                <Button size="sm" variant="secondary" onClick={bqEstimate} disabled={!!bqBusy}>{bqBusy === 'est' ? 'Estimating...' : 'Estimate'}</Button>
+                <select className={styles.input} style={{ width: 132 }} value={bqLimit} onChange={e => setBqLimit(e.target.value)}>
+                  <option value="100">100 rows</option>
+                  <option value="500">500 rows</option>
+                  <option value="2000">2,000 rows</option>
+                  <option value="10000">10,000 rows</option>
+                </select>
+                {(bqRes || bqEst || bqErr || bqWarn) && (
+                  <button type="button" className={styles.bqClear} onClick={() => { setBqRes(null); setBqEst(null); setBqErr(''); setBqWarn('') }}>Clear</button>
+                )}
+              </div>
+              {bqWarn && <p className={styles.note} style={{ color: '#1F3C84' }}>{bqWarn}</p>}
+              {bqErr && <p className={styles.note} style={{ color: '#c0392b' }}>{'\u2715'} {bqErr}</p>}
+              {bqEst && !bqRes && (
+                <p className={styles.note}>Dry run only: this query would scan {bqBytes(bqEst.totalBytesProcessed)} ({bqCost(bqEst.totalBytesProcessed)}). Nothing was billed.</p>
+              )}
+              {bqRes && (
+                <>
+                  <p className={styles.note} style={{ color: '#15803D' }}>
+                    {'\u2713'} {Number(bqRes.totalRows || 0).toLocaleString('en-IN')} row(s)
+                    {(bqRes.rows || []).length < Number(bqRes.totalRows || 0) ? ' \u00B7 showing first ' + bqRes.rows.length : ''}
+                    {' \u00B7 scanned ' + bqBytes(bqRes.totalBytesProcessed) + ' (' + bqCost(bqRes.totalBytesProcessed) + ')'}
+                    {bqRes.cacheHit ? ' \u00B7 served from cache, no charge' : ''}
+                    {' \u00B7 ' + bqRes.ms + ' ms'}
+                  </p>
+                  {(bqRes.rows || []).length === 0 ? (
+                    <p className={styles.note}>The query ran but returned no rows.</p>
+                  ) : (
+                    <div className={styles.tableWrap} style={{ maxHeight: 420, overflowY: 'auto' }}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            {(bqRes.fields || []).map(f => (
+                              <th key={f.name} className={styles.bqTh}>{f.name}<span className={styles.bqType}>{f.type}</span></th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(bqRes.rows || []).map((row, i) => (
+                            <tr key={i}>
+                              {(bqRes.fields || []).map(f => (
+                                <td key={f.name} className={styles.bqTd} title={bqCell(row[f.name])}>{bqCell(row[f.name])}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {bqRes.jobId && (
+                    <p className={styles.note} style={{ color: '#94A3B8' }}>Job {bqRes.jobId} in {bqRes.projectId} ({bqRes.location})</p>
+                  )}
+                </>
+              )}
+            </div>
+
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>SR Revenue Assumptions</h3>
                 <p className={styles.cardDesc}>SR fee per RAU (Registered At University) used in projected revenue. Estimated RAU = Applications × 0.09; Actual RAUs is the real count. Formula: Estimated/Actual RAUs × SR Fee</p>

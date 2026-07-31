@@ -636,3 +636,12 @@
 .alSearch input::placeholder { color:var(--text-3); }
 .alSearchClear { flex:0 0 auto; border:none; background:transparent; cursor:pointer; font-size:16px; line-height:1; color:var(--text-3); padding:0 2px; border-radius:6px; transition:color .15s ease; }
 .alSearchClear:hover { color:var(--text); }
+
+/* ===== BigQuery console ===== */
+.sqlEditor { display: block; width: 100%; min-height: 132px; resize: vertical; padding: 12px 14px; border: 0.5px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--text-2); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.6; outline: none; }
+.sqlEditor:focus { border-color: #1C9FD4; box-shadow: 0 0 0 3px rgba(28, 159, 212, 0.12); }
+.bqTh { position: sticky; top: 0; z-index: 1; background: var(--card); border-bottom: 0.5px solid var(--border); text-align: left; padding: 8px 12px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
+.bqType { display: block; font-size: 9.5px; font-weight: 500; letter-spacing: 0.02em; text-transform: none; color: #94A3B8; }
+.bqTd { padding: 7px 12px; border-bottom: 0.5px solid var(--border-2); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
+.bqClear { border: none; background: transparent; color: var(--text-3); font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 2px; }
+.bqClear:hover { color: #1F3C84; }
