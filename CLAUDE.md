@@ -3143,3 +3143,49 @@ Two rules from this:
    NOT a valid check for over-tall cards, because marginTop:auto pushes the footer to
    the bottom and the number reads 0 either way. Compare card height against the SUM of
    its body children instead.
+
+### 31 Jul 2026 - V7 added: the daily read (src/lib/pmReportV7.js)
+
+Why: V4 is a month-to-date report. Sent every morning it repeats itself, because one
+extra day moves a month total by a percent or two. A suppression ledger alone cannot fix
+that - roughly 12 insights a day with a 7-day cooldown needs about 80 distinct true
+statements a week out of data that barely moves. So V7 changes what the report is ABOUT
+rather than how it is worded.
+
+Shape - 3 messages, msgKeys ['yesterday', 'movers', 'month']:
+M1 yesterday: spend, leads, QLs, CPL, CPQL, Lead-to-QL, each against D-2. Then the
+verdict (10 L daily budget, the bonus-day test, the 550-600 QL target) and the same day
+against the mean of its trailing 7 complete days.
+M2 movers: the source table for that ONE day, then the top three movers scored on
+materiality = money at stake x size of the biggest move, so the names change with the
+data instead of a fixed generator order.
+M3 month: demoted to context. KPI fields, run-rate to month end, two channel positions,
+the channel table (applications and CPA stripped) and the CSV in thread.
+
+Rules this version keeps: reads ctx.day (last COMPLETE day, current day excluded
+upstream) and ctx.dow.rows; Facebook + Google money only where scoped; no applications,
+no CPA anywhere; no annotation of any single day; nothing modelled or invented. On a
+genuinely flat day it says so plainly rather than dressing an old fact up as new.
+
+Deliberately NOT in V7: corridor and ad cuts. The dashboard only builds those month to
+date, so they would read identically every morning - the exact problem V7 solves. M3
+says so and points at V4. Also NOT built yet: the fingerprint ledger. With a day-keyed
+headline it is only a backstop, so it was deferred rather than rushed.
+
+Registry: appended to the TOP of REPORT_VERSIONS as id 'v7', recommended: false.
+DEFAULT_VERSION_ID is still 'v4', so the daily send is unchanged until it is picked.
+
+Hard lessons from building it, worth keeping:
+1. Typing a 250-line file into the Codespace terminal in one heredoc CORRUPTS it. The
+   first attempt silently turned nOf( into nu( and dropped half the file. Write files in
+   chunks of at most ~20 lines and check wc -l after every chunk.
+2. esbuild and vite build do NOT catch that class of corruption - an undefined identifier
+   only fails at runtime. A smoke test (/tmp/smoke.mjs) that imports the builder with a
+   synthetic ctx and asserts the output contains no 'undefined' and no 'NaN' does catch
+   it. Do that for every report builder from now on.
+3. Emoji: :sunrise: does NOT render in the in-app preview and shipped as literal text on
+   the first pass. Only reuse shortcodes already present in pmReport.js.
+
+Open question for Shivam, not touched: ctx.pace reports "31 of 31 days" on 31 Jul while
+the data only runs to 30 Jul. That off-by-one is pre-existing in V4's pace block, not
+new to V7, so it was left alone rather than changed unasked.

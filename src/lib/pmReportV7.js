@@ -85,7 +85,7 @@ export function buildV7(ctx) {
   // 1 -- yesterday, and the verdict on it.
   const m1 = {
     key: 'yesterday', label: 'Yesterday',
-    text: eList([test, '*:sunrise: Yesterday ' + DASH + ' ' + d.label + '*', ctx.filterLine]),
+    text: eList([test, '*:calendar: Yesterday ' + DASH + ' ' + d.label + '*', ctx.filterLine]),
     fields: [
       fld(':moneybag:', 'SPEND', inr(g.spend), g.spend, p.spend, inr(p.spend)),
       fld(':bar_chart:', 'LEADS', cnt(g.leads), g.leads, p.leads, cnt(p.leads)),
@@ -219,7 +219,7 @@ export function buildV7(ctx) {
 
   const m3 = {
     key: 'month', label: 'Month to date',
-    text: eList(['*:calendar: Where the month stands*', ctx.filterLine]),
+    text: eList(['*:bar_chart: Where the month stands*', ctx.filterLine]),
     fields: [
       mtdFld(':moneybag:', 'SPEND', inr(ctx.num('spend')), 'spend', ctx.hasPrev ? inr(pv.spend) : null),
       mtdFld(':bar_chart:', 'LEADS', cnt(ctx.num('leads')), 'leads', ctx.hasPrev ? cnt(pv.leads) : null),
