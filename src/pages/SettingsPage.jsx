@@ -322,6 +322,14 @@ const GoogleIcon = () => (
   </svg>
 )
 
+// Real LeadSquared mark (from the user's own downloaded brand SVG) -- two-tone step shape.
+const LeadSquaredIcon = () => (
+  <svg viewBox="0 0 136.6 137.9">
+    <polygon fill="#0C9AFC" points="0,0 0,68.5 68.6,68.5 68.6,137.9 136.6,137.9 136.6,0" />
+    <polygon fill="#0C293D" points="68.6,137.9 0,137.9 0,68.5" />
+  </svg>
+)
+
 // Sheet-backed sources (anything with editKey) get the real Sheets mark; Meta Graph API and
 // Google Ads API get their real brand marks; custom sources keep the generic glyph (they're
 // arbitrary user-registered sheets, not a specific named service).
@@ -329,6 +337,7 @@ function sourceIconClass(s) {
   if (s.editKey) return { Icon: SheetsIcon, wrap: styles.dsIconWrapSheets }
   if (s.name === 'Meta Graph API') return { Icon: MetaIcon, wrap: styles.dsIconWrapBrand }
   if (s.name === 'Google Ads API') return { Icon: GoogleIcon, wrap: styles.dsIconWrapBrand }
+  if (s.apiTestMode) return { Icon: LeadSquaredIcon, wrap: styles.dsIconWrapBrand }
   return { Icon: GenericSourceIcon, wrap: '' }
 }
 
