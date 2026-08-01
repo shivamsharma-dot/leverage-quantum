@@ -35,6 +35,9 @@ const shareOf = (part, whole) => (part == null || !whole ? null : (part / whole)
 const pct1 = n => (n == null ? '\u2014' : n.toFixed(1) + '%')
 const move = n => (n == null ? null : (n >= 0 ? '\u25b2 ' : '\u25bc ') + Math.abs(n).toFixed(1) + '%')
 
+// A movement, where the sign is the whole point.
+const signed = n => (n == null || !isFinite(n) ? '\u2014' : (n > 0 ? '+' : '') + money(n))
+
 // tag is the only Block Kit element that carries a real colour, so every verdict
 // in this file is expressed as one. Costs invert: spending more is not good news.
 const tone = (n, invert) => (n == null ? 'gray' : (invert ? n <= 0 : n >= 0) ? 'green' : 'red')
@@ -111,12 +114,86 @@ function fromSheet(o) {
 }
 const marginOf = w => (w && w.rev ? (w.net / w.rev) * 100 : null)
 
+// -- the diagnosis ------------------------------------------------------------
+// Every line below is arithmetic on two windows the page has already computed:
+// the month so far, and the same number of days of the month before it. There
+// is no forecast and no judgement in here, so every sentence can be checked
+// against the ledger message without leaving Slack.
+
+function movers(now, was, kind) {
+  if (!was) return []
+  return HEADS.filter(function (h) { return h[1] === kind })
+    .map(function (h) { return { label: h[0], now: now[h[2]], was: was[h[2]] } })
+    .filter(function (x) { return x.now != null && x.was != null && x.now !== x.was })
+    .map(function (x) { x.d = x.now - x.was; return x })
+}
+
+function insights(c, w, p, margin, ym) {
+  const bad = []
+  const fix = []
+  const lab = (c.prev && c.prev.label) || 'the month before'
+
+  if (p && p.net != null && w.net != null) {
+    bad.push('Net inflow moved from ' + money(p.net) + ' in ' + lab + ' to ' + money(w.net)
+      + ', a swing of ' + signed(w.net - p.net) + ' over the same number of days.')
+  }
+  const dRev = p && p.rev != null && w.rev != null ? w.rev - p.rev : null
+  const dCost = p && p.cost != null && w.cost != null ? w.cost - p.cost : null
+  if (dRev != null && dCost != null) {
+    const tot = Math.abs(dRev) + Math.abs(dCost)
+    bad.push('Revenue moved ' + signed(dRev) + ', cost moved ' + signed(dCost) + '.'
+      + (tot ? ' ' + Math.round((Math.abs(dCost) / tot) * 100) + '% of the movement sits on the cost side.' : ''))
+  }
+  if (w.rev && w.cost != null) {
+    bad.push('Every ' + money(CR) + ' of revenue is carrying ' + money((w.cost / w.rev) * CR) + ' of cost.')
+  }
+  const up = movers(w, p, 'Cost').filter(function (x) { return x.d > 0 }).sort(function (a, b) { return b.d - a.d })
+  const down = movers(w, p, 'Revenue').filter(function (x) { return x.d < 0 }).sort(function (a, b) { return a.d - b.d })
+  if (up.length) {
+    bad.push('The rise is concentrated: ' + up.slice(0, 2).map(function (x) { return x.label + ' ' + signed(x.d) }).join(' and ')
+      + ', against ' + lab + '.')
+  }
+  if (down.length) {
+    bad.push('The largest fall on revenue is ' + down[0].label + ', ' + money(down[0].was) + ' down to '
+      + money(down[0].now) + ' (' + signed(down[0].d) + ').')
+  }
+  if (c.days && c.negDays != null) {
+    bad.push(c.negDays + ' of the ' + c.days + ' completed days lost money'
+      + (c.worstDay ? ', the worst ' + c.worstDay.date + ' at ' + money(c.worstDay.net) : '') + '.')
+  }
+  const top = HEADS.filter(function (h) { return h[1] === 'Revenue' && w[h[2]] != null })
+    .sort(function (a, b) { return w[b[2]] - w[a[2]] })[0]
+  if (top && w.rev) {
+    bad.push(top[0] + ' alone is ' + pct1(shareOf(w[top[2]], w.rev)) + ' of revenue, so the month turns on one line.')
+  }
+
+  const gap = w.rev != null && w.cost != null ? w.cost - w.rev : null
+  if (gap != null && gap > 0) {
+    fix.push('Leaving cost alone, break-even needs revenue of ' + money(w.cost) + ' \u2014 ' + money(gap) + ' more than booked'
+      + (c.days ? ', about ' + money(gap / c.days) + ' a day across the ' + c.days + ' days so far' : '') + '.')
+    fix.push('Leaving revenue alone, cost would have to come down ' + money(gap) + ', which is '
+      + pct1(shareOf(gap, w.cost)) + ' of everything spent this month.')
+  }
+  if (up.length && w.net != null) {
+    fix.push(up[0].label + ' back at its ' + lab + ' level of ' + money(up[0].was) + ' would put the month at '
+      + money(w.net + up[0].d) + ' instead of ' + money(w.net) + '.')
+    if (up.length > 1) {
+      fix.push(up[0].label + ' and ' + up[1].label + ' both back at that level: ' + money(w.net + up[0].d + up[1].d) + '.')
+    }
+  }
+  if (w.rev) fix.push('One point of net margin on this month is worth ' + money(w.rev / 100) + '.')
+  if (margin != null && ym != null) {
+    fix.push('The month is running ' + Math.abs(margin - ym).toFixed(1) + ' pp '
+      + (margin >= ym ? 'above' : 'below') + ' the financial year to date, which stands at ' + pct1(ym) + '.')
+  }
+  return { bad: bad, fix: fix }
+}
+
 // -- message 1: the brief -----------------------------------------------------
 
-function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats) {
+function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx) {
   const d = c.d || {}
   const charts = c.charts || {}
-  const sources = Array.isArray(c.sources) ? c.sources : []
   const throughTs = c.throughTs || Math.floor(Date.now() / 1000)
   const blocks = []
 
@@ -124,11 +201,10 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats) {
 
   const pills = [
     T((c.monthLabel || '') + ' \u00b7 through ', { bold: true }),
-    { type: 'date', timestamp: throughTs, format: '{date_short_pretty}', fallback: c.through || '', style: { bold: true } },
+    { type: 'date', timestamp: throughTs, format: '{date_short}', fallback: c.through || '', style: { bold: true } },
     T(' '),
     TAG('D-1 complete', 'green'),
   ]
-  if (sources.length) pills.push(T(' '), TAG(sources.length + ' sources reconciled', 'blue'))
   if (peopleOutside) pills.push(T(' '), TAG('People cost booked monthly', 'gray'))
   if (c.isTest) pills.push(T(' '), TAG('Test post', 'indigo'))
   blocks.push(RICH([SEC(pills)]))
@@ -178,17 +254,26 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats) {
   }
   blocks.push({ type: 'carousel', block_id: 'qb_kpis', elements: cards.slice(0, 10) })
 
-  if (notes.length || caveats.length) {
+  // The read. Four sections, each a list of rules that fired over the numbers
+  // in the ledger message: nothing here is generated prose, and every figure
+  // can be checked against the table below it. Left expanded, because this is
+  // the part worth reading.
+  const bad = (dx && dx.bad) || []
+  const fix = (dx && dx.fix) || []
+  const total = notes.length + bad.length + fix.length + caveats.length
+  if (total) {
     const kids = []
-    if (notes.length) kids.push(RICH([SEC([T('What the numbers say', { bold: true })]), BULLETS(notes)]))
+    if (notes.length) kids.push(RICH([SEC([T('Where the month stands', { bold: true })]), BULLETS(notes)]))
+    if (bad.length) kids.push(RICH([SEC([T(':red_circle: What went wrong', { bold: true })]), BULLETS(bad)]))
+    if (fix.length) kids.push(RICH([SEC([T(':large_green_circle: What would close the gap', { bold: true })]), BULLETS(fix)]))
     if (caveats.length) kids.push(RICH([SEC([T('What we cannot tell yet', { bold: true })]), BULLETS(caveats)]))
     blocks.push({
       type: 'container',
       block_id: 'qb_read',
       title: { type: 'plain_text', text: 'The read' },
-      subtitle: { type: 'plain_text', text: (notes.length + caveats.length) + ' rules fired. Nothing here is generated prose.' },
+      subtitle: { type: 'plain_text', text: total + ' rules fired against the month before, day by day. Nothing here is generated prose.' },
       is_collapsible: true,
-      default_collapsed: true,
+      default_collapsed: false,
       width: 'wide',
       child_blocks: kids.slice(0, 10),
     })
@@ -287,6 +372,12 @@ function buildQuantumBrief(ctx) {
   const lastLab = day && day.date ? day.date : 'Last day'
   const ytdLab = (c.ytd && c.ytd.label ? c.ytd.label : 'Year') + ' to date'
 
+  // The prior window, normalised the same way, so the diagnosis compares a
+  // 31-day month to the first 31 days of the one before it and never to its
+  // finished total.
+  const prevW = c.prev ? fromCtx(c.prev.rev || {}, c.prev.cost || {}, c.prev.net) : null
+  const dx = insights(c, mtd, prevW, margin, marginOf(ytd))
+
   const notes = (Array.isArray(c.notes) ? c.notes : []).filter(Boolean)
   const caveats = []
   if (peopleOutside) {
@@ -308,6 +399,8 @@ function buildQuantumBrief(ctx) {
     + (margin == null ? '' : ' \u00b7 ' + pct1(margin) + ' margin'))
   if (day) fb.push('*' + day.date + '* revenue ' + money(day.rev) + ' \u00b7 cost ' + money(day.cost) + ' \u00b7 net ' + money(day.net))
   if (notes.length) { fb.push(''); notes.forEach(function (n) { fb.push('\u2022 ' + n) }) }
+  if (dx.bad.length) { fb.push(''); fb.push('*What went wrong*'); dx.bad.forEach(function (n) { fb.push('\u2022 ' + n) }) }
+  if (dx.fix.length) { fb.push(''); fb.push('*What would close the gap*'); dx.fix.forEach(function (n) { fb.push('\u2022 ' + n) }) }
   if (caveats.length) { fb.push(''); caveats.forEach(function (n) { fb.push(':warning: ' + n) }) }
 
   const lb = []
@@ -325,7 +418,7 @@ function buildQuantumBrief(ctx) {
       id: 'QB-1',
       label: 'Quantum Brief',
       text: fb.join('\n'),
-      blocks: briefBlocks(c, mtd, day, margin, peopleOutside, notes, caveats),
+      blocks: briefBlocks(c, mtd, day, margin, peopleOutside, notes, caveats, dx),
       attach: true,
       metadata: {
         event_type: 'quantum_brief',
@@ -358,12 +451,12 @@ export const CEO_BRIEF_VERSIONS = [{
   recommended: true,
   msgKeys: ['brief', 'ledger'],
   name: 'Quantum Brief',
-  tagline: 'Two messages: the colour-coded brief, then the split totals across last day, month and year.',
+  tagline: 'Two messages: the colour-coded brief with the diagnosis, then the split totals across last day, month and year.',
   what: [
     'A colour strip and KPI cards, green or red on the figure itself',
     'Revenue total and cost total split out, net inflow underneath in colour',
     'Last day, month to date and year to date side by side in one sortable table',
-    'The read and the caveats collapsed, so the top of the message stays short',
+    'The read, open by default: where the month stands, what went wrong, what would close the gap',
     'No links back into the dashboard \u2014 every number is read inside Slack',
   ],
   build: buildQuantumBrief,
