@@ -3867,3 +3867,27 @@ column when there is one. `buildSlackContext` is unchanged.
 Gotcha: `.cardHead` was `align-items:baseline`, which floats a Dropdown oddly.
 Changed to `center` and added `.cardTools`. The tools wrapper must be a `div`,
 not a `span` — Dropdown renders block content.
+
+## 2026-08-01 — CEO B2C Slack: three periods, day / MTD / FY to date
+
+The message used to lead with the month and mention the day in passing. It now
+opens with three identically shaped blocks in a fixed order: last completed
+day, month to date, financial year to date. `block(title, o)` in b2cReport.js
+renders all three, so the CEO reads the same three lines (revenue, cost as a %
+of revenue, net inflow with margin) at every zoom level without relearning the
+layout. The line-item breakdowns stay monthly and are labelled as such.
+
+FY is the Indian one, 1 April to 31 March. `fy` in CeoB2CDashboard.jsx derives
+the start year from the selected month (`mi >= 3 ? y : y - 1`), then totals
+`upto` from `sy + '-04-01'` to **the last date in `rows`** — not to `d1`. Using
+the month's own cut-off means MTD and FY-to-date can never disagree about where
+the data stops, including when an older month is selected from the picker.
+
+The same figure is printed on the page as a one-line footnote under the main
+table. That is deliberate: the panel's whole promise is that the CEO gets
+exactly what the page shows, so a number that only exists in Slack would break
+it. One line, no extra card.
+
+Gotcha: `once()` on the anchor `'</tbody>\n</table>\n</div>\n) : null}'` only
+works because the plan table is followed by `<p className={styles.note}>`
+rather than `</div>`. If a note is ever added to the main table, re-anchor.

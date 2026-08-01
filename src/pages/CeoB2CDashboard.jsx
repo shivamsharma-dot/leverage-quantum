@@ -152,6 +152,25 @@ export default function CeoB2CDashboard() {
     })
   }, [months, upto])
 
+  // Indian financial year: 1 April to 31 March. It stops at exactly the same
+  // cut-off as the month-to-date figures, so the two can never disagree.
+  const fy = useMemo(function () {
+    if (!rows.length) return null
+    const p = String(month || '').split('-')
+    const mi = MONTHS.indexOf(String(p[0]).toLowerCase())
+    const y = parseInt(p[1], 10)
+    if (mi < 0 || !isFinite(y)) return null
+    const sy = mi >= 3 ? y : y - 1
+    const from = sy + '-04-01'
+    const to = rows[rows.length - 1].date
+    const t = totals(upto.filter(function (d) { return d.date >= from && d.date <= to }))
+    t.from = from
+    t.to = to
+    t.label = 'FY ' + sy + '-' + String((sy + 1) % 100).padStart(2, '0')
+    return t
+  }, [rows, upto, month])
+  const fyMargin = fy && fy.rev ? (fy.net / fy.rev) * 100 : null
+
   // Consolidated says 'August-2026'; the cost tabs say 'Aug-2026'.
   const shortMonth = useMemo(function () {
     const p = String(month || '').split('-')
@@ -208,9 +227,10 @@ export default function CeoB2CDashboard() {
       net: mtd.net,
       margin: margin,
       day: day ? { date: day.date, rev: day.rev, cost: day.cost, net: day.net } : null,
-      peopleMonthly: peopleMonthly
+      peopleMonthly: peopleMonthly,
+      ytd: fy
     }
-  }, [month, d1, mtd, margin, day, peopleMonthly])
+  }, [month, d1, mtd, margin, day, peopleMonthly, fy])
   const captureSlackFiles = useCallback(async function () {
     await nextPaint()
     const node = tableRef.current
@@ -366,6 +386,11 @@ export default function CeoB2CDashboard() {
                   </tr>
                 </tbody>
               </table>
+              {fy ? (
+                <p className={styles.note}>
+                  {fy.label} to date, {fy.from} to {fy.to} &middot; revenue {full(fy.rev)} &middot; cost {full(fy.cost)} &middot; net inflow {full(fy.net)}{fyMargin == null ? '' : ' (' + fyMargin.toFixed(1) + '% margin)'}
+                </p>
+              ) : null}
             </div>
           ) : null}
           {ready ? (
