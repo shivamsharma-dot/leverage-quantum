@@ -104,6 +104,32 @@ async function leadsquaredRequest(method, path, { accessKey, secretKey, host }, 
 async function leadsquaredPost(path, creds, body, extraQuery) { return leadsquaredRequest('POST', path, creds, body, extraQuery) }
 async function leadsquaredGet(path, creds, extraQuery) { return leadsquaredRequest('GET', path, creds, undefined, extraQuery) }
 
+// LeadSquared's own per-request page-size ceiling -- confirmed live against this real
+// account (requesting more is silently clamped, and page 2 of a "page 1" request reliably
+// returns a full second 1000 with zero overlap), so this was NEVER the real reason every
+// tab topped out at 1000 total. The real reason: every caller here used to fetch exactly
+// ONE page and never asked for page 2+. fetchAllPages loops PageIndex 1,2,3... until a page
+// comes back short (real end of data) or `maxPages` is hit -- bounded, not unlimited,
+// because real volume on this account varies wildly by data type: Leads/Opportunities run a
+// few thousand per typical window, but one single Activity Type alone was measured live at
+// 15.8 MILLION total records account-wide, so looping "until done" for Activities would
+// either time out this function or hammer LeadSquared's API for no useful reason -- nobody
+// scrolls a 15M-row grid. Each caller below picks a cap sized to its own real volume.
+const LSQ_PAGE_SIZE = 1000
+async function fetchAllPages(fetchPage, maxPages) {
+  let rows = []
+  let pageIndex = 1
+  let truncated = false
+  while (pageIndex <= maxPages) {
+    const page = await fetchPage(pageIndex, LSQ_PAGE_SIZE)
+    rows = rows.concat(page)
+    if (page.length < LSQ_PAGE_SIZE) break // short page = real end of data, not just of the cap
+    if (pageIndex === maxPages) truncated = true
+    pageIndex++
+  }
+  return { rows, truncated }
+}
+
 // Last 7 complete days -- the default window for the by-event-code activity feed below.
 function defaultRecentWindow() {
   const toIso = d => d.toISOString().slice(0, 10)
@@ -122,23 +148,28 @@ const DEFAULT_ACTIVITY_EVENT_CODE = 23
 // "Manage Leads" grid filters on: a field name (LookupName), an operator, and a value.
 // since/until filter on CreatedOn, matching the date-range convention every other data
 // source in this app already uses.
-async function fetchLeadSquaredLeads(creds, { since, until, pageIndex, pageSize }) {
-  const body = {
+// 10 pages (10,000 rows) -- generous headroom over the old flat 1000 cap; live-tested
+// against this account's default 30-day window, which already returned a full 2,000+
+// (page 1 AND page 2 both came back completely full) with the OLD single-page code, so the
+// old cap wasn't a rare edge case, it silently dropped real rows on an ordinary page load.
+const LEADS_MAX_PAGES = 10
+async function fetchLeadSquaredLeads(creds, { since, until }) {
+  const fetchPage = (pageIndex, pageSize) => leadsquaredPost('/v2/LeadManagement.svc/Leads.Get', creds, {
     Parameter: since || until
       ? { LookupName: 'CreatedOn', LookupValue: (since || '1900-01-01') + ' 00:00:00', SqlOperator: '>=' }
       : { LookupName: 'CreatedOn', LookupValue: '1900-01-01 00:00:00', SqlOperator: '>=' },
     Columns: { Include_CSV: 'ProspectID,FirstName,LastName,EmailAddress,Phone,Mobile,LeadType,Source,Status,ProspectStage,Owner,CreatedOn,ModifiedOn' },
     Sorting: { ColumnName: 'CreatedOn', Direction: '1' },
-    Paging: { PageIndex: pageIndex || 1, PageSize: Math.min(pageSize || 200, 1000) },
-  }
-  const data = await leadsquaredPost('/v2/LeadManagement.svc/Leads.Get', creds, body)
-  const rows = Array.isArray(data) ? data : (data && data.Leads) || []
+    Paging: { PageIndex: pageIndex, PageSize: pageSize },
+  }).then(data => Array.isArray(data) ? data : (data && data.Leads) || [])
+
+  const { rows, truncated } = await fetchAllPages(fetchPage, LEADS_MAX_PAGES)
   // until isn't expressible as a second SqlOperator in one Parameter block (the API takes
-  // one field/operator/value triple) -- filtered client-side on the page returned instead.
+  // one field/operator/value triple) -- filtered client-side on the returned rows instead.
   const filtered = until ? rows.filter(r => !r.CreatedOn || r.CreatedOn <= until + ' 23:59:59') : rows
   const ownerMap = await fetchLeadSquaredUsersMap(creds)
   filtered.forEach(r => { if (r.Owner) r.OwnerName = ownerMap[r.Owner] || r.Owner })
-  return { rows: filtered, count: filtered.length, since, until }
+  return { rows: filtered, count: filtered.length, truncated, since, until }
 }
 
 // UserManagement.svc/Users.Get -- resolves a GUID like Owner/CreatedBy into a real display
@@ -161,7 +192,12 @@ async function fetchLeadSquaredUsersMap(creds) {
 // 12003 is the code this same LeadSquared account already uses elsewhere in this app
 // (see LEADSQUARED_OPPORTUNITY_EVENT in HumanQLDetailDashboard.jsx) for opportunity deep
 // links, so it's reused here as the default rather than guessed fresh.
-async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, pageSize, eventCode, status }) {
+// 10 pages (10,000 rows) -- same reasoning/cap as Leads above (live-tested: 12 pages/12,000
+// rows all came back completely full on this account's real Opportunity data before this
+// was bounded, so the true total comfortably exceeds this cap too, but 10,000 covers any
+// realistic date-window view with room to spare).
+const OPPORTUNITIES_MAX_PAGES = 10
+async function fetchLeadSquaredOpportunities(creds, { since, until, eventCode, status }) {
   const code = Number(eventCode) || 12003
   // First real error hit against the live account: "AdvancedSearch criteria does not match
   // ActivityEvent passed" -- this search REQUIRES the AdvancedSearch to restate the same
@@ -186,31 +222,68 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, pageIndex, p
     Conditions: [{ Type: 'Activity', ConOp: 'and', RowCondition: rowCondition }],
     QueryTimeZone: 'India Standard Time',
   }
-  const body = {
+  const fetchPage = (pageIndex, pageSize) => leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
     OpportunityEventCode: code,
     AdvancedSearch: JSON.stringify(advancedSearch),
-    Paging: { PageIndex: pageIndex || 1, PageSize: Math.min(pageSize || 200, 1000) },
+    Paging: { PageIndex: pageIndex, PageSize: pageSize },
     Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-  }
-  const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, body)
-  // Response shape is {"RecordCount":N,"List":[...]} per apidocs.leadsquared.com's own
-  // documented example -- the original code checked data.Opportunities/data.RecordSet,
-  // neither of which the docs ever showed; that silently returned [] even when the API
-  // had real matching rows under "List", which is why every prior test here only ever
-  // proved "no error", never "real data comes back". Confirmed live after fixing.
-  let rows = Array.isArray(data) ? data : (data && (data.List || data.Opportunities || data.RecordSet)) || []
+  }).then(data =>
+    // Response shape is {"RecordCount":N,"List":[...]} per apidocs.leadsquared.com's own
+    // documented example -- the original code checked data.Opportunities/data.RecordSet,
+    // neither of which the docs ever showed; that silently returned [] even when the API
+    // had real matching rows under "List", which is why every prior test here only ever
+    // proved "no error", never "real data comes back". Confirmed live after fixing.
+    Array.isArray(data) ? data : (data && (data.List || data.Opportunities || data.RecordSet)) || []
+  )
+  const { rows: fetchedRows, truncated } = await fetchAllPages(fetchPage, OPPORTUNITIES_MAX_PAGES)
+  let rows = fetchedRows
   if (since) rows = rows.filter(r => !r.CreatedOn || r.CreatedOn >= since + ' 00:00:00')
   if (until) rows = rows.filter(r => !r.CreatedOn || r.CreatedOn <= until + ' 23:59:59')
   if (status) rows = rows.filter(r => r.Status === status)
-  const [ownerMap, contactNames] = await Promise.all([
+  const [ownerMap, contactNames, typeMeta] = await Promise.all([
     fetchLeadSquaredUsersMap(creds),
     fetchLeadSquaredContactNames(creds, rows.map(r => r.RelatedProspectId)),
+    fetchLeadSquaredOpportunityMeta(creds, { eventCode: code }).catch(() => null),
   ])
+
+  // Same "resolve real field labels, never a raw mx_Custom_N key" treatment already proven
+  // out on Activities below -- GetOpportunityTypeMetadata's Fields array (confirmed live:
+  // 105 fields configured on this account's opportunity type, e.g. mx_Custom_81 => "Last
+  // Disposition from Superbot", mx_Custom_100 => "Last Disposition from Futwork" -- two
+  // genuinely distinct real fields the old hardcoded switch below silently merged into one
+  // fake "Last Disposition" via `||`) is the only real source of truth for what "all the
+  // columns" means here. Deliberately does NOT special-case mx_Custom_1 ("Opportunity
+  // Name")/mx_Custom_2 ("Stage")/etc. as separate "base" columns the way the old hardcoded
+  // list did -- they're just ordinary configured custom fields in LeadSquared's own data
+  // model, so they flow through this same dynamic list (already sorted near the top by
+  // their own real Sequence) exactly like the real product treats them.
+  const fieldOrder = []
+  const fieldLabels = {}
+  if (typeMeta && Array.isArray(typeMeta.Fields)) {
+    typeMeta.Fields
+      .filter(f => f.SchemaName && f.SchemaName.startsWith('mx_Custom_'))
+      .sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0))
+      .forEach(f => { fieldLabels[f.SchemaName] = f.DisplayName || f.SchemaName; fieldOrder.push(f.DisplayName || f.SchemaName) })
+  }
   rows.forEach(r => {
     if (r.Owner) r.OwnerName = ownerMap[r.Owner] || r.Owner
     r.ContactName = contactNames[r.RelatedProspectId] || null
+    const fields = {}
+    Object.keys(r).forEach(k => {
+      if (k.startsWith('mx_Custom_') && r[k] != null && r[k] !== '') fields[fieldLabels[k] || k] = r[k]
+    })
+    r.Fields = fields
   })
-  return { rows, count: rows.length, since, until }
+  // If the metadata call failed (or a key it never described shows up anyway), fall back to
+  // the union of whatever custom-field keys were actually observed in the real data -- a
+  // metadata hiccup should never silently hide a column real data clearly has.
+  if (!fieldOrder.length) {
+    const seen = new Set()
+    rows.forEach(r => Object.keys(r.Fields || {}).forEach(k => seen.add(k)))
+    fieldOrder.push(...seen)
+  }
+
+  return { rows, count: rows.length, truncated, since, until, fieldColumns: fieldOrder }
 }
 
 // ProspectActivity.svc/Retrieve -- single-lead activity timeline (leadId given), OR the
@@ -252,15 +325,23 @@ async function fetchLeadSquaredActivityTypeMeta(creds, eventCode) {
 async function fetchLeadSquaredContactNames(creds, ids) {
   const unique = Array.from(new Set(ids.filter(Boolean)))
   if (!unique.length) return {}
-  const body = {
-    SearchParameters: { LeadIds: unique },
-    Columns: { Include_CSV: 'ProspectID,FirstName,LastName' },
-    Paging: { PageIndex: 1, PageSize: 1000 },
-  }
-  const data = await leadsquaredPost('/v2/LeadManagement.svc/Leads/Retrieve/ByIds', creds, body)
-  const rows = (data && data.Leads) || []
+  // PageSize here caps the RESULT rows at 1000, same real ceiling as everywhere else in
+  // this file -- with the row caps above now allowing up to 10,000 leads/opportunities or
+  // 5,000 activities in one load, the number of DISTINCT contacts among them can easily
+  // exceed 1000 too. Chunking the INPUT id list into groups of <=1000 guarantees each
+  // chunk's own result set is small enough to fit in one un-paginated response.
+  const chunks = []
+  for (let i = 0; i < unique.length; i += 1000) chunks.push(unique.slice(i, i + 1000))
   const map = {}
-  rows.forEach(r => { if (r.ProspectID) map[r.ProspectID] = [r.FirstName, r.LastName].filter(Boolean).join(' ').trim() || null })
+  for (const chunk of chunks) {
+    const data = await leadsquaredPost('/v2/LeadManagement.svc/Leads/Retrieve/ByIds', creds, {
+      SearchParameters: { LeadIds: chunk },
+      Columns: { Include_CSV: 'ProspectID,FirstName,LastName' },
+      Paging: { PageIndex: 1, PageSize: 1000 },
+    })
+    const rows = (data && data.Leads) || []
+    rows.forEach(r => { if (r.ProspectID) map[r.ProspectID] = [r.FirstName, r.LastName].filter(Boolean).join(' ').trim() || null })
+  }
   return map
 }
 
@@ -282,6 +363,16 @@ function parseKeyValueNote(note) {
   return out
 }
 
+// Only 5 pages (5,000 rows) here, well below the Leads/Opportunities cap -- confirmed live
+// that ONE Activity Type on this account alone totals 15.8 MILLION records account-wide
+// (via the real RecordCount this same endpoint returns), so "loop until done" is never the
+// right move here. Real LeadSquared's own Manage Activities screen doesn't bulk-load
+// millions of rows into one grid either -- it paginates and expects you to narrow the
+// Activity Type/date window, which is why `totalCount` below (LeadSquared's own RecordCount
+// for the full window, independent of how many rows were actually fetched) is surfaced
+// honestly to the frontend rather than silently presenting 1,000 or 5,000 as if it were
+// everything.
+const ACTIVITIES_MAX_PAGES = 5
 async function fetchLeadSquaredActivities(creds, { leadId, since, until, eventCode, pageIndex, pageSize }) {
   if (leadId) {
     const body = { Parameter: {}, Paging: { Offset: '0', RowCount: String(Math.min(pageSize || 50, 1000)) } }
@@ -293,13 +384,21 @@ async function fetchLeadSquaredActivities(creds, { leadId, since, until, eventCo
   const fromDate = (win.since || defaultRecentWindow().since) + ' 00:00:00'
   const toDate = (win.until || defaultRecentWindow().until) + ' 23:59:59'
   const code = Number(eventCode) || DEFAULT_ACTIVITY_EVENT_CODE
-  const body = {
+
+  let totalCount = null
+  const fetchPage = (pi, ps) => leadsquaredPost('/v2/ProspectActivity.svc/CustomActivity/RetrieveByActivityEvent', creds, {
     Parameter: { FromDate: fromDate, ToDate: toDate, ActivityEvent: code, RemoveEmptyValue: true },
-    Paging: { PageIndex: pageIndex || 1, PageSize: Math.min(pageSize || 200, 1000) },
+    Paging: { PageIndex: pi, PageSize: ps },
     Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-  }
-  const data = await leadsquaredPost('/v2/ProspectActivity.svc/CustomActivity/RetrieveByActivityEvent', creds, body)
-  const rows = (data && data.List) || []
+  }).then(data => {
+    // RecordCount is the real total matching this Activity Type + date window, independent
+    // of PageSize -- captured once (it's the same value on every page) so the frontend can
+    // show "X of Y" honestly instead of presenting whatever we fetched as if it were all of it.
+    if (totalCount == null && data && typeof data.RecordCount === 'number') totalCount = data.RecordCount
+    return (data && data.List) || []
+  })
+  const { rows, truncated: pageCapped } = await fetchAllPages(fetchPage, ACTIVITIES_MAX_PAGES)
+  const truncated = pageCapped || (totalCount != null && totalCount > rows.length)
 
   // Resolve everything LeadSquared's own Manage Activities screen would show, so the
   // frontend never has to render a raw GUID or a raw mx_Custom_N key.
@@ -326,8 +425,16 @@ async function fetchLeadSquaredActivities(creds, { leadId, since, until, eventCo
     })
     r.Fields = fields
   })
+  // If the metadata call failed, fall back to the union of custom-field keys actually
+  // observed in the real data (including the ad-hoc 'Note' key plain-string types use) --
+  // a metadata hiccup should never silently hide a column real data clearly has.
+  if (!fieldOrder.length) {
+    const seen = new Set()
+    rows.forEach(r => Object.keys(r.Fields || {}).forEach(k => seen.add(k)))
+    fieldOrder.push(...seen)
+  }
   return {
-    rows, count: (data && data.RecordCount) || rows.length, since: win.since, until: win.until, eventCode: code,
+    rows, count: rows.length, totalCount, truncated, since: win.since, until: win.until, eventCode: code,
     fieldColumns: fieldOrder,
   }
 }
@@ -425,6 +532,11 @@ async function handleBigQuery(req, res, me) {
     return res.status(502).json({ configured: true, ok: false, error: String((e && e.message) || e) })
   }
 }
+
+// LeadSquared's own bulk-pagination loops (fetchAllPages, above) can take several
+// sequential round-trips for a single load -- explicit maxDuration rather than relying on
+// the platform default, same pattern as api/send-report.js / api/ask-ai.mjs.
+export const maxDuration = 60
 
 export default async function handler(req, res) {
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')

@@ -474,12 +474,14 @@ function LeadsTab() {
   const [page, setPage] = useState(1)
   const [hiddenCols, setHiddenCols] = useHiddenColumns('lq_columns_leads')
   const [advSearch, setAdvSearch] = useState(null)
+  const [truncated, setTruncated] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const d = await fetchJson(`${API}&mode=leads&since=${since}&until=${until}&pageSize=1000`)
+      const d = await fetchJson(`${API}&mode=leads&since=${since}&until=${until}`)
       setRows(d.rows || [])
+      setTruncated(!!d.truncated)
     } catch (e) { setError(e.message); setRows([]) }
     finally { setLoading(false) }
   }, [since, until])
@@ -521,6 +523,7 @@ function LeadsTab() {
         <ColumnPickerButton columns={LEADS_COLUMNS} hidden={hiddenCols} onApply={setHiddenCols} />
       </Toolbar>
       {error && <ErrorNote message={error} />}
+      {!loading && truncated && <TruncationNote shown={rows.length} label="leads" />}
       {loading ? <InlineLoader label="Loading Leads from LeadSquared" /> : filtered.length === 0 ? <EmptyNote label="No leads match these filters." /> : (
         <>
           <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 12 }}>
@@ -593,6 +596,8 @@ function ActivitiesTab() {
   const [hiddenCols, setHiddenCols] = useHiddenColumns(`lq_columns_activities_${eventCode}`)
   const allColumns = useMemo(() => [...ACTIVITIES_BASE_COLUMNS, ...fieldColumns], [fieldColumns])
   const [advSearch, setAdvSearch] = useState(null)
+  const [truncated, setTruncated] = useState(false)
+  const [totalCount, setTotalCount] = useState(null)
 
   useEffect(() => {
     fetchJson(`${API}&mode=activity_types`).then(d => setTypes(d.rows || [])).catch(() => setTypes([]))
@@ -601,7 +606,7 @@ function ActivitiesTab() {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const d = await fetchJson(`${API}&mode=activities&eventCode=${eventCode}&since=${since}&until=${until}&pageSize=1000`)
+      const d = await fetchJson(`${API}&mode=activities&eventCode=${eventCode}&since=${since}&until=${until}`)
       setRows(d.rows || [])
       // Every Activity Type has its own custom-field schema (same as Opportunities) --
       // fieldColumns is the real, ordered list of field labels this specific type uses,
@@ -609,6 +614,8 @@ function ActivitiesTab() {
       // "Disposition", "Preferred Course" for Manual Lead Qualification - not a fixed
       // column set, so the table below renders columns dynamically per selected type.
       setFieldColumns(d.fieldColumns || [])
+      setTruncated(!!d.truncated)
+      setTotalCount(typeof d.totalCount === 'number' ? d.totalCount : null)
     } catch (e) { setError(e.message); setRows([]); setFieldColumns([]) }
     finally { setLoading(false) }
   }, [eventCode, since, until])
@@ -661,6 +668,7 @@ function ActivitiesTab() {
         LeadSquared's own Manage Activities screen is scoped to one Activity Type at a time too — this isn't a Quantum limitation. Showing <strong style={{ color: C.text }}>{activityTypeName}</strong>.
       </p>
       {error && <ErrorNote message={error} />}
+      {!loading && truncated && <TruncationNote shown={rows.length} totalKnown={totalCount} label="activities" />}
       {loading ? <InlineLoader label="Loading Activities from LeadSquared" /> : filtered.length === 0 ? <EmptyNote label="No activities match these filters." /> : (
         <>
           <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 12 }}>
@@ -694,24 +702,28 @@ function ActivitiesTab() {
 
 // ----------------------------------------------------------- Opportunities
 
-const OPPORTUNITIES_COLUMNS = ['Opportunity Name', 'Contact', 'Status', 'Stage', 'Owner', 'Source', 'Intake', 'Last Disposition', 'Created On']
+// Only the fields that are NEVER part of the configured custom-field schema -- Contact,
+// Status, Owner and Created On are bespoke row properties on every Opportunity regardless
+// of type. Everything else (Opportunity Name, Stage, Source, Intake, both real "Last
+// Disposition from ..." fields, and ~100 more) is schema-driven via fieldColumns below,
+// resolved server-side from GetOpportunityTypeMetadata -- deliberately NOT special-cased
+// as fixed columns the way an earlier version of this page hardcoded 9 of the real ~105
+// configured fields and silently dropped the rest.
+const OPPORTUNITIES_BASE_COLUMNS = ['Contact', 'Status', 'Owner', 'Created On']
 
 function getOpportunityFieldValue(r, field) {
   switch (field) {
-    case 'Opportunity Name': return r.mx_Custom_1
     case 'Contact': return r.ContactName
     case 'Status': return r.Status
-    case 'Stage': return r.mx_Custom_2
     case 'Owner': return r.OwnerName
-    case 'Source': return r.mx_Custom_3
-    case 'Intake': return r.mx_Custom_32
-    case 'Last Disposition': return r.mx_Custom_100 || r.mx_Custom_81
-    default: return ''
+    case 'Created On': return r.CreatedOn
+    default: return (r.Fields && r.Fields[field]) || ''
   }
 }
 
 function OpportunitiesTab() {
   const [rows, setRows] = useState([])
+  const [fieldColumns, setFieldColumns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [since, setSince] = useState(isoDaysAgo(30))
@@ -723,30 +735,34 @@ function OpportunitiesTab() {
   const [openDD, setOpenDD] = useState(null)
   const [page, setPage] = useState(1)
   const [hiddenCols, setHiddenCols] = useHiddenColumns('lq_columns_opportunities')
+  const allColumns = useMemo(() => [...OPPORTUNITIES_BASE_COLUMNS, ...fieldColumns], [fieldColumns])
   const [advSearch, setAdvSearch] = useState(null)
+  const [truncated, setTruncated] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
       const statusQ = status !== 'All' ? `&status=${encodeURIComponent(status)}` : ''
-      const d = await fetchJson(`${API}&mode=opportunities&eventCode=${DEFAULT_OPPORTUNITY_EVENT_CODE}&since=${since}&until=${until}&pageSize=1000${statusQ}`)
+      const d = await fetchJson(`${API}&mode=opportunities&eventCode=${DEFAULT_OPPORTUNITY_EVENT_CODE}&since=${since}&until=${until}${statusQ}`)
       setRows(d.rows || [])
-    } catch (e) { setError(e.message); setRows([]) }
+      setFieldColumns(d.fieldColumns || [])
+      setTruncated(!!d.truncated)
+    } catch (e) { setError(e.message); setRows([]); setFieldColumns([]) }
     finally { setLoading(false) }
   }, [since, until, status])
 
   useEffect(() => { load() }, [load])
   useEffect(() => { setPage(1) }, [search, stage, owner, advSearch])
 
-  const stageOptions = useMemo(() => ['All', ...Array.from(new Set(rows.map(r => r.mx_Custom_2).filter(Boolean))).sort()], [rows])
+  const stageOptions = useMemo(() => ['All', ...Array.from(new Set(rows.map(r => r.Fields && r.Fields['Stage']).filter(Boolean))).sort()], [rows])
   const ownerOptions = useMemo(() => ['All', ...Array.from(new Set(rows.map(r => r.OwnerName).filter(Boolean))).sort()], [rows])
 
   const filtered = useMemo(() => rows.filter(r => {
-    if (stage !== 'All' && r.mx_Custom_2 !== stage) return false
+    if (stage !== 'All' && (r.Fields && r.Fields['Stage']) !== stage) return false
     if (owner !== 'All' && r.OwnerName !== owner) return false
     if (search) {
       const q = search.toLowerCase()
-      const hay = [r.mx_Custom_1, r.mx_Custom_3, r.OwnerName].filter(Boolean).join(' ').toLowerCase()
+      const hay = [r.ContactName, r.OwnerName, ...Object.values(r.Fields || {})].filter(Boolean).join(' ').toLowerCase()
       if (!hay.includes(q)) return false
     }
     if (!matchesAdvSearch(r, getOpportunityFieldValue, advSearch)) return false
@@ -761,44 +777,43 @@ function OpportunitiesTab() {
       <Toolbar>
         <DateRangeRow since={since} until={until} onSince={setSince} onUntil={setUntil} />
         <SearchBox value={search} onChange={setSearch} placeholder="Search name, source…" />
-        <AdvancedSearchButton fields={OPPORTUNITIES_COLUMNS} advSearch={advSearch} onApply={setAdvSearch} onClear={() => setAdvSearch(null)} />
+        <AdvancedSearchButton fields={allColumns} advSearch={advSearch} onApply={setAdvSearch} onClear={() => setAdvSearch(null)} />
         <FilterDropdown label="Status" value={status} options={['All', 'Open', 'Won', 'Lost'].map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} />
         <FilterDropdown label="Stage" value={stage} options={stageOptions.map(o => ({ v: o, l: o }))} open={openDD === 'stage'} onToggle={() => setOpenDD(openDD === 'stage' ? null : 'stage')} onSelect={v => { setStage(v); setOpenDD(null) }} />
         <FilterDropdown label="Owner" value={owner} options={ownerOptions.map(o => ({ v: o, l: o }))} open={openDD === 'owner'} onToggle={() => setOpenDD(openDD === 'owner' ? null : 'owner')} onSelect={v => { setOwner(v); setOpenDD(null) }} />
         <Button size="sm" variant="secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</Button>
-        <ColumnPickerButton columns={OPPORTUNITIES_COLUMNS} hidden={hiddenCols} onApply={setHiddenCols} />
+        <ColumnPickerButton columns={allColumns} hidden={hiddenCols} onApply={setHiddenCols} />
       </Toolbar>
       <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 12px' }}>
         Showing <strong style={{ color: C.text }}>University Admission Opportunity</strong> — this account also tracks Fly Compass, Fly Homes, Forex, Ivy100 and others as separate Opportunity Types, not wired up here yet.
       </p>
       {error && <ErrorNote message={error} />}
+      {!loading && truncated && <TruncationNote shown={rows.length} label="opportunities" />}
       {loading ? <InlineLoader label="Loading Opportunities from LeadSquared" /> : filtered.length === 0 ? <EmptyNote label="No opportunities match these filters." /> : (
         <>
           <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 12 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
-                {!hiddenCols.has('Opportunity Name') && <Th>Opportunity Name</Th>}
                 {!hiddenCols.has('Contact') && <Th>Contact</Th>}
                 {!hiddenCols.has('Status') && <Th>Status</Th>}
-                {!hiddenCols.has('Stage') && <Th>Stage</Th>}
                 {!hiddenCols.has('Owner') && <Th>Owner</Th>}
-                {!hiddenCols.has('Source') && <Th>Source</Th>}
-                {!hiddenCols.has('Intake') && <Th>Intake</Th>}
-                {!hiddenCols.has('Last Disposition') && <Th width="20%">Last Disposition</Th>}
                 {!hiddenCols.has('Created On') && <Th>Created On</Th>}
+                {fieldColumns.filter(col => !hiddenCols.has(col)).map(col => <Th key={col}>{col}</Th>)}
               </tr></thead>
               <tbody>
                 {pageRows.map(r => (
                   <tr key={r.OpportunityId}>
-                    {!hiddenCols.has('Opportunity Name') && <Td style={{ fontWeight: 700 }}><a href={LEADSQUARED_OPPORTUNITY_URL + r.OpportunityId} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: 'none' }}>{r.mx_Custom_1 || '—'}</a></Td>}
                     {!hiddenCols.has('Contact') && <Td><ContactLink id={r.RelatedProspectId} name={r.ContactName} /></Td>}
                     {!hiddenCols.has('Status') && <Td><StatusPill value={r.Status} /></Td>}
-                    {!hiddenCols.has('Stage') && <Td>{r.mx_Custom_2 || '—'}</Td>}
                     {!hiddenCols.has('Owner') && <Td>{r.OwnerName || '—'}</Td>}
-                    {!hiddenCols.has('Source') && <Td>{r.mx_Custom_3 || '—'}</Td>}
-                    {!hiddenCols.has('Intake') && <Td>{r.mx_Custom_32 || '—'}</Td>}
-                    {!hiddenCols.has('Last Disposition') && <Td style={{ color: C.muted }}>{r.mx_Custom_100 || r.mx_Custom_81 || '—'}</Td>}
                     {!hiddenCols.has('Created On') && <Td>{fmtDate(r.CreatedOn)}</Td>}
+                    {fieldColumns.filter(col => !hiddenCols.has(col)).map(col => (
+                      <Td key={col} style={col === 'Opportunity Name' ? { fontWeight: 700 } : { color: C.muted }}>
+                        {col === 'Opportunity Name'
+                          ? <a href={LEADSQUARED_OPPORTUNITY_URL + r.OpportunityId} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: 'none' }}>{(r.Fields && r.Fields[col]) || '—'}</a>
+                          : ((r.Fields && r.Fields[col]) || '—')}
+                      </Td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
@@ -819,6 +834,65 @@ const TABS = [
   { key: 'opportunities', label: 'Opportunities' },
 ]
 
+// Page-level "i" -- deliberately for the OWNER, not a metric-calculation explainer like
+// every other page's info button. Answers the three questions that came up repeatedly while
+// building this page: is this live, how live, and what's the real ceiling on what it shows.
+function PageInfoButton() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(v => !v)} title="What this page can and can't show"
+        style={{ width: 30, height: 30, borderRadius: 8, border: '0.5px solid ' + (open ? '#1C9FD4' : C.border), background: open ? '#E8EFF9' : 'var(--card)', color: '#1F3C84', fontSize: 14, fontWeight: 700, fontStyle: 'italic', fontFamily: 'Georgia,serif', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>i</button>
+      {open && <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />}
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 200, width: 420, maxHeight: '76vh', overflowY: 'auto', background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 12, boxShadow: '0 14px 40px rgba(15,23,42,0.16)', padding: '16px 18px', textAlign: 'left', fontFamily: FONT }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 10 }}>How live is this, and what's the ceiling</div>
+
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.text, marginBottom: 3 }}>Live, not cached</div>
+          <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: '0 0 12px' }}>
+            Every page load and every "Refresh" click calls LeadSquared's real API directly, in that moment. Nothing here is pre-computed or snapshotted in Quantum's own database -- what you see is exactly what LeadSquared's own API returns right now for the selected window.
+          </p>
+
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.text, marginBottom: 3 }}>Row ceiling per load</div>
+          <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: '0 0 8px' }}>
+            LeadSquared's own API caps every single request at 1,000 rows -- Quantum loops multiple requests to go well beyond that:
+          </p>
+          <ul style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.7, margin: '0 0 12px', paddingLeft: 18 }}>
+            <li><strong style={{ color: C.text }}>Leads &amp; Opportunities</strong> -- up to 10,000 rows per load (10 requests).</li>
+            <li><strong style={{ color: C.text }}>Activities</strong> -- up to 5,000 rows per load (5 requests). Deliberately lower: one Activity Type on this account alone was measured at 15.8 million records account-wide, so looping until "done" isn't realistic or useful here -- narrow the Activity Type or date window instead, same as LeadSquared's own Manage Activities screen expects you to.</li>
+          </ul>
+          <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: '0 0 12px' }}>
+            Rows load newest-first, so if a window has more than the ceiling, it's the OLDEST rows in that window that get left out -- and a banner says so on-screen whenever it happens, rather than silently showing a partial set as if it were everything.
+          </p>
+
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.text, marginBottom: 3 }}>Filtering happens on what's loaded</div>
+          <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: '0 0 12px' }}>
+            Search, the column picker, and Advanced Search all run against the rows already fetched for the current window -- they don't trigger a fresh LeadSquared call per keystroke. Changing the date range, Activity Type, or hitting Refresh does.
+          </p>
+
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.text, marginBottom: 3 }}>Read-only</div>
+          <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: 0 }}>
+            This page only reads from LeadSquared. Creating, editing, or deleting a Lead/Activity/Opportunity still has to happen in LeadSquared itself.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Shown above the table whenever the current load hit its row ceiling -- the honest version
+// of "here's everything", instead of quietly presenting a partial set as complete.
+function TruncationNote({ shown, totalKnown, label }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10, background: '#FFFBEB', border: '0.5px solid #FDE68A', color: '#92400E', fontSize: 11.5, marginBottom: 12 }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M12 9v4M12 17h.01" /><circle cx="12" cy="12" r="10" /></svg>
+      <span>
+        Showing the most recent <strong>{fmtN(shown)}</strong>{totalKnown ? <> of <strong>{fmtN(totalKnown)}</strong> total</> : null} {label} for this window -- there are more than this page loads at once. Narrow the date range{totalKnown ? ' or Activity Type' : ''} to see the rest.
+      </span>
+    </div>
+  )
+}
+
 export default function LeadSquaredDashboard() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') || 'leads'
@@ -829,8 +903,13 @@ export default function LeadSquaredDashboard() {
       <Sidebar />
       <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid #EEF1F6', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <div style={{ background: 'var(--card)', borderBottom: '0.5px solid ' + C.border, padding: '10px 28px', flexShrink: 0 }}>
-          <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / LeadSquared</p>
-          <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 10px', letterSpacing: '-0.4px', fontFamily: FONT }}>LeadSquared</h1>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / LeadSquared</p>
+              <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 10px', letterSpacing: '-0.4px', fontFamily: FONT }}>LeadSquared</h1>
+            </div>
+            <div style={{ marginTop: 2 }}><PageInfoButton /></div>
+          </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} className="lq-header-controls">
             {TABS.map(t => <div key={t.key} style={pillStyle(activeTab === t.key)} onClick={() => setTab(t.key)}>{t.label}</div>)}
           </div>
