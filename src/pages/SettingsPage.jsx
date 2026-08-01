@@ -1021,7 +1021,13 @@ export default function SettingsPage() {
           let apiCompare = null
           if (s.apiPath) {
             try {
-              const ar = await fetch(s.apiPath + '?_=' + Date.now(), { credentials: 'include', cache: 'no-store' })
+              // Some apiPaths already carry a query string (e.g. /api/crm-leads?source=b2c).
+          // Appending a bare '?_=' produced '...?source=b2c?_=123', so source parsed as
+          // 'b2c?_=123', missed the router, and fell through to the default CRM handler --
+          // the cross-check then compared the B2C sheet against 17,731 CRM rows and cried
+          // stale. Join with '&' when a query string is already present.
+          const bustJoin = s.apiPath.includes('?') ? '&' : '?'
+          const ar = await fetch(s.apiPath + bustJoin + '_=' + Date.now(), { credentials: 'include', cache: 'no-store' })
               if (ar.ok) {
                 const aj = await ar.json()
                 const apiDates = Object.keys(aj.byDate || {}).sort()

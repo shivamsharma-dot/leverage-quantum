@@ -3749,3 +3749,17 @@ the sheet fine the whole time. Only the Settings self-test was misreporting.
 
 **Lesson.** When a data source is added, the stored URL must be a CSV endpoint, not the
 address-bar link - or normalised on the way in, which is what now happens.
+
+**Follow-up, same day - the cross-check was hitting the wrong endpoint.** With the URL
+fixed, Test connection went green but warned: "Your dashboard's live API
+(/api/crm-leads?source=b2c) reports 17,731 rows, 2025-12-31 to 2026-08-01 - doesn't match
+the sheet's live data above." Those are the CRM numbers, not B2C. Cause: the compare call
+was `fetch(s.apiPath + '?_=' + Date.now())`, which for an apiPath that already has a query
+string produced `/api/crm-leads?source=b2c?_=123`. `source` then parsed as `b2c?_=123`,
+missed the router, and fell through to the default CRM handler. Fixed by joining with `&`
+when a query string is already present. The B2C route returns no `byDate`, so the compare
+block now correctly produces no warning for it.
+
+**Also note:** the sheet is no longer empty - costs are being filled in. As of this check
+the API returns 123 populated days; PM / Operating / Offline cost carry values, revenue
+lines are still blank, so the dashboard honestly shows net inflow as negative cost only.
