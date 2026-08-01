@@ -625,7 +625,14 @@ function b2cRows(csv, cols) {
   if (lines.length < 2) return { at: {}, rows: [] };
   const header = splitCsvLine(lines[0]).map(function (h) { return h.trim().toLowerCase() });
   const at = {};
-  Object.keys(cols).forEach(function (k) { at[k] = header.indexOf(cols[k]) });
+  // The sheet decorates some headers, e.g. 'Offline Revenue (AC+VAS)'. Match the
+  // exact name first, then fall back to the first header that starts with it, so
+  // a column that gains a suffix degrades to a match, never to a silent blank.
+  Object.keys(cols).forEach(function (k) {
+    let i = header.indexOf(cols[k]);
+    if (i < 0) i = header.findIndex(function (h) { return h.indexOf(cols[k]) === 0 });
+    at[k] = i;
+  });
   return { at: at, rows: lines.slice(1).map(splitCsvLine) };
 }
 

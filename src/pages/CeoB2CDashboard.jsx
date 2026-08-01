@@ -11,7 +11,7 @@ import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
 
 // Line items exactly as the finance sheet names them, in sheet order.
-const REV = [['sr', 'SR (Online + Offline)'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['offRev', 'Offline']]
+const REV = [['sr', 'SR (Online + Offline)'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['offRev', 'Offline (AC + VAS)']]
 const COST = [['people', 'People'], ['pm', 'Perf. Marketing'], ['op', 'Operating'], ['offCost', 'Offline'], ['corp', 'Corp. Overheads']]
 const PLAN = [['people', 'People'], ['operating', 'Operating'], ['corp', 'Corp. Overheads'], ['offline', 'Offline']]
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']

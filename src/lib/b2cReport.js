@@ -19,7 +19,7 @@ const LAKH = 1e5
 
 // The sheet's SR column is Online and Offline together, so it is labelled that
 // way here until the sheet carries the two apart.
-const LINES = [['SR (Online + Offline)', 'sr'], ['AC Online', 'ac'], ['VAS Online', 'vas'], ['Offline', 'off']]
+const LINES = [['SR (Online + Offline)', 'sr'], ['AC Online', 'ac'], ['VAS Online', 'vas'], ['Offline (AC + VAS)', 'off']]
 const HEADS = [['Perf. Marketing', 'pm'], ['Operating', 'op'], ['Offline', 'off'], ['Corp. Overheads', 'corp'], ['People', 'people']]
 const SR_NOTE = '_SR is Online and Offline together in the sheet today. The split is coming shortly._'
 

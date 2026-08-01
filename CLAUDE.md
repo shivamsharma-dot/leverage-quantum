@@ -3959,3 +3959,34 @@ Gotcha worth remembering: `get_page_text` on raw.githubusercontent strips
 leading whitespace, so anchors copied from it will not match the real file. Two
 anchors failed on that. Derive indentation from the file (`indentOf`) and shift
 the inserted block to match, rather than hard-coding spaces.
+
+### CEO B2C: the Offline (AC + VAS) revenue line was never read
+
+The Consolidated tab of the B2C finance sheet carries four revenue columns, not
+three: SR, AC Online, VAS Online and `Offline Revenue (AC+VAS)`. The page and the
+Slack report both had an `offRev` line for it, but it printed an em dash in every
+month, including the months where the sheet is filled.
+
+Cause was in `b2cRows` in `api/crm-leads.js`. Column lookup was a strict
+`header.indexOf(cols[k])` against the lower-cased header row, and `B2C_COLS.offRev`
+is `'offline revenue'` while the sheet header reads `Offline Revenue (AC+VAS)`.
+The strict match returned -1, so the value was null for every day and the line
+item quietly rendered blank. Totals were still right, because the page trusts the
+sheet's own `Total Revenue` column, which already includes offline. The visible
+symptom was only that the revenue lines did not add up to the total: June showed
+17.90 Cr revenue against 16.52 Cr of named lines, the 1.60 Cr of offline missing.
+
+The lookup now falls back to the first header that *starts with* the configured
+name, so a column that gains a suffix degrades to a match instead of to a silent
+blank. Verified against the real header row: every one of the fourteen keys
+resolves, `offRev` to index 5.
+
+The line is now labelled `Offline (AC + VAS)` on the page and in the Slack tables,
+to keep it apart from `Offline` on the cost side, which is a different column
+(rent, support staff, maintenance).
+
+Separate and NOT a code problem, worth knowing when reading July: in the sheet
+itself the Offline Revenue column stops at row 92, 30-Jun-2026. All 31 July rows
+are empty, and the `Offline (AC + VAS)` source tab has no Jul-2026 actual, while
+Offline Cost is still charged at 1,61,290 a day, 49,99,990 for the month. So July
+carries the offline cost with none of the offline revenue.
