@@ -10,6 +10,7 @@ import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'; im
 import { checkShape, schemaKeyFor } from '../../shared/apiSchemas.mjs'
 import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
+import DateRangePicker from '../components/DateRangePicker'
 import FilterDropdown from '../components/FilterDropdown'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
 
@@ -644,7 +645,7 @@ const { user } = useAuth()
 const activeUsers = usePresence(user)
 const [searchParams,setSearchParams]=useSearchParams()
 const activeTab=searchParams.get('tab')||'campaigns'
-const [dateRange,setDateRange]=useState('LAST_30_DAYS');const [customFrom,setCustomFrom]=useState('');const [customTo,setCustomTo]=useState('')
+const [dateRange,setDateRange]=useState('LAST_30_DAYS');const [customFrom,setCustomFrom]=useState('');const [customTo,setCustomTo]=useState('');const [customOpen,setCustomOpen]=useState(false)
 const [dateOpen,setDateOpen]=useState(false)
 const [showInfo,setShowInfo]=useState(false)
 const [lastSync,setLastSync]=useState(null)
@@ -734,7 +735,25 @@ return(
 </div>
 </>)}
 </div>
-{dateRange==='CUSTOM'&&<><input type='date' value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{padding:'5px 10px',borderRadius:8,border:'0.5px solid '+C.border,fontSize:12,fontFamily:FONT,background:'var(--card)',color:C.text}}/><input type='date' value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{padding:'5px 10px',borderRadius:8,border:'0.5px solid '+C.border,fontSize:12,fontFamily:FONT,background:'var(--card)',color:C.text}}/></>}
+{dateRange==='CUSTOM'&&(
+<div style={{position:'relative'}}>
+<button onClick={()=>setCustomOpen(v=>!v)} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 12px',borderRadius:8,border:'0.5px solid '+(customOpen?C.navy:C.border),background:customOpen?C.navyBg:'var(--card)',color:customOpen?C.navy:C.text,fontSize:12.5,fontWeight:700,fontFamily:FONT,cursor:'pointer',whiteSpace:'nowrap'}}>
+<svg width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round'><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>
+{customFrom&&customTo?customFrom+' \u2192 '+customTo:'Pick dates'}
+</button>
+{customOpen&&(<>
+<div onClick={()=>setCustomOpen(false)} style={{position:'fixed',inset:0,zIndex:399}}/>
+<div style={{position:'absolute',right:0,top:'calc(100% + 8px)',zIndex:400,background:'var(--card)',border:'0.5px solid '+C.border,borderRadius:14,boxShadow:'0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)',overflow:'hidden'}}>
+<DateRangePicker
+from={customFrom?(()=>{const [y,m,d]=customFrom.split('-').map(Number);return new Date(y,m-1,d)})():null}
+to={customTo?(()=>{const [y,m,d]=customTo.split('-').map(Number);return new Date(y,m-1,d)})():null}
+onChange={(f,t)=>{setCustomFrom(f);setCustomTo(t);setCustomOpen(false)}}
+onClose={()=>setCustomOpen(false)}
+/>
+</div>
+</>)}
+</div>
+)}
 
 {lastSync&&!isBusy&&<span style={{fontSize:10.5,color:C.muted,whiteSpace:'nowrap'}}>Synced {lastSync.toLocaleTimeString()}</span>}
 
