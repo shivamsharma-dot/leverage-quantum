@@ -3628,3 +3628,32 @@ so the two pages behaved differently.
 prop AND the page's own fixed backdrop `<div onClick=...>`. Patching only the
 former looks correct in code but does nothing when the user clicks outside.
 Both had to be changed.
+
+### 2026-08-01 - Meta Creatives now shows the original CRM sheet QL numbers
+
+**Symptom:** on Meta Ads > Creatives the QL cards looked wrong/empty.
+
+**Two separate things were going on:**
+
+1. `This Month` on 1 Aug is a ONE-DAY window and the CRM sheet has no QL rows
+   for the current day yet, so Total/Human/AI QLs correctly render as `-`.
+   Verified straight off the API: Jul = 6,312 human + 4,674 AI, Jun = 7,063 +
+   830, Aug 1 = 0 + 0 with 861 leads. Not a bug.
+
+2. A REAL inconsistency in the KPI row: `CRM LEADS` and `CPL (CRM)` used
+   `crmSummary.crmTotal` (the full sheet number) but `TOTAL QLS`,
+   `FUTWORK HUMAN QLS`, `FUTWORK AI QLS` and `CPQL` used `humanQLTotal` /
+   `aiQLTotal`, which are summed ONLY over the ads this page happened to load.
+   So leads were the original CRM figure while QLs were a subset.
+
+**Fix** (`src/pages/MetaAdsDashboard.jsx`, commit 2bbd302): the account-level
+cards now prefer `crmSummary.humanQLSheetTotal` / `aiQLSheetTotal` (falling back
+to the matched totals if absent). July now reads 1,40,468 CRM leads / 10,986
+QLs / 6,312 human / 4,674 AI - identical to `/api/crm-leads`.
+
+The per-creative table and the `Totals for these N creatives` row stay
+matched-only; they are per-ad and cannot be anything else. The blue note under
+the cards was rewritten to explain that gap instead of the old wording.
+
+**Rule:** on this page, account KPI cards = original CRM sheet totals; anything
+per-ad = matched subset. Do not mix the two in one row again.
