@@ -926,8 +926,8 @@ function CreativesTab({ data, token }) {
     const activeCount = list.filter(a=>(a.spend||0)>0||(a.impressions||0)>0).length
     const cpl = accCPL
     const cplCrm = (crmSummary.hasCrm && crmSummary.crmTotal>0) ? Math.round(accSpend/crmSummary.crmTotal) : 0
-    const humanQLTotal = crmSummary.humanQLTotal || 0
-    const aiQLTotal = crmSummary.aiQLTotal || 0
+    const humanQLTotal = (crmSummary.humanQLSheetTotal != null ? crmSummary.humanQLSheetTotal : crmSummary.humanQLTotal) || 0
+    const aiQLTotal = (crmSummary.aiQLSheetTotal != null ? crmSummary.aiQLSheetTotal : crmSummary.aiQLTotal) || 0
     const totalQL = humanQLTotal + aiQLTotal
     const cpql = totalQL>0 ? Math.round(accSpend/totalQL) : 0
     const ctr = accCTRpct
@@ -959,8 +959,8 @@ function CreativesTab({ data, token }) {
             { key:'cplCrm', label:'CPL (CRM)', value:kpiStats.cplCrm>0?'₹'+kpiStats.cplCrm.toLocaleString('en-IN'):'—', sub:kpiStats.cpl>0?('vs ₹'+kpiStats.cpl.toLocaleString('en-IN')+' Meta CPL'):'cost per CRM lead', c1:'#1F3C84', c2:'#1C9FD4', icon:'◈' },
             { key:'cpql', label:'CPQL', value:kpiStats.cpql>0?'₹'+kpiStats.cpql.toLocaleString('en-IN'):'—', sub:'cost per qualified lead (Human + AI)', c1:'#1F3C84', c2:'#4CAE6F', icon:'◈' },
             { key:'totalQL', label:'TOTAL QLS', value:kpiStats.totalQL>0?kpiStats.totalQL.toLocaleString('en-IN'):'—', sub:'human + AI qualified leads', c1:'#4CAE6F', c2:'#1F3C84', icon:'✓' },
-            { key:'humanQL', label:'FUTWORK HUMAN QLs', value:kpiStats.humanQLTotal>0?kpiStats.humanQLTotal.toLocaleString('en-IN'):'—', sub:'in selected range, per matched ad', c1:'#4CAE6F', c2:'#29B9C3', icon:'✓' },
-            { key:'aiQL', label:'FUTWORK AI QLs', value:kpiStats.aiQLTotal>0?kpiStats.aiQLTotal.toLocaleString('en-IN'):'—', sub:'in selected range, per matched ad', c1:'#29B9C3', c2:'#1C9FD4', icon:'✓' },
+            { key:'humanQL', label:'FUTWORK HUMAN QLs', value:kpiStats.humanQLTotal>0?kpiStats.humanQLTotal.toLocaleString('en-IN'):'—', sub:'in selected range, full CRM sheet', c1:'#4CAE6F', c2:'#29B9C3', icon:'✓' },
+            { key:'aiQL', label:'FUTWORK AI QLs', value:kpiStats.aiQLTotal>0?kpiStats.aiQLTotal.toLocaleString('en-IN'):'—', sub:'in selected range, full CRM sheet', c1:'#29B9C3', c2:'#1C9FD4', icon:'✓' },
           ]
           const KpiCard = k => (
             <div key={k.key} style={{ position:'relative', overflow:'hidden', borderRadius:16, padding:'16px 18px', background:'#fff', border:'1px solid #EEF1F6', boxShadow:'0 1px 2px rgba(16,24,40,0.04), 0 8px 24px -12px rgba(16,24,40,0.18)' }}>
@@ -1000,7 +1000,7 @@ function CreativesTab({ data, token }) {
                   )}
                   {crmSummary.hasCrm && crmSummary.crmNamesNoMeta > 0 && (crmSummary.humanQLSheetTotal + crmSummary.aiQLSheetTotal) > (crmSummary.humanQLTotal + crmSummary.aiQLTotal) && (
                     <div style={{ marginBottom:18, padding:'10px 14px', borderRadius:10, background:'#F0F7FC', border:'1px solid #D7ECF7', fontSize:12, color:'#1F3C84', lineHeight:1.5 }}>
-                      {`Total QLs here (${(crmSummary.humanQLTotal+crmSummary.aiQLTotal).toLocaleString('en-IN')}) is lower than the source sheet's full total for this period (${(crmSummary.humanQLSheetTotal+crmSummary.aiQLSheetTotal).toLocaleString('en-IN')}) because ${crmSummary.crmNamesNoMeta.toLocaleString('en-IN')} of ${crmSummary.crmSheetNameCount.toLocaleString('en-IN')} sheet campaign names have no currently loaded ad to attach to (this page only loads a capped set of ads by spend). Not a bug — a known limitation of the current ad-fetch cap.`}
+                  {`KPI cards above show the full CRM sheet total for this period (${(crmSummary.humanQLSheetTotal+crmSummary.aiQLSheetTotal).toLocaleString('en-IN')} QLs). The per-creative table below sums to ${(crmSummary.humanQLTotal+crmSummary.aiQLTotal).toLocaleString('en-IN')} because ${crmSummary.crmNamesNoMeta.toLocaleString('en-IN')} of ${crmSummary.crmSheetNameCount.toLocaleString('en-IN')} sheet campaign names have no currently loaded ad to attach to (this page only loads a capped set of ads by spend).`}
                     </div>
                   )}
                 </>
