@@ -3919,3 +3919,14 @@ because three stacked rows invite being read as a comparison when they are
 actually cumulative windows.
 
 Unit-checked with /tmp/t3.mjs against July's real figures before installing.
+
+Caught on the live check straight after: the panel preview printed the literal
+backtick fences and HTML collapsed the padding, so the columns looked broken in
+Quantum while being correct in Slack. A preview that does not match the send is
+worse than no preview, so `mrkdwn()` in `src/components/SlackReportPanel.jsx`
+was split. `inline()` keeps the old emoji/bold/italic pass; `mrkdwn()` now
+splits on the fence, renders odd segments in a `white-space:pre` monospace div
+and leaves even segments to `inline()`. An odd fence count means the text is
+not what we think it is, so it falls back to flat rendering rather than
+guessing. File is 471 lines. Message length is 1733 chars, inside Slack's 3000
+character section limit -- worth re-checking if more rows are ever added.

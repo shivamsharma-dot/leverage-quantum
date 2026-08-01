@@ -49,14 +49,31 @@ const agoLabel = iso => {
   return 'Last sent ' + d.toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
 }
 
-// Slack mrkdwn to preview HTML. Escaped FIRST, so no value in the data can inject
-// markup into the panel.
+// Slack mrkdwn to preview HTML. Escaped FIRST, so no value in the data can
+// inject markup into the panel.
+function inline(s) {
+Object.keys(EMOJI).forEach(k => { s = s.split(k).join(EMOJI[k]) })
+s = s.replace(/\*([^*\n]+)\*/g, '<b>$1</b>')
+s = s.replace(/_([^_\n]+)_/g, '<i style="color:#64748B">$1</i>')
+return s.replace(/\n/g, '<br/>')
+}
+
+// Slack renders a triple-backtick fence as a monospace block and keeps the
+// spaces inside it. HTML collapses runs of spaces, so a fence has to be held
+// aside and drawn as its own block, or a character-padded table looks right in
+// Slack and loses its columns here, which defeats the point of a preview.
+const PRE = 'margin:7px 0;padding:9px 11px;border:1px solid #E2E8F0;border-radius:8px;background:#F8FAFC;overflow-x:auto;white-space:pre;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.6;color:#0F172A'
+const trimEdge = s => s.replace(/^\n/, '').replace(/\n$/, '')
+
 function mrkdwn(text) {
-  let s = String(text || '').replace(/[&<>]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]))
-  Object.keys(EMOJI).forEach(k => { s = s.split(k).join(EMOJI[k]) })
-  s = s.replace(/\*([^*\n]+)\*/g, '<b>$1</b>')
-  s = s.replace(/_([^_\n]+)_/g, '<i style="color:#64748B">$1</i>')
-  return s.replace(/\n/g, '<br/>')
+const s = String(text || '').replace(/[&<>]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]))
+const parts = s.split('```')
+// An unbalanced fence means the text is not what we think it is: draw it flat
+// rather than guessing where the block was meant to end.
+if (parts.length % 2 === 0) return inline(s)
+return parts.map((part, i) => (
+i % 2 ? '<div style="' + PRE + '">' + trimEdge(part) + '</div>' : inline(trimEdge(part))
+)).join('')
 }
 
 export default function SlackReportPanel({ open, onClose, buildContext, captureFiles, dashboardId, filename, rowCount, versions }) {
