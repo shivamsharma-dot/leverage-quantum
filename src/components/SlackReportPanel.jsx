@@ -59,8 +59,10 @@ function mrkdwn(text) {
   return s.replace(/\n/g, '<br/>')
 }
 
-export default function SlackReportPanel({ open, onClose, buildContext, captureFiles, dashboardId, filename, rowCount }) {
-  const [versionId, setVersionId] = useState(DEFAULT_VERSION_ID)
+export default function SlackReportPanel({ open, onClose, buildContext, captureFiles, dashboardId, filename, rowCount, versions }) {
+  // A page may hand in its own report library; Overall keeps the shared one.
+  const VERSIONS = versions && versions.length ? versions : REPORT_VERSIONS
+  const [versionId, setVersionId] = useState(versions && versions.length ? versions[0].id : DEFAULT_VERSION_ID)
   const [target, setTarget] = useState('test')
   const [busy, setBusy] = useState(false)
   // The main channel needs a second, deliberate click. No browser confirm dialog:
@@ -110,7 +112,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   // code path that could drift from what actually gets posted.
   const messages = useMemo(() => {
     if (!open) return []
-    try { return buildReportMessages(versionId, { ...buildContext(), isTest: target === 'test' }) }
+    try { return buildReportMessages(versionId, { ...buildContext(), isTest: target === 'test' }, VERSIONS) }
     catch (e) { return [{ key:'error', label:'Preview failed', text: e.message || 'Could not build this version' }] }
   }, [open, versionId, target, buildContext])
 
@@ -173,7 +175,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   }
 
   if (!open) return null
-  const version = REPORT_VERSIONS.find(v => v.id === versionId) || REPORT_VERSIONS[0]
+  const version = VERSIONS.find(v => v.id === versionId) || VERSIONS[0]
   const attachCount = messages.filter(m => m.attach).length
   const LABEL = { fontSize:10, fontWeight:800, letterSpacing:'0.07em', textTransform:'uppercase', color:C.muted, marginBottom:9 }
   const pill = active => ({
@@ -214,7 +216,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
             borderRight: narrow ? 'none' : `1px solid ${C.border}`, borderBottom: narrow ? `1px solid ${C.border}` : 'none',
           }}>
             <div style={LABEL}>Version</div>
-            {REPORT_VERSIONS.map(v => {
+            {VERSIONS.map(v => {
               const sel = v.id === versionId
               return (
                 <button key={v.id} onClick={() => setVersionId(v.id)} style={{

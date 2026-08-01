@@ -3794,3 +3794,30 @@ report, made the whole thumbnail a real clickable link to the same Meta Ads
 Manager URL as the ad name (not just the name text), and removed a closing
 disclosure line the user didn't want. Confirmed each change actually landed in
 the DOM (not just eyeballed) before re-sending.
+
+## 2026-08-01 — Send to Slack on the CEO B2C page
+
+The CEO B2C dashboard now carries the same Send to Slack control the Overall
+page has, in the page header next to the month picker.
+
+- `src/lib/b2cReport.js` (new) — `B2C_REPORT_VERSIONS`, one version, one
+  message. Month-to-date revenue / cost / net inflow / margin, the latest
+  completed day on its own line, then revenue by line and cost by head each
+  read as a share of revenue. No internal version label reaches the CEO.
+- `SlackReportPanel` grew an optional `versions` prop. A page that passes its
+  own library gets it end to end; Overall passes nothing and keeps the shared
+  `REPORT_VERSIONS`. `pmReport.getVersion` and `buildReportMessages` take an
+  optional list as their last argument to make that work.
+- `dashboardId` is `ceo_b2c`, the real PAGE_LIST id, so the per-page gate in
+  api/send-report.js applies. Admin-only, same as the page.
+- The revenue/cost/net table card is captured as the PNG and a CSV of the same
+  rows rides in the thread, same as Overall. No new api/ file: the existing
+  send-report route already takes any message array.
+- Honesty note baked into the message: People cost is booked monthly in this
+  sheet, not daily, so the daily Total Cost genuinely excludes it. When the
+  daily People column is empty the message prints the monthly figure and says
+  it sits outside the totals, rather than letting the margin read better than
+  it is. July 2026: cost reads 12.26 Cr and margin 31.5%, but People is
+  3.90 Cr on top of that.
+
+Build 12.21s, api still 12 files.

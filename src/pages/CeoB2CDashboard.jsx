@@ -1,8 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import Dropdown from '../components/Dropdown'
 import KPICard from '../components/KPICard'
+import Button from '../components/Button'
+import SlackReportPanel from '../components/SlackReportPanel'
+import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
+import { B2C_REPORT_VERSIONS } from '../lib/b2cReport'
 import styles from './CeoB2CDashboard.module.css'
 
 // Line items exactly as the finance sheet names them, in sheet order.
@@ -114,6 +118,42 @@ export default function CeoB2CDashboard() {
   const notSet = !!(data && data.configured === false)
   const ready = !loading && !err && !notSet && rows.length > 0
 
+  // Slack: the CEO gets exactly the numbers the page shows. Nothing is
+  // recomputed for the message, and the table image rides along in the thread.
+  const tableRef = useRef(null)
+  const [slackOpen, setSlackOpen] = useState(false)
+  const peopleMonthly = useMemo(function () {
+    const p = planRows.filter(function (r) { return r.label === 'People' })[0]
+    return p ? p.actual : null
+  }, [planRows])
+  const buildSlackContext = useCallback(function () {
+    return {
+      monthLabel: String(month || '').replace('-', ' '),
+      through: d1,
+      rev: { sr: mtd.sr, ac: mtd.ac, vas: mtd.vas, off: mtd.offRev, total: mtd.rev },
+      cost: { pm: mtd.pm, op: mtd.op, off: mtd.offCost, corp: mtd.corp, people: mtd.people, total: mtd.cost },
+      net: mtd.net,
+      margin: margin,
+      day: day ? { date: day.date, rev: day.rev, cost: day.cost, net: day.net } : null,
+      peopleMonthly: peopleMonthly
+    }
+  }, [month, d1, mtd, margin, day, peopleMonthly])
+  const captureSlackFiles = useCallback(async function () {
+    await nextPaint()
+    const node = tableRef.current
+    const shot = node ? await captureNodePng(node) : null
+    const cols = ['Line item', day ? day.date : 'Latest day', 'Month to date']
+    const spec = REV.concat([['rev', 'Total Revenue']]).concat(COST).concat([['cost', 'Total Cost'], ['net', 'Net Inflow']])
+    const body = spec.map(function (d) {
+      const r = {}
+      r[cols[0]] = d[1]
+      r[cols[1]] = day ? day[d[0]] : null
+      r[cols[2]] = mtd[d[0]]
+      return r
+    })
+    return { pngBase64: shot ? shot.base64 : null, pixelRatio: shot ? shot.pixelRatio : null, csv: rowsToCsv(cols, body) }
+  }, [day, mtd])
+
   return (
     <div className={styles.layout}>
       <Sidebar />
@@ -126,6 +166,22 @@ export default function CeoB2CDashboard() {
           <div className={styles.headerRight}>
             <span className={styles.badge}>Through {d1}</span>
             {months.length > 0 ? <Dropdown options={monthOpts} value={month} onChange={setMonth} minWidth={150} /> : null}
+              {ready ? (
+                <Button size="sm" variant="secondary" onClick={function () { setSlackOpen(true) }}
+                  icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4Z" /></svg>}>
+                  Send to Slack
+                </Button>
+              ) : null}
+              <SlackReportPanel
+                open={slackOpen}
+                onClose={function () { setSlackOpen(false) }}
+                versions={B2C_REPORT_VERSIONS}
+                buildContext={buildSlackContext}
+                captureFiles={captureSlackFiles}
+                dashboardId="ceo_b2c"
+                filename={'b2c-' + (month || '')}
+                rowCount={rows.length}
+              />
           </div>
         </div>
         <div className={styles.content}>
@@ -158,7 +214,7 @@ export default function CeoB2CDashboard() {
             </div>
           ) : null}
           {ready ? (
-            <div className={styles.card}>
+            <div className={styles.card} ref={tableRef}>
               <div className={styles.cardHead}>
                 <span className={styles.cardTitle}>Revenue &rarr; Cost &rarr; Net Inflow</span>
                 <span className={styles.cardSub}>exact rupees, straight from the sheet</span>

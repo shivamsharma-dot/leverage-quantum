@@ -1174,15 +1174,16 @@ id: 'v4',
 export const DEFAULT_VERSION_ID = 'v4'
 export const CORRIDOR_MIN_QL = 25
 
-export function getVersion(id) {
-  return REPORT_VERSIONS.find(v => v.id === id) || REPORT_VERSIONS[0]
+export function getVersion(id, list) {
+  const all = list && list.length ? list : REPORT_VERSIONS
+  return all.find(v => v.id === id) || all[0]
 }
 
 // Slack section text caps at 3000 characters. Trimming here (rather than letting the
 // API reject the post) keeps a send from failing on an unusually long insight list.
-export function buildReportMessages(versionId, ctx) {
+export function buildReportMessages(versionId, ctx, list) {
   const trim = t => (typeof t === 'string' && t.length > 2900 ? t.slice(0, 2897) + '...' : t)
-  const v = getVersion(versionId)
+  const v = getVersion(versionId, list)
   const order = v.msgKeys || []
   return v.build(ctx).map((m, i) => {
     const slot = order.indexOf(m.key)
