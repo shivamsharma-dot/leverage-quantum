@@ -81,7 +81,7 @@ async function getRecipients(reportType) {
 async function getReportConfig() {
   const out = {}
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled,slack_webhook_url,slack_webhook_url_test,slack_channel_main,slack_channel_test,slack_channel_internal,slack_channel_ceo,slack_auto_reports_enabled)`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled,slack_webhook_url,slack_webhook_url_test,slack_channel_main,slack_channel_test,slack_channel_internal,slack_channel_ceo,slack_test_channels,slack_auto_reports_enabled)`, {
       headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
     })
     const rows = (await res.json()) || []
@@ -114,21 +114,17 @@ async function getReportConfig() {
 // anything stored there is effectively public. Channel NAMES are not secrets and are fine
 // there. (The pre-existing slack_webhook_url rows have this same exposure -- a webhook URL
 // is a posting credential. Worth migrating to env separately.)
-// Three destinations, not two:
-//   test     -- the sandbox channel. Safe, one click.
-//   internal -- team-performance-marketing, the PM team's own channel. Two clicks.
-//   ceo      -- performance_mktg_core, the CEO group. GUARDED: admin only, an
-//               explicit confirmation and a PIN, both checked on the server before
-//               a single Slack call is made.
+// Destinations:
+//   test:<id> -- one of possibly SEVERAL named sandbox channels (see getTestChannels
+//                below). Bare 'test' means "the first configured one". Safe, one click.
+//   internal  -- team-performance-marketing, the PM team's own channel. Two clicks.
+//   ceo       -- performance_mktg_core, the CEO group. GUARDED: admin only, an
+//                explicit confirmation and a PIN, both checked on the server before
+//                a single Slack call is made.
 // 'prod', 'main', '' and anything unrecognised still resolve to internal, which is
 // exactly where they resolved before this existed -- the scheduler and the older
 // callers behave identically.
 const SLACK_TARGETS = {
-  test: {
-    label: 'test channel',
-    pref: 'slack_channel_test', env: 'SLACK_CHANNEL_TEST',
-    hookPref: 'slack_webhook_url_test', hookEnv: 'SLACK_WEBHOOK_URL_TEST',
-  },
   internal: {
     label: 'team channel',
     pref: 'slack_channel_internal', env: 'SLACK_CHANNEL_INTERNAL',
@@ -142,40 +138,76 @@ const SLACK_TARGETS = {
   },
 }
 
+// Multiple named test channels, admin-managed in Settings > Reports as
+// app_preferences.slack_test_channels: [{id, name, channel}, ...]. Falls back to the
+// original single slack_channel_test/SLACK_CHANNEL_TEST slot (labelled plain "Test
+// channel") when the list has never been configured, so an account that shipped before
+// this existed keeps working with zero migration.
+function getTestChannels(cfg) {
+  let list = Array.isArray(cfg.slack_test_channels) ? cfg.slack_test_channels : []
+  list = list.filter(c => c && c.id && c.channel)
+  if (!list.length) {
+    const legacy = cfg.slack_channel_test || process.env.SLACK_CHANNEL_TEST
+    if (legacy) list = [{ id: 'legacy', name: 'Test channel', channel: legacy }]
+  }
+  return list
+}
+
+// target is either a bare family ('test'/'internal'/'ceo'/anything-else-means-internal)
+// or 'test:<id>' to pick a SPECIFIC configured test channel by id.
 function normaliseTarget(target) {
   const t = String(target || '').toLowerCase()
-  if (t === 'test') return 'test'
-  if (t === 'ceo') return 'ceo'
-  return 'internal'
+  if (t === 'ceo') return { family: 'ceo', id: null }
+  if (t === 'test') return { family: 'test', id: null }
+  const m = t.match(/^test:(.+)$/)
+  if (m) return { family: 'test', id: m[1] }
+  return { family: 'internal', id: null }
 }
 
 function resolveSlackTarget(cfg, target, opts) {
-  const key = normaliseTarget(target)
-  const spec = SLACK_TARGETS[key]
+  const { family, id } = normaliseTarget(target)
+
+  if (family === 'test') {
+    const channels = getTestChannels(cfg)
+    const entry = (id && channels.find(c => c.id === id)) || channels[0]
+    if (!entry) return { mode: 'bot', key: 'test', isTest: true, label: 'test channel', missing: 'No Slack test channel is set -- add one in Settings > Reports.' }
+    const botToken = process.env.SLACK_BOT_TOKEN
+    if (botToken) return { mode: 'bot', key: 'test', id: entry.id, token: botToken, channel: entry.channel, label: entry.name, isTest: true }
+    // No webhook fallback for a SPECIFIC non-default test channel: a webhook is welded
+    // to one channel, so only the account's single configured test webhook (always
+    // meant for the FIRST/default test channel) can ever work this way.
+    const url = cfg.slack_webhook_url_test || process.env.SLACK_WEBHOOK_URL_TEST
+    return {
+      mode: 'webhook', key: 'test', id: entry.id, url, label: entry.name, isTest: true,
+      missing: url ? undefined : `Slack ${entry.name} is not connected -- add SLACK_BOT_TOKEN plus a channel, or a webhook URL, in Settings > Reports.`,
+    }
+  }
+
+  const spec = SLACK_TARGETS[family]
   const label = spec.label
   // A guarded destination is unreachable unless the caller states, in so many
   // words, that it has already run the PIN gate. Ask AI, the table exports and
   // the scheduler all call this without that flag, so none of them can be talked
   // into reaching the CEO group.
   if (spec.guarded && !(opts && opts.allowGuarded)) {
-    return { mode: 'bot', key, label, guarded: true, missing: 'The CEO channel is only reachable from Send to Slack, after the PIN check.' }
+    return { mode: 'bot', key: family, label, isTest: false, guarded: true, missing: 'The CEO channel is only reachable from Send to Slack, after the PIN check.' }
   }
   const botToken = process.env.SLACK_BOT_TOKEN
   if (botToken) {
     const channel = cfg[spec.pref] || process.env[spec.env]
       || (spec.altPref ? (cfg[spec.altPref] || process.env[spec.altEnv]) : '')
-    if (channel) return { mode: 'bot', key, token: botToken, channel, label, guarded: !!spec.guarded }
-    return { mode: 'bot', key, label, guarded: !!spec.guarded, missing: `No Slack ${label} set -- add the channel in Settings > Reports.` }
+    if (channel) return { mode: 'bot', key: family, token: botToken, channel, label, isTest: false, guarded: !!spec.guarded }
+    return { mode: 'bot', key: family, label, isTest: false, guarded: !!spec.guarded, missing: `No Slack ${label} set -- add the channel in Settings > Reports.` }
   }
   // No webhook fallback for the CEO group on purpose: a webhook cannot upload the
   // chart images this report is built around, so it could only ever post a
   // half-report to the one audience that must not receive one.
   if (spec.guarded) {
-    return { mode: 'bot', key, label, guarded: true, missing: 'The CEO channel needs SLACK_BOT_TOKEN -- an Incoming Webhook cannot post this report.' }
+    return { mode: 'bot', key: family, label, isTest: false, guarded: true, missing: 'The CEO channel needs SLACK_BOT_TOKEN -- an Incoming Webhook cannot post this report.' }
   }
   const url = cfg[spec.hookPref] || process.env[spec.hookEnv]
   return {
-    mode: 'webhook', key, url, label,
+    mode: 'webhook', key: family, url, label, isTest: false,
     missing: `Slack ${label} is not connected -- add SLACK_BOT_TOKEN plus a channel, or a webhook URL, in Settings > Reports.`,
   }
 }
@@ -232,13 +264,13 @@ function mdToSlackText(md) {
   return text.trim()
 }
 
-function buildSlackAnswerBlocks({ question, answerMarkdown, askedBy, channelLabel }) {
+function buildSlackAnswerBlocks({ question, answerMarkdown, askedBy, channelLabel, isTest }) {
   const body = mdToSlackText(answerMarkdown).slice(0, 2900)
   return {
     blocks: [
       { type: 'header', text: { type: 'plain_text', text: '📊 Ask AI Answer', emoji: true } },
-      ...(channelLabel === 'test channel'
-        ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: ':test_tube: *Test post* -- sent to the test channel to check formatting.' }] }]
+      ...(isTest
+        ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: `:test_tube: *Test post* -- sent to ${channelLabel || 'a test channel'} to check formatting.` }] }]
         : []),
       { type: 'section', text: { type: 'mrkdwn', text: `*${(question || '').slice(0, 300)}*` } },
       { type: 'divider' },
@@ -248,7 +280,7 @@ function buildSlackAnswerBlocks({ question, answerMarkdown, askedBy, channelLabe
   }
 }
 
-function buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy, channelLabel }) {
+function buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy, channelLabel, isTest }) {
   const cols = columns && columns.length ? columns : (rows[0] ? Object.keys(rows[0]) : [])
   const capped = rows.slice(0, 20)
   const widths = cols.map(c => Math.max(c.length, ...(capped.length ? capped.map(r => String(r[c] ?? '').length) : [0])))
@@ -262,8 +294,8 @@ function buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy, cha
       { type: 'header', text: { type: 'plain_text', text: `📤 ${(title || 'Export').slice(0, 140)}`, emoji: true } },
       // a test post says so on its face, so it can't be mistaken for a real report if
       // someone forwards a screenshot out of the test channel
-      ...(channelLabel === 'test channel'
-        ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: ':test_tube: *Test post* -- sent to the test channel to check formatting.' }] }]
+      ...(isTest
+        ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: `:test_tube: *Test post* -- sent to ${channelLabel || 'a test channel'} to check formatting.` }] }]
         : []),
       { type: 'context', elements: [{ type: 'mrkdwn', text: `${sourcePage ? sourcePage + ' · ' : ''}${rows.length} row${rows.length === 1 ? '' : 's'} · shared by ${askedBy || 'a teammate'}` }] },
       { type: 'section', text: { type: 'mrkdwn', text: (table + truncNote).slice(0, 2900) } },
@@ -317,7 +349,7 @@ async function handleSlackAnswer(req, res) {
   if (!answerMarkdown) return res.status(400).json({ error: 'No answer content to send' })
 
   try {
-    await deliverToSlack(hook, buildSlackAnswerBlocks({ question, answerMarkdown, askedBy: me.email, channelLabel: hook.label }))
+    await deliverToSlack(hook, buildSlackAnswerBlocks({ question, answerMarkdown, askedBy: me.email, channelLabel: hook.label, isTest: hook.isTest }))
     await logReport({ report_type: 'slack answer', recipients: ['slack'], status: 'sent', triggered_by: me.email })
     return res.status(200).json({ ok: true, success: true })
   } catch (e) {
@@ -347,9 +379,9 @@ async function handleSlackExport(req, res) {
   if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'No rows to send' })
 
   // the channel is recorded in the log so a test post is never mistaken for a real one
-  const logType = slackTarget === 'test' ? 'slack export (test)' : 'slack export'
+  const logType = hook.isTest ? 'slack export (test)' : 'slack export'
   try {
-    await deliverToSlack(hook, buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy: me.email, channelLabel: hook.label }))
+    await deliverToSlack(hook, buildSlackExportBlocks({ title, columns, rows, sourcePage, askedBy: me.email, channelLabel: hook.label, isTest: hook.isTest }))
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: me.email })
     return res.status(200).json({ ok: true, success: true, channel: hook.label })
   } catch (e) {
@@ -1155,7 +1187,7 @@ async function handleSlackExportImage(req, res) {
     return res.status(400).json({ error: 'Posting a table image needs SLACK_BOT_TOKEN plus a channel (files:write) -- an Incoming Webhook cannot upload files.' })
   }
 
-  const logType = slackTarget === 'test' ? 'slack table image (test)' : 'slack table image'
+  const logType = hook.isTest ? 'slack table image (test)' : 'slack table image'
   try {
     const stamp = new Date().toISOString().slice(0, 10)
     const base = String(filename || 'export').replace(/[^a-z0-9._-]+/gi, '-')
@@ -1168,7 +1200,7 @@ async function handleSlackExportImage(req, res) {
     }))
     const comment = buildTableShareComment({
       title: label, subtitle, summary, rowCount: rowCount || 0, askedBy: me.email,
-      isTest: slackTarget === 'test', degraded: pixelRatio ? pixelRatio < 2 : false,
+      isTest: hook.isTest, degraded: pixelRatio ? pixelRatio < 2 : false,
     })
     // Lead with Slack's own table so the numbers are readable and copyable in the
     // client, then hang the PNG and the all-columns CSV in that message's thread. If
@@ -1537,7 +1569,7 @@ async function handleSlackReport(req, res) {
   // have to be true, all checked here on the server: the caller is an admin, the
   // caller sent the exact confirmation phrase, and the PIN verifies. Nothing
   // touches Slack until all three pass.
-  const wantsCeo = normaliseTarget(slackTarget) === 'ceo'
+  const wantsCeo = normaliseTarget(slackTarget).family === 'ceo'
   if (wantsCeo) {
     if (me.role !== 'admin') {
       await logReport({ report_type: 'ceo report blocked', recipients: [me.email], status: 'failed', error: 'not an admin', triggered_by: me.email })

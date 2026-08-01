@@ -81,6 +81,10 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   const VERSIONS = versions && versions.length ? versions : REPORT_VERSIONS
   const [versionId, setVersionId] = useState(versions && versions.length ? versions[0].id : DEFAULT_VERSION_ID)
   const [target, setTarget] = useState('test')
+  // Which specific named test channel, when more than one is configured (Settings >
+  // Reports > Slack). '' means "the default" (the first configured one).
+  const [testChannels, setTestChannels] = useState([])
+  const [testPick, setTestPick] = useState('')
   const [busy, setBusy] = useState(false)
   // The main channel needs a second, deliberate click. No browser confirm dialog:
   // the preview above IS the confirmation, this just stops a stray click.
@@ -93,6 +97,19 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 940)
 
   useEffect(() => { if (open) { setLastSent(readLastSent()); setArmed(false) } }, [open])
+  // Named test channels are admin-configured in Settings > Reports > Slack. Loaded
+  // fresh each time the panel opens -- channel ids/names only, never a credential.
+  useEffect(() => {
+    if (!open) return
+    setTestChannels([]); setTestPick('')
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { prefs: {} })
+      .then(d => {
+        const list = Array.isArray(d.prefs?.slack_test_channels) ? d.prefs.slack_test_channels : []
+        setTestChannels(list.filter(c => c && c.id && c.name))
+      })
+      .catch(() => {})
+  }, [open])
   useEffect(() => {
     setArmed(false); setPhrase(''); setPin(''); setGateErr('')
   }, [target, versionId])
@@ -149,12 +166,13 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
     setBusy(true)
     try {
       const files = await captureFiles()
+      const slackTarget = target === 'test' && testPick ? 'test:' + testPick : target
       const r = await fetch('/api/send-report', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'slack_report', dashboardId, slackTarget: target, filename, versionId, rowCount,
+          type: 'slack_report', dashboardId, slackTarget, filename, versionId, rowCount,
         confirm: target === 'ceo' ? CEO_PHRASE : undefined,
         ceoPin: target === 'ceo' ? pin : undefined,
           messages: messages.map(x => ({
@@ -307,8 +325,24 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
                 <button key={d.key} onClick={() => setTarget(d.key)} style={pill(target === d.key)}>{d.label}</button>
               ))}
             </div>
+            {target === 'test' && testChannels.length > 1 && (
+              <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+                {testChannels.map(c => {
+                  const sel = (testPick || testChannels[0].id) === c.id
+                  return (
+                    <button key={c.id} onClick={() => setTestPick(c.id)} style={{
+                      border:`1px solid ${sel ? C.navy : C.border}`, background: sel ? 'rgba(31,60,132,0.07)' : '#fff',
+                      color: sel ? C.navy : C.sub, fontWeight: sel ? 800 : 600, fontSize:11, borderRadius:7,
+                      padding:'5px 9px', cursor:'pointer', fontFamily:FONT,
+                    }}>{c.name}</button>
+                  )
+                })}
+              </div>
+            )}
             <div style={{ fontSize:11, color: target === 'test' ? C.muted : C.navy, fontWeight: target === 'test' ? 500 : 700, flex:1, minWidth:170 }}>
-              {DEST_HINT(target)}
+              {target === 'test' && testChannels.length > 1
+                ? `Posts to ${(testChannels.find(c => c.id === (testPick || testChannels[0].id)) || {}).name || 'a test channel'} only.`
+                : DEST_HINT(target)}
             </div>
           </div>
 

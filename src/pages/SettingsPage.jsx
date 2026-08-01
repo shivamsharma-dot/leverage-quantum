@@ -869,7 +869,11 @@ export default function SettingsPage() {
         if (pf.slack_webhook_url != null) setSlackWebhook(pf.slack_webhook_url)
         if (pf.slack_webhook_url_test != null) setSlackWebhookTest(pf.slack_webhook_url_test)
         if (pf.slack_channel_main != null) setSlackChannelMain(pf.slack_channel_main)
-        if (pf.slack_channel_test != null) setSlackChannelTest(pf.slack_channel_test)
+        if (Array.isArray(pf.slack_test_channels) && pf.slack_test_channels.length) {
+          setSlackTestChannels(pf.slack_test_channels)
+        } else if (pf.slack_channel_test) {
+          setSlackTestChannels([{ id: 'legacy', name: 'Test channel', channel: pf.slack_channel_test }])
+        }
         if (pf.slack_channel_ceo != null) setSlackChannelCeo(pf.slack_channel_ceo)
         if (pf.slack_auto_reports_enabled != null) setSlackAuto(pf.slack_auto_reports_enabled !== false)
         setSavedHiddenPages(hp)
@@ -1274,7 +1278,14 @@ export default function SettingsPage() {
   // RLS disabled and is readable with the public anon key from the client bundle, so it
   // would be effectively public. It lives in the Vercel env as SLACK_BOT_TOKEN.
   const [slackChannelMain, setSlackChannelMain] = useState('')
-  const [slackChannelTest, setSlackChannelTest] = useState('')
+  // Multiple named test channels: [{id, name, channel}, ...]. A pre-existing single
+  // slack_channel_test value is migrated into this list on load (id 'legacy') so an
+  // account configured before this existed keeps working with zero manual steps --
+  // saving from here then "graduates" it into the array format for good.
+  const [slackTestChannels, setSlackTestChannels] = useState([])
+  const [newTestChanName, setNewTestChanName] = useState('')
+  const [newTestChanValue, setNewTestChanValue] = useState('')
+  const [slackTestPick, setSlackTestPick] = useState('')
   const [slackChannelCeo, setSlackChannelCeo] = useState('')
   // The CEO PIN is managed through its own endpoint, never through preferences,
   // so nothing about it is ever held in this page's state except its status.
@@ -1714,7 +1725,7 @@ export default function SettingsPage() {
         ['slack_webhook_url', slackWebhook.trim()],
         ['slack_webhook_url_test', slackWebhookTest.trim()],
         ['slack_channel_main', slackChannelMain.trim()],
-        ['slack_channel_test', slackChannelTest.trim()],
+        ['slack_test_channels', slackTestChannels.filter(c => c.name.trim() && c.channel.trim())],
         ['slack_channel_ceo', slackChannelCeo.trim()],
         ['slack_auto_reports_enabled', slackAuto],
       ]
@@ -1734,16 +1745,32 @@ export default function SettingsPage() {
   const sendSlackTest = async () => {
     setSlackTesting(true); setSlackCfgMsg('')
     try {
+      const pick = slackTestPick || (slackTestChannels[0] && slackTestChannels[0].id) || ''
       const r = await fetch('/api/send-report', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'slack_test', slackTarget: 'test' }),
+        body: JSON.stringify({ type: 'slack_test', slackTarget: pick ? 'test:' + pick : 'test' }),
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed')
       setSlackCfgMsg(`Posted to the ${d.channel || 'test channel'} via ${d.mode === 'bot' ? 'the bot' : 'webhook'} ✓`)
     } catch (e) { setSlackCfgMsg('✕ ' + e.message) }
     finally { setSlackTesting(false); setTimeout(() => setSlackCfgMsg(''), 6000) }
+  }
+
+  const addTestChannel = () => {
+    const name = newTestChanName.trim(), channel = newTestChanValue.trim()
+    if (!name || !channel) return
+    const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 't_' + Math.random().toString(36).slice(2)
+    setSlackTestChannels(list => [...list, { id, name, channel }])
+    setNewTestChanName(''); setNewTestChanValue('')
+  }
+  const updateTestChannel = (id, patch) => {
+    setSlackTestChannels(list => list.map(c => c.id === id ? { ...c, ...patch } : c))
+  }
+  const removeTestChannel = id => {
+    setSlackTestChannels(list => list.filter(c => c.id !== id))
+    setSlackTestPick(p => p === id ? '' : p)
   }
 
   const sendTestReport = async () => {
@@ -2882,10 +2909,31 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <p className={styles.cardDesc} style={{ marginTop: 6 }}>
                   <b>Preferred: bot token.</b> Set <code>SLACK_BOT_TOKEN</code> in the Vercel env (Slack app &gt; OAuth &amp; Permissions &gt; Bot User OAuth Token, needs <code>chat:write</code>), then just name the channels below — one token reaches any channel. The token is intentionally not stored here: this settings table is readable with the app’s public key, so a token kept here would be exposed. Remember to invite the bot to each channel with <code>/invite @pm_analyst</code>, or posting fails with “not in channel”.
                 </p>
-                <label className={styles.fieldLabel}>Test channel</label>
-                <div className={styles.inputGroup}>
-                  <input type="text" className={styles.input} placeholder="#pm-analyst-test  (or a channel ID like C0123ABCD)" value={slackChannelTest}
-                    onChange={e => setSlackChannelTest(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                <label className={styles.fieldLabel}>Test channels &middot; as many as you like</label>
+                <p className={styles.cardDesc} style={{ marginTop: 2, marginBottom: 8 }}>
+                  Name each one so Send to Slack can offer a real picker (e.g. one channel per person, or one per feature you're checking). The first one is used whenever something posts to "test" without picking a specific one (e.g. a scheduled report's own auto-post copy).
+                </p>
+                {slackTestChannels.map((c, i) => (
+                  <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                    <input type="text" className={styles.input} placeholder="Name (e.g. Shivam's test)" value={c.name}
+                      onChange={e => updateTestChannel(c.id, { name: e.target.value })}
+                      style={{ fontSize: 12.5, flex: '0 0 180px' }} />
+                    <input type="text" className={styles.input} placeholder="#pm-analyst-test  (or a channel ID like C0123ABCD)" value={c.channel}
+                      onChange={e => updateTestChannel(c.id, { channel: e.target.value })}
+                      style={{ fontFamily: 'monospace', fontSize: 12.5, flex: 1 }} />
+                    {i === 0 && <span style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.04em', flexShrink: 0 }}>DEFAULT</span>}
+                    <button type="button" onClick={() => removeTestChannel(c.id)} title="Remove"
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: 16, lineHeight: 1, padding: '2px 6px', flexShrink: 0 }}>&times;</button>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="text" className={styles.input} placeholder="Name" value={newTestChanName}
+                    onChange={e => setNewTestChanName(e.target.value)} style={{ fontSize: 12.5, flex: '0 0 180px' }} />
+                  <input type="text" className={styles.input} placeholder="#channel or channel ID" value={newTestChanValue}
+                    onChange={e => setNewTestChanValue(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTestChannel() } }}
+                    style={{ fontFamily: 'monospace', fontSize: 12.5, flex: 1 }} />
+                  <Button variant="secondary" onClick={addTestChannel} disabled={!newTestChanName.trim() || !newTestChanValue.trim()}>+ Add</Button>
                 </div>
           <label className={styles.fieldLabel} style={{ marginTop: 14 }}>Team channel &middot; the whole team reads it</label>
           <div className={styles.inputGroup}>
@@ -2958,9 +3006,17 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     Also post a summary card to Slack for every scheduled report
                   </label>
                 </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                   <Button onClick={saveSlackConfig} disabled={slackCfgSaving}>{slackCfgSaving ? 'Saving…' : 'Save'}</Button>
-                  <Button variant="secondary" onClick={sendSlackTest} disabled={slackTesting || (!slackChannelTest.trim() && !slackWebhookTest.trim())}>{slackTesting ? 'Sending…' : 'Send test message to test channel'}</Button>
+                  {slackTestChannels.length > 1 && (
+                    <Dropdown
+                      minWidth={160}
+                      options={slackTestChannels.map(c => ({ value: c.id, label: c.name }))}
+                      value={slackTestPick || slackTestChannels[0].id}
+                      onChange={setSlackTestPick}
+                    />
+                  )}
+                  <Button variant="secondary" onClick={sendSlackTest} disabled={slackTesting || (!slackTestChannels.length && !slackWebhookTest.trim())}>{slackTesting ? 'Sending…' : 'Send test message'}</Button>
                   {slackCfgMsg && <span className={styles.rcFeedback + ' ' + (slackCfgMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{slackCfgMsg}</span>}
                 </div>
               </div>

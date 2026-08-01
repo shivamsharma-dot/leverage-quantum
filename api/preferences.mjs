@@ -83,7 +83,11 @@ export default async function handler(req, res) {
     // affiliate_spend_manual must be readable by every signed-in user (not just
     // admins) -- the Overall dashboard is viewable by non-admins too, and it
     // needs this value to compute Affiliate's totals correctly for everyone.
-    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'lq_login_style', 'affiliate_spend_manual'])
+    // slack_test_channels is the named-test-channel list for the Send to Slack
+    // picker on that same page -- channel ids/names are documented as non-secret
+    // (the real credential is SLACK_BOT_TOKEN, Vercel-env only), so any signed-in
+    // user who can see the picker can see which test channels are configured.
+    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'lq_login_style', 'affiliate_spend_manual', 'slack_test_channels'])
     const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key))
     const prefs = Object.fromEntries(visibleRows.map(row => [row.key, row.value]))
     const meta = Object.fromEntries(visibleRows.map(row => [row.key, row.updated_at]))
