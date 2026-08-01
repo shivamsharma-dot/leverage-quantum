@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { InlineLoader } from '../components/SkeletonLoader'
@@ -255,22 +256,96 @@ function summarizeAdvSearch(advSearch) {
   }).join(glue)
 }
 
+// Portal-based dropdown used ONLY inside the Advanced Search criteria list.
+// The rows list below scrolls internally (overflowY:auto) so a row's own
+// Field/Op menu can't be allowed to rely on CSS position:absolute -- an
+// ancestor's overflow:auto clips anything, including popovers, that extends
+// past its box. Rendering to document.body via a portal, positioned from the
+// trigger's real getBoundingClientRect(), guarantees the menu is never cut
+// off by the scroll container, the modal edge, or the viewport -- it also
+// flips upward and clamps horizontally when there isn't room.
+function AdvSearchDropdown({ label, value, options, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
+  const btnRef = useRef(null)
+  const menuRef = useRef(null)
+
+  const place = () => {
+    const btn = btnRef.current
+    if (!btn) return
+    const r = btn.getBoundingClientRect()
+    const estHeight = Math.min(options.length * 33 + 8, 260)
+    const openUp = r.bottom + estHeight + 8 > window.innerHeight
+    const width = Math.max(r.width, 170)
+    let left = r.left
+    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8
+    if (left < 8) left = 8
+    setPos({ top: openUp ? Math.max(8, r.top - estHeight - 6) : r.bottom + 6, left, width })
+  }
+
+  const toggle = () => { if (open) { setOpen(false) } else { place(); setOpen(true) } }
+
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    const onDocDown = (e) => {
+      if (btnRef.current?.contains(e.target)) return
+      if (menuRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    // capture:true so scroll INSIDE the criteria list (which doesn't bubble) still closes it
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    document.addEventListener('mousedown', onDocDown)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+      document.removeEventListener('mousedown', onDocDown)
+    }
+  }, [open])
+
+  const current = options.find(o => o.v === value) || options[0] || { v: value, l: value }
+
+  return (
+    <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+      <button ref={btnRef} type="button" onClick={toggle}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '7px 10px', borderRadius: 8, border: '0.5px solid ' + (open ? '#1C9FD4' : C.border), background: 'var(--card)', cursor: 'pointer', fontSize: 12.5, fontFamily: FONT, color: C.text, textAlign: 'left' }}>
+        <span style={{ color: C.muted, fontWeight: 600, flexShrink: 0 }}>{label}:</span>
+        <span style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current.l}</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
+      </button>
+      {open && pos && createPortal(
+        <div ref={menuRef} style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 2000, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 20px 45px -10px rgba(15,23,42,0.32)', padding: 4, maxHeight: 260, overflowY: 'auto' }}>
+          {options.map(o => (
+            <button key={o.v} type="button" onClick={() => { onSelect(o.v); setOpen(false) }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', textAlign: 'left', padding: '7px 9px', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: value === o.v ? 700 : 500, fontFamily: FONT, color: value === o.v ? '#1F3C84' : C.text, background: value === o.v ? '#E8EFF9' : 'transparent' }}
+              onMouseEnter={e => { if (value !== o.v) e.currentTarget.style.background = '#F3F4F6' }}
+              onMouseLeave={e => { if (value !== o.v) e.currentTarget.style.background = 'transparent' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.l}</span>
+              {value === o.v && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1C9FD4" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginLeft: 8 }}><polyline points="20 6 9 17 4 12" /></svg>}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 function AdvancedSearchButton({ fields, advSearch, onApply, onClear }) {
   const [open, setOpen] = useState(false)
   const [criteria, setCriteria] = useState([{ field: fields[0], op: 'is', value: '' }])
   const [matchMode, setMatchMode] = useState('all')
-  const [openDD, setOpenDD] = useState(null)
 
   const openModal = () => {
     setCriteria(advSearch ? advSearch.criteria.map(c => ({ ...c })) : [{ field: fields[0], op: 'is', value: '' }])
     setMatchMode(advSearch ? advSearch.matchMode : 'all')
-    setOpenDD(null)
     setOpen(true)
   }
   const addRow = () => setCriteria(prev => [...prev, { field: fields[0], op: 'is', value: '' }])
   const removeRow = (i) => setCriteria(prev => prev.filter((_, idx) => idx !== i))
   const updateRow = (i, patch) => setCriteria(prev => prev.map((c, idx) => idx === i ? { ...c, ...patch } : c))
-  const reset = () => { setCriteria([{ field: fields[0], op: 'is', value: '' }]); setMatchMode('all') }
+  const reset = () => setCriteria([{ field: fields[0], op: 'is', value: '' }])
 
   const draftSummary = summarizeAdvSearch({ criteria, matchMode })
 
@@ -297,43 +372,66 @@ function AdvancedSearchButton({ fields, advSearch, onApply, onClear }) {
         )}
       </div>
       {open && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(15,23,42,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setOpen(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 14, width: 640, maxHeight: '78vh', display: 'flex', flexDirection: 'column', boxShadow: '0 24px 60px -12px rgba(15,23,42,0.35)', fontFamily: FONT }}>
-            <div style={{ padding: '18px 20px 0' }}>
-              <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800, color: C.text }}>Advanced Search</h3>
-              <p style={{ margin: '0 0 14px', fontSize: 11.5, color: C.muted }}>Select Search Criteria</p>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 400, background: 'rgba(15,23,42,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setOpen(false)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--card)', borderRadius: 16, width: 'min(900px, 96vw)', height: 'min(660px, 90vh)', display: 'flex', flexDirection: 'column', boxShadow: '0 30px 70px -14px rgba(15,23,42,0.4)', fontFamily: FONT, overflow: 'hidden' }}>
+            {/* Header -- fixed, never scrolls */}
+            <div style={{ flex: '0 0 auto', padding: '20px 24px', borderBottom: '1px solid ' + C.border, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <h3 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 800, color: C.text }}>Advanced Search</h3>
+                <p style={{ margin: 0, fontSize: 12, color: C.muted }}>Select Search Criteria</p>
+              </div>
+              <button type="button" onClick={() => setOpen(false)} title="Close"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 8, border: '0.5px solid ' + C.border, background: 'transparent', color: C.muted, cursor: 'pointer', flexShrink: 0 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="4" y1="4" x2="20" y2="20" /><line x1="20" y1="4" x2="4" y2="20" /></svg>
+              </button>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px', display: 'flex', gap: 18 }}>
-              <div style={{ flex: '0 0 260px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {criteria.map((c, i) => (
-                  <div key={i} style={{ border: '0.5px solid ' + C.border, borderRadius: 10, padding: 10, display: 'flex', flexDirection: 'column', gap: 6, position: 'relative' }}>
-                    {criteria.length > 1 && (
-                      <span onClick={() => removeRow(i)} style={{ position: 'absolute', top: 6, right: 8, cursor: 'pointer', color: C.muted, fontSize: 12, fontWeight: 800 }}>✕</span>
-                    )}
-                    <FilterDropdown label="Field" value={c.field} options={fields.map(f => ({ v: f, l: f }))} open={openDD === 'field-' + i} onToggle={() => setOpenDD(openDD === 'field-' + i ? null : 'field-' + i)} onSelect={v => { updateRow(i, { field: v }); setOpenDD(null) }} />
-                    <FilterDropdown label="Op" value={c.op} options={ADV_OPERATORS} open={openDD === 'op-' + i} onToggle={() => setOpenDD(openDD === 'op-' + i ? null : 'op-' + i)} onSelect={v => { updateRow(i, { op: v }); setOpenDD(null) }} />
-                    {c.op !== 'isempty' && c.op !== 'isnotempty' && (
-                      <input value={c.value} onChange={e => updateRow(i, { value: e.target.value })} placeholder="Value" style={{ ...inputStyle, width: '100%' }} />
-                    )}
-                  </div>
-                ))}
-                <div style={{ display: 'flex', gap: 8 }}>
+
+            {/* Body -- fixed height, two columns; ONLY the rows list inside scrolls */}
+            <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+              <div style={{ flex: '1 1 58%', minWidth: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid ' + C.border }}>
+                <div style={{ flex: '0 0 auto', padding: '14px 24px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Criteria ({criteria.length})</span>
+                </div>
+                <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 24px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {criteria.map((c, i) => (
+                    <div key={i} style={{ border: '0.5px solid ' + C.border, borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, position: 'relative', background: '#F8FAFC' }}>
+                      {criteria.length > 1 && (
+                        <button type="button" onClick={() => removeRow(i)} title="Remove criterion"
+                          style={{ position: 'absolute', top: 8, right: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 13, fontWeight: 800, lineHeight: 1 }}>✕</button>
+                      )}
+                      <div style={{ display: 'flex', gap: 8, paddingRight: criteria.length > 1 ? 24 : 0 }}>
+                        <AdvSearchDropdown label="Field" value={c.field} options={fields.map(f => ({ v: f, l: f }))} onSelect={v => updateRow(i, { field: v })} />
+                        <AdvSearchDropdown label="Op" value={c.op} options={ADV_OPERATORS} onSelect={v => updateRow(i, { op: v })} />
+                      </div>
+                      {c.op !== 'isempty' && c.op !== 'isnotempty' && (
+                        <input value={c.value} onChange={e => updateRow(i, { value: e.target.value })} placeholder="Value" style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', background: 'var(--card)' }} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* Footer of the left column -- fixed, never scrolls with the rows */}
+                <div style={{ flex: '0 0 auto', padding: '12px 24px', borderTop: '1px solid ' + C.border, display: 'flex', gap: 8 }}>
                   <Button size="sm" variant="secondary" onClick={addRow}>+ Add</Button>
                   <Button size="sm" variant="secondary" onClick={reset}>Reset</Button>
                 </div>
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: '0 0 10px', fontSize: 12.5, fontWeight: 700, color: C.text }}>
-                  Search for records that match{' '}
-                  <label style={{ fontWeight: 500, marginRight: 10, cursor: 'pointer' }}><input type="radio" checked={matchMode === 'any'} onChange={() => setMatchMode('any')} /> Any Criteria</label>
-                  <label style={{ fontWeight: 500, cursor: 'pointer' }}><input type="radio" checked={matchMode === 'all'} onChange={() => setMatchMode('all')} /> All Criteria</label>
-                </p>
-                <div style={{ background: '#F8FAFC', border: '0.5px solid ' + C.border, borderRadius: 10, padding: 14, fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
+
+              <div style={{ flex: '1 1 42%', minWidth: 0, display: 'flex', flexDirection: 'column', padding: '18px 24px', overflowY: 'auto' }}>
+                <p style={{ margin: '0 0 12px', fontSize: 12.5, fontWeight: 700, color: C.text }}>Search for records that match</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 500, color: C.text, cursor: 'pointer' }}><input type="radio" checked={matchMode === 'any'} onChange={() => setMatchMode('any')} /> Any Criteria</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 500, color: C.text, cursor: 'pointer' }}><input type="radio" checked={matchMode === 'all'} onChange={() => setMatchMode('all')} /> All Criteria</label>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Live summary</span>
+                <div style={{ flex: 1, background: '#F8FAFC', border: '0.5px solid ' + C.border, borderRadius: 10, padding: 14, fontSize: 12.5, color: C.text, lineHeight: 1.7, wordBreak: 'break-word' }}>
                   {draftSummary || <span style={{ color: C.muted }}>No criteria added yet.</span>}
                 </div>
               </div>
             </div>
-            <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+
+            {/* Footer -- fixed, never scrolls */}
+            <div style={{ flex: '0 0 auto', padding: '16px 24px', borderTop: '1px solid ' + C.border, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <Button size="sm" variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
               <Button size="sm" onClick={find}>Find</Button>
             </div>
