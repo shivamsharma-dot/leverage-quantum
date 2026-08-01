@@ -1,24 +1,24 @@
 // Quantum Brief -- the CEO's daily read, built as native Block Kit.
 //
-// NEW version, additive only. None of the existing builders (V3/V5/V6/V7 in
-// pmReport.js, B2C in b2cReport.js) are imported, changed or read by this file,
-// and none of their behaviour moves: they keep emitting { text, table, chart }
-// and keep travelling the same path through api/send-report.js they always did.
+// Additive only. None of the existing builders (V3/V5/V6/V7 in pmReport.js, B2C
+// in b2cReport.js) are imported, changed or read by this file, and none of their
+// behaviour moves: they keep emitting { text, table, chart } and keep travelling
+// the same path through api/send-report.js they always did. The only difference
+// is that the messages this builder returns also carry a blocks array, and the
+// server posts blocks when it finds one.
 //
-// The one difference is that the message this builder returns also carries a
-// blocks array. The server posts blocks when it is present and falls back to the
-// existing renderer when it is not, so a single added if covers this whole file.
-// text is still filled in from the same numbers, so the Send to Slack preview and
-// the Slack notification line keep working unchanged.
+// Two messages are posted, on purpose:
+//   1. the brief  -- what happened, colour coded, readable on a phone
+//   2. the ledger -- revenue total, cost total, net inflow, then every line and
+//      head, each read across last day / month to date / year to date
+// Splitting them keeps the top of the thread short and gives the numbers their
+// own message to be scrolled, sorted and quoted from.
 //
-// The layout exists to be audited. The plan block publishes which source produced
-// which number -- including the ones that did not answer -- so any figure can be
-// checked without opening Quantum. Every line is a rule over numbers the dashboard
-// already computed. There is no generated prose in this file.
+// Nothing in here links back into Quantum. The CEO reads the numbers in Slack
+// and never has to open the dashboard they were pulled from.
 
 const CR = 1e7
 const LAKH = 1e5
-const QUANTUM = 'https://quantum.leverageedu.com'
 
 // -- formatting ---------------------------------------------------------------
 
@@ -35,6 +35,11 @@ const shareOf = (part, whole) => (part == null || !whole ? null : (part / whole)
 const pct1 = n => (n == null ? '\u2014' : n.toFixed(1) + '%')
 const move = n => (n == null ? null : (n >= 0 ? '\u25b2 ' : '\u25bc ') + Math.abs(n).toFixed(1) + '%')
 
+// tag is the only Block Kit element that carries a real colour, so every verdict
+// in this file is expressed as one. Costs invert: spending more is not good news.
+const tone = (n, invert) => (n == null ? 'gray' : (invert ? n <= 0 : n >= 0) ? 'green' : 'red')
+const dotFor = t => (t === 'red' ? ':red_circle:' : t === 'green' ? ':large_green_circle:' : ':white_circle:')
+
 // -- Block Kit atoms ----------------------------------------------------------
 
 const T = (text, style) => (style ? { type: 'text', text, style } : { type: 'text', text })
@@ -43,12 +48,20 @@ const SEC = elements => ({ type: 'rich_text_section', elements })
 const BULLETS = lines => ({ type: 'rich_text_list', style: 'bullet', elements: lines.map(l => SEC([T(l)])) })
 const RICH = elements => ({ type: 'rich_text', elements })
 
+// data_table cells. A rich_text cell is the only way to get a colour into a
+// table, so every figure that carries a verdict is rendered as a tag.
 const cellText = v => ({ type: 'raw_text', text: v == null || v === '' ? '\u2014' : String(v) })
 const cellNum = (value, text) => ({ type: 'raw_number', value: Number(value) || 0, text: text || '\u2014' })
+const cellBold = v => RICH([SEC([T(v == null || v === '' ? '\u2014' : String(v), { bold: true })])])
+const cellTag = (text, color) => RICH([SEC([TAG(text, color)])])
+const cellMoney = (o, k) => (o && o[k] != null ? cellNum(o[k], money(o[k])) : cellText('\u2014'))
+const cellMoneyTone = (o, k) => (o && o[k] != null ? cellTag(money(o[k]), tone(o[k])) : cellText('\u2014'))
+const cellPctTone = n => (n == null ? cellText('\u2014') : cellTag(pct1(n), tone(n)))
 
-// A KPI card. hero_image is attached only when the caller has a real hosted URL:
-// Slack rejects data: URLs, so chartPng output has to be uploaded first and the
-// permalink handed in as ctx.charts before any image appears here.
+// hero_image is attached only when the caller has a real hosted URL: Slack
+// rejects data: URLs, so chartPng output has to be uploaded first and the
+// permalink handed in as ctx.charts. No card carries a button any more -- the
+// only place one could point is the dashboard, and the CEO does not open it.
 function card(id, title, subtitle, body, opts) {
   const o = opts || {}
   const c = {
@@ -57,136 +70,114 @@ function card(id, title, subtitle, body, opts) {
     title: { type: 'mrkdwn', text: String(title).slice(0, 150) },
     subtitle: { type: 'mrkdwn', text: String(subtitle).slice(0, 150) },
     body: { type: 'mrkdwn', text: String(body).slice(0, 200) },
-    actions: [{
-      type: 'button',
-      text: { type: 'plain_text', text: o.cta || 'Open' },
-      url: o.url || QUANTUM,
-      action_id: 'qb_open_' + id,
-    }],
   }
   if (o.image) c.hero_image = { type: 'image', image_url: o.image, alt_text: String(title) }
   if (o.subtext) c.subtext = { type: 'mrkdwn', text: String(o.subtext).slice(0, 200) }
   return c
 }
 
-// A provenance step. status is the honest part: a source that did not answer is
-// published as an error rather than dropped, because a silent omission is the one
-// thing that makes a reader stop trusting the number above it.
-function task(s, i) {
-  const t = {
-    type: 'task_card',
-    task_id: s.id || ('src_' + i),
-    title: String(s.title || 'Source').slice(0, 255),
-    status: s.status || 'complete',
+// -- one shape for all three windows ------------------------------------------
+// The sheet names offline revenue offRev and offline cost offCost; the
+// month-to-date context hands the same two over as rev.off and cost.off.
+// Normalised once here so last day, month to date and year to date are read by
+// exactly the same code below.
+
+const HEADS = [
+  ['SR Online', 'Revenue', 'sr'],
+  ['AC Online', 'Revenue', 'ac'],
+  ['VAS Online', 'Revenue', 'vas'],
+  ['Offline revenue', 'Revenue', 'offRev'],
+  ['Perf. Marketing', 'Cost', 'pm'],
+  ['Operating', 'Cost', 'op'],
+  ['Offline cost', 'Cost', 'offCost'],
+  ['Corp. Overheads', 'Cost', 'corp'],
+  ['People', 'Cost', 'people'],
+]
+
+function fromCtx(rev, cost, net) {
+  return {
+    sr: rev.sr, ac: rev.ac, vas: rev.vas, offRev: rev.off,
+    pm: cost.pm, op: cost.op, offCost: cost.off, corp: cost.corp, people: cost.people,
+    rev: rev.total, cost: cost.total, net: net,
   }
-  if (s.details) t.details = RICH([SEC([T(String(s.details))])])
-  if (s.output) t.output = RICH([SEC([T(String(s.output))])])
-  if (s.url) t.sources = [{ type: 'url', url: s.url, text: s.label || s.url }]
-  return t
 }
+function fromSheet(o) {
+  if (!o) return null
+  return {
+    sr: o.sr, ac: o.ac, vas: o.vas, offRev: o.offRev,
+    pm: o.pm, op: o.op, offCost: o.offCost, corp: o.corp, people: o.people,
+    rev: o.rev, cost: o.cost, net: o.net,
+  }
+}
+const marginOf = w => (w && w.rev ? (w.net / w.rev) * 100 : null)
 
-// -- the report ---------------------------------------------------------------
+// -- message 1: the brief -----------------------------------------------------
 
-function buildQuantumBrief(ctx) {
-  const c = ctx || {}
-  const rev = c.rev || {}
-  const cost = c.cost || {}
-  const day = c.day || null
+function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats) {
   const d = c.d || {}
   const charts = c.charts || {}
   const sources = Array.isArray(c.sources) ? c.sources : []
   const throughTs = c.throughTs || Math.floor(Date.now() / 1000)
-  const margin = c.margin != null ? c.margin : shareOf(c.net, rev.total)
-  const peopleOutside = cost.people == null && c.peopleMonthly != null
-
   const blocks = []
 
-  // 1. title
   blocks.push({ type: 'header', text: { type: 'plain_text', text: 'Quantum Brief \u2014 B2C', emoji: true } })
 
-  // 2. the period, and every standing condition as its own pill
   const pills = [
     T((c.monthLabel || '') + ' \u00b7 through ', { bold: true }),
     { type: 'date', timestamp: throughTs, format: '{date_short_pretty}', fallback: c.through || '', style: { bold: true } },
-    T('  '),
-    TAG('D-1 complete', 'green'),
     T(' '),
-    TAG(sources.length + ' sources reconciled', 'blue'),
+    TAG('D-1 complete', 'green'),
   ]
+  if (sources.length) pills.push(T(' '), TAG(sources.length + ' sources reconciled', 'blue'))
   if (peopleOutside) pills.push(T(' '), TAG('People cost booked monthly', 'gray'))
   if (c.isTest) pills.push(T(' '), TAG('Test post', 'indigo'))
   blocks.push(RICH([SEC(pills)]))
 
-  // 3. the one-line read
+  // The headline, in colour. Green or red on the figure itself is the point of
+  // this row: the verdict should not need a sentence to carry it.
+  const costTone = w.cost != null && w.rev != null && w.cost > w.rev ? 'red' : 'green'
+  blocks.push(RICH([SEC([
+    TAG('Revenue ' + money(w.rev), 'blue'),
+    T(' '),
+    TAG('Cost ' + money(w.cost), costTone),
+    T(' '),
+    TAG('Net inflow ' + money(w.net), tone(w.net)),
+    T(' '),
+    TAG('Margin ' + pct1(margin), tone(margin)),
+  ])]))
+
   blocks.push({
     type: 'markdown',
-    text: '**Net inflow ' + money(c.net) + ' on ' + money(rev.total) + ' revenue'
+    text: '**Net inflow ' + money(w.net) + ' on ' + money(w.rev) + ' revenue'
       + (margin == null ? '.**' : ' \u2014 ' + pct1(margin) + ' margin.**')
       + (day ? ' Latest completed day ' + day.date + ': revenue ' + money(day.rev)
         + ', cost ' + money(day.cost) + ', net ' + money(day.net) + '.' : ''),
   })
 
-  // 4. KPI cards, swipeable on a phone
   const cards = [
-    card('net', 'Net inflow', money(c.net) + (move(d.net) ? ' \u00b7 ' + move(d.net) : ''),
-      'Revenue ' + money(rev.total) + ' less cost ' + money(cost.total) + '. Margin ' + pct1(margin) + '.',
-      { image: charts.net, url: QUANTUM + '/ceo-b2c',
-        subtext: peopleOutside ? 'Excludes People cost \u2014 booked monthly, ' + money(c.peopleMonthly) + '.' : null }),
-    card('revenue', 'Revenue', money(rev.total) + (move(d.rev) ? ' \u00b7 ' + move(d.rev) : ''),
-      'SR ' + money(rev.sr) + ' \u00b7 AC ' + money(rev.ac) + ' \u00b7 VAS ' + money(rev.vas),
-      { image: charts.revenue, url: QUANTUM + '/ceo-b2c' }),
-    card('cost', 'Cost', money(cost.total) + (move(d.cost) ? ' \u00b7 ' + move(d.cost) : ''),
-      'Perf. marketing ' + money(cost.pm) + ' \u00b7 Operating ' + money(cost.op),
-      { image: charts.cost, url: QUANTUM + '/ceo-b2c' }),
+    card('net', dotFor(tone(w.net)) + ' Net inflow',
+      money(w.net) + (move(d.net) ? ' \u00b7 ' + move(d.net) : ''),
+      'Revenue ' + money(w.rev) + ' less cost ' + money(w.cost) + '. Margin ' + pct1(margin) + '.',
+      { image: charts.net, subtext: peopleOutside ? 'Excludes People cost \u2014 booked monthly, ' + money(c.peopleMonthly) + '.' : null }),
+    card('revenue', dotFor(d.rev != null ? tone(d.rev) : 'green') + ' Revenue',
+      money(w.rev) + (move(d.rev) ? ' \u00b7 ' + move(d.rev) : ''),
+      'SR ' + money(w.sr) + ' \u00b7 AC ' + money(w.ac) + ' \u00b7 VAS ' + money(w.vas)
+      + (w.offRev == null ? '' : ' \u00b7 Offline ' + money(w.offRev)),
+      { image: charts.revenue }),
+    card('cost', dotFor(d.cost != null ? tone(d.cost, true) : costTone) + ' Cost',
+      money(w.cost) + (move(d.cost) ? ' \u00b7 ' + move(d.cost) : ''),
+      'Marketing ' + money(w.pm) + ' \u00b7 Operating ' + money(w.op) + ' \u00b7 Offline ' + money(w.offCost)
+      + ' \u00b7 Overheads ' + money(w.corp) + ' \u00b7 People ' + money(w.people),
+      { image: charts.cost }),
   ]
   if (day) {
-    cards.push(card('day', 'Yesterday', money(day.net) + ' net',
+    cards.push(card('day', dotFor(tone(day.net)) + ' Last completed day',
+      money(day.net) + ' net',
       day.date + ' \u00b7 revenue ' + money(day.rev) + ' \u00b7 cost ' + money(day.cost),
-      { image: charts.day, url: QUANTUM + '/ceo-b2c' }))
+      { image: charts.day }))
   }
   blocks.push({ type: 'carousel', block_id: 'qb_kpis', elements: cards.slice(0, 10) })
 
-  blocks.push({ type: 'divider' })
-
-  // 5. every line and head, sortable in place. raw_number carries the sortable
-  //    value and the printed text separately, so "1.24 Cr" still sorts as 12400000.
-  const lines = []
-  const add = (head, kind, value) => { if (value != null) lines.push([head, kind, value]) }
-  add('SR Online', 'Revenue', rev.sr)
-  add('AC Online', 'Revenue', rev.ac)
-  add('VAS Online', 'Revenue', rev.vas)
-  add('Offline revenue', 'Revenue', rev.off)
-  add('Perf. Marketing', 'Cost', cost.pm)
-  add('Operating', 'Cost', cost.op)
-  add('Offline cost', 'Cost', cost.off)
-  add('Corp. Overheads', 'Cost', cost.corp)
-  add('People', 'Cost', cost.people)
-  if (lines.length) {
-    blocks.push({
-      type: 'data_table',
-      block_id: 'qb_lines',
-      caption: 'Revenue lines and cost heads, each read against revenue',
-      page_size: 10,
-      row_header_column_index: 0,
-      rows: [[cellText('Head'), cellText('Type'), cellText('Amount'), cellText('% of revenue')]].concat(
-        lines.map(function (r) {
-          const sh = shareOf(r[2], rev.total)
-          return [cellText(r[0]), cellText(r[1]), cellNum(r[2], money(r[2])), cellNum(sh || 0, pct1(sh))]
-        })
-      ),
-    })
-  }
-
-  // 6. the read and the caveats, collapsed so the top of the message stays short
-  const notes = (Array.isArray(c.notes) ? c.notes : []).filter(Boolean)
-  const caveats = []
-  if (peopleOutside) {
-    caveats.push('People cost is booked monthly in the sheet, not daily: ' + money(c.peopleMonthly)
-      + ' for the month. It sits outside the cost and net inflow above.')
-  }
-  if (c.partial) {
-    caveats.push((c.monthLabel || 'This month') + ' is still running, so it is being read against a completed month.')
-  }
   if (notes.length || caveats.length) {
     const kids = []
     if (notes.length) kids.push(RICH([SEC([T('What the numbers say', { bold: true })]), BULLETS(notes)]))
@@ -203,37 +194,8 @@ function buildQuantumBrief(ctx) {
     })
   }
 
-  // 7. provenance. The part a technical reader checks first.
-  if (sources.length) {
-    blocks.push({
-      type: 'plan',
-      block_id: 'qb_provenance',
-      title: 'How this brief was built',
-      tasks: sources.slice(0, 10).map(task),
-    })
-  }
-
-  // 8. where to go next. url buttons only -- these need no interactivity endpoint.
-  const acts = [{
-    type: 'button',
-    style: 'primary',
-    text: { type: 'plain_text', text: 'Open CEO B2C' },
-    url: QUANTUM + '/ceo-b2c',
-    action_id: 'qb_open_dash',
-  }]
-  if (c.canvasUrl) {
-    acts.push({
-      type: 'button',
-      text: { type: 'plain_text', text: 'Open the month canvas' },
-      url: c.canvasUrl,
-      action_id: 'qb_open_canvas',
-    })
-  }
-  blocks.push({ type: 'actions', block_id: 'qb_actions', elements: acts })
-
-  // 9. the verdict. Rendered ONLY when an interactivity request URL is configured:
-  //    without one these buttons post to nowhere and error in the reader's face,
-  //    so they are left out rather than shipped broken.
+  // Rendered only when an interactivity request URL is configured: without one
+  // these buttons post to nowhere and error in the reader's face.
   if (c.interactivity) {
     blocks.push({
       type: 'context_actions',
@@ -246,59 +208,163 @@ function buildQuantumBrief(ctx) {
       }],
     })
   }
+  return blocks
+}
 
-  // -- text fallback. Notifications, search and the Send to Slack preview all read
-  //    this, and it is built from the same numbers, so nothing can drift between
-  //    what was previewed and what was posted.
+// -- message 2: the ledger ----------------------------------------------------
+// Revenue total and cost total split out, the net inflow underneath in green or
+// red, and then every line and head read across the same three windows.
+
+function ledgerBlocks(last, mtd, ytd, lastLab, ytdLab) {
+  const blocks = []
+
+  blocks.push({ type: 'header', text: { type: 'plain_text', text: 'Revenue, cost and net inflow', emoji: true } })
+
+  blocks.push(RICH([SEC([
+    T('Net inflow \u00b7 ', { bold: true }),
+    TAG(lastLab + '  ' + money(last && last.net), tone(last && last.net)),
+    T(' '),
+    TAG('Month to date  ' + money(mtd.net), tone(mtd.net)),
+    T(' '),
+    TAG(ytdLab + '  ' + money(ytd && ytd.net), tone(ytd && ytd.net)),
+  ])]))
+
+  blocks.push({
+    type: 'data_table',
+    block_id: 'qb_totals',
+    caption: 'Revenue total and cost total, with the net inflow they leave behind',
+    page_size: 4,
+    row_header_column_index: 0,
+    rows: [
+      [cellText('Measure'), cellText(lastLab), cellText('Month to date'), cellText(ytdLab)],
+      [cellBold('Total revenue'), cellMoney(last, 'rev'), cellMoney(mtd, 'rev'), cellMoney(ytd, 'rev')],
+      [cellBold('Total cost'), cellMoney(last, 'cost'), cellMoney(mtd, 'cost'), cellMoney(ytd, 'cost')],
+      [cellBold('Net inflow'), cellMoneyTone(last, 'net'), cellMoneyTone(mtd, 'net'), cellMoneyTone(ytd, 'net')],
+      [cellBold('Net margin'), cellPctTone(marginOf(last)), cellPctTone(marginOf(mtd)), cellPctTone(marginOf(ytd))],
+    ],
+  })
+
+  const rows = HEADS.filter(function (h) {
+    return (last && last[h[2]] != null) || mtd[h[2]] != null || (ytd && ytd[h[2]] != null)
+  })
+  if (rows.length) {
+    blocks.push({
+      type: 'data_table',
+      block_id: 'qb_lines',
+      caption: 'Every revenue line and cost head, read across the same three windows',
+      page_size: 12,
+      row_header_column_index: 0,
+      rows: [[cellText('Head'), cellText('Type'), cellText(lastLab), cellText('Month to date'), cellText('% of MTD revenue'), cellText(ytdLab)]]
+        .concat(rows.map(function (h) {
+          const sh = shareOf(mtd[h[2]], mtd.rev)
+          return [
+            cellText(h[0]),
+            cellText(h[1]),
+            cellMoney(last, h[2]),
+            cellMoney(mtd, h[2]),
+            sh == null ? cellText('\u2014') : cellNum(sh, pct1(sh)),
+            cellMoney(ytd, h[2]),
+          ]
+        })),
+    })
+  }
+  return blocks
+}
+
+// -- the report ---------------------------------------------------------------
+
+function buildQuantumBrief(ctx) {
+  const c = ctx || {}
+  const rev = c.rev || {}
+  const cost = c.cost || {}
+  const day = c.day || null
+  const margin = c.margin != null ? c.margin : shareOf(c.net, rev.total)
+  const peopleOutside = cost.people == null && c.peopleMonthly != null
+
+  const mtd = fromCtx(rev, cost, c.net)
+  const last = fromSheet(day)
+  const ytd = fromSheet(c.ytd)
+  const lastLab = day && day.date ? day.date : 'Last day'
+  const ytdLab = (c.ytd && c.ytd.label ? c.ytd.label : 'Year') + ' to date'
+
+  const notes = (Array.isArray(c.notes) ? c.notes : []).filter(Boolean)
+  const caveats = []
+  if (peopleOutside) {
+    caveats.push('People cost is booked monthly in the sheet, not daily: ' + money(c.peopleMonthly)
+      + ' for the month. It sits outside the cost and net inflow above.')
+  }
+  if (c.partial) {
+    caveats.push((c.monthLabel || 'This month') + ' is still running, so it is being read against a completed month.')
+  }
+
+  // Text fallbacks. Notifications, search and the Send to Slack preview all read
+  // these, and they are built from the same numbers, so nothing can drift
+  // between what was previewed and what was posted.
   const fb = []
   fb.push(':bar_chart: *Quantum Brief \u2014 B2C \u2014 ' + (c.monthLabel || '') + ', through ' + (c.through || '') + '*')
   if (c.isTest) fb.push('_Test post._')
   fb.push('')
-  fb.push('*Revenue* ' + money(rev.total) + '   *Cost* ' + money(cost.total) + '   *Net inflow* ' + money(c.net)
+  fb.push('*Revenue* ' + money(mtd.rev) + '  *Cost* ' + money(mtd.cost) + '  *Net inflow* ' + money(mtd.net)
     + (margin == null ? '' : ' \u00b7 ' + pct1(margin) + ' margin'))
-  if (day) {
-    fb.push('*' + day.date + '* revenue ' + money(day.rev) + ' \u00b7 cost ' + money(day.cost) + ' \u00b7 net ' + money(day.net))
-  }
+  if (day) fb.push('*' + day.date + '* revenue ' + money(day.rev) + ' \u00b7 cost ' + money(day.cost) + ' \u00b7 net ' + money(day.net))
   if (notes.length) { fb.push(''); notes.forEach(function (n) { fb.push('\u2022 ' + n) }) }
   if (caveats.length) { fb.push(''); caveats.forEach(function (n) { fb.push(':warning: ' + n) }) }
 
-  return [{
-    key: 'brief',
-    id: 'QB-1',
-    label: 'Quantum Brief',
-    text: fb.join('\n'),
-    blocks: blocks,
-    attach: true,
-    metadata: {
-      event_type: 'quantum_brief',
-      event_payload: {
-        month: c.monthLabel || null,
-        through: c.through || null,
-        revenue: rev.total == null ? null : rev.total,
-        cost: cost.total == null ? null : cost.total,
-        net: c.net == null ? null : c.net,
-        margin_pct: margin == null ? null : Number(margin.toFixed(2)),
-        people_outside: !!peopleOutside,
-        day_date: day ? day.date : null,
-        day_net: day ? day.net : null,
+  const lb = []
+  lb.push('*Revenue, cost and net inflow*')
+  lb.push('')
+  lb.push('*Total revenue*  ' + lastLab + ' ' + money(last && last.rev) + ' \u00b7 MTD ' + money(mtd.rev) + ' \u00b7 ' + ytdLab + ' ' + money(ytd && ytd.rev))
+  lb.push('*Total cost*  ' + lastLab + ' ' + money(last && last.cost) + ' \u00b7 MTD ' + money(mtd.cost) + ' \u00b7 ' + ytdLab + ' ' + money(ytd && ytd.cost))
+  lb.push('*Net inflow*  ' + lastLab + ' ' + money(last && last.net) + ' \u00b7 MTD ' + money(mtd.net) + ' \u00b7 ' + ytdLab + ' ' + money(ytd && ytd.net))
+  lb.push('')
+  lb.push('_Net margin_  ' + pct1(marginOf(last)) + ' \u00b7 ' + pct1(marginOf(mtd)) + ' \u00b7 ' + pct1(marginOf(ytd)))
+
+  return [
+    {
+      key: 'brief',
+      id: 'QB-1',
+      label: 'Quantum Brief',
+      text: fb.join('\n'),
+      blocks: briefBlocks(c, mtd, day, margin, peopleOutside, notes, caveats),
+      attach: true,
+      metadata: {
+        event_type: 'quantum_brief',
+        event_payload: {
+          month: c.monthLabel || null,
+          through: c.through || null,
+          revenue: mtd.rev == null ? null : mtd.rev,
+          cost: mtd.cost == null ? null : mtd.cost,
+          net: mtd.net == null ? null : mtd.net,
+          margin_pct: margin == null ? null : Number(margin.toFixed(2)),
+          people_outside: !!peopleOutside,
+          day_date: day ? day.date : null,
+          day_net: day ? day.net : null,
+        },
       },
     },
-  }]
+    {
+      key: 'ledger',
+      id: 'QB-2',
+      label: 'Split totals \u2014 last day, MTD, YTD',
+      text: lb.join('\n'),
+      blocks: ledgerBlocks(last, mtd, ytd, lastLab, ytdLab),
+    },
+  ]
 }
 
 export const CEO_BRIEF_VERSIONS = [{
   id: 'quantum-brief',
   code: 'QB',
   recommended: true,
-  msgKeys: ['brief'],
+  msgKeys: ['brief', 'ledger'],
   name: 'Quantum Brief',
-  tagline: 'One Block Kit message: KPI cards, a sortable table, the read, and a published source trail.',
+  tagline: 'Two messages: the colour-coded brief, then the split totals across last day, month and year.',
   what: [
-    'A carousel of KPI cards, each with its own chart and a link into Quantum',
-    'Revenue lines and cost heads in one sortable, paginated table',
+    'A colour strip and KPI cards, green or red on the figure itself',
+    'Revenue total and cost total split out, net inflow underneath in colour',
+    'Last day, month to date and year to date side by side in one sortable table',
     'The read and the caveats collapsed, so the top of the message stays short',
-    'A plan block naming every source that answered, and every one that did not',
-    'The table image and a CSV land in the thread',
+    'No links back into the dashboard \u2014 every number is read inside Slack',
   ],
   build: buildQuantumBrief,
 }]
