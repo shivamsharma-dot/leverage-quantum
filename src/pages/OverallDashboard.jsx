@@ -150,6 +150,68 @@ function Dropdown({ options, value, onChange, label, minWidth = 120 }) {
   )
 }
 
+// Multi-select variant of Dropdown, built ONLY for this page's Source filter (Month/
+// Corridor stay single-select via the plain Dropdown above -- this is a sibling
+// component, not a shared-behavior change, so nothing else on this page is affected).
+// Visually matches Dropdown exactly; the two real differences are (1) a checkbox per
+// row instead of a single active checkmark, and (2) the panel stays open after a click
+// so multiple sources can be toggled in one interaction -- only closes on outside click.
+// 'All' is mutually exclusive with everything else by construction (see toggle logic
+// below), so the resulting `selected` array is always either exactly ['All'] or a set of
+// real source names -- callers never need to re-derive that invariant themselves.
+function SourceMultiSelect({ options, selected, onChange, label, minWidth = 120 }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
+  }, [])
+  const isAll = selected.length === 0 || selected.includes('All')
+  const toggleAll = () => onChange(['All'])
+  const toggleOne = (opt) => {
+    if (isAll) { onChange([opt]); return }
+    const set = new Set(selected)
+    if (set.has(opt)) set.delete(opt); else set.add(opt)
+    const next = [...set]
+    onChange(next.length === 0 ? ['All'] : next)
+  }
+  const labelText = isAll ? 'All' : selected.length === 1 ? selected[0] : selected.length + ' selected'
+  const Checkbox = ({ checked }) => (
+    <span style={{ width:14, height:14, borderRadius:4, border:`1.5px solid ${checked ? C.navy : C.border}`, background: checked ? C.navy : 'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+      {checked && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>}
+    </span>
+  )
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:6 }} ref={ref}>
+      {label && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT, whiteSpace:'nowrap' }}>{label}</span>}
+      <div style={{ position:'relative' }}>
+        <button onClick={() => setOpen(v => !v)} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px 6px 12px', borderRadius:8, border:`0.5px solid ${open ? C.navy : C.border}`, background: open ? C.navyBg : 'var(--card)', color:C.text, cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight:600, minWidth, boxShadow: open ? '0 0 0 3px rgba(31,60,132,0.08)' : 'none', transition:'all .15s', whiteSpace:'nowrap' }}>
+          <span style={{ flex:1, textAlign:'left' }}>{labelText}</span>
+          <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ flexShrink:0, transition:'transform .2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+            <path d="M1 1l4 4 4-4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {open && (
+          <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:500, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:6, minWidth:Math.max(minWidth, 170), maxHeight:280, overflowY:'auto' }}>
+            <button onClick={toggleAll} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12.5, fontWeight: isAll ? 700 : 400, background: isAll ? C.navyBg : 'transparent', color: isAll ? C.navy : C.text }}>
+              <span style={{ display:'flex', alignItems:'center', gap:8 }}><Checkbox checked={isAll} />All</span>
+            </button>
+            <div style={{ height:1, background:C.border, margin:'4px 2px' }} />
+            {options.map(opt => {
+              const checked = !isAll && selected.includes(opt)
+              return (
+                <button key={opt} onClick={() => toggleOne(opt)} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12.5, fontWeight: checked ? 700 : 400, background: checked ? C.navyBg : 'transparent', color: checked ? C.navy : C.text }}>
+                  <span style={{ display:'flex', alignItems:'center', gap:8 }}><Checkbox checked={checked} />{opt}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Campaign search — free-text filter with a ranked autocomplete list (top campaigns
 // by leads shown by default, narrowed by substring match as the user types) since
 // campaign name is how people actually look things up on this page.
@@ -634,7 +696,18 @@ export default function OverallDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
-  const [source, setSource] = useState('All')
+  // Multi-select Source filter -- ['All'] is the sentinel meaning "no filter, every
+  // source". Any other array means "only these specific sources". Never store both
+  // 'All' and specific names together -- toggleSource() below enforces that, so this
+  // invariant never needs re-checking at each of the filter call sites.
+  const [selectedSources, setSelectedSources] = useState(['All'])
+  const sourceIsAll = selectedSources.length === 0 || selectedSources.includes('All')
+  const selectedSourceSet = useMemo(() => new Set(selectedSources), [selectedSources])
+  // The ONE predicate every row-filtering site below must use -- so "never show wrong
+  // numbers" holds by construction: there is no second place a source check could drift
+  // out of sync with this one.
+  const matchesSource = useCallback(r => sourceIsAll || selectedSourceSet.has(r.source), [sourceIsAll, selectedSourceSet])
+  const sourceLabel = sourceIsAll ? 'All' : selectedSources.length === 1 ? selectedSources[0] : selectedSources.length + ' selected'
   const [corridorFilter, setCorridorFilter] = useState('All')
   const [campaignQuery, setCampaignQuery] = useState('')
   const [showInfo, setShowInfo] = useState(false)
@@ -861,12 +934,12 @@ export default function OverallDashboard() {
   }, [rows, dateWindow, selMonth, monthKeyByLabel])
 
   const filtered = useMemo(() => {
-    let rs = source === 'All' ? dateFilteredRows : dateFilteredRows.filter(r => r.source === source)
+    let rs = sourceIsAll ? dateFilteredRows : dateFilteredRows.filter(matchesSource)
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQuery.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
     return rs
-  }, [dateFilteredRows, source, corridorFilter, campaignQuery])
+  }, [dateFilteredRows, selectedSources, corridorFilter, campaignQuery])
 
   const sumKpis = list => {
     const sum = k => list.reduce((t, r) => t + r[k], 0)
@@ -938,12 +1011,12 @@ export default function OverallDashboard() {
   const prevFiltered = useMemo(() => {
     if (!prevWindow) return []
     let rs = prevWindow.type === 'month' ? rows.filter(r => r.mk === prevWindow.mk) : rows.filter(r => r.date && r.date >= prevWindow.from && r.date <= prevWindow.to)
-    if (source !== 'All') rs = rs.filter(r => r.source === source)
+    if (!sourceIsAll) rs = rs.filter(matchesSource)
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQuery.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
     return rs
-  }, [rows, prevWindow, source, corridorFilter, campaignQuery])
+  }, [rows, prevWindow, selectedSources, corridorFilter, campaignQuery])
 
   const prevKpis = useMemo(() => sumKpis(prevFiltered), [prevFiltered])
   // Same paid-only basis as the current period -- otherwise the delta arrows would be
@@ -991,7 +1064,7 @@ export default function OverallDashboard() {
     const [fy, fm, fd] = fromStr.split('-').map(Number); const cf = new Date(fy, fm - 1, fd); cf.setHours(0, 0, 0, 0)
     const [ty, tm, td] = toStr.split('-').map(Number); const ct = new Date(ty, tm - 1, td); ct.setHours(23, 59, 59, 999)
     let rs = rows.filter(r => r.date && r.date >= cf && r.date <= ct)
-    if (source !== 'All') rs = rs.filter(r => r.source === source)
+    if (!sourceIsAll) rs = rs.filter(matchesSource)
     return rs
   }
 
@@ -1000,9 +1073,9 @@ export default function OverallDashboard() {
     if (compareMode === 'custom') return filterRowsByDateStr(compareCustomFrom, compareCustomTo) || []
     if (!compareWindow) return []
     let rs = compareWindow.type === 'month' ? rows.filter(r => r.mk === compareWindow.mk) : rows.filter(r => r.date && r.date >= compareWindow.from && r.date <= compareWindow.to)
-    if (source !== 'All') rs = rs.filter(r => r.source === source)
+    if (!sourceIsAll) rs = rs.filter(matchesSource)
     return rs
-  }, [compareOpen, compareMode, compareCustomFrom, compareCustomTo, compareWindow, rows, source])
+  }, [compareOpen, compareMode, compareCustomFrom, compareCustomTo, compareWindow, rows, selectedSources])
 
   // Period A (the "current" side) is normally whatever the main page filter is --
   // correct for 'prev'/'yoy' modes, since those are explicitly "vs the period I'm
@@ -1466,8 +1539,8 @@ export default function OverallDashboard() {
   ), [activeFilter, customFrom, customTo, dateWindow, selMonth])
 
   const filterLine = useMemo(() => (
-    'Filtered by -> ' + [periodLabel, 'Source: ' + source, 'Corridor: ' + corridorFilter].join('  \u00b7  ')
-  ), [periodLabel, source, corridorFilter])
+    'Filtered by -> ' + [periodLabel, 'Source: ' + sourceLabel, 'Corridor: ' + corridorFilter].join('  \u00b7  ')
+  ), [periodLabel, selectedSources, sourceLabel, corridorFilter])
 
   // Slack's own table block caps a row at 20 cells, so it carries the CEO column set.
   // Every ROW is included, banded into Paid / Non-Paid with a subtotal each; the CSV
@@ -1591,12 +1664,12 @@ export default function OverallDashboard() {
 
   const nonDateRows = useMemo(() => {
     let rs = rows
-    if (source !== 'All') rs = rs.filter(r => r.source === source)
+    if (!sourceIsAll) rs = rs.filter(matchesSource)
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQuery.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
     return rs
-  }, [rows, source, corridorFilter, campaignQuery])
+  }, [rows, selectedSources, corridorFilter, campaignQuery])
 
   // Only closed days count. Today is still filling up, and half a day sitting
   // next to a full one reads as a collapse that never happened.
@@ -1954,7 +2027,7 @@ export default function OverallDashboard() {
       v5: v5Report,
       v6: v6Report,
       cmp: reportCmp,
-      scopeLine: 'Source: ' + source + ' \u00b7 Corridor: ' + corridorFilter,
+      scopeLine: 'Source: ' + sourceLabel + ' \u00b7 Corridor: ' + corridorFilter,
       now: { ...kpis, cpl, cpql, cpa },
       cmpRows: mtdCmp.rows,
       cmpTotalSpend: mtdCmp.totalSpend,
@@ -1987,7 +2060,7 @@ export default function OverallDashboard() {
     }
   }, [grpByLabel, periodLabel, filterLine, filtered, sortedFilteredRows, totalsRow, kpis, prevKpis,
     cpl, cpql, cpa, prevCpl, prevCpql, prevCpa, conversionChain, bySource, byCorridor,
-    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, reportCmp, v5Report, v6Report, source, corridorFilter, mtdCmp, ydayCmp, dowCmp])
+    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, reportCmp, v5Report, v6Report, selectedSources, sourceLabel, corridorFilter, mtdCmp, ydayCmp, dowCmp])
 
   // The picture of the table plus the all-columns CSV. The row limit is lifted to
   // "all" for the capture and restored right after, so the image always carries every
@@ -2125,7 +2198,7 @@ export default function OverallDashboard() {
                 )}
               </div>
 
-              <Dropdown label="Source" options={sources} value={source} minWidth={110} onChange={setSource} />
+              <SourceMultiSelect label="Source" options={sources.filter(s => s !== 'All')} selected={selectedSources} minWidth={110} onChange={setSelectedSources} />
               <Dropdown label="Corridor" options={['All', ...CORRIDORS.map(c => c.label)]} value={corridorFilter} minWidth={140} onChange={setCorridorFilter} />
               <CampaignSearch value={campaignQuery} onChange={setCampaignQuery} suggestions={campaignSuggestions} />
             </div>
