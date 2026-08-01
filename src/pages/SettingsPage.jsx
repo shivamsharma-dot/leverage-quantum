@@ -11,6 +11,11 @@ import { useDesignStyle, saveDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
 import LoginScene from '../components/LoginScene'
 import styles from './SettingsPage.module.css'
+import { SLACK_CHANNELS, confirmPhrase } from '../../shared/slackChannels.mjs'
+
+// The locked rooms, in the order shared/slackChannels.mjs lists them. Settings only
+// has to name them; which ones are locked is decided in that one file, not here.
+const GUARDED = SLACK_CHANNELS.filter(c => c.guarded)
 
 // Short labels for the design-system pickers below -- the actual visual
 // rendering lives in buttonVariants.js / kpiVariants.jsx / LoginScene.jsx.
@@ -874,7 +879,7 @@ export default function SettingsPage() {
         } else if (pf.slack_channel_test) {
           setSlackTestChannels([{ id: 'legacy', name: 'Test channel', channel: pf.slack_channel_test }])
         }
-        if (pf.slack_channel_ceo != null) setSlackChannelCeo(pf.slack_channel_ceo)
+        setGuardedChan(Object.fromEntries(GUARDED.map(c => [c.id, pf[c.pref] != null ? pf[c.pref] : ''])))
         if (pf.slack_auto_reports_enabled != null) setSlackAuto(pf.slack_auto_reports_enabled !== false)
         setSavedHiddenPages(hp)
         setHiddenPages(hp)
@@ -1286,7 +1291,7 @@ export default function SettingsPage() {
   const [newTestChanName, setNewTestChanName] = useState('')
   const [newTestChanValue, setNewTestChanValue] = useState('')
   const [slackTestPick, setSlackTestPick] = useState('')
-  const [slackChannelCeo, setSlackChannelCeo] = useState('')
+  const [guardedChan, setGuardedChan] = useState({})
   // The CEO PIN is managed through its own endpoint, never through preferences,
   // so nothing about it is ever held in this page's state except its status.
   const [ceoPinInfo, setCeoPinInfo] = useState(null)
@@ -1726,7 +1731,7 @@ export default function SettingsPage() {
         ['slack_webhook_url_test', slackWebhookTest.trim()],
         ['slack_channel_main', slackChannelMain.trim()],
         ['slack_test_channels', slackTestChannels.filter(c => c.name.trim() && c.channel.trim())],
-        ['slack_channel_ceo', slackChannelCeo.trim()],
+        ...GUARDED.map(c => [c.pref, String(guardedChan[c.id] || '').trim()]),
         ['slack_auto_reports_enabled', slackAuto],
       ]
       for (const [key, value] of entries) {
@@ -2940,23 +2945,32 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             <input type="text" className={styles.input} placeholder="#team-performance-marketing" value={slackChannelMain}
               onChange={e => setSlackChannelMain(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
           </div>
-          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO group &middot; locked</label>
-          <div className={styles.inputGroup}>
-            <input type="text" className={styles.input} placeholder="#performance_mktg_core" value={slackChannelCeo}
-              onChange={e => setSlackChannelCeo(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
-          </div>
-          <p className={styles.cardDesc} style={{ marginTop: 6 }}>
-            Posting here needs an admin, the exact phrase <b>SEND TO CEO GROUP</b>, the PIN below, and then a second
-            confirm — every single time. Leave this blank and nothing can reach the CEO group at all. Scheduled
-            reports, Ask AI and table exports can never post here.
-          </p>
+          {/* One block per guarded channel, straight off shared/slackChannels.mjs. Adding a
+              locked channel there grows this list by itself, phrase and all. */}
+          {GUARDED.map(c => (
+            <div key={c.id} style={{ marginTop: 14 }}>
+              <label className={styles.fieldLabel}>{c.label} &middot; locked</label>
+              <div className={styles.inputGroup}>
+                <input type="text" className={styles.input} placeholder={'#' + c.name}
+                  value={guardedChan[c.id] || ''}
+                  onChange={e => setGuardedChan(g => ({ ...g, [c.id]: e.target.value }))}
+                  style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+              </div>
+              <p className={styles.cardDesc} style={{ marginTop: 6 }}>
+                {c.reads} Posting here needs an admin, the exact phrase <b>{confirmPhrase(c.id)}</b>, the
+                PIN below, and then a second confirm &mdash; every single time. Left blank, Quantum reads
+                the <code>{c.env}</code> environment variable{c.fallback ? <> and finally falls back to <code>{c.fallback}</code></> : <>, and with neither set nothing can reach it</>}.
+                Scheduled reports, Ask AI and table exports can never post here.
+              </p>
+            </div>
+          ))}
 
-          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO group PIN</label>
+          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO PIN &middot; shared by every locked channel</label>
           <p className={styles.cardDesc} style={{ marginTop: 4 }}>
             {ceoPinInfo === null ? 'Checking\u2026'
               : ceoPinInfo.denied ? 'Only an admin can manage this PIN.'
-              : ceoPinInfo.invalid ? 'The stored PIN record does not verify, so the CEO group is sealed. Set a new PIN below to repair it.'
-              : !ceoPinInfo.set ? 'No PIN is set yet, so nothing can be posted to the CEO group.'
+              : ceoPinInfo.invalid ? 'The stored PIN record does not verify, so every locked channel is sealed. Set a new PIN below to repair it.'
+              : !ceoPinInfo.set ? 'No PIN is set yet, so nothing can be posted to any locked channel.'
               : 'A ' + ceoPinInfo.digits + '-digit PIN is set'
                 + (ceoPinInfo.setBy ? ' by ' + ceoPinInfo.setBy : '')
                 + (ceoPinInfo.setAt ? ' on ' + new Date(ceoPinInfo.setAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '')

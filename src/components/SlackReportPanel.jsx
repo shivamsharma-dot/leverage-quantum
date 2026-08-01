@@ -3,6 +3,7 @@ import { chartPng, chartPngUrl } from '../lib/chartPng'
 import { toast } from './ToastHost'
 import PinInput from './PinInput'
 import { REPORT_VERSIONS, DEFAULT_VERSION_ID, buildReportMessages } from '../lib/pmReport'
+import { SLACK_CHANNELS, channelHandle, confirmPhrase, phraseMatches } from '../../shared/slackChannels.mjs'
 
 // Send to Slack, with the version library and the preview living entirely inside
 // Quantum. Nothing is created in Slack to keep track of layouts -- Slack only ever
@@ -10,17 +11,30 @@ import { REPORT_VERSIONS, DEFAULT_VERSION_ID, buildReportMessages } from '../lib
 
 const C = { navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', border:'#E2E8F0', muted:'#64748B', sub:'#475569', ink:'#0F172A' }
 const FONT = 'Inter,-apple-system,BlinkMacSystemFont,sans-serif'
+const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace'
 const LAST_KEY = 'lq_slack_report_last_sent'
-const CEO_PHRASE = 'SEND TO CEO GROUP'
+// Every Slack channel Quantum can post to comes from shared/slackChannels.mjs, the
+// same file the API reads. The panel can therefore never offer a room the server
+// does not know about, and a channel added there shows up here with no edit at all.
+// 'test' is the one entry that is not a real channel: it stands for the sandbox
+// channels an admin names in Settings > Reports, and it sits first because it is
+// the only one nobody else can see.
+const TEST_KEY = 'test'
+const DESTS = [{
+  key: TEST_KEY, label: 'Test channel', name: '', guarded: false, isTest: true,
+  reads: 'Only the sandbox channel you pick. Nobody else sees it.'
+}].concat(SLACK_CHANNELS.map(c => ({
+  key: c.id, label: c.label, name: c.name, guarded: !!c.guarded, isTest: false, reads: c.reads
+})))
+const DEST = k => DESTS.find(d => d.key === k) || DESTS[0]
 
-// Three destinations, in rising order of who sees it. The CEO group is the only
-// one behind a gate: the phrase, the PIN, and then a second click.
-const DESTS = [
-  { key: 'test', label: 'Test channel', hint: 'Safe: posts to the test channel only.' },
-  { key: 'internal', label: 'Team channel', hint: 'Posts to team-performance-marketing, which the whole team reads.' },
-  { key: 'ceo', label: 'CEO group', hint: 'Posts to performance_mktg_core. Needs the phrase and the PIN.' },
-]
-const DEST_HINT = k => (DESTS.find(d => d.key === k) || DESTS[0]).hint
+// A closed padlock at 9px, drawn rather than an emoji so it takes the chip's colour.
+const Lock = ({ color }) => (
+  <svg width="9" height="11" viewBox="0 0 9 11" fill="none" aria-hidden="true">
+    <rect x="0.65" y="4.4" width="7.7" height="6" rx="1.5" stroke={color} strokeWidth="1.15" />
+    <path d="M2.45 4.4V2.95a2.05 2.05 0 0 1 4.1 0V4.4" stroke={color} strokeWidth="1.15" />
+  </svg>
+)
 
 const GATE_INPUT = {
   width: '100%', boxSizing: 'border-box', border: `1px solid ${C.border}`, borderRadius: 8,
@@ -114,7 +128,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
     setArmed(false); setPhrase(''); setPin(''); setGateErr('')
   }, [target, versionId])
 
-  // The PIN status is read fresh every time the CEO tab is opened. It never
+  // The PIN status is read fresh every time a locked channel is picked. It never
   // carries the PIN or the hash, only whether one is set and whether we are
   // locked out, so it is safe to hold in component state.
   const loadPinInfo = async () => {
@@ -128,7 +142,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
     } catch { setPinInfo({ set: false, denied: true }) }
   }
   useEffect(() => {
-    if (!open || target !== 'ceo') return
+    if (!open || !DEST(target).guarded) return
     setPinInfo(null); loadPinInfo()
   }, [open, target])
   useEffect(() => {
@@ -146,19 +160,21 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   // code path that could drift from what actually gets posted.
   const messages = useMemo(() => {
     if (!open) return []
-    try { return buildReportMessages(versionId, { ...buildContext(), isTest: target === 'test' }, VERSIONS) }
+    try { return buildReportMessages(versionId, { ...buildContext(), isTest: target === TEST_KEY }, VERSIONS) }
     catch (e) { return [{ key:'error', label:'Preview failed', text: e.message || 'Could not build this version' }] }
   }, [open, versionId, target, buildContext])
 
   const send = async () => {
-    // Team channel keeps the plain two-step. The CEO group needs the exact
-    // phrase and the PIN typed first, and then a second, separate click. The
-    // server re-checks all three, so nothing here is the real protection.
-    if (target === 'internal' && !armed) { setArmed(true); return }
-    if (target === 'ceo') {
+    // An ordinary channel keeps the plain two-step. A guarded one needs that
+    // channel's own confirmation phrase and the PIN typed first, and then a
+    // second, separate click. The server re-checks all three, so nothing on
+    // this side of the wire is the real protection.
+    const spec = DEST(target)
+    if (!spec.isTest && !spec.guarded && !armed) { setArmed(true); return }
+    if (spec.guarded) {
       if (!(pinInfo && pinInfo.set)) { setGateErr('No CEO PIN is set. An admin has to set it in Settings > Reports.'); return }
       if (pinInfo.locked) { setGateErr('Locked after too many wrong PINs. Try again later.'); return }
-      if (phrase.trim().toUpperCase() !== CEO_PHRASE) { setGateErr('Type ' + CEO_PHRASE + ' exactly, to confirm.'); return }
+      if (!phraseMatches(target, phrase)) { setGateErr('Type ' + confirmPhrase(target) + ' exactly, to confirm.'); return }
       if (!/^[0-9]{6,12}$/.test(pin)) { setGateErr('Enter the CEO PIN.'); return }
       if (!armed) { setGateErr(''); setArmed(true); return }
     }
@@ -166,15 +182,15 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
     setBusy(true)
     try {
       const files = await captureFiles()
-      const slackTarget = target === 'test' && testPick ? 'test:' + testPick : target
+      const slackTarget = target === TEST_KEY && testPick ? 'test:' + testPick : target
       const r = await fetch('/api/send-report', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'slack_report', dashboardId, slackTarget, filename, versionId, rowCount,
-        confirm: target === 'ceo' ? CEO_PHRASE : undefined,
-        ceoPin: target === 'ceo' ? pin : undefined,
+        confirm: spec.guarded ? phrase.trim() : undefined,
+        ceoPin: spec.guarded ? pin : undefined,
           messages: messages.map(x => ({
             text: x.text, after: x.after || null, fields: x.fields || null,
             table: x.table || null, chart: x.chart || null, context: x.context || null,
@@ -189,7 +205,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
-        if (target === 'ceo') { setPin(''); setArmed(false); loadPinInfo() }
+        if (spec.guarded) { setPin(''); setArmed(false); loadPinInfo() }
         throw new Error([
           d.error || 'Failed to post to Slack',
           d.failsLeft != null ? d.failsLeft + ' tries left' : null,
@@ -214,11 +230,17 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   const version = VERSIONS.find(v => v.id === versionId) || VERSIONS[0]
   const attachCount = messages.filter(m => m.attach).length
   const LABEL = { fontSize:10, fontWeight:800, letterSpacing:'0.07em', textTransform:'uppercase', color:C.muted, marginBottom:9 }
-  const pill = active => ({
-    flex:1, padding:'7px 10px', border:'none', borderRadius:7, cursor:'pointer', fontFamily:FONT,
-    fontSize:12, fontWeight:700, color: active ? '#fff' : C.sub, background: active ? C.navy : 'transparent',
-    transition:'background .12s',
+  // One channel chip. The selected one goes solid navy. A guarded channel keeps a
+  // darker hairline even when it is not selected, so the locked rooms read as locked
+  // before anybody clicks them.
+  const chip = (active, guarded) => ({
+    display:'flex', alignItems:'center', gap:6, padding:'6px 10px', cursor:'pointer',
+    border:`1px solid ${active ? C.navy : (guarded ? C.sub : C.border)}`,
+    borderRadius:9, background: active ? C.navy : '#fff', fontFamily:FONT,
+    color: active ? '#fff' : C.ink, transition:'background .12s, border-color .12s',
+    boxShadow: active ? '0 1px 2px rgba(15,23,42,0.12)' : 'none'
   })
+  const phraseOk = DEST(target).guarded && phraseMatches(target, phrase)
 
   return (
     <div
@@ -319,48 +341,69 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
         </div>
 
         <div style={{ padding:'12px 16px', borderTop:`1px solid ${C.border}`, display:'flex', flexDirection:'column', gap:10 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
-            <div style={{ display:'flex', background:'#F1F5F9', borderRadius:9, padding:3 }}>
-              {DESTS.map(d => (
-                <button key={d.key} onClick={() => setTarget(d.key)} style={pill(target === d.key)}>{d.label}</button>
-              ))}
+          {/* The channel picker. Every chip is a real room, spelled the way Slack spells it. */}
+          <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
+              {DESTS.map(d => {
+                const on = target === d.key
+                return (
+                  <button key={d.key} onClick={() => setTarget(d.key)} style={chip(on, d.guarded)}>
+                    {d.guarded && <Lock color={on ? '#fff' : C.sub} />}
+                    <span style={{ fontSize: d.isTest ? 12 : 11.5, fontWeight:700, fontFamily: d.isTest ? FONT : MONO }}>
+                      {d.isTest ? d.label : '#' + d.name}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
-            {target === 'test' && testChannels.length > 1 && (
-              <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+            {target === TEST_KEY && testChannels.length > 1 && (
+              <div style={{ display:'flex', gap:5, flexWrap:'wrap', alignItems:'center' }}>
+                <span style={{ ...LABEL, marginBottom:0 }}>Which sandbox</span>
                 {testChannels.map(c => {
                   const sel = (testPick || testChannels[0].id) === c.id
                   return (
                     <button key={c.id} onClick={() => setTestPick(c.id)} style={{
                       border:`1px solid ${sel ? C.navy : C.border}`, background: sel ? 'rgba(31,60,132,0.07)' : '#fff',
                       color: sel ? C.navy : C.sub, fontWeight: sel ? 800 : 600, fontSize:11, borderRadius:7,
-                      padding:'5px 9px', cursor:'pointer', fontFamily:FONT,
-                    }}>{c.name}</button>
+                      padding:'5px 9px', cursor:'pointer', fontFamily:MONO
+                    }}>{'#' + c.name}</button>
                   )
                 })}
               </div>
             )}
-            <div style={{ fontSize:11, color: target === 'test' ? C.muted : C.navy, fontWeight: target === 'test' ? 500 : 700, flex:1, minWidth:170 }}>
-              {target === 'test' && testChannels.length > 1
-                ? `Posts to ${(testChannels.find(c => c.id === (testPick || testChannels[0].id)) || {}).name || 'a test channel'} only.`
-                : DEST_HINT(target)}
+            <div style={{ display:'flex', alignItems:'baseline', gap:6, fontSize:11, lineHeight:1.5, flexWrap:'wrap' }}>
+              <span style={{ color: DEST(target).guarded ? C.navy : C.muted, fontWeight: DEST(target).guarded ? 700 : 500 }}>
+                {target === TEST_KEY && testChannels.length
+                  ? 'Goes to #' + ((testChannels.find(c => c.id === (testPick || testChannels[0].id)) || {}).name || 'a test channel') + ' only.'
+                  : DEST(target).reads}
+              </span>
+              {DEST(target).guarded && <span style={{ color:C.sub, fontWeight:600 }}>Admin, phrase and PIN.</span>}
             </div>
           </div>
 
-          {target === 'ceo' && (
+          {DEST(target).guarded && (
             <div style={{ border:`1px solid ${C.border}`, borderRadius:10, padding:'10px 12px', background:'#FAFCFE', display:'flex', flexDirection:'column', gap:7 }}>
-              <div style={{ fontSize:11, fontWeight:800, color:C.navy }}>performance_mktg_core is locked</div>
+              <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
+                <Lock color={C.navy} />
+                <span style={{ fontSize:11.5, fontWeight:800, color:C.navy, fontFamily:MONO }}>{channelHandle(target)}</span>
+                <span style={{ fontSize:10.5, fontWeight:700, color:C.sub }}>is locked \u2014 the CEO reads it</span>
+              </div>
               <div style={{ fontSize:10.5, color:C.sub, lineHeight:1.55 }}>
                 {!pinInfo ? 'Checking the PIN\u2026'
-                  : pinInfo.denied ? 'Only an admin can post to the CEO group.'
+                  : pinInfo.denied ? 'Only an admin can post to ' + channelHandle(target) + '.'
                   : pinInfo.invalid ? 'The PIN record does not verify. An admin has to set the PIN again in Settings \u203A Reports.'
                   : !pinInfo.set ? 'No PIN is set yet. An admin has to set one in Settings \u203A Reports first.'
                   : pinInfo.locked ? 'Locked after too many wrong PINs. Try again in ' + Math.ceil((pinInfo.lockedForSec || 0) / 60) + ' min.'
                   : 'Type the phrase, then the PIN, then confirm.' + (pinInfo.failsLeft != null ? ' ' + pinInfo.failsLeft + ' tries left before a lockout.' : '')}
               </div>
-              <input value={phrase} onChange={e => { setPhrase(e.target.value); setGateErr('') }}
-                placeholder={CEO_PHRASE} spellCheck={false} autoComplete="off" style={GATE_INPUT} />
+              <div style={{ position:'relative' }}>
+                <input value={phrase} onChange={e => { setPhrase(e.target.value); setGateErr('') }}
+                  placeholder={confirmPhrase(target)} spellCheck={false} autoComplete="off"
+                  style={{ ...GATE_INPUT, paddingRight:26, borderColor: phraseOk ? C.green : C.border }} />
+                {phraseOk && <span style={{ position:'absolute', right:9, top:5, fontSize:12, fontWeight:800, color:C.green }}>{'\u2713'}</span>}
+              </div>
               <PinInput value={pin} onChange={v => { setPin(v); setGateErr('') }} placeholder="CEO PIN" inputStyle={GATE_INPUT} iconColor={C.muted} />
-              {gateErr && <div style={{ fontSize:10.5, fontWeight:700, color:C.navy }}>{gateErr}</div>}
+              <div style={{ fontSize:10.5, fontWeight:700, color:C.navy }}>{gateErr}</div>
             </div>
           )}
 
@@ -375,7 +418,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
               fontFamily:FONT, boxShadow:'0 1px 2px rgba(15,23,42,0.10)',
             }}>
               {busy ? 'Sending\u2026'
-                : armed ? (target === 'ceo' ? 'Confirm \u2014 post to the CEO group' : 'Confirm \u2014 post to the team channel')
+                : armed ? 'Confirm \u2014 post to ' + channelHandle(target)
                 : 'Send ' + messages.length + (messages.length === 1 ? ' message' : ' messages')}
             </button>
           </div>

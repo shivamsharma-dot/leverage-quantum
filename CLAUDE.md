@@ -4001,3 +4001,42 @@ glossary at the end of every daily message is noise once the CEO has read it
 once. The SR note stays where it was, italic, directly under the revenue table:
 SR is Online and Offline together in the sheet today, the split is coming
 shortly. The version card now lists that note instead of the footer.
+
+### 1 Aug 2026 — Slack channels became a list, and #b2c-leverage-core joined it
+
+Everything about where a report can go now lives in `shared/slackChannels.mjs`. One
+array, one entry per channel: `internal` (`team-performance-marketing`), `ceo`
+(`performance_mktg_core`) and the new `b2c_core` (`b2c-leverage-core`). Each entry
+carries its own label, the sentence describing who reads it, the preference key, the
+environment variable, an optional literal `#name` fallback, and a `guarded` flag. The
+file also exports `channelHandle`, `confirmPhrase` and `phraseMatches`.
+
+The word group is gone. A Slack destination is a channel everywhere now — in the send
+panel, in Settings, in the API's errors, and in the `report_log` TYPE column, which
+reads "slack pm report v7 (#performance_mktg_core)" instead of "(CEO group)".
+
+Guarded is the important idea. It means the CEO is in that channel, so the send needs
+an admin, the exact confirmation phrase and the CEO PIN, all three re-checked on the
+server. `b2c-leverage-core` is guarded for the same reason `performance_mktg_core` is.
+The confirmation phrase is now per channel and names the room: `SEND TO
+#performance_mktg_core`, `SEND TO #b2c-leverage-core`. The old single constant
+`SEND TO CEO GROUP` no longer exists on either side. Phrase comparison is
+case-insensitive, because channel names are lower case and the rest of the phrase is not.
+The PIN is deliberately still one PIN, shared by every locked channel.
+
+Three files read the shared list and none of them keeps its own copy. `api/send-report.js`
+builds `SLACK_TARGETS` from it and derives `PREF_KEYS` from it, so the preferences query
+widens by itself when a channel is added. `src/components/SlackReportPanel.jsx` builds
+the picker from it: one chip per channel, showing the real `#name` in monospace with a
+drawn padlock on the locked ones, a context line underneath naming who reads it, and a
+green tick on the phrase field the moment it matches. `src/pages/SettingsPage.jsx`
+renders one channel-name field per guarded channel, each with its own phrase spelled out.
+
+So adding a fourth channel is a single edit: append to `SLACK_CHANNELS`. The picker,
+the Settings fields, the confirmation phrase, the preference query and the log label
+all follow. Nothing else has to be touched, and nothing can drift out of step.
+
+Operational note: `b2c-leverage-core` resolves from `slack_channel_b2c_core`, then
+`SLACK_CHANNEL_B2C_CORE`, then the literal `#b2c-leverage-core`. The bot has to be
+invited to the channel in Slack first; without that, `chat.postMessage` answers
+`not_in_channel` and the panel surfaces it verbatim.

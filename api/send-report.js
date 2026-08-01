@@ -1,3 +1,5 @@
+import { SLACK_CHANNELS, DEFAULT_CHANNEL_ID, channelHandle, confirmPhrase, phraseMatches } from '../shared/slackChannels.mjs'
+
 export const maxDuration = 60
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://tsyekthwthxszmsgqfej.supabase.co'
@@ -78,10 +80,23 @@ async function getRecipients(reportType) {
   } catch { return [] }
 }
 
+// Every preference the report path reads, in one list. The per channel keys come
+// from shared/slackChannels.mjs, so adding a channel there widens this query by
+// itself and nobody has to remember to edit a comma separated string down here.
+const PREF_KEYS = Array.from(new Set([
+  'report_from_name', 'report_from_email', 'report_subjects', 'auto_reports_enabled',
+  'slack_webhook_url', 'slack_webhook_url_test', 'slack_channel_main',
+  'slack_channel_test', 'slack_test_channels', 'slack_auto_reports_enabled'
+]
+  .concat(SLACK_CHANNELS.map(function (c) { return c.pref }))
+  .concat(SLACK_CHANNELS.map(function (c) { return c.altPref }))
+  .concat(SLACK_CHANNELS.map(function (c) { return c.hookPref }))
+  .filter(Boolean)))
+
 async function getReportConfig() {
   const out = {}
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(report_from_name,report_from_email,report_subjects,auto_reports_enabled,slack_webhook_url,slack_webhook_url_test,slack_channel_main,slack_channel_test,slack_channel_internal,slack_channel_ceo,slack_test_channels,slack_auto_reports_enabled)`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/app_preferences?select=key,value&key=in.(${PREF_KEYS.join(',')})`, {
       headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
     })
     const rows = (await res.json()) || []
@@ -117,26 +132,19 @@ async function getReportConfig() {
 // Destinations:
 //   test:<id> -- one of possibly SEVERAL named sandbox channels (see getTestChannels
 //                below). Bare 'test' means "the first configured one". Safe, one click.
-//   internal  -- team-performance-marketing, the PM team's own channel. Two clicks.
-//   ceo       -- performance_mktg_core, the CEO group. GUARDED: admin only, an
-//                explicit confirmation and a PIN, both checked on the server before
-//                a single Slack call is made.
+//   <id>      -- any channel id listed in shared/slackChannels.mjs, e.g. 'internal'
+//                (team-performance-marketing), 'ceo' (performance_mktg_core) or
+//                'b2c_core' (b2c-leverage-core). Channels marked guarded there need
+//                an admin, that channel's own confirmation phrase, and the CEO PIN,
+//                all three checked on the server before a single Slack call is made.
 // 'prod', 'main', '' and anything unrecognised still resolve to internal, which is
 // exactly where they resolved before this existed -- the scheduler and the older
 // callers behave identically.
-const SLACK_TARGETS = {
-  internal: {
-    label: 'team channel',
-    pref: 'slack_channel_internal', env: 'SLACK_CHANNEL_INTERNAL',
-    altPref: 'slack_channel_main', altEnv: 'SLACK_CHANNEL_MAIN',
-    hookPref: 'slack_webhook_url', hookEnv: 'SLACK_WEBHOOK_URL',
-  },
-  ceo: {
-    label: 'CEO channel',
-    pref: 'slack_channel_ceo', env: 'SLACK_CHANNEL_CEO',
-    guarded: true,
-  },
-}
+// One entry per channel, built straight from the shared directory so the API and
+// the Send to Slack panel can never disagree about which channels exist or which
+// of them are locked. Add a channel in shared/slackChannels.mjs, never here.
+const SLACK_TARGETS = {}
+SLACK_CHANNELS.forEach(function (c) { SLACK_TARGETS[c.id] = c })
 
 // Multiple named test channels, admin-managed in Settings > Reports as
 // app_preferences.slack_test_channels: [{id, name, channel}, ...]. Falls back to the
@@ -153,15 +161,15 @@ function getTestChannels(cfg) {
   return list
 }
 
-// target is either a bare family ('test'/'internal'/'ceo'/anything-else-means-internal)
+// target is either a bare channel id from shared/slackChannels.mjs, or 'test',
 // or 'test:<id>' to pick a SPECIFIC configured test channel by id.
 function normaliseTarget(target) {
   const t = String(target || '').toLowerCase()
-  if (t === 'ceo') return { family: 'ceo', id: null }
   if (t === 'test') return { family: 'test', id: null }
   const m = t.match(/^test:(.+)$/)
   if (m) return { family: 'test', id: m[1] }
-  return { family: 'internal', id: null }
+  if (SLACK_TARGETS[t]) return { family: t, id: null }
+  return { family: DEFAULT_CHANNEL_ID, id: null }
 }
 
 function resolveSlackTarget(cfg, target, opts) {
@@ -188,22 +196,23 @@ function resolveSlackTarget(cfg, target, opts) {
   // A guarded destination is unreachable unless the caller states, in so many
   // words, that it has already run the PIN gate. Ask AI, the table exports and
   // the scheduler all call this without that flag, so none of them can be talked
-  // into reaching the CEO group.
+  // into reaching a locked channel.
   if (spec.guarded && !(opts && opts.allowGuarded)) {
-    return { mode: 'bot', key: family, label, isTest: false, guarded: true, missing: 'The CEO channel is only reachable from Send to Slack, after the PIN check.' }
+    return { mode: 'bot', key: family, label, isTest: false, guarded: true, missing: '#' + spec.name + ' is only reachable from Send to Slack, after the PIN check.' }
   }
   const botToken = process.env.SLACK_BOT_TOKEN
   if (botToken) {
     const channel = cfg[spec.pref] || process.env[spec.env]
       || (spec.altPref ? (cfg[spec.altPref] || process.env[spec.altEnv]) : '')
+      || spec.fallback || ''
     if (channel) return { mode: 'bot', key: family, token: botToken, channel, label, isTest: false, guarded: !!spec.guarded }
     return { mode: 'bot', key: family, label, isTest: false, guarded: !!spec.guarded, missing: `No Slack ${label} set -- add the channel in Settings > Reports.` }
   }
-  // No webhook fallback for the CEO group on purpose: a webhook cannot upload the
+  // No webhook fallback for a locked channel on purpose: a webhook cannot upload
   // chart images this report is built around, so it could only ever post a
   // half-report to the one audience that must not receive one.
   if (spec.guarded) {
-    return { mode: 'bot', key: family, label, isTest: false, guarded: true, missing: 'The CEO channel needs SLACK_BOT_TOKEN -- an Incoming Webhook cannot post this report.' }
+    return { mode: 'bot', key: family, label, isTest: false, guarded: true, missing: '#' + spec.name + ' needs SLACK_BOT_TOKEN -- an Incoming Webhook cannot post this report.' }
   }
   const url = cfg[spec.hookPref] || process.env[spec.hookEnv]
   return {
@@ -1353,7 +1362,6 @@ async function slackPostReportMessage(token, channel, m) {
 //  * Every attempt, pass or fail, lands in report_logs against the signed-in
 //    email, so there is an audit trail without the PIN ever appearing in it.
 const CEO_PIN_KEY = 'slack_ceo_pin'
-const CEO_CONFIRM_PHRASE = 'SEND TO CEO GROUP'
 const PIN_ITER = 310000
 const PIN_KEYLEN = 32
 const PIN_MAX_FAILS = 5
@@ -1565,18 +1573,22 @@ async function handleSlackReport(req, res) {
   if (!list.length) return res.status(400).json({ error: 'Nothing to post' })
   if (list.length > 6) return res.status(400).json({ error: 'A report is capped at 6 messages' })
 
-  // The CEO group is the one destination that is guarded. Three independent things
+  // A guarded channel is one the CEO is in, and it is the only kind that is gated.
   // have to be true, all checked here on the server: the caller is an admin, the
   // caller sent the exact confirmation phrase, and the PIN verifies. Nothing
   // touches Slack until all three pass.
-  const wantsCeo = normaliseTarget(slackTarget).family === 'ceo'
+  const guardFam = normaliseTarget(slackTarget).family
+  // Guarded means the CEO is in that channel. Which ones those are lives in
+  // shared/slackChannels.mjs, so a new channel can never quietly arrive unlocked.
+  const guardSpec = SLACK_TARGETS[guardFam] || null
+  const wantsCeo = !!(guardSpec && guardSpec.guarded)
   if (wantsCeo) {
     if (me.role !== 'admin') {
       await logReport({ report_type: 'ceo report blocked', recipients: [me.email], status: 'failed', error: 'not an admin', triggered_by: me.email })
-      return res.status(403).json({ error: 'Only an admin can post to the CEO group.' })
+      return res.status(403).json({ error: 'Only an admin can post to ' + channelHandle(guardFam) + '.' })
     }
-    if (String(confirm || '') !== CEO_CONFIRM_PHRASE) {
-      return res.status(400).json({ error: 'Confirm the CEO send first.', code: 'need_confirm' })
+    if (!phraseMatches(guardFam, confirm)) {
+      return res.status(400).json({ error: 'Type ' + confirmPhrase(guardFam) + ' to confirm this send.', code: 'need_confirm' })
     }
     const chk = await verifyCeoPin(ceoPin, me.email)
     if (!chk.ok) {
@@ -1595,7 +1607,7 @@ async function handleSlackReport(req, res) {
     return res.status(400).json({ error: 'Posting a report needs SLACK_BOT_TOKEN plus a channel (files:write) -- an Incoming Webhook cannot upload files.' })
   }
 
-  const logType = 'slack pm report ' + (versionId || 'v?') + (hook.key === 'test' ? ' (test)' : hook.key === 'ceo' ? ' (CEO group)' : ' (team)')
+  const logType = 'slack pm report ' + (versionId || 'v7') + (hook.key === 'test' ? ' (test)' : ' (' + channelHandle(hook.key) + ')')
   try {
     // Sequential on purpose: Slack orders by arrival, so posting in parallel would
     // let message 3 land above message 1.
