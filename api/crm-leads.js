@@ -116,16 +116,30 @@ async function leadsquaredGet(path, creds, extraQuery) { return leadsquaredReque
 // either time out this function or hammer LeadSquared's API for no useful reason -- nobody
 // scrolls a 15M-row grid. Each caller below picks a cap sized to its own real volume.
 const LSQ_PAGE_SIZE = 1000
+// Fetches page 1 alone first (its length already tells us whether a page 2 could possibly
+// exist), then -- if more might be needed -- fires pages 2..maxPages CONCURRENTLY rather
+// than one at a time. Sequential looping here was a real, measured problem: a single day of
+// one Activity Type took ~40s wall-clock (5 pages + up to 5 more chunked contact-name
+// lookups, every one of them awaited one after another) -- close enough to the 60s function
+// budget to risk timing out on a slightly wider window, and a genuinely bad "Loading..."
+// wait either way. Each PageIndex is an independent, self-contained request (not a cursor
+// that depends on the previous response), so requesting them in parallel is safe; the only
+// correctness nuance is truncating the result at the first page (IN ORDER) that came back
+// short, even if a later page in the same parallel batch happened to come back full -- that
+// can only happen if data changed mid-fetch, and "trust the earliest signal of the true end"
+// is the safer read.
 async function fetchAllPages(fetchPage, maxPages) {
-  let rows = []
-  let pageIndex = 1
-  let truncated = false
-  while (pageIndex <= maxPages) {
-    const page = await fetchPage(pageIndex, LSQ_PAGE_SIZE)
+  const first = await fetchPage(1, LSQ_PAGE_SIZE)
+  if (first.length < LSQ_PAGE_SIZE) return { rows: first, truncated: false } // real end of data on page 1 itself
+  if (maxPages <= 1) return { rows: first, truncated: true } // page 1 was full and the cap is 1 -- more may exist, unknown
+  const restIndexes = []
+  for (let i = 2; i <= maxPages; i++) restIndexes.push(i)
+  const rest = await Promise.all(restIndexes.map(i => fetchPage(i, LSQ_PAGE_SIZE)))
+  let rows = first.slice()
+  let truncated = true
+  for (const page of rest) {
     rows = rows.concat(page)
-    if (page.length < LSQ_PAGE_SIZE) break // short page = real end of data, not just of the cap
-    if (pageIndex === maxPages) truncated = true
-    pageIndex++
+    if (page.length < LSQ_PAGE_SIZE) { truncated = false; break }
   }
   return { rows, truncated }
 }
@@ -332,16 +346,18 @@ async function fetchLeadSquaredContactNames(creds, ids) {
   // chunk's own result set is small enough to fit in one un-paginated response.
   const chunks = []
   for (let i = 0; i < unique.length; i += 1000) chunks.push(unique.slice(i, i + 1000))
+  // Chunks are independent lookups (no shared cursor/state) -- fired concurrently rather
+  // than one at a time, same reasoning as fetchAllPages above.
+  const results = await Promise.all(chunks.map(chunk => leadsquaredPost('/v2/LeadManagement.svc/Leads/Retrieve/ByIds', creds, {
+    SearchParameters: { LeadIds: chunk },
+    Columns: { Include_CSV: 'ProspectID,FirstName,LastName' },
+    Paging: { PageIndex: 1, PageSize: 1000 },
+  })))
   const map = {}
-  for (const chunk of chunks) {
-    const data = await leadsquaredPost('/v2/LeadManagement.svc/Leads/Retrieve/ByIds', creds, {
-      SearchParameters: { LeadIds: chunk },
-      Columns: { Include_CSV: 'ProspectID,FirstName,LastName' },
-      Paging: { PageIndex: 1, PageSize: 1000 },
-    })
+  results.forEach(data => {
     const rows = (data && data.Leads) || []
     rows.forEach(r => { if (r.ProspectID) map[r.ProspectID] = [r.FirstName, r.LastName].filter(Boolean).join(' ').trim() || null })
-  }
+  })
   return map
 }
 
