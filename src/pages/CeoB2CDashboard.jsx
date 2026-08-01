@@ -309,7 +309,10 @@ export default function CeoB2CDashboard() {
   const captureSlackFiles = useCallback(async function () {
     await nextPaint()
     const node = tableRef.current
-    const shot = node ? await captureNodePng(node) : null
+    // Shot at 3x first: the CEO reads this table as an image in Slack, and it has
+    // to survive being opened on a phone. captureNodePng walks the ratio down on
+    // its own if the PNG comes out too big for the request body.
+    const shot = node ? await captureNodePng(node, { ratios: [3, 2, 1.5, 1] }) : null
     const cols = ['Line item', day ? day.date : 'Latest day', 'Month to date']
     if (hasPrev) cols.push(prevLab)
     const spec = REV.concat([['rev', 'Total Revenue']]).concat(COST).concat([['cost', 'Total Cost'], ['net', 'Net Inflow']])
