@@ -245,7 +245,15 @@ export default function CeoB2CDashboard() {
       cost: { pm: mtd.pm, op: mtd.op, off: mtd.offCost, corp: mtd.corp, people: mtd.people, total: mtd.cost },
       net: mtd.net,
       margin: margin,
-      day: day ? { date: day.date, rev: day.rev, cost: day.cost, net: day.net } : null,
+      // The last completed day now carries its line items too, so the Slack ledger
+      // can print last day, month to date and year to date in the same columns.
+      // Additive: the existing B2C builder only ever reads date, rev, cost and net.
+      day: day ? {
+        date: day.date,
+        sr: day.sr, ac: day.ac, vas: day.vas, offRev: day.offRev,
+        pm: day.pm, op: day.op, offCost: day.offCost, corp: day.corp, people: day.people,
+        rev: day.rev, cost: day.cost, net: day.net,
+      } : null,
       peopleMonthly: peopleMonthly,
       ytd: fy,
       // The closing sections of the message are arithmetic on these two windows.
