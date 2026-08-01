@@ -162,6 +162,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
             table: x.table || null, chart: x.chart || null, context: x.context || null,
             chartPng: chartPng(x.chart) || null,
             label: x.label || null, attach: !!x.attach,
+            blocks: x.blocks || null, metadata: x.metadata || null,
           })),
           pngBase64: files ? files.pngBase64 : null,
           pixelRatio: files ? files.pixelRatio : null,
