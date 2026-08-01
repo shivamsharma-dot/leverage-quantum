@@ -3657,3 +3657,56 @@ the cards was rewritten to explain that gap instead of the old wording.
 
 **Rule:** on this page, account KPI cards = original CRM sheet totals; anything
 per-ad = matched subset. Do not mix the two in one row again.
+
+---
+
+## 2026-08-01 - CEO B2C dashboard (finance sheet -> cost, revenue, net inflow)
+
+New page `/dashboard/ceo-b2c` (`src/pages/CeoB2CDashboard.jsx` + `.module.css`),
+nav id `ceo_b2c`, sits under Overview after Overall. Admin-only: `ceo_b2c` was
+added to the same two exclusion lists that already hide `marketing_performance`
+in `lib/auth.mjs`, `src/App.jsx` and `src/components/Sidebar.jsx`.
+
+### Data
+Finance owns a Google Sheet named B2C. Tabs used:
+- `Consolidated` (gid=0): one row per calendar day, Apr-2026 -> Mar-2027.
+  Columns: Month, Date (DD-Mon-YYYY), SR / AC / VAS / Offline Revenue,
+  Total Revenue, People / PM / Operating / Offline / Corp. Overheads Cost,
+  Total Cost, Net inflow.
+- `People`, `Operating_Cost`, `Corp_Overheads` (Year, Month, Actual, Forecast)
+  and `Offline (rent, support staff costs, maitenance)` (no Forecast column).
+  Their Month is `Aug-2026`; Consolidated says `August-2026`.
+
+### API
+No new file in `api/` (Hobby is still 12/12). It is a new `source` on the
+existing router: **`/api/crm-leads?source=b2c`** -> `handleB2C()`. It fetches
+the five tabs in parallel over gviz CSV and returns
+`{ configured, days[], monthly{people,operating,corp,offline}, gridFrom, gridTo }`.
+Blank cells come back as `null`, never `0`, so the UI can tell 'finance has not
+filled this yet' from a real zero.
+
+**The sheet id is deliberately NOT hard-coded.** This repo is public and the
+sheet is link-readable P&L data, so `getB2CSheetId()` reads
+`app_preferences.sheet_url_b2c` first and falls back to `process.env.B2C_SHEET_URL`.
+The URL is set from Settings > Data > Data Sources > 'B2C Finance Sheet (CEO)'
+(registered in `src/lib/dataSources.js` as `b2c` and in SettingsPage's source
+list). If neither is set the API returns `configured:false` and the page shows
+a 'connect the sheet' empty state instead of an error.
+
+### Page
+KPI row (MTD revenue / cost / net inflow / margin / latest-day net inflow),
+a Revenue -> Cost -> Net Inflow table with a D-1 column and an MTD column,
+a daily Revenue+Cost bar / Net inflow line chart, and monthly cost plan vs
+actual. Month picker is the shared `Dropdown` (never a native select).
+
+### Gotchas hit
+- **JSX text does not process `\uXXXX` escapes.** Writing `B2C \u2014 cost` in a
+  JSX child renders the literal characters. Use HTML entities (`&mdash;`,
+  `&hellip;`, `&rsaquo;`, `&ldquo;`) in JSX text; `\uXXXX` is fine inside JS
+  strings and attribute expressions.
+- `.total td { color: var(--text) }` beats `.pos` on specificity, so the Net
+  Inflow row lost its green until `.total td.pos` / `.total td.neg` were added.
+- D-1 everywhere: the page filters to `date <= yesterday (Asia/Kolkata)` and
+  the header shows a 'Through YYYY-MM-DD' chip.
+- Sheet is currently an empty template (Apr-2026 -> Mar-2027 grid, no values),
+  so the live page correctly shows the 'no day filled in yet' state.
