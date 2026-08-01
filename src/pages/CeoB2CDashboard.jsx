@@ -11,7 +11,7 @@ import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
 
 // Line items exactly as the finance sheet names them, in sheet order.
-const REV = [['sr', 'SR Online'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['offRev', 'Offline']]
+const REV = [['sr', 'SR (Online + Offline)'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['offRev', 'Offline']]
 const COST = [['people', 'People'], ['pm', 'Perf. Marketing'], ['op', 'Operating'], ['offCost', 'Offline'], ['corp', 'Corp. Overheads']]
 const PLAN = [['people', 'People'], ['operating', 'Operating'], ['corp', 'Corp. Overheads'], ['offline', 'Offline']]
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
@@ -211,6 +211,24 @@ export default function CeoB2CDashboard() {
   }, [runRate, prevLab])
   const mgDelta = margin == null || prevMargin == null ? null : margin - prevMargin
 
+  // How many of the days so far actually lost money, and which was the worst.
+  // Counted off exactly the rows the table above is built from.
+  const dayStats = useMemo(function () {
+    let neg = 0
+    let worst = null
+    rows.forEach(function (r) {
+      const o = {}
+      REV.concat(COST).forEach(function (d) { o[d[0]] = r[d[0]] })
+      const rv = r.totalRev != null ? r.totalRev : roll(o, REV)
+      const ct = r.totalCost != null ? r.totalCost : roll(o, COST)
+      const n = r.net != null ? r.net : sub(rv, ct)
+      if (n == null) return
+      if (n < 0) neg += 1
+      if (worst == null || n < worst.net) worst = { date: r.date, net: n }
+    })
+    return { days: rows.length, neg: neg, worst: worst }
+  }, [rows])
+
   // Slack: the CEO gets exactly the numbers the page shows. Nothing is
   // recomputed for the message, and the table image rides along in the thread.
   const tableRef = useRef(null)
@@ -230,6 +248,18 @@ export default function CeoB2CDashboard() {
       day: day ? { date: day.date, rev: day.rev, cost: day.cost, net: day.net } : null,
       peopleMonthly: peopleMonthly,
       ytd: fy,
+      // The closing sections of the message are arithmetic on these two windows.
+      // The page hands over the comparison it has already drawn rather than letting
+      // the builder re-derive it, so the message can never disagree with the table.
+      prev: hasPrev ? {
+        label: prevLab,
+        rev: { sr: prev.sr, ac: prev.ac, vas: prev.vas, off: prev.offRev, total: prev.rev },
+        cost: { pm: prev.pm, op: prev.op, off: prev.offCost, corp: prev.corp, people: prev.people, total: prev.cost },
+        net: prev.net
+      } : null,
+      days: dayStats.days,
+      negDays: dayStats.neg,
+      worstDay: dayStats.worst,
       // Extra keys for the Quantum Brief builder. The existing B2C builders read
       // none of these, so they are additive and change nothing for them.
       partial: !!(dim && rows.length < dim),
@@ -267,7 +297,7 @@ export default function CeoB2CDashboard() {
         },
       ]
     }
-  }, [month, d1, mtd, margin, day, peopleMonthly, fy, dim, rows.length, hasPrev, prev, prevRows.length, prevLab, prevMargin, mgDelta, hasPlan, shortMonth])
+  }, [month, d1, mtd, margin, day, peopleMonthly, fy, dim, rows.length, hasPrev, prev, prevRows.length, prevLab, prevMargin, mgDelta, hasPlan, shortMonth, dayStats])
   const captureSlackFiles = useCallback(async function () {
     await nextPaint()
     const node = tableRef.current
@@ -428,6 +458,9 @@ export default function CeoB2CDashboard() {
                   {fy.label} to date, {fy.from} to {fy.to} &middot; revenue {full(fy.rev)} &middot; cost {full(fy.cost)} &middot; net inflow {full(fy.net)}{fyMargin == null ? '' : ' (' + fyMargin.toFixed(1) + '% margin)'}
                 </p>
               ) : null}
+              <p className={styles.note}>
+                SR is Online and Offline together in the sheet today. The split is coming shortly.
+              </p>
             </div>
           ) : null}
           {ready ? (

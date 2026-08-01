@@ -1203,10 +1203,28 @@ function nativeChartBlock(c) {
   return { type: 'data_visualization', title: c.title, chart: c.chart }
 }
 
+// Slack caps a section at 3000 characters and quietly drops the rest, which
+// would take the footer off the end of a long report. Split on blank lines
+// instead, and never inside a code fence, so nothing is lost silently.
+function mrkdwnSections(t) {
+  const s = String(t || '')
+  if (s.length <= 2900) return [s]
+  const out = []
+  let cur = ''
+  let open = false
+  s.split('\n\n').forEach(function (p) {
+    const cand = cur ? cur + '\n\n' + p : p
+    if (!open && cur && cand.length > 2900) { out.push(cur); cur = p } else { cur = cand }
+    if (((p.match(/```/g) || []).length) % 2) open = !open
+  })
+  if (cur) out.push(cur)
+  return out.map(function (x) { return x.slice(0, 2900) })
+}
+
 function reportBlocks(m, opts) {
   const clip = t => String(t || '').slice(0, 2900)
   const blocks = []
-  if (m.text) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: clip(m.text) } })
+  if (m.text) mrkdwnSections(m.text).forEach(function (t) { blocks.push({ type: 'section', text: { type: 'mrkdwn', text: t } }) })
   if (opts.bare) return blocks.length ? blocks : [{ type: 'section', text: { type: 'mrkdwn', text: clip(m.label || 'Report') } }]
   // A section takes at most 10 fields, so a longer grid simply continues in the next.
   const fields = Array.isArray(m.fields) ? m.fields.filter(Boolean).slice(0, 20) : []

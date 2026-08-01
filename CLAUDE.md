@@ -3930,3 +3930,32 @@ and leaves even segments to `inline()`. An odd fence count means the text is
 not what we think it is, so it falls back to flat rendering rather than
 guessing. File is 471 lines. Message length is 1733 chars, inside Slack's 3000
 character section limit -- worth re-checking if more rows are ever added.
+
+## 2026-08-01 - CEO B2C Slack: SR relabelled, and a closing diagnosis
+
+Three files. The sheet's SR column is Online and Offline together, so the label
+is now `SR (Online + Offline)` on the page and in the message, with a one-line
+note in both saying the split is coming. Changed in `REV` on the page and in
+`LINES` in the report, which are now the single source of both the table rows
+and the mover ranking.
+
+The message closes with `What went wrong` and `What would close the gap`. Every
+line is arithmetic: the net-inflow swing against the same run of days last
+month, how that swing splits between revenue and cost, the two cost heads that
+rose most, the largest revenue faller, and how many days lost money. The fixes
+are counterfactuals, not advice -- the top head back at last month's level and
+what that does to month-to-date net inflow, and the break-even revenue at
+today's cost expressed per day. The page hands over `prev` and `dayStats`
+rather than letting the builder re-derive them, so the message can never
+disagree with the table it sits under.
+
+Found while checking the length: `clip()` in `api/send-report.js` was slicing
+section text at 2900 characters silently, and the message is now 2762. The
+footer would have been the first thing to fall off. `mrkdwnSections()` splits
+on blank lines instead, never inside a code fence, and every existing report is
+under 2900 so nothing else changes.
+
+Gotcha worth remembering: `get_page_text` on raw.githubusercontent strips
+leading whitespace, so anchors copied from it will not match the real file. Two
+anchors failed on that. Derive indentation from the file (`indentOf`) and shift
+the inserted block to match, rather than hard-coding spaces.
