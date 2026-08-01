@@ -1233,6 +1233,24 @@ function reportBlocks(m, opts) {
 // then without the chart, then without the table, then as the lead section alone.
 async function slackPostReportMessage(token, channel, m) {
   const fallbackText = String(m.text || m.label || 'Report').slice(0, 2900)
+  // A version may hand over a finished Block Kit payload instead of the
+  // { text, fields, table, chart } shape every builder used until now. Nothing
+  // that exists today sets m.blocks, so every current report falls straight
+  // through to the renderer below and behaves exactly as it did before.
+  // The newer block types are not enabled in every workspace, so this degrades
+  // the same way the rest of this file does: the full layout first, then only
+  // the blocks Slack has shipped everywhere, then the plain text fallback.
+  if (Array.isArray(m.blocks) && m.blocks.length) {
+    const EVERYWHERE = new Set(['header', 'section', 'divider', 'context', 'actions', 'image', 'rich_text'])
+    const safe = m.blocks.filter(b => b && EVERYWHERE.has(b.type))
+    const tries = safe.length && safe.length < m.blocks.length ? [m.blocks, safe] : [m.blocks]
+    let blockErr = null
+    for (const bl of tries) {
+      try { return await slackPostBlocks(token, channel, fallbackText, bl) }
+      catch (e) { blockErr = e }
+    }
+    throw blockErr || new Error('Slack: message rejected')
+  }
   // Slack will not colour its own chart and will not print the value on a bar,
   // and this report is read on a phone. So when we have a picture of our own --
   // brand ramp, every number written on it -- we leave Slack's chart out of the
