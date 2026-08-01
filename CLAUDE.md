@@ -3891,3 +3891,31 @@ it. One line, no extra card.
 Gotcha: `once()` on the anchor `'</tbody>\n</table>\n</div>\n) : null}'` only
 works because the plan table is followed by `<p className={styles.note}>`
 rather than `</div>`. If a note is ever added to the main table, re-anchor.
+
+## 2026-08-01 - CEO B2C Slack: tables in the message, and a how-to-read footer
+
+`src/lib/b2cReport.js` is now 137 lines. The three periods and both month
+breakdowns are monospaced tables inside triple-backtick code blocks instead of
+bullet lists.
+
+Why a code block. Slack has no table element in a chat message. Block Kit
+`fields` wrap to two columns and reflow differently on mobile, so the numbers
+stop sitting under one another. A code block is the only construct where a
+character-padded table survives desktop and mobile alike. `table(head, rows)`
+measures every column against its widest cell, left-aligns column 0 and
+right-aligns the rest, joins on two spaces, then trims the trailing run so no
+line carries dead whitespace.
+
+The `Cost %` column was dropped from the period table on purpose. Net inflow is
+revenue minus cost, so margin is exactly 100% minus cost-as-a-%-of-revenue.
+Printing both is the same fact twice. Cost against revenue is still shown per
+head in the cost table, where it is not redundant.
+
+The `How to read this` footer is fixed prose, not derived from the data. It
+states the nesting (the day sits inside the month, the month inside the year),
+that a negative margin means the period outspent itself, that the two
+breakdowns are month-to-date only, and that nothing is adjusted. It exists
+because three stacked rows invite being read as a comparison when they are
+actually cumulative windows.
+
+Unit-checked with /tmp/t3.mjs against July's real figures before installing.
