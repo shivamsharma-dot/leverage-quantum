@@ -35,3 +35,7 @@
    specificity or the Net Inflow row loses its green / red. */
 .total td.pos { color:#15803D; }
 .total td.neg { color:#c0392b; }
+/* Card headers that carry a control (the daily / cumulative switch) need their
+   items centred, not baseline-aligned against the title. */
+.cardHead { align-items:center; }
+.cardTools { display:flex; align-items:center; gap:10px; }
