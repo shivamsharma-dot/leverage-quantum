@@ -3990,3 +3990,8 @@ itself the Offline Revenue column stops at row 92, 30-Jun-2026. All 31 July rows
 are empty, and the `Offline (AC + VAS)` source tab has no Jul-2026 actual, while
 Offline Cost is still charged at 1,61,290 a day, 49,99,990 for the month. So July
 carries the offline cost with none of the offline revenue.
+
+Both sides of the sheet had a column called Offline: revenue (the AC and VAS
+sold offline) and cost (rent, support staff, maintenance). In one Slack message
+that reads as the same line twice. Revenue is now `Offline (AC + VAS)` and cost
+is `Offline (rent + staff)`, on the page, in the plan table and in the report.
