@@ -89,15 +89,15 @@ function card(id, title, subtitle, body, opts) {
 // exactly the same code below.
 
 const HEADS = [
-  ['SR Online', 'Revenue', 'sr'],
-  ['AC Online', 'Revenue', 'ac'],
-  ['VAS Online', 'Revenue', 'vas'],
-  ['Offline revenue', 'Revenue', 'offRev'],
-  ['Perf. Marketing', 'Cost', 'pm'],
-  ['Operating', 'Cost', 'op'],
-  ['Offline cost', 'Cost', 'offCost'],
-  ['Corp. Overheads', 'Cost', 'corp'],
-  ['People', 'Cost', 'people'],
+  ['SR Online', 'Revenue', 'sr', 'SR'],
+  ['AC Online', 'Revenue', 'ac', 'AC'],
+  ['VAS Online', 'Revenue', 'vas', 'VAS'],
+  ['Offline revenue', 'Revenue', 'offRev', 'Offline'],
+  ['Perf. Marketing', 'Cost', 'pm', 'Marketing'],
+  ['Operating', 'Cost', 'op', 'Operating'],
+  ['Offline cost', 'Cost', 'offCost', 'Offline'],
+  ['Corp. Overheads', 'Cost', 'corp', 'Overheads'],
+  ['People', 'Cost', 'people', 'People'],
 ]
 
 function fromCtx(rev, cost, net) {
@@ -172,10 +172,9 @@ function insights(c, w, p, margin, ym) {
 
   const gap = w.rev != null && w.cost != null ? w.cost - w.rev : null
   if (gap != null && gap > 0) {
-    fix.push('Leaving cost alone, break-even needs revenue of ' + money(w.cost) + ' \u2014 ' + money(gap) + ' more than booked'
-      + (c.days ? ', about ' + money(gap / c.days) + ' a day across the ' + c.days + ' days so far' : '') + '.')
-    fix.push('Leaving revenue alone, cost would have to come down ' + money(gap) + ', which is '
-      + pct1(shareOf(gap, w.cost)) + ' of everything spent this month.')
+    fix.push('Break-even needs revenue of ' + money(w.cost) + ', ' + money(gap) + ' more than booked'
+      + (c.days ? ' \u2014 about ' + money(gap / c.days) + ' a day' : '') + '.')
+    fix.push('Or cost down ' + money(gap) + ', ' + pct1(shareOf(gap, w.cost)) + ' of the month spend.')
   }
   if (up.length && w.net != null) {
     fix.push(up[0].label + ' back at its ' + lab + ' level of ' + money(up[0].was) + ' would put the month at '
@@ -202,51 +201,47 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx) {
 
   blocks.push({ type: 'header', text: { type: 'plain_text', text: 'Quantum Brief \u2014 B2C', emoji: true } })
 
-  const pills = [
+  const stamp = [
     T((c.monthLabel || '') + ' \u00b7 through ', { bold: true }),
     { type: 'date', timestamp: throughTs, format: '{date_short}', fallback: c.through || '', style: { bold: true } },
-    T(' '),
-    TAG('D-1 complete', 'green'),
   ]
-  if (peopleOutside) pills.push(T(' '), TAG('People cost booked monthly', 'gray'))
+  // Two short lines rather than one long one: a phone wraps a single row of
+  // pills into something that reads like a broken sentence.
+  const pills = [TAG('D-1 complete', 'green')]
+  if (peopleOutside) pills.push(T(' '), TAG('People booked monthly', 'gray'))
   if (c.isTest) pills.push(T(' '), TAG('Test post', 'indigo'))
-  blocks.push(RICH([SEC(pills)]))
+  blocks.push(RICH([SEC(stamp), SEC(pills)]))
 
   // The headline, in colour. Green or red on the figure itself is the point of
   // this row: the verdict should not need a sentence to carry it.
   const costTone = w.cost != null && w.rev != null && w.cost > w.rev ? 'red' : 'green'
-  blocks.push(RICH([SEC([
-    TAG('Revenue ' + money(w.rev), 'blue'),
-    T(' '),
-    TAG('Cost ' + money(w.cost), costTone),
-    T(' '),
-    TAG('Net inflow ' + money(w.net), tone(w.net)),
-    T(' '),
-    TAG('Margin ' + pct1(margin), tone(margin)),
-  ])]))
+  blocks.push(RICH([
+    SEC([TAG('Revenue ' + money(w.rev), 'blue'), T(' '), TAG('Cost ' + money(w.cost), costTone)]),
+    SEC([TAG('Net ' + money(w.net), tone(w.net)), T(' '), TAG('Margin ' + pct1(margin), tone(margin))]),
+  ]))
 
   blocks.push({
     type: 'markdown',
-    text: '**Net inflow ' + money(w.net) + ' on ' + money(w.rev) + ' revenue'
-      + (margin == null ? '.**' : ' \u2014 ' + pct1(margin) + ' margin.**')
-      + (day ? ' Latest completed day ' + day.date + ': revenue ' + money(day.rev)
-        + ', cost ' + money(day.cost) + ', net ' + money(day.net) + '.' : ''),
+    text: '**Net ' + money(w.net) + ' on ' + money(w.rev) + ' revenue'
+      + (margin == null ? '.**' : ' \u00b7 ' + pct1(margin) + ' margin.**')
+      + (day ? '\n' + day.date + ' \u00b7 rev ' + money(day.rev) + ' \u00b7 cost ' + money(day.cost)
+        + ' \u00b7 net ' + money(day.net) : ''),
   })
 
   const cards = [
     card('net', dotFor(tone(w.net)) + ' Net inflow',
       money(w.net) + (move(d.net) ? ' \u00b7 ' + move(d.net) : ''),
-      'Revenue ' + money(w.rev) + ' less cost ' + money(w.cost) + '. Margin ' + pct1(margin) + '.',
+      'Revenue ' + money(w.rev) + '\nless cost ' + money(w.cost) + '\nMargin ' + pct1(margin),
       { image: charts.net, subtext: peopleOutside ? 'Excludes People cost \u2014 booked monthly, ' + money(c.peopleMonthly) + '.' : null }),
     card('revenue', dotFor(d.rev != null ? tone(d.rev) : 'green') + ' Revenue',
       money(w.rev) + (move(d.rev) ? ' \u00b7 ' + move(d.rev) : ''),
-      'SR ' + money(w.sr) + ' \u00b7 AC ' + money(w.ac) + ' \u00b7 VAS ' + money(w.vas)
-      + (w.offRev == null ? '' : ' \u00b7 Offline ' + money(w.offRev)),
+      'SR ' + money(w.sr) + '\nAC ' + money(w.ac) + '\nVAS ' + money(w.vas)
+        + (w.offRev == null ? '' : '\nOffline ' + money(w.offRev)),
       { image: charts.revenue }),
     card('cost', dotFor(d.cost != null ? tone(d.cost, true) : costTone) + ' Cost',
       money(w.cost) + (move(d.cost) ? ' \u00b7 ' + move(d.cost) : ''),
-      'Marketing ' + money(w.pm) + ' \u00b7 Operating ' + money(w.op) + ' \u00b7 Offline ' + money(w.offCost)
-      + ' \u00b7 Overheads ' + money(w.corp) + ' \u00b7 People ' + money(w.people),
+      'Marketing ' + money(w.pm) + '\nOperating ' + money(w.op) + '\nOffline ' + money(w.offCost)
+        + '\nOverheads ' + money(w.corp) + '\nPeople ' + money(w.people),
       { image: charts.cost }),
   ]
   if (day) {
@@ -261,8 +256,8 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx) {
   // in the ledger message: nothing here is generated prose, and every figure
   // can be checked against the table below it. Left expanded, because this is
   // the part worth reading.
-  const bad = (dx && dx.bad) || []
-  const fix = (dx && dx.fix) || []
+  const bad = ((dx && dx.bad) || []).slice(0, 5)
+  const fix = ((dx && dx.fix) || []).slice(0, 4)
   const total = notes.length + bad.length + fix.length + caveats.length
   if (total) {
     const kids = []
@@ -274,7 +269,7 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx) {
       type: 'container',
       block_id: 'qb_read',
       title: { type: 'plain_text', text: 'The read' },
-      subtitle: { type: 'plain_text', text: total + ' rules fired against the month before, day by day. Nothing here is generated prose.' },
+      subtitle: { type: 'plain_text', text: total + ' checks \u00b7 this month against ' + ((c.prev && c.prev.label) || 'the month before') + ', same number of days' },
       is_collapsible: true,
       default_collapsed: false,
       width: 'wide',
@@ -301,61 +296,71 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx) {
 
 // -- message 2: the ledger ----------------------------------------------------
 // Revenue total and cost total split out, the net inflow underneath in green or
-// red, and then every line and head read across the same three windows.
+// red, then the revenue lines and the cost heads in a table each. Four columns
+// everywhere, because this is read on a phone.
 
 function ledgerBlocks(last, mtd, ytd, lastLab, ytdLab) {
   const blocks = []
 
-  blocks.push({ type: 'header', text: { type: 'plain_text', text: 'Revenue, cost and net inflow', emoji: true } })
+  blocks.push({ type: 'header', text: { type: 'plain_text', text: 'Revenue, cost, net inflow', emoji: true } })
 
-  blocks.push(RICH([SEC([
-    T('Net inflow \u00b7 ', { bold: true }),
-    TAG(lastLab + '  ' + money(last && last.net), tone(last && last.net)),
-    T(' '),
-    TAG('Month to date  ' + money(mtd.net), tone(mtd.net)),
-    T(' '),
-    TAG(ytdLab + '  ' + money(ytd && ytd.net), tone(ytd && ytd.net)),
-  ])]))
+  blocks.push(RICH([
+    SEC([T('Net inflow', { bold: true })]),
+    SEC([
+      TAG(lastLab + ' ' + money(last && last.net), tone(last && last.net)),
+      T(' '),
+      TAG('MTD ' + money(mtd.net), tone(mtd.net)),
+      T(' '),
+      TAG('YTD ' + money(ytd && ytd.net), tone(ytd && ytd.net)),
+    ]),
+  ]))
 
   blocks.push({
     type: 'data_table',
     block_id: 'qb_totals',
-    caption: 'Revenue total and cost total, with the net inflow they leave behind',
+    caption: 'Totals \u00b7 ' + lastLab + ', month to date, ' + ytdLab,
     page_size: 4,
     row_header_column_index: 0,
     rows: [
-      [cellText('Measure'), cellText(lastLab), cellText('Month to date'), cellText(ytdLab)],
-      [cellBold('Total revenue'), cellMoney(last, 'rev'), cellMoney(mtd, 'rev'), cellMoney(ytd, 'rev')],
-      [cellBold('Total cost'), cellMoney(last, 'cost'), cellMoney(mtd, 'cost'), cellMoney(ytd, 'cost')],
+      [cellText('Total'), cellText(lastLab), cellText('MTD'), cellText('YTD')],
+      [cellBold('Revenue'), cellMoney(last, 'rev'), cellMoney(mtd, 'rev'), cellMoney(ytd, 'rev')],
+      [cellBold('Cost'), cellMoney(last, 'cost'), cellMoney(mtd, 'cost'), cellMoney(ytd, 'cost')],
       [cellBold('Net inflow'), cellMoneyTone(last, 'net'), cellMoneyTone(mtd, 'net'), cellMoneyTone(ytd, 'net')],
-      [cellBold('Net margin'), cellPctTone(marginOf(last)), cellPctTone(marginOf(mtd)), cellPctTone(marginOf(ytd))],
+      [cellBold('Margin'), cellPctTone(marginOf(last)), cellPctTone(marginOf(mtd)), cellPctTone(marginOf(ytd))],
     ],
   })
 
-  const rows = HEADS.filter(function (h) {
-    return (last && last[h[2]] != null) || mtd[h[2]] != null || (ytd && ytd[h[2]] != null)
-  })
-  if (rows.length) {
-    blocks.push({
+  // Type used to be a column. It is now the table it sits in, and the year to
+  // date column moved up into the totals: four columns is what a phone can
+  // hold without scrolling sideways, and sideways is where numbers go to die.
+  function lines(kind, id, head, caption) {
+    const rows = HEADS.filter(function (h) {
+      return h[1] === kind && ((last && last[h[2]] != null) || mtd[h[2]] != null)
+    })
+    if (!rows.length) return null
+    return {
       type: 'data_table',
-      block_id: 'qb_lines',
-      caption: 'Every revenue line and cost head, read across the same three windows',
-      page_size: 12,
+      block_id: id,
+      caption: caption,
+      page_size: 6,
       row_header_column_index: 0,
-      rows: [[cellText('Head'), cellText('Type'), cellText(lastLab), cellText('Month to date'), cellText('% of MTD revenue'), cellText(ytdLab)]]
+      rows: [[cellText(head), cellText(lastLab), cellText('MTD'), cellText('% rev')]]
         .concat(rows.map(function (h) {
           const sh = shareOf(mtd[h[2]], mtd.rev)
           return [
-            cellText(h[0]),
-            cellText(h[1]),
+            cellText(h[3] || h[0]),
             cellMoney(last, h[2]),
             cellMoney(mtd, h[2]),
             sh == null ? cellText('\u2014') : cellNum(sh, pct1(sh)),
-            cellMoney(ytd, h[2]),
           ]
         })),
-    })
+    }
   }
+
+  const rv = lines('Revenue', 'qb_rev', 'Line', 'Revenue lines \u00b7 share of month to date revenue')
+  const cs = lines('Cost', 'qb_cost', 'Head', 'Cost heads \u00b7 each read against month to date revenue')
+  if (rv) blocks.push(rv)
+  if (cs) blocks.push(cs)
   return blocks
 }
 
@@ -458,9 +463,10 @@ export const CEO_BRIEF_VERSIONS = [{
   what: [
     'A colour strip and KPI cards, green or red on the figure itself',
     'Revenue total and cost total split out, net inflow underneath in colour',
-    'Last day, month to date and year to date side by side in one sortable table',
+    'Last day, month to date and year to date side by side, four columns wide',
     'The read, open by default: where the month stands, what went wrong, what would close the gap',
     'No links back into the dashboard \u2014 every number is read inside Slack',
+  'Built for a phone: nothing scrolls sideways, nothing needs a laptop',
   ],
   build: buildQuantumBrief,
 }]
