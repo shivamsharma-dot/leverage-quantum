@@ -3572,3 +3572,37 @@ it only looks right in one of the four themes.
 Commit `06ba099`. Verified live on `/settings` and `/dashboard/lq-ops` in both
 light and dark. `grep -rn "<select" src/` returns one hit: the comment inside
 `Dropdown.jsx`.
+
+---
+
+## 2026-08-01 - Google Ads uses the Lead Qualification date picker
+
+Google Ads' Custom range was two raw `<input type="date">` boxes - browser
+chrome, `dd/mm/yyyy` placeholders, a different look on every OS. Lead
+Qualification already had a proper two-month range calendar, so that one
+became the shared component rather than writing a second picker.
+
+**New:** `src/components/DateRangePicker.jsx` - `CalMonth` plus
+`DateRangePicker`, lifted verbatim out of `LeadQualificationDashboard.jsx`.
+Props `{ from, to, onChange, onClose }`; `from`/`to` are `Date` objects,
+`onChange(from, to)` hands back `YYYY-MM-DD` strings. Self-contained: its own
+brand constants and theme tokens, so it needs nothing from the host page.
+
+**Google Ads** picks it up behind a `Pick dates` button that mirrors Lead
+Qualification's `Custom` button: closes on outside click, label turns into
+`2026-07-01 -> 2026-07-15` once a range is applied, and `Apply range` triggers
+the existing `loadTab` refetch. New state `customOpen`; `customFrom`/`customTo`
+keep the same `YYYY-MM-DD` shape the API already expected, so no fetch code
+changed.
+
+**LeadQualificationDashboard** now imports the shared picker; its local
+`CalMonth`, `DateRangePicker`, `MONTHS_SHORT`, `DAYS` and `fmt` were deleted.
+`fmtShort` stays - it is still used by the LD/L7D/MTD tooltips.
+
+**Still on native date inputs** (same swap will work): AIUnassigned,
+LeadSquared, LeadsAssigned, Referral, HumanQLDetail, HumanUnassigned,
+AIQLDetail.
+
+Commit `f91e8b9`. Verified live: picked 1-15 Jul on Google Ads, KPIs moved from
+15,633 leads / 56.8L to 11,815 / 28.6L, and Lead Qualification's own picker is
+unchanged.
