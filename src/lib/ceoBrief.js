@@ -50,6 +50,9 @@ const TAG = (text, color) => ({ type: 'tag', text, color })
 const SEC = elements => ({ type: 'rich_text_section', elements })
 const BULLETS = lines => ({ type: 'rich_text_list', style: 'bullet', elements: lines.map(l => SEC([T(l)])) })
 const RICH = elements => ({ type: 'rich_text', elements })
+// rich_text does not parse :shortcode: the way mrkdwn does -- an emoji inside a
+// rich_text section has to be its own element or it prints as literal text.
+const EMOJI = name => ({ type: 'emoji', name })
 
 // data_table cells. A rich_text cell is the only way to get a colour into a
 // table, so every figure that carries a verdict is rendered as a tag.
@@ -264,8 +267,8 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx) {
   if (total) {
     const kids = []
     if (notes.length) kids.push(RICH([SEC([T('Where the month stands', { bold: true })]), BULLETS(notes)]))
-    if (bad.length) kids.push(RICH([SEC([T(':red_circle: What went wrong', { bold: true })]), BULLETS(bad)]))
-    if (fix.length) kids.push(RICH([SEC([T(':large_green_circle: What would close the gap', { bold: true })]), BULLETS(fix)]))
+    if (bad.length) kids.push(RICH([SEC([EMOJI('red_circle'), T(' What went wrong', { bold: true })]), BULLETS(bad)]))
+    if (fix.length) kids.push(RICH([SEC([EMOJI('large_green_circle'), T(' What would close the gap', { bold: true })]), BULLETS(fix)]))
     if (caveats.length) kids.push(RICH([SEC([T('What we cannot tell yet', { bold: true })]), BULLETS(caveats)]))
     blocks.push({
       type: 'container',
