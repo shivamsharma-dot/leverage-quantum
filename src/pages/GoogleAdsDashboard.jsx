@@ -742,7 +742,7 @@ return(
 {customFrom&&customTo?customFrom+' \u2192 '+customTo:'Pick dates'}
 </button>
 {customOpen&&(<>
-<div onClick={()=>setCustomOpen(false)} style={{position:'fixed',inset:0,zIndex:399}}/>
+<div onClick={()=>{setCustomOpen(false);if(!(customFrom&&customTo))setDateRange(prevRangeRef.current)}} style={{position:'fixed',inset:0,zIndex:399}}/>
 <div style={{position:'absolute',right:0,top:'calc(100% + 8px)',zIndex:400,background:'var(--card)',border:'0.5px solid '+C.border,borderRadius:14,boxShadow:'0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)',overflow:'hidden'}}>
 <DateRangePicker
 from={customFrom?(()=>{const [y,m,d]=customFrom.split('-').map(Number);return new Date(y,m-1,d)})():null}
