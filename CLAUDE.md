@@ -3710,3 +3710,42 @@ actual. Month picker is the shared `Dropdown` (never a native select).
   the header shows a 'Through YYYY-MM-DD' chip.
 - Sheet is currently an empty template (Apr-2026 -> Mar-2027 grid, no values),
   so the live page correctly shows the 'no day filled in yet' state.
+
+---
+
+## 2026-08-01 - "Got an HTML page instead of CSV" on the B2C data source (735efc9)
+
+**Symptom.** Settings > Data > B2C Finance Sheet (CEO) > Test connection returned
+`Got an HTML page instead of CSV -- this sheet may no longer be shared publicly.
+Check its sharing settings.` The message pointed at sharing. Sharing was fine.
+
+**Proof it was not sharing.** Unauthenticated curl from the codespace:
+
+| URL form | Result |
+| --- | --- |
+| `/gviz/tq?tqx=out:csv&gid=0` | 200, 28061 B, `text/csv` |
+| `/export?format=csv&gid=0` | 200, 14884 B, `text/csv` |
+| `/pub?output=csv` | 401, `text/html` (never published to web - expected) |
+
+**Real cause.** `testSheetConnection` fetched the stored preference string verbatim
+(`const url = sheetUrls[key] || s.defaultUrl`). Every other data source in the list
+ships a `defaultUrl` that is already a `gviz/tq?tqx=out:csv&sheet=NAME` link, so this
+never bit before. For B2C I saved the plain address-bar link ending in `/edit`, which
+serves the HTML editor. The `startsWith('<')` guard then fired and blamed sharing.
+
+**Fix.** Added `normalizeSheetUrl()` in `src/pages/SettingsPage.jsx`, applied at BOTH
+the test call site and inside `saveSheetUrl` so the stored value is normalised too:
+
+- passes through anything already matching `gviz/tq | output=csv | format=csv`
+- rewrites `/spreadsheets/d/<id>/...` to `/gviz/tq?tqx=out:csv`, carrying `gid` over
+- returns the input unchanged if it is empty or not a Sheets URL
+
+Placeholder text changed from "Paste published/gviz CSV URL" to "Paste the sheet link
+or a CSV URL", since pasting the address-bar link is now genuinely fine.
+
+**Note.** The CEO B2C dashboard itself was never broken by this - `b2cSheetId()` in
+`api/crm-leads.js` pulls the bare file id out of whatever string is stored, so it read
+the sheet fine the whole time. Only the Settings self-test was misreporting.
+
+**Lesson.** When a data source is added, the stored URL must be a CSV endpoint, not the
+address-bar link - or normalised on the way in, which is what now happens.
