@@ -1,0 +1,33 @@
+/* CEO B2C - every colour comes from the theme tokens in index.css so the page
+   renders correctly under light / dark / navy / stone. */
+.layout   { display:flex; height:100vh; overflow:hidden; background:var(--bg); font-family:'Plus Jakarta Sans','Inter',sans-serif; }
+.main     { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+.header {
+  position:sticky; top:0; z-index:50;
+  background:var(--card); border-bottom:1px solid var(--card-border);
+  padding:0 32px; display:flex; align-items:center; justify-content:space-between;
+  gap:16px; height:56px; flex-shrink:0;
+}
+.headerLeft  { display:flex; flex-direction:column; justify-content:center; }
+.headerRight { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.breadcrumb  { font-size:10px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--text3); margin:0 0 1px; }
+.pageTitle   { font-size:16px; font-weight:700; letter-spacing:-.02em; color:var(--text); margin:0; }
+.content     { padding:20px 32px 40px; display:flex; flex-direction:column; gap:20px; }
+.kpis        { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }
+.card      { background:var(--card); border:1px solid var(--card-border); border-radius:14px; padding:16px 18px; }
+.cardHead  { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.cardTitle { font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--text); }
+.cardSub   { font-size:11px; color:var(--text3); }
+.table     { width:100%; border-collapse:collapse; font-size:12px; }
+.table th  { text-align:right; font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3); padding:8px 10px; border-bottom:1px solid var(--card-border); white-space:nowrap; }
+.table td  { padding:8px 10px; border-bottom:1px solid var(--card-border); color:var(--text2); text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.table th:first-child, .table td:first-child { text-align:left; }
+.table tr:last-child td { border-bottom:none; }
+.group  { font-weight:700; color:var(--text); text-transform:uppercase; font-size:10px; letter-spacing:.06em; }
+.total  { background:var(--bg2); }
+.total td { font-weight:700; color:var(--text); }
+.pos    { color:#15803D; }
+.neg    { color:#c0392b; }
+.empty  { padding:40px 12px; text-align:center; color:var(--text3); font-size:13px; line-height:1.7; }
+.badge  { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3); border:1px solid var(--card-border); border-radius:999px; padding:4px 10px; }
+.note   { font-size:11px; color:var(--text3); line-height:1.6; margin:12px 0 0; }

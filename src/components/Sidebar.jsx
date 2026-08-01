@@ -34,6 +34,7 @@ export const NAV = [
     items: [
       { to: '/', icon: <HomeIcon />, label: 'Summary', end: true },
       { to: '/dashboard/overall', icon: <OverallIcon />, label: 'Overall', end: false },
+      { to: '/dashboard/ceo-b2c', icon: <RevenueIcon />, label: 'CEO B2C', end: false },
     ]
   },
   {
@@ -138,6 +139,7 @@ export const PAGE_LIST = [
   { id:'ask_ai',         label:'Ask AI',      path:'/ask-ai',                  adminOnly:true  },
   { id:'agents',         label:'Agent Runs',  path:'/dashboard/agents',        adminOnly:true  },
   { id:'marketing_performance', label:'Marketing Performance', path:'/dashboard/marketing-performance', adminOnly:true },
+  { id:'ceo_b2c', label:'CEO B2C', path:'/dashboard/ceo-b2c', adminOnly:true },
   { id:'settings',     label:'Settings',     path:'/settings',              adminOnly:true  },
 ]
 
@@ -287,7 +289,7 @@ export default function Sidebar() {
     // Admin sees everything
     if (userRole === 'admin') return true
     // Plain viewer = all dashboards EXCEPT ask-ai/agents (must be explicitly granted)
-    if (userRole === 'viewer') return id !== 'ask_ai' && id !== 'agents' && id !== 'marketing_performance'
+    if (userRole === 'viewer') return id !== 'ask_ai' && id !== 'agents' && id !== 'marketing_performance' && id !== 'ceo_b2c'
     // Custom viewer access: "viewer:home,meta_ads,..." — only granted ids are visible
     if (userRole?.startsWith('viewer:')) {
       const granted = userRole.replace('viewer:', '').split(',').filter(Boolean)
@@ -297,7 +299,7 @@ export default function Sidebar() {
     if (userRole === 'roas_only') return id === 'roas'
     if (userRole?.startsWith('custom:')) return userRole.replace('custom:', '').split(',').filter(Boolean).includes(id)
     // Fallback: treat unknown as viewer (no ask-ai/agents)
-    return id !== 'ask_ai' && id !== 'agents' && id !== 'marketing_performance'
+    return id !== 'ask_ai' && id !== 'agents' && id !== 'marketing_performance' && id !== 'ceo_b2c'
   }
 
   const initials = user?.name

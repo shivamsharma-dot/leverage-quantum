@@ -10,6 +10,7 @@ export const SHEET_PREF_KEYS = {
     qlopsMonthly: 'sheet_url_qlops_monthly',
     whatsapp: 'sheet_url_whatsapp',
     fbleads: 'sheet_url_fbleads',
+  b2c: 'sheet_url_b2c',
     leadsAssigned: 'sheet_url_leads_assigned',
     googleLeads: 'sheet_url_googleleads',
     humanQlDetail: 'sheet_url_human_ql_detail',

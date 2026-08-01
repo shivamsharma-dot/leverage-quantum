@@ -26,6 +26,7 @@ export const COMPONENT_IMPORTS = {
   AskAI: () => import('../pages/AskAI'),
   AgentsDashboard: () => import('../pages/AgentsDashboard'),
   MarketingPerformanceReport: () => import('../pages/MarketingPerformanceReport'),
+  CeoB2CDashboard: () => import('../pages/CeoB2CDashboard'),
   SettingsPage: () => import('../pages/SettingsPage'),
 }
 
@@ -54,6 +55,7 @@ const ROUTE_COMPONENT = {
   '/ask-ai': 'AskAI',
   '/dashboard/agents': 'AgentsDashboard',
   '/dashboard/marketing-performance': 'MarketingPerformanceReport',
+  '/dashboard/ceo-b2c': 'CeoB2CDashboard',
   '/settings': 'SettingsPage',
 }
 

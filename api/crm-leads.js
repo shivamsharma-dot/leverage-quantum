@@ -570,6 +570,126 @@ async function handleBigQuery(req, res, me) {
 // the platform default, same pattern as api/send-report.js / api/ask-ai.mjs.
 export const maxDuration = 60
 
+// ---------------------------------------------------------------------------
+// B2C CEO dashboard  ->  /api/crm-leads?source=b2c
+// Finance owns a Google Sheet ("B2C") with one row per calendar day on the
+// Consolidated tab (revenue lines, cost lines, net inflow) plus four monthly
+// forecast/actual tabs. The sheet id is deliberately NOT hard-coded here --
+// this repo is public and the sheet carries P&L data -- so it is read from the
+// admin override app_preferences.sheet_url_b2c, else the B2C_SHEET_URL env.
+// ---------------------------------------------------------------------------
+const B2C_MONTH_TABS = [
+  ['people', 'People'],
+  ['operating', 'Operating_Cost'],
+  ['corp', 'Corp_Overheads'],
+  ['offline', 'Offline (rent, support staff costs, maitenance)'],
+];
+
+function b2cSheetId(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const m = s.match(/\/d\/([A-Za-z0-9_-]{20,})/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{20,}$/.test(s) ? s : '';
+}
+
+async function getB2CSheetId() {
+  try {
+    const { supabaseAdmin } = await import('../lib/auth.mjs');
+    const r = await supabaseAdmin('app_preferences?select=value&key=eq.sheet_url_b2c&limit=1');
+    if (r.ok) {
+      const rows = await r.json();
+      const id = b2cSheetId(rows[0] && rows[0].value);
+      if (id) return id;
+    }
+  } catch (_) {}
+  return b2cSheetId(process.env.B2C_SHEET_URL || '');
+}
+
+// '1,23,456' / '(1200)' / 'Rs 40' -> number. Blank or junk -> null, never 0,
+// so the UI can tell 'finance has not filled this in yet' from a real zero.
+function b2cNum(v) {
+  let s = String(v == null ? '' : v).replace(/[^0-9.()-]/g, '').trim();
+  if (!s || s === '-' || s === '()' || s === '.') return null;
+  let neg = false;
+  if (s.charAt(0) === '(' && s.charAt(s.length - 1) === ')') { neg = true; s = s.slice(1, -1); }
+  s = s.replace(/[()]/g, '');
+  const n = Number(s);
+  if (!isFinite(n)) return null;
+  return neg ? -n : n;
+}
+
+// Reads a gviz CSV tab and returns the column index map plus the raw cells.
+function b2cRows(csv, cols) {
+  const lines = String(csv || '').split(/\r?\n/).filter(function (l) { return l.trim().length > 0 });
+  if (lines.length < 2) return { at: {}, rows: [] };
+  const header = splitCsvLine(lines[0]).map(function (h) { return h.trim().toLowerCase() });
+  const at = {};
+  Object.keys(cols).forEach(function (k) { at[k] = header.indexOf(cols[k]) });
+  return { at: at, rows: lines.slice(1).map(splitCsvLine) };
+}
+
+const B2C_COLS = {
+  date: 'date', month: 'month',
+  sr: 'sr online revenue', ac: 'ac online revenue', vas: 'vas online revenue',
+  offRev: 'offline revenue', totalRev: 'total revenue',
+  people: 'people cost', pm: 'pm cost', op: 'operating cost',
+  offCost: 'offline cost', corp: 'corp. overheads',
+  totalCost: 'total cost', net: 'net inflow',
+};
+const B2C_VALUE_KEYS = ['sr', 'ac', 'vas', 'offRev', 'totalRev', 'people', 'pm', 'op', 'offCost', 'corp', 'totalCost', 'net'];
+
+async function handleB2C(req, res, me) {
+  const { canAccessDashboard } = await import('../lib/auth.mjs');
+  if (!canAccessDashboard(me.role, 'ceo_b2c')) return res.status(403).json({ error: 'Forbidden' });
+  const id = await getB2CSheetId();
+  if (!id) return res.status(200).json({ configured: false, days: [], monthly: {}, ts: Date.now() });
+  const base = 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv';
+  const grab = async function (u) {
+    const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!r.ok) throw new Error('sheet ' + r.status);
+    return r.text();
+  };
+  try {
+    const csvs = await Promise.all([grab(base + '&gid=0')].concat(
+      B2C_MONTH_TABS.map(function (t) { return grab(base + '&sheet=' + encodeURIComponent(t[1])) })
+    ));
+    const parsed = b2cRows(csvs[0], B2C_COLS);
+    const at = parsed.at;
+    const days = [];
+    let gridFrom = null;
+    let gridTo = null;
+    for (const row of parsed.rows) {
+      const iso = toIso(String(row[at.date] == null ? '' : row[at.date]).trim());
+      if (!iso) continue;
+      if (!gridFrom) gridFrom = iso;
+      gridTo = iso;
+      const d = { date: iso, month: String(row[at.month] == null ? '' : row[at.month]).trim() };
+      let any = false;
+      for (const k of B2C_VALUE_KEYS) {
+        const v = at[k] >= 0 ? b2cNum(row[at[k]]) : null;
+        d[k] = v;
+        if (v != null) any = true;
+      }
+      if (any) days.push(d);
+    }
+    const monthly = {};
+    B2C_MONTH_TABS.forEach(function (t, i) {
+      const p = b2cRows(csvs[i + 1], { month: 'month', actual: 'actual', forecast: 'forecast' });
+      monthly[t[0]] = p.rows.map(function (r) {
+        return {
+          month: String(r[p.at.month] == null ? '' : r[p.at.month]).trim(),
+          actual: p.at.actual >= 0 ? b2cNum(r[p.at.actual]) : null,
+          forecast: p.at.forecast >= 0 ? b2cNum(r[p.at.forecast]) : null,
+        };
+      }).filter(function (m) { return m.month });
+    });
+    return res.status(200).json({ configured: true, days: days, monthly: monthly, gridFrom: gridFrom, gridTo: gridTo, ts: Date.now() });
+  } catch (e) {
+    return res.status(502).json({ error: 'sheet fetch failed', detail: String((e && e.message) || e) });
+  }
+}
+
 export default async function handler(req, res) {
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
@@ -577,6 +697,7 @@ export default async function handler(req, res) {
 
   if ((req.query && req.query.source) === 'leadsquared') return handleLeadSquared(req, res, me)
   if ((req.query && req.query.source) === 'bigquery') return handleBigQuery(req, res, me)
+  if ((req.query && req.query.source) === 'b2c') return handleB2C(req, res, me)
 
   if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
     return res.status(403).json({ error: 'Forbidden' })

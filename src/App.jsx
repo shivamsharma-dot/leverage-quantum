@@ -28,6 +28,7 @@ const LeadSquaredDashboard = lazy(COMPONENT_IMPORTS.LeadSquaredDashboard)
 const AskAI = lazy(COMPONENT_IMPORTS.AskAI)
 const AgentsDashboard = lazy(COMPONENT_IMPORTS.AgentsDashboard)
 const MarketingPerformanceReport = lazy(COMPONENT_IMPORTS.MarketingPerformanceReport)
+const CeoB2CDashboard = lazy(COMPONENT_IMPORTS.CeoB2CDashboard)
 const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
 
 // Suspense fallback — slim skeleton shown while lazy chunk loads
@@ -97,7 +98,7 @@ function canAccess(role, dashboardId) {
   const userRole = role || 'viewer'
   if (dashboardId === 'settings') return userRole === 'admin'
   if (userRole === 'admin') return true
-  if (userRole === 'viewer') return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance'
+  if (userRole === 'viewer') return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance' && dashboardId !== 'ceo_b2c'
   if (userRole.startsWith('viewer:')) {
     const granted = userRole.replace('viewer:', '').split(',').filter(Boolean)
     return granted.includes(dashboardId)
@@ -107,7 +108,7 @@ function canAccess(role, dashboardId) {
     return userRole.replace('custom:', '').split(',').filter(Boolean).includes(dashboardId)
   }
   // Unknown/malformed role — fail safe (no ask-ai, no agents, no settings), not fail-open
-  return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance'
+  return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance' && dashboardId !== 'ceo_b2c'
 }
 
 // Ordered fallback for a denied route — first entry the role can actually access
@@ -236,6 +237,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute dashboardId="home"> <DashboardHome /></ProtectedRoute>} />
           <Route path="/dashboard/overall" element={<ProtectedRoute dashboardId="overall"> <OverallDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/ceo-b2c" element={<ProtectedRoute dashboardId="ceo_b2c"> <CeoB2CDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/roas" element={<ProtectedRoute dashboardId="roas"> <ROASDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/mtd" element={<ProtectedRoute dashboardId="mtd"> <MTDDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/lead-quality" element={<ProtectedRoute dashboardId="lead_quality"><LeadQualityDashboard /></ProtectedRoute>} />
