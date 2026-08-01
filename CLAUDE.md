@@ -3995,3 +3995,9 @@ Both sides of the sheet had a column called Offline: revenue (the AC and VAS
 sold offline) and cost (rent, support staff, maintenance). In one Slack message
 that reads as the same line twice. Revenue is now `Offline (AC + VAS)` and cost
 is `Offline (rent + staff)`, on the page, in the plan table and in the report.
+
+The how-to-read footer is gone from the B2C Slack report. Seven bullets of
+glossary at the end of every daily message is noise once the CEO has read it
+once. The SR note stays where it was, italic, directly under the revenue table:
+SR is Online and Offline together in the sheet today, the split is coming
+shortly. The version card now lists that note instead of the footer.

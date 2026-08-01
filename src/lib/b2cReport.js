@@ -175,15 +175,6 @@ L.push('')
 L.push(':warning: People cost is booked monthly in the sheet, not daily: ' + money(c.peopleMonthly) + ' for the month. It sits outside the cost and net inflow above.')
 }
 L.push.apply(L, diagnose(c))
-L.push('')
-L.push('*How to read this*')
-L.push('\u2022 Net inflow is revenue minus cost for the same period. Margin is net inflow as a share of that period\u2019s revenue.')
-L.push('\u2022 A negative margin, or a cost above 100% of revenue, means the period spent more than it earned.')
-L.push('\u2022 The three periods nest, they do not compare: the day sits inside the month and the month sits inside the year.')
-L.push('\u2022 The financial year runs 1 April to 31 March, so FY to date starts on 1 April and ends at the same cut-off as the other two.')
-L.push('\u2022 The breakdowns and the two closing sections are month to date only \u2014 not the day, not the year.')
-L.push('\u2022 The closing sections compare this month against the same run of days last month. They are arithmetic, not a forecast.')
-L.push('\u2022 Everything is read straight from the B2C finance sheet with no adjustment. A blank in the sheet stays blank here.')
 if (c.isTest) {
 L.push('')
 L.push('_Test send._')
@@ -203,7 +194,7 @@ what: [
 'The month\u2019s revenue by line and cost by head, each read against revenue',
 'What went wrong, named by line item and by amount against last month',
 'What would close the gap, costed on the spend side and the revenue side',
-'A short how-to-read footer',
+'A note that SR is Online and Offline together until the split lands',
 'The table image and a CSV land in the thread'
 ],
 build: buildB2C
