@@ -4040,3 +4040,13 @@ Operational note: `b2c-leverage-core` resolves from `slack_channel_b2c_core`, th
 `SLACK_CHANNEL_B2C_CORE`, then the literal `#b2c-leverage-core`. The bot has to be
 invited to the channel in Slack first; without that, `chat.postMessage` answers
 `not_in_channel` and the panel surfaces it verbatim.
+
+Gotcha that cost a deploy: `api/send-report.js` had to be renamed to
+`api/send-report.mjs`. `package.json` has no `"type": "module"`, so a `.js` file under
+`api/` is treated as CommonJS on Vercel. The file had survived on ESM syntax only
+because it imported nothing; the moment it imported `../shared/slackChannels.mjs` every
+call answered `FUNCTION_INVOCATION_FAILED`. Locally `node` reparses and hides this, so
+it built and imported clean and still broke in production. Every other API file that
+imports anything is already `.mjs` — that is the rule, not a coincidence. The route is
+unchanged: Vercel maps by filename without the extension, and nothing imports the file
+by path, only `/api/send-report` by URL.

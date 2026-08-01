@@ -386,7 +386,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
               <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
                 <Lock color={C.navy} />
                 <span style={{ fontSize:11.5, fontWeight:800, color:C.navy, fontFamily:MONO }}>{channelHandle(target)}</span>
-                <span style={{ fontSize:10.5, fontWeight:700, color:C.sub }}>is locked \u2014 the CEO reads it</span>
+                <span style={{ fontSize:10.5, fontWeight:700, color:C.sub }}>is locked &mdash; the CEO reads it</span>
               </div>
               <div style={{ fontSize:10.5, color:C.sub, lineHeight:1.55 }}>
                 {!pinInfo ? 'Checking the PIN\u2026'
