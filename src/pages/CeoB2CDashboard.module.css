@@ -11,26 +11,26 @@
 .headerLeft  { display:flex; flex-direction:column; justify-content:center; }
 .headerRight { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .breadcrumb  { font-size:10px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--text3); margin:0 0 1px; }
-.pageTitle   { font-size:16px; font-weight:700; letter-spacing:-.02em; color:var(--text); margin:0; }
+.pageTitle   { font-size:19px; font-weight:700; letter-spacing:-.02em; color:var(--text); margin:0; }
 .content     { padding:20px 32px 40px; display:flex; flex-direction:column; gap:20px; }
-.kpis        { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }
+.kpis        { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; }
 .card      { background:var(--card); border:1px solid var(--card-border); border-radius:14px; padding:16px 18px; }
 .cardHead  { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:12px; }
-.cardTitle { font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--text); }
-.cardSub   { font-size:11px; color:var(--text3); }
-.table     { width:100%; border-collapse:collapse; font-size:12px; }
-.table th  { text-align:right; font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3); padding:8px 10px; border-bottom:1px solid var(--card-border); white-space:nowrap; }
-.table td  { padding:8px 10px; border-bottom:1px solid var(--card-border); color:var(--text2); text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.cardTitle { font-size:14px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--text); }
+.cardSub   { font-size:13px; color:var(--text3); }
+.table     { width:100%; border-collapse:collapse; font-size:15px; }
+.table th  { text-align:right; font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3); padding:11px 14px; border-bottom:1px solid var(--card-border); white-space:nowrap; }
+.table td  { padding:11px 14px; border-bottom:1px solid var(--card-border); color:var(--text2); text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
 .table th:first-child, .table td:first-child { text-align:left; }
 .table tr:last-child td { border-bottom:none; }
-.group  { font-weight:700; color:var(--text); text-transform:uppercase; font-size:10px; letter-spacing:.06em; }
+.group  { font-weight:700; color:var(--text); text-transform:uppercase; font-size:12px; letter-spacing:.06em; }
 .total  { background:var(--bg2); }
 .total td { font-weight:700; color:var(--text); }
 .pos    { color:#15803D; }
 .neg    { color:#c0392b; }
-.empty  { padding:40px 12px; text-align:center; color:var(--text3); font-size:13px; line-height:1.7; }
-.badge  { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3); border:1px solid var(--card-border); border-radius:999px; padding:4px 10px; }
-.note   { font-size:11px; color:var(--text3); line-height:1.6; margin:12px 0 0; }
+.empty  { padding:40px 12px; text-align:center; color:var(--text3); font-size:15px; line-height:1.7; }
+.badge  { font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3); border:1px solid var(--card-border); border-radius:999px; padding:4px 10px; }
+.note   { font-size:13px; color:var(--text3); line-height:1.6; margin:12px 0 0; }
 /* .total td sets the bold text colour, so the sign colours need to win on
    specificity or the Net Inflow row loses its green / red. */
 .total td.pos { color:#15803D; }
@@ -39,3 +39,14 @@
    items centred, not baseline-aligned against the title. */
 .cardHead { align-items:center; }
 .cardTools { display:flex; align-items:center; gap:10px; }
+
+/* Read at arm’s length, and readable again in the PNG that goes to Slack:
+   the tables are the point of this page, so they are set larger than the rest
+   of Quantum. Narrow screens drop back to the compact scale. */
+@media (max-width: 900px) {
+  .content    { padding:16px 16px 32px; }
+  .table      { font-size:12px; }
+  .table th   { font-size:10px; padding:8px 10px; }
+  .table td   { padding:8px 10px; }
+  .pageTitle  { font-size:16px; }
+}
