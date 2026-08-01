@@ -646,7 +646,7 @@ const activeUsers = usePresence(user)
 const [searchParams,setSearchParams]=useSearchParams()
 const activeTab=searchParams.get('tab')||'campaigns'
 const [dateRange,setDateRange]=useState('LAST_30_DAYS');const [customFrom,setCustomFrom]=useState('');const [customTo,setCustomTo]=useState('');const [customOpen,setCustomOpen]=useState(false)
-const [dateOpen,setDateOpen]=useState(false)
+const [dateOpen,setDateOpen]=useState(false);const prevRangeRef=useRef('LAST_30_DAYS')
 const [showInfo,setShowInfo]=useState(false)
 const [lastSync,setLastSync]=useState(null)
 const [data,setData]=useState({})
@@ -727,7 +727,7 @@ return(
 <div onClick={()=>setDateOpen(false)} style={{position:'fixed',inset:0,zIndex:140}}/>
 <div style={{position:'absolute',top:'calc(100% + 6px)',right:0,zIndex:150,background:'var(--card)',border:'0.5px solid '+C.border,borderRadius:10,boxShadow:'0 14px 32px rgba(15,23,42,.14)',padding:6,minWidth:170}}>
 {DATE_RANGES.map(d=>(
-<div key={d.id} onClick={()=>{setDateRange(d.id);if(d.id!=='CUSTOM')setDateOpen(false)}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'7px 10px',borderRadius:7,fontSize:12.5,fontWeight:dateRange===d.id?700:500,color:dateRange===d.id?C.navy:C.text,background:dateRange===d.id?C.navyBg:'transparent',cursor:'pointer'}}>
+<div key={d.id} onClick={()=>{if(d.id==='CUSTOM'&&dateRange!=='CUSTOM')prevRangeRef.current=dateRange;setDateRange(d.id);setDateOpen(false);if(d.id==='CUSTOM')setCustomOpen(true)}} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'7px 10px',borderRadius:7,fontSize:12.5,fontWeight:dateRange===d.id?700:500,color:dateRange===d.id?C.navy:C.text,background:dateRange===d.id?C.navyBg:'transparent',cursor:'pointer'}}>
 {d.label}
 {dateRange===d.id&&<svg width='11' height='11' viewBox='0 0 24 24' fill='none' stroke={C.blue} strokeWidth='3' strokeLinecap='round' strokeLinejoin='round'><polyline points='20 6 9 17 4 12'/></svg>}
 </div>
@@ -747,8 +747,8 @@ return(
 <DateRangePicker
 from={customFrom?(()=>{const [y,m,d]=customFrom.split('-').map(Number);return new Date(y,m-1,d)})():null}
 to={customTo?(()=>{const [y,m,d]=customTo.split('-').map(Number);return new Date(y,m-1,d)})():null}
-onChange={(f,t)=>{setCustomFrom(f);setCustomTo(t);setCustomOpen(false)}}
-onClose={()=>setCustomOpen(false)}
+onChange={(f,t)=>{setCustomFrom(f||'');setCustomTo(t||'');setCustomOpen(false);if(!(f&&t))setDateRange(prevRangeRef.current)}}
+onClose={()=>{setCustomOpen(false);if(!(customFrom&&customTo))setDateRange(prevRangeRef.current)}}
 />
 </div>
 </>)}
