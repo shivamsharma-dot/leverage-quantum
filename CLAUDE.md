@@ -3606,3 +3606,25 @@ AIQLDetail.
 Commit `f91e8b9`. Verified live: picked 1-15 Jul on Google Ads, KPIs moved from
 15,633 leads / 56.8L to 11,815 / 28.6L, and Lead Qualification's own picker is
 unchanged.
+
+### 2026-08-01 - Google Ads date control unified (one click to Custom)
+
+**Problem:** picking `Custom` in the Google Ads range dropdown only revealed a
+separate `Pick dates` button - two clicks before the calendar appeared, and the
+page went blank in between. Lead Qualification opens its calendar in one click,
+so the two pages behaved differently.
+
+**Fix** (`src/pages/GoogleAdsDashboard.jsx`, commits 8053fc3 + e074569):
+- Choosing any option now closes the menu; choosing `Custom` also sets
+  `setCustomOpen(true)`, so the two-month calendar opens immediately.
+- `prevRangeRef` (a `useRef`) remembers the range that was active before Custom.
+- Dismissing the popover without a complete range - overlay click, `onClose`, or
+  `Clear` - restores `prevRangeRef.current`, so the dashboard is never left blank
+  on a Custom range with no dates.
+- The `Pick dates` chip stays as the label/edit affordance; once applied it reads
+  `2026-07-01 -> 2026-07-15`.
+
+**Gotcha:** the popover has TWO dismiss paths - the DateRangePicker's `onClose`
+prop AND the page's own fixed backdrop `<div onClick=...>`. Patching only the
+former looks correct in code but does nothing when the user clicks outside.
+Both had to be changed.
