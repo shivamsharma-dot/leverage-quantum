@@ -738,6 +738,7 @@ function OpportunitiesTab() {
   const allColumns = useMemo(() => [...OPPORTUNITIES_BASE_COLUMNS, ...fieldColumns], [fieldColumns])
   const [advSearch, setAdvSearch] = useState(null)
   const [truncated, setTruncated] = useState(false)
+  const [allTimeTotal, setAllTimeTotal] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -747,6 +748,7 @@ function OpportunitiesTab() {
       setRows(d.rows || [])
       setFieldColumns(d.fieldColumns || [])
       setTruncated(!!d.truncated)
+      setAllTimeTotal(typeof d.allTimeTotal === 'number' ? d.allTimeTotal : null)
     } catch (e) { setError(e.message); setRows([]); setFieldColumns([]) }
     finally { setLoading(false) }
   }, [since, until, status])
@@ -786,6 +788,7 @@ function OpportunitiesTab() {
       </Toolbar>
       <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 12px' }}>
         Showing <strong style={{ color: C.text }}>University Admission Opportunity</strong> — this account also tracks Fly Compass, Fly Homes, Forex, Ivy100 and others as separate Opportunity Types, not wired up here yet.
+        {typeof allTimeTotal === 'number' && <> This type has <strong style={{ color: C.text }}>{fmtN(allTimeTotal)}</strong> opportunities account-wide, all-time — always far more than any date window will show; that total isn't itself scoped by the date filter above.</>}
       </p>
       {error && <ErrorNote message={error} />}
       {!loading && truncated && <TruncationNote shown={rows.length} label="opportunities" />}
@@ -858,8 +861,9 @@ function PageInfoButton() {
             LeadSquared's own API caps every single request at 1,000 rows -- Quantum loops multiple requests to go well beyond that:
           </p>
           <ul style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.7, margin: '0 0 12px', paddingLeft: 18 }}>
-            <li><strong style={{ color: C.text }}>Leads &amp; Opportunities</strong> -- up to 10,000 rows per load (10 requests).</li>
-            <li><strong style={{ color: C.text }}>Activities</strong> -- up to 5,000 rows per load (5 requests). Deliberately lower: one Activity Type on this account alone was measured at 15.8 million records account-wide, so looping until "done" isn't realistic or useful here -- narrow the Activity Type or date window instead, same as LeadSquared's own Manage Activities screen expects you to.</li>
+            <li><strong style={{ color: C.text }}>Leads</strong> -- up to 10,000 rows per load (10 requests).</li>
+            <li><strong style={{ color: C.text }}>Opportunities</strong> -- up to 10,000 rows per load (10 requests). Deliberately not "load everything": LeadSquared's own Manage Opportunities screen was measured live at 4,870,025 total for this one Opportunity Type, account-wide, all-time -- narrow the date range for a load that actually captures the window you care about.</li>
+            <li><strong style={{ color: C.text }}>Activities</strong> -- up to 5,000 rows per load (5 requests). Deliberately lower still: one Activity Type on this account alone was measured at 15.8 million records account-wide, so looping until "done" isn't realistic or useful here -- narrow the Activity Type or date window instead, same as LeadSquared's own Manage Activities screen expects you to.</li>
           </ul>
           <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: '0 0 12px' }}>
             Rows load newest-first, so if a window has more than the ceiling, it's the OLDEST rows in that window that get left out -- and a banner says so on-screen whenever it happens, rather than silently showing a partial set as if it were everything.

@@ -236,19 +236,27 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, eventCode, s
     Conditions: [{ Type: 'Activity', ConOp: 'and', RowCondition: rowCondition }],
     QueryTimeZone: 'India Standard Time',
   }
+  // Cross-checked live against LeadSquared's own internal grid (its ActivityGrid endpoint,
+  // intercepted directly): with every filter genuinely cleared (Owner/Status/Stage all
+  // "any", date range "All Time"), the real "University Admission Opportunity" total is
+  // 4,870,025 -- not the few thousand this assumed. RecordCount here is the SAME real number
+  // this endpoint's own docs promise, so it's captured once and surfaced honestly instead of
+  // silently implying our bounded page-fetch (below) is anywhere close to complete.
+  let totalCount = null
   const fetchPage = (pageIndex, pageSize) => leadsquaredPost('/v2/OpportunityManagement.svc/Retrieve/BySearchParameter', creds, {
     OpportunityEventCode: code,
     AdvancedSearch: JSON.stringify(advancedSearch),
     Paging: { PageIndex: pageIndex, PageSize: pageSize },
     Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
-  }).then(data =>
+  }).then(data => {
     // Response shape is {"RecordCount":N,"List":[...]} per apidocs.leadsquared.com's own
     // documented example -- the original code checked data.Opportunities/data.RecordSet,
     // neither of which the docs ever showed; that silently returned [] even when the API
     // had real matching rows under "List", which is why every prior test here only ever
     // proved "no error", never "real data comes back". Confirmed live after fixing.
-    Array.isArray(data) ? data : (data && (data.List || data.Opportunities || data.RecordSet)) || []
-  )
+    if (totalCount == null && data && typeof data.RecordCount === 'number') totalCount = data.RecordCount
+    return Array.isArray(data) ? data : (data && (data.List || data.Opportunities || data.RecordSet)) || []
+  })
   const { rows: fetchedRows, truncated } = await fetchAllPages(fetchPage, OPPORTUNITIES_MAX_PAGES)
   let rows = fetchedRows
   if (since) rows = rows.filter(r => !r.CreatedOn || r.CreatedOn >= since + ' 00:00:00')
@@ -297,7 +305,15 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, eventCode, s
     fieldOrder.push(...seen)
   }
 
-  return { rows, count: rows.length, truncated, since, until, fieldColumns: fieldOrder }
+  // allTimeTotal is NOT scoped to the requested date window -- this endpoint's date filter
+  // only ever runs client-side on whatever page(s) get fetched (see the long comment on
+  // rowCondition above for why), so RecordCount here reflects every Opportunity of this
+  // type ever created, account-wide. Deliberately kept separate from `truncated` (which IS
+  // about this window) rather than combined into one misleading "X of Y" -- comparing a
+  // few thousand windowed rows against a multi-million all-time count would make the
+  // truncation banner fire on every single load regardless of whether the window itself was
+  // fully captured.
+  return { rows, count: rows.length, truncated, allTimeTotal: totalCount, since, until, fieldColumns: fieldOrder }
 }
 
 // ProspectActivity.svc/Retrieve -- single-lead activity timeline (leadId given), OR the
