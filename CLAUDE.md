@@ -3540,3 +3540,35 @@ with shortSource labels intact, and both Settings pickers including loading a
 saved query.
 
 Commit 20e59ad.
+
+---
+
+## 2026-08-01 - Dropdown made theme-aware + local copy removed
+
+**The bug I shipped yesterday.** When every native `<select>` was replaced with
+`src/components/Dropdown.jsx`, that component had hard-coded light colours
+(`#fff` panel, `#374151` text, `#E5E7EB` border). Quantum has four themes
+(`light`, `dark`, `navy`, `stone`) applied via `data-theme` on `<html>`, so on
+the three non-light themes all 19 dropdowns rendered as white pills on a dark
+page. Nobody reported it - I found it while checking a second Dropdown copy.
+
+**Fix.** `src/components/Dropdown.jsx` now takes every colour from the theme
+tokens in `index.css` - `var(--card)`, `var(--card-border)`, `var(--text)`,
+`var(--text3)`, `var(--bg3)`. Only the two brand constants stay literal
+(`NAVY #1F3C84`, `NAVY_TINT #E8EFF9`) because the themes do not override them.
+
+**Second copy removed.** `LeadQualificationDashboard.jsx` had its own 77-line
+`Dropdown` (the better one - theme-aware, with a caption `label`). The shared
+component absorbed its `label` prop and its tick-on-active row, the local copy
+was deleted, and the page now imports the shared one. Six call sites unchanged.
+
+**Props:** `{ options, value, onChange, label, minWidth = 100, disabled }`.
+`options` may be plain values or `{ value, label }` objects.
+
+**Rule reminder:** never a native `<select>` in Quantum, and never hard-code a
+surface or text colour in a shared component - use the theme tokens, otherwise
+it only looks right in one of the four themes.
+
+Commit `06ba099`. Verified live on `/settings` and `/dashboard/lq-ops` in both
+light and dark. `grep -rn "<select" src/` returns one hit: the comment inside
+`Dropdown.jsx`.
