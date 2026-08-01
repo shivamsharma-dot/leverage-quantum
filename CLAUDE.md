@@ -3821,3 +3821,49 @@ page has, in the page header next to the month picker.
   3.90 Cr on top of that.
 
 Build 12.21s, api still 12 files.
+
+## 2026-08-01 — CEO B2C: comparison, run-rate, cumulative toggle, month-on-month
+
+The page showed correct numbers with nothing to judge them against. Six changes,
+all additive context rather than new surfaces.
+
+**Prior-month comparison, like for like.** `prevMonth` is the entry before the
+selected one in `months`; `prevRows` takes that month's rows and `.slice(0,
+rows.length)`. A 12-day month to date is therefore compared with the first 12
+days of the month before, never with its finished total. `totals(rs)` was
+extracted out of the old `mtd` useMemo so both periods are summed by identical
+code. `hasPrev` gates every comparison; the first month in the sheet simply has
+none and the columns disappear.
+
+**KPI cards.** Four now, not five — "Latest Day Net Inflow" was deleted because
+the table already carries a full latest-day column. The remaining four each get
+a delta pill (%Δ vs the same days last month, `deltaInvert` on cost so
+over-spending reads red) and a `sub` line built by `ctx()`: month-end run-rate
+plus the prior-month figure. Run-rate is suppressed when `rows.length >= dim`,
+since on the last day of a month it would just repeat the MTD number.
+Net Margin compares in percentage points via `deltaLabel`, not %.
+
+**Table.** Two new columns behind `hasPrev`: the prior-month same-day total and
+a signed, colour-coded change cell (`dcell(v, invert)`). Group-row `colSpan`
+follows `hasPrev ? 6 : 4`. The Share column changed meaning for cost rows: it
+was % of total cost, it is now % of revenue, so "People is 21.8% of revenue"
+reads directly. Total Cost shows cost as a % of revenue; Net Inflow shows margin.
+
+**Charts.** No new chart types, and deliberately no donut, gauge or sparklines
+— they restate the table. The existing daily chart gained a Daily / Cumulative
+Dropdown (house rule: never a native select) that running-sums the same series,
+which answers "where does the month land" without a second chart. One genuinely
+new card, "Month on month": `months.slice(-4)` totalled through `totals()`,
+rendered with the same bar/bar/line encoding so it reads at a glance. It only
+renders when `trend.length > 1`.
+
+**Plan vs actual.** The Forecast and Variance columns are hidden unless some
+forecast exists (`hasPlan`), because an all-blank column is noise; the footnote
+swaps to explain the absence.
+
+**Slack.** Untouched apart from the CSV, which now carries the prior-month
+column when there is one. `buildSlackContext` is unchanged.
+
+Gotcha: `.cardHead` was `align-items:baseline`, which floats a Dropdown oddly.
+Changed to `center` and added `.cardTools`. The tools wrapper must be a `div`,
+not a `span` — Dropdown renders block content.
