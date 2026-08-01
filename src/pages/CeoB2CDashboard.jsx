@@ -7,6 +7,7 @@ import Button from '../components/Button'
 import SlackReportPanel from '../components/SlackReportPanel'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import { B2C_REPORT_VERSIONS } from '../lib/b2cReport'
+import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
 
 // Line items exactly as the finance sheet names them, in sheet order.
@@ -228,9 +229,45 @@ export default function CeoB2CDashboard() {
       margin: margin,
       day: day ? { date: day.date, rev: day.rev, cost: day.cost, net: day.net } : null,
       peopleMonthly: peopleMonthly,
-      ytd: fy
+      ytd: fy,
+      // Extra keys for the Quantum Brief builder. The existing B2C builders read
+      // none of these, so they are additive and change nothing for them.
+      partial: !!(dim && rows.length < dim),
+      throughTs: Math.floor(new Date(d1 + 'T00:00:00+05:30').getTime() / 1000),
+      d: hasPrev ? { rev: chg(mtd.rev, prev.rev), cost: chg(mtd.cost, prev.cost), net: chg(mtd.net, prev.net) } : {},
+      notes: [
+        mgDelta == null || margin == null ? null
+          : 'Net margin ' + margin.toFixed(1) + '%, ' + (mgDelta >= 0 ? 'up ' : 'down ') + Math.abs(mgDelta).toFixed(1) + ' pp on ' + prevLab + '.',
+        mtd.pm == null || !mtd.rev ? null
+          : 'Performance marketing is ' + ((mtd.pm / mtd.rev) * 100).toFixed(1) + '% of revenue.',
+        !dim || rows.length >= dim || mtd.net == null ? null
+          : 'At the run rate of the ' + rows.length + ' days so far, the month lands near ' + inr((mtd.net / rows.length) * dim) + ' net.',
+      ].filter(Boolean),
+      sources: [
+        {
+          id: 'src_sheet', title: 'B2C finance sheet', status: 'complete',
+          details: rows.length + ' completed day(s) read for ' + String(month || '').replace('-', ' ') + ', up to ' + d1 + '. The current day is never included.',
+          output: 'Revenue ' + inr(mtd.rev) + ' \u00b7 cost ' + inr(mtd.cost) + ' \u00b7 net ' + inr(mtd.net),
+          url: 'https://quantum.leverageedu.com/dashboard/ceo-b2c', label: 'CEO B2C',
+        },
+        {
+          id: 'src_prev', title: 'Like-for-like comparison', status: hasPrev ? 'complete' : 'error',
+          details: hasPrev ? prevLab + ' read over the same ' + prevRows.length + ' day(s), never against its finished total.' : 'No earlier month in the sheet to read this one against.',
+          output: hasPrev ? 'Net ' + inr(prev.net) + ' \u00b7 margin ' + (prevMargin == null ? '\u2014' : prevMargin.toFixed(1) + '%') : 'Not available',
+        },
+        {
+          id: 'src_plan', title: 'Monthly cost plan', status: hasPlan ? 'complete' : 'error',
+          details: hasPlan ? 'Forecast against actual for ' + shortMonth + '.' : 'No forecast has been entered for ' + shortMonth + ' yet, so only actuals are shown.',
+          output: peopleMonthly == null ? 'People cost not booked yet' : 'People ' + inr(peopleMonthly) + ', booked monthly',
+        },
+        {
+          id: 'src_fy', title: fy ? fy.label + ' to date' : 'Financial year to date', status: fy ? 'complete' : 'error',
+          details: fy ? fy.from + ' to ' + fy.to + ', cut off at exactly the same day as the month to date.' : 'Could not resolve the financial year window.',
+          output: fy ? 'Revenue ' + inr(fy.rev) + ' \u00b7 net ' + inr(fy.net) : 'Not available',
+        },
+      ]
     }
-  }, [month, d1, mtd, margin, day, peopleMonthly, fy])
+  }, [month, d1, mtd, margin, day, peopleMonthly, fy, dim, rows.length, hasPrev, prev, prevRows.length, prevLab, prevMargin, mgDelta, hasPlan, shortMonth])
   const captureSlackFiles = useCallback(async function () {
     await nextPaint()
     const node = tableRef.current
@@ -270,7 +307,7 @@ export default function CeoB2CDashboard() {
             <SlackReportPanel
               open={slackOpen}
               onClose={function () { setSlackOpen(false) }}
-              versions={B2C_REPORT_VERSIONS}
+              versions={[...CEO_BRIEF_VERSIONS, ...B2C_REPORT_VERSIONS]}
               buildContext={buildSlackContext}
               captureFiles={captureSlackFiles}
               dashboardId="ceo_b2c"
