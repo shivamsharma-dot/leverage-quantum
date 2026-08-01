@@ -8,6 +8,7 @@ import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
+import Dropdown from '../components/Dropdown'
 import { fetchCSV } from '../lib/sheetCache'
 import { getSession, setSession, getPersisted } from '../lib/sessionLoad'
 import { classifyCorridor, corridorLabel, CORRIDORS, classifyCampaignTypeFromName, isGoogleSource } from '../lib/corridors'
@@ -245,83 +246,6 @@ const DonutLabel = ({ cx, cy, total, label }) => (
   </text>
 )
 
-/* Custom production-grade dropdown - replaces all native <select> */
-const Dropdown = ({ options, value, onChange, label, minWidth = 120 }) => {
-  const [open, setOpen] = React.useState(false)
-  const ref = React.useRef(null)
-
-  React.useEffect(() => {
-    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} ref={ref}>
-      {label && <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT, whiteSpace: 'nowrap' }}>{label}</span>}
-      <div style={{ position: 'relative' }}>
-        {/* Trigger */}
-        <button
-          onClick={() => setOpen(v => !v)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '7px 14px', borderRadius: 8,
-            border: `0.5px solid ${open ? C.navy : C.border}`,
-            background: open ? C.navyBg : 'var(--card)',
-            color: C.text, cursor: 'pointer', fontFamily: FONT,
-            fontSize: 12.5, fontWeight: 700, minWidth,
-            boxShadow: open ? `0 0 0 3px rgba(31,60,132,0.08)` : 'none',
-            transition: 'all .15s', whiteSpace: 'nowrap',
-          }}>
-          <span style={{ flex: 1, textAlign: 'left' }}>{value}</span>
-          <svg width="10" height="6" viewBox="0 0 10 6" fill="none"
-            style={{ flexShrink: 0, transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-            <path d="M1 1l4 4 4-4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-
-        {/* Panel */}
-        {open && (
-          <div style={{
-            position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 500,
-            background: 'var(--card)', border: `0.5px solid ${C.border}`,
-            borderRadius: 12, boxShadow: '0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)',
-            padding: '6px', minWidth: Math.max(minWidth, 150),
-            maxHeight: 280, overflowY: 'auto',
-            scrollbarWidth: 'none',
-          }}>
-            {options.map(opt => {
-              const active = opt === value
-              return (
-                <button key={opt} onClick={() => { onChange(opt); setOpen(false) }}
-                  style={{
-                    display: 'block', width: '100%', textAlign: 'left',
-                    padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                    fontFamily: FONT, fontSize: 12.5,
-                    fontWeight: active ? 700 : 400,
-                    background: active ? C.navyBg : 'transparent',
-                    color: active ? C.navy : C.text,
-                    transition: 'background .1s, color .1s',
-                  }}
-                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg3)' }}
-                  onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    {opt}
-                    {active && (
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2.5" strokeLinecap="round">
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                    )}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
 
 
 /* -- Production date picker ------------------------------------------- */
