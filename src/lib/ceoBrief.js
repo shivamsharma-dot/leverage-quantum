@@ -468,6 +468,14 @@ function buildQuantumBrief(ctx) {
   if (c.partial) {
     caveats.push((c.monthLabel || 'This month') + ' is still running, so it is being read against a completed month.')
   }
+  var gaps = HEADS.filter(function (h) {
+    return mtd[h[2]] == null && !(h[2] === 'people' && peopleOutside)
+  }).map(function (h) { return h[3] || h[0] })
+  if (gaps.length) {
+    caveats.push(gaps.join(', ') + (gaps.length === 1 ? ' has' : ' have')
+      + ' no value in the sheet for this window, so the totals above leave '
+      + (gaps.length === 1 ? 'it' : 'them') + ' out.')
+  }
   if (c.prev && c.prev.days) {
     caveats.push(prevLab + ' is the first ' + c.prev.days + ' day'
       + (c.prev.days === 1 ? '' : 's') + ' of the month before, not its finished total, so both'
