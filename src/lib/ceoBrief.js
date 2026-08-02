@@ -332,6 +332,19 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx, p) {
 // red, then the revenue lines and the cost heads in a table each. Four columns
 // everywhere, because this is read on a phone.
 
+// The data_table block gives no control over column width, so on a phone its
+// last column falls off the right edge and the CEO has to drag sideways. The
+// plain table block does give control: the label column is told to wrap and the
+// figure columns are right aligned, which is what keeps a table inside a phone.
+// The caption is not part of that block, so it is written above it instead.
+function pushTable(out, t) {
+  if (!t || !t.rows || !t.rows.length) return out
+  const cols = t.rows[0].map((_, i) => (i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
+  if (t.caption) out.push({ type: 'context', elements: [{ type: 'mrkdwn', text: '*' + t.caption + '*' }] })
+  out.push({ type: 'table', block_id: t.block_id, column_settings: cols, rows: t.rows })
+  return out
+}
+
 function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab) {
   const blocks = []
 
@@ -351,7 +364,7 @@ function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab) {
   // Three columns is what a phone shows without cutting one off, so the month
   // and the month before get one table and the day and the year get another.
   if (prev) {
-    blocks.push({
+    pushTable(blocks, {
       type: 'data_table',
       block_id: 'qb_totals_mom',
       caption: 'Month to date against ' + prevLab + ', same number of days',
@@ -367,7 +380,7 @@ function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab) {
     })
   }
 
-  blocks.push({
+  pushTable(blocks, {
     type: 'data_table',
     block_id: 'qb_totals_day',
     caption: 'Last completed day and the financial year so far',
@@ -406,8 +419,8 @@ function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab) {
 
   const rv = lines('Revenue', 'qb_rev', 'Line', 'Revenue lines, month to date against ' + prevLab, 'Total revenue', false)
   const cs = lines('Cost', 'qb_cost', 'Head', 'Cost heads, month to date against ' + prevLab, 'Total cost', true)
-  if (rv) blocks.push(rv)
-  if (cs) blocks.push(cs)
+  if (rv) pushTable(blocks, rv)
+  if (cs) pushTable(blocks, cs)
   return blocks
 }
 
