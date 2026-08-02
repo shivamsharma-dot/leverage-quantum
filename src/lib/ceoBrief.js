@@ -124,13 +124,13 @@ const cellMoneyVs = (o, p, k, invert) => {
 // exactly the same code below.
 
 const HEADS = [
-  ['SR Online', 'Revenue', 'sr', 'SR'],
-  ['AC Online', 'Revenue', 'ac', 'AC'],
-  ['VAS Online', 'Revenue', 'vas', 'VAS'],
-  ['Offline revenue', 'Revenue', 'offRev', 'Offline'],
+  ['SR (online + offline)', 'Revenue', 'sr', 'SR'],
+  ['AC online', 'Revenue', 'ac', 'AC'],
+  ['VAS online', 'Revenue', 'vas', 'VAS'],
+  ['Offline revenue (AC + VAS)', 'Revenue', 'offRev', 'Offline'],
   ['Perf. Marketing', 'Cost', 'pm', 'Marketing'],
-  ['Operating', 'Cost', 'op', 'Operating'],
-  ['Offline cost', 'Cost', 'offCost', 'Offline'],
+  ['Operating (AC + VAS)', 'Cost', 'op', 'Operating'],
+  ['Offline cost (rent, staff, upkeep)', 'Cost', 'offCost', 'Offline'],
   ['Corp. Overheads', 'Cost', 'corp', 'Overheads'],
   ['People', 'Cost', 'people', 'People'],
 ]
@@ -467,6 +467,11 @@ function buildQuantumBrief(ctx) {
   }
   if (c.partial) {
     caveats.push((c.monthLabel || 'This month') + ' is still running, so it is being read against a completed month.')
+  }
+  if (c.prev && c.prev.days) {
+    caveats.push(prevLab + ' is the first ' + c.prev.days + ' day'
+      + (c.prev.days === 1 ? '' : 's') + ' of the month before, not its finished total, so both'
+      + ' columns cover the same stretch of the month.')
   }
 
   // Text fallbacks. Notifications, search and the Send to Slack preview all read
