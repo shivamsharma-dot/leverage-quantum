@@ -82,6 +82,36 @@ function card(id, title, subtitle, body, opts) {
   return c
 }
 
+// data_visualization is the one native block that redraws itself to the width it
+// is given, so it is the only honest way to show nine heads on a phone. Two per
+// message is the hard limit, and every series has to carry a point for every
+// category, so gaps are sent as zero rather than dropped.
+const CRV = n => (n == null || !isFinite(n) ? 0 : Number((n / CR).toFixed(2)))
+
+function bars(title, cats, aName, aVals, bName, bVals) {
+  if (!cats.length) return null
+  return {
+    type: 'data_visualization',
+    title: String(title).slice(0, 50),
+    chart: {
+      type: 'bar',
+      series: [
+        { name: String(aName).slice(0, 20), data: cats.map(function (c, i) { return { label: c, value: aVals[i] } }) },
+        { name: String(bName).slice(0, 20), data: cats.map(function (c, i) { return { label: c, value: bVals[i] } }) },
+      ],
+      axis_config: { categories: cats, y_label: '\u20b9 Cr' },
+    },
+  }
+}
+
+// A figure that is judged against the same days of the month before: the colour
+// is the comparison, so the phone does not need a fourth column to carry it.
+const cellMoneyVs = (o, p, k, invert) => {
+  if (!o || o[k] == null) return cellText('\u2014')
+  if (!p || p[k] == null) return cellNum(o[k], money(o[k]))
+  return cellTag(money(o[k]), tone(o[k] - p[k], invert))
+}
+
 // -- one shape for all three windows ------------------------------------------
 // The sheet names offline revenue offRev and offline cost offCost; the
 // month-to-date context hands the same two over as rev.off and cost.off.
@@ -193,7 +223,7 @@ function insights(c, w, p, margin, ym) {
 
 // -- message 1: the brief -----------------------------------------------------
 
-function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx) {
+function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx, p) {
   const d = c.d || {}
   const charts = c.charts || {}
   const throughTs = c.throughTs || Math.floor(Date.now() / 1000)
@@ -252,6 +282,16 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx) {
   }
   blocks.push({ type: 'carousel', block_id: 'qb_kpis', elements: cards.slice(0, 10) })
 
+  // The month against the same days of the month before, drawn by Slack itself.
+  if (p && (p.rev != null || p.cost != null)) {
+    const lab = (c.prev && c.prev.label) || 'Month before'
+    const chart = bars('This month against ' + lab + ' \u00b7 \u20b9 Cr',
+      ['Revenue', 'Cost', 'Net inflow'],
+      (c.monthLabel || 'This month').slice(0, 20), [CRV(w.rev), CRV(w.cost), CRV(w.net)],
+      lab.slice(0, 20), [CRV(p.rev), CRV(p.cost), CRV(p.net)])
+    if (chart) blocks.push(chart)
+  }
+
   // The read. Four sections, each a list of rules that fired over the numbers
   // in the ledger message: nothing here is generated prose, and every figure
   // can be checked against the table below it. Left expanded, because this is
@@ -299,7 +339,7 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx) {
 // red, then the revenue lines and the cost heads in a table each. Four columns
 // everywhere, because this is read on a phone.
 
-function ledgerBlocks(last, mtd, ytd, lastLab, ytdLab) {
+function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab) {
   const blocks = []
 
   blocks.push({ type: 'header', text: { type: 'plain_text', text: 'Revenue, cost, net inflow', emoji: true } })
@@ -315,52 +355,82 @@ function ledgerBlocks(last, mtd, ytd, lastLab, ytdLab) {
     ]),
   ]))
 
+  // Three columns is what a phone shows without cutting one off, so the month
+  // and the month before get one table and the day and the year get another.
+  if (prev) {
+    blocks.push({
+      type: 'data_table',
+      block_id: 'qb_totals_mom',
+      caption: 'Month to date against ' + prevLab + ', same number of days',
+      page_size: 4,
+      row_header_column_index: 0,
+      rows: [
+        [cellText('Total'), cellText('MTD'), cellText(prevLab)],
+        [cellBold('Revenue'), cellMoneyVs(mtd, prev, 'rev'), cellMoney(prev, 'rev')],
+        [cellBold('Cost'), cellMoneyVs(mtd, prev, 'cost', true), cellMoney(prev, 'cost')],
+        [cellBold('Net inflow'), cellMoneyTone(mtd, 'net'), cellMoneyTone(prev, 'net')],
+        [cellBold('Margin'), cellPctTone(marginOf(mtd)), cellPctTone(marginOf(prev))],
+      ],
+    })
+  }
+
   blocks.push({
     type: 'data_table',
-    block_id: 'qb_totals',
-    caption: 'Totals \u00b7 ' + lastLab + ', month to date, ' + ytdLab,
+    block_id: 'qb_totals_day',
+    caption: 'Last completed day and the financial year so far',
     page_size: 4,
     row_header_column_index: 0,
     rows: [
-      [cellText('Total'), cellText(lastLab), cellText('MTD'), cellText('YTD')],
-      [cellBold('Revenue'), cellMoney(last, 'rev'), cellMoney(mtd, 'rev'), cellMoney(ytd, 'rev')],
-      [cellBold('Cost'), cellMoney(last, 'cost'), cellMoney(mtd, 'cost'), cellMoney(ytd, 'cost')],
-      [cellBold('Net inflow'), cellMoneyTone(last, 'net'), cellMoneyTone(mtd, 'net'), cellMoneyTone(ytd, 'net')],
-      [cellBold('Margin'), cellPctTone(marginOf(last)), cellPctTone(marginOf(mtd)), cellPctTone(marginOf(ytd))],
+      [cellText('Total'), cellText(lastLab), cellText(ytdLab)],
+      [cellBold('Revenue'), cellMoney(last, 'rev'), cellMoney(ytd, 'rev')],
+      [cellBold('Cost'), cellMoney(last, 'cost'), cellMoney(ytd, 'cost')],
+      [cellBold('Net inflow'), cellMoneyTone(last, 'net'), cellMoneyTone(ytd, 'net')],
+      [cellBold('Margin'), cellPctTone(marginOf(last)), cellPctTone(marginOf(ytd))],
     ],
   })
 
-  // Type used to be a column. It is now the table it sits in, and the year to
-  // date column moved up into the totals: four columns is what a phone can
-  // hold without scrolling sideways, and sideways is where numbers go to die.
-  function lines(kind, id, head, caption) {
+  // Type used to be a column. It is now the table it sits in, the month before
+  // took the third column, and each table closes on its own total.
+  function lines(kind, id, head, caption, totalLabel, invert) {
     const rows = HEADS.filter(function (h) {
-      return h[1] === kind && ((last && last[h[2]] != null) || mtd[h[2]] != null)
+      return h[1] === kind && (mtd[h[2]] != null || (prev && prev[h[2]] != null))
     })
     if (!rows.length) return null
+    const body = rows.map(function (h) {
+      return [cellText(h[3] || h[0]), cellMoneyVs(mtd, prev, h[2], invert), cellMoney(prev, h[2])]
+    })
+    const k = kind === 'Revenue' ? 'rev' : 'cost'
+    body.push([cellBold(totalLabel), cellBold(money(mtd[k])), cellBold(money(prev && prev[k]))])
     return {
       type: 'data_table',
       block_id: id,
       caption: caption,
-      page_size: 6,
+      page_size: 7,
       row_header_column_index: 0,
-      rows: [[cellText(head), cellText(lastLab), cellText('MTD'), cellText('% rev')]]
-        .concat(rows.map(function (h) {
-          const sh = shareOf(mtd[h[2]], mtd.rev)
-          return [
-            cellText(h[3] || h[0]),
-            cellMoney(last, h[2]),
-            cellMoney(mtd, h[2]),
-            sh == null ? cellText('\u2014') : cellNum(sh, pct1(sh)),
-          ]
-        })),
+      rows: [[cellText(head), cellText('MTD'), cellText(prevLab)]].concat(body),
     }
   }
 
-  const rv = lines('Revenue', 'qb_rev', 'Line', 'Revenue lines \u00b7 share of month to date revenue')
-  const cs = lines('Cost', 'qb_cost', 'Head', 'Cost heads \u00b7 each read against month to date revenue')
+  const rv = lines('Revenue', 'qb_rev', 'Line', 'Revenue lines, month to date against ' + prevLab, 'Total revenue', false)
+  const cs = lines('Cost', 'qb_cost', 'Head', 'Cost heads, month to date against ' + prevLab, 'Total cost', true)
   if (rv) blocks.push(rv)
   if (cs) blocks.push(cs)
+
+  // Two charts is the per-message limit, so they go where the columns had to be
+  // dropped: one for the lines, one for the heads.
+  if (prev) {
+    const rvHeads = HEADS.filter(function (h) { return h[1] === 'Revenue' && (mtd[h[2]] != null || prev[h[2]] != null) })
+    const csHeads = HEADS.filter(function (h) { return h[1] === 'Cost' && (mtd[h[2]] != null || prev[h[2]] != null) })
+    const mtdLab = 'MTD'
+    const c1 = bars('Revenue lines \u00b7 \u20b9 Cr', rvHeads.map(function (h) { return h[3] || h[0] }),
+      mtdLab, rvHeads.map(function (h) { return CRV(mtd[h[2]]) }),
+      prevLab, rvHeads.map(function (h) { return CRV(prev[h[2]]) }))
+    const c2 = bars('Cost heads \u00b7 \u20b9 Cr', csHeads.map(function (h) { return h[3] || h[0] }),
+      mtdLab, csHeads.map(function (h) { return CRV(mtd[h[2]]) }),
+      prevLab, csHeads.map(function (h) { return CRV(prev[h[2]]) }))
+    if (c1) blocks.push(c1)
+    if (c2) blocks.push(c2)
+  }
   return blocks
 }
 
@@ -379,6 +449,7 @@ function buildQuantumBrief(ctx) {
   const ytd = fromSheet(c.ytd)
   const lastLab = day && day.date ? day.date : 'Last day'
   const ytdLab = (c.ytd && c.ytd.label ? c.ytd.label : 'Year') + ' to date'
+  const prevLab = (c.prev && c.prev.label) || 'Month before'
 
   // The prior window, normalised the same way, so the diagnosis compares a
   // 31-day month to the first 31 days of the one before it and never to its
@@ -419,6 +490,11 @@ function buildQuantumBrief(ctx) {
   lb.push('*Net inflow*  ' + lastLab + ' ' + money(last && last.net) + ' \u00b7 MTD ' + money(mtd.net) + ' \u00b7 ' + ytdLab + ' ' + money(ytd && ytd.net))
   lb.push('')
   lb.push('_Net margin_  ' + pct1(marginOf(last)) + ' \u00b7 ' + pct1(marginOf(mtd)) + ' \u00b7 ' + pct1(marginOf(ytd)))
+  if (prevW) {
+    lb.push('')
+    lb.push('*Against ' + prevLab + '* revenue ' + money(prevW.rev) + ' \u00b7 cost ' + money(prevW.cost)
+      + ' \u00b7 net ' + money(prevW.net) + ' \u00b7 margin ' + pct1(marginOf(prevW)))
+  }
 
   return [
     {
@@ -426,7 +502,7 @@ function buildQuantumBrief(ctx) {
       id: 'QB-1',
       label: 'Quantum Brief',
       text: fb.join('\n'),
-      blocks: briefBlocks(c, mtd, day, margin, peopleOutside, notes, caveats, dx),
+      blocks: briefBlocks(c, mtd, day, margin, peopleOutside, notes, caveats, dx, prevW),
       attach: true,
       metadata: {
         event_type: 'quantum_brief',
@@ -448,7 +524,7 @@ function buildQuantumBrief(ctx) {
       id: 'QB-2',
       label: 'Split totals \u2014 last day, MTD, YTD',
       text: lb.join('\n'),
-      blocks: ledgerBlocks(last, mtd, ytd, lastLab, ytdLab),
+      blocks: ledgerBlocks(last, mtd, ytd, prevW, lastLab, ytdLab, prevLab),
     },
   ]
 }
@@ -463,7 +539,9 @@ export const CEO_BRIEF_VERSIONS = [{
   what: [
     'A colour strip and KPI cards, green or red on the figure itself',
     'Revenue total and cost total split out, net inflow underneath in colour',
-    'Last day, month to date and year to date side by side, four columns wide',
+    'Month to date against the same days of the month before, line by line',
+  'A total row on the revenue lines and on the cost heads',
+  'Native Slack charts that redraw themselves to the width of the phone',
     'The read, open by default: where the month stands, what went wrong, what would close the gap',
     'No links back into the dashboard \u2014 every number is read inside Slack',
   'Built for a phone: nothing scrolls sideways, nothing needs a laptop',
