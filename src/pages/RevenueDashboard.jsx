@@ -202,10 +202,10 @@ export default function RevenueDashboard(){
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={acVasMonthly} margin={{top:4,right:8,left:0,bottom:0}} barCategoryGap="25%"><defs><linearGradient id="gradRev" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#1C9FD4" stopOpacity={0.15}/><stop offset="95%" stopColor="#1C9FD4" stopOpacity={0}/></linearGradient></defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
-                <XAxis dataKey="month" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmtR(v)} width={70}/>
+                <XAxis dataKey="month" tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
+                <YAxis tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmtR(v)} width={70}/>
                 <Tooltip content={<BrandTooltip/>}/>
-                <Legend wrapperStyle={{fontSize:11}}/>
+                <Legend wrapperStyle={{fontSize:12.5}}/>
                 <Bar dataKey="AC"  name="AC Revenue"  fill="#4CAE6F" radius={[4,4,0,0]}/>
                 <Bar dataKey="VAS" name="VAS Revenue" fill="#1C9FD4" radius={[4,4,0,0]}/>
               </BarChart>
@@ -220,10 +220,10 @@ export default function RevenueDashboard(){
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={collectionMonthly} margin={{top:4,right:8,left:0,bottom:0}} barCategoryGap="25%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
-                <XAxis dataKey="month" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmtR(v)} width={75}/>
+                <XAxis dataKey="month" tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
+                <YAxis tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmtR(v)} width={75}/>
                 <Tooltip content={<BrandTooltip/>}/>
-                <Legend wrapperStyle={{fontSize:11}}/>
+                <Legend wrapperStyle={{fontSize:12.5}}/>
                 <Bar dataKey="Collected"  fill="#F59E0B" radius={[4,4,0,0]}/>
                 <Bar dataKey="Projected"  fill="#E5E7EB" radius={[4,4,0,0]}/>
               </BarChart>
@@ -267,10 +267,10 @@ export default function RevenueDashboard(){
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={unidMonthly} margin={{top:4,right:8,left:0,bottom:0}} barCategoryGap="25%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
-                <XAxis dataKey="month" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmtR(v)} width={70}/>
+                <XAxis dataKey="month" tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
+                <YAxis tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmtR(v)} width={70}/>
                 <Tooltip content={<BrandTooltip/>}/>
-                <Legend wrapperStyle={{fontSize:11}}/>
+                <Legend wrapperStyle={{fontSize:12.5}}/>
                 <Bar dataKey="Identified"   fill="#4CAE6F" radius={[4,4,0,0]} stackId="u"/>
                 <Bar dataKey="Unidentified" fill="#E5E7EB" radius={[4,4,0,0]} stackId="u"/>
               </BarChart>
