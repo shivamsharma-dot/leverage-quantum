@@ -231,8 +231,8 @@ export default function ROASDashboard(){
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
-                <XAxis dataKey="month_short" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmt(v)} width={65}/>
+                <XAxis dataKey="month_short" tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
+                <YAxis tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmt(v)} width={65}/>
                 <Tooltip content={<BrandTooltip/>}/>
                 <Area type="monotone" dataKey="spend" name="Spend" stroke="#1C9FD4" strokeWidth={2.5} fill="url(#spendGrad)" dot={false} activeDot={{r:5,fill:'#1C9FD4'}}/>
               </AreaChart>
@@ -248,10 +248,10 @@ export default function ROASDashboard(){
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={monthlyChart.filter(m=>m.total_rev>0||m.proj_rev>0)} margin={{top:8,right:8,left:0,bottom:0}} barCategoryGap="25%">
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
-                <XAxis dataKey="month_short" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmt(v)} width={70}/>
+                <XAxis dataKey="month_short" tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
+                <YAxis tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmt(v)} width={70}/>
                 <Tooltip content={<BrandTooltip/>}/>
-                <Legend wrapperStyle={{fontSize:11,paddingTop:8}}/>
+                <Legend wrapperStyle={{fontSize:12.5,paddingTop:8}}/>
                 <Bar dataKey="total_rev" name="Actual Rev"   fill="#4CAE6F" radius={[5,5,0,0]} fillOpacity={0.9}/>
                 <Bar dataKey="proj_rev"  name="Proj Rev"     fill="#1C9FD4" radius={[5,5,0,0]} fillOpacity={0.6}/>
               </BarChart>
@@ -267,10 +267,10 @@ export default function ROASDashboard(){
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={monthlyChart.filter(m=>m.roas>0||m.proj_roas>0)} margin={{top:8,right:16,left:0,bottom:0}}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
-                <XAxis dataKey="month_short" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
-                <YAxis tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>v+'x'} width={42}/>
+                <XAxis dataKey="month_short" tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
+                <YAxis tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>v+'x'} width={42}/>
                 <Tooltip content={<BrandTooltip/>}/>
-                <Legend wrapperStyle={{fontSize:11,paddingTop:8}}/>
+                <Legend wrapperStyle={{fontSize:12.5,paddingTop:8}}/>
                 <Line type="monotone" dataKey="roas"      name="ROAS"      stroke="#4CAE6F" strokeWidth={2.5} dot={{r:5,strokeWidth:2,fill:'#fff',stroke:'#4CAE6F'}} activeDot={{r:6}}/>
                 <Line type="monotone" dataKey="proj_roas" name="Proj ROAS" stroke="#1C9FD4" strokeWidth={2} strokeDasharray="6 3" dot={{r:4,strokeWidth:2,fill:'#fff',stroke:'#1C9FD4'}} activeDot={{r:5}}/>
               </LineChart>
