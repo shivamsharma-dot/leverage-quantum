@@ -12,9 +12,9 @@ import { getButtonVariantStyle } from '../ui/buttonVariants'
 const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 
 const SIZES = {
-  sm: { padding: '7px 14px', fontSize: 12.5, gap: 6, iconSize: 14 },
-  md: { padding: '10px 20px', fontSize: 13.5, gap: 8, iconSize: 15 },
-  lg: { padding: '12px 24px', fontSize: 14.5, gap: 9, iconSize: 17 },
+  sm: { padding: '7px 14px', fontSize: 13.5, gap: 6, iconSize: 14 },
+  md: { padding: '10px 20px', fontSize: 14.5, gap: 8, iconSize: 15 },
+  lg: { padding: '12px 24px', fontSize: 15.5, gap: 9, iconSize: 17 },
 }
 
 export default function Button({
