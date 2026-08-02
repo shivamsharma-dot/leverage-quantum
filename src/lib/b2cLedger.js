@@ -222,7 +222,12 @@ return cols.some(function (col) { return col.v[p[0]] != null })
 
 const L = []
 L.push(':ledger: *B2C \u2014 the full ledger*')
-L.push('_Every line the finance sheet carries, read across the last completed day, the month so far and the financial year so far. Everything stops at ' + (c.through || 'the last completed day') + '; the day in progress is never counted._')
+// The cut-off is the last day actually in this report, not simply today
+// minus one. They are the same thing on the live month and they are not the
+// same when an earlier month is picked, and a header that disagrees with its
+// own table is exactly what gets a report distrusted.
+const cut = (c.day && c.day.date) || c.through || 'the last completed day'
+L.push('_Every line the finance sheet carries, read across the last completed day, the month so far and the financial year so far. Everything stops at ' + cut + '; the day in progress is never counted._')
 
 L.push('')
 L.push('*Rupees*')
