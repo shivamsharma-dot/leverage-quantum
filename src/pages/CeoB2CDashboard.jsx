@@ -7,6 +7,7 @@ import Button from '../components/Button'
 import SlackReportPanel from '../components/SlackReportPanel'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import { B2C_REPORT_VERSIONS } from '../lib/b2cReport'
+import { B2C_LEDGER_VERSIONS } from '../lib/b2cLedger'
 import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
 
@@ -261,6 +262,10 @@ export default function CeoB2CDashboard() {
       // the builder re-derive it, so the message can never disagree with the table.
       prev: hasPrev ? {
         label: prevLab,
+        // How many days that window actually holds. A 31 day month read against
+        // a 30 day one is a calendar artefact, and a builder cannot see that
+        // without the count, so it travels with the comparison.
+        days: prevRows.length,
         rev: { sr: prev.sr, ac: prev.ac, vas: prev.vas, off: prev.offRev, total: prev.rev },
         cost: { pm: prev.pm, op: prev.op, off: prev.offCost, corp: prev.corp, people: prev.people, total: prev.cost },
         net: prev.net
@@ -348,7 +353,7 @@ export default function CeoB2CDashboard() {
             <SlackReportPanel
               open={slackOpen}
               onClose={function () { setSlackOpen(false) }}
-              versions={[...CEO_BRIEF_VERSIONS, ...B2C_REPORT_VERSIONS]}
+              versions={[...CEO_BRIEF_VERSIONS, ...B2C_REPORT_VERSIONS, ...B2C_LEDGER_VERSIONS]}
               buildContext={buildSlackContext}
               captureFiles={captureSlackFiles}
               dashboardId="ceo_b2c"
