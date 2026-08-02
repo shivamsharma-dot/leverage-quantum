@@ -57,7 +57,9 @@ const EMOJI = name => ({ type: 'emoji', name })
 // data_table cells. A rich_text cell is the only way to get a colour into a
 // table, so every figure that carries a verdict is rendered as a tag.
 const cellText = v => ({ type: 'raw_text', text: v == null || v === '' ? '\u2014' : String(v) })
-const cellNum = (value, text) => ({ type: 'raw_number', value: Number(value) || 0, text: text || '\u2014' })
+// A raw_number cell renders empty inside a table block, so every figure is
+// written as text. Nothing here is sorted, so the numeric type buys nothing.
+const cellNum = (value, text) => ({ type: 'raw_text', text: text || '\u2014' })
 const cellBold = v => RICH([SEC([T(v == null || v === '' ? '\u2014' : String(v), { bold: true })])])
 const cellTag = (text, color) => RICH([SEC([TAG(text, color)])])
 const cellMoney = (o, k) => (o && o[k] != null ? cellNum(o[k], money(o[k])) : cellText('\u2014'))
