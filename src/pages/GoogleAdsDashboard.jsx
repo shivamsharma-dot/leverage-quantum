@@ -101,10 +101,10 @@ return <>
 <ResponsiveContainer width='100%' height={280}>
 <BarChart data={chartData} layout='vertical' margin={{top:0,right:60,left:0,bottom:0}} barSize={20}>
 <XAxis type='number' hide/>
-<YAxis type='category' dataKey='name' width={190} tick={{fontSize:11,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false}/>
-<Tooltip formatter={v=>'₹'+v+'K'} contentStyle={{fontSize:11,border:'0.5px solid #E5E7EB',borderRadius:8,fontFamily:FONT}}/>
+<YAxis type='category' dataKey='name' width={190} tick={{fontSize:12.5,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false}/>
+<Tooltip formatter={v=>'₹'+v+'K'} contentStyle={{fontSize:12.5,border:'0.5px solid #E5E7EB',borderRadius:8,fontFamily:FONT}}/>
 <Bar dataKey='spend' radius={[0,5,5,0]} fill={C.navy}>
-<LabelList dataKey='spend' position='right' formatter={v=>'₹'+v+'K'} style={{fontSize:10,fontWeight:700,fill:'#374151'}}/>
+<LabelList dataKey='spend' position='right' formatter={v=>'₹'+v+'K'} style={{fontSize:12,fontWeight:700,fill:'#374151'}}/>
 </Bar>
 </BarChart>
 </ResponsiveContainer>
@@ -433,10 +433,10 @@ return <>
 <ResponsiveContainer width='100%' height={Math.max(140,summary.length*40)}>
 <BarChart data={summary.map(d=>({name:DEVICE_LABEL[d.device]||d.device,spend:Math.round(d.spend/1000)}))} layout='vertical' margin={{top:0,right:60,left:0,bottom:0}} barSize={22}>
 <XAxis type='number' hide/>
-<YAxis type='category' dataKey='name' width={100} tick={{fontSize:11,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false}/>
-<Tooltip formatter={v=>'₹'+v+'K'} contentStyle={{fontSize:11,border:'0.5px solid #E5E7EB',borderRadius:8,fontFamily:FONT}}/>
+<YAxis type='category' dataKey='name' width={100} tick={{fontSize:12.5,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false}/>
+<Tooltip formatter={v=>'₹'+v+'K'} contentStyle={{fontSize:12.5,border:'0.5px solid #E5E7EB',borderRadius:8,fontFamily:FONT}}/>
 <Bar dataKey='spend' radius={[0,5,5,0]} fill={C.navy}>
-<LabelList dataKey='spend' position='right' formatter={v=>'₹'+v+'K'} style={{fontSize:10,fontWeight:700,fill:'#374151'}}/>
+<LabelList dataKey='spend' position='right' formatter={v=>'₹'+v+'K'} style={{fontSize:12,fontWeight:700,fill:'#374151'}}/>
 </Bar>
 </BarChart>
 </ResponsiveContainer>
