@@ -49,7 +49,7 @@ html, body, #root {
   background: var(--bg);
   color: var(--text);
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
@@ -254,16 +254,16 @@ input:focus, textarea:focus {
 }
 
 /* ── Table density ──────────────────────────────────────────────────────── */
-[data-density="compact"]     { --row-py: 8px;  --row-fs: 12px; }
-[data-density="comfortable"] { --row-py: 12px; --row-fs: 13px; }
-[data-density="spacious"]    { --row-py: 16px; --row-fs: 13.5px; }
+[data-density="compact"]     { --row-py: 8px;  --row-fs: 13.5px; }
+[data-density="comfortable"] { --row-py: 12px; --row-fs: 14.5px; }
+[data-density="spacious"]    { --row-py: 16px; --row-fs: 15px; }
 
 /* Apply density to all dashboard tables */
 [data-density] table td,
 [data-density] table th {
   padding-top:    var(--row-py, 12px);
   padding-bottom: var(--row-py, 12px);
-  font-size:      var(--row-fs, 13px);
+  font-size:      var(--row-fs, 14.5px);
 }
 
 /* ── Sidebar width modes ─────────────────────────────────────────────────── */
