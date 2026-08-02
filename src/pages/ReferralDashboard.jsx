@@ -316,7 +316,7 @@ export default function ReferralDashboard() {
                 <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
                 <Bar dataKey='count' name='Referrals' radius={[0, 6, 6, 0]} barSize={22}>
                   {M.funnel.map((e, i) => <Cell key={i} fill={brandColor(i)} />)}
-                  <LabelList dataKey='count' position='right' formatter={fmtN} style={{ fontSize:11, fontWeight:700, fill:C.sub }} />
+                  <LabelList dataKey='count' position='right' formatter={fmtN} style={{ fontSize:12.5, fontWeight:700, fill:C.sub }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -332,10 +332,10 @@ export default function ReferralDashboard() {
                   <XAxis dataKey='period' tick={axis} axisLine={false} tickLine={false} />
                   <YAxis tick={axis} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
-                  <Legend wrapperStyle={{ fontSize:11.5, fontFamily:FONT }} iconType='circle' />
-                  <Bar dataKey='Student' name='Student' fill={C.cyan} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='Student' position='top' style={{ fontSize:10, fontWeight:700, fill:C.muted }} /></Bar>
-                  <Bar dataKey='EMP' name='EMP' fill={C.blue} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='EMP' position='top' style={{ fontSize:10, fontWeight:700, fill:C.muted }} /></Bar>
-                  <Bar dataKey='Total' name='Total' fill={C.navy} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='Total' position='top' style={{ fontSize:10, fontWeight:700, fill:C.muted }} /></Bar>
+                  <Legend wrapperStyle={{ fontSize:12.5, fontFamily:FONT }} iconType='circle' />
+                  <Bar dataKey='Student' name='Student' fill={C.cyan} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='Student' position='top' style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
+                  <Bar dataKey='EMP' name='EMP' fill={C.blue} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='EMP' position='top' style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
+                  <Bar dataKey='Total' name='Total' fill={C.navy} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='Total' position='top' style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -347,9 +347,9 @@ export default function ReferralDashboard() {
                   <XAxis type='number' tick={axis} axisLine={false} tickLine={false} />
                   <YAxis type='category' dataKey='metric' tick={axis} axisLine={false} tickLine={false} width={60} />
                   <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
-                  <Legend wrapperStyle={{ fontSize:11.5, fontFamily:FONT }} iconType='circle' />
-                  <Bar dataKey='last' name={M.cvlLabels.last} fill={C.blue} radius={[0,4,4,0]} barSize={13}><LabelList dataKey='last' position='right' formatter={fmtN} style={{ fontSize:10, fontWeight:700, fill:C.muted }} /></Bar>
-                  <Bar dataKey='current' name={M.cvlLabels.current} fill={C.navy} radius={[0,4,4,0]} barSize={13}><LabelList dataKey='current' position='right' formatter={fmtN} style={{ fontSize:10, fontWeight:700, fill:C.muted }} /></Bar>
+                  <Legend wrapperStyle={{ fontSize:12.5, fontFamily:FONT }} iconType='circle' />
+                  <Bar dataKey='last' name={M.cvlLabels.last} fill={C.blue} radius={[0,4,4,0]} barSize={13}><LabelList dataKey='last' position='right' formatter={fmtN} style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
+                  <Bar dataKey='current' name={M.cvlLabels.current} fill={C.navy} radius={[0,4,4,0]} barSize={13}><LabelList dataKey='current' position='right' formatter={fmtN} style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -364,7 +364,7 @@ export default function ReferralDashboard() {
                 <XAxis dataKey='month' tick={axis} axisLine={false} tickLine={false} />
                 <YAxis tick={axis} axisLine={false} tickLine={false} domain={[0, 100]} tickFormatter={v => v + '%'} />
                 <Tooltip content={<BrandTooltip />} />
-                <Legend wrapperStyle={{ fontSize:11.5, fontFamily:FONT }} iconType='circle' />
+                <Legend wrapperStyle={{ fontSize:12.5, fontFamily:FONT }} iconType='circle' />
                 <Line type='monotone' dataKey='leadStu' name='Lead-STU %' stroke={C.blue} strokeWidth={2.5} dot={{ r:3 }} />
                 <Line type='monotone' dataKey='stuOffer' name='STU-Offer %' stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }} />
                 <Line type='monotone' dataKey='offerDep' name='Offer-Deposit %' stroke={C.green} strokeWidth={2.5} dot={{ r:3 }} />
@@ -382,7 +382,7 @@ export default function ReferralDashboard() {
                   <XAxis dataKey='intake' tick={axis} axisLine={false} tickLine={false} />
                   <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
                   <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
-                  <Legend wrapperStyle={{ fontSize:11.5, fontFamily:FONT }} iconType='circle' />
+                  <Legend wrapperStyle={{ fontSize:12.5, fontFamily:FONT }} iconType='circle' />
                   <Bar dataKey='firstApp' name='First App' fill={C.navy} radius={[4,4,0,0]} barSize={16} />
                   <Bar dataKey='firstOffer' name='First Offer received' fill={C.blue} radius={[4,4,0,0]} barSize={16} />
                   <Bar dataKey='firstDep' name='First Deposit made' fill={C.cyan} radius={[4,4,0,0]} barSize={16} />
@@ -397,8 +397,8 @@ export default function ReferralDashboard() {
                   <XAxis dataKey='intake' tick={axis} axisLine={false} tickLine={false} />
                   <YAxis tick={axis} axisLine={false} tickLine={false} domain={[0, 100]} ticks={[0,25,50,75,100]} tickFormatter={v => v + '%'} />
                   <Tooltip content={<BrandTooltip />} />
-                  <Legend wrapperStyle={{ fontSize:11.5, fontFamily:FONT }} iconType='circle' />
-                  <Line type='monotone' dataKey='appOffer' name='App-Offer %' stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }}><LabelList dataKey='appOffer' position='top' formatter={v => v + '%'} style={{ fontSize:9.5, fontWeight:700, fill:C.navy }} /></Line>
+                  <Legend wrapperStyle={{ fontSize:12.5, fontFamily:FONT }} iconType='circle' />
+                  <Line type='monotone' dataKey='appOffer' name='App-Offer %' stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }}><LabelList dataKey='appOffer' position='top' formatter={v => v + '%'} style={{ fontSize:11.5, fontWeight:700, fill:C.navy }} /></Line>
                   <Line type='monotone' dataKey='offerDep' name='Offer-Deposit %' stroke={C.cyan} strokeWidth={2.5} dot={{ r:3 }} />
                   <Line type='monotone' dataKey='appDep' name='App-Deposit %' stroke={C.green} strokeWidth={2.5} strokeDasharray='4 3' dot={{ r:3 }} />
                 </LineChart>
@@ -416,7 +416,7 @@ export default function ReferralDashboard() {
                     {M.split.map((e, i) => <Cell key={i} fill={e.name === 'Employee' ? C.blue : C.cyan} />)}
                   </Pie>
                   <Tooltip content={<BrandTooltip />} />
-                  <Legend wrapperStyle={{ fontSize:11.5, fontFamily:FONT }} iconType='circle' />
+                  <Legend wrapperStyle={{ fontSize:12.5, fontFamily:FONT }} iconType='circle' />
                 </PieChart>
               </ResponsiveContainer>
             </Card>
