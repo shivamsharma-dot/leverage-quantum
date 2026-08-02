@@ -11,7 +11,7 @@ export default function FilterDropdown({ label, value, options, open, onToggle, 
   const current = options.find(o => o.v === value) || options[0] || { v: value, l: '…' }
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
-      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: '0.5px solid ' + (open ? '#1C9FD4' : '#E5E7EB'), background: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', color: '#374151', whiteSpace: 'nowrap' }}>
+      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', borderRadius: 8, border: '0.5px solid ' + (open ? '#1C9FD4' : '#E5E7EB'), background: '#fff', cursor: 'pointer', fontSize: 13.5, fontWeight: 500, fontFamily: 'inherit', color: '#374151', whiteSpace: 'nowrap' }}>
         <span style={{ color: '#9CA3AF', fontWeight: 600 }}>{label}:</span>
         <span style={{ fontWeight: 600, color: accentOf ? accentOf(value) : '#374151' }}>{current.l}</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
@@ -21,7 +21,7 @@ export default function FilterDropdown({ label, value, options, open, onToggle, 
         <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, minWidth: 130, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 4, overflow: 'hidden' }}>
           {options.map(o => (
             <button key={o.v} type="button" onClick={() => onSelect(o.v)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', textAlign: 'left', padding: '7px 9px', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: value === o.v ? 700 : 500, fontFamily: 'inherit', color: value === o.v ? '#1F3C84' : '#374151', background: value === o.v ? '#E8EFF9' : 'transparent' }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', textAlign: 'left', padding: '7px 9px', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 13, fontWeight: value === o.v ? 700 : 500, fontFamily: 'inherit', color: value === o.v ? '#1F3C84' : '#374151', background: value === o.v ? '#E8EFF9' : 'transparent' }}
               onMouseEnter={e => { if (value !== o.v) e.currentTarget.style.background = '#F3F4F6' }}
               onMouseLeave={e => { if (value !== o.v) e.currentTarget.style.background = 'transparent' }}>
               <span>{o.l}</span>
