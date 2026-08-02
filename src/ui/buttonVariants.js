@@ -240,7 +240,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
           background: 'var(--card, #fff)',
           border: '1px solid var(--card-border, #E2E6EF)',
           color: danger ? RED : NAVY,
-          textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: 12,
+          textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: 13.5,
           transform: hover ? 'translateY(-1px)' : 'none',
         },
         extra: { centerUnderline: true, underlineOn: hover, underlineColor: danger ? RED : CYAN },
