@@ -2282,7 +2282,7 @@ export default function OverallDashboard() {
                 <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
                 <Bar dataKey="count" name="Count" radius={[0, 6, 6, 0]} barSize={20}>
                   {funnel.map((e, i) => <Cell key={i} fill={brandColor(i)} />)}
-                  <LabelList dataKey="count" position="right" formatter={fmtN} style={{ fontSize:11, fontWeight:700, fill:C.sub }} />
+                  <LabelList dataKey="count" position="right" formatter={fmtN} style={{ fontSize:12.5, fontWeight:700, fill:C.sub }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -2515,7 +2515,7 @@ export default function OverallDashboard() {
                   <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} />
                   <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
                   <Tooltip content={<BrandTooltip />} />
-                  <Legend wrapperStyle={{ fontSize:11, fontFamily:FONT }} />
+                  <Legend wrapperStyle={{ fontSize:12.5, fontFamily:FONT }} />
                   <Line type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }} />
                   <Line type="monotone" dataKey="queued" name="Total Queued" stroke={C.blue} strokeWidth={2.5} dot={{ r:3 }} />
                   <Line type="monotone" dataKey="totalQL" name="Total QL" stroke={C.cyan} strokeWidth={2.5} dot={{ r:3 }} />
@@ -2586,8 +2586,8 @@ export default function OverallDashboard() {
                     <XAxis type="number" dataKey="totalQL" name="Total QLs" tick={axis} tickFormatter={fmtN} label={{ value:'Total QLs (volume)', position:'insideBottom', offset:-6, style:{ ...axis, fontWeight:700 } }} />
                     <YAxis type="number" dataKey="cpql" name="CPQL" tick={axis} tickFormatter={v => fmtINRShort(v)} width={70} />
                     <ZAxis type="number" dataKey="spend" range={[60, 600]} name="Spend" />
-                    <ReferenceLine x={campaignEfficiencyMap.medQL} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median volume', position:'top', fontSize:10, fill:C.muted }} />
-                    <ReferenceLine y={campaignEfficiencyMap.medCpql} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median CPQL', position:'right', fontSize:10, fill:C.muted }} />
+                    <ReferenceLine x={campaignEfficiencyMap.medQL} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median volume', position:'top', fontSize:12, fill:C.muted }} />
+                    <ReferenceLine y={campaignEfficiencyMap.medCpql} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median CPQL', position:'right', fontSize:12, fill:C.muted }} />
                     <Tooltip content={<EfficiencyMapTooltip />} cursor={{ strokeDasharray:'3 3' }} />
                     <Scatter data={campaignEfficiencyMap.points}>
                       {campaignEfficiencyMap.points.map((p, i) => (
