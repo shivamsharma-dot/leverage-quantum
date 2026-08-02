@@ -82,24 +82,27 @@ function card(id, title, subtitle, body, opts) {
   return c
 }
 
-// data_visualization is the one native block that redraws itself to the width it
-// is given, so it is the only honest way to show nine heads on a phone. Two per
-// message is the hard limit, and every series has to carry a point for every
-// category, so gaps are sent as zero rather than dropped.
-const CRV = n => (n == null || !isFinite(n) ? 0 : Number((n / CR).toFixed(2)))
+// Slack's own chart block takes no colour: the palette is Slack's, not ours.
+// chartPng.js already draws the same spec on a canvas in the brand ramp from
+// src/ui/dashboardKit.jsx, with the number written on every bar, and
+// SlackReportPanel uploads that image for any message carrying a chart. So the
+// spec below is built once and handed over as message.chart -- Slack's own
+// block stays behind it as the fallback if the canvas is unavailable.
+const NUM = n => (n == null || !isFinite(n) ? 0 : Number(n))
 
 function bars(title, cats, aName, aVals, bName, bVals) {
   if (!cats.length) return null
   return {
     type: 'data_visualization',
     title: String(title).slice(0, 50),
+    unit: 'inr',
     chart: {
       type: 'bar',
       series: [
         { name: String(aName).slice(0, 20), data: cats.map(function (c, i) { return { label: c, value: aVals[i] } }) },
         { name: String(bName).slice(0, 20), data: cats.map(function (c, i) { return { label: c, value: bVals[i] } }) },
       ],
-      axis_config: { categories: cats, y_label: '\u20b9 Cr' },
+      axis_config: { categories: cats, y_label: '\u20b9' },
     },
   }
 }
@@ -282,16 +285,6 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx, p) {
   }
   blocks.push({ type: 'carousel', block_id: 'qb_kpis', elements: cards.slice(0, 10) })
 
-  // The month against the same days of the month before, drawn by Slack itself.
-  if (p && (p.rev != null || p.cost != null)) {
-    const lab = (c.prev && c.prev.label) || 'Month before'
-    const chart = bars('This month against ' + lab + ' \u00b7 \u20b9 Cr',
-      ['Revenue', 'Cost', 'Net inflow'],
-      (c.monthLabel || 'This month').slice(0, 20), [CRV(w.rev), CRV(w.cost), CRV(w.net)],
-      lab.slice(0, 20), [CRV(p.rev), CRV(p.cost), CRV(p.net)])
-    if (chart) blocks.push(chart)
-  }
-
   // The read. Four sections, each a list of rules that fired over the numbers
   // in the ledger message: nothing here is generated prose, and every figure
   // can be checked against the table below it. Left expanded, because this is
@@ -415,22 +408,6 @@ function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab) {
   const cs = lines('Cost', 'qb_cost', 'Head', 'Cost heads, month to date against ' + prevLab, 'Total cost', true)
   if (rv) blocks.push(rv)
   if (cs) blocks.push(cs)
-
-  // Two charts is the per-message limit, so they go where the columns had to be
-  // dropped: one for the lines, one for the heads.
-  if (prev) {
-    const rvHeads = HEADS.filter(function (h) { return h[1] === 'Revenue' && (mtd[h[2]] != null || prev[h[2]] != null) })
-    const csHeads = HEADS.filter(function (h) { return h[1] === 'Cost' && (mtd[h[2]] != null || prev[h[2]] != null) })
-    const mtdLab = 'MTD'
-    const c1 = bars('Revenue lines \u00b7 \u20b9 Cr', rvHeads.map(function (h) { return h[3] || h[0] }),
-      mtdLab, rvHeads.map(function (h) { return CRV(mtd[h[2]]) }),
-      prevLab, rvHeads.map(function (h) { return CRV(prev[h[2]]) }))
-    const c2 = bars('Cost heads \u00b7 \u20b9 Cr', csHeads.map(function (h) { return h[3] || h[0] }),
-      mtdLab, csHeads.map(function (h) { return CRV(mtd[h[2]]) }),
-      prevLab, csHeads.map(function (h) { return CRV(prev[h[2]]) }))
-    if (c1) blocks.push(c1)
-    if (c2) blocks.push(c2)
-  }
   return blocks
 }
 
@@ -456,6 +433,16 @@ function buildQuantumBrief(ctx) {
   // finished total.
   const prevW = c.prev ? fromCtx(c.prev.rev || {}, c.prev.cost || {}, c.prev.net) : null
   const dx = insights(c, mtd, prevW, margin, marginOf(ytd))
+
+  // One chart per message, both drawn in the brand ramp by chartPng.js.
+  const chartTop = prevW ? bars((c.monthLabel || 'This month') + ' against ' + prevLab,
+    ['Revenue', 'Cost'],
+    'Month to date', [NUM(mtd.rev), NUM(mtd.cost)],
+    prevLab, [NUM(prevW.rev), NUM(prevW.cost)]) : null
+  const chartHeads = prevW ? bars('Every line and head against ' + prevLab,
+    HEADS.filter(function (h) { return mtd[h[2]] != null || prevW[h[2]] != null }).map(function (h) { return h[3] || h[0] }),
+    'Month to date', HEADS.filter(function (h) { return mtd[h[2]] != null || prevW[h[2]] != null }).map(function (h) { return NUM(mtd[h[2]]) }),
+    prevLab, HEADS.filter(function (h) { return mtd[h[2]] != null || prevW[h[2]] != null }).map(function (h) { return NUM(prevW[h[2]]) })) : null
 
   const notes = (Array.isArray(c.notes) ? c.notes : []).filter(Boolean)
   const caveats = []
@@ -503,6 +490,7 @@ function buildQuantumBrief(ctx) {
       label: 'Quantum Brief',
       text: fb.join('\n'),
       blocks: briefBlocks(c, mtd, day, margin, peopleOutside, notes, caveats, dx, prevW),
+      chart: chartTop,
       attach: true,
       metadata: {
         event_type: 'quantum_brief',
@@ -525,6 +513,7 @@ function buildQuantumBrief(ctx) {
       label: 'Split totals \u2014 last day, MTD, YTD',
       text: lb.join('\n'),
       blocks: ledgerBlocks(last, mtd, ytd, prevW, lastLab, ytdLab, prevLab),
+      chart: chartHeads,
     },
   ]
 }
@@ -541,7 +530,7 @@ export const CEO_BRIEF_VERSIONS = [{
     'Revenue total and cost total split out, net inflow underneath in colour',
     'Month to date against the same days of the month before, line by line',
   'A total row on the revenue lines and on the cost heads',
-  'Native Slack charts that redraw themselves to the width of the phone',
+  'Brand-ramp charts drawn from the same numbers, one on each message',
     'The read, open by default: where the month stands, what went wrong, what would close the gap',
     'No links back into the dashboard \u2014 every number is read inside Slack',
   'Built for a phone: nothing scrolls sideways, nothing needs a laptop',
