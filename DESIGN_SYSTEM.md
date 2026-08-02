@@ -33,6 +33,41 @@ const FONT = "'Plus Jakarta Sans','Inter',sans-serif";
 ```
 Use `fontFamily: FONT` on headings, values, labels, table cells.
 
+### Type scale (Aug 2026 sizing pass)
+
+Base is 16px. These are the shared-token targets: set them in index.css, src/ui/dashboardKit.jsx
+and src/components/*, never per page. Font family stays Plus Jakarta Sans everywhere. This pass
+changes size only, never colour.
+
+| Token / usage | Old | New |
+| --- | --- | --- |
+| Base html, body, #root | 14px | **16px** |
+| Default table text (index.css `table {}`) | 12px | **13.5px** |
+| Row font-size var --row-fs | 13px | **14.5px** |
+| Uppercase section / group labels | 10-10.5px | **11.5-12px** |
+| KPI card VALUE (the big number) | 26px | 26px (unchanged) |
+| KPI card sub / delta text | 10.5-11.5px | **12-12.5px** |
+| Card title (dashboardKit Card) | 13.5px | **15px** |
+| Card sub / description | 11px | **12.5px** |
+| Button sm / md / lg | 12.5 / 13.5 / 14.5px | **13.5 / 14.5 / 15.5px** |
+| Dropdown + FilterDropdown trigger + option | 11-12.5px | **12.5-13.5px** |
+| Sidebar nav item | 14.5px | 14.5px (unchanged) |
+| Sidebar .groupLabel | 10px | **11.5px** |
+| Chart axis ticks / legend / tooltip | 10-11px | **11.5-12.5px** |
+| Badges, pills, rank badges, page numbers | 10-11px | **cap ~13px** (stay compact) |
+
+**General rule.** Any other hardcoded inline fontSize below 13px on a dashboard page gets
++1.5 to +2px. Hard cap: micro-labels (rank badges, pagination numbers, status pills) never
+exceed ~13px, they are compact by design.
+
+**Never fix density by shrinking text back down.** If a table clips after the bump, widen its
+own overflowX:'auto' scroll container; if a hard-capped KPI grid (e.g. repeat(8,minmax(0,1fr)))
+gets cramped, let it reflow to fewer columns per row. 1280px (laptop, sidebar expanded) is the
+known worst-case width to test.
+
+Sections 3.1-3.3 below are stated at the new sizes.
+
+
 ### Colour object
 ```js
 const C = {
@@ -81,8 +116,8 @@ Every chart, list, table, or block on a page is wrapped in a `<Card>`.
 - Props: `title`, `sub`, `action` (right-aligned control), `noPad`, `children`.
 - Style: white bg, `border:1px solid #EEF1F6`, `borderRadius:16`, dual shadow (above).
 - Header: padding `15px 20px 13px`, bottom border `#F1F4F9`.
-  - Title: `fontSize 13.5, fontWeight 800, letterSpacing -0.2px, color #0F1B33`.
-  - Sub: `fontSize 11, color #94A3B8`.
+  - Title: `fontSize 15, fontWeight 800, letterSpacing -0.2px, color #0F1B33`.
+  - Sub: `fontSize 12.5, color #94A3B8`.
 
 ### 3.2 `<PremKPI>` — the MAIN KPI card (Meta Ads standard)
 The one premium metric card used across Meta Ads, WhatsApp, and QL Ops. Reuse identically.
@@ -92,10 +127,10 @@ The one premium metric card used across Meta Ads, WhatsApp, and QL Ops. Reuse id
   - Gradient **top accent bar** `linear-gradient(90deg,${accent},${accent}99)`.
   - Soft **corner glow blob** `linear-gradient(135deg,${accent}14,${accent}05)`.
   - Gradient **icon square** 30x30, white icon inside, shadow `0 4px 10px -2px ${accent}66`.
-  - Label: uppercase, `fontSize 10.5, fontWeight 700`, muted.
+  - Label: uppercase, `fontSize 12, fontWeight 700`, muted.
   - Value: `fontSize 26, fontWeight 800, letterSpacing -0.6px, color #0F1B33`, tabular nums.
   - Delta pill (optional): green up / navy down, `\u25B2` / `\u25BC`.
-  - Sub: `fontSize 11.5, color #8A94A6`.
+  - Sub: `fontSize 12.5, color #8A94A6`.
 - KPI row layout: CSS grid `repeat(N, 1fr)`, `gap:14`.
 - Icons come from a `KPI_ICONS` map — crisp monochrome SVGs, `stroke="currentColor"`, `strokeWidth 2.2`, rounded caps.
 
@@ -103,7 +138,7 @@ The one premium metric card used across Meta Ads, WhatsApp, and QL Ops. Reuse id
 - Each row: label + right-aligned value (`fontWeight 800`, tabular), then a track
   (`height 7, borderRadius 99, background #F1F5F9`) with gradient fill
   `linear-gradient(90deg,${col},${col}cc)`, animated `width .6s cubic-bezier(.4,0,.2,1)`.
-- Percent label on the right, `fontSize 10.5, color C.muted`, width 36, right-aligned.
+- Percent label on the right, `fontSize 12, color C.muted`, width 36, right-aligned.
 - Colour each bar via `brandColor(i)`.
 
 ### 3.4 Data table conventions
