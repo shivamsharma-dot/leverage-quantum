@@ -1301,8 +1301,8 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                         <linearGradient id="gSb" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5BB8DE"/><stop offset="100%" stopColor="#1C9FD4"/></linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                      <XAxis dataKey="source" axisLine={false} tickLine={false} interval={0} tick={{ fontSize: 10.5, fill: '#94A3B8', fontFamily: FONT }} />
-                      <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="source" axisLine={false} tickLine={false} interval={0} tick={{ fontSize: 12, fill: '#94A3B8', fontFamily: FONT }} />
+                      <YAxis tick={{ fontSize: 12, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
                       <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
                       <Bar dataKey="Futwork"    stackId="a" fill="url(#gFw)"   radius={[0,0,0,0]} maxBarSize={46} />
                       <Bar dataKey="Futwork AI" stackId="a" fill="url(#gFwai)" radius={[0,0,0,0]} maxBarSize={46} />
@@ -1369,8 +1369,8 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                         <BarChart data={budgetBar} margin={{ top: 8, right: 12, left: 6, bottom: 0 }} barCategoryGap="18%">
                           <defs><linearGradient id="gBudget" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7AC796"/><stop offset="100%" stopColor="#4CAE6F"/></linearGradient></defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                          <XAxis dataKey="budget" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94A3B8', fontFamily: FONT }} />
-                          <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
+                          <XAxis dataKey="budget" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94A3B8', fontFamily: FONT }} />
+                          <YAxis tick={{ fontSize: 12, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
                           <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(76,174,111,0.06)' }} />
                           <Bar dataKey="count" radius={[6,6,0,0]} maxBarSize={42} fill="url(#gBudget)" />
                         </BarChart>
@@ -1390,8 +1390,8 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                         <BarChart data={intakeBar} margin={{ top: 8, right: 12, left: -8, bottom: 0 }} barCategoryGap="26%">
                           <defs><linearGradient id="gIntake" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#5BB8DE"/><stop offset="100%" stopColor="#1C9FD4"/></linearGradient></defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                          <XAxis dataKey="intake" axisLine={false} tickLine={false} tick={{ fontSize: 9.5, fill: '#94A3B8', fontFamily: FONT }} tickFormatter={v => v.length > 11 ? v.slice(0, 10) + '...' : v} />
-                          <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
+                          <XAxis dataKey="intake" axisLine={false} tickLine={false} tick={{ fontSize: 11.5, fill: '#94A3B8', fontFamily: FONT }} tickFormatter={v => v.length > 11 ? v.slice(0, 10) + '...' : v} />
+                          <YAxis tick={{ fontSize: 12, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
                           <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(28,159,212,0.06)' }} />
                           <Bar dataKey="count" radius={[6,6,0,0]} maxBarSize={40} fill="url(#gIntake)" />
                         </BarChart>
@@ -1442,8 +1442,8 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                         <linearGradient id="gArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1F3C84" stopOpacity={0.12}/><stop offset="100%" stopColor="#1F3C84" stopOpacity={0}/></linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
-                      <XAxis dataKey="month" tick={{ fontSize: 10.5, fill: '#94A3B8', fontFamily: FONT }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94A3B8', fontFamily: FONT }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 12, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
                       <Tooltip content={<BrandTooltip />} />
                       <Line type="monotone" dataKey="Futwork"    stroke="#1F3C84" strokeWidth={2.5} dot={{ r: 3, fill: '#1F3C84', strokeWidth: 0 }} activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#fff' }} />
                       <Line type="monotone" dataKey="Futwork AI" stroke="#29B9C3" strokeWidth={2.5} dot={{ r: 3, fill: '#29B9C3', strokeWidth: 0 }} activeDot={{ r: 5.5, strokeWidth: 2, stroke: '#fff' }} />
@@ -1499,8 +1499,8 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                     : (<>
                       <ResponsiveContainer width="100%" height={Math.max(220, topCampaigns.length * 34)}>
                         <BarChart data={topCampaigns} layout="vertical" margin={{ top: 4, right: 56, left: 8, bottom: 4 }} barCategoryGap="22%">
-                          <XAxis type="number" tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
-                          <YAxis type="category" dataKey="campaign" tick={{ fontSize: 10.5, fill: C.sub, fontFamily: FONT }} width={248} axisLine={false} tickLine={false} tickFormatter={v => v.length > 36 ? v.slice(0, 34) + '...' : v} />
+                          <XAxis type="number" tick={{ fontSize: 12, fill: C.muted, fontFamily: FONT }} tickFormatter={v => fmtN(v)} axisLine={false} tickLine={false} />
+                          <YAxis type="category" dataKey="campaign" tick={{ fontSize: 12, fill: C.sub, fontFamily: FONT }} width={248} axisLine={false} tickLine={false} tickFormatter={v => v.length > 36 ? v.slice(0, 34) + '...' : v} />
                           <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
                           <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={22}>
                             {topCampaigns.map((e, i) => <Cell key={i} fill={PROVIDER_COLORS[e.provider] || C.muted} />)}
@@ -1633,8 +1633,8 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 54, left: 8, bottom: 8 }} barCategoryGap={'28%'}>
                             <CartesianGrid horizontal={false} stroke="#EEF2FB" />
-                            <XAxis type="number" tick={{ fontSize: 11, fill: C.muted }} axisLine={{ stroke: '#E3E9F5' }} tickLine={false} tickFormatter={fmtN} />
-                            <YAxis type="category" dataKey="source" width={118} tick={{ fontSize: 11.5, fill: C.navy }} axisLine={false} tickLine={false} />
+                            <XAxis type="number" tick={{ fontSize: 12.5, fill: C.muted }} axisLine={{ stroke: '#E3E9F5' }} tickLine={false} tickFormatter={fmtN} />
+                            <YAxis type="category" dataKey="source" width={118} tick={{ fontSize: 12.5, fill: C.navy }} axisLine={false} tickLine={false} />
                             <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(31,60,132,0.05)' }} />
                             <Bar dataKey="qualified" radius={[0, 5, 5, 0]} maxBarSize={26} label={{ position: 'right', fontSize: 11, fontWeight: 700, fill: C.navy, formatter: fmtN }}>
                               {chartData.map((d, i) => (<Cell key={i} fill={convColor(d.conv)} />))}
