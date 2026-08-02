@@ -22,7 +22,7 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
 
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} ref={ref}>
-      {label && <span style={{ fontSize: 11, color: 'var(--text3)', whiteSpace: 'nowrap' }}>{label}</span>}
+      {label && <span style={{ fontSize: 12.5, color: 'var(--text3)', whiteSpace: 'nowrap' }}>{label}</span>}
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <button
           type="button"
@@ -36,7 +36,7 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
             color: open ? NAVY : 'var(--text)',
             cursor: disabled ? 'default' : 'pointer',
             opacity: disabled ? 0.55 : 1,
-            fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit',
+            fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit',
             minWidth, whiteSpace: 'nowrap', transition: 'all .15s'
           }}
         >
@@ -67,7 +67,7 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
                   style={{
                     display: 'block', width: '100%', textAlign: 'left',
                     padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                    fontFamily: 'inherit', fontSize: 12.5, fontWeight: active ? 700 : 400,
+                    fontFamily: 'inherit', fontSize: 13.5, fontWeight: active ? 700 : 400,
                     background: active ? NAVY_TINT : 'transparent',
                     color: active ? NAVY : 'var(--text)',
                     transition: 'background .1s, color .1s'
