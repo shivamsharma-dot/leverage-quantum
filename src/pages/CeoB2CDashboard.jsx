@@ -8,7 +8,6 @@ import SlackReportPanel from '../components/SlackReportPanel'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import { B2C_REPORT_VERSIONS } from '../lib/b2cReport'
 import { B2C_LEDGER_VERSIONS } from '../lib/b2cLedger'
-import { B2C_NATIVE_VERSIONS } from '../lib/b2cLedgerNative'
 import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
 
@@ -354,7 +353,7 @@ export default function CeoB2CDashboard() {
             <SlackReportPanel
               open={slackOpen}
               onClose={function () { setSlackOpen(false) }}
-              versions={[...CEO_BRIEF_VERSIONS, ...B2C_REPORT_VERSIONS, ...B2C_LEDGER_VERSIONS, ...B2C_NATIVE_VERSIONS]}
+              versions={[...CEO_BRIEF_VERSIONS, ...B2C_REPORT_VERSIONS, ...B2C_LEDGER_VERSIONS]}
               buildContext={buildSlackContext}
               captureFiles={captureSlackFiles}
               dashboardId="ceo_b2c"
