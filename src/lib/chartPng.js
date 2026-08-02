@@ -67,6 +67,9 @@ function ell(g, s, max) {
   return cut + '\u2026'
 }
 
+// A phone reads top to bottom. So the bars run left to right, one row per
+// figure, the name sits in its own gutter on the left and the number sits at
+// the end of its own bar. Nothing is rotated and nothing can collide.
 function barPng(spec) {
   const c = spec.chart
   const unit = spec.unit
@@ -74,109 +77,67 @@ function barPng(spec) {
   const series = c.series || []
   if (!cats.length || !series.length) return null
 
-  const W = 1080
-  const H = 640
+  const rows = cats.length * series.length
+  const barH = rows > 14 ? 24 : rows > 8 ? 28 : 34
+  const barGap = 7
+  const groupGap = 20
+  const W = 900
+  const head = 118
+  const bodyH = cats.length * (series.length * barH + (series.length - 1) * barGap) + (cats.length - 1) * groupGap
+  const H = head + bodyH + 44
   const { cv, g } = surface(W, H)
-  const x0 = 104
-  const x1 = W - 44
-  const y0 = 104
-  const y1 = H - 176
 
   g.font = '700 27px ' + FONT
   g.fillStyle = INK
   g.textAlign = 'left'
-  g.fillText(ell(g, spec.title, W - 80), 40, 52)
+  g.fillText(ell(g, spec.title, W - 72), 36, 48)
 
-  // One corridor at fifty thousand rupees a QL flattens every other bar into a
-  // stub. So the axis is scaled to the body of the data and the outlier is drawn
-  // clipped, with its real number still written above it -- nothing is hidden.
-  const all = series.flatMap(s => s.data.map(d => Number(d.value) || 0)).filter(v => v > 0).sort((a, b) => a - b)
-  const median = all.length ? all[Math.floor(all.length / 2)] : 0
-  const body = median > 0 ? all.filter(v => v <= median * 4) : all
-  const top = ceiling(Math.max((body.length ? body[body.length - 1] : 0) || (all.length ? all[all.length - 1] : 0), 0))
-  let clipped = false
-
-  g.textAlign = 'right'
-  g.font = '500 16px ' + FONT
-  for (let i = 0; i <= 4; i++) {
-    const y = Math.round(y1 - (y1 - y0) * (i / 4)) + 0.5
-    g.strokeStyle = GRID
-    g.lineWidth = 1
-    g.beginPath()
-    g.moveTo(x0, y)
-    g.lineTo(x1, y)
-    g.stroke()
-    g.fillStyle = SUB
-    g.fillText(fmt((top * i) / 4, unit), x0 - 14, y + 6)
-  }
-
-  const bars = cats.length * series.length
-  const valueFont = bars > 12 ? 12 : bars > 8 ? 14 : 16
-  const groupW = (x1 - x0) / cats.length
-  const gap = series.length > 1 ? 7 : 0
-  const barW = Math.max(8, Math.min(62, (groupW * 0.74 - gap * (series.length - 1)) / series.length))
-  const span = barW * series.length + gap * (series.length - 1)
-
-  cats.forEach((cat, ci) => {
-    const cx = x0 + groupW * ci + groupW / 2
-    series.forEach((s, si) => {
-      const point = (s.data || []).find(p => p.label === cat)
-      const v = point ? Number(point.value) || 0 : 0
-      const over = v > top
-      if (over) clipped = true
-      const h = Math.max(3, (y1 - y0) * (top ? Math.min(v, top) / top : 0))
-      const bx = cx - span / 2 + si * (barW + gap)
-      g.fillStyle = RAMP[si % RAMP.length]
-      pill(g, bx, y1 - h, barW, h, 5)
-      if (over) {
-        g.strokeStyle = '#FFFFFF'
-        g.lineWidth = 3
-        for (const off of [0, 9]) {
-          g.beginPath()
-          g.moveTo(bx, y1 - h + 16 + off)
-          g.lineTo(bx + barW, y1 - h + 6 + off)
-          g.stroke()
-        }
-      }
-      g.fillStyle = INK
-      g.font = '700 ' + valueFont + 'px ' + FONT
-      g.textAlign = 'center'
-      g.fillText(fmt(v, unit), bx + barW / 2, y1 - h - 10)
-    })
-    g.save()
-    g.translate(cx, y1 + 18)
-    g.rotate(-Math.PI / 7)
-    g.fillStyle = SUB
-    g.font = '600 16px ' + FONT
-    g.textAlign = 'right'
-    g.fillText(ell(g, cat, 190), 0, 0)
-    g.restore()
+  let lx = 36
+  g.font = '600 16px ' + FONT
+  series.forEach((s, si) => {
+    g.fillStyle = RAMP[si % RAMP.length]
+    pill(g, lx, 70, 14, 14, 4)
+    g.fillStyle = INK
+    g.textAlign = 'left'
+    g.fillText(s.name, lx + 22, 82)
+    lx += 22 + g.measureText(s.name).width + 26
   })
+
+  const gutter = 176
+  const x0 = 36 + gutter
+  const x1 = W - 36
+  const room = x1 - x0 - 136
+  const vals = series.reduce((acc, s) => acc.concat((s.data || []).map(d => Math.abs(Number(d.value) || 0))), [0])
+  const topv = ceiling(Math.max.apply(null, vals))
 
   g.strokeStyle = AXIS
   g.lineWidth = 1
   g.beginPath()
-  g.moveTo(x0, y1 + 0.5)
-  g.lineTo(x1, y1 + 0.5)
+  g.moveTo(x0 + 0.5, head - 12)
+  g.lineTo(x0 + 0.5, head + bodyH + 8)
   g.stroke()
 
-  let lx = 40
-  const ly = H - 32
-  g.font = '600 16px ' + FONT
-  g.textAlign = 'left'
-  series.forEach((s, si) => {
-    g.fillStyle = RAMP[si % RAMP.length]
-    pill(g, lx, ly - 12, 14, 14, 4)
+  let y = head
+  cats.forEach(cat => {
+    const gh = series.length * barH + (series.length - 1) * barGap
     g.fillStyle = INK
-    g.fillText(s.name, lx + 22, ly)
-    lx += 22 + g.measureText(s.name).width + 28
-  })
-  if (clipped) {
-    g.fillStyle = SUB
-    g.font = '500 14px ' + FONT
+    g.font = '600 17px ' + FONT
     g.textAlign = 'right'
-    g.fillText('Striped bars run past the axis \u2014 the real figure is written above', x1, ly)
-  }
+    g.fillText(ell(g, cat, gutter - 16), x0 - 14, y + gh / 2 + 6)
+    series.forEach((s, si) => {
+      const point = (s.data || []).find(p => p.label === cat)
+      const v = point ? Number(point.value) || 0 : 0
+      const w = Math.max(4, topv ? room * (Math.abs(v) / topv) : 4)
+      const by = y + si * (barH + barGap)
+      g.fillStyle = RAMP[si % RAMP.length]
+      pill(g, x0 + 1, by, w, barH, 5)
+      g.fillStyle = INK
+      g.font = '700 16px ' + FONT
+      g.textAlign = 'left'
+      g.fillText(fmt(v, unit), x0 + w + 14, by + barH / 2 + 6)
+    })
+    y += gh + groupGap
+  })
 
   return cv.toDataURL('image/png').split(',')[1]
 }
