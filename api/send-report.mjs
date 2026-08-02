@@ -1290,6 +1290,26 @@ function reportBlocks(m, opts) {
 // Charts are the newest block type in this file and a workspace that cannot render
 // one rejects the whole post. So a message degrades rather than fails: full layout,
 // then without the chart, then without the table, then as the lead section alone.
+// Slack will not colour its own chart and will not print the value on a bar,
+// and this report is read on a phone. So we have a picture of our own -- brand
+// ramp, every number written on it -- and it goes underneath the message it
+// belongs to, full width, no tap needed.
+async function slackUploadChartPng(token, channel, m) {
+  try {
+    const up = await slackUploadFile(token, {
+      filename: 'chart-' + Date.now() + '.png',
+      buffer: Buffer.from(m.chartPng, 'base64'),
+      title: (m.chart && m.chart.title) || 'Chart',
+    })
+    await slackCompleteUpload(token, { files: [up], channel })
+    // Slack lands a shared file a beat after it says yes. Without this the
+    // pictures all pile up at the end instead of sitting under their message.
+    await new Promise(r => setTimeout(r, 4000))
+  } catch (e) {
+    // The picture is a bonus. If Slack will not take it the report still reads.
+  }
+}
+
 async function slackPostReportMessage(token, channel, m) {
   const fallbackText = String(m.text || m.label || 'Report').slice(0, 2900)
   // A version may hand over a finished Block Kit payload instead of the
@@ -1304,11 +1324,17 @@ async function slackPostReportMessage(token, channel, m) {
     const safe = m.blocks.filter(b => b && EVERYWHERE.has(b.type))
     const tries = safe.length && safe.length < m.blocks.length ? [m.blocks, safe] : [m.blocks]
     let blockErr = null
+    let blockTs = null
     for (const bl of tries) {
-      try { return await slackPostBlocks(token, channel, fallbackText, bl) }
+      try { blockTs = await slackPostBlocks(token, channel, fallbackText, bl); break }
       catch (e) { blockErr = e }
     }
-    throw blockErr || new Error('Slack: message rejected')
+    if (!blockTs) throw blockErr || new Error('Slack: message rejected')
+    // A Block Kit message can carry a chart of its own too. It used to return
+    // here, which quietly skipped the upload below, so the brand-ramp picture
+    // never reached the channel.
+    if (m.chartPng) await slackUploadChartPng(token, channel, m)
+    return blockTs
   }
   // Slack will not colour its own chart and will not print the value on a bar,
   // and this report is read on a phone. So when we have a picture of our own --
@@ -1326,21 +1352,7 @@ async function slackPostReportMessage(token, channel, m) {
   }
   if (!ts) throw lastErr || new Error('Slack: message rejected')
 
-  if (ownChart) {
-    try {
-      const up = await slackUploadFile(token, {
-        filename: 'chart-' + Date.now() + '.png',
-        buffer: Buffer.from(m.chartPng, 'base64'),
-        title: (m.chart && m.chart.title) || 'Chart',
-      })
-      await slackCompleteUpload(token, { files: [up], channel })
-      // Slack lands a shared file a beat after it says yes. Without this the
-      // pictures all pile up at the end instead of sitting under their message.
-      await new Promise(r => setTimeout(r, 4000))
-    } catch (e) {
-      // The picture is a bonus. If Slack will not take it the report still reads.
-    }
-  }
+  if (ownChart) await slackUploadChartPng(token, channel, m)
   return ts
 }
 
