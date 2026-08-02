@@ -43,8 +43,8 @@ export const Card = ({ title, sub, children, action, noPad }) => (
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
     }}>
       <div>
-        <div style={{ fontSize: 13.5, fontWeight: 800, letterSpacing: '-0.2px', color: '#0F1B33', fontFamily: FONT }}>{title}</div>
-        {sub && <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 3, fontFamily: FONT }}>{sub}</div>}
+        <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.2px', color: '#0F1B33', fontFamily: FONT }}>{title}</div>
+        {sub && <div style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 3, fontFamily: FONT }}>{sub}</div>}
       </div>
       {action && <div style={{ flexShrink: 0 }}>{action}</div>}
     </div>
@@ -84,19 +84,19 @@ export const RankedBars = ({ data, labelKey, max, total, colorFn, showRank }) =>
         const col = colorFn ? colorFn(i) : BRAND_RAMP[i % BRAND_RAMP.length]
         return (
           <div key={r[labelKey] + i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {showRank && <div style={{ width: 20, textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#fff', background: col, borderRadius: 6, padding: '2px 0', flexShrink: 0, fontFamily: FONT }}>{i + 1}</div>}
+            {showRank && <div style={{ width: 20, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#fff', background: col, borderRadius: 6, padding: '2px 0', flexShrink: 0, fontFamily: FONT }}>{i + 1}</div>}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, alignItems: 'baseline' }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
                   {r[labelKey]}
                 </span>
-                <span style={{ fontSize: 12.5, fontWeight: 800, color: col, fontFamily: FONT, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.count)}</span>
+                <span style={{ fontSize: 14.5, fontWeight: 800, color: col, fontFamily: FONT, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.count)}</span>
               </div>
               <div style={{ height: 7, borderRadius: 99, background: '#F1F5F9', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: `linear-gradient(90deg,${col},${col}cc)`, transition: 'width .6s cubic-bezier(.4,0,.2,1)' }} />
               </div>
             </div>
-            <div style={{ fontSize: 10.5, color: C.muted, fontFamily: FONT, width: 36, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{pct(r.count, total)}</div>
+            <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, width: 36, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{pct(r.count, total)}</div>
           </div>
         )
       })}
