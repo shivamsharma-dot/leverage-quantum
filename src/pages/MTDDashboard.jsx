@@ -381,12 +381,12 @@ export default function MTDDashboard(){
                 <ResponsiveContainer width='100%' height={280}>
                   <ComposedChart data={cplBar} margin={{top:20,right:16,left:0,bottom:40}}>
                     <CartesianGrid strokeDasharray='3 3' stroke='#F1F5F9' vertical={false}/>
-                    <XAxis dataKey='name' tick={{fontSize:10,fill:'#6B7280'}} angle={-35} textAnchor='end' interval={0} axisLine={false} tickLine={false}/>
-                    <YAxis tick={{fontSize:10,fill:'#6B7280'}} axisLine={false} tickLine={false} tickFormatter={v=>('\u20B9'+(v>=1000?(v/1000).toFixed(0)+'K':v))}/>
+                    <XAxis dataKey='name' tick={{fontSize:12,fill:'#6B7280'}} angle={-35} textAnchor='end' interval={0} axisLine={false} tickLine={false}/>
+                    <YAxis tick={{fontSize:12,fill:'#6B7280'}} axisLine={false} tickLine={false} tickFormatter={v=>('\u20B9'+(v>=1000?(v/1000).toFixed(0)+'K':v))}/>
                     <Tooltip content={<BrandTooltip fmt={v=>fmtINR(v)}/>}/>
-                    <ReferenceLine y={avgCPL} stroke='#94A3B8' strokeDasharray='4 4' label={{value:'Avg',position:'right',fill:'#94A3B8',fontSize:10}}/>
+                    <ReferenceLine y={avgCPL} stroke='#94A3B8' strokeDasharray='4 4' label={{value:'Avg',position:'right',fill:'#94A3B8',fontSize:12}}/>
                     <Bar dataKey='cpl' name='CPL' radius={[5,5,0,0]} maxBarSize={36}>
-                      <LabelList dataKey='cpl' position='top' formatter={v=>fmtINR(v)} style={{fontSize:9,fontWeight:600,fill:'#374151'}}/>
+                      <LabelList dataKey='cpl' position='top' formatter={v=>fmtINR(v)} style={{fontSize:11,fontWeight:600,fill:'#374151'}}/>
                       {cplBar.map((e,i)=><Cell key={i} fill={e.cpl>avgCPL?'#1F3C84':'#4CAE6F'}/>)}
                     </Bar>
                   </ComposedChart>
@@ -402,8 +402,8 @@ export default function MTDDashboard(){
                 <ResponsiveContainer width='100%' height={280}>
                   <BarChart data={revStack} margin={{top:16,right:16,left:0,bottom:40}}>
                     <CartesianGrid strokeDasharray='3 3' stroke='#F1F5F9' vertical={false}/>
-                    <XAxis dataKey='name' tick={{fontSize:10,fill:'#6B7280'}} angle={-35} textAnchor='end' interval={0} axisLine={false} tickLine={false}/>
-                    <YAxis tick={{fontSize:10,fill:'#6B7280'}} axisLine={false} tickLine={false} tickFormatter={v=>v===0?'\u20B9'+'0':v>=100?'\u20B9'+(v/100).toFixed(1)+'Cr':'\u20B9'+v+'L'}/>
+                    <XAxis dataKey='name' tick={{fontSize:12,fill:'#6B7280'}} angle={-35} textAnchor='end' interval={0} axisLine={false} tickLine={false}/>
+                    <YAxis tick={{fontSize:12,fill:'#6B7280'}} axisLine={false} tickLine={false} tickFormatter={v=>v===0?'\u20B9'+'0':v>=100?'\u20B9'+(v/100).toFixed(1)+'Cr':'\u20B9'+v+'L'}/>
                     <Tooltip content={<BrandTooltip fmt={v=>v>=100?'\u20B9'+(v/100).toFixed(2)+' Cr':'\u20B9'+v+'L'}/>}/>
                     
                     <Bar dataKey='SR' name='SR Revenue' stackId='r' fill='#1F3C84' radius={[6,6,0,0]}/>
