@@ -266,9 +266,9 @@ export function CostTrendMonth({ data, fmtINR }) {
             <YAxis yAxisId="l" tick={axis} axisLine={false} tickLine={false} width={66} tickFormatter={v => fmtINR(v)} />
             <YAxis yAxisId="r" orientation="right" tick={axis} axisLine={false} tickLine={false} width={56} tickFormatter={v => fmtINR(v)} />
             <Tooltip content={<MoneyTip fmtINR={fmtINR} />} />
-            <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} />
+            <Legend wrapperStyle={{ fontSize: 12.5, fontFamily: FONT }} />
             <Line yAxisId="l" type="monotone" dataKey="cpql" name="CPQL" stroke={C.navy} strokeWidth={2.5} dot={{ r: 3 }} connectNulls>
-              <LabelList dataKey="cpql" position="top" formatter={v => (v == null ? '' : fmtINR(v))} style={{ fontSize: 10, fontWeight: 700, fill: C.sub }} />
+              <LabelList dataKey="cpql" position="top" formatter={v => (v == null ? '' : fmtINR(v))} style={{ fontSize: 12, fontWeight: 700, fill: C.sub }} />
             </Line>
             <Line yAxisId="r" type="monotone" dataKey="cpl" name="CPL" stroke={C.cyan} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
           </LineChart>
@@ -292,7 +292,7 @@ export function CostTrendDay({ data, fmtINR }) {
             <YAxis yAxisId="l" tick={axis} axisLine={false} tickLine={false} width={66} tickFormatter={v => fmtINR(v)} />
             <YAxis yAxisId="r" orientation="right" tick={axis} axisLine={false} tickLine={false} width={56} tickFormatter={v => fmtINR(v)} />
             <Tooltip content={<MoneyTip fmtINR={fmtINR} />} />
-            <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} />
+            <Legend wrapperStyle={{ fontSize: 12.5, fontFamily: FONT }} />
             <Line yAxisId="l" type="monotone" dataKey="cpql" name="CPQL" stroke={C.navy} strokeWidth={2.5} dot={false} connectNulls />
             <Line yAxisId="r" type="monotone" dataKey="cpl" name="CPL" stroke={C.cyan} strokeWidth={2.5} dot={false} connectNulls />
           </LineChart>
