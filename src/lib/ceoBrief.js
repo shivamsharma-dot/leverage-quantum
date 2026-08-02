@@ -232,7 +232,7 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx, p) {
   const throughTs = c.throughTs || Math.floor(Date.now() / 1000)
   const blocks = []
 
-  blocks.push({ type: 'header', text: { type: 'plain_text', text: 'Quantum Brief \u2014 B2C', emoji: true } })
+  blocks.push({ type: 'header', text: { type: 'plain_text', text: 'B2C Performance Brief', emoji: true } })
 
   const stamp = [
     T((c.monthLabel || '') + ' \u00b7 through ', { bold: true }),
@@ -458,7 +458,7 @@ function buildQuantumBrief(ctx) {
   // these, and they are built from the same numbers, so nothing can drift
   // between what was previewed and what was posted.
   const fb = []
-  fb.push(':bar_chart: *Quantum Brief \u2014 B2C \u2014 ' + (c.monthLabel || '') + ', through ' + (c.through || '') + '*')
+  fb.push(':bar_chart: *B2C Performance Brief \u2014 ' + (c.monthLabel || '') + ', through ' + (c.through || '') + '*')
   if (c.isTest) fb.push('_Test post._')
   fb.push('')
   fb.push('*Revenue* ' + money(mtd.rev) + '  *Cost* ' + money(mtd.cost) + '  *Net inflow* ' + money(mtd.net)
@@ -487,7 +487,7 @@ function buildQuantumBrief(ctx) {
     {
       key: 'brief',
       id: 'QB-1',
-      label: 'Quantum Brief',
+      label: 'Performance Brief',
       text: fb.join('\n'),
       blocks: briefBlocks(c, mtd, day, margin, peopleOutside, notes, caveats, dx, prevW),
       chart: chartTop,
@@ -523,7 +523,7 @@ export const CEO_BRIEF_VERSIONS = [{
   code: 'QB',
   recommended: true,
   msgKeys: ['brief', 'ledger'],
-  name: 'Quantum Brief',
+  name: 'Performance Brief',
   tagline: 'Two messages: the colour-coded brief with the diagnosis, then the split totals across last day, month and year.',
   what: [
     'A colour strip and KPI cards, green or red on the figure itself',
