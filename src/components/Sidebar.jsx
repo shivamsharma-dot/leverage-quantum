@@ -166,7 +166,7 @@ function OpportunityIcon(){ return <svg width="14" height="14" viewBox="0 0 24 2
 const ICON_MAP = {
   'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
   'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
-  'Revenue': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>,
+  'Revenue': <RevenueIcon/>, 'CEO B2C': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>,
   'Google Ads': <GoogleAdsIcon/>, 'QL Ops': <PeopleIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
   'Human QL Detail': <FunnelIcon/>,
   'AI QL Detail': <BotIcon/>,
@@ -176,6 +176,7 @@ const ICON_MAP = {
   'Referral': <ReferralIcon/>, 'Leads Assigned': <LeadsAssignedIcon/>,
   'WhatsApp': <WhatsAppIcon/>,
   'Ask AI': <AskAIIcon/>, 'Settings': <SettingsIcon/>, 'Agents': <AgentsIcon/>,
+  'Agent Runs': <AgentsIcon/>, 'Marketing Performance': <ChartIcon/>,
   // Meta Ads / Google Ads sub-items (flyout menu icons)
   'Creatives': <ImageIcon/>, 'Campaigns': <TargetIcon/>, 'Ads': <MegaphoneIcon/>,
   'Keywords': <TagIcon/>, 'Search Terms': <SearchIcon/>, 'Ad Groups': <LayersIcon/>,
