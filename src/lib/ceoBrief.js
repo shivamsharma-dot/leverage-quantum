@@ -124,13 +124,13 @@ const cellMoneyVs = (o, p, k, invert) => {
 // exactly the same code below.
 
 const HEADS = [
-  ['SR (online + offline)', 'Revenue', 'sr', 'SR'],
-  ['AC online', 'Revenue', 'ac', 'AC'],
-  ['VAS online', 'Revenue', 'vas', 'VAS'],
-  ['Offline revenue (AC + VAS)', 'Revenue', 'offRev', 'Offline'],
+  ['SR (Online + Offline)', 'Revenue', 'sr', 'SR'],
+  ['AC Online', 'Revenue', 'ac', 'AC'],
+  ['VAS Online', 'Revenue', 'vas', 'VAS'],
+  ['Offline (AC + VAS)', 'Revenue', 'offRev', 'Offline rev'],
   ['Perf. Marketing', 'Cost', 'pm', 'Marketing'],
   ['Operating (AC + VAS)', 'Cost', 'op', 'Operating'],
-  ['Offline cost (rent, staff, upkeep)', 'Cost', 'offCost', 'Offline'],
+  ['Offline (rent, staff, upkeep)', 'Cost', 'offCost', 'Offline cost'],
   ['Corp. Overheads', 'Cost', 'corp', 'Overheads'],
   ['People', 'Cost', 'people', 'People'],
 ]
@@ -405,7 +405,7 @@ function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab) {
     })
     if (!rows.length) return null
     const body = rows.map(function (h) {
-      return [cellText(h[3] || h[0]), cellMoneyVs(mtd, prev, h[2], invert), cellMoney(prev, h[2])]
+      return [cellText(h[0]), cellMoneyVs(mtd, prev, h[2], invert), cellMoney(prev, h[2])]
     })
     const k = kind === 'Revenue' ? 'rev' : 'cost'
     body.push([cellBold(totalLabel), cellBold(money(mtd[k])), cellBold(money(prev && prev[k]))])
