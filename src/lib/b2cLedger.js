@@ -53,7 +53,7 @@ const NAME = {}
 PLAN.forEach(function (p) { if (p[0] !== 'band') NAME[p[0]] = p[1] })
 
 const SR_NOTE = 'SR is Online and Offline together in the sheet today. The split is coming shortly.'
-const COST_NOTE = 'Cost is booked by head in this sheet, not by business line, so there is no cost of SR, AC or VAS to publish yet -- the sheet needs those columns first. Every cost head below is the whole business.'
+const COST_NOTE = 'Cost is booked by head, and a head is a cost category \u2014 People, Operating (AC + VAS), Performance Marketing, Offline (rent, staff, maintenance), Corporate Overheads \u2014 each one covering the whole business. It is not booked by business line, so there is no cost of SR, of AC or of VAS in this sheet to publish yet.'
 
 function money(n) {
   if (n == null || !isFinite(n)) return '\u2014'
@@ -268,7 +268,7 @@ export const B2C_LEDGER_VERSIONS = [{
     'A second table with the same lines as a share of that period\u2019s own revenue, which is what makes a day, a month and a year comparable',
     'Slack\u2019s own table block, not a monospace code block, so a phone lays the columns out instead of wrapping them',
     'A per-day reading when the two months compared are different lengths, so a 31 day month is never flattered by a 30 day one',
-    'A plain statement that the sheet books cost by head and not by line, so no cost of SR, AC or VAS is invented',
+    'A plain statement of what a cost head is \u2014 a cost category, not a business line \u2014 so nobody hunts the table for a cost of SR, AC or VAS that the sheet does not carry',
     'What moved and what would close the gap, both arithmetic on the windows above',
     'The table image and a CSV land in the thread'
   ],
