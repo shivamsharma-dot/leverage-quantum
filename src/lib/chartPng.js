@@ -77,12 +77,13 @@ function barPng(spec) {
   const series = c.series || []
   if (!cats.length || !series.length) return null
 
+  const note = spec.note ? String(spec.note) : ''
   const rows = cats.length * series.length
   const barH = rows > 14 ? 24 : rows > 8 ? 28 : 34
   const barGap = 7
   const groupGap = 20
   const W = 900
-  const head = 118
+  const head = note ? 146 : 118
   const bodyH = cats.length * (series.length * barH + (series.length - 1) * barGap) + (cats.length - 1) * groupGap
   const H = head + bodyH + 44
   const { cv, g } = surface(W, H)
@@ -102,6 +103,15 @@ function barPng(spec) {
     g.fillText(s.name, lx + 22, 82)
     lx += 22 + g.measureText(s.name).width + 26
   })
+
+  // A one-line note under the legend, so the reader is told what the two
+  // series actually are before reading a single bar.
+  if (note) {
+    g.font = '500 16px ' + FONT
+    g.fillStyle = SUB
+    g.textAlign = 'left'
+    g.fillText(ell(g, note, W - 72), 36, 108)
+  }
 
   const gutter = 176
   const x0 = 36 + gutter
