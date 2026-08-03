@@ -42,7 +42,7 @@ changes size only, never colour.
 | Token / usage | Old | New |
 | --- | --- | --- |
 | Base html, body, #root | 14px | **16px** |
-| Default table text (index.css `table {}`) | 12px | **13.5px** |
+| Default table text (desktop, via `--row-fs`) | 12px | **13.5px**. The `table {}` rule inside `@media (max-width:1024px)` deliberately stays 12px so the phone table-wrapping fix is not disturbed. |
 | Row font-size var --row-fs | 13px | **14.5px** |
 | Uppercase section / group labels | 10-10.5px | **11.5-12px** |
 | KPI card VALUE (the big number) | 26px | 26px (unchanged) |
