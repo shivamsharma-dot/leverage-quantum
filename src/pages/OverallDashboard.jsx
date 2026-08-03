@@ -2248,7 +2248,7 @@ export default function OverallDashboard() {
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
 
           {/* KPI ROW 1 — funnel volume, with vs-previous-period deltas */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(8, minmax(0, 1fr))', gap:12, marginBottom:12 }}>
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(175px, 1fr))', gap:12, marginBottom:12 }}>
             <PremKPI label="EST. SR REVENUE" value={<span title={fmtINRShort(estSrRevenue)}>{fmtINR(estSrRevenue)}</span>} sub={'Est. RAUs ' + fmtN(estimatedRaus) + ' × SR Fee'} delta={deltaPct(estSrRevenue, prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="SPEND" value={<span title={fmtINRShort(kpis.spend)}>{fmtINR(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
@@ -2260,7 +2260,7 @@ export default function OverallDashboard() {
           </div>
 
           {/* KPI ROW 2 — cost efficiency + downstream conversion + ROAS */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(8, minmax(0, 1fr))', gap:12, marginBottom:20 }}>
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(175px, 1fr))', gap:12, marginBottom:20 }}>
             <PremKPI label="CPL" value={<span title={fmtINRShort(cpl)}>{fmtINR(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
             <PremKPI label="CPQL" value={<span title={fmtINRShort(cpql)}>{fmtINR(cpql)}</span>} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai} />
             <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.totalQL) + ' of QL'} delta={deltaPct(kpis.apps, prevKpis.apps)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
