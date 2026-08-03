@@ -1,6 +1,6 @@
 # LEVERAGE QUANTUM — Claude Context File
 
-> Auto-read by Claude at every session start. Last updated: July 28, 2026.
+> Auto-read by Claude at every session start. Last updated: August 3, 2026.
 
 ## >>> START HERE — EXTENSION / SESSION HANDOFF (2026-07-28, latest) <<<
 
@@ -4052,3 +4052,21 @@ it built and imported clean and still broke in production. Every other API file 
 imports anything is already `.mjs` — that is the rule, not a coincidence. The route is
 unchanged: Vercel maps by filename without the extension, and nothing imports the file
 by path, only `/api/send-report` by URL.
+
+---
+
+## 2026-08-03 - Type scale raised across the app (sizes only)
+
+The app read too small on a real monitor, so this pass lifted type at the shared-token level. No brand colour was touched, the family stays Plus Jakarta Sans, and nothing was added to `api/`. `DESIGN_SYSTEM.md` now carries a "Type scale (Aug 2026 sizing pass)" section holding these numbers, and the "KPI Card Standard" block earlier in this file was re-synced to match.
+
+Global base in `src/index.css`: `html, body, #root` 14 -> 16. Density row variables went compact 12 -> 13.5, comfortable 13 -> 14.5, spacious 13.5 -> 15, and the `[data-density] table td/th` fallback `var(--row-fs, 13px)` -> `14.5px`. The one `table { font-size: 12px }` left alone sits inside `@media (max-width:1024px)` and was deliberately kept, so the phone table-wrapping fix that had just shipped is not disturbed.
+
+Shared components. `src/ui/dashboardKit.jsx`: Card title 13.5 -> 15, Card sub 11 -> 12.5, RankedBars rank badge 10 -> 12, label 12 -> 14, count 12.5 -> 14.5, percent 10.5 -> 12. `src/ui/kpiVariants.jsx` across all fifteen variants: labels 10 and 10.5 -> 12, sub 11 and 11.5 -> 12.5, DeltaPill 10.5 -> 12, the 9px micro-label -> 11, and every KPI value size (17, 19, 22, 24, 25, 26, 34) left exactly as it was. `KPICard.jsx` itself holds no sizes -- it delegates to `kpiVariants.jsx`, which is why that is the file to edit. Buttons went sm/md/lg 12.5/13.5/14.5 -> 13.5/14.5/15.5, with the uppercase variant in `buttonVariants.js` 12 -> 13.5. `Dropdown.jsx` label 11 -> 12.5, trigger and option 12.5 -> 13.5; `FilterDropdown.jsx` trigger 12.5 -> 13.5, option 12 -> 13. `Sidebar.module.css`: both `.groupLabel` rules 10 -> 11.5, `.quantumLabel` 11.5 -> 12.5, `.soonBadge`, `.avatar`, `.userEmail` and `.collapsedFlyoutHeader` 11 -> 12.5, `.subNavItem` and `.userName` 13 -> 14, `.roleBadge` 8.5 -> 10.5; `.navItem` and `.collapsedFlyoutItem` stay 14.5. `PinInput.jsx`, `ExportButton.jsx` and `ToastHost.jsx` were read and needed nothing.
+
+Chart text, one commit per file: 9 -> 11, 9.5 -> 11.5, 10 -> 12, 10.5 -> 12, 11 -> 12.5, 11.5 -> 12.5, applied to sixty-seven literals whose surrounding node is a Recharts axis tick, a legend `wrapperStyle`, a `LabelList`, a `ReferenceLine` label or a tooltip body. Counts: ChannelMix 6, Revenue 9, ROAS 8, Referral 13, QualitySections 3, MTD 6, GoogleAds 6, LeadQualification 12, Overall 4. `MetaAdsDashboard.jsx` has no Recharts usage. No chart colour changed.
+
+Two layout fixes the bigger scale forced. The Overall KPI rows were `repeat(8, minmax(0, 1fr))`, which at the 1280-class width with the sidebar expanded gave each card about 129px and clipped `Rs 3,78,000`, `Rs 10,19,827` and `Rs 1,45,690`; they are now `repeat(auto-fit, minmax(175px, 1fr))`, so the row keeps eight across on a wide monitor and drops to five on a laptop with nothing cut. The Meta Ads campaigns table had 1,280px of fixed columns inside a card set to `overflow:hidden`, so the right-hand columns were unreachable and the `2.2fr` campaign column collapsed until the date wrapped one word per line; the card is now `overflowX:auto`, the header and row grids carry `minWidth:fit-content`, and the first track is `minmax(230px, 2.2fr)`. No column was hidden or dropped anywhere.
+
+Verified live after deploy at the 1280-class width with the sidebar expanded: Summary, Overall, Meta Ads Creatives and Campaigns, QL Ops Daily QLs and Monthly QLs, Google Ads Campaigns / Keywords / Search Terms / Ad Groups, LeadSquared Leads / Activities / Opportunities, and Settings. Every wide table scrolls horizontally rather than clipping.
+
+One thing to know if you read the history: `7675a0a` pushed a broken `ChannelMixDashboard.jsx` -- the browser editor prepended a second copy of the whole file, duplicate imports and all. `eb89759`, a minute later, restores it to 346 lines. Nothing between those two commits is safe to check out.
