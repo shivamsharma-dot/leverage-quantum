@@ -92,12 +92,13 @@ function card(id, title, subtitle, body, opts) {
 // block stays behind it as the fallback if the canvas is unavailable.
 const NUM = n => (n == null || !isFinite(n) ? 0 : Number(n))
 
-function bars(title, cats, aName, aVals, bName, bVals) {
+function bars(title, cats, aName, aVals, bName, bVals, note) {
   if (!cats.length) return null
   return {
     type: 'data_visualization',
     title: String(title).slice(0, 50),
     unit: 'inr',
+    note: note ? String(note) : '',
     chart: {
       type: 'bar',
       series: [
@@ -270,13 +271,15 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx, p) {
       { image: charts.net, subtext: peopleOutside ? 'Excludes People cost \u2014 booked monthly, ' + money(c.peopleMonthly) + '.' : null }),
     card('revenue', dotFor(d.rev != null ? tone(d.rev) : 'green') + ' Revenue',
       money(w.rev) + (move(d.rev) ? ' \u00b7 ' + move(d.rev) : ''),
-      'SR ' + money(w.sr) + '\nAC ' + money(w.ac) + '\nVAS ' + money(w.vas)
-        + (w.offRev == null ? '' : '\nOffline ' + money(w.offRev)),
+      'SR (Online + Offline) ' + money(w.sr) + '\nAC Online ' + money(w.ac)
+        + '\nVAS Online ' + money(w.vas)
+        + (w.offRev == null ? '' : '\nOffline (AC + VAS) ' + money(w.offRev)),
       { image: charts.revenue }),
     card('cost', dotFor(d.cost != null ? tone(d.cost, true) : costTone) + ' Cost',
       money(w.cost) + (move(d.cost) ? ' \u00b7 ' + move(d.cost) : ''),
-      'Marketing ' + money(w.pm) + '\nOperating ' + money(w.op) + '\nOffline ' + money(w.offCost)
-        + '\nOverheads ' + money(w.corp) + '\nPeople ' + money(w.people),
+      'Perf. Marketing ' + money(w.pm) + '\nOperating (AC + VAS) ' + money(w.op)
+        + '\nOffline (rent, staff, upkeep) ' + money(w.offCost)
+        + '\nCorp. Overheads ' + money(w.corp) + '\nPeople ' + money(w.people),
       { image: charts.cost }),
   ]
   if (day) {
@@ -449,15 +452,21 @@ function buildQuantumBrief(ctx) {
   const prevW = c.prev ? fromCtx(c.prev.rev || {}, c.prev.cost || {}, c.prev.net) : null
   const dx = insights(c, mtd, prevW, margin, marginOf(ytd))
 
+  // Both charts read one period against the same stretch of the month before,
+  // so the chart says so on its own face.
+  const sameSpan = 'Like for like \u2014 both bars cover the same '
+    + (c.prev && c.prev.days ? (c.prev.days === 1 ? 'single day' : c.prev.days + ' days') : 'number of days')
+    + ' of each month.'
+
   // One chart per message, both drawn in the brand ramp by chartPng.js.
   const chartTop = prevW ? bars((c.monthLabel || 'This month') + ' against ' + prevLab,
     ['Revenue', 'Cost'],
     'Month to date', [NUM(mtd.rev), NUM(mtd.cost)],
-    prevLab, [NUM(prevW.rev), NUM(prevW.cost)]) : null
+    prevLab, [NUM(prevW.rev), NUM(prevW.cost)], sameSpan) : null
   const chartHeads = prevW ? bars('Every line and head against ' + prevLab,
     HEADS.filter(function (h) { return mtd[h[2]] != null || prevW[h[2]] != null }).map(function (h) { return h[3] || h[0] }),
     'Month to date', HEADS.filter(function (h) { return mtd[h[2]] != null || prevW[h[2]] != null }).map(function (h) { return NUM(mtd[h[2]]) }),
-    prevLab, HEADS.filter(function (h) { return mtd[h[2]] != null || prevW[h[2]] != null }).map(function (h) { return NUM(prevW[h[2]]) })) : null
+    prevLab, HEADS.filter(function (h) { return mtd[h[2]] != null || prevW[h[2]] != null }).map(function (h) { return NUM(prevW[h[2]]) }), sameSpan) : null
 
   const notes = (Array.isArray(c.notes) ? c.notes : []).filter(Boolean)
   const caveats = []
