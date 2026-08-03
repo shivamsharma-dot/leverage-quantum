@@ -92,13 +92,14 @@ function card(id, title, subtitle, body, opts) {
 // block stays behind it as the fallback if the canvas is unavailable.
 const NUM = n => (n == null || !isFinite(n) ? 0 : Number(n))
 
-function bars(title, cats, aName, aVals, bName, bVals, note) {
+function bars(title, cats, aName, aVals, bName, bVals, note, layout) {
   if (!cats.length) return null
   return {
     type: 'data_visualization',
     title: String(title).slice(0, 50),
     unit: 'inr',
     note: note ? String(note) : '',
+    layout: layout || '',
     chart: {
       type: 'bar',
       series: [
@@ -294,7 +295,7 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx, p) {
   // in the ledger message: nothing here is generated prose, and every figure
   // can be checked against the table below it. Left expanded, because this is
   // the part worth reading.
-  const bad = ((dx && dx.bad) || []).slice(0, 5)
+  const bad = ((dx && dx.bad) || []).slice(0, 6)
   const fix = ((dx && dx.fix) || []).slice(0, 4)
   const total = notes.length + bad.length + fix.length + caveats.length
   if (total) {
@@ -342,16 +343,20 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx, p) {
 // plain table block does give control: the label column is told to wrap and the
 // figure columns are right aligned, which is what keeps a table inside a phone.
 // The caption is not part of that block, so it is written above it instead.
-function pushTable(out, t) {
+function pushTable(out, t, wide) {
   if (!t || !t.rows || !t.rows.length) return out
+  // The wide reading wants the native block itself, with its own sort, search
+  // and open-full-screen controls, so it is handed through untouched.
+  if (wide) { out.push(t); return out }
   const cols = t.rows[0].map((_, i) => (i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
   if (t.caption) out.push({ type: 'context', elements: [{ type: 'mrkdwn', text: '*' + t.caption + '*' }] })
   out.push({ type: 'table', block_id: t.block_id, column_settings: cols, rows: t.rows })
   return out
 }
 
-function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab) {
+function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab, wide) {
   const blocks = []
+  const pt = function (out, t) { return pushTable(out, t, wide) }
 
   blocks.push({ type: 'header', text: { type: 'plain_text', text: 'Revenue, cost, net inflow', emoji: true } })
 
@@ -369,7 +374,7 @@ function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab) {
   // Three columns is what a phone shows without cutting one off, so the month
   // and the month before get one table and the day and the year get another.
   if (prev) {
-    pushTable(blocks, {
+    pt(blocks, {
       type: 'data_table',
       block_id: 'qb_totals_mom',
       caption: 'Month to date against ' + prevLab + ', same number of days',
@@ -385,7 +390,7 @@ function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab) {
     })
   }
 
-  pushTable(blocks, {
+  pt(blocks, {
     type: 'data_table',
     block_id: 'qb_totals_day',
     caption: 'Last completed day and the financial year so far',
@@ -424,15 +429,19 @@ function ledgerBlocks(last, mtd, ytd, prev, lastLab, ytdLab, prevLab) {
 
   const rv = lines('Revenue', 'qb_rev', 'Line', 'Revenue lines, month to date against ' + prevLab, 'Total revenue', false)
   const cs = lines('Cost', 'qb_cost', 'Head', 'Cost heads, month to date against ' + prevLab, 'Total cost', true)
-  if (rv) pushTable(blocks, rv)
-  if (cs) pushTable(blocks, cs)
+  if (rv) pt(blocks, rv)
+  if (cs) pt(blocks, cs)
   return blocks
 }
 
 // -- the report ---------------------------------------------------------------
 
-function buildQuantumBrief(ctx) {
+function buildQuantumBrief(ctx, opts) {
   const c = ctx || {}
+  // The wide reading is the earlier layout kept alive as its own version:
+  // native data tables and standing bars instead of phone-sized ones.
+  const wide = !!(opts && opts.wide)
+  const chartLayout = wide ? 'vertical' : ''
   const rev = c.rev || {}
   const cost = c.cost || {}
   const day = c.day || null
@@ -451,6 +460,10 @@ function buildQuantumBrief(ctx) {
   // finished total.
   const prevW = c.prev ? fromCtx(c.prev.rev || {}, c.prev.cost || {}, c.prev.net) : null
   const dx = insights(c, mtd, prevW, margin, marginOf(ytd))
+  // The blocks used to keep five of these and the text fallback all of them, so
+  // the preview showed a line the post never carried. One cap, applied here.
+  dx.bad = dx.bad.slice(0, 6)
+  dx.fix = dx.fix.slice(0, 4)
 
   // Both charts read one period against the same stretch of the month before,
   // so the chart says so on its own face.
@@ -462,11 +475,11 @@ function buildQuantumBrief(ctx) {
   const chartTop = prevW ? bars((c.monthLabel || 'This month') + ' against ' + prevLab,
     ['Revenue', 'Cost'],
     'Month to date', [NUM(mtd.rev), NUM(mtd.cost)],
-    prevLab, [NUM(prevW.rev), NUM(prevW.cost)], sameSpan) : null
+    prevLab, [NUM(prevW.rev), NUM(prevW.cost)], sameSpan, chartLayout) : null
   const chartHeads = prevW ? bars('Every line and head against ' + prevLab,
     HEADS.filter(function (h) { return mtd[h[2]] != null || prevW[h[2]] != null }).map(function (h) { return h[3] || h[0] }),
     'Month to date', HEADS.filter(function (h) { return mtd[h[2]] != null || prevW[h[2]] != null }).map(function (h) { return NUM(mtd[h[2]]) }),
-    prevLab, HEADS.filter(function (h) { return mtd[h[2]] != null || prevW[h[2]] != null }).map(function (h) { return NUM(prevW[h[2]]) }), sameSpan) : null
+    prevLab, HEADS.filter(function (h) { return mtd[h[2]] != null || prevW[h[2]] != null }).map(function (h) { return NUM(prevW[h[2]]) }), sameSpan, chartLayout) : null
 
   const notes = (Array.isArray(c.notes) ? c.notes : []).filter(Boolean)
   const caveats = []
@@ -549,7 +562,7 @@ function buildQuantumBrief(ctx) {
       id: 'QB-2',
       label: 'Split totals \u2014 last day, MTD, YTD',
       text: lb.join('\n'),
-      blocks: ledgerBlocks(last, mtd, ytd, prevW, lastLab, ytdLab, prevLab),
+      blocks: ledgerBlocks(last, mtd, ytd, prevW, lastLab, ytdLab, prevLab, wide),
       chart: chartHeads,
     },
   ]
@@ -573,6 +586,20 @@ export const CEO_BRIEF_VERSIONS = [{
   'Built for a phone: nothing scrolls sideways, nothing needs a laptop',
   ],
   build: buildQuantumBrief,
+}, {
+  id: 'quantum-brief-wide',
+  code: 'QBW',
+  msgKeys: ['brief', 'ledger'],
+  name: 'Performance Brief \u2014 wide tables',
+  tagline: 'The same two messages in the earlier reading: native tables the CEO can sort, search and open full screen, and standing-bar charts.',
+  what: [
+    'The same numbers, the same read and the same red and green rules as the Performance Brief',
+    'Tables as native data tables \u2014 sortable, searchable, openable full screen',
+    'Charts drawn as standing bars, two to a category, the figure written above each bar',
+    'Every line and head carries its full definition, and the like-for-like note sits on both charts',
+    'The wide tables can scroll sideways on a phone \u2014 that is the trade for the extra controls',
+  ],
+  build: function (ctx) { return buildQuantumBrief(ctx, { wide: true }) },
 }]
 
 export default CEO_BRIEF_VERSIONS
