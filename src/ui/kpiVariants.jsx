@@ -219,7 +219,7 @@ export function renderKpiVariant(variantId, props) {
     case 15: // compact dense
       return (
         <div style={{ ...wrap, background: 'var(--card,#fff)', border: '0.5px solid var(--card-border,#E7EAF1)', borderRadius: 10, padding: '10px 12px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text3,#94A3B8)', marginBottom: 4 }}>{label}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text3,#94A3B8)', marginBottom: 4 }}>{label}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 17, fontWeight: 800, color: 'var(--text,#0F172A)' }}>{value}</span>
             <DeltaPill deltaText={deltaText} isGood={isGood} />
