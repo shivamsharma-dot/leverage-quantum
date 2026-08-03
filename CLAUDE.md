@@ -432,15 +432,17 @@ All KPI cards across every page use the **shared `KPICard.jsx` component**:
 
 ```
 padding: 16px 20px 14px
-label: 10px / 700 / #94A3B8 / uppercase / letterSpacing 0.08em
+label: 12px / 700 / #94A3B8 / uppercase / letterSpacing 0.08em
 value: 26px / 800 / #0F172A / letterSpacing -1px
-sub: 11.5px / 400 / #94A3B8
-delta: 10.5px / 700 / #16A34A (good) or #DC2626 (bad) / NO pill background
+sub: 12.5px / 400 / #94A3B8
+delta: 12px / 700 / #16A34A (good) or #DC2626 (bad) / NO pill background
 border: 0.5px solid #E2E8F0
 borderRadius: 12px
 boxShadow: 0 1px 4px rgba(15,23,42,0.04)
 NO colored top border. NO colored icon squares. NO tinted backgrounds.
 ```
+
+> **Revised 2026-08-03 (type-scale pass).** label 10 -> 12, sub 11.5 -> 12.5, delta 10.5 -> 12. **value stays 26px.** The runtime source of truth is `src/ui/kpiVariants.jsx` (`KPICard.jsx` delegates to it); keep this block and the "Type scale" section of `DESIGN_SYSTEM.md` in sync with that file.
 
 **Never define a local KPICard component in a page.** Always import from `../components/KPICard`.
 
