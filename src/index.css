@@ -147,7 +147,7 @@ input:focus, textarea:focus {
 
 /* Tables: always horizontally scrollable on small screens */
 @media (max-width: 1024px) {
-  table { font-size: 13.5px; }
+  table { font-size: 12px; }
 }
 
 /* Show mobile top bar on ≤768px */
