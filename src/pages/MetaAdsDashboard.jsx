@@ -401,13 +401,13 @@ function KPIBar({ kpis }) {
 
 // ─── HEALTH BADGE ─────────────────────────────────────────
 function HealthBadge({ label }) {
-  const map = { healthy:'#4CAE6F', moderate:'#D97706', high:'#DC2626' }
+  const map = { healthy:'#4CAE6F', moderate:'#29B9C3', high:'#1F3C84' }
   const bg  = { healthy:'#DCFCE7', moderate:'#FEF3C7', high:'#FEE2E2' }
   return <span style={{fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:20,background:bg[label]||'#F3F4F6',color:map[label]||'#6B7280',textTransform:'capitalize'}}>{label}</span>
 }
 
 function ScoreBadge({ score, label }) {
-  const colors = { healthy:'#4CAE6F', moderate:'#D97706', high:'#DC2626' }
+  const colors = { healthy:'#4CAE6F', moderate:'#29B9C3', high:'#1F3C84' }
   return <span style={{fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:20,background:'#fff',border:'1.5px solid '+(colors[label]||'#E5E7EB'),color:colors[label]||'#6B7280'}}>Score {score}</span>
 }
 
