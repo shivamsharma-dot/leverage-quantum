@@ -8,10 +8,7 @@ import {
 import Sidebar from '../components/Sidebar'
 import Dropdown from '../components/Dropdown'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
-import {
-  C, FONT, BRAND_RAMP, brandColor, PAGE_SIZE,
-  fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
-} from '../ui/dashboardKit'
+import { C, FONT, BRAND_RAMP, brandColor, PAGE_SIZE, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
 import Button from '../components/Button'
 
 const CSV_DEFAULT = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=whatsapp'
@@ -338,13 +335,14 @@ export default function WhatsAppDashboard() {
                   <div style={{ padding: '16px 20px' }}>
                     <ResponsiveContainer width='100%' height={280}>
                       <ComposedChart data={dailyTrend} margin={{ left: 0, right: 10, top: 10, bottom: 4 }}>
+                <defs><BarGrad id="g-b0-2" color={C.cyan}/></defs>
                         <CartesianGrid vertical={false} stroke={C.border} />
                         <XAxis dataKey='label' tick={axis} axisLine={false} tickLine={false} />
                         <YAxis yAxisId='left' tick={axis} axisLine={false} tickLine={false} allowDecimals={false} />
                         <YAxis yAxisId='right' orientation='right' tick={axis} axisLine={false} tickLine={false} />
                         <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
                         <Legend wrapperStyle={{ fontSize: 11.5, fontFamily: FONT }} iconType='circle' />
-                        <Bar yAxisId='left' dataKey='Delivered' name='Delivered' fill={C.cyan} radius={[4, 4, 0, 0]} barSize={14} />
+                        <Bar yAxisId='left' dataKey='Delivered' name='Delivered' fill={barFill('g-b0-2')} radius={BAR_RADIUS} barSize={14} />
                         <Line yAxisId='right' type='monotone' dataKey='Spend' name='Spend' stroke={C.navy} strokeWidth={2.5} dot={false} />
                       </ComposedChart>
                     </ResponsiveContainer>
@@ -357,13 +355,14 @@ export default function WhatsAppDashboard() {
                   <div style={{ padding: '16px 20px' }}>
                     <ResponsiveContainer width='100%' height={240}>
                       <ComposedChart data={monthTrend} margin={{ left: 0, right: 10, top: 10, bottom: 4 }} barCategoryGap='30%'>
+                <defs><BarGrad id="g-b1-1" color={C.blue}/></defs>
                         <CartesianGrid vertical={false} stroke={C.border} />
                         <XAxis dataKey='month' tick={axis} axisLine={false} tickLine={false} />
                         <YAxis yAxisId='left' tick={axis} axisLine={false} tickLine={false} allowDecimals={false} />
                         <YAxis yAxisId='right' orientation='right' tick={axis} axisLine={false} tickLine={false} />
                         <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
                         <Legend wrapperStyle={{ fontSize: 11.5, fontFamily: FONT }} iconType='circle' />
-                        <Bar yAxisId='left' dataKey='Delivered' name='Delivered' fill={C.blue} radius={[4, 4, 0, 0]} barSize={28}>
+                        <Bar yAxisId='left' dataKey='Delivered' name='Delivered' fill={barFill('g-b1-1')} radius={BAR_RADIUS} barSize={28}>
                           <LabelList dataKey='Delivered' position='top' style={{ fontSize: 10, fontWeight: 700, fill: C.muted }} />
                         </Bar>
                         <Line yAxisId='right' type='monotone' dataKey='Spend' name='Spend' stroke={C.green} strokeWidth={2.5} dot={{ r: 4 }} />
