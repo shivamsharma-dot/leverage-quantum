@@ -5,7 +5,7 @@ import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { resolveSheetUrl } from '../lib/dataSources'
-import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN } from '../ui/dashboardKit'
+import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN, BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
 
 const DEFAULT_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=AIDetailedQL'
 const PAGE = 25
@@ -627,11 +627,12 @@ export default function AIQLDetailDashboard() {
               <div style={{ height: 220, padding: '12px 12px 4px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={dailyTrend} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                <defs><BarGrad id="g-b0-1" color={C.navy}/></defs>
                     <CartesianGrid vertical={false} stroke="#EEF1F5" />
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} interval={dailyTrend.length > 10 ? 1 : 0} />
                     <YAxis hide />
                     <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: '0.5px solid ' + C.border }} />
-                    <Bar dataKey="count" fill={C.navy} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                    <Bar dataKey="count" fill={barFill('g-b0-1')} radius={BAR_RADIUS} maxBarSize={22} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
