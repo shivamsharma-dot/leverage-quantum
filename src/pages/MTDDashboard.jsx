@@ -5,18 +5,16 @@ import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
+import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK, SOURCE_COLORS } from '../ui/dashboardKit'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT58jwL_E0MSciEW_nyrHQMA-0DiFqUN3wstB9yTpfM3gdhK-ctxaODRuqtdxurFRJwmhvbzqS_9EuM/pub?output=csv'
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 const isMonthHeader = v => v && MONTH_NAMES.some(m => v.startsWith(m)) && v.length < 25
 
-const SRC_COLOR = {
-  Facebook:'#1F3C84', Google:'#1C9FD4', 'Google MBBS':'#29B9C3', Affiliate:'#4CAE6F',
-  Remarketing:'#29B9C3', Referral:'#0D9488', Bing:'#6B8FD4', Others:'#9CA3AF',
-  Branding:'#6B7280', 'Content+Brand':'#EC4899', 'Lead Source NA':'#14B8A6',
-  'Affiliate Partner':'#84CC16', Offline:'#374151'
-}
+// Channel hues come from the shared map (DESIGN_SYSTEM.md). The old local map here
+// used pink, lime and teal, and disagreed with Channel Mix on Facebook and Google.
+const SRC_COLOR = SOURCE_COLORS
 const sc = src => SRC_COLOR[src] || '#9CA3AF'
 
 function parseINR(v){ if(!v)return 0; return parseFloat(String(v).replace(/[^0-9.]/g,''))||0 }
@@ -401,14 +399,15 @@ export default function MTDDashboard(){
               <Card title='Revenue breakdown' sub='SR vs AC vs VAS by channel - in Lakhs'>
                 <ResponsiveContainer width='100%' height={280}>
                   <BarChart data={revStack} margin={{top:16,right:16,left:0,bottom:40}}>
+                <defs><BarGrad id="g-b1-1" color="#4CAE6F"/><BarGrad id="g-b1-2" color="#1C9FD4"/><BarGrad id="g-b1-3" color="#1F3C84"/></defs>
                     <CartesianGrid strokeDasharray='3 3' stroke='#F1F5F9' vertical={false}/>
                     <XAxis dataKey='name' tick={{fontSize:12,fill:'#6B7280'}} angle={-35} textAnchor='end' interval={0} axisLine={false} tickLine={false}/>
                     <YAxis tick={{fontSize:12,fill:'#6B7280'}} axisLine={false} tickLine={false} tickFormatter={v=>v===0?'\u20B9'+'0':v>=100?'\u20B9'+(v/100).toFixed(1)+'Cr':'\u20B9'+v+'L'}/>
                     <Tooltip content={<BrandTooltip fmt={v=>v>=100?'\u20B9'+(v/100).toFixed(2)+' Cr':'\u20B9'+v+'L'}/>}/>
                     
-                    <Bar dataKey='SR' name='SR Revenue' stackId='r' fill='#1F3C84' radius={[6,6,0,0]}/>
-                    <Bar dataKey='AC' name='AC Revenue' stackId='r' fill='#1C9FD4' radius={[6,6,0,0]}/>
-                    <Bar dataKey='VAS' name='VAS Revenue' stackId='r' fill='#4CAE6F' radius={[4,4,0,0]}/>
+                    <Bar dataKey='SR' name='SR Revenue' stackId='r' fill={barFill('g-b1-3')} radius={[6,6,0,0]}/>
+                    <Bar dataKey='AC' name='AC Revenue' stackId='r' fill={barFill('g-b1-2')} radius={[6,6,0,0]}/>
+                    <Bar dataKey='VAS' name='VAS Revenue' stackId='r' fill={barFill('g-b1-1')} radius={[4,4,0,0]}/>
                   </BarChart>
                 </ResponsiveContainer>
                 <div style={{display:'flex',gap:16,justifyContent:'center',marginTop:8,fontSize:11,color:'#374151'}}>
