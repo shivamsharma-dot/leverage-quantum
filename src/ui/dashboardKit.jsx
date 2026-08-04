@@ -19,7 +19,7 @@ export const PROVIDER_COLORS = { Futwork: C.navy, 'Futwork AI': C.cyan, Superbot
 
 // On-brand ordered palette — navy → blue → cyan → green, then tinted repeats.
 // Used for multi-category bars so everything stays within brand colors.
-export const BRAND_RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F', '#3A5BA0', '#52B5DC', '#5BCAD2', '#73C58E', '#8AA4D8']
+export const BRAND_RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F', '#3A5BA0', '#52B5DC', '#5BCAD2', '#73C58E', '#8AA4D8', '#9BD8AF', '#8FDCE1']
 export const brandColor = i => BRAND_RAMP[i % BRAND_RAMP.length]
 
 /* ===== Chart bar treatment — see DESIGN_SYSTEM.md "Chart bars" =====
@@ -40,11 +40,15 @@ export const BarGrad = ({ id, color, from = 0.95, to = 0.55, dir = 'v' }) => (
   </linearGradient>
 )
 // Stable channel -> hue map so a source is the same colour on every page.
+// Stable channel -> hue map, grouped by family so the channel type is readable from
+// the hue: blue = paid social, green = search, navy = owned/partner, cyan = brand/
+// content, grey = unknown bucket. Same source, same colour on every page.
 export const SOURCE_COLORS = {
-  Facebook: '#1C9FD4', Google: '#4CAE6F', Referral: '#1F3C84',
-  'Content+Brand': '#29B9C3', Affiliate: '#3A5BA0', Remarketing: '#52B5DC',
-  Offline: '#5BCAD2', Bing: '#73C58E', Branding: '#8AA4D8',
-  Unidentified: '#9CA3AF',
+  Facebook: '#1C9FD4', Remarketing: '#52B5DC',
+  Google: '#4CAE6F', 'Google MBBS': '#73C58E', Bing: '#9BD8AF',
+  Referral: '#1F3C84', Affiliate: '#3A5BA0', 'Affiliate Partner': '#8AA4D8',
+  'Content+Brand': '#29B9C3', Branding: '#5BCAD2', Offline: '#8FDCE1',
+  Unidentified: '#9CA3AF', Others: '#9CA3AF', 'Lead Source NA': '#9CA3AF',
 }
 export const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 export const PAGE_SIZE = 10
