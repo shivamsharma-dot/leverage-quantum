@@ -8,10 +8,7 @@ import {
 } from 'recharts';
 import Sidebar from '../components/Sidebar';
 import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
-import {
-  C, FONT, BRAND_RAMP, brandColor, PAGE_SIZE,
-  fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
-} from '../ui/dashboardKit';
+import { C, FONT, BRAND_RAMP, brandColor, PAGE_SIZE, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit';
 import Button from '../components/Button';
 
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Referral';
@@ -328,14 +325,15 @@ export default function ReferralDashboard() {
               {sectionTitle('Source-wise lead gen rate', 'leads created · yesterday / last 7 days / this month')}
               <ResponsiveContainer width='100%' height={280}>
                 <BarChart data={M.leadgen} margin={{ left:0, right:10, top:10, bottom:4 }} barGap={4} barCategoryGap='22%'>
+                <defs><BarGrad id="g-b1-6" color={C.navy}/><BarGrad id="g-b1-7" color={C.blue}/><BarGrad id="g-b1-8" color={C.cyan}/></defs>
                   <CartesianGrid vertical={false} stroke={C.border} />
                   <XAxis dataKey='period' tick={axis} axisLine={false} tickLine={false} />
                   <YAxis tick={axis} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
                   <Legend wrapperStyle={{ fontSize:12.5, fontFamily:FONT }} iconType='circle' />
-                  <Bar dataKey='Student' name='Student' fill={C.cyan} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='Student' position='top' style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
-                  <Bar dataKey='EMP' name='EMP' fill={C.blue} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='EMP' position='top' style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
-                  <Bar dataKey='Total' name='Total' fill={C.navy} radius={[4,4,0,0]} barSize={18}><LabelList dataKey='Total' position='top' style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
+                  <Bar dataKey='Student' name='Student' fill={barFill('g-b1-8')} radius={BAR_RADIUS} barSize={18}><LabelList dataKey='Student' position='top' style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
+                  <Bar dataKey='EMP' name='EMP' fill={barFill('g-b1-7')} radius={BAR_RADIUS} barSize={18}><LabelList dataKey='EMP' position='top' style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
+                  <Bar dataKey='Total' name='Total' fill={barFill('g-b1-6')} radius={BAR_RADIUS} barSize={18}><LabelList dataKey='Total' position='top' style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -343,13 +341,14 @@ export default function ReferralDashboard() {
               {sectionTitle('Current vs last month', M.cvlLabels.last + ' vs ' + M.cvlLabels.current)}
               <ResponsiveContainer width='100%' height={280}>
                 <BarChart data={M.cvl} layout='vertical' margin={{ left:20, right:30, top:10, bottom:4 }} barGap={3}>
+                <defs><BarGrad id="g-b2-4" color={C.navy} dir="h"/><BarGrad id="g-b2-5" color={C.blue} dir="h"/></defs>
                   <CartesianGrid horizontal={false} stroke={C.border} />
                   <XAxis type='number' tick={axis} axisLine={false} tickLine={false} />
                   <YAxis type='category' dataKey='metric' tick={axis} axisLine={false} tickLine={false} width={60} />
                   <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
                   <Legend wrapperStyle={{ fontSize:12.5, fontFamily:FONT }} iconType='circle' />
-                  <Bar dataKey='last' name={M.cvlLabels.last} fill={C.blue} radius={[0,4,4,0]} barSize={13}><LabelList dataKey='last' position='right' formatter={fmtN} style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
-                  <Bar dataKey='current' name={M.cvlLabels.current} fill={C.navy} radius={[0,4,4,0]} barSize={13}><LabelList dataKey='current' position='right' formatter={fmtN} style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
+                  <Bar dataKey='last' name={M.cvlLabels.last} fill={barFill('g-b2-5')} radius={BAR_RADIUS_H} barSize={13}><LabelList dataKey='last' position='right' formatter={fmtN} style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
+                  <Bar dataKey='current' name={M.cvlLabels.current} fill={barFill('g-b2-4')} radius={BAR_RADIUS_H} barSize={13}><LabelList dataKey='current' position='right' formatter={fmtN} style={{ fontSize:12, fontWeight:700, fill:C.muted }} /></Bar>
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -378,14 +377,15 @@ export default function ReferralDashboard() {
               {sectionTitle('Intake-wise funnel', 'first app / offer received / deposit made')}
               <ResponsiveContainer width='100%' height={300}>
                 <BarChart data={M.intakeFunnel} margin={{ left:0, right:10, top:10, bottom:4 }} barGap={3} barCategoryGap='20%'>
+                <defs><BarGrad id="g-b3-1" color={C.cyan}/><BarGrad id="g-b3-2" color={C.blue}/><BarGrad id="g-b3-3" color={C.navy}/></defs>
                   <CartesianGrid vertical={false} stroke={C.border} />
                   <XAxis dataKey='intake' tick={axis} axisLine={false} tickLine={false} />
                   <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
                   <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
                   <Legend wrapperStyle={{ fontSize:12.5, fontFamily:FONT }} iconType='circle' />
-                  <Bar dataKey='firstApp' name='First App' fill={C.navy} radius={[4,4,0,0]} barSize={16} />
-                  <Bar dataKey='firstOffer' name='First Offer received' fill={C.blue} radius={[4,4,0,0]} barSize={16} />
-                  <Bar dataKey='firstDep' name='First Deposit made' fill={C.cyan} radius={[4,4,0,0]} barSize={16} />
+                  <Bar dataKey='firstApp' name='First App' fill={barFill('g-b3-3')} radius={BAR_RADIUS} barSize={16} />
+                  <Bar dataKey='firstOffer' name='First Offer received' fill={barFill('g-b3-2')} radius={BAR_RADIUS} barSize={16} />
+                  <Bar dataKey='firstDep' name='First Deposit made' fill={barFill('g-b3-1')} radius={BAR_RADIUS} barSize={16} />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -422,7 +422,7 @@ export default function ReferralDashboard() {
             </Card>
             <Card>
               {sectionTitle('Top student statuses', 'distribution across the funnel')}
-              <RankedBars data={M.statusRows} labelKey='status' max={M.statusRows[0]?.count || 0} total={M.statusRows.reduce((a, b) => a + b.count, 0)} colorFn={brandColor} showRank />
+              <RankedBars data={M.statusRows} labelKey='status' max={M.statusRows[0]?.count || 0} total={M.statusRows.reduce((a, b) => a + b.count, 0)} showRank />
             </Card>
           </div>
 
