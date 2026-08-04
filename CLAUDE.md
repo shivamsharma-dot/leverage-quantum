@@ -4072,3 +4072,50 @@ Verified live after deploy at the 1280-class width with the sidebar expanded: Su
 One thing to know if you read the history: `7675a0a` pushed a broken `ChannelMixDashboard.jsx` -- the browser editor prepended a second copy of the whole file, duplicate imports and all. `eb89759`, a minute later, restores it to 346 lines. Nothing between those two commits is safe to check out.
 
 Follow-up sweep the same day, after re-auditing every shared token against the table above. `src/ui/kpiVariants.jsx` variant 15 still had its uppercase label at 11 -- lifted to 12 so all fifteen KPI variants now agree (`7338a64`). One false positive is worth recording so nobody repeats it: `839e9e2` raised the `table { font-size }` rule to 13.5, not noticing it lives inside `@media (max-width:1024px)`; it was reverted in `4076ed5` and the DESIGN_SYSTEM row was reworded in `85fb15b` to say so plainly. Desktop table text comes from `--row-fs`, not from that rule. `.roleBadge` at 10.5 and the RankedBars rank badge at 12 are intentional and stay compact.
+
+## 2026-08-04 - Chart colour unified (sizes untouched)
+
+Summary's bar treatment is now the app-wide default, and colour finally means one thing.
+The rule, written into `DESIGN_SYSTEM.md` under "Chart bars": colour encodes **identity,
+never position**. One series gets one hue; the ramp is only for genuinely different
+entities, read from a stable name map. Bars carry a gradient of their own hue at 0.95
+fading to 0.55, rounded caps, `maxBarSize` 26; areas use the same hue at 0.4 to 0.02.
+
+`src/ui/dashboardKit.jsx` now owns it: `BarGrad`, `barFill`, `gradId`, `BAR_RADIUS`,
+`BAR_RADIUS_H`, `BAR_MAX`, `GRID_STROKE`, `NEUTRAL_TRACK`, `NEUTRAL_GREY`,
+`SOURCE_COLORS` and `sourceColor()`. Pages must not hand-roll a `<linearGradient>` or a
+local channel-colour map again. `BRAND_RAMP` is now 12 tones: navy, blue, cyan and green,
+each at three tiers, so a hue family tells you the channel type. Three tints are new
+(`#8AA4D8`, `#8FD3F0`, `#8FDCE1`) plus `#9BD8AF`; all are lightened members of the four
+existing families, nothing new was invented outside them.
+
+`RankedBars` no longer walks the ramp by row index. It takes a single `color` (default
+navy) and keeps `colorFn` only for real categorical use, which is why Overall, Referral,
+Leads Assigned and QL Ops all dropped their `colorFn={brandColor}`. Overall's funnel was
+the clearest case: eight stages of one series painted eight different colours, now one
+navy horizontal gradient.
+
+Four competing channel-colour maps became one. Channel Mix and Revenue had off-brand amber
+on Referral and Affiliate, and gave Facebook, Offline and Branding the same blue. MTD had
+pink `#EC4899`, lime `#84CC16` and teal, and disagreed with Channel Mix about Facebook and
+Google. ROAS had Bing on amber and LinkedIn duplicating Facebook. Lead Quality had amber,
+red and a sky blue. All four now read from `SOURCE_COLORS`, and anything not named there
+gets a stable on-brand tone from `sourceColor()`, which hashes the channel name into the
+ramp so the same name lands on the same tone on every page.
+
+Off-brand hues also came off data elements elsewhere: CompareMode used indigo `#6366F1`
+and emerald `#10B981` for its two periods (now navy and cyan) and a green/red delta pill
+(now the standard green/navy); Meta Ads fatigue severity was green/orange/red (now green
+to cyan to navy, light reading as fine and dark as serious); ROAS and Lead Quality KPI
+colours and the QL% line came off amber and red; Settings report cards came off `#22C55E`,
+`#F59E0B` and `#EF4444`.
+
+Deliberately left alone, flag if you disagree: red on genuine error and toast states
+(WhatsApp, Settings save messages, Meta Ads trend error), the amber warning-triangle icon
+in Meta Ads, and the indigo `#6366F1` date-picker and export icons in Meta Ads and
+ExportButton. Those are UI chrome and alerts, not data. `AskAI.jsx` still declares an
+unused `const AMBER`, left in place but do not reach for it.
+
+Verified live after deploy: Summary, Overall, Channel Mix, MTD, ROAS, Meta Ads Creatives,
+Referral and Revenue all render, no off-brand hex on any chart node, and the only
+off-brand attribute left anywhere is that one indigo date-picker icon.
