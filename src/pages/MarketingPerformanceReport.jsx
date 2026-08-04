@@ -5,7 +5,7 @@ import {
 import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
-import { C, FONT, Card } from '../ui/dashboardKit'
+import { C, FONT, Card, BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
 import { fetchDailyTotalsByChannel, CHANNELS } from '../lib/overallFunnelCache'
 
 // -- date helpers ------------------------------------------------------------
@@ -259,13 +259,14 @@ export default function MarketingPerformanceReport() {
                       <div style={{ padding: '10px 14px' }}>
                         <ResponsiveContainer width="100%" height={220}>
                           <ComposedChart data={chartData30} margin={{ left: 0, right: 6, top: 6, bottom: 0 }}>
+                <defs><BarGrad id="g-b0-1" color={C.blue}/></defs>
                             <CartesianGrid vertical={false} stroke={C.border} />
                             <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} interval={4} />
                             <YAxis yAxisId="left" tick={axis} axisLine={false} tickLine={false} allowDecimals={false} />
                             <YAxis yAxisId="right" orientation="right" tick={axis} axisLine={false} tickLine={false} allowDecimals={false} />
                             <Tooltip />
                             <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} iconType="circle" />
-                            <Bar yAxisId="left" dataKey="Leads" fill={C.blue} opacity={0.75} radius={[3, 3, 0, 0]} barSize={8} />
+                            <Bar yAxisId="left" dataKey="Leads" fill={barFill('g-b0-1')} opacity={0.75} radius={BAR_RADIUS} barSize={8} />
                             <Line yAxisId="right" type="monotone" dataKey="QL" stroke={C.cyan} strokeWidth={2.2} dot={false} />
                           </ComposedChart>
                         </ResponsiveContainer>
