@@ -89,7 +89,7 @@ export default function CompareMode({ monthlyData, onClose }) {
                       <p style={{fontSize:10,color:C.navy,fontWeight:600,marginBottom:2}}>{m1.replace('-2025','')}</p>
                       <p style={{fontSize:14,fontWeight:700,color:'#111827'}}>{m.format(v1)}</p>
                     </div>
-                    {d && <span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:4,background:d.up?'#DCFCE7':'#FEE2E2',color:d.up?'#059669':'#DC2626'}}>{d.up?'▲':'▼'}{Math.abs(d.pct)}%</span>}
+                    {d && <span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:4,background:d.up?C.greenBg:C.navyBg,color:d.up?C.green:C.navy}}>{d.up?'▲':'▼'}{Math.abs(d.pct)}%</span>}
                     <div style={{textAlign:'right'}}>
                       <p style={{fontSize:10,color:C.cyan,fontWeight:600,marginBottom:2}}>{m2.replace('-2025','')}</p>
                       <p style={{fontSize:14,fontWeight:700,color:'#111827'}}>{m.format(v2)}</p>
