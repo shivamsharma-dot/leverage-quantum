@@ -19,7 +19,8 @@ export const PROVIDER_COLORS = { Futwork: C.navy, 'Futwork AI': C.cyan, Superbot
 
 // On-brand ordered palette — navy → blue → cyan → green, then tinted repeats.
 // Used for multi-category bars so everything stays within brand colors.
-export const BRAND_RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F', '#3A5BA0', '#52B5DC', '#5BCAD2', '#73C58E', '#8AA4D8', '#9BD8AF', '#8FDCE1']
+// 4 brand families x 3 tiers: navy, blue, cyan, green, each lightening.
+export const BRAND_RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F', '#3A5BA0', '#52B5DC', '#5BCAD2', '#73C58E', '#8AA4D8', '#8FD3F0', '#8FDCE1', '#9BD8AF']
 export const brandColor = i => BRAND_RAMP[i % BRAND_RAMP.length]
 
 /* ===== Chart bar treatment — see DESIGN_SYSTEM.md "Chart bars" =====
@@ -44,7 +45,7 @@ export const BarGrad = ({ id, color, from = 0.95, to = 0.55, dir = 'v' }) => (
 // the hue: blue = paid social, green = search, navy = owned/partner, cyan = brand/
 // content, grey = unknown bucket. Same source, same colour on every page.
 export const SOURCE_COLORS = {
-  Facebook: '#1C9FD4', Remarketing: '#52B5DC',
+  Facebook: '#1C9FD4', Remarketing: '#52B5DC', LinkedIn: '#8FD3F0',
   Google: '#4CAE6F', 'Google MBBS': '#73C58E', Bing: '#9BD8AF',
   Referral: '#1F3C84', Affiliate: '#3A5BA0', 'Affiliate Partner': '#8AA4D8',
   'Content+Brand': '#29B9C3', Branding: '#5BCAD2', Offline: '#8FDCE1',
