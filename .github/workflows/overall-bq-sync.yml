@@ -225,8 +225,8 @@ jobs:
 
           def results_page(page_token=None):
               u = (BQ + '/projects/' + urllib.parse.quote(PROJECT)
-                   + '/jobs/' + urllib.parse.quote(job_id)
-                   + '/queryResults?location=' + urllib.parse.quote(job_loc)
+                   + '/queries/' + urllib.parse.quote(job_id)
+                   + '?location=' + urllib.parse.quote(job_loc)
                    + '&maxResults=' + str(PAGE) + '&timeoutMs=55000')
               if page_token:
                   u += '&pageToken=' + urllib.parse.quote(page_token)
