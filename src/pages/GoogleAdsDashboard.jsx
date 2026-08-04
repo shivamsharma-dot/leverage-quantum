@@ -6,7 +6,7 @@ import { InlineLoader } from '../components/SkeletonLoader'
 import ExportButton from '../components/ExportButton'
 import { useAuth } from '../hooks/useAuth'
 import { usePresence } from '../hooks/usePresence'
-import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'; import { resolveSheetUrl } from '../lib/dataSources'
+import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'; import { resolveSheetUrl } from '../lib/dataSources'
 import { checkShape, schemaKeyFor } from '../../shared/apiSchemas.mjs'
 import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
@@ -100,10 +100,11 @@ return <>
 <Card title='Spend by campaign' sub='Top 8 by spend (₹K)'>
 <ResponsiveContainer width='100%' height={280}>
 <BarChart data={chartData} layout='vertical' margin={{top:0,right:60,left:0,bottom:0}} barSize={20}>
+                <defs><BarGrad id="g-b0-2" color={C.navy} dir="h"/></defs>
 <XAxis type='number' hide/>
 <YAxis type='category' dataKey='name' width={190} tick={{fontSize:12.5,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false}/>
 <Tooltip formatter={v=>'₹'+v+'K'} contentStyle={{fontSize:12.5,border:'0.5px solid #E5E7EB',borderRadius:8,fontFamily:FONT}}/>
-<Bar dataKey='spend' radius={[0,5,5,0]} fill={C.navy}>
+<Bar dataKey='spend' radius={BAR_RADIUS_H} fill={barFill('g-b0-2')}>
 <LabelList dataKey='spend' position='right' formatter={v=>'₹'+v+'K'} style={{fontSize:12,fontWeight:700,fill:'#374151'}}/>
 </Bar>
 </BarChart>
@@ -432,10 +433,11 @@ return <>
 <Card title='Spend by device' sub='Top 8 by spend (₹K)'>
 <ResponsiveContainer width='100%' height={Math.max(140,summary.length*40)}>
 <BarChart data={summary.map(d=>({name:DEVICE_LABEL[d.device]||d.device,spend:Math.round(d.spend/1000)}))} layout='vertical' margin={{top:0,right:60,left:0,bottom:0}} barSize={22}>
+                <defs><BarGrad id="g-b1-1" color={C.navy} dir="h"/></defs>
 <XAxis type='number' hide/>
 <YAxis type='category' dataKey='name' width={100} tick={{fontSize:12.5,fill:C.muted,fontFamily:FONT}} axisLine={false} tickLine={false}/>
 <Tooltip formatter={v=>'₹'+v+'K'} contentStyle={{fontSize:12.5,border:'0.5px solid #E5E7EB',borderRadius:8,fontFamily:FONT}}/>
-<Bar dataKey='spend' radius={[0,5,5,0]} fill={C.navy}>
+<Bar dataKey='spend' radius={BAR_RADIUS_H} fill={barFill('g-b1-1')}>
 <LabelList dataKey='spend' position='right' formatter={v=>'₹'+v+'K'} style={{fontSize:12,fontWeight:700,fill:'#374151'}}/>
 </Bar>
 </BarChart>
