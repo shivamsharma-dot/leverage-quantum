@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import Dropdown from './Dropdown'
+import { C, BarGrad, barFill, BAR_RADIUS, BAR_MAX } from '../ui/dashboardKit'
 
 const MONTHS = ['Jan-2025','Feb-2025','Mar-2025','Apr-2025','May-2025','Jun-2025',
   'Jul-2025','Aug-2025','Sep-2025','Oct-2025','Nov-2025','Dec-2025']
@@ -85,12 +86,12 @@ export default function CompareMode({ monthlyData, onClose }) {
                   <p style={{fontSize:10,fontWeight:600,color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>{m.label}</p>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:6}}>
                     <div>
-                      <p style={{fontSize:10,color:'#6366F1',fontWeight:600,marginBottom:2}}>{m1.replace('-2025','')}</p>
+                      <p style={{fontSize:10,color:C.navy,fontWeight:600,marginBottom:2}}>{m1.replace('-2025','')}</p>
                       <p style={{fontSize:14,fontWeight:700,color:'#111827'}}>{m.format(v1)}</p>
                     </div>
                     {d && <span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:4,background:d.up?'#DCFCE7':'#FEE2E2',color:d.up?'#059669':'#DC2626'}}>{d.up?'▲':'▼'}{Math.abs(d.pct)}%</span>}
                     <div style={{textAlign:'right'}}>
-                      <p style={{fontSize:10,color:'#10B981',fontWeight:600,marginBottom:2}}>{m2.replace('-2025','')}</p>
+                      <p style={{fontSize:10,color:C.cyan,fontWeight:600,marginBottom:2}}>{m2.replace('-2025','')}</p>
                       <p style={{fontSize:14,fontWeight:700,color:'#111827'}}>{m.format(v2)}</p>
                     </div>
                   </div>
@@ -104,13 +105,17 @@ export default function CompareMode({ monthlyData, onClose }) {
             <p style={{fontSize:12,fontWeight:600,color:'#374151',marginBottom:12}}>All metrics comparison — {m1.replace('-2025','')} vs {m2.replace('-2025','')}</p>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={chartData} margin={{left:0,right:0,top:0,bottom:0}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6"/>
+                <defs>
+                  <BarGrad id="g-compare-a" color={C.navy} />
+                  <BarGrad id="g-compare-b" color={C.cyan} />
+                </defs>
+                <CartesianGrid vertical={false} stroke="#EEF1F5"/>
                 <XAxis dataKey="name" tick={{fontSize:10,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
                 <YAxis hide/>
                 <Tooltip contentStyle={{borderRadius:8,border:'1px solid #E5E7EB',fontSize:11}}/>
                 <Legend wrapperStyle={{fontSize:11}}/>
-                <Bar dataKey={m1.replace('-2025','')} fill="#6366F1" radius={[4,4,0,0]}/>
-                <Bar dataKey={m2.replace('-2025','')} fill="#10B981" radius={[4,4,0,0]}/>
+                <Bar dataKey={m1.replace('-2025','')} fill={barFill('g-compare-a')} radius={BAR_RADIUS} maxBarSize={BAR_MAX}/>
+                <Bar dataKey={m2.replace('-2025','')} fill={barFill('g-compare-b')} radius={BAR_RADIUS} maxBarSize={BAR_MAX}/>
               </BarChart>
             </ResponsiveContainer>
           </div>
