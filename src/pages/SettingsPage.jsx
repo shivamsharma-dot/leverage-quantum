@@ -646,7 +646,7 @@ export default function SettingsPage() {
       { key: 'funnelStages', label: 'Funnel stages', type: 'textarea', default: 'Lead -> QL (Qualified Lead, meets disposition criteria) -> Application -> Offer -> Deposit -> RAU (Registered At University). Total QL = Futwork Human QL + Futwork AI QL + Superbot AI QL combined -- Quantum\'s own authoritative figure, not Meta/Google\'s in-platform lead count.' },
       { key: 'keyMetrics', label: 'Conversion & key metrics', type: 'textarea', placeholder: 'Which metric actually gets optimized against (e.g. QL, not raw leads or CPA), and why.' },
       { key: 'goals', label: 'Goals (6-12 mo)', type: 'textarea', placeholder: 'What the business is trying to move in the next two quarters.' },
-      { key: 'revenueRoas', label: 'Revenue & ROAS', type: 'textarea', default: 'Est. SR Revenue = Applications x 0.09 x SR Fee. Actual SR Revenue = Actual RAUs x SR Fee (no discount -- already realized). ROAS = SR Revenue / Spend. Caveat: the sales cycle is long, so true ROAS is only knowable months after lead-gen -- never present it as a same-day figure.' },
+      { key: 'revenueRoas', label: 'Revenue & ROAS', type: 'textarea', default: 'Est. SR Revenue = Deposits x 0.7 x SR Fee. Actual SR Revenue = Actual RAUs x SR Fee (no discount -- already realized). ROAS = SR Revenue / Spend. Caveat: the sales cycle is long, so true ROAS is only knowable months after lead-gen -- never present it as a same-day figure.' },
     ]},
     { title: 'Markets & competition', fields: [
       { key: 'sourceMarkets', label: 'Source markets', type: 'tags', placeholder: 'e.g. India — add and press Enter' },
@@ -1939,7 +1939,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>SR Revenue Assumptions</h3>
-                <p className={styles.cardDesc}>SR fee per RAU (Registered At University) used in projected revenue. Estimated RAU = Applications × 0.09; Actual RAUs is the real count. Formula: Estimated/Actual RAUs × SR Fee</p>
+                <p className={styles.cardDesc}>SR fee per RAU (Registered At University) used in projected revenue. Estimated RAU = Deposits × 70%; Actual RAUs is the real count. Formula: Estimated/Actual RAUs × SR Fee</p>
                 <label className={styles.fieldLabel}>SR Fee per RAU</label>
                 <div className={styles.inputGroup}>
                   <span className={styles.prefix}>₹</span>

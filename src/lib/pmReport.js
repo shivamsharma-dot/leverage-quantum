@@ -177,7 +177,7 @@ function caveats(ctx, cr) {
   if (!ctx.hasPrev) out.push('No comparable previous period is loaded, so nothing here shows period-on-period movement.')
   if (ctx.partialPeriod) out.push(ctx.periodLabel + ' is still running, so it is being compared against a completed period.')
   if (ctx.estimatedRaus > ctx.num('raus')) {
-    out.push('RAUs lag the funnel: ' + ctx.stat('raus') + ' actual against ' + ctx.fmtN(Math.round(ctx.estimatedRaus)) + ' projected off ' + ctx.stat('apps') + ' applications. Part of that gap is timing, not loss.')
+    out.push('RAUs lag the funnel: ' + ctx.stat('raus') + ' actual against ' + ctx.fmtN(Math.round(ctx.estimatedRaus)) + ' projected off ' + ctx.stat('deposits') + ' deposits. Part of that gap is timing, not loss.')
   }
   if (cr && cr.skipped > 0) out.push(cr.skipped + ' corridors had under ' + ctx.minQL + ' QLs and are not ranked ' + DASH + ' they are all in the attached CSV.')
   const unc = (ctx.corridors || []).find(c => /unclassified/i.test(c.label))

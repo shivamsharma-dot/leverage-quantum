@@ -480,13 +480,13 @@ const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
 const SUMMARY_SCHEMA_VERSION = 2
 const SUMMARY_SCHEMA_VERSION_KEY = 'lq_overall_summary_schema_version'
 // Shared with Settings > Data > SR Revenue Assumptions — same rate everywhere.
-// RAU = "Registered At University". Estimated RAUs is a projection (Applications x
+// RAU = "Registered At University". Estimated RAUs is a projection (Deposits x
 // conversion factor); Actual RAUs is the real, already-realized count from the data.
 // Revenue = RAUs (estimated or actual) x SR Fee -- no extra discount on the actual side,
 // since real RAUs don't need a realization haircut.
 const SR_FEE_KEY = 'lq_sr_fee'
 const SR_FEE_DEFAULT = 350000
-const RAU_CONVERSION_FACTOR = 0.09
+const RAU_CONVERSION_FACTOR = 0.7
 
 // Full INR formatter — every rupee figure on this page displays in full (no Cr/L
 // shorthand); the abbreviated form is only ever surfaced as a hover tooltip via fmtINRShort.
@@ -979,10 +979,10 @@ export default function OverallDashboard() {
   const cpql = paidKpis.totalQL > 0 ? kpis.spend / paidKpis.totalQL : 0
   const cpa = paidKpis.apps > 0 ? kpis.spend / paidKpis.apps : 0
 
-  // SR revenue + ROAS — Estimated RAUs projects Applications forward at a 0.9 conversion
+  // SR revenue + ROAS — Estimated RAUs projects Deposits forward at a 70% conversion
   // rate (real RAUs haven't materialized yet); Actual RAUs is the real, already-realized
   // count, so it gets no discount. Both then multiply by the same shared SR Fee.
-  const estimatedRaus = kpis.apps * RAU_CONVERSION_FACTOR
+  const estimatedRaus = kpis.deposits * RAU_CONVERSION_FACTOR
   const estSrRevenue = estimatedRaus * srFee
   const actSrRevenue = kpis.raus * srFee
   const actualRoas = kpis.spend > 0 ? actSrRevenue / kpis.spend : 0
@@ -1029,7 +1029,7 @@ export default function OverallDashboard() {
   const prevCpa = prevPaidKpis.apps > 0 ? prevKpis.spend / prevPaidKpis.apps : 0
   const prevTotalQueued = prevKpis.futworkQ + prevKpis.superbotQ
   const prevFloorPlusFutwork = prevKpis.floorQueued + prevKpis.futworkQ
-  const prevEstimatedRaus = prevKpis.apps * RAU_CONVERSION_FACTOR
+  const prevEstimatedRaus = prevKpis.deposits * RAU_CONVERSION_FACTOR
   const prevEstSrRevenue = prevEstimatedRaus * srFee
   const prevActSrRevenue = prevKpis.raus * srFee
   const prevActualRoas = prevKpis.spend > 0 ? prevActSrRevenue / prevKpis.spend : 0
@@ -1377,10 +1377,10 @@ export default function OverallDashboard() {
 
   const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'corridor' ? 'Corridor' : grpBy === 'day' ? 'Date' : 'Month'
 
-  // SR Revenue — Estimated (Applications × rate) and Actual (RAUs × rate). Both rates are
+  // SR Revenue — Estimated (Deposits × rate) and Actual (RAUs × rate). Both rates are
   // user-configurable in the toolbar below and persist to localStorage.
   const groupedWithRevenue = useMemo(() => grouped.map(g => {
-    const estimatedRaus = g.apps * RAU_CONVERSION_FACTOR
+    const estimatedRaus = g.deposits * RAU_CONVERSION_FACTOR
     const estSrRevenue = estimatedRaus * srFee
     const actSrRevenue = g.raus * srFee
     return {
@@ -2230,7 +2230,7 @@ export default function OverallDashboard() {
                   <div style={{ fontSize:11, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
                   <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.7 }}>
                     <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (Registered At University). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
-                    <b>Estimated RAU</b> = Applications × 0.09 (a projection of how many current Applications will go on to register). <b>Actual RAUs</b> is the real, already-registered count — no discount applied. <b>Est./Actual SR Revenue</b> = Estimated/Actual RAUs × SR Fee.<br /><br />
+                    <b>Estimated RAU</b> = Deposits × 70% (a projection of how many current Deposits will go on to register). <b>Actual RAUs</b> is the real, already-registered count — no discount applied. <b>Est./Actual SR Revenue</b> = Estimated/Actual RAUs × SR Fee.<br /><br />
                     <b>CPL, CPQL and CPA count paid channels only.</b> A row shows a cost figure only if it carried spend, divided by its own leads / QLs / applications. The <b>TOTAL</b> divides all spend by the leads from <i>sources that spent</i> — so unpaid channels (Referral, Content+Brand, Offline, organic) don't dilute the blended figure, which otherwise made paid acquisition look materially cheaper than it is. "Paid" is judged per source rather than per row, because spend and leads frequently sit on different rows: manual affiliate spend arrives on rows carrying no leads, while Affiliate's actual leads sit on rows with no spend. That keeps the blended figure identical on every grouping tab. A row with no spend of its own shows "—" rather than ₹0.<br /><br />
                     In the summary table, the three conversion rates are each a single funnel step, not a share of all leads: <b>QL %</b> = Total QLs ÷ Total Queued, <b>App %</b> = Applications ÷ Total QLs, <b>Deposit %</b> = Deposits ÷ Offers. Because each stage is reported independently and a lead can reach a later stage in a different period from the one it was queued in, these can read above 100% on small or lagging rows. The <b>TOTAL</b> row re-derives every rate, cost and ROAS from the summed totals rather than averaging the rows, so it is weighted by volume.<br /><br />
                     <b>Executive insights</b> and <b>KPI deltas</b> compare the active period against the immediately preceding period of equal length (or the previous calendar month, in month view). <b>Biggest funnel leak</b> and campaign efficiency rankings use the real conversion path (Leads → Queued → Total QL → Apps → Offers → Deposits), skipping the parallel Floor Queued branch.<br /><br />
@@ -2355,7 +2355,7 @@ export default function OverallDashboard() {
                         <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>SR revenue formula</div>
                         <div style={{ fontSize:20, fontWeight:800, color:C.navy, fontFamily:FONT, marginBottom:8 }}>₹{srFee.toLocaleString('en-IN')} <span style={{ fontSize:11, fontWeight:600, color:C.muted }}>per RAU (SR Fee)</span></div>
                         <div style={{ fontSize:11, color:C.sub, lineHeight:1.7 }}>
-                          <b>Estimated RAU</b> = Applications × 0.09<br />
+                          <b>Estimated RAU</b> = Deposits × 70%<br />
                           <b>Est. SR Revenue</b> = Estimated RAU × SR Fee<br />
                           <b>Actual SR Revenue</b> = Actual RAUs × SR Fee<br />
                           <b>ROAS</b> = Actual SR Revenue ÷ Spend (Est. ROAS uses Est. SR Revenue)
