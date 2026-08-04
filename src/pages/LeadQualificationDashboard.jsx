@@ -1352,14 +1352,14 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
                   <RankedBars data={countryBar} labelKey="country" max={countryBar[0]?.count || 0} total={totals.total} showRank />
                 </Card>
                 <Card title="Degree type" sub="What students want to pursue">
-                  <RankedBars data={degreeBar} labelKey="degree" max={degreeBar[0]?.count || 0} total={totals.total} colorFn={i => RAMP[i % RAMP.length]} />
+                  <RankedBars data={degreeBar} labelKey="degree" max={degreeBar[0]?.count || 0} total={totals.total} />
                 </Card>
               </div>
 
               {/* -- ROW 3: DISPOSITION + BUDGET -- */}
               <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 16, marginBottom: 16 }}>
                 <Card title="Call disposition" sub="Outcome classification of qualifying calls">
-                  <RankedBars data={dispositionBar} labelKey="disposition" max={dispositionBar[0]?.count || 0} total={totals.total} colorFn={i => [C.green, C.blue, C.navy, C.cyan][i % 4]} />
+                  <RankedBars data={dispositionBar} labelKey="disposition" max={dispositionBar[0]?.count || 0} total={totals.total} />
                 </Card>
                 <Card title="Budget range" sub="Student budget distribution">
                   {budgetBar.length === 0
