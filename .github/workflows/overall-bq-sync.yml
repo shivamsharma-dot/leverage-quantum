@@ -1,0 +1,424 @@
+name: Overall BigQuery Cache Sync
+
+# Mirrors the BigQuery saved query named "Overall" (Quantum: Settings > Data >
+# BigQuery Console) into public.overall_bq_daily, row for row, at the full
+# date x source x campaign grain. Nothing is aggregated away.
+#
+# This is a NEW, ADDITIVE pipeline. It never reads or writes overall_funnel_daily
+# and it does not touch .github/workflows/overall-funnel-sync.yml -- Ask AI's
+# contribution tool, the Marketing Performance report and both agents depend on
+# those and must keep behaving exactly as they do today.
+#
+# The table DDL is supabase/sql/overall_bq_cache_setup.sql and must have been run
+# once in the Supabase SQL editor before this workflow first runs.
+#
+# Required repository Actions secrets:
+#   SUPABASE_ANON_KEY      already present (RLS is disabled on this table)
+#   BIGQUERY_CLIENT_ID     same value as Vercel env
+#   BIGQUERY_CLIENT_SECRET same value as Vercel env
+#   BIGQUERY_REFRESH_TOKEN same value as Vercel env
+# THE REPO IS PUBLIC -- never inline any of these.
+
+on:
+  schedule:
+    # Every 30 minutes. Do NOT treat that as a freshness guarantee: GitHub
+    # heavily throttles scheduled workflows on low-activity repos and observed
+    # spacing on this repo is 2-3.5 hours even with an hourly cron. Correctness,
+    # not freshness, is the point of this pipeline. Cron is UTC.
+    - cron: '5,35 * * * *'
+  workflow_dispatch:
+
+# One sync at a time. Two overlapping runs would interleave their sync_id stamps
+# and the loser's prune step would delete the winner's freshly written rows.
+concurrency:
+  group: overall-bq-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Query the Overall saved query and upsert into overall_bq_daily
+        env:
+          SB_URL: https://tsyekthwthxszmsgqfej.supabase.co
+          SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          BQ_CLIENT_ID: ${{ secrets.BIGQUERY_CLIENT_ID }}
+          BQ_CLIENT_SECRET: ${{ secrets.BIGQUERY_CLIENT_SECRET }}
+          BQ_REFRESH_TOKEN: ${{ secrets.BIGQUERY_REFRESH_TOKEN }}
+          BQ_PROJECT: leverage-production
+          BQ_LOCATION: asia-south1
+        run: |
+          python3 << 'PYEOF'
+          import json, os, re, time, hashlib
+          import urllib.request, urllib.parse, urllib.error
+          from datetime import datetime, timezone
+
+          SB_URL = os.environ['SB_URL']
+          SB_KEY = os.environ['SB_KEY']
+          TABLE = 'overall_bq_daily'
+
+          CLIENT_ID = os.environ.get('BQ_CLIENT_ID', '')
+          CLIENT_SECRET = os.environ.get('BQ_CLIENT_SECRET', '')
+          REFRESH_TOKEN = os.environ.get('BQ_REFRESH_TOKEN', '')
+          PROJECT = os.environ.get('BQ_PROJECT') or 'leverage-production'
+          LOCATION = os.environ.get('BQ_LOCATION') or 'asia-south1'
+
+          # Exit 0, not 1, when the credentials are absent. A red scheduled run
+          # every 30 minutes is noise, and this workflow is committed before the
+          # BIGQUERY_* secrets exist on purpose.
+          if not (CLIENT_ID and CLIENT_SECRET and REFRESH_TOKEN):
+              print('::warning::BigQuery credentials are not set as repository Actions '
+                    'secrets (BIGQUERY_CLIENT_ID, BIGQUERY_CLIENT_SECRET, '
+                    'BIGQUERY_REFRESH_TOKEN). Nothing was read and nothing was written. '
+                    'Add them with the same values already in Vercel env, then re-run.')
+              raise SystemExit(0)
+
+          # The saved query named "Overall", copied verbatim from the BigQuery
+          # Console on 2026-08-05. Saved queries are console-only objects and are
+          # NOT reachable over the REST API, so the text has to live here. If the
+          # saved query is ever edited, edit this too. The schema guard below fails
+          # loudly on a changed column list, but it cannot see a changed WHERE.
+          SQL = '''
+          SELECT
+              FORMAT_DATE('%d-%b-%Y', DATE(date_of_transaction)) AS lead_date,
+              FORMAT_DATE("%B'%Y", DATE(date_of_transaction)) AS month,
+              CASE
+                  WHEN LOWER(source_1) IN ('affiliate partner') THEN 'Affiliate'
+                  WHEN LOWER(source_1) IN ('content+brand', 'branding') THEN 'Organic'
+                  WHEN LOWER(source_1) IN ('lead source na', 'others', 'offline') THEN 'Others'
+                  ELSE source_1
+              END AS Source,
+              campaign_name,
+              count_opps AS `Total Leads Generated`,
+              floor_queued,
+              fut_human_queued AS `Queued on Futwork`,
+              superbot_queued AS `Queued on Superbot`,
+              count_fut_ql_snapshot AS `Futwork Human QL`,
+              count_fut_ai_ql_snapshot AS `Futwork AI QL`,
+              count_sup_ql_snapshot AS `Superbot AI QL`,
+              total_spends AS `Total_Spends`,
+              count_stus_snapshot AS `Total Apps`,
+              count_offer_snapshot AS `Total Offers`,
+              count_deposit_snapshot AS `Total Deposits`,
+              count_rau_snapshot AS `Total RAUs`
+          FROM `chatbot_marketing.marketing_table_v1`
+          WHERE DATE(date_of_transaction) > '2025-12-31';
+          '''
+
+          EXPECTED = [
+              'lead_date', 'month', 'Source', 'campaign_name',
+              'Total Leads Generated', 'floor_queued',
+              'Queued on Futwork', 'Queued on Superbot',
+              'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
+              'Total_Spends',
+              'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
+          ]
+
+          TOKEN_URL = 'https://oauth2.googleapis.com/token'
+          BQ = 'https://bigquery.googleapis.com/bigquery/v2'
+          PAGE = 20000
+          BATCH = 500
+
+          MONTHS = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+                    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12}
+
+
+          def access_token():
+              # Same refresh-token exchange as lib/bigquery.mjs. Never printed.
+              body = urllib.parse.urlencode({
+                  'client_id': CLIENT_ID,
+                  'client_secret': CLIENT_SECRET,
+                  'refresh_token': REFRESH_TOKEN,
+                  'grant_type': 'refresh_token',
+              }).encode('utf-8')
+              req = urllib.request.Request(
+                  TOKEN_URL, data=body, method='POST',
+                  headers={'Content-Type': 'application/x-www-form-urlencoded'})
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      d = json.loads(r.read().decode('utf-8'))
+              except urllib.error.HTTPError as e:
+                  # Deliberately does not echo the response body: the request that
+                  # produced it carried the client secret and the refresh token.
+                  raise SystemExit('BigQuery token refresh failed: HTTP %s' % e.code)
+              tok = d.get('access_token')
+              if not tok:
+                  raise SystemExit('BigQuery token refresh failed: no access_token returned.')
+              return tok
+
+
+          def bq(url, token, payload=None):
+              last = None
+              for attempt in range(3):
+                  headers = {'Authorization': 'Bearer ' + token}
+                  if payload is None:
+                      req = urllib.request.Request(url, headers=headers)
+                  else:
+                      headers['Content-Type'] = 'application/json'
+                      req = urllib.request.Request(
+                          url, data=json.dumps(payload).encode('utf-8'),
+                          method='POST', headers=headers)
+                  try:
+                      with urllib.request.urlopen(req, timeout=180) as r:
+                          return json.loads(r.read().decode('utf-8'))
+                  except urllib.error.HTTPError as e:
+                      detail = ''
+                      try:
+                          detail = e.read().decode('utf-8')[:500]
+                      except Exception:
+                          pass
+                      last = 'HTTP %s %s' % (e.code, detail)
+                      # A 4xx will not fix itself; fail fast instead of retry-spam.
+                      if e.code < 500 and e.code != 429:
+                          raise SystemExit('BigQuery request failed: ' + last)
+                  except Exception as e:
+                      last = repr(e)
+                  time.sleep(2 * (attempt + 1))
+              raise SystemExit('BigQuery request failed after 3 attempts: ' + str(last))
+
+
+          def iso_date(s):
+              m = re.match(r'^(\d{1,2})-([A-Za-z]{3})-(\d{4})$', (s or '').strip())
+              if not m:
+                  return None
+              mo = MONTHS.get(m.group(2).lower())
+              if not mo:
+                  return None
+              try:
+                  return '%04d-%02d-%02d' % (int(m.group(3)), mo, int(m.group(1)))
+              except ValueError:
+                  return None
+
+
+          def as_int(v):
+              # BigQuery hands every scalar back as a string. NULL stays NULL --
+              # NULL is not the same fact as 0 (see overall_bq_cache_setup.sql).
+              if v is None:
+                  return None
+              s = str(v).strip()
+              if s == '':
+                  return None
+              try:
+                  return int(s)
+              except ValueError:
+                  try:
+                      return int(float(s))
+                  except ValueError:
+                      return None
+
+
+          token = access_token()
+          print('Running the Overall query against', PROJECT, 'in', LOCATION, '...')
+          res = bq(BQ + '/projects/' + urllib.parse.quote(PROJECT) + '/queries', token, {
+              'query': SQL,
+              'useLegacySql': False,
+              'location': LOCATION,
+              'timeoutMs': 55000,
+              'maxResults': PAGE,
+          })
+
+          job = res.get('jobReference') or {}
+          job_id = job.get('jobId')
+          job_loc = job.get('location') or LOCATION
+
+
+          def results_page(page_token=None):
+              u = (BQ + '/projects/' + urllib.parse.quote(PROJECT)
+                   + '/jobs/' + urllib.parse.quote(job_id)
+                   + '/queryResults?location=' + urllib.parse.quote(job_loc)
+                   + '&maxResults=' + str(PAGE) + '&timeoutMs=55000')
+              if page_token:
+                  u += '&pageToken=' + urllib.parse.quote(page_token)
+              return bq(u, token)
+
+
+          waited = 0
+          while not res.get('jobComplete', True):
+              if waited >= 600:
+                  raise SystemExit('BigQuery job %s did not complete within 10 minutes.' % job_id)
+              time.sleep(5)
+              waited += 5
+              res = results_page()
+
+          total_rows = int(res.get('totalRows') or 0)
+          print('job', job_id, '| location', job_loc,
+                '| totalRows', total_rows,
+                '| bytesProcessed', res.get('totalBytesProcessed'),
+                '| cacheHit', res.get('cacheHit'))
+
+          fields = [f.get('name') for f in ((res.get('schema') or {}).get('fields') or [])]
+          if fields != EXPECTED:
+              raise SystemExit(
+                  'Schema drift. BigQuery returned %r but this workflow and '
+                  'overall_bq_daily are built for %r. Refusing to write mismatched data.'
+                  % (fields, EXPECTED))
+          print('Schema matches the 16 expected columns, in order.')
+
+          # getQueryResults is paginated. One page is NOT everything.
+          raw = []
+          page = res
+          n_pages = 0
+          while True:
+              n_pages += 1
+              for row in (page.get('rows') or []):
+                  raw.append([(c or {}).get('v') for c in (row.get('f') or [])])
+              next_token = page.get('pageToken')
+              print('  page', n_pages, '-> cumulative rows', len(raw))
+              if not next_token:
+                  break
+              page = results_page(next_token)
+
+          # Pagination-drop guard. Without it a silently short read just looks like
+          # a smaller month, and the fidelity check would be the only thing between
+          # that and a wrong CEO-facing dashboard.
+          if total_rows and len(raw) != total_rows:
+              raise SystemExit(
+                  'Pagination drop: collected %d rows over %d page(s) but BigQuery '
+                  'reported totalRows=%d. Refusing to write.'
+                  % (len(raw), n_pages, total_rows))
+          print('Read', len(raw), 'rows over', n_pages, 'page(s) -- matches totalRows.')
+
+          # (lead_date, Source, campaign_name) is NOT unique. The query's CASE
+          # collapses several source_1 values into one output Source, so 2,134 of
+          # the 2,05,720 rows measured on 2026-08-05 shared that triple. Upserting
+          # on it would silently discard them and every sum would come out short.
+          # Each row therefore gets a surrogate key: md5 of the triple plus its
+          # ordinal within the duplicate group, the group being ordered by its
+          # serialised metric values so the same source row keeps the same key
+          # across syncs (merge-duplicates then does a real in-place UPDATE).
+          groups = {}
+          for vals in raw:
+              groups.setdefault((vals[0], vals[2], vals[3]), []).append(vals)
+
+          dup_groups = sum(1 for v in groups.values() if len(v) > 1)
+          print('Distinct (lead_date, Source, campaign_name):', len(groups),
+                '| groups holding duplicates:', dup_groups)
+
+          sync_id = (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+                     + '-' + str(os.environ.get('GITHUB_RUN_ID') or 'manual'))
+          now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+          def keypart(x):
+              # NULL-safe: a real NULL campaign_name (673 observed) must not collide
+              # with the literal string 'None'.
+              return '\x00NULL' if x is None else str(x)
+
+
+          records = []
+          for k in sorted(groups.keys(), key=lambda t: tuple(keypart(x) for x in t)):
+              bucket = groups[k]
+              bucket.sort(key=lambda vals: json.dumps(vals[4:], sort_keys=True))
+              for ordinal, vals in enumerate(bucket):
+                  seed = '\x1f'.join([keypart(k[0]), keypart(k[1]), keypart(k[2]),
+                                      str(ordinal)])
+                  records.append({
+                      'row_key': hashlib.md5(seed.encode('utf-8')).hexdigest(),
+                      'lead_date': vals[0],
+                      'month': vals[1],
+                      'Source': vals[2],
+                      'campaign_name': vals[3],
+                      'Total Leads Generated': as_int(vals[4]),
+                      'floor_queued': as_int(vals[5]),
+                      'Queued on Futwork': as_int(vals[6]),
+                      'Queued on Superbot': as_int(vals[7]),
+                      'Futwork Human QL': as_int(vals[8]),
+                      'Futwork AI QL': as_int(vals[9]),
+                      'Superbot AI QL': as_int(vals[10]),
+                      # Total_Spends goes into a Postgres NUMERIC as the STRING
+                      # BigQuery returned (it arrives like 4.0660831692071205E8).
+                      # float() here would be a lossy round-trip; NUMERIC parses
+                      # scientific notation exactly.
+                      'Total_Spends': (None
+                                       if vals[11] is None or str(vals[11]).strip() == ''
+                                       else str(vals[11]).strip()),
+                      'Total Apps': as_int(vals[12]),
+                      'Total Offers': as_int(vals[13]),
+                      'Total Deposits': as_int(vals[14]),
+                      'Total RAUs': as_int(vals[15]),
+                      'lead_date_iso': iso_date(vals[0]),
+                      'sync_id': sync_id,
+                      'synced_at': now_iso,
+                  })
+
+          if len(records) != len(raw):
+              raise SystemExit('Built %d records from %d rows. Refusing to write.'
+                               % (len(records), len(raw)))
+          if len(set(r['row_key'] for r in records)) != len(records):
+              raise SystemExit('row_key collision across %d records. Refusing to write.'
+                               % len(records))
+          bad_dates = sum(1 for r in records if r['lead_date_iso'] is None)
+          if bad_dates:
+              raise SystemExit('%d row(s) had a lead_date that did not parse as '
+                               'DD-Mon-YYYY. Refusing to write.' % bad_dates)
+          print('Built', len(records), 'records, all row_keys unique. sync_id =', sync_id)
+
+
+          def sb(url, method, data=None, extra=None):
+              headers = {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY}
+              if data is not None:
+                  headers['Content-Type'] = 'application/json'
+              if extra:
+                  headers.update(extra)
+              return urllib.request.Request(url, data=data, method=method, headers=headers)
+
+
+          upsert_url = SB_URL + '/rest/v1/' + TABLE + '?on_conflict=row_key'
+          for i in range(0, len(records), BATCH):
+              body = json.dumps(records[i:i + BATCH]).encode('utf-8')
+              for attempt in range(3):
+                  try:
+                      req = sb(upsert_url, 'POST', body,
+                               {'Prefer': 'resolution=merge-duplicates,return=minimal'})
+                      with urllib.request.urlopen(req, timeout=60) as r:
+                          r.read()
+                      break
+                  except Exception as e:
+                      detail = ''
+                      try:
+                          if hasattr(e, 'read'):
+                              detail = ' | body: ' + e.read().decode('utf-8')[:500]
+                      except Exception:
+                          pass
+                      print('batch', i, 'attempt', attempt, 'failed:', repr(e) + detail)
+                      if attempt == 2:
+                          raise
+                      time.sleep(2 * (attempt + 1))
+              done = min(i + BATCH, len(records))
+              if (i // BATCH) % 25 == 0 or done == len(records):
+                  print('  upserted', done, '/', len(records))
+
+          # Prune, so a corrected or removed source row cannot linger here as a
+          # ghost. This runs only after every batch above has landed, so a mid-sync
+          # failure leaves the previous good snapshot intact rather than a hole.
+          #
+          # NOTE the PostgREST gotcha documented in CLAUDE.md: filter values are
+          # percent-encoded and NOT wrapped in double quotes -- quotes are matched
+          # as literal characters and would silently make this a no-op. The
+          # sync_id.is.null arm catches rows written before this column was stamped,
+          # which a bare neq. would skip because NULL != x is not true in SQL.
+          prune_url = (SB_URL + '/rest/v1/' + TABLE + '?or=(sync_id.neq.'
+                       + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
+          req = sb(prune_url, 'DELETE', None, {'Prefer': 'return=minimal'})
+          with urllib.request.urlopen(req, timeout=120) as r:
+              r.read()
+          print('Pruned every row not stamped with this sync_id.')
+
+          # Final proof, server-side: the table must now hold exactly as many rows
+          # as BigQuery returned. This is the cheap always-on version of the
+          # month-by-month fidelity check.
+          req = sb(SB_URL + '/rest/v1/' + TABLE + '?select=row_key&limit=1', 'GET',
+                   None, {'Prefer': 'count=exact', 'Range': '0-0'})
+          with urllib.request.urlopen(req, timeout=60) as r:
+              r.read()
+              content_range = r.headers.get('Content-Range') or ''
+          after = content_range.split('/')[-1]
+          print('Rows in', TABLE, 'after sync:', after, '| expected:', len(records))
+          if after.isdigit() and int(after) != len(records):
+              raise SystemExit('Post-sync row count mismatch: table holds %s, expected %d.'
+                               % (after, len(records)))
+
+          print('Sync complete.')
+          PYEOF
+
