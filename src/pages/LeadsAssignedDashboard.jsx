@@ -251,7 +251,7 @@ const base = await resolveSheetUrl('leadsAssigned', CSV_URL);
           <div className="lq-grid2" style={grid2}>
             <Card>
               {sectionTitle('Top owners by qualified leads', 'highest qualified assignments (agents + pools)')}
-              <RankedBars data={M.leaderboard} labelKey='name' max={M.leaderboard[0]?.count || 0} total={M.leaderboard.reduce((a, b) => a + b.count, 0)} colorFn={brandColor} showRank />
+              <RankedBars data={M.leaderboard} labelKey='name' max={M.leaderboard[0]?.count || 0} total={M.leaderboard.reduce((a, b) => a + b.count, 0)} showRank />
             </Card>
             <Card>
               {sectionTitle('Qualified by source', 'futwork vs floor qualified leads')}
