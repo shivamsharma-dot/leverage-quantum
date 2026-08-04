@@ -17,9 +17,7 @@ import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import Button from '../components/Button'
 import { getSession, setSession, hasLoaded, getPersisted } from '../lib/sessionLoad'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
-import {
-  C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars,
-} from '../ui/dashboardKit'
+import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, BarGrad, barFill, BAR_RADIUS_H } from '../ui/dashboardKit'
 
 // "Overall PM" — added by the admin as a custom Data Source (Settings > Data > Google Sheets).
 // Not part of the original SHEET_PREF_KEYS set, so this page resolves its own override the same
@@ -2276,12 +2274,13 @@ export default function OverallDashboard() {
             {sectionTitle('Overall funnel', 'lead → revenue path for the selected period and source')}
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={funnel} layout="vertical" margin={{ left:20, right:50, top:4, bottom:4 }}>
+                <defs><BarGrad id="g-ov-funnel" color={C.navy} dir="h"/></defs>
                 <CartesianGrid horizontal={false} stroke={C.border} />
                 <XAxis type="number" tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
                 <YAxis type="category" dataKey="stage" tick={axis} axisLine={false} tickLine={false} width={110} />
                 <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
-                <Bar dataKey="count" name="Count" radius={[0, 6, 6, 0]} barSize={20}>
-                  {funnel.map((e, i) => <Cell key={i} fill={brandColor(i)} />)}
+                <Bar dataKey="count" name="Count" fill={barFill('g-ov-funnel')} radius={BAR_RADIUS_H} barSize={20}>
+                  
                   <LabelList dataKey="count" position="right" formatter={fmtN} style={{ fontSize:12.5, fontWeight:700, fill:C.sub }} />
                 </Bar>
               </BarChart>
@@ -2488,7 +2487,7 @@ export default function OverallDashboard() {
           <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
             <Card>
               {sectionTitle('Leads by source', 'volume leaders this period')}
-              <RankedBars data={bySource.slice(0, 8).map(s => ({ source:s.source, count:s.leads }))} labelKey="source" max={maxSourceLeads} total={totalSourceLeads} colorFn={brandColor} showRank />
+              <RankedBars data={bySource.slice(0, 8).map(s => ({ source:s.source, count:s.leads }))} labelKey="source" max={maxSourceLeads} total={totalSourceLeads} showRank />
             </Card>
             <Card>
               {sectionTitle('Source efficiency', 'queued → Total QL rate — where quality actually converts (min. 10 queued)')}
@@ -2552,7 +2551,7 @@ export default function OverallDashboard() {
           <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
             <Card>
               {sectionTitle('Top campaigns by volume', 'where the leads are coming from right now')}
-              <RankedBars data={topCampaignsByLeads.map(c => ({ campaign:c.campaign, count:c.leads }))} labelKey="campaign" max={topCampaignsByLeads.length ? topCampaignsByLeads[0].leads : 1} total={totalSourceLeads} colorFn={brandColor} showRank />
+              <RankedBars data={topCampaignsByLeads.map(c => ({ campaign:c.campaign, count:c.leads }))} labelKey="campaign" max={topCampaignsByLeads.length ? topCampaignsByLeads[0].leads : 1} total={totalSourceLeads} showRank />
             </Card>
             <Card>
               {sectionTitle('Best campaigns to scale', 'highest Total QL rate among campaigns with real volume (min. 15 queued)')}
