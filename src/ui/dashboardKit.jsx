@@ -31,6 +31,18 @@ export const BAR_RADIUS = [5, 5, 0, 0]      // vertical bars
 export const BAR_RADIUS_H = [0, 5, 5, 0]    // horizontal bars
 export const BAR_MAX = 26
 export const GRID_STROKE = '#EEF1F5'
+// Any channel not named above still gets a stable on-brand tone: the name is hashed
+// into the ramp, so the same channel is the same colour on every page even when a
+// page carries extra channels of its own. Never index by sort position.
+export const NEUTRAL_GREY = '#9CA3AF'
+export const sourceColor = name => {
+  if (!name) return NEUTRAL_GREY
+  if (SOURCE_COLORS[name]) return SOURCE_COLORS[name]
+  if (/^(other|others|unknown|unidentified|na|n\/a)$/i.test(String(name).trim())) return NEUTRAL_GREY
+  let h = 7
+  for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return BRAND_RAMP[h % BRAND_RAMP.length]
+}
 export const NEUTRAL_TRACK = '#E5E7EB'      // remainder/track bar behind a real one
 export const barFill = id => 'url(#' + id + ')'
 export const gradId = (slug, key) => 'g-' + String(slug).replace(/[^a-zA-Z0-9]/g, '') + '-' + key
