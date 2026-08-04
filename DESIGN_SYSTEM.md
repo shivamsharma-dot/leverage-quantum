@@ -80,10 +80,51 @@ const C = {
 
 ### Brand ramp (for multi-category bars / series)
 ```js
-const BRAND_RAMP = ['#1F3C84','#1C9FD4','#29B9C3','#4CAE6F','#3A5BA0','#52B5DC','#5BCAD2','#73C58E'];
+const BRAND_RAMP = ['#1F3C84','#1C9FD4','#29B9C3','#4CAE6F','#3A5BA0','#52B5DC','#5BCAD2','#73C58E','#8AA4D8'];
 const brandColor = i => BRAND_RAMP[i % BRAND_RAMP.length];
 ```
 
+### Chart bars — the Summary treatment is the app-wide default
+
+Colour encodes **identity, never position**. One series gets one hue: where a bar sits in a
+sort order is not information, so never walk the ramp across the bars of a single series.
+Reach for `BRAND_RAMP` only when each bar or slice is a genuinely different entity (channel
+mix by source, opportunity quadrants), and then read the hue from a stable name map so the
+same entity is the same colour on every page.
+
+Bars carry a gradient of their own hue, never a flat fill:
+
+```jsx
+// vertical bars — 0.95 at the cap fading to 0.55 at the baseline
+<defs><BarGrad id={gid} color={C.blue} /></defs>
+<Bar dataKey="spend" fill={barFill(gid)} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
+
+// horizontal bars — same fade, left to right
+<defs><BarGrad id={gid} color={C.blue} dir="h" /></defs>
+<Bar dataKey="count" fill={barFill(gid)} radius={BAR_RADIUS_H} barSize={20} />
+
+// area under a line, same hue, much lighter
+<defs><BarGrad id={gid} color={C.blue} from={0.4} to={0.02} /></defs>
+```
+
+`BarGrad`, `barFill`, `BAR_RADIUS`, `BAR_RADIUS_H` and `BAR_MAX` come from
+`src/ui/dashboardKit.jsx` — do not re-declare the gradient by hand on a page. Ids must be
+unique per chart, so build them as `g-<chart-slug>-<dataKey>`. Alongside: `<CartesianGrid
+vertical={false} stroke='#EEF1F5'/>`, and `axisLine={false} tickLine={false}` on both axes.
+
+Semantic hues, so a metric keeps its colour wherever it appears: ad spend `blue`, Google
+spend and any cost-per metric `navy`, qualified leads and other good outcomes `green`,
+totals and raw volume `cyan`. `#E5E7EB` is the only permitted neutral and only for a
+remainder/track bar sitting behind a real one. `#9CA3AF` is the neutral for an
+"Unidentified" or unknown category.
+
+Never on a data element: `#F59E0B` amber, `#6366F1` indigo, `#10B981` emerald, or any hex
+outside the ramp. Third-party brand colours (the Meta blue behind the Summary logo tile)
+are for logos only, never for bars, lines or slices.
+
+The ninth ramp entry `#8AA4D8` is a third-tier navy tint, added because the channel-mix
+source map needs nine distinct on-brand hues. Extend the ramp the same way if a tenth is
+ever needed — stay inside navy/blue/cyan/green and lighten.
 ### Common literals
 ```js
 const PAGE_SIZE = 10;            // table pagination
