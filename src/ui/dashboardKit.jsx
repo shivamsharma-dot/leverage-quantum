@@ -19,8 +19,33 @@ export const PROVIDER_COLORS = { Futwork: C.navy, 'Futwork AI': C.cyan, Superbot
 
 // On-brand ordered palette — navy → blue → cyan → green, then tinted repeats.
 // Used for multi-category bars so everything stays within brand colors.
-export const BRAND_RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F', '#3A5BA0', '#52B5DC', '#5BCAD2', '#73C58E']
+export const BRAND_RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F', '#3A5BA0', '#52B5DC', '#5BCAD2', '#73C58E', '#8AA4D8']
 export const brandColor = i => BRAND_RAMP[i % BRAND_RAMP.length]
+
+/* ===== Chart bar treatment — see DESIGN_SYSTEM.md "Chart bars" =====
+   One series = one hue, filled with a gradient of that hue. Never a flat fill,
+   and never the ramp walked across the bars of a single series: colour encodes
+   identity, not position. This is the Summary treatment, now the default. */
+export const BAR_RADIUS = [5, 5, 0, 0]      // vertical bars
+export const BAR_RADIUS_H = [0, 5, 5, 0]    // horizontal bars
+export const BAR_MAX = 26
+export const GRID_STROKE = '#EEF1F5'
+export const NEUTRAL_TRACK = '#E5E7EB'      // remainder/track bar behind a real one
+export const barFill = id => 'url(#' + id + ')'
+export const gradId = (slug, key) => 'g-' + String(slug).replace(/[^a-zA-Z0-9]/g, '') + '-' + key
+export const BarGrad = ({ id, color, from = 0.95, to = 0.55, dir = 'v' }) => (
+  <linearGradient id={id} x1="0" y1="0" x2={dir === 'h' ? "1" : "0"} y2={dir === 'h' ? "0" : "1"}>
+    <stop offset="0%" stopColor={color} stopOpacity={from} />
+    <stop offset="100%" stopColor={color} stopOpacity={to} />
+  </linearGradient>
+)
+// Stable channel -> hue map so a source is the same colour on every page.
+export const SOURCE_COLORS = {
+  Facebook: '#1C9FD4', Google: '#4CAE6F', Referral: '#1F3C84',
+  'Content+Brand': '#29B9C3', Affiliate: '#3A5BA0', Remarketing: '#52B5DC',
+  Offline: '#5BCAD2', Bing: '#73C58E', Branding: '#8AA4D8',
+  Unidentified: '#9CA3AF',
+}
 export const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 export const PAGE_SIZE = 10
 
@@ -75,13 +100,13 @@ export const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon, inve
 }
 
 /* ===== Ranked horizontal bar list ===== */
-export const RankedBars = ({ data, labelKey, max, total, colorFn, showRank }) => {
+export const RankedBars = ({ data, labelKey, max, total, colorFn, color, showRank }) => {
   if (!data || data.length === 0) return <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No data</div>
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '2px 0' }}>
       {data.map((r, i) => {
         const w = max > 0 ? (r.count / max * 100) : 0
-        const col = colorFn ? colorFn(i) : BRAND_RAMP[i % BRAND_RAMP.length]
+        const col = colorFn ? colorFn(i) : (color || C.navy)
         return (
           <div key={r[labelKey] + i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {showRank && <div style={{ width: 20, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#fff', background: col, borderRadius: 6, padding: '2px 0', flexShrink: 0, fontFamily: FONT }}>{i + 1}</div>}
