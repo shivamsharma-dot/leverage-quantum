@@ -10,6 +10,7 @@ import { B2C_REPORT_VERSIONS } from '../lib/b2cReport'
 import { B2C_LEDGER_VERSIONS } from '../lib/b2cLedger'
 import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
+import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
 
 // Line items exactly as the finance sheet names them, in sheet order.
 const REV = [['sr', 'SR (Online + Offline)'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['offRev', 'Offline (AC + VAS)']]
@@ -491,13 +492,14 @@ export default function CeoB2CDashboard() {
               <div style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={chart} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                <defs><BarGrad id="g-b0-3" color="#1F3C84"/><BarGrad id="g-b0-4" color="#1C9FD4"/></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--card-border)" vertical={false} />
                     <XAxis dataKey="d" tick={{ fontSize: 11, fill: 'var(--text3)' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: 'var(--text3)' }} axisLine={false} tickLine={false} tickFormatter={inr} width={78} />
                     <Tooltip formatter={function (v) { return full(v) }} contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--card)', color: 'var(--text)' }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Revenue" fill="#1C9FD4" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Cost" fill="#1F3C84" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Revenue" fill={barFill('g-b0-4')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
+                    <Bar dataKey="Cost" fill={barFill('g-b0-3')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
                     <Line type="monotone" dataKey="Net inflow" stroke="#4CAE6F" strokeWidth={2} dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -513,13 +515,14 @@ export default function CeoB2CDashboard() {
               <div style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={trend} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                <defs><BarGrad id="g-b1-1" color="#1F3C84"/><BarGrad id="g-b1-2" color="#1C9FD4"/></defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--card-border)" vertical={false} />
                     <XAxis dataKey="d" tick={{ fontSize: 11, fill: 'var(--text3)' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: 'var(--text3)' }} axisLine={false} tickLine={false} tickFormatter={inr} width={78} />
                     <Tooltip formatter={function (v) { return full(v) }} contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--card)', color: 'var(--text)' }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Revenue" fill="#1C9FD4" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Cost" fill="#1F3C84" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Revenue" fill={barFill('g-b1-2')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
+                    <Bar dataKey="Cost" fill={barFill('g-b1-1')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
                     <Line type="monotone" dataKey="Net inflow" stroke="#4CAE6F" strokeWidth={2} dot={{ r: 3 }} />
                   </ComposedChart>
                 </ResponsiveContainer>
