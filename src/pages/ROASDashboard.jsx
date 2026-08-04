@@ -8,6 +8,7 @@ import { DashboardSkeleton } from '../components/SkeletonLoader'
 import CompareMode from '../components/CompareMode'
 import Button from '../components/Button'
 import styles from './ROASDashboard.module.css'
+import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
 
 const CH_COLORS = { Facebook:'#1C9FD4', Google:'#4CAE6F', LinkedIn:'#1C9FD4', Bing:'#F59E0B' }
 
@@ -247,13 +248,14 @@ export default function ROASDashboard(){
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={monthlyChart.filter(m=>m.total_rev>0||m.proj_rev>0)} margin={{top:8,right:8,left:0,bottom:0}} barCategoryGap="25%">
+                <defs><BarGrad id="g-b0-1" color="#1C9FD4"/><BarGrad id="g-b0-2" color="#4CAE6F"/></defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false}/>
                 <XAxis dataKey="month_short" tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false}/>
                 <YAxis tick={{fontSize:12,fill:'#9CA3AF'}} axisLine={false} tickLine={false} tickFormatter={v=>fmt(v)} width={70}/>
                 <Tooltip content={<BrandTooltip/>}/>
                 <Legend wrapperStyle={{fontSize:12.5,paddingTop:8}}/>
-                <Bar dataKey="total_rev" name="Actual Rev"   fill="#4CAE6F" radius={[5,5,0,0]} fillOpacity={0.9}/>
-                <Bar dataKey="proj_rev"  name="Proj Rev"     fill="#1C9FD4" radius={[5,5,0,0]} fillOpacity={0.6}/>
+                <Bar dataKey="total_rev" name="Actual Rev"   fill={barFill('g-b0-2')} radius={BAR_RADIUS} fillOpacity={0.9} maxBarSize={BAR_MAX}/>
+                <Bar dataKey="proj_rev"  name="Proj Rev"     fill={barFill('g-b0-1')} radius={BAR_RADIUS} fillOpacity={0.6} maxBarSize={BAR_MAX}/>
               </BarChart>
             </ResponsiveContainer>
           </div>
