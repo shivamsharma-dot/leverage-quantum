@@ -18,6 +18,12 @@ import Button from '../components/Button'
 import { getSession, setSession, hasLoaded, getPersisted } from '../lib/sessionLoad'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
 import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, BarGrad, barFill, BAR_RADIUS_H } from '../ui/dashboardKit'
+import { useAuth } from '../hooks/useAuth'
+// Data source: BigQuery (beta) -- see src/lib/overallBqCache.js for the why.
+import {
+  BQ_BETA_EVENT, readBqBeta,
+  fetchOverallBqRows, fetchOverallBqBounds, fetchOverallBqSyncedAt,
+} from '../lib/overallBqCache'
 
 // "Overall PM" — added by the admin as a custom Data Source (Settings > Data > Google Sheets).
 // Not part of the original SHEET_PREF_KEYS set, so this page resolves its own override the same
@@ -72,6 +78,12 @@ const monthKey = d => d.getFullYear() * 12 + d.getMonth()
 const monthLabel = k => MN[((k % 12) + 12) % 12] + "'" + String(Math.floor(k / 12)).slice(2)
 const dayKey = d => { const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}` }
 const dayLabel = d => `${d.getDate()} ${MN[d.getMonth()]}`
+// 'YYYY-MM-DD' -> the same integer month key monthKey() derives from a Date, plus that
+// month's first/last day. Used only by the BigQuery path, which knows the cache's date
+// BOUNDS without holding its rows, and so builds the Month dropdown from those.
+const monthKeyFromIso = s => { const p = String(s || '').split('-'); return p.length < 2 ? null : (+p[0]) * 12 + (+p[1] - 1) }
+const monthStartDate = mk => new Date(Math.floor(mk / 12), ((mk % 12) + 12) % 12, 1)
+const monthEndDate = mk => new Date(Math.floor(mk / 12), ((mk % 12) + 12) % 12 + 1, 0)
 
 function parseNum(v) {
   if (v == null) return 0
@@ -676,6 +688,44 @@ function buildSyntheticAffiliateRows(map) {
 export default function OverallDashboard() {
   const [rawRows, setRawRows] = useState([])
   const [affiliateManual, setAffiliateManual] = useState(null)
+  // ── Data source: BigQuery (beta) ─────────────────────────────────────────────
+  // Admin-only, off by default, flipped in Settings > Data.
+  //
+  // ON : this page reads public.overall_bq_daily straight from Supabase with the anon
+  //      key, already narrowed SERVER-SIDE to the date range and the Sources selected
+  //      below, instead of downloading the whole "Overall PM" CSV and parsing every
+  //      one of its 2,05,720 rows in the browser.
+  // OFF: nothing about the CSV path changes. rawRows is still the only thing feeding
+  //      the page, so turning the toggle off reverts instantly and with no refetch.
+  //
+  // The rows are deliberately run through the SAME mapRow() as the CSV, because the
+  // cache keeps BigQuery's own column names byte-for-byte. One mapping, so the two
+  // paths cannot drift apart on what a column means.
+  const { user } = useAuth()
+  const isAdmin = (user?.role || '') === 'admin'
+  const [bqPref, setBqPref] = useState(readBqBeta)
+  useEffect(() => {
+    const sync = () => setBqPref(readBqBeta())
+    window.addEventListener(BQ_BETA_EVENT, sync)  // same tab -- Settings is a route here
+    window.addEventListener('storage', sync)      // other tabs
+    return () => { window.removeEventListener(BQ_BETA_EVENT, sync); window.removeEventListener('storage', sync) }
+  }, [])
+  // The preference is per-device localStorage, so it is gated on the live server-session
+  // role as well: a flag left set on an admin's machine must not survive that machine
+  // later being used by a viewer.
+  const bqMode = isAdmin && bqPref
+  const [bqRows, setBqRows] = useState([])
+  const [bqRowCount, setBqRowCount] = useState(null)   // null = no read has landed yet
+  const [bqBounds, setBqBounds] = useState(null)
+  const [bqSourceOpts, setBqSourceOpts] = useState(null)
+  const [bqBusy, setBqBusy] = useState(false)
+  const [bqError, setBqError] = useState(null)
+  const [bqNonce, setBqNonce] = useState(0)            // bumped by Refresh
+  // A failed cache read must never leave this page dead, so it falls back to the sheet
+  // rather than replacing it: every derivation below reverts to rawRows while bqError
+  // is set. bqLive is the single test for "BQ data is what we are showing".
+  const bqActive = bqMode && !bqError
+  const bqLive = bqActive && bqRowCount != null
   useEffect(() => {
     fetch('/api/preferences', { credentials: 'include' })
       .then(r => r.ok ? r.json() : { prefs: {} })
@@ -688,9 +738,16 @@ export default function OverallDashboard() {
   const rows = useMemo(() => {
     const cut = new Date(); cut.setHours(0, 0, 0, 0)
     const t = cut.getTime()
-    return [...rawRows, ...buildSyntheticAffiliateRows(affiliateManual)]
+    // Affiliate manual spend lives in app_preferences, not in either data source, so it
+    // is merged in identically on both paths -- otherwise the two would disagree on
+    // Spend by exactly the affiliate figure.
+    //
+    // Until the first BigQuery read lands (bqRowCount still null), BQ mode keeps
+    // rendering whatever the CSV path already had, so flipping the toggle on never
+    // flashes a screenful of zeros.
+    return [...(bqLive ? bqRows : rawRows), ...buildSyntheticAffiliateRows(affiliateManual)]
       .filter(r => !(r && r.date && +r.date >= t))
-  }, [rawRows, affiliateManual])
+  }, [bqLive, bqRows, rawRows, affiliateManual])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
@@ -873,19 +930,38 @@ export default function OverallDashboard() {
     }
     finally { setLoading(false) }
   }, [applyCsv])
-  useEffect(() => { loadData() }, [loadData])
+  // The CSV download is skipped entirely while the toggle is on -- that is the point of
+  // it. Toggling back off calls loadData(), which finds this session's already-parsed
+  // CSV in the session cache and repaints from it instantly.
+  useEffect(() => { if (!bqMode) loadData() }, [loadData, bqMode])
 
   const months = useMemo(() => {
+    // In BQ mode `rows` only ever holds the window on screen, so the Month dropdown
+    // cannot be derived from it -- it comes from the cache's real min/max dates instead.
+    // Before those bounds land it falls through to the rows-derived list, so the
+    // dropdown never blanks out mid-flip.
+    const lo = bqActive ? monthKeyFromIso(bqBounds?.min) : null
+    const hi = bqActive ? monthKeyFromIso(bqBounds?.max) : null
+    if (lo != null && hi != null) {
+      const out = []
+      for (let k = lo; k <= hi; k++) out.push(k)
+      return out
+    }
     const set = new Set(rows.filter(r => r.mk != null).map(r => r.mk))
     return [...set].sort((a, b) => a - b)
-  }, [rows])
+  }, [rows, bqActive, bqBounds])
   const monthOptions = useMemo(() => ['All months', ...[...months].reverse().map(monthLabel)], [months])
   const monthKeyByLabel = useMemo(() => new Map(months.map(mk => [monthLabel(mk), mk])), [months])
 
   const sources = useMemo(() => {
+    // In BQ mode the Source filter is applied server-side, so once a source is picked
+    // `rows` no longer contains the ones filtered OUT -- deriving the dropdown from it
+    // would collapse it to the current selection and strand the user there with no way
+    // back. bqSourceOpts holds the list as last seen with NO Source filter applied.
+    if (bqActive && bqSourceOpts) return bqSourceOpts
     const set = new Set(rows.map(r => r.source))
     return ['All', ...[...set].sort()]
-  }, [rows])
+  }, [rows, bqActive, bqSourceOpts])
 
   // Master campaign list — scoped to the FULL dataset (not the active period/source
   // filters) so a campaign that only shows up in an earlier month is still searchable
@@ -1074,6 +1150,97 @@ export default function OverallDashboard() {
     if (!sourceIsAll) rs = rs.filter(matchesSource)
     return rs
   }, [compareOpen, compareMode, compareCustomFrom, compareCustomTo, compareWindow, rows, selectedSources])
+
+  // ── BigQuery mode: the server-side window ────────────────────────────────────
+  // What this page needs is not only the range on screen: every KPI also carries a
+  // vs-previous-period delta, and Compare adds a second period on top. So the read
+  // spans the union of (window on screen) + (previous equivalent window) + (Compare
+  // window, while Compare is open) -- and nothing wider than that. Everything
+  // downstream then slices these rows exactly the way it slices CSV rows, which is
+  // what makes the two paths the same arithmetic over the same facts.
+  //
+  // Known and accepted narrowing, documented rather than hidden: things that
+  // deliberately ignore the date filter -- the campaign search suggestion list, and
+  // the day-level windows the Slack v2/v5/v6 reports build -- see only this window in
+  // BQ mode, where on the CSV path they see the entire sheet.
+  const bqRange = useMemo(() => {
+    if (!bqMode) return null
+    const spans = []
+    const pushRange = w => { if (w && w.from && w.to) spans.push([w.from, w.to]) }
+    const pushMonth = mk => { if (mk != null) spans.push([monthStartDate(mk), monthEndDate(mk)]) }
+    const pushWindow = w => { if (!w) return; if (w.type === 'month') pushMonth(w.mk); else pushRange(w) }
+    if (dateWindow) pushRange(dateWindow)
+    else pushMonth(monthKeyByLabel.get(selMonth))
+    pushWindow(prevWindow)
+    pushWindow(compareWindow)
+    if (compareOpen && compareMode === 'custom' && compareCustomFrom && compareCustomTo) {
+      const [fy, fm, fd] = compareCustomFrom.split('-').map(Number)
+      const [ty, tm, td] = compareCustomTo.split('-').map(Number)
+      spans.push([new Date(fy, fm - 1, fd), new Date(ty, tm - 1, td)])
+    }
+    if (!spans.length) return null
+    let lo = spans[0][0], hi = spans[0][1]
+    for (const [a, b] of spans) { if (a < lo) lo = a; if (b > hi) hi = b }
+    return { since: dayKey(lo), until: dayKey(hi) }
+  }, [bqMode, dateWindow, selMonth, monthKeyByLabel, prevWindow, compareWindow, compareOpen, compareMode, compareCustomFrom, compareCustomTo])
+
+  // The read effect below depends on these two PRIMITIVES, never on the bqRange object
+  // itself -- and that is not a style preference. `months` is derived from `rows`, so a
+  // completed read hands monthKeyByLabel a new identity, which hands bqRange a new
+  // identity with byte-identical contents. An effect keyed on the object would see a
+  // "changed" dependency and refetch forever.
+  const bqSince = bqRange ? bqRange.since : null
+  const bqUntil = bqRange ? bqRange.until : null
+
+  // Date bounds + the cache's own freshness stamp. Three single-row reads, once per
+  // toggle-on (and again on Refresh). "Synced" then reports when the CACHE last ran
+  // rather than when this tab happened to fetch, which is the more useful fact.
+  useEffect(() => {
+    if (!bqMode) return
+    let dead = false
+    fetchOverallBqBounds()
+      .then(b => { if (!dead) setBqBounds(b) })
+      .catch(e => { if (!dead) { setBqError('cache unavailable -- ' + e.message); setLoading(false); loadData() } })
+    fetchOverallBqSyncedAt().then(ts => { if (!dead && ts) setLastSync(ts) })
+    return () => { dead = true }
+  }, [bqMode, bqNonce, loadData])
+
+  // A cold load straight into BQ mode has no selMonth yet (the CSV path is what
+  // normally sets it), so default it here: the current month if the cache reaches it,
+  // the newest month it has otherwise. Toggling on mid-session leaves selMonth alone --
+  // which is precisely what makes the two paths comparable on identical filters.
+  useEffect(() => {
+    if (!bqMode || selMonth) return
+    const maxKey = monthKeyFromIso(bqBounds?.max)
+    if (maxKey == null) return
+    const curKey = monthKey(new Date())
+    setSelMonth(monthLabel(maxKey >= curKey ? curKey : maxKey))
+  }, [bqMode, bqBounds, selMonth])
+
+  useEffect(() => {
+    if (!bqMode || !bqSince || !bqUntil) return
+    let dead = false
+    setBqBusy(true)
+    fetchOverallBqRows({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources })
+      .then(raw => {
+        if (dead) return
+        setBqRows(raw.map(mapRow))
+        setBqRowCount(raw.length)
+        // Only ever refresh the Source options from a read that had NO Source filter on
+        // it, or the dropdown would shrink to whatever is currently selected.
+        if (sourceIsAll) setBqSourceOpts(['All', ...[...new Set(raw.map(r => (r.Source || '').trim() || 'Unknown'))].sort()])
+        setBqError(null)
+      })
+      .catch(e => {
+        if (dead) return
+        // Fall back to the sheet instead of showing a broken page. loadData() is
+        // session-cached, so this is instant if the CSV was already parsed once.
+        setBqError(e.message)
+        loadData()
+      })
+      .finally(() => { if (!dead) { setBqBusy(false); setLoading(false) } })
+    return () => { dead = true }
+  }, [bqMode, bqSince, bqUntil, sourceIsAll, selectedSources, bqNonce, loadData])
 
   // Period A (the "current" side) is normally whatever the main page filter is --
   // correct for 'prev'/'yoy' modes, since those are explicitly "vs the period I'm
@@ -2210,15 +2377,23 @@ export default function OverallDashboard() {
               Compare
             </Button>
 
+            {bqMode && (
+              <span
+                title={'Data source: BigQuery (beta) -- public.overall_bq_daily' + (bqSince ? ', ' + bqSince + ' to ' + bqUntil : '') + (bqRowCount != null ? ', ' + bqRowCount.toLocaleString('en-IN') + ' rows read' : '') + (bqError ? ' -- FAILED (' + bqError + '), showing the sheet instead' : '')}
+                style={{ fontSize:10, fontWeight:800, letterSpacing:.4, textTransform:'uppercase', fontFamily:FONT, whiteSpace:'nowrap', borderRadius:8, padding:'5px 9px', border:'0.5px solid ' + C.border, color: bqError ? C.muted : C.navy, background: bqError ? 'var(--card)' : C.navyBg }}
+              >
+                {bqError ? 'BigQuery — fell back to sheet' : (bqBusy ? 'BigQuery — loading' : 'BigQuery (beta)')}
+              </span>
+            )}
             {lastSync && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT }}>Synced {syncFmt.format(lastSync)}</span>}
             <Button
-              onClick={() => loadData(true)}
-              disabled={loading}
+              onClick={() => { if (bqMode) { setBqError(null); setBqNonce(n => n + 1) } else loadData(true) }}
+              disabled={loading || bqBusy}
               size="sm"
               variant="secondary"
-              icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>}
+              icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: (loading || bqBusy) ? 'spin .8s linear infinite' : 'none' }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>}
             >
-              {loading ? 'Refreshing' : 'Refresh'}
+              {(loading || bqBusy) ? 'Refreshing' : 'Refresh'}
             </Button>
             <ExportButton data={exportRows} totalRow={exportTotalRow} filename="overall-summary" dashboardId="overall" />
             <div style={{ position:'relative' }}>
@@ -2227,6 +2402,7 @@ export default function OverallDashboard() {
               {showInfo && (
                 <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:380, maxHeight:'74vh', overflowY:'auto', background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 14px 40px rgba(15,23,42,0.16)', padding:'16px 18px', textAlign:'left', fontFamily:FONT }}>
                   <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:8 }}>How Overall is calculated</div>
+                  {bqMode && <div style={{ fontSize:11, color: bqError ? C.muted : C.navy, fontWeight:700, marginBottom:6 }}>{bqError ? 'BigQuery (beta) is on but its cache read failed, so these numbers are the sheet\u2019s.' : 'BigQuery (beta) is on: these numbers come from the overall_bq_daily cache of the BigQuery saved query "Overall", read for the selected range only \u2014 same rows and same columns as the sheet, just not downloaded whole.'}</div>}
                   <div style={{ fontSize:11, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
                   <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.7 }}>
                     <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (Registered At University). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
