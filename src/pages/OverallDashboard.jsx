@@ -837,6 +837,14 @@ export default function OverallDashboard() {
   const [trendPeriods, setTrendPeriods] = useState(6)
   const [trendMetric, setTrendMetric] = useState('totalQL')
 
+  // Deep-analysis-only narrowing -- separate from the page's own toolbar filters
+  // (Source/Corridor/Campaign up top) so zooming into "just Facebook" or "just this
+  // corridor" inside Compare/Trend never changes the KPIs/funnel/table behind the
+  // modal. Shared by both features since both read the same underlying rows.
+  const [deepCorridorFilter, setDeepCorridorFilter] = useState(['All'])
+  const [deepSourceFilter, setDeepSourceFilter] = useState(['All'])
+  const [deepCampaignQuery, setDeepCampaignQuery] = useState('')
+
   // Summary table customization — search, sortable columns, show/hide + reorder columns
   // (persisted), row limit. Mirrors the Meta Ads Creatives table's "customizable" pattern.
   const [tableSearch, setTableSearch] = useState('')
@@ -1928,15 +1936,46 @@ export default function OverallDashboard() {
     return t
   }
 
+  // Deep-analysis-only narrowing (see the state comment above) -- an ADDITIONAL
+  // filter on top of whatever the page's own toolbar already applied, scoped only
+  // to Compare/Trend so it never touches the KPIs/funnel/table on the page itself.
+  const deepCorridorIsAll = deepCorridorFilter.length === 0 || deepCorridorFilter.includes('All')
+  const deepSourceIsAll = deepSourceFilter.length === 0 || deepSourceFilter.includes('All')
+  const deepCorridorSet = useMemo(() => new Set(deepCorridorFilter), [deepCorridorFilter])
+  const deepSourceSet = useMemo(() => new Set(deepSourceFilter), [deepSourceFilter])
+  const deepFilterActive = !deepCorridorIsAll || !deepSourceIsAll || deepCampaignQuery.trim() !== ''
+  const matchesDeepFilter = useCallback(r => {
+    if (!deepCorridorIsAll && !deepCorridorSet.has(corridorLabel(classifyCorridor(r.campaign)))) return false
+    if (!deepSourceIsAll && !deepSourceSet.has(r.source)) return false
+    const q = deepCampaignQuery.trim().toLowerCase()
+    if (q && !(r.campaign || '').toLowerCase().includes(q)) return false
+    return true
+  }, [deepCorridorIsAll, deepCorridorSet, deepSourceIsAll, deepSourceSet, deepCampaignQuery])
+  const clearDeepFilters = () => { setDeepCorridorFilter(['All']); setDeepSourceFilter(['All']); setDeepCampaignQuery('') }
+  // Independent typeahead state for the deep-filter's own Campaign search box --
+  // separate from the page's own campaignQuery/campaignSuggestions so the two
+  // don't fight over one input.
+  const deepCampaignSuggestions = useMemo(() => {
+    const q = deepCampaignQuery.trim().toLowerCase()
+    const list = q ? campaignOptions.filter(c => c.name.toLowerCase().includes(q)) : campaignOptions
+    return list.slice(0, 8)
+  }, [campaignOptions, deepCampaignQuery])
+
   const compareJoinable = DEEP_JOINABLE_DIMS.has(compareTableDim)
 
   // Full, UNCAPPED comparison -- every corridor/source/campaign that appears in
   // either period, not just the top-5 "what's driving it" movers above. Sorted by
   // |Δ Total QL| by default so the biggest movements still surface first.
+  // The deep-filter narrows BOTH periods' rows before aggregation -- e.g. Source
+  // filter='Facebook' means the full breakdown reads only Facebook's rows for
+  // *both* the current and comparison period, not just one side.
+  const periodARowsDeep = useMemo(() => periodARows.filter(matchesDeepFilter), [periodARows, matchesDeepFilter])
+  const compareRowsDeep = useMemo(() => compareRows.filter(matchesDeepFilter), [compareRows, matchesDeepFilter])
+
   const compareTableRows = useMemo(() => {
-    if (!compareOpen || !compareJoinable || compareRows.length === 0 || periodARows.length === 0) return []
-    const a = aggReportByDim(periodARows, compareTableDim, paidOf(periodARows))
-    const b = aggReportByDim(compareRows, compareTableDim, paidOf(compareRows))
+    if (!compareOpen || !compareJoinable || compareRowsDeep.length === 0 || periodARowsDeep.length === 0) return []
+    const a = aggReportByDim(periodARowsDeep, compareTableDim, paidOf(periodARowsDeep))
+    const b = aggReportByDim(compareRowsDeep, compareTableDim, paidOf(compareRowsDeep))
     const bMap = new Map(b.map(x => [x.key, x]))
     const aKeys = new Set(a.map(x => x.key))
     const rowsOut = a.map(x => ({ label: x.label, a: x, b: bMap.get(x.key) || null }))
@@ -1949,19 +1988,19 @@ export default function OverallDashboard() {
       const dy = Math.abs((y.a?.totalQL || 0) - (y.b?.totalQL || 0))
       return dy - dx
     })
-  }, [compareOpen, compareJoinable, compareRows, periodARows, compareTableDim, aggReportByDim, paidOf])
+  }, [compareOpen, compareJoinable, compareRowsDeep, periodARowsDeep, compareTableDim, aggReportByDim, paidOf])
 
   // Day/Month dimension: period A's dates and period B's dates essentially never
   // coincide (different ranges), so there is nothing real to join row-for-row.
   // Shown instead as two independent, fully-detailed breakdowns.
   const compareBreakdownA = useMemo(() => {
-    if (!compareOpen || compareJoinable || periodARows.length === 0) return []
-    return aggReportByDim(periodARows, compareTableDim, paidOf(periodARows)).sort((x, y) => (x.key > y.key ? 1 : -1))
-  }, [compareOpen, compareJoinable, periodARows, compareTableDim, aggReportByDim, paidOf])
+    if (!compareOpen || compareJoinable || periodARowsDeep.length === 0) return []
+    return aggReportByDim(periodARowsDeep, compareTableDim, paidOf(periodARowsDeep)).sort((x, y) => (x.key > y.key ? 1 : -1))
+  }, [compareOpen, compareJoinable, periodARowsDeep, compareTableDim, aggReportByDim, paidOf])
   const compareBreakdownB = useMemo(() => {
-    if (!compareOpen || compareJoinable || compareRows.length === 0) return []
-    return aggReportByDim(compareRows, compareTableDim, paidOf(compareRows)).sort((x, y) => (x.key > y.key ? 1 : -1))
-  }, [compareOpen, compareJoinable, compareRows, compareTableDim, aggReportByDim, paidOf])
+    if (!compareOpen || compareJoinable || compareRowsDeep.length === 0) return []
+    return aggReportByDim(compareRowsDeep, compareTableDim, paidOf(compareRowsDeep)).sort((x, y) => (x.key > y.key ? 1 : -1))
+  }, [compareOpen, compareJoinable, compareRowsDeep, compareTableDim, aggReportByDim, paidOf])
 
   // Exact export rows for Compare -- raw (unrounded) numbers for every metric,
   // both periods, plus the delta, so the download can never disagree with what a
@@ -2010,6 +2049,12 @@ export default function OverallDashboard() {
   const trendIsSingleSeries = trendDim === 'month' || trendDim === 'day'
   const trendEffectiveGranularity = trendDim === 'month' ? 'month' : trendDim === 'day' ? 'day' : trendGranularity
 
+  // Deep-filtered base rows for the trend -- period BOUNDARIES still anchor off the
+  // whole account's latest date (trendMaxDate, below, stays unfiltered) so narrowing
+  // to e.g. Source=Facebook can't shift the window if Facebook's own last active day
+  // happens to be earlier; only which ROWS land in each bucket is narrowed.
+  const trendBaseRows = useMemo(() => nonDateRows.filter(matchesDeepFilter), [nonDateRows, matchesDeepFilter])
+
   const trendMaxDate = useMemo(() => {
     let max = null
     nonDateRows.forEach(r => { if (r.date && (!max || r.date > max)) max = r.date })
@@ -2043,7 +2088,7 @@ export default function OverallDashboard() {
 
   const trendResult = useMemo(() => {
     if (!trendOpen || !trendBuckets.length) return { chartRows: [], seriesKeys: [], seriesLabels: {}, exportRows: [], shownCount: 0, totalCount: 0 }
-    const bucketRows = trendBuckets.map(b => nonDateRows.filter(r => r.date && r.date >= b.from && r.date <= b.to))
+    const bucketRows = trendBuckets.map(b => trendBaseRows.filter(r => r.date && r.date >= b.from && r.date <= b.to))
 
     if (trendIsSingleSeries) {
       const chartRows = trendBuckets.map((b, i) => {
@@ -2093,7 +2138,7 @@ export default function OverallDashboard() {
       })
     })
     return { chartRows, seriesKeys: shown.map(s => s.key), seriesLabels, exportRows, shownCount: shown.length, totalCount: ranked.length }
-  }, [trendOpen, trendBuckets, nonDateRows, trendIsSingleSeries, trendDim, trendMetric, aggReportByDim, paidOf])
+  }, [trendOpen, trendBuckets, trendBaseRows, trendIsSingleSeries, trendDim, trendMetric, aggReportByDim, paidOf])
 
   const trendExportRowsFmt = useMemo(() => trendResult.exportRows.map(r => {
     const o = {}
@@ -3223,6 +3268,17 @@ export default function OverallDashboard() {
                           </div>
                         </div>
 
+                        {/* Deep filter -- zoom into a specific corridor/source/campaign
+                            within both periods, without touching the page behind this modal. */}
+                        <div style={{ display:'flex', alignItems:'flex-end', gap:12, marginBottom:12, flexWrap:'wrap' }}>
+                          <SourceMultiSelect label="Corridor" minWidth={130} options={CORRIDORS.map(c => c.label)} selected={deepCorridorFilter} onChange={setDeepCorridorFilter} />
+                          <SourceMultiSelect label="Source" minWidth={110} options={sources.filter(s => s !== 'All')} selected={deepSourceFilter} onChange={setDeepSourceFilter} />
+                          <CampaignSearch value={deepCampaignQuery} onChange={setDeepCampaignQuery} suggestions={deepCampaignSuggestions} minWidth={180} />
+                          {deepFilterActive && (
+                            <button onClick={clearDeepFilters} style={{ border:'none', background:'transparent', color:C.navy, cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight:700, padding:'6px 4px' }}>Clear filter</button>
+                          )}
+                        </div>
+
                         {!compareJoinable && (
                           <div style={{ fontSize:11, color:C.muted, marginBottom:10, lineHeight:1.5 }}>
                             {DEEP_DIMENSIONS.find(d => d.key === compareTableDim)?.label} values don't recur across two different ranges, so {currentLabel} and {compareLabel} are shown as two separate breakdowns rather than joined row-for-row.
@@ -3355,12 +3411,26 @@ export default function OverallDashboard() {
                       onChange={lbl => { const m = DEEP_METRICS.find(x => x.label === lbl); if (m) setTrendMetric(m.key) }} />
                   </div>
 
+                  {/* Deep filter -- zoom into a specific corridor/source/campaign without
+                      touching the page's own toolbar filters behind this modal. */}
+                  <div style={{ display:'flex', alignItems:'flex-end', gap:12, marginBottom:16, flexWrap:'wrap', paddingBottom:14, borderBottom:`0.5px solid ${C.border}` }}>
+                    <SourceMultiSelect label="Corridor" minWidth={130} options={CORRIDORS.map(c => c.label)} selected={deepCorridorFilter} onChange={setDeepCorridorFilter} />
+                    <SourceMultiSelect label="Source" minWidth={110} options={sources.filter(s => s !== 'All')} selected={deepSourceFilter} onChange={setDeepSourceFilter} />
+                    <CampaignSearch value={deepCampaignQuery} onChange={setDeepCampaignQuery} suggestions={deepCampaignSuggestions} minWidth={180} />
+                    {deepFilterActive && (
+                      <button onClick={clearDeepFilters} style={{ border:'none', background:'transparent', color:C.navy, cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight:700, padding:'6px 4px' }}>Clear filter</button>
+                    )}
+                  </div>
+
                   {!trendMaxDate ? (
                     <div style={{ textAlign:'center', padding:'32px 0', color:C.muted, fontSize:13 }}>No dated rows to trend.</div>
                   ) : (
                     <>
                       <div style={{ fontSize:11, color:C.muted, marginBottom:10 }}>
-                        {trendBuckets.length} trailing {trendEffectiveGranularity === 'month' ? 'months' : trendEffectiveGranularity === 'week' ? 'weeks' : 'days'} ending {dayLabel(trendMaxDate)}, {sourceIsAll ? 'all sources' : sourceLabel}{corridorFilter !== 'All' ? ', ' + corridorFilter : ''}.
+                        {trendBuckets.length} trailing {trendEffectiveGranularity === 'month' ? 'months' : trendEffectiveGranularity === 'week' ? 'weeks' : 'days'} ending {dayLabel(trendMaxDate)}, {sourceIsAll ? 'all sources' : sourceLabel}{corridorFilter !== 'All' ? ', ' + corridorFilter : ''}
+                        {!deepCorridorIsAll && <> · corridor: {deepCorridorFilter.length === 1 ? deepCorridorFilter[0] : deepCorridorFilter.length + ' selected'}</>}
+                        {!deepSourceIsAll && <> · source: {deepSourceFilter.length === 1 ? deepSourceFilter[0] : deepSourceFilter.length + ' selected'}</>}
+                        {deepCampaignQuery.trim() && <> · campaign contains "{deepCampaignQuery.trim()}"</>}.
                         {!trendIsSingleSeries && trendResult.totalCount > trendResult.shownCount && (
                           <> Charting the top {trendResult.shownCount} of {trendResult.totalCount} by Total QL -- every one of the {trendResult.totalCount} is in the export below.</>
                         )}
