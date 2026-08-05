@@ -84,6 +84,10 @@ const dayLabel = d => `${d.getDate()} ${MN[d.getMonth()]}`
 const monthKeyFromIso = s => { const p = String(s || '').split('-'); return p.length < 2 ? null : (+p[0]) * 12 + (+p[1] - 1) }
 const monthStartDate = mk => new Date(Math.floor(mk / 12), ((mk % 12) + 12) % 12, 1)
 const monthEndDate = mk => new Date(Math.floor(mk / 12), ((mk % 12) + 12) % 12 + 1, 0)
+// 'YYYY-MM-DD' -> a real local Date. Used to anchor Trend Analysis off the BigQuery
+// cache's OWN latest date (bqBounds.max) rather than off nonDateRows -- see the
+// trendAnchorDate comment below for why that distinction is load-bearing.
+const dateFromIso = s => { const p = String(s || '').split('-').map(Number); return p.length < 3 ? null : new Date(p[0], p[1] - 1, p[2]) }
 
 function parseNum(v) {
   if (v == null) return 0
@@ -856,6 +860,12 @@ export default function OverallDashboard() {
   const [trendGranularity, setTrendGranularity] = useState('month') // 'day' | 'week' | 'month'
   const [trendPeriods, setTrendPeriods] = useState(6)
   const [trendMetric, setTrendMetric] = useState('totalQL')
+  // month/day dimensions are naturally their own period axis, so there is no separate
+  // granularity to pick and no further breakdown -- one line, matching the page's own
+  // byMonth/byDay charts. Declared here (not down near the rest of Trend's computation)
+  // because bqRange's own trendBqSpan, much earlier in the file, needs it too.
+  const trendIsSingleSeries = trendDim === 'month' || trendDim === 'day'
+  const trendEffectiveGranularity = trendDim === 'month' ? 'month' : trendDim === 'day' ? 'day' : trendGranularity
 
   // Deep-analysis-only narrowing -- separate from the page's own toolbar filters
   // (Source/Corridor/Campaign up top) so zooming into "just Facebook" or "just this
@@ -1240,6 +1250,29 @@ export default function OverallDashboard() {
   // deliberately ignore the date filter -- the campaign search suggestion list, and
   // the day-level windows the Slack v2/v5/v6 reports build -- see only this window in
   // BQ mode, where on the CSV path they see the entire sheet.
+  // Trend Analysis' own trailing window -- deliberately computed WITHOUT touching
+  // nonDateRows/bqRows, so it can safely feed bqRange below without a circular
+  // dependency (bqRange -> fetch -> bqRows -> nonDateRows -> trendMaxDate -> bqRange).
+  // Anchored off the BigQuery cache's own latest date (bqBounds.max, fetched
+  // independently of any range) rather than off whatever bqRows currently holds --
+  // that's the whole bug this fixes: bqRows only ever contains what bqRange already
+  // asked for, so anchoring off it can never discover that Trend needs MORE.
+  const trendAnchorDate = useMemo(() => (
+    bqActive && bqBounds?.max ? dateFromIso(bqBounds.max) : null
+  ), [bqActive, bqBounds])
+  const trendBqSpan = useMemo(() => {
+    if (!trendOpen || !bqActive || !trendAnchorDate) return null
+    const end = trendAnchorDate
+    if (trendEffectiveGranularity === 'month') {
+      const endMk = monthKey(end)
+      return { from: monthStartDate(endMk - (trendPeriods - 1)), to: monthEndDate(endMk) }
+    }
+    const days = trendEffectiveGranularity === 'week' ? trendPeriods * 7 : trendPeriods
+    const from = new Date(end); from.setDate(from.getDate() - (days - 1)); from.setHours(0, 0, 0, 0)
+    const to = new Date(end); to.setHours(23, 59, 59, 999)
+    return { from, to }
+  }, [trendOpen, bqActive, trendAnchorDate, trendEffectiveGranularity, trendPeriods])
+
   const bqRange = useMemo(() => {
     if (!bqMode) return null
     const spans = []
@@ -1255,11 +1288,12 @@ export default function OverallDashboard() {
       const [ty, tm, td] = compareCustomTo.split('-').map(Number)
       spans.push([new Date(fy, fm - 1, fd), new Date(ty, tm - 1, td)])
     }
+    pushRange(trendBqSpan)
     if (!spans.length) return null
     let lo = spans[0][0], hi = spans[0][1]
     for (const [a, b] of spans) { if (a < lo) lo = a; if (b > hi) hi = b }
     return { since: dayKey(lo), until: dayKey(hi) }
-  }, [bqMode, dateWindow, selMonth, monthKeyByLabel, prevWindow, compareWindow, compareOpen, compareMode, compareCustomFrom, compareCustomTo])
+  }, [bqMode, dateWindow, selMonth, monthKeyByLabel, prevWindow, compareWindow, compareOpen, compareMode, compareCustomFrom, compareCustomTo, trendBqSpan])
 
   // The read effect below depends on these two PRIMITIVES, never on the bqRange object
   // itself -- and that is not a style preference. `months` is derived from `rows`, so a
@@ -2072,23 +2106,22 @@ export default function OverallDashboard() {
   }), [compareExportRows])
 
   // ── Trend Analysis ────────────────────────────────────────────────────────────
-  // month/day dimensions are naturally their own period axis, so there is no
-  // separate granularity to pick and no further breakdown -- one line, exactly
-  // like the page's own byMonth/byDay charts, just with a configurable N.
-  const trendIsSingleSeries = trendDim === 'month' || trendDim === 'day'
-  const trendEffectiveGranularity = trendDim === 'month' ? 'month' : trendDim === 'day' ? 'day' : trendGranularity
-
   // Deep-filtered base rows for the trend -- period BOUNDARIES still anchor off the
   // whole account's latest date (trendMaxDate, below, stays unfiltered) so narrowing
   // to e.g. Source=Facebook can't shift the window if Facebook's own last active day
   // happens to be earlier; only which ROWS land in each bucket is narrowed.
   const trendBaseRows = useMemo(() => nonDateRows.filter(matchesDeepFilter), [nonDateRows, matchesDeepFilter])
 
+  // In BQ mode, anchor off the cache's own bounds (trendAnchorDate) rather than
+  // scanning nonDateRows -- nonDateRows only ever holds whatever bqRange already
+  // fetched, so on the render before that wider fetch lands, a scan would find the
+  // OLD narrow window's latest date and build the wrong bucket boundaries entirely.
   const trendMaxDate = useMemo(() => {
+    if (trendAnchorDate) return trendAnchorDate
     let max = null
     nonDateRows.forEach(r => { if (r.date && (!max || r.date > max)) max = r.date })
     return max
-  }, [nonDateRows])
+  }, [nonDateRows, trendAnchorDate])
 
   const trendBuckets = useMemo(() => {
     if (!trendOpen || !trendMaxDate) return []
