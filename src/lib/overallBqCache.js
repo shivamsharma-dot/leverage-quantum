@@ -20,8 +20,8 @@
 // Two rules carried over verbatim from src/lib/overallFunnelCache.js, both of which
 // were real production bugs there first:
 //   1. Supabase's hosted PostgREST caps EVERY response at 1000 rows server-side, no
-//      matter what 'limit' asks for. So every multi-row read here paginates with the
-//      Range header until a page comes back short.
+//      matter what 'limit' asks for. So every multi-row read here pages through with
+//      the Range header (see fetchAllPaginated for how, and why it is not sequential).
 //   2. Paginating without an explicit ORDER BY is a second, independent bug -- page
 //      boundaries are not guaranteed stable across requests. Every read below orders
 //      by row_key, the table's primary key.
@@ -75,15 +75,56 @@ async function sbGet(params, extraHeaders) {
   return j
 }
 
+// One page is 1000 rows and that is not negotiable, so a July-sized window (40,284
+// rows) is 41 requests. Fetched strictly one after another that measured 22.6s in the
+// browser -- slower than the CSV path this is supposed to replace. So the first page
+// asks for 'Prefer: count=exact', which makes PostgREST return the real total in the
+// Content-Range header ('0-999/40284'), and the remaining pages are then fetched in
+// parallel batches. The same window measured 5.0s that way.
+//
+// Ordering stays deterministic: every page carries its own explicit offset against the
+// same 'order=row_key.asc', and the pages are reassembled by offset -- never by the
+// order the responses happen to come back in.
+const PAGE = 1000
+const CONCURRENCY = 8
+
+async function sbGetPage(params, offset, wantCount) {
+  const h = { Range: offset + '-' + (offset + PAGE - 1) }
+  if (wantCount) h.Prefer = 'count=exact'
+  const r = await fetch(SB_URL + '/rest/v1/' + TABLE + '?' + params.toString(), { headers: headers(h) })
+  if (!r.ok) throw new Error('overall_bq_daily read failed (' + r.status + ')')
+  const rows = await r.json()
+  if (!Array.isArray(rows)) throw new Error('overall_bq_daily returned a non-array response')
+  const total = Number(String(r.headers.get('content-range') || '').split('/')[1])
+  return { rows: rows, total: Number.isFinite(total) ? total : null }
+}
+
 async function fetchAllPaginated(params) {
-  const PAGE = 1000
-  let offset = 0
-  let all = []
-  for (let guard = 0; guard < 400; guard++) { // 4,00,000-row safety valve
-    const page = await sbGet(params, { Range: offset + '-' + (offset + PAGE - 1) })
-    all = all.concat(page)
-    if (page.length < PAGE) break
-    offset += PAGE
+  const first = await sbGetPage(params, 0, true)
+  if (first.rows.length < PAGE) return first.rows
+
+  const offsets = []
+  if (first.total != null) { for (let o = PAGE; o < first.total; o += PAGE) offsets.push(o) }
+  const pages = new Array(offsets.length)
+  for (let i = 0; i < offsets.length; i += CONCURRENCY) {
+    const batch = await Promise.all(offsets.slice(i, i + CONCURRENCY).map(o => sbGetPage(params, o, false)))
+    batch.forEach((b, k) => { pages[i + k] = b.rows })
+  }
+  let all = first.rows
+  for (const p of pages) all = all.concat(p || [])
+
+  // Belt and braces: if the count header were ever missing we would have no offsets to
+  // parallelise over, so walk sequentially from wherever we got to. A short read must
+  // never pass silently -- that is exactly the class of bug that produced a wrong
+  // Total QL figure off overall_funnel_daily.
+  if (first.total == null) {
+    let offset = all.length
+    for (let guard = 0; guard < 400; guard++) { // 4,00,000-row safety valve
+      const page = await sbGetPage(params, offset, false)
+      all = all.concat(page.rows)
+      if (page.rows.length < PAGE) break
+      offset += PAGE
+    }
   }
   return all
 }
