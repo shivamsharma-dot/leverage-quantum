@@ -1414,223 +1414,6 @@ export default function OverallDashboard() {
     return null
   }, [compareOpen, compareMovers, compareQlDeltaPct, compareDimWord])
 
-  // ── Deep Analysis shared plumbing ─────────────────────────────────────────────
-  // One generic aggregator, keyed by dimension, used by BOTH Compare's full table
-  // and Trend Analysis' per-bucket breakdown -- so "what does 'corridor' mean" can
-  // never drift between the two features (or from the main summary table's own
-  // grouping above, which this deliberately mirrors field-for-field).
-  const paidOf = useCallback(list => {
-    const s = new Set(); list.forEach(r => { if (r.spend > 0) s.add(r.source) }); return s
-  }, [])
-  const aggReportByDim = useCallback((list, dim, paidSet) => {
-    const keyFn = dim === 'source' ? (r => r.source || 'Unknown')
-      : dim === 'campaign' ? (r => r.campaign || '(no campaign)')
-      : dim === 'corridor' ? (r => classifyCorridor(r.campaign))
-      : dim === 'month' ? (r => r.mk == null ? null : r.mk)
-      : (r => r.date ? dayKey(r.date) : null) // 'day'
-    const labelFn = dim === 'corridor' ? corridorLabel : dim === 'month' ? monthLabel : (k => k)
-    const m = new Map()
-    list.forEach(r => {
-      const k = keyFn(r)
-      if (k == null || k === '') return
-      const e = m.get(k) || {
-        key: k, label: labelFn(k),
-        corridor: dim === 'campaign' ? corridorLabel(classifyCorridor(r.campaign)) : null,
-        leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0,
-        apps:0, offers:0, deposits:0, raus:0, spend:0, paidLeads:0, paidQL:0, paidApps:0,
-      }
-      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
-      e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
-      e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
-      if (paidSet.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
-      m.set(k, e)
-    })
-    return [...m.values()]
-  }, [])
-  // Every additive field summed across a list of aggReportByDim-shaped entries --
-  // used for bucket totals (Trend, month/day dimension) where there is no further
-  // breakdown, just one grand total per period.
-  const sumDeepEntries = list => {
-    const t = { leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, paidLeads:0, paidQL:0, paidApps:0 }
-    list.forEach(e => { Object.keys(t).forEach(k => { t[k] += e[k] || 0 }) })
-    return t
-  }
-
-  const compareJoinable = DEEP_JOINABLE_DIMS.has(compareTableDim)
-
-  // Full, UNCAPPED comparison -- every corridor/source/campaign that appears in
-  // either period, not just the top-5 "what's driving it" movers above. Sorted by
-  // |Δ Total QL| by default so the biggest movements still surface first.
-  const compareTableRows = useMemo(() => {
-    if (!compareOpen || !compareJoinable || compareRows.length === 0 || periodARows.length === 0) return []
-    const a = aggReportByDim(periodARows, compareTableDim, paidOf(periodARows))
-    const b = aggReportByDim(compareRows, compareTableDim, paidOf(compareRows))
-    const bMap = new Map(b.map(x => [x.key, x]))
-    const aKeys = new Set(a.map(x => x.key))
-    const rowsOut = a.map(x => ({ label: x.label, a: x, b: bMap.get(x.key) || null }))
-    // Rows that only exist in period B (e.g. a corridor active last month, silent
-    // this month) still belong in an exhaustive export -- a delta report that only
-    // shows what's still running would hide exactly the campaigns that stopped.
-    b.forEach(x => { if (!aKeys.has(x.key)) rowsOut.push({ label: x.label, a: null, b: x }) })
-    return rowsOut.sort((x, y) => {
-      const dx = Math.abs((x.a?.totalQL || 0) - (x.b?.totalQL || 0))
-      const dy = Math.abs((y.a?.totalQL || 0) - (y.b?.totalQL || 0))
-      return dy - dx
-    })
-  }, [compareOpen, compareJoinable, compareRows, periodARows, compareTableDim, aggReportByDim, paidOf])
-
-  // Day/Month dimension: period A's dates and period B's dates essentially never
-  // coincide (different ranges), so there is nothing real to join row-for-row.
-  // Shown instead as two independent, fully-detailed breakdowns.
-  const compareBreakdownA = useMemo(() => {
-    if (!compareOpen || compareJoinable || periodARows.length === 0) return []
-    return aggReportByDim(periodARows, compareTableDim, paidOf(periodARows)).sort((x, y) => (x.key > y.key ? 1 : -1))
-  }, [compareOpen, compareJoinable, periodARows, compareTableDim, aggReportByDim, paidOf])
-  const compareBreakdownB = useMemo(() => {
-    if (!compareOpen || compareJoinable || compareRows.length === 0) return []
-    return aggReportByDim(compareRows, compareTableDim, paidOf(compareRows)).sort((x, y) => (x.key > y.key ? 1 : -1))
-  }, [compareOpen, compareJoinable, compareRows, compareTableDim, aggReportByDim, paidOf])
-
-  // Exact export rows for Compare -- raw (unrounded) numbers for every metric,
-  // both periods, plus the delta, so the download can never disagree with what a
-  // spreadsheet computes on its own.
-  const compareExportRows = useMemo(() => {
-    const dimLabel = DEEP_DIMENSIONS.find(d => d.key === compareTableDim)?.label || compareTableDim
-    if (compareJoinable) {
-      return compareTableRows.map(r => {
-        const o = { [dimLabel]: r.label }
-        DEEP_METRICS.forEach(m => {
-          const av = r.a ? summaryValue(r.a, m.key) : null
-          const bv = r.b ? summaryValue(r.b, m.key) : null
-          o[m.label + ' (' + currentLabel + ')'] = av
-          o[m.label + ' (' + compareLabel + ')'] = bv
-          o[m.label + ' Δ'] = (av != null && bv != null) ? av - bv : null
-          o[m.label + ' Δ%'] = (av != null && bv != null && bv !== 0) ? ((av - bv) / bv) * 100 : null
-        })
-        return o
-      })
-    }
-    const row = (period, e) => {
-      const o = { Period: period, [dimLabel]: e.label }
-      DEEP_METRICS.forEach(m => { o[m.label] = summaryValue(e, m.key) })
-      return o
-    }
-    return [
-      ...compareBreakdownA.map(e => row(currentLabel, e)),
-      ...compareBreakdownB.map(e => row(compareLabel, e)),
-    ]
-  }, [compareJoinable, compareTableRows, compareBreakdownA, compareBreakdownB, compareTableDim, currentLabel, compareLabel])
-  // Formatted twin of the same rows, for the human-readable CSV/JSON -- exact
-  // numbers live in compareExportRows above (ExportButton's rawData).
-  const compareExportRowsFmt = useMemo(() => compareExportRows.map(r => {
-    const o = {}
-    Object.entries(r).forEach(([k, v]) => {
-      if (typeof v !== 'number') { o[k] = v; return }
-      o[k] = k.endsWith('Δ%') ? (v.toFixed(1) + '%') : (k.includes('Spend') || k.includes('CPL') || k.includes('CPQL') || k.includes('CPA')) ? fmtINR(v) : fmtN(v)
-    })
-    return o
-  }), [compareExportRows])
-
-  // ── Trend Analysis ────────────────────────────────────────────────────────────
-  // month/day dimensions are naturally their own period axis, so there is no
-  // separate granularity to pick and no further breakdown -- one line, exactly
-  // like the page's own byMonth/byDay charts, just with a configurable N.
-  const trendIsSingleSeries = trendDim === 'month' || trendDim === 'day'
-  const trendEffectiveGranularity = trendDim === 'month' ? 'month' : trendDim === 'day' ? 'day' : trendGranularity
-
-  const trendMaxDate = useMemo(() => {
-    let max = null
-    nonDateRows.forEach(r => { if (r.date && (!max || r.date > max)) max = r.date })
-    return max
-  }, [nonDateRows])
-
-  const trendBuckets = useMemo(() => {
-    if (!trendOpen || !trendMaxDate) return []
-    const out = []
-    if (trendEffectiveGranularity === 'month') {
-      const endMk = monthKey(trendMaxDate)
-      for (let i = trendPeriods - 1; i >= 0; i--) {
-        const mk = endMk - i
-        out.push({ key: 'm' + mk, label: monthLabel(mk), from: monthStartDate(mk), to: monthEndDate(mk) })
-      }
-    } else if (trendEffectiveGranularity === 'week') {
-      for (let i = trendPeriods - 1; i >= 0; i--) {
-        const to = new Date(trendMaxDate); to.setDate(to.getDate() - i * 7); to.setHours(23, 59, 59, 999)
-        const from = new Date(to); from.setDate(from.getDate() - 6); from.setHours(0, 0, 0, 0)
-        out.push({ key: 'w' + dayKey(from), label: dayLabel(from) + '–' + dayLabel(to), from, to })
-      }
-    } else { // 'day'
-      for (let i = trendPeriods - 1; i >= 0; i--) {
-        const d = new Date(trendMaxDate); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0)
-        const to = new Date(d); to.setHours(23, 59, 59, 999)
-        out.push({ key: 'd' + dayKey(d), label: dayLabel(d), from: d, to })
-      }
-    }
-    return out
-  }, [trendOpen, trendMaxDate, trendEffectiveGranularity, trendPeriods])
-
-  const trendResult = useMemo(() => {
-    if (!trendOpen || !trendBuckets.length) return { chartRows: [], seriesKeys: [], seriesLabels: {}, exportRows: [], shownCount: 0, totalCount: 0 }
-    const bucketRows = trendBuckets.map(b => nonDateRows.filter(r => r.date && r.date >= b.from && r.date <= b.to))
-
-    if (trendIsSingleSeries) {
-      const chartRows = trendBuckets.map((b, i) => {
-        const t = sumDeepEntries(aggReportByDim(bucketRows[i], 'source', paidOf(bucketRows[i])))
-        return { period: b.label, value: summaryValue(t, trendMetric) }
-      })
-      const exportRows = trendBuckets.map((b, i) => {
-        const t = sumDeepEntries(aggReportByDim(bucketRows[i], 'source', paidOf(bucketRows[i])))
-        const o = { Period: b.label }
-        DEEP_METRICS.forEach(m => { o[m.label] = summaryValue(t, m.key) })
-        return o
-      })
-      return { chartRows, seriesKeys: ['value'], seriesLabels: { value: DEEP_METRICS.find(m => m.key === trendMetric)?.label || trendMetric }, exportRows, shownCount: 1, totalCount: 1 }
-    }
-
-    // Multi-series: rank every dimension value that appears anywhere in the window
-    // by its total volume (Total QL, the same yardstick the page's own "top
-    // campaigns" lists use), chart only the top 8 so the legend stays legible --
-    // but the export below carries every value with no cap, and states the count
-    // that didn't make the chart rather than silently dropping them.
-    const perBucket = bucketRows.map((rs, i) => aggReportByDim(rs, trendDim, paidOf(rs)))
-    const totals = new Map()
-    perBucket.forEach(entries => entries.forEach(e => {
-      const t = totals.get(e.key) || { key:e.key, label:e.label, totalQL:0 }
-      t.totalQL += e.totalQL
-      totals.set(e.key, t)
-    }))
-    const ranked = [...totals.values()].sort((a, b) => b.totalQL - a.totalQL)
-    const shown = ranked.slice(0, 8)
-    const seriesLabels = {}
-    shown.forEach(s => { seriesLabels[s.key] = s.label })
-
-    const chartRows = trendBuckets.map((b, i) => {
-      const row = { period: b.label }
-      const byKey = new Map(perBucket[i].map(e => [e.key, e]))
-      shown.forEach(s => { const e = byKey.get(s.key); row[s.key] = e ? summaryValue(e, trendMetric) : 0 })
-      return row
-    })
-
-    const dimLabel = DEEP_DIMENSIONS.find(d => d.key === trendDim)?.label || trendDim
-    const exportRows = []
-    trendBuckets.forEach((b, i) => {
-      perBucket[i].forEach(e => {
-        const o = { Period: b.label, [dimLabel]: e.label }
-        DEEP_METRICS.forEach(m => { o[m.label] = summaryValue(e, m.key) })
-        exportRows.push(o)
-      })
-    })
-    return { chartRows, seriesKeys: shown.map(s => s.key), seriesLabels, exportRows, shownCount: shown.length, totalCount: ranked.length }
-  }, [trendOpen, trendBuckets, nonDateRows, trendIsSingleSeries, trendDim, trendMetric, aggReportByDim, paidOf])
-
-  const trendExportRowsFmt = useMemo(() => trendResult.exportRows.map(r => {
-    const o = {}
-    Object.entries(r).forEach(([k, v]) => {
-      if (typeof v !== 'number') { o[k] = v; return }
-      o[k] = (k === 'Spend' || k === 'CPL' || k === 'CPQL' || k === 'CPA') ? fmtINR(v) : fmtN(v)
-    })
-    return o
-  }), [trendResult.exportRows])
 
   const funnel = useMemo(() => ([
     { stage:'Leads Generated', count:kpis.leads },
@@ -2102,6 +1885,224 @@ export default function OverallDashboard() {
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
     return rs
   }, [rows, selectedSources, corridorFilter, campaignQuery])
+
+  // ── Deep Analysis shared plumbing ─────────────────────────────────────────────
+  // One generic aggregator, keyed by dimension, used by BOTH Compare's full table
+  // and Trend Analysis' per-bucket breakdown -- so "what does 'corridor' mean" can
+  // never drift between the two features (or from the main summary table's own
+  // grouping above, which this deliberately mirrors field-for-field).
+  const paidOf = useCallback(list => {
+    const s = new Set(); list.forEach(r => { if (r.spend > 0) s.add(r.source) }); return s
+  }, [])
+  const aggReportByDim = useCallback((list, dim, paidSet) => {
+    const keyFn = dim === 'source' ? (r => r.source || 'Unknown')
+      : dim === 'campaign' ? (r => r.campaign || '(no campaign)')
+      : dim === 'corridor' ? (r => classifyCorridor(r.campaign))
+      : dim === 'month' ? (r => r.mk == null ? null : r.mk)
+      : (r => r.date ? dayKey(r.date) : null) // 'day'
+    const labelFn = dim === 'corridor' ? corridorLabel : dim === 'month' ? monthLabel : (k => k)
+    const m = new Map()
+    list.forEach(r => {
+      const k = keyFn(r)
+      if (k == null || k === '') return
+      const e = m.get(k) || {
+        key: k, label: labelFn(k),
+        corridor: dim === 'campaign' ? corridorLabel(classifyCorridor(r.campaign)) : null,
+        leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0,
+        apps:0, offers:0, deposits:0, raus:0, spend:0, paidLeads:0, paidQL:0, paidApps:0,
+      }
+      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
+      e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      if (paidSet.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      m.set(k, e)
+    })
+    return [...m.values()]
+  }, [])
+  // Every additive field summed across a list of aggReportByDim-shaped entries --
+  // used for bucket totals (Trend, month/day dimension) where there is no further
+  // breakdown, just one grand total per period.
+  const sumDeepEntries = list => {
+    const t = { leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, paidLeads:0, paidQL:0, paidApps:0 }
+    list.forEach(e => { Object.keys(t).forEach(k => { t[k] += e[k] || 0 }) })
+    return t
+  }
+
+  const compareJoinable = DEEP_JOINABLE_DIMS.has(compareTableDim)
+
+  // Full, UNCAPPED comparison -- every corridor/source/campaign that appears in
+  // either period, not just the top-5 "what's driving it" movers above. Sorted by
+  // |Δ Total QL| by default so the biggest movements still surface first.
+  const compareTableRows = useMemo(() => {
+    if (!compareOpen || !compareJoinable || compareRows.length === 0 || periodARows.length === 0) return []
+    const a = aggReportByDim(periodARows, compareTableDim, paidOf(periodARows))
+    const b = aggReportByDim(compareRows, compareTableDim, paidOf(compareRows))
+    const bMap = new Map(b.map(x => [x.key, x]))
+    const aKeys = new Set(a.map(x => x.key))
+    const rowsOut = a.map(x => ({ label: x.label, a: x, b: bMap.get(x.key) || null }))
+    // Rows that only exist in period B (e.g. a corridor active last month, silent
+    // this month) still belong in an exhaustive export -- a delta report that only
+    // shows what's still running would hide exactly the campaigns that stopped.
+    b.forEach(x => { if (!aKeys.has(x.key)) rowsOut.push({ label: x.label, a: null, b: x }) })
+    return rowsOut.sort((x, y) => {
+      const dx = Math.abs((x.a?.totalQL || 0) - (x.b?.totalQL || 0))
+      const dy = Math.abs((y.a?.totalQL || 0) - (y.b?.totalQL || 0))
+      return dy - dx
+    })
+  }, [compareOpen, compareJoinable, compareRows, periodARows, compareTableDim, aggReportByDim, paidOf])
+
+  // Day/Month dimension: period A's dates and period B's dates essentially never
+  // coincide (different ranges), so there is nothing real to join row-for-row.
+  // Shown instead as two independent, fully-detailed breakdowns.
+  const compareBreakdownA = useMemo(() => {
+    if (!compareOpen || compareJoinable || periodARows.length === 0) return []
+    return aggReportByDim(periodARows, compareTableDim, paidOf(periodARows)).sort((x, y) => (x.key > y.key ? 1 : -1))
+  }, [compareOpen, compareJoinable, periodARows, compareTableDim, aggReportByDim, paidOf])
+  const compareBreakdownB = useMemo(() => {
+    if (!compareOpen || compareJoinable || compareRows.length === 0) return []
+    return aggReportByDim(compareRows, compareTableDim, paidOf(compareRows)).sort((x, y) => (x.key > y.key ? 1 : -1))
+  }, [compareOpen, compareJoinable, compareRows, compareTableDim, aggReportByDim, paidOf])
+
+  // Exact export rows for Compare -- raw (unrounded) numbers for every metric,
+  // both periods, plus the delta, so the download can never disagree with what a
+  // spreadsheet computes on its own.
+  const compareExportRows = useMemo(() => {
+    const dimLabel = DEEP_DIMENSIONS.find(d => d.key === compareTableDim)?.label || compareTableDim
+    if (compareJoinable) {
+      return compareTableRows.map(r => {
+        const o = { [dimLabel]: r.label }
+        DEEP_METRICS.forEach(m => {
+          const av = r.a ? summaryValue(r.a, m.key) : null
+          const bv = r.b ? summaryValue(r.b, m.key) : null
+          o[m.label + ' (' + currentLabel + ')'] = av
+          o[m.label + ' (' + compareLabel + ')'] = bv
+          o[m.label + ' Δ'] = (av != null && bv != null) ? av - bv : null
+          o[m.label + ' Δ%'] = (av != null && bv != null && bv !== 0) ? ((av - bv) / bv) * 100 : null
+        })
+        return o
+      })
+    }
+    const row = (period, e) => {
+      const o = { Period: period, [dimLabel]: e.label }
+      DEEP_METRICS.forEach(m => { o[m.label] = summaryValue(e, m.key) })
+      return o
+    }
+    return [
+      ...compareBreakdownA.map(e => row(currentLabel, e)),
+      ...compareBreakdownB.map(e => row(compareLabel, e)),
+    ]
+  }, [compareJoinable, compareTableRows, compareBreakdownA, compareBreakdownB, compareTableDim, currentLabel, compareLabel])
+  // Formatted twin of the same rows, for the human-readable CSV/JSON -- exact
+  // numbers live in compareExportRows above (ExportButton's rawData).
+  const compareExportRowsFmt = useMemo(() => compareExportRows.map(r => {
+    const o = {}
+    Object.entries(r).forEach(([k, v]) => {
+      if (typeof v !== 'number') { o[k] = v; return }
+      o[k] = k.endsWith('Δ%') ? (v.toFixed(1) + '%') : (k.includes('Spend') || k.includes('CPL') || k.includes('CPQL') || k.includes('CPA')) ? fmtINR(v) : fmtN(v)
+    })
+    return o
+  }), [compareExportRows])
+
+  // ── Trend Analysis ────────────────────────────────────────────────────────────
+  // month/day dimensions are naturally their own period axis, so there is no
+  // separate granularity to pick and no further breakdown -- one line, exactly
+  // like the page's own byMonth/byDay charts, just with a configurable N.
+  const trendIsSingleSeries = trendDim === 'month' || trendDim === 'day'
+  const trendEffectiveGranularity = trendDim === 'month' ? 'month' : trendDim === 'day' ? 'day' : trendGranularity
+
+  const trendMaxDate = useMemo(() => {
+    let max = null
+    nonDateRows.forEach(r => { if (r.date && (!max || r.date > max)) max = r.date })
+    return max
+  }, [nonDateRows])
+
+  const trendBuckets = useMemo(() => {
+    if (!trendOpen || !trendMaxDate) return []
+    const out = []
+    if (trendEffectiveGranularity === 'month') {
+      const endMk = monthKey(trendMaxDate)
+      for (let i = trendPeriods - 1; i >= 0; i--) {
+        const mk = endMk - i
+        out.push({ key: 'm' + mk, label: monthLabel(mk), from: monthStartDate(mk), to: monthEndDate(mk) })
+      }
+    } else if (trendEffectiveGranularity === 'week') {
+      for (let i = trendPeriods - 1; i >= 0; i--) {
+        const to = new Date(trendMaxDate); to.setDate(to.getDate() - i * 7); to.setHours(23, 59, 59, 999)
+        const from = new Date(to); from.setDate(from.getDate() - 6); from.setHours(0, 0, 0, 0)
+        out.push({ key: 'w' + dayKey(from), label: dayLabel(from) + '–' + dayLabel(to), from, to })
+      }
+    } else { // 'day'
+      for (let i = trendPeriods - 1; i >= 0; i--) {
+        const d = new Date(trendMaxDate); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0)
+        const to = new Date(d); to.setHours(23, 59, 59, 999)
+        out.push({ key: 'd' + dayKey(d), label: dayLabel(d), from: d, to })
+      }
+    }
+    return out
+  }, [trendOpen, trendMaxDate, trendEffectiveGranularity, trendPeriods])
+
+  const trendResult = useMemo(() => {
+    if (!trendOpen || !trendBuckets.length) return { chartRows: [], seriesKeys: [], seriesLabels: {}, exportRows: [], shownCount: 0, totalCount: 0 }
+    const bucketRows = trendBuckets.map(b => nonDateRows.filter(r => r.date && r.date >= b.from && r.date <= b.to))
+
+    if (trendIsSingleSeries) {
+      const chartRows = trendBuckets.map((b, i) => {
+        const t = sumDeepEntries(aggReportByDim(bucketRows[i], 'source', paidOf(bucketRows[i])))
+        return { period: b.label, value: summaryValue(t, trendMetric) }
+      })
+      const exportRows = trendBuckets.map((b, i) => {
+        const t = sumDeepEntries(aggReportByDim(bucketRows[i], 'source', paidOf(bucketRows[i])))
+        const o = { Period: b.label }
+        DEEP_METRICS.forEach(m => { o[m.label] = summaryValue(t, m.key) })
+        return o
+      })
+      return { chartRows, seriesKeys: ['value'], seriesLabels: { value: DEEP_METRICS.find(m => m.key === trendMetric)?.label || trendMetric }, exportRows, shownCount: 1, totalCount: 1 }
+    }
+
+    // Multi-series: rank every dimension value that appears anywhere in the window
+    // by its total volume (Total QL, the same yardstick the page's own "top
+    // campaigns" lists use), chart only the top 8 so the legend stays legible --
+    // but the export below carries every value with no cap, and states the count
+    // that didn't make the chart rather than silently dropping them.
+    const perBucket = bucketRows.map((rs, i) => aggReportByDim(rs, trendDim, paidOf(rs)))
+    const totals = new Map()
+    perBucket.forEach(entries => entries.forEach(e => {
+      const t = totals.get(e.key) || { key:e.key, label:e.label, totalQL:0 }
+      t.totalQL += e.totalQL
+      totals.set(e.key, t)
+    }))
+    const ranked = [...totals.values()].sort((a, b) => b.totalQL - a.totalQL)
+    const shown = ranked.slice(0, 8)
+    const seriesLabels = {}
+    shown.forEach(s => { seriesLabels[s.key] = s.label })
+
+    const chartRows = trendBuckets.map((b, i) => {
+      const row = { period: b.label }
+      const byKey = new Map(perBucket[i].map(e => [e.key, e]))
+      shown.forEach(s => { const e = byKey.get(s.key); row[s.key] = e ? summaryValue(e, trendMetric) : 0 })
+      return row
+    })
+
+    const dimLabel = DEEP_DIMENSIONS.find(d => d.key === trendDim)?.label || trendDim
+    const exportRows = []
+    trendBuckets.forEach((b, i) => {
+      perBucket[i].forEach(e => {
+        const o = { Period: b.label, [dimLabel]: e.label }
+        DEEP_METRICS.forEach(m => { o[m.label] = summaryValue(e, m.key) })
+        exportRows.push(o)
+      })
+    })
+    return { chartRows, seriesKeys: shown.map(s => s.key), seriesLabels, exportRows, shownCount: shown.length, totalCount: ranked.length }
+  }, [trendOpen, trendBuckets, nonDateRows, trendIsSingleSeries, trendDim, trendMetric, aggReportByDim, paidOf])
+
+  const trendExportRowsFmt = useMemo(() => trendResult.exportRows.map(r => {
+    const o = {}
+    Object.entries(r).forEach(([k, v]) => {
+      if (typeof v !== 'number') { o[k] = v; return }
+      o[k] = (k === 'Spend' || k === 'CPL' || k === 'CPQL' || k === 'CPA') ? fmtINR(v) : fmtN(v)
+    })
+    return o
+  }), [trendResult.exportRows])
 
   // Only closed days count. Today is still filling up, and half a day sitting
   // next to a full one reads as a collapse that never happened.
