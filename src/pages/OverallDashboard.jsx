@@ -222,6 +222,20 @@ function SourceMultiSelect({ options, selected, onChange, label, minWidth = 120 
   )
 }
 
+// Delays adopting a fast-changing value (a search box keystroke) until it's been
+// stable for `delay`ms. The INPUT stays bound to the raw value (so typing itself
+// is instant/responsive) -- only the expensive row-filtering that reacts to it
+// (iterating the full dataset) is deferred, so it doesn't run on every keystroke
+// while someone is mid-word.
+function useDebouncedValue(value, delay) {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return debounced
+}
+
 // Campaign search — free-text filter with a ranked autocomplete list (top campaigns
 // by leads shown by default, narrowed by substring match as the user types) since
 // campaign name is how people actually look things up on this page.
@@ -796,6 +810,12 @@ export default function OverallDashboard() {
   const sourceLabel = sourceIsAll ? 'All' : selectedSources.length === 1 ? selectedSources[0] : selectedSources.length + ' selected'
   const [corridorFilter, setCorridorFilter] = useState('All')
   const [campaignQuery, setCampaignQuery] = useState('')
+  // The search BOX stays bound to campaignQuery directly (instant keystrokes, instant
+  // suggestion list). Every row-filtering memo below (filtered/prevFiltered/nonDateRows
+  // -- each iterating the full, possibly 100k+-row dataset) reads the DEBOUNCED value
+  // instead, so a full re-filter only runs once typing actually pauses, not per
+  // keystroke -- this is what was making campaign search feel slow while typing.
+  const campaignQueryDebounced = useDebouncedValue(campaignQuery, 250)
   const [showInfo, setShowInfo] = useState(false)
   const [grpBy, setGrpBy] = useState('source')
 
@@ -1067,10 +1087,10 @@ export default function OverallDashboard() {
   const filtered = useMemo(() => {
     let rs = sourceIsAll ? dateFilteredRows : dateFilteredRows.filter(matchesSource)
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
-    const q = campaignQuery.trim().toLowerCase()
+    const q = campaignQueryDebounced.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
     return rs
-  }, [dateFilteredRows, selectedSources, corridorFilter, campaignQuery])
+  }, [dateFilteredRows, selectedSources, corridorFilter, campaignQueryDebounced])
 
   const sumKpis = list => {
     const sum = k => list.reduce((t, r) => t + r[k], 0)
@@ -1144,10 +1164,10 @@ export default function OverallDashboard() {
     let rs = prevWindow.type === 'month' ? rows.filter(r => r.mk === prevWindow.mk) : rows.filter(r => r.date && r.date >= prevWindow.from && r.date <= prevWindow.to)
     if (!sourceIsAll) rs = rs.filter(matchesSource)
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
-    const q = campaignQuery.trim().toLowerCase()
+    const q = campaignQueryDebounced.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
     return rs
-  }, [rows, prevWindow, selectedSources, corridorFilter, campaignQuery])
+  }, [rows, prevWindow, selectedSources, corridorFilter, campaignQueryDebounced])
 
   const prevKpis = useMemo(() => sumKpis(prevFiltered), [prevFiltered])
   // Same paid-only basis as the current period -- otherwise the delta arrows would be
@@ -1588,7 +1608,7 @@ export default function OverallDashboard() {
     return byMonth.map(m => {
       const full = filtered.filter(r => r.mk === m.mk)
       return {
-        label:m.label, leads:m.leads, queued:m.queued, humanQL:m.humanQL, futworkAiQl:m.futworkAiQl, superbotAiQl:m.superbotAiQl, totalQL:m.totalQL,
+        label:m.label, mk:m.mk, leads:m.leads, queued:m.queued, humanQL:m.humanQL, futworkAiQl:m.futworkAiQl, superbotAiQl:m.superbotAiQl, totalQL:m.totalQL,
         apps: full.reduce((t, r) => t + r.apps, 0), offers: full.reduce((t, r) => t + r.offers, 0),
         deposits:m.deposits, raus: full.reduce((t, r) => t + r.raus, 0),
         spend: full.reduce((t, r) => t + r.spend, 0),
@@ -1649,8 +1669,12 @@ export default function OverallDashboard() {
     if (q) rs = rs.filter(g => g.label.toLowerCase().includes(q))
     return [...rs].sort((a, b) => {
       if (sortKey === 'label') {
-        // Day view sorts chronologically by the underlying date key, not the display label
-        const cmp = (a.dateKey && b.dateKey) ? a.dateKey.localeCompare(b.dateKey) : a.label.localeCompare(b.label)
+        // Day/Month views sort chronologically by the underlying date key / month key --
+        // NOT the display label. "Apr'26"/"Aug'26"/"Mar'26" alphabetize to a scrambled
+        // order (Apr, Aug, Dec, Feb, Jan...) that has nothing to do with real time.
+        const cmp = (a.dateKey && b.dateKey) ? a.dateKey.localeCompare(b.dateKey)
+          : (a.mk != null && b.mk != null) ? a.mk - b.mk
+          : a.label.localeCompare(b.label)
         return sortDir === 'asc' ? cmp : -cmp
       }
       if (sortKey === 'corridor') {
@@ -1889,10 +1913,10 @@ export default function OverallDashboard() {
     let rs = rows
     if (!sourceIsAll) rs = rs.filter(matchesSource)
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
-    const q = campaignQuery.trim().toLowerCase()
+    const q = campaignQueryDebounced.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
     return rs
-  }, [rows, selectedSources, corridorFilter, campaignQuery])
+  }, [rows, selectedSources, corridorFilter, campaignQueryDebounced])
 
   // ── Deep Analysis shared plumbing ─────────────────────────────────────────────
   // One generic aggregator, keyed by dimension, used by BOTH Compare's full table
@@ -1944,13 +1968,18 @@ export default function OverallDashboard() {
   const deepCorridorSet = useMemo(() => new Set(deepCorridorFilter), [deepCorridorFilter])
   const deepSourceSet = useMemo(() => new Set(deepSourceFilter), [deepSourceFilter])
   const deepFilterActive = !deepCorridorIsAll || !deepSourceIsAll || deepCampaignQuery.trim() !== ''
+  // The Campaign search box binds to the raw state (instant typing + instant
+  // suggestions); matchesDeepFilter -- which re-filters every row of Compare/Trend's
+  // dataset -- waits for the debounced value, so the visible lag while typing/picking
+  // a campaign (which happens on every keystroke otherwise) is gone.
+  const deepCampaignQueryDebounced = useDebouncedValue(deepCampaignQuery, 250)
   const matchesDeepFilter = useCallback(r => {
     if (!deepCorridorIsAll && !deepCorridorSet.has(corridorLabel(classifyCorridor(r.campaign)))) return false
     if (!deepSourceIsAll && !deepSourceSet.has(r.source)) return false
-    const q = deepCampaignQuery.trim().toLowerCase()
+    const q = deepCampaignQueryDebounced.trim().toLowerCase()
     if (q && !(r.campaign || '').toLowerCase().includes(q)) return false
     return true
-  }, [deepCorridorIsAll, deepCorridorSet, deepSourceIsAll, deepSourceSet, deepCampaignQuery])
+  }, [deepCorridorIsAll, deepCorridorSet, deepSourceIsAll, deepSourceSet, deepCampaignQueryDebounced])
   const clearDeepFilters = () => { setDeepCorridorFilter(['All']); setDeepSourceFilter(['All']); setDeepCampaignQuery('') }
   // Independent typeahead state for the deep-filter's own Campaign search box --
   // separate from the page's own campaignQuery/campaignSuggestions so the two
@@ -2101,7 +2130,13 @@ export default function OverallDashboard() {
         DEEP_METRICS.forEach(m => { o[m.label] = summaryValue(t, m.key) })
         return o
       })
-      return { chartRows, seriesKeys: ['value'], seriesLabels: { value: DEEP_METRICS.find(m => m.key === trendMetric)?.label || trendMetric }, exportRows, shownCount: 1, totalCount: 1 }
+      // periodIndexes: the bucket's own chronological position (0 = oldest), kept
+      // OUT of the exported row object itself (it isn't a real column) so it can
+      // drive a real chronological sort on "Period" -- clicking that header can't
+      // just compare the display labels ("Apr'26"/"Aug'26"/"Mar'26" alphabetize to
+      // Apr, Aug, Dec, Feb... which is not real time order).
+      const periodIndexes = trendBuckets.map((b, i) => i)
+      return { chartRows, seriesKeys: ['value'], seriesLabels: { value: DEEP_METRICS.find(m => m.key === trendMetric)?.label || trendMetric }, exportRows, periodIndexes, shownCount: 1, totalCount: 1 }
     }
 
     // Multi-series: rank every dimension value that appears anywhere in the window
@@ -2130,14 +2165,16 @@ export default function OverallDashboard() {
 
     const dimLabel = DEEP_DIMENSIONS.find(d => d.key === trendDim)?.label || trendDim
     const exportRows = []
+    const periodIndexes = []
     trendBuckets.forEach((b, i) => {
       perBucket[i].forEach(e => {
         const o = { Period: b.label, [dimLabel]: e.label }
         DEEP_METRICS.forEach(m => { o[m.label] = summaryValue(e, m.key) })
         exportRows.push(o)
+        periodIndexes.push(i)
       })
     })
-    return { chartRows, seriesKeys: shown.map(s => s.key), seriesLabels, exportRows, shownCount: shown.length, totalCount: ranked.length }
+    return { chartRows, seriesKeys: shown.map(s => s.key), seriesLabels, exportRows, periodIndexes, shownCount: shown.length, totalCount: ranked.length }
   }, [trendOpen, trendBuckets, trendBaseRows, trendIsSingleSeries, trendDim, trendMetric, aggReportByDim, paidOf])
 
   const trendExportRowsFmt = useMemo(() => trendResult.exportRows.map(r => {
@@ -2148,6 +2185,34 @@ export default function OverallDashboard() {
     })
     return o
   }), [trendResult.exportRows])
+
+  // Sortable on-screen table -- clicking a header sorts the raw (unrounded) values,
+  // never the formatted display strings. "Period" sorts by periodIndexes (the
+  // bucket's real chronological position), not by comparing labels like "Apr'26" --
+  // string comparison would alphabetize months into a scrambled order.
+  const [trendSortKey, setTrendSortKey] = useState('Period')
+  const [trendSortDir, setTrendSortDir] = useState('asc')
+  // Column 2 is a different dimension name depending on trendDim (Corridor vs Source vs
+  // Campaign) -- reset to Period rather than sorting by a column that no longer exists.
+  useEffect(() => { setTrendSortKey('Period'); setTrendSortDir('asc') }, [trendDim])
+  const handleTrendSort = key => {
+    if (trendSortKey === key) setTrendSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setTrendSortKey(key); setTrendSortDir(key === 'Period' ? 'asc' : 'desc') }
+  }
+  const trendTableRows = useMemo(() => {
+    const rows = trendResult.exportRows.map((raw, i) => ({ raw, fmt: trendExportRowsFmt[i], periodIndex: trendResult.periodIndexes[i] }))
+    return rows.sort((a, b) => {
+      let cmp
+      if (trendSortKey === 'Period') cmp = a.periodIndex - b.periodIndex
+      else {
+        const av = a.raw[trendSortKey], bv = b.raw[trendSortKey]
+        cmp = typeof av === 'number' && typeof bv === 'number'
+          ? (av == null ? -Infinity : av) - (bv == null ? -Infinity : bv)
+          : String(av ?? '').localeCompare(String(bv ?? ''))
+      }
+      return trendSortDir === 'asc' ? cmp : -cmp
+    })
+  }, [trendResult.exportRows, trendResult.periodIndexes, trendExportRowsFmt, trendSortKey, trendSortDir])
 
   // Only closed days count. Today is still filling up, and half a day sitting
   // next to a full one reads as a collapse that never happened.
@@ -3108,7 +3173,7 @@ export default function OverallDashboard() {
           {compareOpen && (
             <div onClick={e => { if (e.target === e.currentTarget) setCompareOpen(false) }}
               style={{ position:'fixed', inset:0, zIndex:600, background:'rgba(15,23,42,0.45)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
-              <div style={{ background:'var(--card)', borderRadius:18, width:'min(720px, 100%)', maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
+              <div style={{ background:'var(--card)', borderRadius:18, width:'min(1120px, 96vw)', maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
                 <div style={{ padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div>
                     <div style={{ fontSize:16.5, fontWeight:800, color:C.text }}>Compare periods</div>
@@ -3373,7 +3438,7 @@ export default function OverallDashboard() {
           {trendOpen && (
             <div onClick={e => { if (e.target === e.currentTarget) setTrendOpen(false) }}
               style={{ position:'fixed', inset:0, zIndex:600, background:'rgba(15,23,42,0.45)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
-              <div style={{ background:'var(--card)', borderRadius:18, width:'min(880px, 100%)', maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
+              <div style={{ background:'var(--card)', borderRadius:18, width:'min(1320px, 96vw)', maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
                 <div style={{ padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div>
                     <div style={{ fontSize:16.5, fontWeight:800, color:C.text }}>Trend Analysis</div>
@@ -3461,22 +3526,31 @@ export default function OverallDashboard() {
                         </ResponsiveContainer>
                       </div>
 
-                      {/* Full data table -- every bucket/value pair, all metrics */}
-                      <div style={{ maxHeight:280, overflowY:'auto', border:`0.5px solid ${C.border}`, borderRadius:10, marginBottom:12 }}>
+                      {/* Full data table -- every bucket/value pair, all metrics. Every
+                          header is click-to-sort; Period sorts chronologically off the
+                          bucket's real position, never off the display label string. */}
+                      <div style={{ maxHeight:340, overflowY:'auto', border:`0.5px solid ${C.border}`, borderRadius:10, marginBottom:12 }}>
                         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                           <thead style={{ position:'sticky', top:0, background:'var(--card)', zIndex:1 }}>
                             <tr>
-                              {Object.keys(trendExportRowsFmt[0] || { Period:'' }).map((h, i) => (
-                                <th key={h} style={{ textAlign: i < (trendIsSingleSeries ? 1 : 2) ? 'left' : 'right', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:10.5, textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
-                              ))}
+                              {Object.keys(trendExportRowsFmt[0] || { Period:'' }).map((h, i) => {
+                                const leftAlign = i < (trendIsSingleSeries ? 1 : 2)
+                                const active = trendSortKey === h
+                                return (
+                                  <th key={h} onClick={() => handleTrendSort(h)}
+                                    style={{ textAlign: leftAlign ? 'left' : 'right', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color: active ? C.navy : C.muted, fontWeight:700, fontSize:10.5, textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
+                                    {h}{active ? (trendSortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                                  </th>
+                                )
+                              })}
                             </tr>
                           </thead>
                           <tbody>
-                            {trendExportRowsFmt.length === 0 ? (
+                            {trendTableRows.length === 0 ? (
                               <tr><td colSpan={12} style={{ padding:'12px 10px', color:C.muted }}>No rows.</td></tr>
-                            ) : trendExportRowsFmt.map((r, i) => (
+                            ) : trendTableRows.map((row, i) => (
                               <tr key={i} style={{ background: i % 2 ? 'var(--bg2)' : 'transparent' }}>
-                                {Object.entries(r).map(([k, v], j) => (
+                                {Object.entries(row.fmt).map(([k, v], j) => (
                                   <td key={k} style={{ padding:'6px 10px', textAlign: j < (trendIsSingleSeries ? 1 : 2) ? 'left' : 'right', fontWeight: j < (trendIsSingleSeries ? 1 : 2) ? 600 : 400, color: j < (trendIsSingleSeries ? 1 : 2) ? C.text : C.sub, whiteSpace:'nowrap' }}>{v}</td>
                                 ))}
                               </tr>
