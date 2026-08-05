@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import Sidebar, { PAGE_LIST, NAV } from '../components/Sidebar'
 import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole } from '../hooks/useAuth'
+// The Overall dashboard's "Data source: BigQuery (beta)" switch. Key, event name and
+// both accessors live in the lib so this page and OverallDashboard cannot drift apart.
+import { readBqBeta, writeBqBeta } from '../lib/overallBqCache'
 import { getActivityLog } from '../components/ActivityLogger.js'
 import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
@@ -546,6 +549,9 @@ function buildReportPreviewHTML(reportType, senderName) {
 export default function SettingsPage() {
   const { user } = useAuth()
   const userIsAdmin = user?.role === 'admin'
+  // Per-device, like every other lq_* preference. writeBqBeta() also fires the same-tab
+  // event, so an Overall tab already open picks the change up without a reload.
+  const [bqBeta, setBqBeta] = useState(readBqBeta)
   const [activeTab, setActiveTab] = useState(userIsAdmin ? 'data' : 'profile')
   const [copied, setCopied] = useState(false)
   const location = useLocation()
@@ -1948,6 +1954,27 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <Button onClick={saveSrFee}>{srFeeSaved ? 'Saved' : 'Save'}</Button>
                 </div>
                 <p className={styles.note}>Current: ₹{parseInt(srFeeInput || 350000).toLocaleString('en-IN')} per RAU</p>
+              </div>
+
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>Data source: BigQuery (beta)</h3>
+                <p className={styles.cardDesc}>
+                  Off by default. With this on, the <b>Overall</b> dashboard stops downloading the
+                  whole "Overall PM" sheet and parsing all 2,05,720 rows in the browser, and instead
+                  reads the <code>overall_bq_daily</code> cache of the BigQuery saved query
+                  "Overall" &mdash; filtered on the server down to just the date range and Sources
+                  selected on the page. Same 16 columns and the same numbers: what changes is the
+                  delivery, not the data. Admin only, saved per device, and it affects no page other
+                  than Overall.
+                </p>
+                <div className={styles.reportsToggleRow}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>Read Overall from the BigQuery cache</div>
+                    <div style={{ fontSize: 11.5, color: '#94A3B8' }}>Turning it off restores the sheet path immediately, with no reload. The cache is written by the Overall BigQuery Cache Sync workflow and is entirely separate from overall_funnel_daily, which Ask AI and the agents read.</div>
+                  </div>
+                  <input type="checkbox" className={styles.premToggle} checked={bqBeta}
+                    onChange={e => { setBqBeta(e.target.checked); writeBqBeta(e.target.checked) }} />
+                </div>
               </div>
 
               <div className={styles.card}>
