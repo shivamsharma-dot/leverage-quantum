@@ -554,6 +554,37 @@ function summaryColor(key) {
 }
 const SUMMARY_BOLD_COLS = ['leads', 'spend', 'raus', 'qlPct', 'appPct', 'depositPct', 'estSrRevenue', 'actSrRevenue', 'roas', 'estimatedRoas']
 
+// Shared metric list for Deep Analysis (Compare's full table + Trend Analysis) --
+// one definition so the two features can never disagree on what "CPQL" means or
+// how it's formatted. fmt(null) must read '--', matching summaryFmt's own null rule.
+const DEEP_METRICS = [
+  { key:'spend', label:'Spend', fmt:v => v == null ? '—' : fmtINR(v) },
+  { key:'leads', label:'Leads', fmt:v => v == null ? '—' : fmtN(v) },
+  { key:'queued', label:'Total Queued', fmt:v => v == null ? '—' : fmtN(v) },
+  { key:'totalQL', label:'Total QL', fmt:v => v == null ? '—' : fmtN(v) },
+  { key:'apps', label:'Applications', fmt:v => v == null ? '—' : fmtN(v) },
+  { key:'offers', label:'Offers', fmt:v => v == null ? '—' : fmtN(v) },
+  { key:'deposits', label:'Deposits', fmt:v => v == null ? '—' : fmtN(v) },
+  { key:'raus', label:'Actual RAUs', fmt:v => v == null ? '—' : fmtN(v) },
+  { key:'cpl', label:'CPL', fmt:v => v == null ? '—' : fmtINR(v) },
+  { key:'cpql', label:'CPQL', fmt:v => v == null ? '—' : fmtINR(v) },
+  { key:'cpa', label:'CPA', fmt:v => v == null ? '—' : fmtINR(v) },
+]
+const DEEP_DIMENSIONS = [
+  { key:'corridor', label:'Corridor' },
+  { key:'source', label:'Source' },
+  { key:'campaign', label:'Campaign' },
+  { key:'month', label:'Month' },
+  { key:'day', label:'Day' },
+]
+// true for the three dimensions whose values are stable names that recur across any
+// two periods (a campaign/source/corridor named the same thing this month and last
+// month IS the same thing) -- these can be joined row-for-row into a single delta
+// table. Day and Month keys never recur across two genuinely different ranges, so
+// joining them would show every single row as "new" -- those two are shown as two
+// separate breakdowns instead (see the Compare modal's compareJoinable branch).
+const DEEP_JOINABLE_DIMS = new Set(['source', 'campaign', 'corridor'])
+
 // Show/hide + reorder popover for the summary table's columns.
 function ColumnsPicker({ order, visible, onToggle, onMove, onClose, onReset }) {
   return (
@@ -784,9 +815,27 @@ export default function OverallDashboard() {
   // comparison instead of blank fields.
   const [compareCustomFromA, setCompareCustomFromA] = useState('')
   const [compareCustomToA, setCompareCustomToA] = useState('')
-  const [compareGroupBy, setCompareGroupBy] = useState('corridor') // 'corridor' | 'source' | 'campaign'
+  const [compareGroupBy, setCompareGroupBy] = useState('corridor') // 'corridor' | 'source' | 'campaign' -- top-5 "what's driving it" movers only
+  // The full, uncapped breakdown table below the movers strip supports 2 more
+  // dimensions (Month/Day) that a joined "mover" delta can't meaningfully apply to
+  // (see DEEP_JOINABLE_DIMS) -- kept as its own state so picking Month/Day here can
+  // never feed the wrong keying into compareMovers' groupByDimRaw above.
+  const [compareTableDim, setCompareTableDim] = useState('corridor')
   const [showComparePickerA, setShowComparePickerA] = useState(false)
   const [showComparePickerB, setShowComparePickerB] = useState(false)
+
+  // Trend Analysis — a genuinely new capability alongside Compare: instead of two
+  // points (A vs B), show the trajectory across N trailing periods. Same 5
+  // dimensions as Compare (corridor/source/campaign/month/day). For month/day the
+  // dimension IS the period axis (one line, no further breakdown); for
+  // source/campaign/corridor the period axis is a separate day/week/month
+  // granularity, broken down into one line per dimension value (top 8 by volume
+  // charted, every value still in the export).
+  const [trendOpen, setTrendOpen] = useState(false)
+  const [trendDim, setTrendDim] = useState('corridor')
+  const [trendGranularity, setTrendGranularity] = useState('month') // 'day' | 'week' | 'month'
+  const [trendPeriods, setTrendPeriods] = useState(6)
+  const [trendMetric, setTrendMetric] = useState('totalQL')
 
   // Summary table customization — search, sortable columns, show/hide + reorder columns
   // (persisted), row limit. Mirrors the Meta Ads Creatives table's "customizable" pattern.
@@ -1364,6 +1413,224 @@ export default function OverallDashboard() {
     }
     return null
   }, [compareOpen, compareMovers, compareQlDeltaPct, compareDimWord])
+
+  // ── Deep Analysis shared plumbing ─────────────────────────────────────────────
+  // One generic aggregator, keyed by dimension, used by BOTH Compare's full table
+  // and Trend Analysis' per-bucket breakdown -- so "what does 'corridor' mean" can
+  // never drift between the two features (or from the main summary table's own
+  // grouping above, which this deliberately mirrors field-for-field).
+  const paidOf = useCallback(list => {
+    const s = new Set(); list.forEach(r => { if (r.spend > 0) s.add(r.source) }); return s
+  }, [])
+  const aggReportByDim = useCallback((list, dim, paidSet) => {
+    const keyFn = dim === 'source' ? (r => r.source || 'Unknown')
+      : dim === 'campaign' ? (r => r.campaign || '(no campaign)')
+      : dim === 'corridor' ? (r => classifyCorridor(r.campaign))
+      : dim === 'month' ? (r => r.mk == null ? null : r.mk)
+      : (r => r.date ? dayKey(r.date) : null) // 'day'
+    const labelFn = dim === 'corridor' ? corridorLabel : dim === 'month' ? monthLabel : (k => k)
+    const m = new Map()
+    list.forEach(r => {
+      const k = keyFn(r)
+      if (k == null || k === '') return
+      const e = m.get(k) || {
+        key: k, label: labelFn(k),
+        corridor: dim === 'campaign' ? corridorLabel(classifyCorridor(r.campaign)) : null,
+        leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0,
+        apps:0, offers:0, deposits:0, raus:0, spend:0, paidLeads:0, paidQL:0, paidApps:0,
+      }
+      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
+      e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      if (paidSet.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      m.set(k, e)
+    })
+    return [...m.values()]
+  }, [])
+  // Every additive field summed across a list of aggReportByDim-shaped entries --
+  // used for bucket totals (Trend, month/day dimension) where there is no further
+  // breakdown, just one grand total per period.
+  const sumDeepEntries = list => {
+    const t = { leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, paidLeads:0, paidQL:0, paidApps:0 }
+    list.forEach(e => { Object.keys(t).forEach(k => { t[k] += e[k] || 0 }) })
+    return t
+  }
+
+  const compareJoinable = DEEP_JOINABLE_DIMS.has(compareTableDim)
+
+  // Full, UNCAPPED comparison -- every corridor/source/campaign that appears in
+  // either period, not just the top-5 "what's driving it" movers above. Sorted by
+  // |Δ Total QL| by default so the biggest movements still surface first.
+  const compareTableRows = useMemo(() => {
+    if (!compareOpen || !compareJoinable || compareRows.length === 0 || periodARows.length === 0) return []
+    const a = aggReportByDim(periodARows, compareTableDim, paidOf(periodARows))
+    const b = aggReportByDim(compareRows, compareTableDim, paidOf(compareRows))
+    const bMap = new Map(b.map(x => [x.key, x]))
+    const aKeys = new Set(a.map(x => x.key))
+    const rowsOut = a.map(x => ({ label: x.label, a: x, b: bMap.get(x.key) || null }))
+    // Rows that only exist in period B (e.g. a corridor active last month, silent
+    // this month) still belong in an exhaustive export -- a delta report that only
+    // shows what's still running would hide exactly the campaigns that stopped.
+    b.forEach(x => { if (!aKeys.has(x.key)) rowsOut.push({ label: x.label, a: null, b: x }) })
+    return rowsOut.sort((x, y) => {
+      const dx = Math.abs((x.a?.totalQL || 0) - (x.b?.totalQL || 0))
+      const dy = Math.abs((y.a?.totalQL || 0) - (y.b?.totalQL || 0))
+      return dy - dx
+    })
+  }, [compareOpen, compareJoinable, compareRows, periodARows, compareTableDim, aggReportByDim, paidOf])
+
+  // Day/Month dimension: period A's dates and period B's dates essentially never
+  // coincide (different ranges), so there is nothing real to join row-for-row.
+  // Shown instead as two independent, fully-detailed breakdowns.
+  const compareBreakdownA = useMemo(() => {
+    if (!compareOpen || compareJoinable || periodARows.length === 0) return []
+    return aggReportByDim(periodARows, compareTableDim, paidOf(periodARows)).sort((x, y) => (x.key > y.key ? 1 : -1))
+  }, [compareOpen, compareJoinable, periodARows, compareTableDim, aggReportByDim, paidOf])
+  const compareBreakdownB = useMemo(() => {
+    if (!compareOpen || compareJoinable || compareRows.length === 0) return []
+    return aggReportByDim(compareRows, compareTableDim, paidOf(compareRows)).sort((x, y) => (x.key > y.key ? 1 : -1))
+  }, [compareOpen, compareJoinable, compareRows, compareTableDim, aggReportByDim, paidOf])
+
+  // Exact export rows for Compare -- raw (unrounded) numbers for every metric,
+  // both periods, plus the delta, so the download can never disagree with what a
+  // spreadsheet computes on its own.
+  const compareExportRows = useMemo(() => {
+    const dimLabel = DEEP_DIMENSIONS.find(d => d.key === compareTableDim)?.label || compareTableDim
+    if (compareJoinable) {
+      return compareTableRows.map(r => {
+        const o = { [dimLabel]: r.label }
+        DEEP_METRICS.forEach(m => {
+          const av = r.a ? summaryValue(r.a, m.key) : null
+          const bv = r.b ? summaryValue(r.b, m.key) : null
+          o[m.label + ' (' + currentLabel + ')'] = av
+          o[m.label + ' (' + compareLabel + ')'] = bv
+          o[m.label + ' Δ'] = (av != null && bv != null) ? av - bv : null
+          o[m.label + ' Δ%'] = (av != null && bv != null && bv !== 0) ? ((av - bv) / bv) * 100 : null
+        })
+        return o
+      })
+    }
+    const row = (period, e) => {
+      const o = { Period: period, [dimLabel]: e.label }
+      DEEP_METRICS.forEach(m => { o[m.label] = summaryValue(e, m.key) })
+      return o
+    }
+    return [
+      ...compareBreakdownA.map(e => row(currentLabel, e)),
+      ...compareBreakdownB.map(e => row(compareLabel, e)),
+    ]
+  }, [compareJoinable, compareTableRows, compareBreakdownA, compareBreakdownB, compareTableDim, currentLabel, compareLabel])
+  // Formatted twin of the same rows, for the human-readable CSV/JSON -- exact
+  // numbers live in compareExportRows above (ExportButton's rawData).
+  const compareExportRowsFmt = useMemo(() => compareExportRows.map(r => {
+    const o = {}
+    Object.entries(r).forEach(([k, v]) => {
+      if (typeof v !== 'number') { o[k] = v; return }
+      o[k] = k.endsWith('Δ%') ? (v.toFixed(1) + '%') : (k.includes('Spend') || k.includes('CPL') || k.includes('CPQL') || k.includes('CPA')) ? fmtINR(v) : fmtN(v)
+    })
+    return o
+  }), [compareExportRows])
+
+  // ── Trend Analysis ────────────────────────────────────────────────────────────
+  // month/day dimensions are naturally their own period axis, so there is no
+  // separate granularity to pick and no further breakdown -- one line, exactly
+  // like the page's own byMonth/byDay charts, just with a configurable N.
+  const trendIsSingleSeries = trendDim === 'month' || trendDim === 'day'
+  const trendEffectiveGranularity = trendDim === 'month' ? 'month' : trendDim === 'day' ? 'day' : trendGranularity
+
+  const trendMaxDate = useMemo(() => {
+    let max = null
+    nonDateRows.forEach(r => { if (r.date && (!max || r.date > max)) max = r.date })
+    return max
+  }, [nonDateRows])
+
+  const trendBuckets = useMemo(() => {
+    if (!trendOpen || !trendMaxDate) return []
+    const out = []
+    if (trendEffectiveGranularity === 'month') {
+      const endMk = monthKey(trendMaxDate)
+      for (let i = trendPeriods - 1; i >= 0; i--) {
+        const mk = endMk - i
+        out.push({ key: 'm' + mk, label: monthLabel(mk), from: monthStartDate(mk), to: monthEndDate(mk) })
+      }
+    } else if (trendEffectiveGranularity === 'week') {
+      for (let i = trendPeriods - 1; i >= 0; i--) {
+        const to = new Date(trendMaxDate); to.setDate(to.getDate() - i * 7); to.setHours(23, 59, 59, 999)
+        const from = new Date(to); from.setDate(from.getDate() - 6); from.setHours(0, 0, 0, 0)
+        out.push({ key: 'w' + dayKey(from), label: dayLabel(from) + '–' + dayLabel(to), from, to })
+      }
+    } else { // 'day'
+      for (let i = trendPeriods - 1; i >= 0; i--) {
+        const d = new Date(trendMaxDate); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0)
+        const to = new Date(d); to.setHours(23, 59, 59, 999)
+        out.push({ key: 'd' + dayKey(d), label: dayLabel(d), from: d, to })
+      }
+    }
+    return out
+  }, [trendOpen, trendMaxDate, trendEffectiveGranularity, trendPeriods])
+
+  const trendResult = useMemo(() => {
+    if (!trendOpen || !trendBuckets.length) return { chartRows: [], seriesKeys: [], seriesLabels: {}, exportRows: [], shownCount: 0, totalCount: 0 }
+    const bucketRows = trendBuckets.map(b => nonDateRows.filter(r => r.date && r.date >= b.from && r.date <= b.to))
+
+    if (trendIsSingleSeries) {
+      const chartRows = trendBuckets.map((b, i) => {
+        const t = sumDeepEntries(aggReportByDim(bucketRows[i], 'source', paidOf(bucketRows[i])))
+        return { period: b.label, value: summaryValue(t, trendMetric) }
+      })
+      const exportRows = trendBuckets.map((b, i) => {
+        const t = sumDeepEntries(aggReportByDim(bucketRows[i], 'source', paidOf(bucketRows[i])))
+        const o = { Period: b.label }
+        DEEP_METRICS.forEach(m => { o[m.label] = summaryValue(t, m.key) })
+        return o
+      })
+      return { chartRows, seriesKeys: ['value'], seriesLabels: { value: DEEP_METRICS.find(m => m.key === trendMetric)?.label || trendMetric }, exportRows, shownCount: 1, totalCount: 1 }
+    }
+
+    // Multi-series: rank every dimension value that appears anywhere in the window
+    // by its total volume (Total QL, the same yardstick the page's own "top
+    // campaigns" lists use), chart only the top 8 so the legend stays legible --
+    // but the export below carries every value with no cap, and states the count
+    // that didn't make the chart rather than silently dropping them.
+    const perBucket = bucketRows.map((rs, i) => aggReportByDim(rs, trendDim, paidOf(rs)))
+    const totals = new Map()
+    perBucket.forEach(entries => entries.forEach(e => {
+      const t = totals.get(e.key) || { key:e.key, label:e.label, totalQL:0 }
+      t.totalQL += e.totalQL
+      totals.set(e.key, t)
+    }))
+    const ranked = [...totals.values()].sort((a, b) => b.totalQL - a.totalQL)
+    const shown = ranked.slice(0, 8)
+    const seriesLabels = {}
+    shown.forEach(s => { seriesLabels[s.key] = s.label })
+
+    const chartRows = trendBuckets.map((b, i) => {
+      const row = { period: b.label }
+      const byKey = new Map(perBucket[i].map(e => [e.key, e]))
+      shown.forEach(s => { const e = byKey.get(s.key); row[s.key] = e ? summaryValue(e, trendMetric) : 0 })
+      return row
+    })
+
+    const dimLabel = DEEP_DIMENSIONS.find(d => d.key === trendDim)?.label || trendDim
+    const exportRows = []
+    trendBuckets.forEach((b, i) => {
+      perBucket[i].forEach(e => {
+        const o = { Period: b.label, [dimLabel]: e.label }
+        DEEP_METRICS.forEach(m => { o[m.label] = summaryValue(e, m.key) })
+        exportRows.push(o)
+      })
+    })
+    return { chartRows, seriesKeys: shown.map(s => s.key), seriesLabels, exportRows, shownCount: shown.length, totalCount: ranked.length }
+  }, [trendOpen, trendBuckets, nonDateRows, trendIsSingleSeries, trendDim, trendMetric, aggReportByDim, paidOf])
+
+  const trendExportRowsFmt = useMemo(() => trendResult.exportRows.map(r => {
+    const o = {}
+    Object.entries(r).forEach(([k, v]) => {
+      if (typeof v !== 'number') { o[k] = v; return }
+      o[k] = (k === 'Spend' || k === 'CPL' || k === 'CPQL' || k === 'CPA') ? fmtINR(v) : fmtN(v)
+    })
+    return o
+  }), [trendResult.exportRows])
 
   const funnel = useMemo(() => ([
     { stage:'Leads Generated', count:kpis.leads },
@@ -2377,6 +2644,15 @@ export default function OverallDashboard() {
               Compare
             </Button>
 
+            <Button
+              onClick={() => setTrendOpen(true)}
+              size="sm"
+              variant="secondary"
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 17 9 11 13 15 21 6"/><polyline points="15 6 21 6 21 12"/></svg>}
+            >
+              Trend
+            </Button>
+
             {bqMode && (
               <span
                 title={'Data source: BigQuery (beta) -- public.overall_bq_daily' + (bqSince ? ', ' + bqSince + ' to ' + bqUntil : '') + (bqRowCount != null ? ', ' + bqRowCount.toLocaleString('en-IN') + ' rows read' : '') + (bqError ? ' -- FAILED (' + bqError + '), showing the sheet instead' : '')}
@@ -2929,6 +3205,224 @@ export default function OverallDashboard() {
                           <div style={{ fontSize:13, fontWeight:600, color:C.text, lineHeight:1.5 }}>{compareAction}</div>
                         </div>
                       )}
+
+                      {/* Full breakdown -- every row, every metric, any of the 5 dimensions,
+                          with an exact (unrounded) CSV/JSON export. Distinct from the top-5
+                          "movers" strip above: this is the exhaustive version. */}
+                      <div style={{ marginTop:20, paddingTop:18, borderTop:`0.5px solid ${C.border}` }}>
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, flexWrap:'wrap', gap:8 }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em' }}>Full breakdown -- every {DEEP_DIMENSIONS.find(d => d.key === compareTableDim)?.label.toLowerCase()}</div>
+                          <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                            {DEEP_DIMENSIONS.map(d => (
+                              <button key={d.key} onClick={() => setCompareTableDim(d.key)}
+                                style={{ padding:'4px 10px', borderRadius:6, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:11, fontWeight:700, background: compareTableDim === d.key ? C.navy : 'var(--bg2)', color: compareTableDim === d.key ? '#fff' : C.sub }}>
+                                {d.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {!compareJoinable && (
+                          <div style={{ fontSize:11, color:C.muted, marginBottom:10, lineHeight:1.5 }}>
+                            {DEEP_DIMENSIONS.find(d => d.key === compareTableDim)?.label} values don't recur across two different ranges, so {currentLabel} and {compareLabel} are shown as two separate breakdowns rather than joined row-for-row.
+                          </div>
+                        )}
+
+                        {compareJoinable ? (
+                          compareTableRows.length === 0 ? (
+                            <div style={{ fontSize:12, color:C.muted, padding:'12px 0' }}>No rows for this dimension in either period.</div>
+                          ) : (
+                            <div style={{ maxHeight:280, overflowY:'auto', border:`0.5px solid ${C.border}`, borderRadius:10 }}>
+                              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                                <thead style={{ position:'sticky', top:0, background:'var(--card)', zIndex:1 }}>
+                                  <tr>
+                                    {[DEEP_DIMENSIONS.find(d => d.key === compareTableDim)?.label, 'Spend ' + currentLabel, 'Spend ' + compareLabel, 'Total QL ' + currentLabel, 'Total QL ' + compareLabel, 'Δ Total QL', 'CPQL ' + currentLabel, 'CPQL ' + compareLabel].map((h, i) => (
+                                      <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:10.5, textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {compareTableRows.map((r, i) => {
+                                    const av = r.a ? summaryValue(r.a, 'totalQL') : null
+                                    const bv = r.b ? summaryValue(r.b, 'totalQL') : null
+                                    const d = (av != null && bv != null) ? av - bv : null
+                                    return (
+                                      <tr key={r.label + i} style={{ background: i % 2 ? 'var(--bg2)' : 'transparent' }}>
+                                        <td style={{ padding:'6px 10px', fontWeight:600, color:C.text, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.label}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.sub }}>{r.a ? fmtINR(r.a.spend) : '—'}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.muted }}>{r.b ? fmtINR(r.b.spend) : '—'}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.sub }}>{av != null ? fmtN(av) : '—'}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.muted }}>{bv != null ? fmtN(bv) : '—'}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', fontWeight:700, color: d == null ? C.muted : d > 0 ? '#2F7A4B' : d < 0 ? C.navy : C.muted }}>{d == null ? '—' : (d > 0 ? '+' : '') + fmtN(d)}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.sub }}>{summaryFmt('cpql', summaryValue(r.a || {}, 'cpql'))}</td>
+                                        <td style={{ padding:'6px 10px', textAlign:'right', color:C.muted }}>{summaryFmt('cpql', summaryValue(r.b || {}, 'cpql'))}</td>
+                                      </tr>
+                                    )
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )
+                        ) : (
+                          <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0,1fr))', gap:12 }} className="lq-grid2">
+                            {[[currentLabel, compareBreakdownA], [compareLabel, compareBreakdownB]].map(([lbl, list]) => (
+                              <div key={lbl} style={{ border:`0.5px solid ${C.border}`, borderRadius:10, overflow:'hidden' }}>
+                                <div style={{ padding:'8px 10px', background:'var(--bg2)', fontSize:11, fontWeight:700, color:C.text, borderBottom:`0.5px solid ${C.border}` }}>{lbl}</div>
+                                <div style={{ maxHeight:240, overflowY:'auto' }}>
+                                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                                    <thead style={{ position:'sticky', top:0, background:'var(--card)' }}>
+                                      <tr>
+                                        {['Period', 'Spend', 'Total QL', 'CPQL'].map((h, i) => (
+                                          <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding:'6px 10px', borderBottom:`0.5px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:10.5, textTransform:'uppercase' }}>{h}</th>
+                                        ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {list.length === 0 ? (
+                                        <tr><td colSpan={4} style={{ padding:'12px 10px', color:C.muted, fontSize:12 }}>No data.</td></tr>
+                                      ) : list.map((e, i) => (
+                                        <tr key={e.key} style={{ background: i % 2 ? 'var(--bg2)' : 'transparent' }}>
+                                          <td style={{ padding:'6px 10px', fontWeight:600, color:C.text, whiteSpace:'nowrap' }}>{e.label}</td>
+                                          <td style={{ padding:'6px 10px', textAlign:'right', color:C.sub }}>{fmtINR(e.spend)}</td>
+                                          <td style={{ padding:'6px 10px', textAlign:'right', color:C.sub }}>{fmtN(e.totalQL)}</td>
+                                          <td style={{ padding:'6px 10px', textAlign:'right', color:C.sub }}>{summaryFmt('cpql', summaryValue(e, 'cpql'))}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div style={{ marginTop:10, display:'flex', justifyContent:'flex-end' }}>
+                          <ExportButton
+                            data={compareExportRowsFmt}
+                            rawData={compareExportRows}
+                            filename={'overall-compare-' + compareTableDim}
+                            dashboardId="overall"
+                            hideSlack
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {trendOpen && (
+            <div onClick={e => { if (e.target === e.currentTarget) setTrendOpen(false) }}
+              style={{ position:'fixed', inset:0, zIndex:600, background:'rgba(15,23,42,0.45)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+              <div style={{ background:'var(--card)', borderRadius:18, width:'min(880px, 100%)', maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
+                <div style={{ padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div>
+                    <div style={{ fontSize:16.5, fontWeight:800, color:C.text }}>Trend Analysis</div>
+                    <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>Trajectory across trailing periods -- not just two points</div>
+                  </div>
+                  <button onClick={() => setTrendOpen(false)} style={{ border:'none', background:'transparent', color:C.muted, cursor:'pointer', display:'flex', padding:4 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  </button>
+                </div>
+
+                <div style={{ padding:'18px 24px 24px' }}>
+                  {/* Controls */}
+                  <div style={{ display:'flex', alignItems:'flex-end', gap:12, marginBottom:16, flexWrap:'wrap' }}>
+                    <div>
+                      <div style={{ fontSize:10, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:5 }}>Dimension</div>
+                      <div style={{ display:'flex', gap:4 }}>
+                        {DEEP_DIMENSIONS.map(d => (
+                          <button key={d.key} onClick={() => setTrendDim(d.key)}
+                            style={{ padding:'6px 11px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight:700, background: trendDim === d.key ? C.navy : 'var(--bg2)', color: trendDim === d.key ? '#fff' : C.sub }}>
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {!trendIsSingleSeries && (
+                      <Dropdown label="Granularity" minWidth={110}
+                        value={trendGranularity === 'day' ? 'Day' : trendGranularity === 'week' ? 'Week' : 'Month'}
+                        options={['Day', 'Week', 'Month']}
+                        onChange={v => setTrendGranularity(v.toLowerCase())} />
+                    )}
+                    <Dropdown label="Trailing periods" minWidth={90} value={trendPeriods} options={[6, 12, 24, 52]} onChange={setTrendPeriods} />
+                    <Dropdown label="Metric" minWidth={150}
+                      value={DEEP_METRICS.find(m => m.key === trendMetric)?.label || trendMetric}
+                      options={DEEP_METRICS.map(m => m.label)}
+                      onChange={lbl => { const m = DEEP_METRICS.find(x => x.label === lbl); if (m) setTrendMetric(m.key) }} />
+                  </div>
+
+                  {!trendMaxDate ? (
+                    <div style={{ textAlign:'center', padding:'32px 0', color:C.muted, fontSize:13 }}>No dated rows to trend.</div>
+                  ) : (
+                    <>
+                      <div style={{ fontSize:11, color:C.muted, marginBottom:10 }}>
+                        {trendBuckets.length} trailing {trendEffectiveGranularity === 'month' ? 'months' : trendEffectiveGranularity === 'week' ? 'weeks' : 'days'} ending {dayLabel(trendMaxDate)}, {sourceIsAll ? 'all sources' : sourceLabel}{corridorFilter !== 'All' ? ', ' + corridorFilter : ''}.
+                        {!trendIsSingleSeries && trendResult.totalCount > trendResult.shownCount && (
+                          <> Charting the top {trendResult.shownCount} of {trendResult.totalCount} by Total QL -- every one of the {trendResult.totalCount} is in the export below.</>
+                        )}
+                      </div>
+
+                      <div style={{ background:'var(--bg2)', border:`0.5px solid ${C.border}`, borderRadius:12, padding:'14px 16px 6px', marginBottom:16 }}>
+                        <ResponsiveContainer width="100%" height={260}>
+                          {trendIsSingleSeries ? (
+                            <LineChart data={trendResult.chartRows} margin={{ left:0, right:12, top:4, bottom:4 }}>
+                              <CartesianGrid vertical={false} stroke={C.border} />
+                              <XAxis dataKey="period" tick={{ fontSize:11, fill:C.muted }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize:11, fill:C.muted }} axisLine={false} tickLine={false} width={54} />
+                              <Tooltip formatter={v => DEEP_METRICS.find(m => m.key === trendMetric)?.fmt(v)} contentStyle={{ fontSize:12, borderRadius:8, border:`0.5px solid ${C.border}` }} />
+                              <Line type="monotone" dataKey="value" name={DEEP_METRICS.find(m => m.key === trendMetric)?.label} stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }} />
+                            </LineChart>
+                          ) : (
+                            <LineChart data={trendResult.chartRows} margin={{ left:0, right:12, top:4, bottom:4 }}>
+                              <CartesianGrid vertical={false} stroke={C.border} />
+                              <XAxis dataKey="period" tick={{ fontSize:11, fill:C.muted }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize:11, fill:C.muted }} axisLine={false} tickLine={false} width={54} />
+                              <Tooltip formatter={v => DEEP_METRICS.find(m => m.key === trendMetric)?.fmt(v)} contentStyle={{ fontSize:12, borderRadius:8, border:`0.5px solid ${C.border}` }} />
+                              <Legend wrapperStyle={{ fontSize:11 }} />
+                              {trendResult.seriesKeys.map((k, i) => (
+                                <Line key={k} type="monotone" dataKey={k} name={trendResult.seriesLabels[k]} stroke={brandColor(i)} strokeWidth={2} dot={{ r:2.5 }} />
+                              ))}
+                            </LineChart>
+                          )}
+                        </ResponsiveContainer>
+                      </div>
+
+                      {/* Full data table -- every bucket/value pair, all metrics */}
+                      <div style={{ maxHeight:280, overflowY:'auto', border:`0.5px solid ${C.border}`, borderRadius:10, marginBottom:12 }}>
+                        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+                          <thead style={{ position:'sticky', top:0, background:'var(--card)', zIndex:1 }}>
+                            <tr>
+                              {Object.keys(trendExportRowsFmt[0] || { Period:'' }).map((h, i) => (
+                                <th key={h} style={{ textAlign: i < (trendIsSingleSeries ? 1 : 2) ? 'left' : 'right', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:10.5, textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {trendExportRowsFmt.length === 0 ? (
+                              <tr><td colSpan={12} style={{ padding:'12px 10px', color:C.muted }}>No rows.</td></tr>
+                            ) : trendExportRowsFmt.map((r, i) => (
+                              <tr key={i} style={{ background: i % 2 ? 'var(--bg2)' : 'transparent' }}>
+                                {Object.entries(r).map(([k, v], j) => (
+                                  <td key={k} style={{ padding:'6px 10px', textAlign: j < (trendIsSingleSeries ? 1 : 2) ? 'left' : 'right', fontWeight: j < (trendIsSingleSeries ? 1 : 2) ? 600 : 400, color: j < (trendIsSingleSeries ? 1 : 2) ? C.text : C.sub, whiteSpace:'nowrap' }}>{v}</td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div style={{ display:'flex', justifyContent:'flex-end' }}>
+                        <ExportButton
+                          data={trendExportRowsFmt}
+                          rawData={trendResult.exportRows}
+                          filename={'overall-trend-' + trendDim + '-' + trendEffectiveGranularity}
+                          dashboardId="overall"
+                          hideSlack
+                        />
+                      </div>
                     </>
                   )}
                 </div>
