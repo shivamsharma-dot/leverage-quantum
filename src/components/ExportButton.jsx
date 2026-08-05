@@ -1,9 +1,25 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { toast } from './ToastHost'
 import Button from './Button'
 
 export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow, slackRich, hideSlack }) {
   const [open, setOpen] = useState(false)
+  // When this button sits near the bottom of a scrollable modal (Compare/Trend
+  // Analysis, for instance), a menu that always drops DOWN renders past the
+  // modal's own overflow:auto edge and gets clipped -- invisible, not just
+  // cut short. Measured once at open time: if there isn't enough room below
+  // in the actual viewport, flip the menu to open upward instead.
+  const [openUp, setOpenUp] = useState(false)
+  const wrapRef = useRef(null)
+  const toggleOpen = () => {
+    if (!open && wrapRef.current) {
+      const rect = wrapRef.current.getBoundingClientRect()
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top
+      setOpenUp(spaceBelow < 320 && spaceAbove > spaceBelow)
+    }
+    setOpen(o => !o)
+  }
   const [sheetsBusy, setSheetsBusy] = useState(false)
   const [slackBusy, setSlackBusy] = useState(false)
 
@@ -141,10 +157,10 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
   }
 
   return (
-    <div style={{position:'relative'}}>
+    <div style={{position:'relative'}} ref={wrapRef}>
       <Button
         size="sm" variant="secondary"
-        onClick={() => setOpen(o => !o)}
+        onClick={toggleOpen}
         icon={
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -163,7 +179,8 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
         <>
           <div onClick={() => setOpen(false)} style={{position:'fixed',inset:0,zIndex:99}}/>
           <div style={{
-            position:'absolute', top:'calc(100% + 6px)', right:0, zIndex:100,
+            position:'absolute', right:0, zIndex:100,
+            ...(openUp ? { bottom:'calc(100% + 6px)' } : { top:'calc(100% + 6px)' }),
             background:'#fff', border:'1px solid #E5E7EB', borderRadius:10,
             boxShadow:'0 8px 24px rgba(0,0,0,0.12)', padding:6, minWidth:150
           }}>
