@@ -3564,6 +3564,20 @@ export default function OverallDashboard() {
                     )}
                   </div>
 
+                  {/* Trend's own trailing window is usually WIDER than whatever range the
+                      page itself already had loaded (e.g. 6 trailing months vs a 1-month
+                      MTD view), so opening this modal can kick off a real BigQuery read that
+                      is still in flight. Until it lands, nonDateRows is still the narrower
+                      range from before -- silently charting that as if it were the whole
+                      trailing window would show early periods as a real, confident zero
+                      when they simply have not been fetched yet. Say so instead. */}
+                  {bqMode && bqBusy && (
+                    <div style={{ display:'flex', alignItems:'center', gap:8, background:C.navyBg, border:`0.5px solid ${C.border}`, borderRadius:10, padding:'9px 12px', marginBottom:14, fontSize:12.5, color:C.navy, fontWeight:700 }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation:'spin .8s linear infinite', flexShrink:0 }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+                      Fetching the full trailing window from BigQuery -- earlier periods below may still read zero until this finishes.
+                    </div>
+                  )}
+
                   {!trendMaxDate ? (
                     <div style={{ textAlign:'center', padding:'32px 0', color:C.muted, fontSize:14.5 }}>No dated rows to trend.</div>
                   ) : (

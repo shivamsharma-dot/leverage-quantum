@@ -99,15 +99,34 @@ async function sbGetPage(params, offset, wantCount) {
   return { rows: rows, total: Number.isFinite(total) ? total : null }
 }
 
+// Live-verified via network inspection (2026-08-06): a wide range (e.g. the 6-month
+// window Trend Analysis needs) can need ~200 pages, fetched CONCURRENCY-at-a-time. Two
+// full batches of them came back 500 in a row that session -- a resource-limit symptom
+// under concurrent load (this is Supabase's free tier), not a random one-off. The
+// caller's own outer retry re-does the ENTIRE multi-hundred-request fetch from page 0 on
+// any single page's failure, which just repeats the same batch shape and hits the same
+// wall again -- that is why a page 500ing 'sometimes' turned into the whole view falling
+// back to the slow CSV path 'very frequently'. Retrying the ONE flaky page in place, after
+// its batch-mates have already finished, gives it a real second chance without discarding
+// every page that already succeeded or re-triggering the same all-at-once contention.
+async function sbGetPageRetry(params, offset, wantCount, attempts = 4, delay = 500) {
+  let lastErr
+  for (let i = 0; i < attempts; i++) {
+    try { return await sbGetPage(params, offset, wantCount) }
+    catch (e) { lastErr = e; if (i < attempts - 1) await new Promise(res => setTimeout(res, delay * (i + 1))) }
+  }
+  throw lastErr
+}
+
 async function fetchAllPaginated(params) {
-  const first = await sbGetPage(params, 0, true)
+  const first = await sbGetPageRetry(params, 0, true)
   if (first.rows.length < PAGE) return first.rows
 
   const offsets = []
   if (first.total != null) { for (let o = PAGE; o < first.total; o += PAGE) offsets.push(o) }
   const pages = new Array(offsets.length)
   for (let i = 0; i < offsets.length; i += CONCURRENCY) {
-    const batch = await Promise.all(offsets.slice(i, i + CONCURRENCY).map(o => sbGetPage(params, o, false)))
+    const batch = await Promise.all(offsets.slice(i, i + CONCURRENCY).map(o => sbGetPageRetry(params, o, false)))
     batch.forEach((b, k) => { pages[i + k] = b.rows })
   }
   let all = first.rows
@@ -120,7 +139,7 @@ async function fetchAllPaginated(params) {
   if (first.total == null) {
     let offset = all.length
     for (let guard = 0; guard < 400; guard++) { // 4,00,000-row safety valve
-      const page = await sbGetPage(params, offset, false)
+      const page = await sbGetPageRetry(params, offset, false)
       all = all.concat(page.rows)
       if (page.rows.length < PAGE) break
       offset += PAGE
