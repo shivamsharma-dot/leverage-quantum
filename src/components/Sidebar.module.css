@@ -379,6 +379,32 @@
   font-weight: 600;
 }
 
+/* Right-click "hide from sidebar" menu (admin only) -- same visual language as
+   .collapsedFlyout, positioned at the cursor instead of anchored to a rail icon. */
+.hideMenuBackdrop { position: fixed; inset: 0; z-index: 2000; }
+.hideMenu {
+  position: fixed;
+  min-width: 200px;
+  background: var(--card);
+  border: 0.5px solid var(--card-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(15,23,42,0.16), 0 2px 8px rgba(15,23,42,0.07);
+  padding: 5px;
+  z-index: 2001;
+  animation: flyoutIn .09s cubic-bezier(0.2,0.6,0.3,1) both;
+}
+.hideMenuItem {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; text-align: left;
+  padding: 9px 11px; border-radius: 8px;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-size: 13px; font-weight: 600;
+  color: #374151; background: none; border: none; cursor: pointer;
+  transition: background .12s;
+}
+.hideMenuItem:hover { background: #F9FAFB; color: #1F3C84; }
+.hideMenuItem:disabled { opacity: .5; cursor: default; background: none; }
+
 /* Settings gear rotates on hover (mechanical turn) */
 .settingsArea .navIcon svg {
   transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);

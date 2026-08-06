@@ -6,6 +6,7 @@ import SnapshotTool from './SnapshotTool'
 import CalculatorTool from './CalculatorTool'
 import { prefetchRoute } from '../lib/routePrefetch'
 import { BRAND_LOGO_BARS, BRAND_LOGO_VIEWBOX, BRAND_LOGO_BASELINE } from '../../shared/brandLogo.mjs'
+import { toast } from './ToastHost'
 
 // Exported so Settings > User Access can derive its page-visibility grouping
 // from this exact same structure (single source of truth for the sidebar's
@@ -390,6 +391,61 @@ export default function Sidebar() {
     if (flyoutCloseTimer.current) { clearTimeout(flyoutCloseTimer.current); flyoutCloseTimer.current = null }
   }
 
+  // Right-click "hide from sidebar" -- admin only, writes to the EXACT SAME
+  // app_preferences.hidden_pages key Settings > User Access > Global Page
+  // Visibility already uses (same POST /api/preferences call, same localStorage
+  // + same-tab event sync it already dispatches). Not a second, parallel hiding
+  // mechanism -- just a faster entry point to the one real switch, which is why
+  // this introduces no new loophole: the server independently requires
+  // role==='admin' on that endpoint (api/preferences.mjs), and the actual
+  // page-blocking for non-admins (App.jsx's ProtectedRoute) already reads this
+  // same hiddenPages list regardless of which UI wrote to it.
+  const [hideMenu, setHideMenu] = React.useState(null) // { id, label, x, y } | null
+  const [hidePending, setHidePending] = React.useState(false)
+
+  const openHideMenu = (e, id, label) => {
+    if (userRole !== 'admin' || !id) return // no id (query-tab sub-item, route-group
+    e.preventDefault()                      // parent row) -- let the native menu show
+    e.stopPropagation()
+    setHideMenu({ id, label, x: e.clientX, y: e.clientY })
+  }
+  const closeHideMenu = () => setHideMenu(null)
+
+  const toggleHiddenPage = async () => {
+    if (!hideMenu) return
+    const { id, label } = hideMenu
+    const willHide = !hiddenPages.includes(id)
+    const next = willHide ? [...hiddenPages, id] : hiddenPages.filter(x => x !== id)
+    setHideMenu(null)
+    setHidePending(true)
+    try {
+      const r = await fetch('/api/preferences', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'hidden_pages', value: next }),
+      })
+      if (!r.ok) throw new Error('save failed')
+      localStorage.setItem('lq_hidden_pages', JSON.stringify(next))
+      window.dispatchEvent(new CustomEvent('lq:hidden-pages-changed', { detail: next }))
+      toast(willHide ? `${label} hidden from the sidebar for everyone` : `${label} is visible again`, { type: willHide ? 'muted' : 'success' })
+    } catch (e) {
+      toast(`Could not update ${label} — try again`, { type: 'neutral' })
+    } finally {
+      setHidePending(false)
+    }
+  }
+
+  const hideMenuPopup = hideMenu && (
+    <>
+      <div className={styles.hideMenuBackdrop} onClick={closeHideMenu} onContextMenu={e => { e.preventDefault(); closeHideMenu() }} />
+      <div className={styles.hideMenu} style={{ top: hideMenu.y, left: hideMenu.x }}>
+        <button className={styles.hideMenuItem} onClick={toggleHiddenPage} disabled={hidePending}>
+          {hiddenPages.includes(hideMenu.id) ? 'Show in sidebar' : 'Hide from sidebar (for everyone)'}
+        </button>
+      </div>
+    </>
+  )
+
   // Shared body for the expanded sidebar, so the true expanded render and any
   // future variant never drift out of sync -- edit the nav/footer once.
   function renderNavBody() {
@@ -425,6 +481,7 @@ export default function Sidebar() {
                     <button
                       className={`${styles.navItem} ${parentActive ? styles.active : ''}`}
                       onClick={() => { setExpanded(item.label)(e => !e); if (!parentActive) navigate(item.defaultTo || item.subItems[0].to) }}
+                      onContextMenu={!isRouteGroup(item) ? (e) => openHideMenu(e, idMap[item.label], item.label) : undefined}
                       onMouseEnter={()=>prefetchRoute(item.defaultTo || item.subItems[0].to)} onFocus={()=>prefetchRoute(item.defaultTo || item.subItems[0].to)}
                       style={{width:'100%',textAlign:'left',background:'none',border:'none',cursor:'pointer',font:'inherit'}}>
                       <span className={styles.navIcon}>{item.icon}</span>
@@ -440,6 +497,7 @@ export default function Sidebar() {
                           <button key={sub.label}
                             className={`${styles.subNavItem} ${isSubActive(sub) ? styles.subNavActive : ''}`}
                             onClick={() => navigate(sub.to)}
+                            onContextMenu={(e) => openHideMenu(e, idMap[sub.label], sub.label)}
                             onMouseEnter={()=>prefetchRoute(sub.to)} onFocus={()=>prefetchRoute(sub.to)}
                             style={{width:'100%',textAlign:'left',background:'none',border:'none',cursor:'pointer',font:'inherit'}}>
                             <span style={{width:5,height:5,borderRadius:'50%',background:isSubActive(sub)?'#1F3C84':'#D1D5DB',flexShrink:0,display:'inline-block'}}/>
@@ -454,6 +512,7 @@ export default function Sidebar() {
               return (
                 <NavLink key={item.label} to={item.to} end={item.end}
                   onMouseEnter={()=>prefetchRoute(item.to)} onFocus={()=>prefetchRoute(item.to)}
+                  onContextMenu={(e) => openHideMenu(e, idMap[item.label], item.label)}
                   className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
                   <span className={styles.navIcon}>{item.icon}</span>
                   <span>{item.label}</span>
@@ -563,6 +622,7 @@ export default function Sidebar() {
                 onMouseLeave={scheduleCloseFlyout}>
                 <NavLink to={item.defaultTo || item.subItems[0].to} end={item.end}
                   onFocus={()=>prefetchRoute(item.defaultTo || item.subItems[0].to)}
+                  onContextMenu={!isRouteGroup(item) ? (e) => openHideMenu(e, idMap[item.label], item.label) : undefined}
                   className={`${styles.collapsedItem} ${parentActiveFor(item) ? styles.collapsedActive : ''}`}
                   title={item.label}>
                   {ICON_MAP[item.label]}
@@ -571,6 +631,7 @@ export default function Sidebar() {
             ) : (
               <NavLink key={item.label} to={item.to} end={item.end}
                 onMouseEnter={()=>prefetchRoute(item.defaultTo || item.to)} onFocus={()=>prefetchRoute(item.defaultTo || item.to)}
+                onContextMenu={(e) => openHideMenu(e, idMap[item.label], item.label)}
                 className={({ isActive }) => `${styles.collapsedItem} ${isActive ? styles.collapsedActive : ''}`}
                 title={item.label}>
                 {ICON_MAP[item.label]}
@@ -589,7 +650,8 @@ export default function Sidebar() {
               <div key={sub.to}
                 className={`${styles.collapsedFlyoutItem} ${isSubActive(sub) ? styles.collapsedFlyoutItemActive : ''}`}
                 onMouseEnter={()=>prefetchRoute(sub.to)}
-                onClick={() => { navigate(sub.to); setFlyout(null) }}>
+                onClick={() => { navigate(sub.to); setFlyout(null) }}
+                onContextMenu={(e) => openHideMenu(e, idMap[sub.label], sub.label)}>
                 <span className={styles.collapsedFlyoutIcon}>{ICON_MAP[sub.label]}</span>
                 {sub.label}
               </div>
@@ -605,6 +667,7 @@ export default function Sidebar() {
         <SnapshotTool/>
         <CalculatorTool/>
       </aside>
+      {hideMenuPopup}
       </>
     )
   }
@@ -614,6 +677,7 @@ export default function Sidebar() {
       {renderNavBody()}
       <SnapshotTool/>
       <CalculatorTool/>
+      {hideMenuPopup}
     </aside>
   )
 }
