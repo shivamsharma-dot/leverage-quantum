@@ -1,20 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
 
 // Shared "pick a design variant, applies everywhere instantly" system.
-// Three independently selectable variants: the Button component, the shared
-// KPI card, and the Login page layout. Each is just an integer id persisted
-// to localStorage; every mounted component listening via useDesignStyle()
-// re-renders the instant any one of them changes anywhere in the app --
-// mirrors the existing 'lq:sidebar-mode-changed' / 'lq:hidden-pages-changed'
-// same-tab CustomEvent pattern already used elsewhere in this codebase
-// (localStorage's own 'storage' event only fires cross-tab, never same-tab).
+// Two independently selectable variants: the Button component and the shared
+// KPI card. (The login page used to be a third — a 21-layout picker — but
+// that was removed; the login page is now a single fixed design, see
+// LoginScene.jsx.) Each is just an integer id persisted to localStorage;
+// every mounted component listening via useDesignStyle() re-renders the
+// instant any one of them changes anywhere in the app -- mirrors the existing
+// 'lq:sidebar-mode-changed' / 'lq:hidden-pages-changed' same-tab CustomEvent
+// pattern already used elsewhere in this codebase (localStorage's own
+// 'storage' event only fires cross-tab, never same-tab).
 
 export const DESIGN_EVENT = 'lq:design-style-changed'
 
 export const DESIGN_KEYS = {
   button: 'lq_button_style',
   kpi: 'lq_kpi_style',
-  login: 'lq_login_style',
 }
 
 // Current live defaults -- whatever is actually shipped today, so switching
@@ -22,7 +23,6 @@ export const DESIGN_KEYS = {
 export const DESIGN_DEFAULTS = {
   button: 10, // "Embossed premium" -- already the one real Button.jsx style
   kpi: 2,     // Gradient-accent + icon chip -- closest to the existing PremKPI look
-  login: 1,   // Minimal centered card -- matches the current LoginPage.jsx
 }
 
 export function getDesignStyle(kind) {

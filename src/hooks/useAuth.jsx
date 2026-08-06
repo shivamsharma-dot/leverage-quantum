@@ -106,11 +106,10 @@ export function AuthProvider({ children }) {
         setHiddenPages(hp)
         localStorage.setItem('lq_hidden_pages', JSON.stringify(hp))
         // Org-wide design pickers (Settings > Appearance) -- same GET, no extra
-        // request. Applies the admin's saved button/KPI/login style to every
+        // request. Applies the admin's saved button/KPI style to every
         // signed-in user's browser instead of only the admin who set it.
         applyRemoteDesignStyle('button', data.prefs?.lq_button_style)
         applyRemoteDesignStyle('kpi', data.prefs?.lq_kpi_style)
-        applyRemoteDesignStyle('login', data.prefs?.lq_login_style)
       })
       .catch(() => {}) // fail silently — localStorage fallback stays
       .finally(() => setPrefsReady(true))

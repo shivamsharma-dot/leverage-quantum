@@ -9,7 +9,6 @@ import Dropdown from '../components/Dropdown'
 import PinInput from '../components/PinInput'
 import { useDesignStyle, saveDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
-import LoginScene from '../components/LoginScene'
 import styles from './SettingsPage.module.css'
 import { SLACK_CHANNELS, confirmPhrase } from '../../shared/slackChannels.mjs'
 
@@ -30,110 +29,6 @@ const KPI_STYLE_NAMES = [
   'Sparkline', 'Icon-left split', 'Progress ring', 'Vs-last bars', 'Frosted glass',
   'Oversized number', 'Goal-progress bar', 'Executive dark', 'Inline trend pill', 'Compact dense',
 ]
-const LOGIN_STYLE_NAMES = [
-  'Minimal card (default)', 'Split screen', 'Gradient + frosted', 'Product preview', 'Ultra-minimal',
-  'Dark console', 'Bento grid', 'Gradient orb', 'Top bar', 'Dot-grid pattern',
-  'Testimonial split', 'Onboarding steps', 'Brand ribbon', 'Diagonal split', 'Floating cards',
-  'Badge-topped', 'Illustration hero', 'Ghost dashboard', 'Dual action', 'Warm greeting',
-  'Aurora glass',
-]
-// Which small layout "glyph" each of the 21 login variants gets in the picker
-// grid below -- grouped by structural family (several variants share a shape).
-const LOGIN_FAMILY = [
-  'dark-card', 'split', 'gradient', 'split', 'minimal',
-  'console', 'split', 'minimal', 'minimal', 'dotted',
-  'split', 'steps', 'ribbon', 'diagonal', 'ghost',
-  'minimal', 'minimal', 'modal', 'minimal', 'minimal',
-  'aurora',
-]
-
-// Small, cheap-to-render shape diagram conveying each login layout family at
-// a glance in the picker grid -- not a pixel-accurate thumbnail (that would
-// need a real per-variant render, which is what the "Preview" popup is for).
-function LoginLayoutGlyph({ family }) {
-  const base = { width: 52, height: 32, borderRadius: 7, overflow: 'hidden', position: 'relative', flexShrink: 0, border: '0.5px solid #E2E8F0', background: '#fff' }
-  const navy = '#1F3C84', blue = '#1C9FD4', cyan = '#29B9C3', light = '#F4F6F9', dark = '#0e1c44'
-  if (family === 'dark-card') return (
-    <div style={{ ...base, background: dark }}>
-      <div style={{ position: 'absolute', left: 7, top: 9, width: 24, height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.85)' }} />
-      <div style={{ position: 'absolute', left: 7, top: 15, width: 32, height: 2, borderRadius: 2, background: 'rgba(255,255,255,0.35)' }} />
-      <div style={{ position: 'absolute', left: 7, top: 21, width: 20, height: 5, borderRadius: 3, background: cyan }} />
-    </div>
-  )
-  if (family === 'split') return (
-    <div style={{ ...base, display: 'flex' }}>
-      <div style={{ flex: 1.1, background: navy }} />
-      <div style={{ flex: 1, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: 20, height: 6, borderRadius: 3, background: light, border: '0.5px solid #E2E8F0' }} />
-      </div>
-    </div>
-  )
-  if (family === 'gradient') return (
-    <div style={{ ...base, background: `linear-gradient(135deg, ${navy}, ${blue} 60%, ${cyan})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 22, height: 7, borderRadius: 4, background: 'rgba(255,255,255,0.85)' }} />
-    </div>
-  )
-  if (family === 'console') return (
-    <div style={{ ...base, background: '#0A1220', backgroundImage: 'linear-gradient(rgba(255,255,255,0.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.08) 1px,transparent 1px)', backgroundSize: '6px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 24, height: 13, borderRadius: 3, background: 'rgba(18,29,50,0.9)', border: '0.5px solid #223052' }} />
-    </div>
-  )
-  if (family === 'dotted') return (
-    <div style={{ ...base, background: light, backgroundImage: 'radial-gradient(#CBD5E1 1px, transparent 1px)', backgroundSize: '5px 5px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 22, height: 11, borderRadius: 4, background: '#fff', border: '0.5px solid #E2E8F0' }} />
-    </div>
-  )
-  if (family === 'steps') return (
-    <div style={{ ...base, background: light, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {[0, 1, 2].map(i => <div key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: navy }} />)}
-      </div>
-      <div style={{ width: 16, height: 13, borderRadius: 3, background: '#fff', border: '0.5px solid #E2E8F0' }} />
-    </div>
-  )
-  if (family === 'ribbon') return (
-    <div style={{ ...base, display: 'flex' }}>
-      <div style={{ width: 5, background: `linear-gradient(180deg, ${navy}, ${blue}, ${cyan})` }} />
-      <div style={{ flex: 1, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: 18, height: 6, borderRadius: 3, background: light }} />
-      </div>
-    </div>
-  )
-  if (family === 'diagonal') return (
-    <div style={{ ...base, background: '#fff' }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, width: '55%', height: '100%', background: navy, clipPath: 'polygon(0 0, 80% 0, 45% 100%, 0 100%)' }} />
-    </div>
-  )
-  if (family === 'ghost') return (
-    <div style={{ ...base, background: light }}>
-      <div style={{ position: 'absolute', width: 15, height: 8, borderRadius: 3, background: '#fff', border: '0.5px solid #E2E8F0', top: 4, left: 4, transform: 'rotate(-8deg)', opacity: 0.6 }} />
-      <div style={{ position: 'absolute', width: 13, height: 7, borderRadius: 3, background: '#fff', border: '0.5px solid #E2E8F0', bottom: 4, right: 5, transform: 'rotate(8deg)', opacity: 0.6 }} />
-      <div style={{ position: 'absolute', width: 20, height: 11, borderRadius: 4, background: '#fff', border: '0.5px solid #E2E8F0', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }} />
-    </div>
-  )
-  if (family === 'modal') return (
-    <div style={{ ...base, background: light }}>
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,14,28,0.7)' }} />
-      <div style={{ position: 'absolute', width: 20, height: 12, borderRadius: 4, background: 'rgba(255,255,255,0.92)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }} />
-    </div>
-  )
-  if (family === 'aurora') return (
-    <div style={{ ...base, background: '#F8F7F2' }}>
-      <div style={{ position: 'absolute', width: 26, height: 26, borderRadius: '50%', background: cyan, opacity: 0.35, filter: 'blur(6px)', top: -8, left: 2 }} />
-      <div style={{ position: 'absolute', width: 22, height: 22, borderRadius: '50%', background: blue, opacity: 0.3, filter: 'blur(6px)', bottom: -6, right: 4 }} />
-      <div style={{ position: 'absolute', width: 18, height: 11, borderRadius: 5, background: 'rgba(255,255,255,0.85)', border: '0.5px solid rgba(255,255,255,0.9)', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', boxShadow: '0 2px 6px rgba(31,60,132,0.15)' }} />
-    </div>
-  )
-  // 'minimal' (and fallback) -- content directly on a plain light background, no card.
-  return (
-    <div style={{ ...base, background: light, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
-        <div style={{ width: 18, height: 3, borderRadius: 2, background: '#0F172A' }} />
-        <div style={{ width: 22, height: 6, borderRadius: 3, background: '#fff', border: '0.5px solid #E2E8F0' }} />
-      </div>
-    </div>
-  )
-}
 
 const RL_SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const RL_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
@@ -1116,9 +1011,7 @@ export default function SettingsPage() {
   // useDesignStyle keeps this picker's own highlight in sync.
   const buttonStyleId = useDesignStyle('button')
   const kpiStyleId = useDesignStyle('kpi')
-  const loginStyleId = useDesignStyle('login')
-  const [loginPreviewId, setLoginPreviewId] = useState(null)
-  const DESIGN_KIND_LABEL = { button: 'Button', kpi: 'KPI card', login: 'Login page' }
+  const DESIGN_KIND_LABEL = { button: 'Button', kpi: 'KPI card' }
 
   const pickDesignStyle = async (kind, id) => {
     const { success, error } = await saveDesignStyle(kind, id)
@@ -3421,77 +3314,6 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   })}
                 </div>
               </div>
-
-              <div className={styles.card}>
-                <h3 className={styles.cardTitle}>Login Page</h3>
-                <p className={styles.cardDesc}>Pick a login screen layout — applies the next time anyone signs in. Click the eye icon to preview it full-screen right here, no sign-out needed.</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 10 }}>
-                  {LOGIN_STYLE_NAMES.map((name, i) => {
-                    const id = i + 1
-                    const active = loginStyleId === id
-                    return (
-                      <div key={id} style={{
-                        borderRadius: 12, padding: 10, border: `1.5px solid ${active ? '#1F3C84' : '#E2E8F0'}`,
-                        background: active ? '#F0FBFF' : '#fff', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
-                        display: 'flex', flexDirection: 'column', gap: 8,
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <LoginLayoutGlyph family={LOGIN_FAMILY[i]} />
-                          <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: active ? '#1F3C84' : '#374151', lineHeight: 1.3 }}>{id}. {name}</div>
-                        </div>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button type="button" onClick={() => pickDesignStyle('login', id)} style={{
-                            flex: 1, padding: '6px 8px', borderRadius: 7, border: `1px solid ${active ? '#1F3C84' : '#E2E8F0'}`,
-                            background: active ? '#1F3C84' : '#fff', color: active ? '#fff' : '#374151',
-                            fontSize: 10.5, fontWeight: 700, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif",
-                          }}>
-                            {active ? '✓ Selected' : 'Use this'}
-                          </button>
-                          <button type="button" onClick={() => setLoginPreviewId(id)} title="Preview full-screen" style={{
-                            width: 30, height: 30, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', color: '#64748B',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                          }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {loginPreviewId && (
-                <div
-                  role="dialog" aria-modal="true" aria-label={`Preview of login style ${loginPreviewId}`}
-                  onClick={() => setLoginPreviewId(null)}
-                  style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(10,14,28,0.55)' }}
-                >
-                  <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', inset: 0, overflow: 'auto' }}>
-                    <div style={{ pointerEvents: 'none' }}>
-                      <LoginScene variant={loginPreviewId} success={false} loading={false} error="" gsiWidth={300} />
-                    </div>
-                  </div>
-                  <div style={{
-                    position: 'fixed', top: 18, left: 18, zIndex: 2, padding: '7px 13px', borderRadius: 999,
-                    background: 'rgba(15,20,36,0.85)', color: '#fff', fontSize: 11.5, fontWeight: 700,
-                    fontFamily: "'Plus Jakarta Sans',sans-serif", backdropFilter: 'blur(6px)',
-                  }}>
-                    Preview — {loginPreviewId}. {LOGIN_STYLE_NAMES[loginPreviewId - 1]}
-                  </div>
-                  <button
-                    type="button" onClick={() => setLoginPreviewId(null)}
-                    style={{
-                      position: 'fixed', top: 18, right: 18, zIndex: 2, padding: '8px 16px', borderRadius: 999,
-                      background: 'rgba(15,20,36,0.85)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)',
-                      fontSize: 12.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                      fontFamily: "'Plus Jakarta Sans',sans-serif", backdropFilter: 'blur(6px)',
-                    }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                    Close preview
-                  </button>
-                </div>
-              )}
 
               {/* THEME */}
               <div className={styles.card}>

@@ -3,23 +3,16 @@ import { SHEET_PREF_KEYS } from '../src/lib/dataSources.js'
 
 const ALLOWED_SHEET_KEYS = new Set(Object.values(SHEET_PREF_KEYS))
 
-// GET  /api/preferences          — returns this admin's hidden_pages
-// POST /api/preferences          — saves hidden_pages (admin only)
-// GET  /api/preferences?global=1 — returns the globally applied hidden_pages (for Sidebar)
+// GET  /api/preferences — returns the public/admin-visible preference keys
+// POST /api/preferences — saves a preference key (admin only)
 
 export default async function handler(req, res) {
   const me = getSessionUser(req)
 
-  // Unauthenticated GET ?global=1 — the login page needs its org-wide style pick
-  // before anyone has signed in. Whitelisted to ONLY the login design-style key;
-  // every other preference (hidden pages, sheet URLs, Slack webhook, etc.) still
-  // requires a real session below.
+  // Unauthenticated requests — the login page has no per-org style pick left
+  // to fetch (that was only ever the now-removed login design-style picker),
+  // so there is nothing an unauthenticated caller is allowed to read here.
   if (!me) {
-    if (req.method === 'GET' && req.query.global === '1') {
-      const r = await supabaseAdmin('app_preferences?select=key,value&key=eq.lq_login_style')
-      const rows = r.ok ? await r.json() : []
-      return res.status(200).json({ prefs: Object.fromEntries(rows.map(row => [row.key, row.value])) })
-    }
     return res.status(401).json({ error: 'Not signed in' })
   }
 
@@ -87,7 +80,7 @@ export default async function handler(req, res) {
     // picker on that same page -- channel ids/names are documented as non-secret
     // (the real credential is SLACK_BOT_TOKEN, Vercel-env only), so any signed-in
     // user who can see the picker can see which test channels are configured.
-    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'lq_login_style', 'affiliate_spend_manual', 'slack_test_channels'])
+    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'slack_test_channels'])
     const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key))
     const prefs = Object.fromEntries(visibleRows.map(row => [row.key, row.value]))
     const meta = Object.fromEntries(visibleRows.map(row => [row.key, row.updated_at]))
