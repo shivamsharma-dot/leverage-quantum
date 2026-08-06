@@ -65,7 +65,37 @@ function dcell(v, invert) {
   return <td className={good ? styles.pos : styles.neg}>{(v >= 0 ? '+' : '') + v.toFixed(1) + '%'}</td>
 }
 
-export default function CeoB2CDashboard() {
+// The two statements read from the same fetch (their days already share one
+// internal row shape -- sr/ac/vas/offRev/totalRev/people/pm/op/offCost/corp/
+// totalCost/net -- built server-side in api/crm-leads.js), so every formula
+// below (totals/chart/trend/fy/dayStats) runs unchanged for both. Only the
+// words on screen differ.
+const STATEMENT_LABELS = {
+  pnl: {
+    dataKey: 'pnl', pageTitle: 'Daily P&L',
+    revGroup: 'Revenue', costGroup: 'Cost',
+    totalRev: 'Total Revenue', totalCost: 'Total Cost', net: 'Net Inflow',
+    kpiRev: 'MTD Revenue', kpiCost: 'MTD Cost', kpiNet: 'MTD Net Inflow',
+    tableTitle: 'Revenue → Cost → Net Inflow',
+    chartTitleDaily: 'Daily revenue, cost and net inflow',
+    chartTitleCum: 'Cumulative revenue, cost and net inflow',
+    fyWords: ['revenue', 'cost', 'net inflow'],
+  },
+  cashflow: {
+    dataKey: 'cashFlow', pageTitle: 'Daily Cash Flow',
+    revGroup: 'Cash Inflow', costGroup: 'Cash Outflow',
+    totalRev: 'Total Cash Inflow', totalCost: 'Total Cash Outflow', net: 'Net Cash Inflow',
+    kpiRev: 'MTD Cash Inflow', kpiCost: 'MTD Cash Outflow', kpiNet: 'MTD Net Cash Inflow',
+    tableTitle: 'Cash Inflow → Cash Outflow → Net Cash Inflow',
+    chartTitleDaily: 'Daily cash inflow, outflow and net cash inflow',
+    chartTitleCum: 'Cumulative cash inflow, outflow and net cash inflow',
+    fyWords: ['cash inflow', 'cash outflow', 'net cash inflow'],
+  },
+}
+
+export default function CeoB2CDashboard({ statement = 'pnl' }) {
+  const isCashFlow = statement === 'cashflow'
+  const L = STATEMENT_LABELS[isCashFlow ? 'cashflow' : 'pnl']
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
@@ -88,7 +118,8 @@ export default function CeoB2CDashboard() {
   // House rule for every CEO-facing surface: the current day is excluded, the
   // page always stops at D-1. The sheet is filled a day late anyway.
   const d1 = ist(-1)
-  const days = (data && data.days) || []
+  const statementData = data && data[L.dataKey]
+  const days = (statementData && statementData.days) || []
   const upto = useMemo(function () { return days.filter(function (d) { return d.date <= d1 }) }, [data, d1])
   const months = useMemo(function () {
     const seen = []
@@ -136,24 +167,30 @@ export default function CeoB2CDashboard() {
       const rev = r.totalRev != null ? r.totalRev : roll(o, REV)
       const cost = r.totalCost != null ? r.totalCost : roll(o, COST)
       const net = r.net != null ? r.net : sub(rev, cost)
-      return { d: r.date.slice(8), Revenue: rev || 0, Cost: cost || 0, 'Net inflow': net || 0 }
+      const p = { d: r.date.slice(8) }
+      p[L.totalRev] = rev || 0; p[L.totalCost] = cost || 0; p[L.net] = net || 0
+      return p
     })
     if (mode !== 'cum') return base
     let a = 0, b = 0, c = 0
     return base.map(function (p) {
-      a += p.Revenue; b += p.Cost; c += p['Net inflow']
-      return { d: p.d, Revenue: a, Cost: b, 'Net inflow': c }
+      a += p[L.totalRev]; b += p[L.totalCost]; c += p[L.net]
+      const o = { d: p.d }
+      o[L.totalRev] = a; o[L.totalCost] = b; o[L.net] = c
+      return o
     })
-  }, [rows, mode])
+  }, [rows, mode, L])
 
   // The one extra chart worth having: the last four months side by side, so
   // the month in progress has something to be judged against.
   const trend = useMemo(function () {
     return months.slice(-4).map(function (m) {
       const t = totals(upto.filter(function (d) { return d.month === m }))
-      return { d: shortOf(m), Revenue: t.rev || 0, Cost: t.cost || 0, 'Net inflow': t.net || 0 }
+      const o = { d: shortOf(m) }
+      o[L.totalRev] = t.rev || 0; o[L.totalCost] = t.cost || 0; o[L.net] = t.net || 0
+      return o
     })
-  }, [months, upto])
+  }, [months, upto, L])
 
   // Indian financial year: 1 April to 31 March. It stops at exactly the same
   // cut-off as the month-to-date figures, so the two can never disagree.
@@ -289,10 +326,10 @@ export default function CeoB2CDashboard() {
       ].filter(Boolean),
       sources: [
         {
-          id: 'src_sheet', title: 'B2C finance sheet', status: 'complete',
+          id: 'src_sheet', title: 'Daily P&L tab', status: 'complete',
           details: rows.length + ' completed day(s) read for ' + String(month || '').replace('-', ' ') + ', up to ' + d1 + '. The current day is never included.',
           output: 'Revenue ' + inr(mtd.rev) + ' \u00b7 cost ' + inr(mtd.cost) + ' \u00b7 net ' + inr(mtd.net),
-          url: 'https://quantum.leverageedu.com/dashboard/ceo-b2c', label: 'CEO B2C',
+          url: 'https://quantum.leverageedu.com/dashboard/ceo-b2c-pnl', label: 'Daily P&L',
         },
         {
           id: 'src_prev', title: 'Like-for-like comparison', status: hasPrev ? 'complete' : 'error',
@@ -339,28 +376,35 @@ export default function CeoB2CDashboard() {
       <div className={styles.main}>
         <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <p className={styles.breadcrumb}>Dashboards / CEO</p>
-            <h1 className={styles.pageTitle}>B2C &mdash; cost, revenue and net inflow</h1>
+            <p className={styles.breadcrumb}>Dashboards / CEO B2C / {L.pageTitle}</p>
+            <h1 className={styles.pageTitle}>{L.pageTitle} &mdash; {isCashFlow ? 'cash inflow, outflow and net cash inflow' : 'cost, revenue and net inflow'}</h1>
           </div>
           <div className={styles.headerRight}>
             <span className={styles.badge}>Through {d1}</span>
             {months.length > 0 ? <Dropdown options={monthOpts} value={month} onChange={setMonth} minWidth={150} /> : null}
-            {ready ? (
+            {/* Send to Slack stays P&L-only for now: the report builders it uses
+                (CEO_BRIEF_VERSIONS/B2C_REPORT_VERSIONS/B2C_LEDGER_VERSIONS) hardcode
+                "Revenue"/"Cost" wording throughout their headline text, which would
+                read wrong for a cash-flow message -- a Cash Flow variant of those
+                builders is a real follow-up, not something to half-do here. */}
+            {ready && !isCashFlow ? (
               <Button size="sm" variant="secondary" onClick={function () { setSlackOpen(true) }}
                 icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4Z" /></svg>}>
                 Send to Slack
               </Button>
             ) : null}
-            <SlackReportPanel
-              open={slackOpen}
-              onClose={function () { setSlackOpen(false) }}
-              versions={[...CEO_BRIEF_VERSIONS, ...B2C_REPORT_VERSIONS, ...B2C_LEDGER_VERSIONS]}
-              buildContext={buildSlackContext}
-              captureFiles={captureSlackFiles}
-              dashboardId="ceo_b2c"
-              filename={'b2c-' + (month || '')}
-              rowCount={rows.length}
-            />
+            {!isCashFlow ? (
+              <SlackReportPanel
+                open={slackOpen}
+                onClose={function () { setSlackOpen(false) }}
+                versions={[...CEO_BRIEF_VERSIONS, ...B2C_REPORT_VERSIONS, ...B2C_LEDGER_VERSIONS]}
+                buildContext={buildSlackContext}
+                captureFiles={captureSlackFiles}
+                dashboardId="ceo_b2c_pnl"
+                filename={'ceo-b2c-pnl-' + (month || '')}
+                rowCount={rows.length}
+              />
+            ) : null}
           </div>
         </div>
         <div className={styles.content}>
@@ -385,17 +429,17 @@ export default function CeoB2CDashboard() {
           ) : null}
           {ready ? (
             <div className={styles.kpis}>
-              <KPICard label="MTD Revenue" value={inr(mtd.rev)}
+              <KPICard label={L.kpiRev} value={inr(mtd.rev)}
                 sub={ctx(mtd.rev, hasPrev ? prev.rev : null) || (month.replace('-', ' ') + ', through ' + d1)}
                 delta={hasPrev ? chg(mtd.rev, prev.rev) : null} />
-              <KPICard label="MTD Cost" value={inr(mtd.cost)}
+              <KPICard label={L.kpiCost} value={inr(mtd.cost)}
                 sub={ctx(mtd.cost, hasPrev ? prev.cost : null) || 'people, marketing, ops, offline, overheads'}
                 delta={hasPrev ? chg(mtd.cost, prev.cost) : null} deltaInvert />
-              <KPICard label="MTD Net Inflow" value={inr(mtd.net)}
-                sub={ctx(mtd.net, hasPrev ? prev.net : null) || 'revenue less cost'}
+              <KPICard label={L.kpiNet} value={inr(mtd.net)}
+                sub={ctx(mtd.net, hasPrev ? prev.net : null) || (isCashFlow ? 'cash inflow less cash outflow' : 'revenue less cost')}
                 delta={hasPrev ? chg(mtd.net, prev.net) : null} />
               <KPICard label="Net Margin" value={margin == null ? '\u2014' : margin.toFixed(1) + '%'}
-                sub={prevMargin == null ? 'net inflow over revenue' : prevLab + ' ' + prevMargin.toFixed(1) + '%'}
+                sub={prevMargin == null ? (L.net + ' over ' + L.totalRev) : prevLab + ' ' + prevMargin.toFixed(1) + '%'}
                 delta={mgDelta}
                 deltaLabel={mgDelta == null ? null : (mgDelta >= 0 ? '\u25B2 ' : '\u25BC ') + Math.abs(mgDelta).toFixed(1) + ' pp'} />
             </div>
@@ -403,8 +447,8 @@ export default function CeoB2CDashboard() {
           {ready ? (
             <div className={styles.card} ref={tableRef}>
               <div className={styles.cardHead}>
-                <span className={styles.cardTitle}>Revenue &rarr; Cost &rarr; Net Inflow</span>
-                <span className={styles.cardSub}>exact rupees &middot; every share is a % of revenue</span>
+                <span className={styles.cardTitle}>{L.tableTitle}</span>
+                <span className={styles.cardSub}>exact rupees &middot; every share is a % of {isCashFlow ? 'cash inflow' : 'revenue'}</span>
               </div>
               <table className={styles.table}>
                 <thead>
@@ -418,7 +462,7 @@ export default function CeoB2CDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr><td className={styles.group} colSpan={hasPrev ? 6 : 4}>Revenue</td></tr>
+                  <tr><td className={styles.group} colSpan={hasPrev ? 6 : 4}>{L.revGroup}</td></tr>
                   {REV.map(function (r) {
                     return (
                       <tr key={r[0]}>
@@ -432,14 +476,14 @@ export default function CeoB2CDashboard() {
                     )
                   })}
                   <tr className={styles.total}>
-                    <td>Total Revenue</td>
+                    <td>{L.totalRev}</td>
                     <td>{full(day && day.rev)}</td>
                     <td>{full(mtd.rev)}</td>
                     {hasPrev ? <td>{full(prev.rev)}</td> : null}
                     {hasPrev ? dcell(chg(mtd.rev, prev.rev), false) : null}
                     <td>100%</td>
                   </tr>
-                  <tr><td className={styles.group} colSpan={hasPrev ? 6 : 4}>Cost</td></tr>
+                  <tr><td className={styles.group} colSpan={hasPrev ? 6 : 4}>{L.costGroup}</td></tr>
                   {COST.map(function (c) {
                     return (
                       <tr key={c[0]}>
@@ -453,7 +497,7 @@ export default function CeoB2CDashboard() {
                     )
                   })}
                   <tr className={styles.total}>
-                    <td>Total Cost</td>
+                    <td>{L.totalCost}</td>
                     <td>{full(day && day.cost)}</td>
                     <td>{full(mtd.cost)}</td>
                     {hasPrev ? <td>{full(prev.cost)}</td> : null}
@@ -461,7 +505,7 @@ export default function CeoB2CDashboard() {
                     <td>{mtd.rev && mtd.cost != null ? ((mtd.cost / mtd.rev) * 100).toFixed(1) + '%' : '\u2014'}</td>
                   </tr>
                   <tr className={styles.total}>
-                    <td>Net Inflow</td>
+                    <td>{L.net}</td>
                     <td className={day && day.net != null && day.net < 0 ? styles.neg : styles.pos}>{full(day && day.net)}</td>
                     <td className={mtd.net != null && mtd.net < 0 ? styles.neg : styles.pos}>{full(mtd.net)}</td>
                     {hasPrev ? <td>{full(prev.net)}</td> : null}
@@ -472,18 +516,23 @@ export default function CeoB2CDashboard() {
               </table>
               {fy ? (
                 <p className={styles.note}>
-                  {fy.label} to date, {fy.from} to {fy.to} &middot; revenue {full(fy.rev)} &middot; cost {full(fy.cost)} &middot; net inflow {full(fy.net)}{fyMargin == null ? '' : ' (' + fyMargin.toFixed(1) + '% margin)'}
+                  {fy.label} to date, {fy.from} to {fy.to} &middot; {L.fyWords[0]} {full(fy.rev)} &middot; {L.fyWords[1]} {full(fy.cost)} &middot; {L.fyWords[2]} {full(fy.net)}{fyMargin == null ? '' : ' (' + fyMargin.toFixed(1) + '% margin)'}
                 </p>
               ) : null}
               <p className={styles.note}>
                 SR is Online and Offline together in the sheet today. The split is coming shortly.
               </p>
+              {isCashFlow ? (
+                <p className={styles.note}>
+                  This page is real cash moved &mdash; every line here is an actual, not an estimate or a monthly average. It will often differ from Daily P&amp;L, which mixes real actuals with a formula estimate for SR and monthly-smoothed figures for People, Offline and Corp. Overheads.
+                </p>
+              ) : null}
             </div>
           ) : null}
           {ready ? (
             <div className={styles.card}>
               <div className={styles.cardHead}>
-                <span className={styles.cardTitle}>{mode === 'cum' ? 'Cumulative revenue, cost and net inflow' : 'Daily revenue, cost and net inflow'}</span>
+                <span className={styles.cardTitle}>{mode === 'cum' ? L.chartTitleCum : L.chartTitleDaily}</span>
                 <div className={styles.cardTools}>
                   <span className={styles.cardSub}>{month.replace('-', ' ')}</span>
                   <Dropdown options={modeOpts} value={mode} onChange={setMode} minWidth={128} />
@@ -498,9 +547,9 @@ export default function CeoB2CDashboard() {
                     <YAxis tick={{ fontSize: 11, fill: 'var(--text3)' }} axisLine={false} tickLine={false} tickFormatter={inr} width={78} />
                     <Tooltip formatter={function (v) { return full(v) }} contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--card)', color: 'var(--text)' }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Revenue" fill={barFill('g-b0-4')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
-                    <Bar dataKey="Cost" fill={barFill('g-b0-3')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
-                    <Line type="monotone" dataKey="Net inflow" stroke="#4CAE6F" strokeWidth={2} dot={false} />
+                    <Bar dataKey={L.totalRev} fill={barFill('g-b0-4')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
+                    <Bar dataKey={L.totalCost} fill={barFill('g-b0-3')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
+                    <Line type="monotone" dataKey={L.net} stroke="#4CAE6F" strokeWidth={2} dot={false} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -521,15 +570,15 @@ export default function CeoB2CDashboard() {
                     <YAxis tick={{ fontSize: 11, fill: 'var(--text3)' }} axisLine={false} tickLine={false} tickFormatter={inr} width={78} />
                     <Tooltip formatter={function (v) { return full(v) }} contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--card-border)', background: 'var(--card)', color: 'var(--text)' }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Revenue" fill={barFill('g-b1-2')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
-                    <Bar dataKey="Cost" fill={barFill('g-b1-1')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
-                    <Line type="monotone" dataKey="Net inflow" stroke="#4CAE6F" strokeWidth={2} dot={{ r: 3 }} />
+                    <Bar dataKey={L.totalRev} fill={barFill('g-b1-2')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
+                    <Bar dataKey={L.totalCost} fill={barFill('g-b1-1')} radius={BAR_RADIUS} maxBarSize={BAR_MAX} />
+                    <Line type="monotone" dataKey={L.net} stroke="#4CAE6F" strokeWidth={2} dot={{ r: 3 }} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </div>
           ) : null}
-          {ready ? (
+          {ready && !isCashFlow ? (
             <div className={styles.card}>
               <div className={styles.cardHead}>
                 <span className={styles.cardTitle}>Monthly cost plan vs actual</span>

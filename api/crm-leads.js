@@ -619,38 +619,112 @@ function b2cNum(v) {
   return neg ? -n : n;
 }
 
+// A cell can legitimately contain a literal newline inside quotes -- e.g. the Daily
+// P&L tab's own Operating Cost header spells its formula across two lines in one
+// quoted cell. Splitting the whole blob on \r?\n BEFORE parsing quotes (the naive
+// approach) tears a row like that in half, corrupting every column index after it.
+// This walks the blob and only splits on a newline genuinely OUTSIDE a quoted field,
+// so an embedded newline just becomes part of the cell instead of a false row break.
+function splitCsvRows(text) {
+  const rows = [];
+  let cur = '';
+  let q = false;
+  const s = String(text || '');
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '"') { q = !q; cur += ch; continue; }
+    if (!q && (ch === '\n' || ch === '\r')) {
+      if (ch === '\r' && s[i + 1] === '\n') i++;
+      rows.push(cur); cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur) rows.push(cur);
+  return rows;
+}
+
 // Reads a gviz CSV tab and returns the column index map plus the raw cells.
 function b2cRows(csv, cols) {
-  const lines = String(csv || '').split(/\r?\n/).filter(function (l) { return l.trim().length > 0 });
+  const lines = splitCsvRows(csv).filter(function (l) { return l.trim().length > 0 });
   if (lines.length < 2) return { at: {}, rows: [] };
   const header = splitCsvLine(lines[0]).map(function (h) { return h.trim().toLowerCase() });
   const at = {};
-  // The sheet decorates some headers, e.g. 'Offline Revenue (AC+VAS)'. Match the
-  // exact name first, then fall back to the first header that starts with it, so
-  // a column that gains a suffix degrades to a match, never to a silent blank.
+  // The sheet decorates some headers with extra text either BEFORE or after the
+  // real column name (e.g. 'Offline Revenue (AC+VAS)', or on the daily P&L/cash
+  // flow tabs, a hyperlink label prefix like 'Deposit x 70% x 3.5L SR Online
+  // Revenue'). Match the exact name first, then a header that STARTS with it
+  // (a suffix decoration), then one that ENDS with it (a prefix decoration) --
+  // so a column that gains a description around it degrades to a match, never
+  // to a silent blank.
   Object.keys(cols).forEach(function (k) {
     let i = header.indexOf(cols[k]);
     if (i < 0) i = header.findIndex(function (h) { return h.indexOf(cols[k]) === 0 });
+    if (i < 0) i = header.findIndex(function (h) { return h.length >= cols[k].length && h.slice(-cols[k].length) === cols[k]; });
     at[k] = i;
   });
   return { at: at, rows: lines.slice(1).map(splitCsvLine) };
 }
 
-const B2C_COLS = {
+// Real Google Sheet tab names -- Finance's own naming for these two tabs, not
+// something we control. Referenced ONLY here (the fetch URL needs the literal
+// tab name); nowhere else in the app should these names appear.
+const B2C_PNL_SHEET_TAB = 'Daily P&L - Yash';
+const B2C_CASHFLOW_SHEET_TAB = 'Daily Cash Flow - Ramesh';
+
+// Both tabs carry the same 6 revenue/cost line items plus a grand total and a
+// net figure, just under different header wording (see CLAUDE.md for why: the
+// P&L tab mixes real actuals with formula estimates and monthly-smoothed
+// costs, while the Cash Flow tab is real cash, everything on actuals -- so the
+// two tabs' Total/Net columns are named differently on purpose). Both maps
+// resolve to the SAME internal keys so one row shape and one set of frontend
+// formulas serve both statements.
+const B2C_PNL_COLS = {
   date: 'date', month: 'month',
   sr: 'sr online revenue', ac: 'ac online revenue', vas: 'vas online revenue',
-  offRev: 'offline revenue', totalRev: 'total revenue',
+  offRev: '(ac + vas) offline revenue', totalRev: 'total revenue',
   people: 'people cost', pm: 'pm cost', op: 'operating cost',
   offCost: 'offline cost', corp: 'corp. overheads',
   totalCost: 'total cost', net: 'net inflow',
 };
+const B2C_CASHFLOW_COLS = {
+  date: 'date', month: 'month',
+  sr: 'sr revenue (online)', ac: 'ac online revenue', vas: 'vas online revenue',
+  offRev: 'offline revenue (ac + vas)', totalRev: 'total cash inflow',
+  people: 'people cost', pm: 'pm cost', op: 'operating cost',
+  offCost: 'offline cost', corp: 'corp. overheads',
+  totalCost: 'total cash outflow', net: 'net cash inflow',
+};
 const B2C_VALUE_KEYS = ['sr', 'ac', 'vas', 'offRev', 'totalRev', 'people', 'pm', 'op', 'offCost', 'corp', 'totalCost', 'net'];
+
+function b2cParseDays(csv, cols) {
+  const parsed = b2cRows(csv, cols);
+  const at = parsed.at;
+  const days = [];
+  let gridFrom = null;
+  let gridTo = null;
+  for (const row of parsed.rows) {
+    const iso = toIso(String(row[at.date] == null ? '' : row[at.date]).trim());
+    if (!iso) continue;
+    if (!gridFrom) gridFrom = iso;
+    gridTo = iso;
+    const d = { date: iso, month: String(row[at.month] == null ? '' : row[at.month]).trim() };
+    let any = false;
+    for (const k of B2C_VALUE_KEYS) {
+      const v = at[k] >= 0 ? b2cNum(row[at[k]]) : null;
+      d[k] = v;
+      if (v != null) any = true;
+    }
+    if (any) days.push(d);
+  }
+  return { days: days, gridFrom: gridFrom, gridTo: gridTo };
+}
 
 async function handleB2C(req, res, me) {
   const { canAccessDashboard } = await import('../lib/auth.mjs');
-  if (!canAccessDashboard(me.role, 'ceo_b2c')) return res.status(403).json({ error: 'Forbidden' });
+  if (!canAccessDashboard(me.role, 'ceo_b2c_pnl') && !canAccessDashboard(me.role, 'ceo_b2c_cashflow')) return res.status(403).json({ error: 'Forbidden' });
   const id = await getB2CSheetId();
-  if (!id) return res.status(200).json({ configured: false, days: [], monthly: {}, ts: Date.now() });
+  if (!id) return res.status(200).json({ configured: false, pnl: { days: [] }, cashFlow: { days: [] }, monthly: {}, ts: Date.now() });
   const base = 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv';
   const grab = async function (u) {
     const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0' } });
@@ -658,31 +732,17 @@ async function handleB2C(req, res, me) {
     return r.text();
   };
   try {
-    const csvs = await Promise.all([grab(base + '&gid=0')].concat(
+    const csvs = await Promise.all([
+      grab(base + '&sheet=' + encodeURIComponent(B2C_PNL_SHEET_TAB)),
+      grab(base + '&sheet=' + encodeURIComponent(B2C_CASHFLOW_SHEET_TAB)),
+    ].concat(
       B2C_MONTH_TABS.map(function (t) { return grab(base + '&sheet=' + encodeURIComponent(t[1])) })
     ));
-    const parsed = b2cRows(csvs[0], B2C_COLS);
-    const at = parsed.at;
-    const days = [];
-    let gridFrom = null;
-    let gridTo = null;
-    for (const row of parsed.rows) {
-      const iso = toIso(String(row[at.date] == null ? '' : row[at.date]).trim());
-      if (!iso) continue;
-      if (!gridFrom) gridFrom = iso;
-      gridTo = iso;
-      const d = { date: iso, month: String(row[at.month] == null ? '' : row[at.month]).trim() };
-      let any = false;
-      for (const k of B2C_VALUE_KEYS) {
-        const v = at[k] >= 0 ? b2cNum(row[at[k]]) : null;
-        d[k] = v;
-        if (v != null) any = true;
-      }
-      if (any) days.push(d);
-    }
+    const pnl = b2cParseDays(csvs[0], B2C_PNL_COLS);
+    const cashFlow = b2cParseDays(csvs[1], B2C_CASHFLOW_COLS);
     const monthly = {};
     B2C_MONTH_TABS.forEach(function (t, i) {
-      const p = b2cRows(csvs[i + 1], { month: 'month', actual: 'actual', forecast: 'forecast' });
+      const p = b2cRows(csvs[i + 2], { month: 'month', actual: 'actual', forecast: 'forecast' });
       monthly[t[0]] = p.rows.map(function (r) {
         return {
           month: String(r[p.at.month] == null ? '' : r[p.at.month]).trim(),
@@ -691,7 +751,7 @@ async function handleB2C(req, res, me) {
         };
       }).filter(function (m) { return m.month });
     });
-    return res.status(200).json({ configured: true, days: days, monthly: monthly, gridFrom: gridFrom, gridTo: gridTo, ts: Date.now() });
+    return res.status(200).json({ configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, ts: Date.now() });
   } catch (e) {
     return res.status(502).json({ error: 'sheet fetch failed', detail: String((e && e.message) || e) });
   }

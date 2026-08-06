@@ -55,7 +55,8 @@ const ROUTE_COMPONENT = {
   '/ask-ai': 'AskAI',
   '/dashboard/agents': 'AgentsDashboard',
   '/dashboard/marketing-performance': 'MarketingPerformanceReport',
-  '/dashboard/ceo-b2c': 'CeoB2CDashboard',
+  '/dashboard/ceo-b2c-pnl': 'CeoB2CDashboard',
+  '/dashboard/ceo-b2c-cashflow': 'CeoB2CDashboard',
   '/settings': 'SettingsPage',
 }
 

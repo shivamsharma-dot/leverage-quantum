@@ -37,6 +37,8 @@ const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
 const PAGE_TITLES = {
   '/': 'Summary',
   '/dashboard/overall': 'Overall',
+  '/dashboard/ceo-b2c-pnl': 'Daily P&L',
+  '/dashboard/ceo-b2c-cashflow': 'Daily Cash Flow',
   '/dashboard/meta-ads': 'Meta Ads',
   '/dashboard/google-ads': 'Google Ads',
   '/dashboard/bing-ads': 'Bing Ads',
@@ -98,7 +100,7 @@ function canAccess(role, dashboardId) {
   const userRole = role || 'viewer'
   if (dashboardId === 'settings') return userRole === 'admin'
   if (userRole === 'admin') return true
-  if (userRole === 'viewer') return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance' && dashboardId !== 'ceo_b2c'
+  if (userRole === 'viewer') return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance' && dashboardId !== 'ceo_b2c_pnl' && dashboardId !== 'ceo_b2c_cashflow'
   if (userRole.startsWith('viewer:')) {
     const granted = userRole.replace('viewer:', '').split(',').filter(Boolean)
     return granted.includes(dashboardId)
@@ -108,7 +110,7 @@ function canAccess(role, dashboardId) {
     return userRole.replace('custom:', '').split(',').filter(Boolean).includes(dashboardId)
   }
   // Unknown/malformed role — fail safe (no ask-ai, no agents, no settings), not fail-open
-  return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance' && dashboardId !== 'ceo_b2c'
+  return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance' && dashboardId !== 'ceo_b2c_pnl' && dashboardId !== 'ceo_b2c_cashflow'
 }
 
 // Ordered fallback for a denied route — first entry the role can actually access
@@ -237,7 +239,9 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute dashboardId="home"> <DashboardHome /></ProtectedRoute>} />
           <Route path="/dashboard/overall" element={<ProtectedRoute dashboardId="overall"> <OverallDashboard /></ProtectedRoute>} />
-          <Route path="/dashboard/ceo-b2c" element={<ProtectedRoute dashboardId="ceo_b2c"> <CeoB2CDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/ceo-b2c" element={<Navigate to="/dashboard/ceo-b2c-pnl" replace />} />
+          <Route path="/dashboard/ceo-b2c-pnl" element={<ProtectedRoute dashboardId="ceo_b2c_pnl"> <CeoB2CDashboard statement="pnl" /></ProtectedRoute>} />
+          <Route path="/dashboard/ceo-b2c-cashflow" element={<ProtectedRoute dashboardId="ceo_b2c_cashflow"> <CeoB2CDashboard statement="cashflow" /></ProtectedRoute>} />
           <Route path="/dashboard/roas" element={<ProtectedRoute dashboardId="roas"> <ROASDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/mtd" element={<ProtectedRoute dashboardId="mtd"> <MTDDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/lead-quality" element={<ProtectedRoute dashboardId="lead_quality"><LeadQualityDashboard /></ProtectedRoute>} />

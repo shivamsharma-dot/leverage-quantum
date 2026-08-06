@@ -34,7 +34,17 @@ export const NAV = [
     items: [
       { to: '/', icon: <HomeIcon />, label: 'Summary', end: true },
       { to: '/dashboard/overall', icon: <OverallIcon />, label: 'Overall', end: false },
-      { to: '/dashboard/ceo-b2c', icon: <RevenueIcon />, label: 'CEO B2C', end: false },
+      {
+        to: '/dashboard/ceo-b2c-pnl',
+        icon: <RevenueIcon />,
+        label: 'CEO B2C',
+        defaultTo: '/dashboard/ceo-b2c-pnl',
+        end: false,
+        subItems: [
+          { to: '/dashboard/ceo-b2c-pnl', label: 'Daily P&L', matchType: 'route' },
+          { to: '/dashboard/ceo-b2c-cashflow', label: 'Daily Cash Flow', matchType: 'route' },
+        ]
+      },
     ]
   },
   {
@@ -139,7 +149,8 @@ export const PAGE_LIST = [
   { id:'ask_ai',         label:'Ask AI',      path:'/ask-ai',                  adminOnly:true  },
   { id:'agents',         label:'Agent Runs',  path:'/dashboard/agents',        adminOnly:true  },
   { id:'marketing_performance', label:'Marketing Performance', path:'/dashboard/marketing-performance', adminOnly:true },
-  { id:'ceo_b2c', label:'CEO B2C', path:'/dashboard/ceo-b2c', adminOnly:true },
+  { id:'ceo_b2c_pnl', label:'Daily P&L', path:'/dashboard/ceo-b2c-pnl', adminOnly:true },
+  { id:'ceo_b2c_cashflow', label:'Daily Cash Flow', path:'/dashboard/ceo-b2c-cashflow', adminOnly:true },
   { id:'settings',     label:'Settings',     path:'/settings',              adminOnly:true  },
 ]
 
@@ -163,6 +174,12 @@ function AgentsIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" f
 // used as the sidebar nav icon for the new LeadSquared page.
 function LeadSquaredIcon() { return <svg width="14" height="14" viewBox="0 0 136.6 137.9"><polygon fill="#0C9AFC" points="0,0 0,68.5 68.6,68.5 68.6,137.9 136.6,137.9 136.6,0"/><polygon fill="#0C293D" points="68.6,137.9 0,137.9 0,68.5"/></svg> }
 function OpportunityIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg> }
+// Daily P&L -- a statement (document with ruled lines), distinct from the plain
+// document-agnostic RevenueIcon used for the parent nav row.
+function PnLIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg> }
+// Daily Cash Flow -- money actually moving (two opposing arrows), distinct from
+// the accrual/ledger framing of PnLIcon.
+function CashFlowIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3v6h-6"/><path d="M17 9a8 8 0 00-14 4"/><path d="M7 21v-6h6"/><path d="M7 15a8 8 0 0014-4"/></svg> }
 
 const ICON_MAP = {
   'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
@@ -186,6 +203,7 @@ const ICON_MAP = {
   'Month on Month': <ChartIcon/>, 'Day on Day': <DayIcon/>,
   'LeadSquared': <LeadSquaredIcon/>,
   'Leads': <PeopleIcon/>, 'Activities': <ClockIcon/>, 'Opportunities': <OpportunityIcon/>,
+  'Daily P&L': <PnLIcon/>, 'Daily Cash Flow': <CashFlowIcon/>,
 }
 function GoogleAdsIcon(){
   return <svg width='16' height='16' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M21.35 11.1H12.18V13.83H18.69C18.36 17.64 15.19 19.27 12.19 19.27C8.36 19.27 5 16.25 5 12C5 7.9 8.2 4.73 12.2 4.73C15.29 4.73 17.1 6.7 17.1 6.7L19 4.72C19 4.72 16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12C2.03 17.05 6.16 22 12.25 22C17.6 22 21.5 18.33 21.5 12.91C21.5 11.76 21.35 11.1 21.35 11.1Z' fill='currentColor'/></svg>
@@ -250,6 +268,7 @@ export default function Sidebar() {
   const isQlOpsParentActive = location.pathname === '/dashboard/lq-ops' || location.pathname === '/dashboard/lq-ops-monthly' || location.pathname === '/dashboard/lq-ops-detail' || location.pathname === '/dashboard/lq-ops-ai-detail' || location.pathname === '/dashboard/lq-ops-human-unassigned' || location.pathname === '/dashboard/lq-ops-ai-unassigned'
   const isAgentsParentActive = location.pathname === '/dashboard/agents' || location.pathname === '/dashboard/marketing-performance'
   const isLeadSquaredParentActive = location.pathname.startsWith('/dashboard/leadsquared')
+  const isCeoB2CParentActive = location.pathname === '/dashboard/ceo-b2c-pnl' || location.pathname === '/dashboard/ceo-b2c-cashflow'
 
   const [metaExpanded, setMetaExpanded] = React.useState(isMetaParentActive)
   React.useEffect(() => { if (isMetaParentActive) setMetaExpanded(true) }, [isMetaParentActive])
@@ -266,8 +285,11 @@ export default function Sidebar() {
   const [leadSquaredExpanded, setLeadSquaredExpanded] = React.useState(isLeadSquaredParentActive)
   React.useEffect(() => { if (isLeadSquaredParentActive) setLeadSquaredExpanded(true) }, [isLeadSquaredParentActive])
 
-  const getExpanded = (label) => label === 'Meta Ads' ? metaExpanded : label === 'Google Ads' ? googleExpanded : label === 'QL Ops' ? qlOpsExpanded : label === 'Agents' ? agentsExpanded : label === 'LeadSquared' ? leadSquaredExpanded : false
-  const setExpanded = (label) => label === 'Meta Ads' ? setMetaExpanded : label === 'Google Ads' ? setGoogleExpanded : label === 'QL Ops' ? setQlOpsExpanded : label === 'Agents' ? setAgentsExpanded : label === 'LeadSquared' ? setLeadSquaredExpanded : () => {}
+  const [ceoB2CExpanded, setCeoB2CExpanded] = React.useState(isCeoB2CParentActive)
+  React.useEffect(() => { if (isCeoB2CParentActive) setCeoB2CExpanded(true) }, [isCeoB2CParentActive])
+
+  const getExpanded = (label) => label === 'Meta Ads' ? metaExpanded : label === 'Google Ads' ? googleExpanded : label === 'QL Ops' ? qlOpsExpanded : label === 'Agents' ? agentsExpanded : label === 'LeadSquared' ? leadSquaredExpanded : label === 'CEO B2C' ? ceoB2CExpanded : false
+  const setExpanded = (label) => label === 'Meta Ads' ? setMetaExpanded : label === 'Google Ads' ? setGoogleExpanded : label === 'QL Ops' ? setQlOpsExpanded : label === 'Agents' ? setAgentsExpanded : label === 'LeadSquared' ? setLeadSquaredExpanded : label === 'CEO B2C' ? setCeoB2CExpanded : () => {}
 
   const toggle = () => {
     const next = !collapsed
@@ -291,7 +313,7 @@ export default function Sidebar() {
     // Admin sees everything
     if (userRole === 'admin') return true
     // Plain viewer = all dashboards EXCEPT ask-ai/agents (must be explicitly granted)
-    if (userRole === 'viewer') return id !== 'ask_ai' && id !== 'agents' && id !== 'marketing_performance' && id !== 'ceo_b2c'
+    if (userRole === 'viewer') return id !== 'ask_ai' && id !== 'agents' && id !== 'marketing_performance' && id !== 'ceo_b2c_pnl' && id !== 'ceo_b2c_cashflow'
     // Custom viewer access: "viewer:home,meta_ads,..." — only granted ids are visible
     if (userRole?.startsWith('viewer:')) {
       const granted = userRole.replace('viewer:', '').split(',').filter(Boolean)
@@ -301,7 +323,7 @@ export default function Sidebar() {
     if (userRole === 'roas_only') return id === 'roas'
     if (userRole?.startsWith('custom:')) return userRole.replace('custom:', '').split(',').filter(Boolean).includes(id)
     // Fallback: treat unknown as viewer (no ask-ai/agents)
-    return id !== 'ask_ai' && id !== 'agents' && id !== 'marketing_performance' && id !== 'ceo_b2c'
+    return id !== 'ask_ai' && id !== 'agents' && id !== 'marketing_performance' && id !== 'ceo_b2c_pnl' && id !== 'ceo_b2c_cashflow'
   }
 
   const initials = user?.name
@@ -335,7 +357,8 @@ export default function Sidebar() {
     item.label === 'Google Ads' ? isGoogleParentActive :
     item.label === 'QL Ops' ? isQlOpsParentActive :
     item.label === 'Agents' ? isAgentsParentActive :
-    item.label === 'LeadSquared' ? isLeadSquaredParentActive : false
+    item.label === 'LeadSquared' ? isLeadSquaredParentActive :
+    item.label === 'CEO B2C' ? isCeoB2CParentActive : false
 
   // Collapsed-rail flyout: hovering a parent item with subItems opens a fixed-position
   // panel listing its sub-pages, since the icon-only rail has no room to show them inline.
