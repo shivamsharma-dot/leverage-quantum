@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import Dropdown from '../components/Dropdown'
+import DateRangePicker from '../components/DateRangePicker'
 import KPICard from '../components/KPICard'
 import Button from '../components/Button'
 import SlackReportPanel from '../components/SlackReportPanel'
@@ -40,6 +41,22 @@ function sub(a, b) { if (a == null && b == null) return null; return (a == null 
 function col(rows, k) { let t = null; for (const r of rows) { if (r[k] != null) t = (t == null ? 0 : t) + r[k] } return t }
 function roll(o, defs) { return defs.reduce(function (a, d) { return plus(a, o[d[0]]) }, null) }
 function ist(off) { return new Date(Date.now() + (off || 0) * 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) }
+// Pure calendar-date arithmetic on 'YYYY-MM-DD' strings -- Date.UTC keeps this
+// immune to local-timezone/DST shifts, since these are already plain calendar
+// dates with no time component to get confused about.
+function shiftDate(iso, days) {
+  const p = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(p[0], p[1] - 1, p[2]))
+  dt.setUTCDate(dt.getUTCDate() + days)
+  return dt.toISOString().slice(0, 10)
+}
+function daysBetweenIncl(fromIso, toIso) {
+  const f = fromIso.split('-').map(Number)
+  const t = toIso.split('-').map(Number)
+  const a = Date.UTC(f[0], f[1] - 1, f[2])
+  const b = Date.UTC(t[0], t[1] - 1, t[2])
+  return Math.round((b - a) / 86400000) + 1
+}
 
 // Every total on this page is built the same way: trust the sheet's own total
 // column when it is filled, otherwise add the line items up.
@@ -84,7 +101,9 @@ const STATEMENT_LABELS = {
     dataKey: 'pnl', pageTitle: 'Daily P&L',
     revGroup: 'Revenue', costGroup: 'Cost',
     totalRev: 'Total Revenue', totalCost: 'Total Cost', net: 'Net Inflow',
-    kpiRev: 'MTD Revenue', kpiCost: 'MTD Cost', kpiNet: 'MTD Net Inflow',
+    // Root words for the KPI cards -- the active date preset (MTD/Last Day/
+    // Last 7D/Range) prefixes these at render time instead of hardcoding MTD.
+    kpiRev: 'Revenue', kpiCost: 'Cost', kpiNet: 'Net Inflow',
     tableTitle: 'Revenue → Cost → Net Inflow',
     chartTitleDaily: 'Daily revenue, cost and net inflow',
     chartTitleCum: 'Cumulative revenue, cost and net inflow',
@@ -94,7 +113,7 @@ const STATEMENT_LABELS = {
     dataKey: 'cashFlow', pageTitle: 'Daily Cash Flow',
     revGroup: 'Cash Inflow', costGroup: 'Cash Outflow',
     totalRev: 'Total Cash Inflow', totalCost: 'Total Cash Outflow', net: 'Net Cash Inflow',
-    kpiRev: 'MTD Cash Inflow', kpiCost: 'MTD Cash Outflow', kpiNet: 'MTD Net Cash Inflow',
+    kpiRev: 'Cash Inflow', kpiCost: 'Cash Outflow', kpiNet: 'Net Cash Inflow',
     tableTitle: 'Cash Inflow → Cash Outflow → Net Cash Inflow',
     chartTitleDaily: 'Daily cash inflow, outflow and net cash inflow',
     chartTitleCum: 'Cumulative cash inflow, outflow and net cash inflow',
@@ -111,6 +130,14 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   const [loading, setLoading] = useState(true)
   const [month, setMonth] = useState('')
   const [mode, setMode] = useState('daily')
+  // Date-range preset, alongside the existing Month dropdown. 'mtd' (the
+  // default) preserves today's exact behaviour -- month-to-date, unchanged.
+  // The other three scope the table/KPIs/chart to a rolling or custom window
+  // instead, independent of which month happens to be selected.
+  const [preset, setPreset] = useState('mtd')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [customOpen, setCustomOpen] = useState(false)
 
   useEffect(function () {
     let alive = true
@@ -140,23 +167,56 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     if (months.length && months.indexOf(month) === -1) setMonth(months[months.length - 1])
   }, [months, month])
 
-  const rows = useMemo(function () { return upto.filter(function (d) { return d.month === month }) }, [upto, month])
+  // null means "use the Month dropdown, month-to-date" (today's original
+  // behaviour); any other preset scopes both `rows` and the comparison window
+  // to a real date range instead.
+  const activeWindow = useMemo(function () {
+    if (preset === 'ld') return { from: d1, to: d1 }
+    if (preset === 'l7d') return { from: shiftDate(d1, -6), to: d1 }
+    if (preset === 'custom' && customFrom && customTo) {
+      return customFrom <= customTo ? { from: customFrom, to: customTo } : { from: customTo, to: customFrom }
+    }
+    return null
+  }, [preset, d1, customFrom, customTo])
+
+  const rows = useMemo(function () {
+    if (activeWindow) return upto.filter(function (d) { return d.date >= activeWindow.from && d.date <= activeWindow.to })
+    return upto.filter(function (d) { return d.month === month })
+  }, [upto, month, activeWindow])
   const last = rows.length ? rows[rows.length - 1] : null
   const mtd = useMemo(function () { return totals(rows, REV) }, [rows, REV])
 
   // Compare like with like: a 12-day month to date is measured against the
-  // first 12 days of the month before, never against its finished total.
+  // first 12 days of the month before, never against its finished total. A
+  // preset window instead compares against the immediately preceding window
+  // of the exact same length (e.g. Last 7D vs the 7 days before that).
   const prevMonth = useMemo(function () {
     const i = months.indexOf(month)
     return i > 0 ? months[i - 1] : ''
   }, [months, month])
+  const comparePrevWindow = useMemo(function () {
+    if (!activeWindow) return null
+    const n = daysBetweenIncl(activeWindow.from, activeWindow.to)
+    const to = shiftDate(activeWindow.from, -1)
+    return { from: shiftDate(to, -(n - 1)), to: to }
+  }, [activeWindow])
   const prevRows = useMemo(function () {
+    if (comparePrevWindow) return upto.filter(function (d) { return d.date >= comparePrevWindow.from && d.date <= comparePrevWindow.to })
     if (!prevMonth) return []
     return upto.filter(function (d) { return d.month === prevMonth }).slice(0, rows.length)
-  }, [upto, prevMonth, rows.length])
+  }, [upto, comparePrevWindow, prevMonth, rows.length])
   const prev = useMemo(function () { return totals(prevRows, REV) }, [prevRows, REV])
   const hasPrev = prevRows.length > 0
-  const prevLab = hasPrev ? shortOf(prevMonth) + ' 1\u2013' + prevRows.length : ''
+  const prevLab = comparePrevWindow
+    ? (comparePrevWindow.from === comparePrevWindow.to ? comparePrevWindow.from : comparePrevWindow.from + ' to ' + comparePrevWindow.to)
+    : (hasPrev ? shortOf(prevMonth) + ' 1\u2013' + prevRows.length : '')
+
+  // What to call the active window everywhere it needs a human label -- KPI
+  // card sub-lines, the table's period column, the empty state.
+  const periodLabel = preset === 'ld' ? 'Last Day' : preset === 'l7d' ? 'Last 7D' : preset === 'custom' ? 'Range' : 'MTD'
+  const windowLabel = activeWindow
+    ? (activeWindow.from === activeWindow.to ? activeWindow.from : activeWindow.from + ' to ' + activeWindow.to)
+    : (month ? month.replace('-', ' ') + ', through ' + d1 : '')
 
   const day = useMemo(function () {
     if (!last) return null
@@ -208,19 +268,21 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   // not the calendar year, which is the standard Indian-business reading.
   const fy = useMemo(function () {
     if (!rows.length) return null
-    const p = String(month || '').split('-')
-    const mi = MONTHS.indexOf(String(p[0]).toLowerCase())
-    const y = parseInt(p[1], 10)
-    if (mi < 0 || !isFinite(y)) return null
-    const sy = mi >= 3 ? y : y - 1
-    const from = sy + '-04-01'
+    // Anchored on the latest date actually in view, not on the Month dropdown
+    // -- this way it stays correct however `rows` got scoped (MTD, LD, L7D,
+    // or a custom range), always stopping at exactly the same cut-off.
     const to = rows[rows.length - 1].date
+    const y = parseInt(to.slice(0, 4), 10)
+    const mo = parseInt(to.slice(5, 7), 10)
+    if (!isFinite(y) || !isFinite(mo)) return null
+    const sy = mo >= 4 ? y : y - 1
+    const from = sy + '-04-01'
     const t = totals(upto.filter(function (d) { return d.date >= from && d.date <= to }), REV)
     t.from = from
     t.to = to
     t.label = 'FY ' + sy + '-' + String((sy + 1) % 100).padStart(2, '0')
     return t
-  }, [rows, upto, month, REV])
+  }, [rows, upto, REV])
   const fyMargin = fy && fy.rev ? (fy.net / fy.rev) * 100 : null
 
   // H1 of that same fiscal year: 1 April to 30 September. Capped at whatever
@@ -268,7 +330,9 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
 
   // Where the month lands if the days still to come look like the days so far.
   // Only shown mid-month; on the last day it would just repeat the MTD figure.
-  const dim = monthDays(month)
+  // Doesn't apply to a rolling/custom window (LD, L7D, Custom) -- there's no
+  // "month" for a 7-day window to run-rate against, so this stays MTD-only.
+  const dim = activeWindow ? null : monthDays(month)
   const runRate = useCallback(function (v) {
     if (v == null || !rows.length || !dim || rows.length >= dim) return null
     return (v / rows.length) * dim
@@ -310,7 +374,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   }, [planRows])
   const buildSlackContext = useCallback(function () {
     return {
-      monthLabel: String(month || '').replace('-', ' '),
+      monthLabel: activeWindow ? windowLabel : String(month || '').replace('-', ' '),
       through: d1,
       rev: { sr: mtd.sr, ac: mtd.ac, vas: mtd.vas, off: mtd.offRev, total: mtd.rev },
       cost: { pm: mtd.pm, op: mtd.op, off: mtd.offCost, corp: mtd.corp, people: mtd.people, total: mtd.cost },
@@ -359,7 +423,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       sources: [
         {
           id: 'src_sheet', title: 'Daily P&L tab', status: 'complete',
-          details: rows.length + ' completed day(s) read for ' + String(month || '').replace('-', ' ') + ', up to ' + d1 + '. The current day is never included.',
+          details: rows.length + ' completed day(s) read for ' + (activeWindow ? windowLabel : String(month || '').replace('-', ' ') + ', up to ' + d1) + '. The current day is never included.',
           output: 'Revenue ' + inr(mtd.rev) + ' \u00b7 cost ' + inr(mtd.cost) + ' \u00b7 net ' + inr(mtd.net),
           url: 'https://quantum.leverageedu.com/dashboard/ceo-b2c-pnl', label: 'Daily P&L',
         },
@@ -380,7 +444,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         },
       ]
     }
-  }, [month, d1, mtd, margin, day, peopleMonthly, fy, dim, rows.length, hasPrev, prev, prevRows.length, prevLab, prevMargin, mgDelta, hasPlan, shortMonth, dayStats])
+  }, [month, d1, mtd, margin, day, peopleMonthly, fy, dim, rows.length, hasPrev, prev, prevRows.length, prevLab, prevMargin, mgDelta, hasPlan, shortMonth, dayStats, activeWindow, windowLabel])
   const captureSlackFiles = useCallback(async function () {
     await nextPaint()
     const node = tableRef.current
@@ -388,7 +452,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     // to survive being opened on a phone. captureNodePng walks the ratio down on
     // its own if the PNG comes out too big for the request body.
     const shot = node ? await captureNodePng(node, { ratios: [3, 2, 1.5, 1] }) : null
-    const cols = ['Line item', day ? day.date : 'Latest day', 'Month to date']
+    const cols = ['Line item', day ? day.date : 'Latest day', periodLabel]
     if (hasPrev) cols.push(prevLab)
     const spec = REV.concat([['rev', 'Total Revenue']]).concat(COST).concat([['cost', 'Total Cost'], ['net', 'Net Inflow']])
     const body = spec.map(function (d) {
@@ -400,7 +464,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       return r
     })
     return { pngBase64: shot ? shot.base64 : null, pixelRatio: shot ? shot.pixelRatio : null, csv: rowsToCsv(cols, body) }
-  }, [day, mtd, prev, hasPrev, prevLab, REV])
+  }, [day, mtd, prev, hasPrev, prevLab, REV, periodLabel])
 
   return (
     <div className={styles.layout}>
@@ -413,7 +477,31 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
           </div>
           <div className={styles.headerRight}>
             <span className={styles.badge}>Through {d1}</span>
-            {months.length > 0 ? <Dropdown options={monthOpts} value={month} onChange={setMonth} minWidth={150} /> : null}
+            <div className={styles.presetRow}>
+              <button type="button" className={preset === 'ld' ? styles.presetPillActive : styles.presetPill} onClick={function () { setPreset('ld') }}>Last Day</button>
+              <button type="button" className={preset === 'l7d' ? styles.presetPillActive : styles.presetPill} onClick={function () { setPreset('l7d') }}>Last 7D</button>
+              <button type="button" className={preset === 'mtd' ? styles.presetPillActive : styles.presetPill} onClick={function () { setPreset('mtd') }}>MTD</button>
+              <div style={{ position: 'relative' }}>
+                <button type="button" className={preset === 'custom' ? styles.presetPillActive : styles.presetPill}
+                  onClick={function () { setPreset('custom'); setCustomOpen(true) }}>
+                  {preset === 'custom' && customFrom && customTo ? customFrom + ' → ' + customTo : 'Custom range'}
+                </button>
+                {customOpen ? (
+                  <>
+                    <div onClick={function () { setCustomOpen(false); if (!(customFrom && customTo)) setPreset('mtd') }} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
+                    <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400, background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 14, boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', overflow: 'hidden' }}>
+                      <DateRangePicker
+                        from={customFrom ? (function () { const p = customFrom.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]) })() : null}
+                        to={customTo ? (function () { const p = customTo.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]) })() : null}
+                        onChange={function (f, t) { setCustomFrom(f || ''); setCustomTo(t || ''); setCustomOpen(false); if (!(f && t)) setPreset('mtd') }}
+                        onClose={function () { setCustomOpen(false); if (!(customFrom && customTo)) setPreset('mtd') }}
+                      />
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            </div>
+            {preset === 'mtd' && months.length > 0 ? <Dropdown options={monthOpts} value={month} onChange={setMonth} minWidth={150} /> : null}
             {/* Send to Slack stays P&L-only for now: the report builders it uses
                 (CEO_BRIEF_VERSIONS/B2C_REPORT_VERSIONS/B2C_LEDGER_VERSIONS) hardcode
                 "Revenue"/"Cost" wording throughout their headline text, which would
@@ -461,13 +549,13 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
           ) : null}
           {ready ? (
             <div className={styles.kpis}>
-              <KPICard label={L.kpiRev} value={inr(mtd.rev)}
-                sub={ctx(mtd.rev, hasPrev ? prev.rev : null) || (month.replace('-', ' ') + ', through ' + d1)}
+              <KPICard label={periodLabel + ' ' + L.kpiRev} value={inr(mtd.rev)}
+                sub={ctx(mtd.rev, hasPrev ? prev.rev : null) || windowLabel}
                 delta={hasPrev ? chg(mtd.rev, prev.rev) : null} />
-              <KPICard label={L.kpiCost} value={inr(mtd.cost)}
+              <KPICard label={periodLabel + ' ' + L.kpiCost} value={inr(mtd.cost)}
                 sub={ctx(mtd.cost, hasPrev ? prev.cost : null) || 'people, marketing, ops, offline, overheads'}
                 delta={hasPrev ? chg(mtd.cost, prev.cost) : null} deltaInvert />
-              <KPICard label={L.kpiNet} value={inr(mtd.net)}
+              <KPICard label={periodLabel + ' ' + L.kpiNet} value={inr(mtd.net)}
                 sub={ctx(mtd.net, hasPrev ? prev.net : null) || (isCashFlow ? 'cash inflow less cash outflow' : 'revenue less cost')}
                 delta={hasPrev ? chg(mtd.net, prev.net) : null} />
               <KPICard label="Net Margin" value={margin == null ? '\u2014' : margin.toFixed(1) + '%'}
@@ -487,7 +575,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                   <tr>
                     <th>Line item</th>
                     <th>{day ? day.date : 'Latest day'}</th>
-                    <th>Month to date</th>
+                    <th>{periodLabel}</th>
                     {hasPrev ? <th>{prevLab}</th> : null}
                     {hasPrev ? <th>Change</th> : null}
                     <th>Share</th>
@@ -568,7 +656,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
               <div className={styles.cardHead}>
                 <span className={styles.cardTitle}>{mode === 'cum' ? L.chartTitleCum : L.chartTitleDaily}</span>
                 <div className={styles.cardTools}>
-                  <span className={styles.cardSub}>{month.replace('-', ' ')}</span>
+                  <span className={styles.cardSub}>{activeWindow ? windowLabel : month.replace('-', ' ')}</span>
                   <Dropdown options={modeOpts} value={mode} onChange={setMode} minWidth={128} />
                 </div>
               </div>
