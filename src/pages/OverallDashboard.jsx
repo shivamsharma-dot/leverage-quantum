@@ -2219,33 +2219,59 @@ export default function OverallDashboard() {
     return o
   }), [trendResult.exportRows])
 
-  // Sortable on-screen table -- clicking a header sorts the raw (unrounded) values,
-  // never the formatted display strings. "Period" sorts by periodIndexes (the
-  // bucket's real chronological position), not by comparing labels like "Apr'26" --
-  // string comparison would alphabetize months into a scrambled order.
-  const [trendSortKey, setTrendSortKey] = useState('Period')
-  const [trendSortDir, setTrendSortDir] = useState('asc')
-  // Column 2 is a different dimension name depending on trendDim (Corridor vs Source vs
-  // Campaign) -- reset to Period rather than sorting by a column that no longer exists.
-  useEffect(() => { setTrendSortKey('Period'); setTrendSortDir('asc') }, [trendDim])
-  const handleTrendSort = key => {
-    if (trendSortKey === key) setTrendSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setTrendSortKey(key); setTrendSortDir(key === 'Period' ? 'asc' : 'desc') }
-  }
-  const trendTableRows = useMemo(() => {
-    const rows = trendResult.exportRows.map((raw, i) => ({ raw, fmt: trendExportRowsFmt[i], periodIndex: trendResult.periodIndexes[i] }))
-    return rows.sort((a, b) => {
-      let cmp
-      if (trendSortKey === 'Period') cmp = a.periodIndex - b.periodIndex
-      else {
-        const av = a.raw[trendSortKey], bv = b.raw[trendSortKey]
-        cmp = typeof av === 'number' && typeof bv === 'number'
-          ? (av == null ? -Infinity : av) - (bv == null ? -Infinity : bv)
-          : String(av ?? '').localeCompare(String(bv ?? ''))
-      }
-      return trendSortDir === 'asc' ? cmp : -cmp
+  // Pivoted on-screen table -- periods across the top, one row per dimension value
+  // down the side (or a single "Total" row for month/day, which has no further
+  // breakdown), cells holding whichever metric is currently picked. This is how a
+  // trend actually gets read: one row scanned left-to-right across periods, not one
+  // row per (period, value) pair scattered down a long list. The export stays in the
+  // old long format regardless -- every metric, every row -- so nothing is lost by
+  // the on-screen view only showing one metric at a time.
+  const trendMetricDef = DEEP_METRICS.find(m => m.key === trendMetric) || DEEP_METRICS[0]
+  const trendPivotDimLabel = trendIsSingleSeries ? '' : (DEEP_DIMENSIONS.find(d => d.key === trendDim)?.label || trendDim)
+  const trendPivotRows = useMemo(() => {
+    const periodCount = trendBuckets.length
+    if (trendIsSingleSeries) {
+      const values = trendBuckets.map((_, i) => trendResult.chartRows[i]?.value ?? null)
+      return [{ label:'Total', values }]
+    }
+    const dimLabel = DEEP_DIMENSIONS.find(d => d.key === trendDim)?.label || trendDim
+    const byLabel = new Map()
+    trendResult.exportRows.forEach((r, i) => {
+      const idx = trendResult.periodIndexes[i]
+      const key = r[dimLabel]
+      let arr = byLabel.get(key)
+      if (!arr) { arr = new Array(periodCount).fill(null); byLabel.set(key, arr) }
+      arr[idx] = r[trendMetricDef.label]
     })
-  }, [trendResult.exportRows, trendResult.periodIndexes, trendExportRowsFmt, trendSortKey, trendSortDir])
+    return [...byLabel.entries()].map(([label, values]) => ({ label, values }))
+  }, [trendBuckets, trendIsSingleSeries, trendResult, trendDim, trendMetricDef])
+
+  // Default sort: total across all periods, descending, so the biggest movers lead --
+  // clicking the row-label header sorts alphabetically, clicking any period column
+  // sorts by that period's value. Resets whenever the dimension/metric changes, since
+  // a period-column sort key from a previous metric/dimension wouldn't mean the same
+  // thing (or might not even exist at the new period count).
+  const [trendPivotSortKey, setTrendPivotSortKey] = useState('__total')
+  const [trendPivotSortDir, setTrendPivotSortDir] = useState('desc')
+  useEffect(() => { setTrendPivotSortKey('__total'); setTrendPivotSortDir('desc') }, [trendDim, trendMetric])
+  const handlePivotSort = key => {
+    if (trendPivotSortKey === key) setTrendPivotSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setTrendPivotSortKey(key); setTrendPivotSortDir(key === 'label' ? 'asc' : 'desc') }
+  }
+  const trendPivotSorted = useMemo(() => {
+    const rows = [...trendPivotRows]
+    rows.sort((a, b) => {
+      if (trendPivotSortKey === 'label') {
+        const cmp = a.label.localeCompare(b.label)
+        return trendPivotSortDir === 'asc' ? cmp : -cmp
+      }
+      const av = trendPivotSortKey === '__total' ? a.values.reduce((s, v) => s + (v || 0), 0) : a.values[trendPivotSortKey]
+      const bv = trendPivotSortKey === '__total' ? b.values.reduce((s, v) => s + (v || 0), 0) : b.values[trendPivotSortKey]
+      const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv
+      return trendPivotSortDir === 'asc' ? an - bn : bn - an
+    })
+    return rows
+  }, [trendPivotRows, trendPivotSortKey, trendPivotSortDir])
 
   // Only closed days count. Today is still filling up, and half a day sitting
   // next to a full one reads as a collapse that never happened.
@@ -3559,32 +3585,39 @@ export default function OverallDashboard() {
                         </ResponsiveContainer>
                       </div>
 
-                      {/* Full data table -- every bucket/value pair, all metrics. Every
-                          header is click-to-sort; Period sorts chronologically off the
-                          bucket's real position, never off the display label string. */}
+                      {/* Pivoted table -- periods across the top, one row per dimension
+                          value (or a single Total row for month/day) down the side,
+                          showing whichever metric the picker above has selected. Every
+                          header is click-to-sort; the row-label column sorts A-Z, a
+                          period column sorts by that period's value, and the default
+                          is total-across-periods so the biggest movers lead. */}
                       <div style={{ maxHeight:340, overflowY:'auto', border:`0.5px solid ${C.border}`, borderRadius:10, marginBottom:12 }}>
                         <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
                           <thead style={{ position:'sticky', top:0, background:'var(--card)', zIndex:1 }}>
                             <tr>
-                              {Object.keys(trendExportRowsFmt[0] || { Period:'' }).map((h, i) => {
-                                const leftAlign = i < (trendIsSingleSeries ? 1 : 2)
-                                const active = trendSortKey === h
+                              <th onClick={() => handlePivotSort('label')}
+                                style={{ textAlign:'left', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color: trendPivotSortKey === 'label' ? C.navy : C.muted, fontWeight:700, fontSize:10.5, textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
+                                {trendPivotDimLabel || trendMetricDef.label}{trendPivotSortKey === 'label' ? (trendPivotSortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                              </th>
+                              {trendBuckets.map((b, i) => {
+                                const active = trendPivotSortKey === i
                                 return (
-                                  <th key={h} onClick={() => handleTrendSort(h)}
-                                    style={{ textAlign: leftAlign ? 'left' : 'right', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color: active ? C.navy : C.muted, fontWeight:700, fontSize:10.5, textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
-                                    {h}{active ? (trendSortDir === 'asc' ? ' ▲' : ' ▼') : ''}
+                                  <th key={b.key} onClick={() => handlePivotSort(i)}
+                                    style={{ textAlign:'right', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color: active ? C.navy : C.muted, fontWeight:700, fontSize:10.5, textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
+                                    {b.label}{active ? (trendPivotSortDir === 'asc' ? ' ▲' : ' ▼') : ''}
                                   </th>
                                 )
                               })}
                             </tr>
                           </thead>
                           <tbody>
-                            {trendTableRows.length === 0 ? (
-                              <tr><td colSpan={12} style={{ padding:'12px 10px', color:C.muted }}>No rows.</td></tr>
-                            ) : trendTableRows.map((row, i) => (
-                              <tr key={i} style={{ background: i % 2 ? 'var(--bg2)' : 'transparent' }}>
-                                {Object.entries(row.fmt).map(([k, v], j) => (
-                                  <td key={k} style={{ padding:'6px 10px', textAlign: j < (trendIsSingleSeries ? 1 : 2) ? 'left' : 'right', fontWeight: j < (trendIsSingleSeries ? 1 : 2) ? 600 : 400, color: j < (trendIsSingleSeries ? 1 : 2) ? C.text : C.sub, whiteSpace:'nowrap' }}>{v}</td>
+                            {trendPivotSorted.length === 0 ? (
+                              <tr><td colSpan={trendBuckets.length + 1} style={{ padding:'12px 10px', color:C.muted }}>No rows.</td></tr>
+                            ) : trendPivotSorted.map((row, i) => (
+                              <tr key={row.label} style={{ background: i % 2 ? 'var(--bg2)' : 'transparent' }}>
+                                <td style={{ padding:'6px 10px', fontWeight:600, color:C.text, whiteSpace:'nowrap', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis' }}>{row.label}</td>
+                                {row.values.map((v, j) => (
+                                  <td key={j} style={{ padding:'6px 10px', textAlign:'right', color:C.sub, whiteSpace:'nowrap' }}>{trendMetricDef.fmt(v)}</td>
                                 ))}
                               </tr>
                             ))}
