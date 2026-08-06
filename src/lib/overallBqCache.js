@@ -75,77 +75,70 @@ async function sbGet(params, extraHeaders) {
   return j
 }
 
-// One page is 1000 rows and that is not negotiable, so a July-sized window (40,284
-// rows) is 41 requests. Fetched strictly one after another that measured 22.6s in the
-// browser -- slower than the CSV path this is supposed to replace. So the first page
-// asks for 'Prefer: count=exact', which makes PostgREST return the real total in the
-// Content-Range header ('0-999/40284'), and the remaining pages are then fetched in
-// parallel batches. The same window measured 5.0s that way.
+// One page is 1000 rows and that is not negotiable. Pages used to be fetched by OFFSET
+// (via a Range header) and batched 8-at-a-time for speed -- a July-sized window (40,284
+// rows / 41 pages) measured 5.0s that way, versus 22.6s fetched one at a time.
 //
-// Ordering stays deterministic: every page carries its own explicit offset against the
-// same 'order=row_key.asc', and the pages are reassembled by offset -- never by the
-// order the responses happen to come back in.
+// Live-verified (2026-08-06) that OFFSET pagination is exactly what broke on a WIDE range
+// (e.g. Trend Analysis' 6-month window): 'OFFSET N LIMIT 1000' makes Postgres walk and
+// discard N rows in sorted order before it can return page N+1, so cost grows with how
+// deep into the result set a page sits. A 6-month range reaches offsets in the hundreds
+// of thousands; the 2-month range this page normally needs never gets past a few tens of
+// thousands. That is exactly the shape of what broke: the narrow range never failed once
+// across dozens of real fetches that session, while the wide range failed on roughly HALF
+// of every page, in whole concurrent batches -- and got WORSE, not better, once failed
+// pages started retrying, because each retry is just another expensive deep-OFFSET query
+// stacked on an already-overloaded resource.
+//
+// Fixed by paging on row_key itself: 'WHERE row_key > <last seen key> ORDER BY row_key
+// LIMIT 1000'. A keyset seek on an indexed primary key costs about the same whether it is
+// page 1 or page 200, so failures stop scaling with range width. The trade-off: a cursor
+// page needs the PREVIOUS page's last key, so pages are fetched one after another rather
+// than in parallel batches -- slower in the best case, but the parallel path was never
+// reliably finishing a wide fetch at all, so this trades peak speed for actually working.
 const PAGE = 1000
-const CONCURRENCY = 8
 
-async function sbGetPage(params, offset, wantCount) {
-  const h = { Range: offset + '-' + (offset + PAGE - 1) }
-  if (wantCount) h.Prefer = 'count=exact'
-  const r = await fetch(SB_URL + '/rest/v1/' + TABLE + '?' + params.toString(), { headers: headers(h) })
+async function sbGetPage(params, cursor) {
+  const p = new URLSearchParams(params)
+  if (cursor != null) p.set('row_key', 'gt.' + cursor)
+  p.set('limit', String(PAGE))
+  const r = await fetch(SB_URL + '/rest/v1/' + TABLE + '?' + p.toString(), { headers: headers() })
   if (!r.ok) throw new Error('overall_bq_daily read failed (' + r.status + ')')
   const rows = await r.json()
   if (!Array.isArray(rows)) throw new Error('overall_bq_daily returned a non-array response')
-  const total = Number(String(r.headers.get('content-range') || '').split('/')[1])
-  return { rows: rows, total: Number.isFinite(total) ? total : null }
+  return rows
 }
 
-// Live-verified via network inspection (2026-08-06): a wide range (e.g. the 6-month
-// window Trend Analysis needs) can need ~200 pages, fetched CONCURRENCY-at-a-time. Two
-// full batches of them came back 500 in a row that session -- a resource-limit symptom
-// under concurrent load (this is Supabase's free tier), not a random one-off. The
-// caller's own outer retry re-does the ENTIRE multi-hundred-request fetch from page 0 on
-// any single page's failure, which just repeats the same batch shape and hits the same
-// wall again -- that is why a page 500ing 'sometimes' turned into the whole view falling
-// back to the slow CSV path 'very frequently'. Retrying the ONE flaky page in place, after
-// its batch-mates have already finished, gives it a real second chance without discarding
-// every page that already succeeded or re-triggering the same all-at-once contention.
-async function sbGetPageRetry(params, offset, wantCount, attempts = 4, delay = 500) {
+// A cursor seek is cheap regardless of depth, so a page should rarely fail at all now --
+// this is a light safety net for a genuine one-off network blip, not the primary
+// reliability mechanism the way retrying used to be under OFFSET pagination.
+async function sbGetPageRetry(params, cursor, attempts = 3, delay = 400) {
   let lastErr
   for (let i = 0; i < attempts; i++) {
-    try { return await sbGetPage(params, offset, wantCount) }
+    try { return await sbGetPage(params, cursor) }
     catch (e) { lastErr = e; if (i < attempts - 1) await new Promise(res => setTimeout(res, delay * (i + 1))) }
   }
   throw lastErr
 }
 
 async function fetchAllPaginated(params) {
-  const first = await sbGetPageRetry(params, 0, true)
-  if (first.rows.length < PAGE) return first.rows
+  // row_key is the cursor column -- make sure it rides along even if a caller's own
+  // select list never asked for it, then strip it back off before returning so every
+  // caller still sees exactly the row shape mapRow() has always expected.
+  const p = new URLSearchParams(params)
+  const sel = p.get('select') || ''
+  if (!/(^|,)row_key(,|$)/.test(sel)) p.set('select', sel ? sel + ',row_key' : 'row_key')
 
-  const offsets = []
-  if (first.total != null) { for (let o = PAGE; o < first.total; o += PAGE) offsets.push(o) }
-  const pages = new Array(offsets.length)
-  for (let i = 0; i < offsets.length; i += CONCURRENCY) {
-    const batch = await Promise.all(offsets.slice(i, i + CONCURRENCY).map(o => sbGetPageRetry(params, o, false)))
-    batch.forEach((b, k) => { pages[i + k] = b.rows })
+  let all = []
+  let cursor = null
+  for (let guard = 0; guard < 2000; guard++) { // 20,00,000-row safety valve
+    const rows = await sbGetPageRetry(p, cursor)
+    if (!rows.length) break
+    all = all.concat(rows)
+    if (rows.length < PAGE) break
+    cursor = rows[rows.length - 1].row_key
   }
-  let all = first.rows
-  for (const p of pages) all = all.concat(p || [])
-
-  // Belt and braces: if the count header were ever missing we would have no offsets to
-  // parallelise over, so walk sequentially from wherever we got to. A short read must
-  // never pass silently -- that is exactly the class of bug that produced a wrong
-  // Total QL figure off overall_funnel_daily.
-  if (first.total == null) {
-    let offset = all.length
-    for (let guard = 0; guard < 400; guard++) { // 4,00,000-row safety valve
-      const page = await sbGetPageRetry(params, offset, false)
-      all = all.concat(page.rows)
-      if (page.rows.length < PAGE) break
-      offset += PAGE
-    }
-  }
-  return all
+  return all.map(r => { const { row_key, ...rest } = r; return rest })
 }
 
 // 'in.(...)' is a comma-separated list, so every value is quoted: Source values
