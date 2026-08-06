@@ -12,6 +12,12 @@ const ALLOWED_DOMAIN = 'leverageedu.com'
 export default function LoginScene({
   success, loading, error, gsiWidth = 300,
   onGoogleSuccess = () => {}, onGoogleError = () => {},
+  // Email/magic-link sign-in. Kept prop-driven (no hooks here) like every
+  // other block below -- all real state/handlers live in LoginPage.jsx.
+  verifying = false,
+  emailMode = false, onToggleEmailMode = () => {},
+  magicEmail = '', onMagicEmailChange = () => {}, onMagicSubmit = () => {},
+  magicSending = false, magicSent = false, magicMessage = '', onMagicReset = () => {},
 }) {
   // Shared, auth-critical block -- the real sign-in logic only exists once.
   // `dark` picks the Google button's own theme so it still reads correctly
@@ -111,15 +117,66 @@ export default function LoginScene({
     )
   }
 
+  if (verifying) {
+    return auroraShell(
+      <div role="status" aria-live="polite">
+        {auroraMark}
+        <h1 className={styles.lAuroraWord}>Verifying your link</h1>
+        <p className={styles.lAuroraTag}>One moment…</p>
+      </div>
+    )
+  }
+
+  const emailBody = magicSent ? (
+    <div className={styles.lAuroraSent} role="status" aria-live="polite">
+      <p className={styles.lAuroraSentTitle}>Check your inbox</p>
+      <p className={styles.lAuroraSentSub}>{magicMessage || 'If that email has access, a sign-in link is on its way.'}</p>
+      <button type="button" className={styles.lAuroraEmailBack} onClick={onMagicReset} style={{ marginTop: 10 }}>
+        Use a different email
+      </button>
+    </div>
+  ) : emailMode ? (
+    <form
+      className={styles.lAuroraEmailForm}
+      onSubmit={(e) => { e.preventDefault(); onMagicSubmit() }}
+    >
+      <input
+        type="email"
+        required
+        autoFocus
+        placeholder="you@leverageedu.com"
+        className={styles.lAuroraEmailInput}
+        value={magicEmail}
+        onChange={(e) => onMagicEmailChange(e.target.value)}
+        disabled={magicSending}
+      />
+      <button type="submit" className={styles.lAuroraEmailSubmit} disabled={magicSending || !magicEmail}>
+        {magicSending ? 'Sending…' : 'Send me a link'}
+      </button>
+      <button type="button" className={styles.lAuroraEmailBack} onClick={onToggleEmailMode}>
+        ← Back
+      </button>
+    </form>
+  ) : (
+    <>
+      {/* the reference's button is 432px wide; Google caps its own widget at
+          400, so this is the widest match achievable with the real widget */}
+      {googleBlock(false, gsiWidth >= 360 ? 400 : gsiWidth)}
+      <div className={styles.lAuroraToggleRow}>
+        <button type="button" className={styles.lAuroraToggleLink} onClick={onToggleEmailMode}>
+          Sign in with email instead
+        </button>
+      </div>
+    </>
+  )
+
   return auroraShell(
     <>
       {auroraMark}
       <h1 className={styles.lAuroraWord}>Quantum</h1>
       <p className={styles.lAuroraTag}>Internal analytics for the marketing team.</p>
       {errorBlock(true)}
-      {/* the reference's button is 432px wide; Google caps its own widget at
-          400, so this is the widest match achievable with the real widget */}
-      {googleBlock(false, gsiWidth >= 360 ? 400 : gsiWidth)}
+      {emailBody}
       {footNote(true)}
     </>
   )

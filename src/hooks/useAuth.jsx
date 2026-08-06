@@ -150,6 +150,45 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // Ask for a one-time sign-in link by email. The response is deliberately
+  // the same generic "check your inbox" message whether or not the email is
+  // actually on the access list -- the server never reveals which (see
+  // api/auth.mjs's MAGIC_GENERIC_RESPONSE), so there is nothing more specific
+  // to branch on here either.
+  const requestMagicLink = async (email) => {
+    try {
+      const r = await fetch('/api/auth?action=magic-request', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await r.json().catch(() => ({}))
+      return { success: r.ok, message: data.message || 'If that email has access, a sign-in link is on its way.' }
+    } catch {
+      return { success: false, message: 'Network error. Please try again.' }
+    }
+  }
+
+  // Consume a one-time link (the token from ?token= in the URL).
+  const verifyMagicLink = async (token) => {
+    try {
+      const r = await fetch('/api/auth?action=magic-verify', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      })
+      const data = await r.json()
+      if (!r.ok) return { success: false, error: data.error || 'Sign-in failed.' }
+      setUser(data.user)
+      fetchHiddenPages()
+      return { success: true }
+    } catch {
+      return { success: false, error: 'Network error. Please try again.' }
+    }
+  }
+
   const logout = async () => {
     // ---- Premium animated sign-out ----
     const kf = document.createElement('style');
@@ -236,7 +275,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, hiddenPages, prefsReady, loginWithGoogle, logout, ALLOWED_DOMAIN }}>
+    <AuthContext.Provider value={{ user, loading, hiddenPages, prefsReady, loginWithGoogle, requestMagicLink, verifyMagicLink, logout, ALLOWED_DOMAIN }}>
       {children}
     </AuthContext.Provider>
   )

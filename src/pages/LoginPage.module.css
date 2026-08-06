@@ -439,6 +439,45 @@
 /* and 16px down to the footnote (the reference has a second 40px button here) */
 .lAuroraCard .footer { margin-top: 16px; padding-top: 14px; }
 
+/* -- email / magic-link sign-in -- same pill radius as the Google button so
+   it reads as one family of controls, not a bolted-on form. -- */
+.lAuroraToggleRow { position: relative; z-index: 1; margin-top: 14px; text-align: center; }
+.lAuroraToggleLink {
+  font: inherit; font-size: 13px; font-weight: 600; color: #1C9FD4;
+  background: none; border: none; cursor: pointer; padding: 4px;
+}
+.lAuroraToggleLink:hover { color: #1F3C84; text-decoration: underline; }
+
+.lAuroraEmailForm { position: relative; z-index: 1; margin-top: 24px; display: flex; flex-direction: column; gap: 10px; }
+.lAuroraEmailInput {
+  width: 100%; box-sizing: border-box; padding: 12px 18px; border-radius: 100px;
+  border: 1px solid rgba(15,27,51,0.14); background: rgba(255,255,255,0.7);
+  font: inherit; font-size: 14px; color: #0F1B33; text-align: center;
+  outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.lAuroraEmailInput:focus { border-color: #1C9FD4; box-shadow: 0 0 0 3px rgba(28,159,212,0.14); }
+.lAuroraEmailInput::placeholder { color: #94A3B8; }
+.lAuroraEmailSubmit {
+  width: 100%; padding: 12px 18px; border-radius: 100px; border: none;
+  background: #1F3C84; color: #fff; font: inherit; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: background .15s;
+}
+.lAuroraEmailSubmit:hover { background: #17306B; }
+.lAuroraEmailSubmit:disabled { opacity: .55; cursor: default; }
+.lAuroraEmailBack {
+  font: inherit; font-size: 12.5px; font-weight: 600; color: #8A94A6;
+  background: none; border: none; cursor: pointer; padding: 4px; align-self: center;
+}
+.lAuroraEmailBack:hover { color: #1F3C84; }
+
+.lAuroraSent {
+  position: relative; z-index: 1; margin-top: 24px; padding: 18px 18px 14px;
+  border-radius: 16px; background: rgba(76,174,111,0.08); border: 1px solid rgba(76,174,111,0.25);
+  text-align: center;
+}
+.lAuroraSentTitle { margin: 0 0 4px; font-size: 14px; font-weight: 700; color: #0F1B33; }
+.lAuroraSentSub { margin: 0; font-size: 12.5px; line-height: 1.5; color: #64748B; }
+
 @media (max-width: 560px) {
   .lAuroraCard { max-width: 100%; padding: 28px 20px 14px; border-radius: 24px; }
   .lAuroraTile { width: 72px; height: 72px; border-radius: 18px; margin-bottom: 14px; }
