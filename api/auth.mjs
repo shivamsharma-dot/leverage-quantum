@@ -20,40 +20,89 @@ function nameFromEmail(email) {
   return local.split(/[._-]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(' ') || local
 }
 
-function magicLinkEmailHtml(link) {
-  // Table/div-based, no inline <svg> -- matches the rest of this app's email
-  // templates (see api/send-report.mjs), which avoid SVG for mail-client safety.
-  return `<!doctype html><html><body style="margin:0;padding:0;background:#F4F6F9;font-family:'Plus Jakarta Sans',Arial,sans-serif;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
-<tr><td align="center">
-<table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 6px 24px rgba(15,23,42,0.08);">
-<tr><td style="height:4px;background:#4CAE6F;"></td></tr>
-<tr><td style="height:4px;background:#1C9FD4;"></td></tr>
-<tr><td style="height:4px;background:#1F3C84;"></td></tr>
-<tr><td style="padding:36px 32px 28px;">
-<table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="width:10px;height:26px;background:#4CAE6F;border-radius:2px;"></td>
-<td style="width:6px;"></td>
-<td style="width:10px;height:34px;background:#1C9FD4;border-radius:2px;"></td>
-<td style="width:6px;"></td>
-<td style="width:10px;height:42px;background:#1F3C84;border-radius:2px;"></td>
-<td style="width:12px;"></td>
-<td style="font-size:18px;font-weight:800;color:#1F3C84;letter-spacing:0.5px;">QUANTUM</td>
-</tr></table>
-<h1 style="margin:24px 0 8px;font-size:22px;font-weight:800;color:#0F172A;">Sign in to Quantum</h1>
-<p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#64748B;">Click the button below to sign in. This link expires in 15 minutes and can only be used once.</p>
-<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:10px;background:#1F3C84;">
-<a href="${link}" style="display:inline-block;padding:13px 28px;font-size:14px;font-weight:700;color:#fff;text-decoration:none;">Sign in</a>
-</td></tr></table>
-<p style="margin:28px 0 0;font-size:12px;line-height:1.6;color:#94A3B8;">Didn't request this? You can safely ignore this email -- nobody can sign in without clicking this exact link.</p>
-</td></tr>
-<tr><td style="padding:16px 32px;background:#F8FAFC;border-top:1px solid #EEF1F6;">
-<p style="margin:0;font-size:11px;color:#94A3B8;text-align:center;">Leverage Quantum &middot; Internal analytics for the marketing team</p>
-</td></tr>
-</table>
-</td></tr>
-</table>
-</body></html>`
+// ── Brand constants + the established report/answer email skeleton (top
+// accent stripe / logo lockup / white card / footer bar) -- byte-identical
+// values to api/send-report.mjs's buildChatAnswerEmail, not reinvented. Email
+// clients can't reliably render inline <svg>, hence table-cell divs instead
+// of shared/brandLogo.mjs's brandLogoSvgMarkup(); the bar heights/colors/order
+// (green 9px / blue 14px / navy 17px) MUST stay byte-identical to that file --
+// see its header comment for the full list of consumers this joins. ──
+const NAVY = '#1F3C84'
+const BLUE = '#1C9FD4'
+const CYAN = '#29B9C3'
+const GREEN = '#4CAE6F'
+const EMAIL_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"
+
+function magicLinkEmailHtml(link, email) {
+  const todayLabel = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="color-scheme" content="light">
+<title>Sign in to Quantum</title></head>
+<body style="margin:0;padding:0;background-color:#F4F6F9;font-family:${EMAIL_FONT};color:#0F172A;-webkit-font-smoothing:antialiased">
+<div style="margin:0;padding:32px 12px;background-color:#F4F6F9">
+<div style="max-width:600px;margin:0 auto">
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:20px 20px 0 0;overflow:hidden">
+    <tr>
+      <td width="25%" style="background-color:${NAVY};font-size:0;line-height:0;height:5px">&nbsp;</td>
+      <td width="25%" style="background-color:${BLUE};font-size:0;line-height:0;height:5px">&nbsp;</td>
+      <td width="25%" style="background-color:${CYAN};font-size:0;line-height:0;height:5px">&nbsp;</td>
+      <td width="25%" style="background-color:${GREEN};font-size:0;line-height:0;height:5px">&nbsp;</td>
+    </tr>
+  </table>
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;box-shadow:0 24px 60px -24px rgba(15,23,42,0.18);border-left:1px solid #EEF1F6;border-right:1px solid #EEF1F6">
+    <tr><td style="padding:32px 36px 24px">
+
+      <table cellpadding="0" cellspacing="0"><tr>
+        <td style="vertical-align:middle;padding-right:12px">
+          <table cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #EEF1F6;border-radius:10px;box-shadow:0 3px 10px rgba(15,23,42,0.10)">
+            <tr><td style="padding:9px 11px">
+              <table cellpadding="0" cellspacing="0"><tr>
+                <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:9px;background-color:${GREEN};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+                <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:14px;background-color:${BLUE};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+                <td valign="bottom"><div style="width:4px;height:17px;background-color:${NAVY};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
+              </tr></table>
+            </td></tr>
+          </table>
+        </td>
+        <td style="vertical-align:middle">
+          <div style="font-size:16px;font-weight:800;color:${NAVY};letter-spacing:.02em;line-height:1.2">Leverage Quantum</div>
+        </td>
+      </tr></table>
+
+      <div style="margin-top:22px">
+        <span style="display:inline-block;padding:4px 11px;border-radius:20px;background-color:#EAF2FC;font-size:10px;font-weight:700;color:${NAVY};letter-spacing:.08em;text-transform:uppercase">Account Sign-in</span>
+      </div>
+      <div style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.35;margin:12px 0 6px">Sign in to Quantum</div>
+      <div style="font-size:12.5px;color:#94A3B8">Requested for <span style="color:#64748B;font-weight:600">${email}</span> &middot; expires in 15 minutes, one-time use</div>
+
+    </td></tr>
+
+    <tr><td style="padding:0 36px">
+      <div style="height:1px;background-color:#EEF1F6"></div>
+    </td></tr>
+
+    <tr><td style="padding:28px 36px 32px;text-align:center">
+      <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#64748B">Click the button below to sign in to your dashboards.</p>
+      <table cellpadding="0" cellspacing="0" style="margin:0 auto"><tr><td style="border-radius:10px;background-color:${NAVY};box-shadow:0 3px 10px rgba(31,60,132,0.28)">
+        <a href="${link}" style="display:inline-block;padding:13px 32px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none">Sign in to Quantum</a>
+      </td></tr></table>
+      <p style="margin:24px 0 0;font-size:12px;line-height:1.6;color:#94A3B8">Didn't request this? You can safely ignore this email &mdash; nobody can sign in without clicking this exact link.</p>
+    </td></tr>
+  </table>
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F8FAFC;border-radius:0 0 20px 20px;border:1px solid #EEF1F6;border-top:none">
+    <tr><td style="padding:16px 36px;text-align:center">
+      <span style="font-size:10.5px;color:#94A3B8">Leverage Quantum &middot; ${todayLabel} &middot; Do not reply</span>
+    </td></tr>
+  </table>
+
+</div>
+</div>
+</body>
+</html>`
 }
 
 export default async function handler(req, res) {
@@ -189,7 +238,7 @@ export default async function handler(req, res) {
             from: process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <quantum@platform.leverageedu.com>',
             to: [email],
             subject: 'Sign in to Quantum',
-            html: magicLinkEmailHtml(link),
+            html: magicLinkEmailHtml(link, email),
           }),
         }).catch(() => {}) // a Resend hiccup still shouldn't reveal anything to the caller
       }

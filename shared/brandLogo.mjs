@@ -8,12 +8,14 @@
 //
 //   - src/components/Sidebar.jsx        (imports BRAND_LOGO_BARS directly, JSX <rect> per bar)
 //   - src/pages/MetaAdsDashboard.jsx     (imports brandLogoSvgMarkup(), Creative Report export)
-//   - api/send-report.js                (email templates — table-cell/div technique for
-//                                         email-client compatibility, can't import this ESM
-//                                         file safely from a serverless .js handler, so the
-//                                         bar heights/colors are duplicated as literals there.
-//                                         MUST stay byte-identical: green 9px / blue 14px /
-//                                         navy 17px, in that order.)
+//   - api/send-report.mjs                (email templates — table-cell/div technique for
+//                                         email-client compatibility, since inline <svg> is
+//                                         unreliable in mail clients, so the bar heights/
+//                                         colors are duplicated as literals there. MUST stay
+//                                         byte-identical: green 9px / blue 14px / navy 17px,
+//                                         in that order.)
+//   - api/auth.mjs                       (magic-link sign-in email — same table-cell/div
+//                                         technique + same duplicated literals as above.)
 //   - public/icon.svg + icon-*.png       (static PWA icon assets, scaled up from this same
 //                                         geometry — regenerate them if this file changes)
 // ---------------------------------------------------------------------------
