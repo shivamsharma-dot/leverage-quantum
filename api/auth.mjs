@@ -75,8 +75,8 @@ function magicLinkEmailHtml(link, email) {
       <div style="margin-top:22px">
         <span style="display:inline-block;padding:4px 11px;border-radius:20px;background-color:#EAF2FC;font-size:10px;font-weight:700;color:${NAVY};letter-spacing:.08em;text-transform:uppercase">Account Sign-in</span>
       </div>
-      <div style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.35;margin:12px 0 6px">Sign in to Quantum</div>
-      <div style="font-size:12.5px;color:#94A3B8">Requested for <span style="color:#64748B;font-weight:600">${email}</span> &middot; expires in 15 minutes, one-time use</div>
+      <div style="font-size:24px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.35;margin:12px 0 6px">Sign in to Quantum</div>
+      <div style="font-size:12.5px;color:#94A3B8">Requested for <a href="mailto:${email}" style="color:#64748B;font-weight:600;text-decoration:none">${email}</a></div>
 
     </td></tr>
 
@@ -84,12 +84,28 @@ function magicLinkEmailHtml(link, email) {
       <div style="height:1px;background-color:#EEF1F6"></div>
     </td></tr>
 
-    <tr><td style="padding:28px 36px 32px;text-align:center">
-      <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#64748B">Click the button below to sign in to your dashboards.</p>
-      <table cellpadding="0" cellspacing="0" style="margin:0 auto"><tr><td style="border-radius:10px;background-color:${NAVY};box-shadow:0 3px 10px rgba(31,60,132,0.28)">
-        <a href="${link}" style="display:inline-block;padding:13px 32px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none">Sign in to Quantum</a>
+    <tr><td style="padding:30px 36px 6px;text-align:center">
+      <p style="margin:0 0 26px;font-size:14px;line-height:1.6;color:#64748B">Click the button below to sign in to your dashboards. This link is yours alone.</p>
+
+      <table cellpadding="0" cellspacing="0" style="margin:0 auto"><tr><td style="border-radius:12px;background-color:${NAVY};box-shadow:0 10px 24px -8px rgba(31,60,132,0.45)">
+        <a href="${link}" style="display:inline-block;padding:16px 42px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;letter-spacing:.01em">Sign in to Quantum &rarr;</a>
       </td></tr></table>
-      <p style="margin:24px 0 0;font-size:12px;line-height:1.6;color:#94A3B8">Didn't request this? You can safely ignore this email &mdash; nobody can sign in without clicking this exact link.</p>
+
+      <table cellpadding="0" cellspacing="0" style="margin:24px auto 0"><tr>
+        <td style="padding:6px 13px;border-radius:20px;background-color:#F1F5F9;font-size:10.5px;font-weight:700;color:#475569;letter-spacing:.03em;text-transform:uppercase">Expires in 15 min</td>
+        <td style="width:8px;font-size:0;line-height:0">&nbsp;</td>
+        <td style="padding:6px 13px;border-radius:20px;background-color:#F1F5F9;font-size:10.5px;font-weight:700;color:#475569;letter-spacing:.03em;text-transform:uppercase">One-time use</td>
+      </tr></table>
+    </td></tr>
+
+    <tr><td style="padding:22px 36px 0;text-align:center">
+      <p style="margin:0;font-size:11.5px;line-height:1.6;color:#B0B8C4">Button not working? Copy and paste this link:<br>
+        <span style="color:#94A3B8;word-break:break-all">${link}</span>
+      </p>
+    </td></tr>
+
+    <tr><td style="padding:18px 36px 32px;text-align:center">
+      <p style="margin:0;font-size:12px;line-height:1.6;color:#94A3B8">Didn't request this? You can safely ignore this email &mdash; nobody can sign in without clicking this exact link.</p>
     </td></tr>
   </table>
 
