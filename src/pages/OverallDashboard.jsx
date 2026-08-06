@@ -88,6 +88,20 @@ const monthEndDate = mk => new Date(Math.floor(mk / 12), ((mk % 12) + 12) % 12 +
 // cache's OWN latest date (bqBounds.max) rather than off nonDateRows -- see the
 // trendAnchorDate comment below for why that distinction is load-bearing.
 const dateFromIso = s => { const p = String(s || '').split('-').map(Number); return p.length < 3 ? null : new Date(p[0], p[1] - 1, p[2]) }
+// A single BigQuery hiccup (rate limit, cold start, a transient network blip) used to
+// fall straight back to the CSV path on the first failure -- which is the SLOW one.
+// Live-verified this actually happens: a real read failed mid-session and the page fell
+// back to the multi-minute sheet load, showing zero everywhere in between. Retrying a
+// couple of times first, with a short backoff, absorbs exactly that kind of transient
+// failure without ever dropping to the slow path over it. Only a call that's STILL
+// failing after every retry falls through to the caller's own catch/fallback.
+const retryFetch = (fn, attempts = 3, delay = 400) => {
+  const attempt = n => fn().catch(e => {
+    if (n >= attempts - 1) throw e
+    return new Promise(res => setTimeout(res, delay * (n + 1))).then(() => attempt(n + 1))
+  })
+  return attempt(0)
+}
 
 function parseNum(v) {
   if (v == null) return 0
@@ -1309,7 +1323,7 @@ export default function OverallDashboard() {
   useEffect(() => {
     if (!bqMode) return
     let dead = false
-    fetchOverallBqBounds()
+    retryFetch(fetchOverallBqBounds)
       .then(b => { if (!dead) setBqBounds(b) })
       .catch(e => { if (!dead) { setBqError('cache unavailable -- ' + e.message); setLoading(false); loadData() } })
     fetchOverallBqSyncedAt().then(ts => { if (!dead && ts) setLastSync(ts) })
@@ -1332,7 +1346,7 @@ export default function OverallDashboard() {
     if (!bqMode || !bqSince || !bqUntil) return
     let dead = false
     setBqBusy(true)
-    fetchOverallBqRows({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources })
+    retryFetch(() => fetchOverallBqRows({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources }))
       .then(raw => {
         if (dead) return
         setBqRows(raw.map(mapRow))
