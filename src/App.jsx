@@ -37,6 +37,7 @@ const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
 const PAGE_TITLES = {
   '/': 'Summary',
   '/dashboard/overall': 'Overall',
+  '/dashboard/overall-bigquery': 'Overall (BigQuery)',
   '/dashboard/ceo-b2c-pnl': 'Daily P&L',
   '/dashboard/ceo-b2c-cashflow': 'Daily Cash Flow',
   '/dashboard/meta-ads': 'Meta Ads',
@@ -94,9 +95,14 @@ function PageLoader() {
   )
 }
 
+// Genuinely restricted to one person, not one role -- see lib/auth.mjs's own copy
+// (server-side is what actually protects the route; this is the client-side mirror).
+const OVERALL_BIGQUERY_EMAILS = ['shivam.sharma@leverageedu.com']
+
 // Mirrors Sidebar.jsx's canSee() exactly — this is the REAL access gate (nav
 // visibility alone is cosmetic; this is what actually blocks direct URL access).
-function canAccess(role, dashboardId) {
+function canAccess(role, dashboardId, email) {
+  if (dashboardId === 'overall_bigquery') return OVERALL_BIGQUERY_EMAILS.includes(String(email || '').toLowerCase())
   const userRole = role || 'viewer'
   if (dashboardId === 'settings') return userRole === 'admin'
   if (userRole === 'admin') return true
@@ -186,7 +192,7 @@ function ProtectedRoute({ children, dashboardId }) {
   // link, never the route itself. Admins can still open a page they hid (e.g. to
   // manage it), but no one else can.
   const isHiddenForRole = dashboardId && user.role !== 'admin' && hiddenPages.includes(dashboardId)
-  if ((dashboardId && !canAccess(user.role, dashboardId)) || isHiddenForRole) {
+  if ((dashboardId && !canAccess(user.role, dashboardId, user.email)) || isHiddenForRole) {
     const fallback = DASHBOARD_FALLBACK_ORDER.find(f => canAccess(user.role, f.id) && !hiddenPages.includes(f.id))
     return <Navigate to={fallback ? fallback.path : '/login'} replace />
   }
@@ -238,7 +244,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute dashboardId="home"> <DashboardHome /></ProtectedRoute>} />
-          <Route path="/dashboard/overall" element={<ProtectedRoute dashboardId="overall"> <OverallDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/overall" element={<ProtectedRoute dashboardId="overall"> <OverallDashboard dataSource="sheet" /></ProtectedRoute>} />
+          <Route path="/dashboard/overall-bigquery" element={<ProtectedRoute dashboardId="overall_bigquery"> <OverallDashboard dataSource="bigquery" /></ProtectedRoute>} />
           <Route path="/dashboard/ceo-b2c" element={<Navigate to="/dashboard/ceo-b2c-pnl" replace />} />
           <Route path="/dashboard/ceo-b2c-pnl" element={<ProtectedRoute dashboardId="ceo_b2c_pnl"> <CeoB2CDashboard statement="pnl" /></ProtectedRoute>} />
           <Route path="/dashboard/ceo-b2c-cashflow" element={<ProtectedRoute dashboardId="ceo_b2c_cashflow"> <CeoB2CDashboard statement="cashflow" /></ProtectedRoute>} />

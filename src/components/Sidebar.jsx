@@ -34,6 +34,9 @@ export const NAV = [
     items: [
       { to: '/', icon: <HomeIcon />, label: 'Summary', end: true },
       { to: '/dashboard/overall', icon: <OverallIcon />, label: 'Overall', end: false },
+      // Genuinely restricted to Shivam's own email, not just admin-only -- see
+      // canSee()'s OVERALL_BIGQUERY_EMAILS check further down this file.
+      { to: '/dashboard/overall-bigquery', icon: <OverallIcon />, label: 'Overall (BigQuery)', end: false },
       {
         to: '/dashboard/ceo-b2c-pnl',
         icon: <RevenueIcon />,
@@ -128,6 +131,10 @@ export const NAV = [
 export const PAGE_LIST = [
   { id:'home',         label:'Summary',      path:'/',                      adminOnly:false },
   { id:'overall',      label:'Overall',      path:'/dashboard/overall',     adminOnly:false },
+  // adminOnly:true here is a floor, not the real gate -- canSee()'s email check below
+  // is what actually restricts this to Shivam alone, since nishant.bhatia is also
+  // 'admin' and must NOT see it.
+  { id:'overall_bigquery', label:'Overall (BigQuery)', path:'/dashboard/overall-bigquery', adminOnly:true },
   { id:'meta_ads',     label:'Meta Ads',     path:'/dashboard/meta-ads',    adminOnly:false },
   { id:'google_ads',   label:'Google Ads',   path:'/dashboard/google-ads',  adminOnly:false },
   { id:'bing_ads',     label:'Bing Ads',     path:'/dashboard/bing-ads',   adminOnly:false },
@@ -182,7 +189,7 @@ function PnLIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill=
 function CashFlowIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3v6h-6"/><path d="M17 9a8 8 0 00-14 4"/><path d="M7 21v-6h6"/><path d="M7 15a8 8 0 0014-4"/></svg> }
 
 const ICON_MAP = {
-  'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
+  'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'Overall (BigQuery)': <OverallIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
   'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
   'Revenue': <RevenueIcon/>, 'CEO B2C': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>,
   'Google Ads': <GoogleAdsIcon/>, 'QL Ops': <PeopleIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
@@ -310,6 +317,10 @@ export default function Sidebar() {
     if (!user) return false
     // Settings is always admin-only
     if (id === 'settings') return userRole === 'admin'
+    // Genuinely restricted to Shivam's own email, not just 'admin' -- nishant.bhatia
+    // is also admin and must not see this. Checked before the admin-sees-everything
+    // branch below, since that branch would otherwise override this for him.
+    if (id === 'overall_bigquery') return (user?.email || '').toLowerCase() === 'shivam.sharma@leverageedu.com'
     // Admin sees everything
     if (userRole === 'admin') return true
     // Plain viewer = all dashboards EXCEPT ask-ai/agents (must be explicitly granted)

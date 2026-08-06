@@ -34,6 +34,7 @@ export const COMPONENT_IMPORTS = {
 const ROUTE_COMPONENT = {
   '/': 'DashboardHome',
   '/dashboard/overall': 'OverallDashboard',
+  '/dashboard/overall-bigquery': 'OverallDashboard',
   '/dashboard/roas': 'ROASDashboard',
   '/dashboard/mtd': 'MTDDashboard',
   '/dashboard/lead-quality': 'LeadQualityDashboard',

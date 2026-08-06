@@ -18,10 +18,10 @@ import Button from '../components/Button'
 import { getSession, setSession, hasLoaded, getPersisted } from '../lib/sessionLoad'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
 import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, BarGrad, barFill, BAR_RADIUS_H } from '../ui/dashboardKit'
-import { useAuth } from '../hooks/useAuth'
-// Data source: BigQuery (beta) -- see src/lib/overallBqCache.js for the why.
+// Data source: BigQuery -- see src/lib/overallBqCache.js for the why. Which
+// source this page instance reads is now fixed by the `dataSource` prop (two
+// separate routes/pages -- see App.jsx), not a per-device Settings toggle.
 import {
-  BQ_BETA_EVENT, readBqBeta,
   fetchOverallBqRows, fetchOverallBqBounds, fetchOverallBqSyncedAt,
 } from '../lib/overallBqCache'
 
@@ -748,35 +748,26 @@ function buildSyntheticAffiliateRows(map) {
   return out
 }
 
-export default function OverallDashboard() {
+// dataSource: 'sheet' (the original CSV path, default -- /dashboard/overall) or
+// 'bigquery' (/dashboard/overall-bigquery, Shivam-only -- see App.jsx/Sidebar.jsx).
+// Fixed per route, not a runtime toggle -- see the CLAUDE.md entry for why the old
+// per-device Settings toggle was retired in favour of two dedicated pages.
+export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [rawRows, setRawRows] = useState([])
   const [affiliateManual, setAffiliateManual] = useState(null)
-  // ── Data source: BigQuery (beta) ─────────────────────────────────────────────
-  // Admin-only, off by default, flipped in Settings > Data.
+  // ── Data source: BigQuery ─────────────────────────────────────────────
+  // dataSource='bigquery' (bqMode true): this page reads public.overall_bq_daily
+  // straight from Supabase with the anon key, already narrowed SERVER-SIDE to the
+  // date range and the Sources selected below, instead of downloading the whole
+  // "Overall PM" CSV and parsing every one of its 2,05,720 rows in the browser.
+  // dataSource='sheet' (bqMode false, the default /dashboard/overall route): every
+  // bqMode-gated effect below no-ops immediately, so nothing about the CSV path
+  // changes -- rawRows is still the only thing feeding the page.
   //
-  // ON : this page reads public.overall_bq_daily straight from Supabase with the anon
-  //      key, already narrowed SERVER-SIDE to the date range and the Sources selected
-  //      below, instead of downloading the whole "Overall PM" CSV and parsing every
-  //      one of its 2,05,720 rows in the browser.
-  // OFF: nothing about the CSV path changes. rawRows is still the only thing feeding
-  //      the page, so turning the toggle off reverts instantly and with no refetch.
-  //
-  // The rows are deliberately run through the SAME mapRow() as the CSV, because the
-  // cache keeps BigQuery's own column names byte-for-byte. One mapping, so the two
-  // paths cannot drift apart on what a column means.
-  const { user } = useAuth()
-  const isAdmin = (user?.role || '') === 'admin'
-  const [bqPref, setBqPref] = useState(readBqBeta)
-  useEffect(() => {
-    const sync = () => setBqPref(readBqBeta())
-    window.addEventListener(BQ_BETA_EVENT, sync)  // same tab -- Settings is a route here
-    window.addEventListener('storage', sync)      // other tabs
-    return () => { window.removeEventListener(BQ_BETA_EVENT, sync); window.removeEventListener('storage', sync) }
-  }, [])
-  // The preference is per-device localStorage, so it is gated on the live server-session
-  // role as well: a flag left set on an admin's machine must not survive that machine
-  // later being used by a viewer.
-  const bqMode = isAdmin && bqPref
+  // The BigQuery rows are deliberately run through the SAME mapRow() as the CSV,
+  // because the cache keeps BigQuery's own column names byte-for-byte. One mapping,
+  // so the two paths cannot drift apart on what a column means.
+  const bqMode = dataSource === 'bigquery'
   const [bqRows, setBqRows] = useState([])
   const [bqRowCount, setBqRowCount] = useState(null)   // null = no read has landed yet
   const [bqBounds, setBqBounds] = useState(null)
@@ -2737,9 +2728,9 @@ export default function OverallDashboard() {
             Source dropdown, Synced, Refresh, Export, info popover. */}
         <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${C.border}`, padding:'10px 28px', minHeight:56, height:'auto', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, overflow:'visible', flexWrap:'wrap' }}>
           <div>
-            <p style={{ fontSize:10.5, color:C.muted, margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / Overall</p>
+            <p style={{ fontSize:10.5, color:C.muted, margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / Overall{bqMode ? ' (BigQuery)' : ''}</p>
             <h1 style={{ fontSize:18, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.4px', fontFamily:FONT }}>
-              Overall Performance
+              Overall Performance{bqMode ? ' (BigQuery)' : ''}
               {' - '}
               {activeFilter === 'custom' && customFrom
                 ? <span style={{ fontSize:13, fontWeight:600, color:C.blue }}>{customFrom} -&gt; {customTo}</span>
@@ -2843,7 +2834,7 @@ export default function OverallDashboard() {
 
             {bqMode && (
               <span
-                title={'Data source: BigQuery (beta) -- public.overall_bq_daily' + (bqSince ? ', ' + bqSince + ' to ' + bqUntil : '') + (bqRowCount != null ? ', ' + bqRowCount.toLocaleString('en-IN') + ' rows read' : '') + (bqError ? ' -- FAILED (' + bqError + '), showing the sheet instead' : '')}
+                title={'Data source: BigQuery (beta) -- public.overall_bq_daily, dedicated page (see /dashboard/overall for the sheet)' + (bqSince ? ', ' + bqSince + ' to ' + bqUntil : '') + (bqRowCount != null ? ', ' + bqRowCount.toLocaleString('en-IN') + ' rows read' : '') + (bqError ? ' -- FAILED (' + bqError + '), showing the sheet instead' : '')}
                 style={{ fontSize:10, fontWeight:800, letterSpacing:.4, textTransform:'uppercase', fontFamily:FONT, whiteSpace:'nowrap', borderRadius:8, padding:'5px 9px', border:'0.5px solid ' + C.border, color: bqError ? C.muted : C.navy, background: bqError ? 'var(--card)' : C.navyBg }}
               >
                 {bqError ? 'BigQuery — fell back to sheet' : (bqBusy ? 'BigQuery — loading' : 'BigQuery (beta)')}
@@ -2866,7 +2857,7 @@ export default function OverallDashboard() {
               {showInfo && (
                 <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:380, maxHeight:'74vh', overflowY:'auto', background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 14px 40px rgba(15,23,42,0.16)', padding:'16px 18px', textAlign:'left', fontFamily:FONT }}>
                   <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:8 }}>How Overall is calculated</div>
-                  {bqMode && <div style={{ fontSize:11, color: bqError ? C.muted : C.navy, fontWeight:700, marginBottom:6 }}>{bqError ? 'BigQuery (beta) is on but its cache read failed, so these numbers are the sheet\u2019s.' : 'BigQuery (beta) is on: these numbers come from the overall_bq_daily cache of the BigQuery saved query "Overall", read for the selected range only \u2014 same rows and same columns as the sheet, just not downloaded whole.'}</div>}
+                  {bqMode && <div style={{ fontSize:11, color: bqError ? C.muted : C.navy, fontWeight:700, marginBottom:6 }}>{bqError ? 'This page\u2019s BigQuery read failed, so these numbers are the sheet\u2019s for now.' : 'This is the BigQuery page: these numbers come from the overall_bq_daily cache of the BigQuery saved query "Overall", read for the selected range only \u2014 same rows and same columns as the /dashboard/overall sheet page, just not downloaded whole.'}</div>}
                   <div style={{ fontSize:11, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
                   <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.7 }}>
                     <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (Registered At University). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
