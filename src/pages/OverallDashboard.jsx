@@ -2149,14 +2149,18 @@ export default function OverallDashboard() {
   }, [trendOpen, trendMaxDate, trendEffectiveGranularity, trendPeriods])
 
   const trendResult = useMemo(() => {
-    if (!trendOpen || !trendBuckets.length) return { chartRows: [], seriesKeys: [], seriesLabels: {}, exportRows: [], shownCount: 0, totalCount: 0 }
+    if (!trendOpen || !trendBuckets.length) return { chartRows: [], seriesKeys: [], seriesLabels: {}, exportRows: [], grandTotal: [], shownCount: 0, totalCount: 0 }
     const bucketRows = trendBuckets.map(b => trendBaseRows.filter(r => r.date && r.date >= b.from && r.date <= b.to))
+    // Grand total per period -- the WHOLE bucket's rows summed (or re-derived, for a
+    // cost ratio like CPQL) BEFORE any dimension breakdown, never the sum/average of
+    // the already-split-out per-row values. Summing per-source CPLs, for instance,
+    // would answer a different (and wrong) question than "what was the blended CPL
+    // across every source that period" -- this is the same additive-vs-ratio
+    // distinction the main summary table's own TOTAL row already respects.
+    const grandTotal = bucketRows.map(rs => summaryValue(sumDeepEntries(aggReportByDim(rs, 'source', paidOf(rs))), trendMetric))
 
     if (trendIsSingleSeries) {
-      const chartRows = trendBuckets.map((b, i) => {
-        const t = sumDeepEntries(aggReportByDim(bucketRows[i], 'source', paidOf(bucketRows[i])))
-        return { period: b.label, value: summaryValue(t, trendMetric) }
-      })
+      const chartRows = trendBuckets.map((b, i) => ({ period: b.label, value: grandTotal[i] }))
       const exportRows = trendBuckets.map((b, i) => {
         const t = sumDeepEntries(aggReportByDim(bucketRows[i], 'source', paidOf(bucketRows[i])))
         const o = { Period: b.label }
@@ -2169,7 +2173,7 @@ export default function OverallDashboard() {
       // just compare the display labels ("Apr'26"/"Aug'26"/"Mar'26" alphabetize to
       // Apr, Aug, Dec, Feb... which is not real time order).
       const periodIndexes = trendBuckets.map((b, i) => i)
-      return { chartRows, seriesKeys: ['value'], seriesLabels: { value: DEEP_METRICS.find(m => m.key === trendMetric)?.label || trendMetric }, exportRows, periodIndexes, shownCount: 1, totalCount: 1 }
+      return { chartRows, seriesKeys: ['value'], seriesLabels: { value: DEEP_METRICS.find(m => m.key === trendMetric)?.label || trendMetric }, exportRows, periodIndexes, grandTotal, shownCount: 1, totalCount: 1 }
     }
 
     // Multi-series: rank every dimension value that appears anywhere in the window
@@ -2207,7 +2211,7 @@ export default function OverallDashboard() {
         periodIndexes.push(i)
       })
     })
-    return { chartRows, seriesKeys: shown.map(s => s.key), seriesLabels, exportRows, periodIndexes, shownCount: shown.length, totalCount: ranked.length }
+    return { chartRows, seriesKeys: shown.map(s => s.key), seriesLabels, exportRows, periodIndexes, grandTotal, shownCount: shown.length, totalCount: ranked.length }
   }, [trendOpen, trendBuckets, trendBaseRows, trendIsSingleSeries, trendDim, trendMetric, aggReportByDim, paidOf])
 
   const trendExportRowsFmt = useMemo(() => trendResult.exportRows.map(r => {
@@ -3609,6 +3613,19 @@ export default function OverallDashboard() {
                                 )
                               })}
                             </tr>
+                            {/* TOTAL row pinned in the header (not the body) so it stays
+                                visible while the rows below scroll -- same convention as
+                                the main Funnel Summary table's own TOTAL row. Only shown
+                                for a real dimension breakdown; month/day's single "Total"
+                                row already IS the total, so this would just repeat it. */}
+                            {!trendIsSingleSeries && (
+                              <tr>
+                                <td style={{ padding:'6px 10px', fontWeight:800, color:C.text, borderBottom:`0.5px solid ${C.border}`, background:'var(--card)' }}>Total</td>
+                                {trendResult.grandTotal.map((v, i) => (
+                                  <td key={i} style={{ padding:'6px 10px', textAlign:'right', fontWeight:800, color:C.text, borderBottom:`0.5px solid ${C.border}`, background:'var(--card)', whiteSpace:'nowrap' }}>{trendMetricDef.fmt(v)}</td>
+                                ))}
+                              </tr>
+                            )}
                           </thead>
                           <tbody>
                             {trendPivotSorted.length === 0 ? (
