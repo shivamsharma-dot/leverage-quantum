@@ -33,7 +33,6 @@ const HEADS = [
   ['Corp. Overheads', 'Overheads', 'corp'],
   ['People', 'People', 'people']
 ]
-const SR_NOTE = '_SR is Online and Offline together in the sheet today. The split is coming shortly._'
 
 // With the rupee sign. Prose only.
 function money(n) {
@@ -233,7 +232,6 @@ function buildB2C(ctx) {
   const R = rl.map(function (d) { return [d[1], at(rev[d[2]], rs), pct(rev[d[2]], rev.total)] })
   R.push(['Total', at(rev.total, rs), '100.0%'])
   L.push.apply(L, table(['Line', 'Amount', 'Share'], R))
-  L.push(SR_NOTE)
 
   L.push('')
   L.push('*Cost this month, against revenue*')

@@ -519,9 +519,6 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                   {fy.label} to date, {fy.from} to {fy.to} &middot; {L.fyWords[0]} {full(fy.rev)} &middot; {L.fyWords[1]} {full(fy.cost)} &middot; {L.fyWords[2]} {full(fy.net)}{fyMargin == null ? '' : ' (' + fyMargin.toFixed(1) + '% margin)'}
                 </p>
               ) : null}
-              <p className={styles.note}>
-                SR is Online and Offline together in the sheet today. The split is coming shortly.
-              </p>
               {isCashFlow ? (
                 <p className={styles.note}>
                   This page is real cash moved &mdash; every line here is an actual, not an estimate or a monthly average. It will often differ from Daily P&amp;L, which mixes real actuals with a formula estimate for SR and monthly-smoothed figures for People, Offline and Corp. Overheads.

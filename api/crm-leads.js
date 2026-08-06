@@ -679,9 +679,16 @@ const B2C_CASHFLOW_SHEET_TAB = 'Daily Cash Flow - Ramesh';
 // two tabs' Total/Net columns are named differently on purpose). Both maps
 // resolve to the SAME internal keys so one row shape and one set of frontend
 // formulas serve both statements.
+// The Daily P&L tab split its single SR column into SR Online + SR Offline
+// (2026-08). This app's "sr" figure is meant to be the combined total, so the
+// P&L map exposes both raw columns and b2cParseDays derives 'sr' as their sum
+// -- see the hasSplitSr branch below. Daily Cash Flow was NOT split; its SR
+// column is already the combined total, just renamed '(Online)' -> '(Total)'
+// in the same pass, which is why 'sr' there is still a direct 1:1 lookup.
 const B2C_PNL_COLS = {
   date: 'date', month: 'month',
-  sr: 'sr online revenue', ac: 'ac online revenue', vas: 'vas online revenue',
+  srOnline: 'sr online revenue', srOffline: 'sr offline revenue',
+  ac: 'ac online revenue', vas: 'vas online revenue',
   offRev: '(ac + vas) offline revenue', totalRev: 'total revenue',
   people: 'people cost', pm: 'pm cost', op: 'operating cost',
   offCost: 'offline cost', corp: 'corp. overheads',
@@ -689,7 +696,7 @@ const B2C_PNL_COLS = {
 };
 const B2C_CASHFLOW_COLS = {
   date: 'date', month: 'month',
-  sr: 'sr revenue (online)', ac: 'ac online revenue', vas: 'vas online revenue',
+  sr: 'sr revenue (total)', ac: 'ac online revenue', vas: 'vas online revenue',
   offRev: 'offline revenue (ac + vas)', totalRev: 'total cash inflow',
   people: 'people cost', pm: 'pm cost', op: 'operating cost',
   offCost: 'offline cost', corp: 'corp. overheads',
@@ -700,6 +707,10 @@ const B2C_VALUE_KEYS = ['sr', 'ac', 'vas', 'offRev', 'totalRev', 'people', 'pm',
 function b2cParseDays(csv, cols) {
   const parsed = b2cRows(csv, cols);
   const at = parsed.at;
+  // True only for the P&L map (which carries srOnline/srOffline instead of a
+  // direct 'sr' column) -- Cash Flow's cols has no such keys, so at.srOnline/
+  // at.srOffline are both undefined there and this stays false.
+  const hasSplitSr = at.srOnline >= 0 || at.srOffline >= 0;
   const days = [];
   let gridFrom = null;
   let gridTo = null;
@@ -711,7 +722,14 @@ function b2cParseDays(csv, cols) {
     const d = { date: iso, month: String(row[at.month] == null ? '' : row[at.month]).trim() };
     let any = false;
     for (const k of B2C_VALUE_KEYS) {
-      const v = at[k] >= 0 ? b2cNum(row[at[k]]) : null;
+      let v;
+      if (k === 'sr' && hasSplitSr) {
+        const onlineV = at.srOnline >= 0 ? b2cNum(row[at.srOnline]) : null;
+        const offlineV = at.srOffline >= 0 ? b2cNum(row[at.srOffline]) : null;
+        v = (onlineV == null && offlineV == null) ? null : (onlineV || 0) + (offlineV || 0);
+      } else {
+        v = at[k] >= 0 ? b2cNum(row[at[k]]) : null;
+      }
       d[k] = v;
       if (v != null) any = true;
     }
