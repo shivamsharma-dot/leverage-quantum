@@ -721,11 +721,19 @@ function b2cParseDays(csv, cols) {
     gridTo = iso;
     const d = { date: iso, month: String(row[at.month] == null ? '' : row[at.month]).trim() };
     let any = false;
+    // Expose the raw online/offline split too (P&L only) so the frontend can
+    // show them as separate line items, alongside 'sr' which stays the
+    // combined total for both statements (KPI cards, Slack reports, etc).
+    const onlineV = at.srOnline >= 0 ? b2cNum(row[at.srOnline]) : null;
+    const offlineV = at.srOffline >= 0 ? b2cNum(row[at.srOffline]) : null;
+    if (hasSplitSr) {
+      d.srOnline = onlineV;
+      d.srOffline = offlineV;
+      if (onlineV != null || offlineV != null) any = true;
+    }
     for (const k of B2C_VALUE_KEYS) {
       let v;
       if (k === 'sr' && hasSplitSr) {
-        const onlineV = at.srOnline >= 0 ? b2cNum(row[at.srOnline]) : null;
-        const offlineV = at.srOffline >= 0 ? b2cNum(row[at.srOffline]) : null;
         v = (onlineV == null && offlineV == null) ? null : (onlineV || 0) + (offlineV || 0);
       } else {
         v = at[k] >= 0 ? b2cNum(row[at[k]]) : null;

@@ -12,8 +12,12 @@ import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
 import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
 
-// Line items exactly as the finance sheet names them, in sheet order.
-const REV = [['sr', 'SR (Online + Offline)'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['offRev', 'Offline (AC + VAS)']]
+// Line items exactly as the finance sheet names them, in sheet order. The
+// Daily P&L tab splits SR into Online/Offline (2026-08); Daily Cash Flow does
+// not -- its SR column was always a single combined total -- so each
+// statement gets its own revenue-line list rather than sharing one.
+const REV_PNL = [['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['srOffline', 'SR Offline'], ['offRev', 'Offline (AC + VAS)']]
+const REV_CASHFLOW = [['sr', 'SR'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['offRev', 'Offline (AC + VAS)']]
 const COST = [['people', 'People'], ['pm', 'Perf. Marketing'], ['op', 'Operating'], ['offCost', 'Offline (rent + staff)'], ['corp', 'Corp. Overheads']]
 const PLAN = [['people', 'People'], ['operating', 'Operating'], ['corp', 'Corp. Overheads'], ['offline', 'Offline (rent + staff)']]
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
@@ -39,12 +43,17 @@ function ist(off) { return new Date(Date.now() + (off || 0) * 86400000).toLocale
 
 // Every total on this page is built the same way: trust the sheet's own total
 // column when it is filled, otherwise add the line items up.
-function totals(rs) {
+function totals(rs, revDefs) {
   const o = {}
-  REV.concat(COST).forEach(function (d) { o[d[0]] = col(rs, d[0]) })
-  o.rev = col(rs, 'totalRev'); if (o.rev == null) o.rev = roll(o, REV)
+  revDefs.concat(COST).forEach(function (d) { o[d[0]] = col(rs, d[0]) })
+  o.rev = col(rs, 'totalRev'); if (o.rev == null) o.rev = roll(o, revDefs)
   o.cost = col(rs, 'totalCost'); if (o.cost == null) o.cost = roll(o, COST)
   o.net = col(rs, 'net'); if (o.net == null) o.net = sub(o.rev, o.cost)
+  // 'sr' is always the combined online+offline total regardless of whether
+  // revDefs shows it split into two lines -- the backend already computed it
+  // per row (api/crm-leads.js), so just sum that field directly rather than
+  // deriving it from whichever line items happen to be in revDefs.
+  o.sr = col(rs, 'sr')
   return o
 }
 function chg(now, was) {
@@ -96,6 +105,7 @@ const STATEMENT_LABELS = {
 export default function CeoB2CDashboard({ statement = 'pnl' }) {
   const isCashFlow = statement === 'cashflow'
   const L = STATEMENT_LABELS[isCashFlow ? 'cashflow' : 'pnl']
+  const REV = isCashFlow ? REV_CASHFLOW : REV_PNL
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
@@ -132,7 +142,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
 
   const rows = useMemo(function () { return upto.filter(function (d) { return d.month === month }) }, [upto, month])
   const last = rows.length ? rows[rows.length - 1] : null
-  const mtd = useMemo(function () { return totals(rows) }, [rows])
+  const mtd = useMemo(function () { return totals(rows, REV) }, [rows, REV])
 
   // Compare like with like: a 12-day month to date is measured against the
   // first 12 days of the month before, never against its finished total.
@@ -144,19 +154,19 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     if (!prevMonth) return []
     return upto.filter(function (d) { return d.month === prevMonth }).slice(0, rows.length)
   }, [upto, prevMonth, rows.length])
-  const prev = useMemo(function () { return totals(prevRows) }, [prevRows])
+  const prev = useMemo(function () { return totals(prevRows, REV) }, [prevRows, REV])
   const hasPrev = prevRows.length > 0
   const prevLab = hasPrev ? shortOf(prevMonth) + ' 1\u2013' + prevRows.length : ''
 
   const day = useMemo(function () {
     if (!last) return null
-    const o = { date: last.date }
+    const o = { date: last.date, sr: last.sr }
     REV.concat(COST).forEach(function (d) { o[d[0]] = last[d[0]] })
     o.rev = last.totalRev != null ? last.totalRev : roll(o, REV)
     o.cost = last.totalCost != null ? last.totalCost : roll(o, COST)
     o.net = last.net != null ? last.net : sub(o.rev, o.cost)
     return o
-  }, [last])
+  }, [last, REV])
 
   // One chart, two readings: the daily bars answer "what happened yesterday",
   // the cumulative view answers "where is the month going to land".
@@ -179,21 +189,23 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       o[L.totalRev] = a; o[L.totalCost] = b; o[L.net] = c
       return o
     })
-  }, [rows, mode, L])
+  }, [rows, mode, L, REV])
 
   // The one extra chart worth having: the last four months side by side, so
   // the month in progress has something to be judged against.
   const trend = useMemo(function () {
     return months.slice(-4).map(function (m) {
-      const t = totals(upto.filter(function (d) { return d.month === m }))
+      const t = totals(upto.filter(function (d) { return d.month === m }), REV)
       const o = { d: shortOf(m) }
       o[L.totalRev] = t.rev || 0; o[L.totalCost] = t.cost || 0; o[L.net] = t.net || 0
       return o
     })
-  }, [months, upto, L])
+  }, [months, upto, L, REV])
 
   // Indian financial year: 1 April to 31 March. It stops at exactly the same
   // cut-off as the month-to-date figures, so the two can never disagree.
+  // This is what "YTD" means on this page -- year here is the fiscal year,
+  // not the calendar year, which is the standard Indian-business reading.
   const fy = useMemo(function () {
     if (!rows.length) return null
     const p = String(month || '').split('-')
@@ -203,13 +215,33 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     const sy = mi >= 3 ? y : y - 1
     const from = sy + '-04-01'
     const to = rows[rows.length - 1].date
-    const t = totals(upto.filter(function (d) { return d.date >= from && d.date <= to }))
+    const t = totals(upto.filter(function (d) { return d.date >= from && d.date <= to }), REV)
     t.from = from
     t.to = to
     t.label = 'FY ' + sy + '-' + String((sy + 1) % 100).padStart(2, '0')
     return t
-  }, [rows, upto, month])
+  }, [rows, upto, month, REV])
   const fyMargin = fy && fy.rev ? (fy.net / fy.rev) * 100 : null
+
+  // H1 of that same fiscal year: 1 April to 30 September. Capped at whatever
+  // the YTD window has actually reached -- while we're still inside H1 (as
+  // now, in August) the two figures are numerically identical, both starting
+  // 1 April and both stopping at the same cut-off day. Once the year moves
+  // past 30 September, YTD keeps growing into H2 while H1 becomes a closed,
+  // complete window of its own -- that's the point of tracking it separately.
+  const h1 = useMemo(function () {
+    if (!fy) return null
+    const h1To = fy.from.slice(0, 4) + '-09-30'
+    const complete = fy.to >= h1To
+    const to = complete ? h1To : fy.to
+    const t = totals(upto.filter(function (d) { return d.date >= fy.from && d.date <= to }), REV)
+    t.from = fy.from
+    t.to = to
+    t.complete = complete
+    t.label = 'H1 ' + fy.label.replace('FY ', '')
+    return t
+  }, [fy, upto, REV])
+  const h1Margin = h1 && h1.rev ? (h1.net / h1.rev) * 100 : null
 
   // Consolidated says 'August-2026'; the cost tabs say 'Aug-2026'.
   const shortMonth = useMemo(function () {
@@ -266,7 +298,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       if (worst == null || n < worst.net) worst = { date: r.date, net: n }
     })
     return { days: rows.length, neg: neg, worst: worst }
-  }, [rows])
+  }, [rows, REV])
 
   // Slack: the CEO gets exactly the numbers the page shows. Nothing is
   // recomputed for the message, and the table image rides along in the thread.
@@ -368,7 +400,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       return r
     })
     return { pngBase64: shot ? shot.base64 : null, pixelRatio: shot ? shot.pixelRatio : null, csv: rowsToCsv(cols, body) }
-  }, [day, mtd, prev, hasPrev, prevLab])
+  }, [day, mtd, prev, hasPrev, prevLab, REV])
 
   return (
     <div className={styles.layout}>
@@ -516,7 +548,12 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
               </table>
               {fy ? (
                 <p className={styles.note}>
-                  {fy.label} to date, {fy.from} to {fy.to} &middot; {L.fyWords[0]} {full(fy.rev)} &middot; {L.fyWords[1]} {full(fy.cost)} &middot; {L.fyWords[2]} {full(fy.net)}{fyMargin == null ? '' : ' (' + fyMargin.toFixed(1) + '% margin)'}
+                  <strong>YTD</strong> &middot; {fy.label}, {fy.from} to {fy.to} &middot; {L.fyWords[0]} {full(fy.rev)} &middot; {L.fyWords[1]} {full(fy.cost)} &middot; {L.fyWords[2]} {full(fy.net)}{fyMargin == null ? '' : ' (' + fyMargin.toFixed(1) + '% margin)'}
+                </p>
+              ) : null}
+              {h1 ? (
+                <p className={styles.note}>
+                  <strong>H1</strong> &middot; {h1.label}, {h1.from} to {h1.to}{h1.complete ? '' : ' (in progress)'} &middot; {L.fyWords[0]} {full(h1.rev)} &middot; {L.fyWords[1]} {full(h1.cost)} &middot; {L.fyWords[2]} {full(h1.net)}{h1Margin == null ? '' : ' (' + h1Margin.toFixed(1) + '% margin)'}
                 </p>
               ) : null}
               {isCashFlow ? (
