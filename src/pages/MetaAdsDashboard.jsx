@@ -24,13 +24,14 @@ const proxyImg = url => url ? `/api/img-proxy?url=${encodeURIComponent(url)}` : 
 
 async function storeTokenInSupabase(token) {
   try {
-    await fetch('/api/meta-token', {
+    const res = await fetch('/api/meta-token', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token })
     })
-  } catch {}
+    return await res.json().catch(() => null)
+  } catch { return null }
 }
 
 async function loadTokenFromSupabase() {
@@ -1802,25 +1803,40 @@ export default function MetaAdsDashboard() {
 
   useEffect(() => { if (token) loadAllData(token, datePreset) }, [token])
 
+  // Meta hands back a short-lived (~1-2hr) token from both connect paths;
+  // api/meta-token.mjs now exchanges it server-side for the long-lived
+  // (~60 day) version before storing it. Surface whether that actually
+  // happened -- previously this failed completely silently, which is exactly
+  // why a dead token looked identical to a freshly-connected one.
+  const notifyTokenStored = (result) => {
+    if (result?.exchanged) {
+      toast('Connected — Meta gave this token a 60-day lifetime.', { type: 'success' })
+    } else {
+      toast('Connected, but still a short-lived token' + (result?.exchangeNote ? ' (' + result.exchangeNote + ')' : '') + ' — it may expire again within a couple of hours.', { type: 'muted' })
+    }
+  }
+
   const handleConnect = () => {
     if (!window.FB) { setError('Facebook SDK loading, please wait…'); return }
     setLoading(true); setError('')
-    window.FB.login(r => {
+    window.FB.login(async r => {
       if (r.authResponse?.accessToken) {
         const t = r.authResponse.accessToken
-        storeTokenInSupabase(t)
+        const result = await storeTokenInSupabase(t)
         setToken(t)
         setTokenCreatedAt(new Date().toISOString())
         fetchAdAccounts(t)
+        notifyTokenStored(result)
       } else { setError('Authorization cancelled. Try pasting token manually.'); setLoading(false) }
     }, { scope: 'ads_read,ads_management,business_management' })
   }
 
-  const handlePaste = (t) => {
+  const handlePaste = async (t) => {
     if (!t.trim()) return
-    storeTokenInSupabase(t.trim())
+    const result = await storeTokenInSupabase(t.trim())
     setToken(t.trim())
     setTokenCreatedAt(new Date().toISOString())
+    notifyTokenStored(result)
   }
 
   const autoRetryCountRef = useRef(0)
