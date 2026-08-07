@@ -290,7 +290,7 @@ function buildB2CFullTable(ctx) {
   rows.push(row('net', 'EBITDA', true))
   const cols = rows[0].map(function (_, i) { return i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' } })
   const L = []
-  L.push(':bar_chart: *B2C — full particulars*')
+  L.push(':bar_chart: *B2C - Daily P & L*')
   L.push('_Last completed day, month to date and year to date. ' + (c.through ? 'Through ' + c.through + '.' : '') + '_')
   return [{
     key: 'b2c_full', label: 'B2C — full particulars', attach: true,
