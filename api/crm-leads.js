@@ -727,11 +727,24 @@ const B2C_CASHFLOW_SHEET_TAB = 'Daily Cash Flow - Ramesh';
 // -- see the hasSplitSr branch below. Daily Cash Flow was NOT split; its SR
 // column is already the combined total, just renamed '(Online)' -> '(Total)'
 // in the same pass, which is why 'sr' there is still a direct 1:1 lookup.
+//
+// Same thing happened to the offline revenue column a few weeks later
+// (2026-08, still P&L only -- Cash Flow's 'Offline Revenue (AC+VAS)' is still
+// one combined column, confirmed against the live sheet): 'AC Offline
+// Revenue' and 'VAS Offline Revenue' are now separate columns, and the old
+// combined header was renamed to 'Calculated Offline Revenue' -- which is
+// why offRev silently went blank on P&L until this fix (the old '(ac + vas)
+// offline revenue' string no longer matches anything). Mirrors the SR
+// pattern exactly: raw acOffline/vasOffline are exposed, and hasSplitOffline
+// below derives offRev as their sum rather than trusting the sheet's own
+// 'Calculated' column (which is kept only as a same-value fallback in case
+// the split is ever reverted).
 const B2C_PNL_COLS = {
   date: 'date', month: 'month',
   srOnline: 'sr online revenue', srOffline: 'sr offline revenue',
   ac: 'ac online revenue', vas: 'vas online revenue',
-  offRev: '(ac + vas) offline revenue', totalRev: 'total revenue',
+  acOffline: 'ac offline revenue', vasOffline: 'vas offline revenue',
+  offRev: 'calculated offline revenue', totalRev: 'total revenue',
   people: 'people cost', pm: 'pm cost', op: 'operating cost',
   offCost: 'offline cost', corp: 'corp. overheads',
   totalCost: 'total cost', net: 'net inflow',
@@ -753,6 +766,10 @@ function b2cParseDays(csv, cols) {
   // direct 'sr' column) -- Cash Flow's cols has no such keys, so at.srOnline/
   // at.srOffline are both undefined there and this stays false.
   const hasSplitSr = at.srOnline >= 0 || at.srOffline >= 0;
+  // Same idea for the offline-revenue split (P&L only, see the comment on
+  // B2C_PNL_COLS above) -- Cash Flow's cols has no acOffline/vasOffline keys,
+  // so this stays false there and offRev keeps reading its own direct column.
+  const hasSplitOffline = at.acOffline >= 0 || at.vasOffline >= 0;
   const days = [];
   let gridFrom = null;
   let gridTo = null;
@@ -773,10 +790,19 @@ function b2cParseDays(csv, cols) {
       d.srOffline = offlineV;
       if (onlineV != null || offlineV != null) any = true;
     }
+    const acOfflineV = at.acOffline >= 0 ? b2cNum(row[at.acOffline]) : null;
+    const vasOfflineV = at.vasOffline >= 0 ? b2cNum(row[at.vasOffline]) : null;
+    if (hasSplitOffline) {
+      d.acOffline = acOfflineV;
+      d.vasOffline = vasOfflineV;
+      if (acOfflineV != null || vasOfflineV != null) any = true;
+    }
     for (const k of B2C_VALUE_KEYS) {
       let v;
       if (k === 'sr' && hasSplitSr) {
         v = (onlineV == null && offlineV == null) ? null : (onlineV || 0) + (offlineV || 0);
+      } else if (k === 'offRev' && hasSplitOffline) {
+        v = (acOfflineV == null && vasOfflineV == null) ? null : (acOfflineV || 0) + (vasOfflineV || 0);
       } else {
         v = at[k] >= 0 ? b2cNum(row[at[k]]) : null;
       }

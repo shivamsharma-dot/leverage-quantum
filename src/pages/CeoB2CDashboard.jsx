@@ -17,7 +17,13 @@ import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } fr
 // Daily P&L tab splits SR into Online/Offline (2026-08); Daily Cash Flow does
 // not -- its SR column was always a single combined total -- so each
 // statement gets its own revenue-line list rather than sharing one.
-const REV_PNL = [['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['srOffline', 'SR Offline'], ['offRev', 'Offline (AC + VAS)']]
+// The same tab later split its combined offline-revenue column into AC
+// Offline / VAS Offline too (still P&L only) -- shown here the same way SR
+// was, as two separate lines rather than one combined row. 'offRev' (their
+// sum, derived server-side) still exists on each row for anything that wants
+// the combined total (Slack reports etc.) -- just no longer rendered as its
+// own table row here.
+const REV_PNL = [['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['srOffline', 'SR Offline'], ['acOffline', 'AC Offline'], ['vasOffline', 'VAS Offline']]
 const REV_CASHFLOW = [['sr', 'SR'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['offRev', 'Offline (AC + VAS)']]
 const COST = [['people', 'People'], ['pm', 'Perf. Marketing'], ['op', 'Operating'], ['offCost', 'Offline (rent + staff)'], ['corp', 'Corp. Overheads']]
 const PLAN = [['people', 'People'], ['operating', 'Operating'], ['corp', 'Corp. Overheads'], ['offline', 'Offline (rent + staff)']]
