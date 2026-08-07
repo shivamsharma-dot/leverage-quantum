@@ -256,6 +256,67 @@ function buildB2C(ctx) {
   return [{ key: 'b2c', label: 'B2C \u2014 cost, revenue and net inflow', text: L.join('\n'), attach: true }]
 }
 
+// -- native full-particulars table ------------------------------------------
+// One native Slack table block (type:'table' -- the same mobile-friendly
+// mechanism already proven in ceoBrief.js's ledgerBlocks), every line item
+// exactly as the Daily P&L page shows it, Last Day / MTD / YTD columns.
+// The page's own Online/Offline subgroup headers are left out here on
+// purpose (Slack asked for one continuous list, the page keeps the headers).
+const cellText = function (v) { return { type: 'raw_text', text: v == null || v === '' ? '—' : String(v) } }
+const cellBold = function (v) { return { type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: v == null || v === '' ? '—' : String(v), style: { bold: true } }] }] } }
+const FULL_LINES = [
+  ['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'VAS Online'],
+  ['srOffline', 'SR Offline'], ['acOffline', 'AC Offline'], ['vasOffline', 'VAS Offline'],
+]
+const FULL_HEADS = [
+  ['people', 'People'], ['pm', 'Performance Marketing'], ['op', 'Product Operating Cost (AC, VAS)'],
+  ['offCost', 'Offline Cost (partner payout + experience centre)'], ['corp', 'Corp. Overheads'],
+]
+function buildB2CFullTable(ctx) {
+  const c = ctx || {}
+  const raw = c.raw || {}
+  const day = raw.day || {}
+  const mtd = raw.mtd || {}
+  const fy = raw.fy || {}
+  const row = function (key, label, bold) {
+    const f = bold ? cellBold : cellText
+    return [f(label), f(money(day[key])), f(money(mtd[key])), f(money(fy[key]))]
+  }
+  const rows = [[cellBold('Line Item'), cellBold('Last Day'), cellBold('MTD'), cellBold(fy.label ? fy.label + ' (YTD)' : 'YTD')]]
+  FULL_LINES.forEach(function (d) { rows.push(row(d[0], d[1])) })
+  rows.push(row('rev', 'Total Revenue', true))
+  FULL_HEADS.forEach(function (d) { rows.push(row(d[0], d[1])) })
+  rows.push(row('cost', 'Total Cost', true))
+  rows.push(row('net', 'EBITDA', true))
+  const cols = rows[0].map(function (_, i) { return i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' } })
+  const L = []
+  L.push(':bar_chart: *B2C — full particulars*')
+  L.push('_Last completed day, month to date and year to date. ' + (c.through ? 'Through ' + c.through + '.' : '') + '_')
+  return [{
+    key: 'b2c_full', label: 'B2C — full particulars', attach: true,
+    text: L.join('\n'),
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: L[1] }] },
+      { type: 'table', block_id: 'b2c_full_table', column_settings: cols, rows: rows },
+    ],
+  }]
+}
+
+export const B2C_FULL_TABLE_VERSIONS = [{
+  id: 'b2c_full',
+  code: 'B2C-FULL',
+  msgKeys: ['b2c_full'],
+  name: 'B2C — full particulars (native table)',
+  tagline: 'One native Slack table, every revenue line and cost head, Last Day / MTD / YTD.',
+  what: [
+    'Every line item exactly as the Daily P&L page shows it -- SR/AC/VAS Online, SR/AC/VAS Offline, Total Revenue, each cost head, Total Cost, then EBITDA',
+    'Three columns: Last Day, MTD, and year to date',
+    'A real Slack table block, not a code block or an image',
+  ],
+  build: buildB2CFullTable,
+}]
+
 export const B2C_REPORT_VERSIONS = [{
   id: 'b2c',
   code: 'B2C',

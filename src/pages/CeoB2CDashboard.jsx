@@ -7,7 +7,7 @@ import KPICard from '../components/KPICard'
 import Button from '../components/Button'
 import SlackReportPanel from '../components/SlackReportPanel'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
-import { B2C_REPORT_VERSIONS } from '../lib/b2cReport'
+import { B2C_REPORT_VERSIONS, B2C_FULL_TABLE_VERSIONS } from '../lib/b2cReport'
 import { B2C_LEDGER_VERSIONS } from '../lib/b2cLedger'
 import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
@@ -395,6 +395,12 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         pm: day.pm, op: day.op, offCost: day.offCost, corp: day.corp, people: day.people,
         rev: day.rev, cost: day.cost, net: day.net,
       } : null,
+      // Full day/mtd/fy objects, untouched -- P&L-only, they already carry the
+      // Online/Offline split (srOnline/ac/vas/srOffline/acOffline/vasOffline)
+      // via `totals()` summing every REV_PNL key. The native full-particulars
+      // Slack table reads these directly instead of the narrower rev/cost
+      // slices above (which only ever carried the combined sr/offRev totals).
+      raw: { day: day, mtd: mtd, fy: fy },
       peopleMonthly: peopleMonthly,
       ytd: fy,
       // The closing sections of the message are arithmetic on these two windows.
@@ -539,7 +545,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
               <SlackReportPanel
                 open={slackOpen}
                 onClose={function () { setSlackOpen(false) }}
-                versions={[...CEO_BRIEF_VERSIONS, ...B2C_REPORT_VERSIONS, ...B2C_LEDGER_VERSIONS]}
+                versions={[...B2C_FULL_TABLE_VERSIONS, ...CEO_BRIEF_VERSIONS, ...B2C_REPORT_VERSIONS, ...B2C_LEDGER_VERSIONS]}
                 buildContext={buildSlackContext}
                 captureFiles={captureSlackFiles}
                 dashboardId="ceo_b2c_pnl"
