@@ -696,13 +696,17 @@ function b2cRows(csv, cols) {
   // real column name (e.g. 'Offline Revenue (AC+VAS)', or on the daily P&L/cash
   // flow tabs, a hyperlink label prefix like 'Deposit x 70% x 3.5L SR Online
   // Revenue'). Match the exact name first, then a header that STARTS with it
-  // (a suffix decoration), then one that ENDS with it (a prefix decoration) --
-  // so a column that gains a description around it degrades to a match, never
-  // to a silent blank.
+  // (a suffix decoration), then one that ENDS with it (a prefix decoration),
+  // then finally a header that merely CONTAINS it anywhere (decoration on
+  // BOTH sides -- e.g. 'Actuals PM Cost (Total)', 'AC: 25% of sales / VAS:
+  // 95% of revenue Product Operating Cost (AC, VAS)') -- so a column that
+  // gains a description around it degrades to a match, never to a silent
+  // blank, however it gets decorated.
   Object.keys(cols).forEach(function (k) {
     let i = header.indexOf(cols[k]);
     if (i < 0) i = header.findIndex(function (h) { return h.indexOf(cols[k]) === 0 });
     if (i < 0) i = header.findIndex(function (h) { return h.length >= cols[k].length && h.slice(-cols[k].length) === cols[k]; });
+    if (i < 0) i = header.findIndex(function (h) { return h.indexOf(cols[k]) >= 0 });
     at[k] = i;
   });
   return { at: at, rows: lines.slice(1).map(splitCsvLine) };
@@ -747,7 +751,11 @@ const B2C_PNL_COLS = {
   offRev: 'calculated offline revenue', totalRev: 'total revenue',
   people: 'people cost', pm: 'pm cost', op: 'operating cost',
   offCost: 'offline cost', corp: 'corp. overheads',
-  totalCost: 'total cost', net: 'net inflow',
+  // 'Net Inflow' was renamed to 'EBITDA' in the same pass (confirmed against
+  // the live sheet) -- a straight rename with no other wording around it, so
+  // this is a direct remap rather than something the new contains-tier below
+  // needed to catch.
+  totalCost: 'total cost', net: 'ebitda',
 };
 const B2C_CASHFLOW_COLS = {
   date: 'date', month: 'month',

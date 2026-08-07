@@ -25,7 +25,7 @@ import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } fr
 // own table row here.
 const REV_PNL = [['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['srOffline', 'SR Offline'], ['acOffline', 'AC Offline'], ['vasOffline', 'VAS Offline']]
 const REV_CASHFLOW = [['sr', 'SR'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['offRev', 'Offline (AC + VAS)']]
-const COST = [['people', 'People'], ['pm', 'Perf. Marketing'], ['op', 'Operating'], ['offCost', 'Offline (rent + staff)'], ['corp', 'Corp. Overheads']]
+const COST = [['people', 'People'], ['pm', 'Performance Marketing'], ['op', 'Product Operating Cost (AC, VAS)'], ['offCost', 'Offline Cost (partner payout + experience centre)'], ['corp', 'Corp. Overheads']]
 const PLAN = [['people', 'People'], ['operating', 'Operating'], ['corp', 'Corp. Overheads'], ['offline', 'Offline (rent + staff)']]
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
 
@@ -472,6 +472,22 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     return { pngBase64: shot ? shot.base64 : null, pixelRatio: shot ? shot.pixelRatio : null, csv: rowsToCsv(cols, body) }
   }, [day, mtd, prev, hasPrev, prevLab, REV, periodLabel])
 
+  // One row-renderer shared by the (P&L-only) Online/Offline revenue
+  // subgroups below and by Cash Flow's flat revenue list -- same markup
+  // either way, just called over a different slice of REV.
+  function revRow(r) {
+    return (
+      <tr key={r[0]}>
+        <td>{r[1]}</td>
+        <td>{full(day && day[r[0]])}</td>
+        <td>{full(mtd[r[0]])}</td>
+        {hasPrev ? <td>{full(prev[r[0]])}</td> : null}
+        {hasPrev ? dcell(chg(mtd[r[0]], prev[r[0]]), false) : null}
+        <td>{mtd.rev && mtd[r[0]] != null ? ((mtd[r[0]] / mtd.rev) * 100).toFixed(1) + '%' : '—'}</td>
+      </tr>
+    )
+  }
+
   return (
     <div className={styles.layout}>
       <Sidebar />
@@ -589,18 +605,14 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                 </thead>
                 <tbody>
                   <tr><td className={styles.group} colSpan={hasPrev ? 6 : 4}>{L.revGroup}</td></tr>
-                  {REV.map(function (r) {
-                    return (
-                      <tr key={r[0]}>
-                        <td>{r[1]}</td>
-                        <td>{full(day && day[r[0]])}</td>
-                        <td>{full(mtd[r[0]])}</td>
-                        {hasPrev ? <td>{full(prev[r[0]])}</td> : null}
-                        {hasPrev ? dcell(chg(mtd[r[0]], prev[r[0]]), false) : null}
-                        <td>{mtd.rev && mtd[r[0]] != null ? ((mtd[r[0]] / mtd.rev) * 100).toFixed(1) + '%' : '\u2014'}</td>
-                      </tr>
-                    )
-                  })}
+                  {isCashFlow ? REV.map(revRow) : (
+                    <>
+                      <tr><td className={styles.subgroup} colSpan={hasPrev ? 6 : 4}>Online</td></tr>
+                      {REV.slice(0, 3).map(revRow)}
+                      <tr><td className={styles.subgroup} colSpan={hasPrev ? 6 : 4}>Offline</td></tr>
+                      {REV.slice(3).map(revRow)}
+                    </>
+                  )}
                   <tr className={styles.total}>
                     <td>{L.totalRev}</td>
                     <td>{full(day && day.rev)}</td>
