@@ -517,13 +517,46 @@ async function handleLeadSquared(req, res, me) {
   }
 }
 
+// A caller-supplied date is interpolated straight into SQL below (BigQuery's
+// REST query API has no bind-parameter support worth the extra round-trip for
+// a single DATE literal) -- this strict YYYY-MM-DD check is what makes that
+// safe, since anything that doesn't match this shape is rejected outright.
+function isIsoDate(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) }
+
+// Fixed, non-editable query behind the Leverage Careers page -- unlike
+// mode=query (arbitrary SQL, admin-only) this is reachable by anyone with
+// leverage_careers page access, so it must never take raw SQL from the request.
+// Groups leads by career_campaign_name (the LeadSquared/BigQuery field that
+// carries the literal Meta ad name, confirmed 1:1 with Campaign_Name /
+// lead_First_Campaign_name on this table) so the frontend can join it to a
+// Meta ad by exact name match.
+function careersLeadsSql(since, until) {
+  const clauses = ["career_campaign_name IS NOT NULL", "career_campaign_name != ''"]
+  if (isIsoDate(since)) clauses.push(`DATE(opp_created_on) >= '${since}'`)
+  if (isIsoDate(until)) clauses.push(`DATE(opp_created_on) <= '${until}'`)
+  return `SELECT
+  career_campaign_name AS campaign,
+  COUNT(prospectid) AS total_leads,
+  COUNT(CASE WHEN LOWER(opp_stage_leverage_careers) LIKE '%int%' THEN prospectid END) AS total_interested
+FROM \`leverage_direct.lsq_careers_opprtunities\`
+WHERE ${clauses.join(' AND ')}
+GROUP BY 1
+ORDER BY total_leads DESC`
+}
+
 // BigQuery lives behind this handler rather than its own file because the
 // Vercel Hobby plan is pinned at 12/12 serverless functions. Reached via
-// ?source=bigquery&mode=ping|datasets|query. Admin-only: it is configured
-// from the Settings page and can run arbitrary read-only SQL.
+// ?source=bigquery&mode=ping|datasets|query|careers_leads.
+// ping/datasets/query run arbitrary read-only SQL and stay admin-only
+// (configured from the Settings page). careers_leads is the one exception --
+// it runs the FIXED query above only, so it's safe to gate on the
+// leverage_careers page grant instead, letting a non-admin viewer of that
+// page load its own data without needing Settings/admin access.
 async function handleBigQuery(req, res, me) {
   const auth = await import('../lib/auth.mjs')
-  if (!auth.canAccessDashboard(me.role, 'settings')) {
+  const mode = (req.query && req.query.mode) || 'ping'
+  const gateId = mode === 'careers_leads' ? 'leverage_careers' : 'settings'
+  if (!auth.canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
   const bq = await import('../lib/bigquery.mjs')
@@ -534,8 +567,12 @@ async function handleBigQuery(req, res, me) {
       configured: false,
     })
   }
-  const mode = (req.query && req.query.mode) || 'ping'
   try {
+    if (mode === 'careers_leads') {
+      const { since, until } = req.query || {}
+      const out = await bq.bigQuerySelect(careersLeadsSql(since, until), { maxBytes: 2_000_000_000 })
+      return res.status(200).json({ configured: true, rows: out.rows || [], totalBytesProcessed: out.totalBytesProcessed })
+    }
     if (mode === 'datasets') {
       const d = await bq.bigQueryDatasets()
       return res.status(200).json({ configured: true, ...d, count: d.datasets.length })

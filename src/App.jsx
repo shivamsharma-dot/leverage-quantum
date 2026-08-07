@@ -20,6 +20,7 @@ const AIUnassignedDashboard = lazy(COMPONENT_IMPORTS.AIUnassignedDashboard)
 const WhatsAppDashboard = lazy(COMPONENT_IMPORTS.WhatsAppDashboard)
 const MTDDashboard = lazy(COMPONENT_IMPORTS.MTDDashboard)
 const MetaAdsDashboard = lazy(COMPONENT_IMPORTS.MetaAdsDashboard)
+const LeverageCareersDashboard = lazy(COMPONENT_IMPORTS.LeverageCareersDashboard)
 const GoogleAdsDashboard = lazy(COMPONENT_IMPORTS.GoogleAdsDashboard)
 const BingAdsDashboard = lazy(COMPONENT_IMPORTS.BingAdsDashboard)
 const ReferralDashboard = lazy(COMPONENT_IMPORTS.ReferralDashboard)
@@ -41,6 +42,7 @@ const PAGE_TITLES = {
   '/dashboard/ceo-b2c-pnl': 'Daily P&L',
   '/dashboard/ceo-b2c-cashflow': 'Daily Cash Flow',
   '/dashboard/meta-ads': 'Meta Ads',
+  '/dashboard/leverage-careers': 'Leverage Careers',
   '/dashboard/google-ads': 'Google Ads',
   '/dashboard/bing-ads': 'Bing Ads',
   '/dashboard/roas': 'ROAS',
@@ -265,6 +267,7 @@ export default function App() {
           <Route path="/dashboard/leadsquared" element={<ProtectedRoute dashboardId="leadsquared"><LeadSquaredDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/whatsapp" element={<ProtectedRoute dashboardId="whatsapp"> <WhatsAppDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/meta-ads" element={<ProtectedRoute dashboardId="meta_ads"> <MetaAdsDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/leverage-careers" element={<ProtectedRoute dashboardId="leverage_careers"> <LeverageCareersDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/google-ads" element={<ProtectedRoute dashboardId="google_ads"> <GoogleAdsDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/bing-ads" element={<ProtectedRoute dashboardId="bing_ads"> <BingAdsDashboard /></ProtectedRoute>} />
           <Route path="/ask-ai" element={<ProtectedRoute dashboardId="ask_ai"> <AskAI /></ProtectedRoute>} />
