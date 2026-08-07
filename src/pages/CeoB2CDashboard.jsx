@@ -7,7 +7,7 @@ import KPICard from '../components/KPICard'
 import Button from '../components/Button'
 import SlackReportPanel from '../components/SlackReportPanel'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
-import { B2C_REPORT_VERSIONS, B2C_FULL_TABLE_VERSIONS } from '../lib/b2cReport'
+import { B2C_REPORT_VERSIONS, B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS } from '../lib/b2cReport'
 import { B2C_LEDGER_VERSIONS } from '../lib/b2cLedger'
 import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
@@ -24,8 +24,21 @@ import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } fr
 // the combined total (Slack reports etc.) -- just no longer rendered as its
 // own table row here.
 const REV_PNL = [['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['srOffline', 'SR Offline'], ['acOffline', 'AC Offline'], ['vasOffline', 'VAS Offline']]
-const REV_CASHFLOW = [['sr', 'SR'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['offRev', 'Offline (AC + VAS)']]
+// Verbatim off the Daily Cash Flow - Ramesh tab, C2:F2 -- shown exactly as
+// Finance titled them, not shortened like the P&L page's Online/Offline split.
+const REV_CASHFLOW = [
+  ['sr', 'Actuals SR Revenue (Online + Offline)'], ['ac', 'Actuals AC Online Revenue'],
+  ['vas', 'Actuals VAS Online Revenue'], ['offRev', 'Actuals Offline Revenue (AC + VAS)'],
+]
 const COST = [['people', 'People'], ['pm', 'Performance Marketing'], ['op', 'Product Operating Cost (AC, VAS)'], ['offCost', 'Offline Cost (partner payout + experience centre)'], ['corp', 'Corp. Overheads']]
+// Verbatim off the same tab, H2:L2 -- Cash Flow's own wording, which differs
+// slightly from the P&L labels above (e.g. "Actuals PM Cost" vs "Performance
+// Marketing (Total)"), so it needs its own array rather than sharing COST.
+const COST_CASHFLOW = [
+  ['people', 'Actuals People Cost (incl. corporate people)'], ['pm', 'Actuals PM Cost'],
+  ['op', 'Actuals Operating Cost (AC + VAS)'], ['offCost', 'Actuals Experience Centre Cost + Partner Payout'],
+  ['corp', 'Actuals Corp. Overheads'],
+]
 const PLAN = [['people', 'People'], ['operating', 'Operating'], ['corp', 'Corp. Overheads'], ['offline', 'Offline (rent + staff)']]
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
 
@@ -466,7 +479,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     const shot = node ? await captureNodePng(node, { ratios: [3, 2, 1.5, 1] }) : null
     const cols = ['Line item', day ? day.date : 'Latest day', periodLabel]
     if (hasPrev) cols.push(prevLab)
-    const spec = REV.concat([['rev', 'Total Revenue']]).concat(COST).concat([['cost', 'Total Cost'], ['net', 'Net Inflow']])
+    const spec = REV.concat([['rev', L.totalRev]]).concat(isCashFlow ? COST_CASHFLOW : COST).concat([['cost', L.totalCost], ['net', L.net]])
     const body = spec.map(function (d) {
       const r = {}
       r[cols[0]] = d[1]
@@ -530,29 +543,25 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
               </div>
             </div>
             {preset === 'mtd' && months.length > 0 ? <Dropdown options={monthOpts} value={month} onChange={setMonth} minWidth={150} /> : null}
-            {/* Send to Slack stays P&L-only for now: the report builders it uses
-                (CEO_BRIEF_VERSIONS/B2C_REPORT_VERSIONS/B2C_LEDGER_VERSIONS) hardcode
-                "Revenue"/"Cost" wording throughout their headline text, which would
-                read wrong for a cash-flow message -- a Cash Flow variant of those
-                builders is a real follow-up, not something to half-do here. */}
-            {ready && !isCashFlow ? (
+            {/* CEO_BRIEF_VERSIONS/B2C_REPORT_VERSIONS/B2C_LEDGER_VERSIONS hardcode
+                "Revenue"/"Cost" wording throughout, so they stay P&L-only. Cash
+                Flow gets its own single native-table version instead. */}
+            {ready ? (
               <Button size="sm" variant="secondary" onClick={function () { setSlackOpen(true) }}
                 icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4Z" /></svg>}>
                 Send to Slack
               </Button>
             ) : null}
-            {!isCashFlow ? (
-              <SlackReportPanel
-                open={slackOpen}
-                onClose={function () { setSlackOpen(false) }}
-                versions={[...B2C_FULL_TABLE_VERSIONS, ...CEO_BRIEF_VERSIONS, ...B2C_REPORT_VERSIONS, ...B2C_LEDGER_VERSIONS]}
-                buildContext={buildSlackContext}
-                captureFiles={captureSlackFiles}
-                dashboardId="ceo_b2c_pnl"
-                filename={'ceo-b2c-pnl-' + (month || '')}
-                rowCount={rows.length}
-              />
-            ) : null}
+            <SlackReportPanel
+              open={slackOpen}
+              onClose={function () { setSlackOpen(false) }}
+              versions={isCashFlow ? B2C_CASHFLOW_TABLE_VERSIONS : [...B2C_FULL_TABLE_VERSIONS, ...CEO_BRIEF_VERSIONS, ...B2C_REPORT_VERSIONS, ...B2C_LEDGER_VERSIONS]}
+              buildContext={buildSlackContext}
+              captureFiles={captureSlackFiles}
+              dashboardId={isCashFlow ? 'ceo_b2c_cashflow' : 'ceo_b2c_pnl'}
+              filename={(isCashFlow ? 'ceo-b2c-cashflow-' : 'ceo-b2c-pnl-') + (month || '')}
+              rowCount={rows.length}
+            />
           </div>
         </div>
         <div className={styles.content}>
@@ -628,7 +637,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                     <td>100%</td>
                   </tr>
                   <tr><td className={styles.group} colSpan={hasPrev ? 6 : 4}>{L.costGroup}</td></tr>
-                  {COST.map(function (c) {
+                  {(isCashFlow ? COST_CASHFLOW : COST).map(function (c) {
                     return (
                       <tr key={c[0]}>
                         <td>{c[1]}</td>

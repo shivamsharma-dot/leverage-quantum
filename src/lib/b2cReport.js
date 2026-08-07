@@ -317,6 +317,66 @@ export const B2C_FULL_TABLE_VERSIONS = [{
   build: buildB2CFullTable,
 }]
 
+// -- native full-particulars table, Daily Cash Flow tab ---------------------
+// Same mechanism as buildB2CFullTable above, but reading the Cash Flow tab's
+// own line items -- SR is one combined figure there (never split into
+// Online/Offline like P&L), and every label is verbatim off the sheet's own
+// C2:F2 (revenue) / H2:L2 (cost) header cells, not shortened. No EBITDA row:
+// the sheet's own bottom line here is still "Net cash inflow", never renamed.
+const CASHFLOW_LINES = [
+  ['sr', 'Actuals SR Revenue (Online + Offline)'], ['ac', 'Actuals AC Online Revenue'],
+  ['vas', 'Actuals VAS Online Revenue'], ['offRev', 'Actuals Offline Revenue (AC + VAS)'],
+]
+const CASHFLOW_HEADS = [
+  ['people', 'Actuals People Cost (incl. corporate people)'], ['pm', 'Actuals PM Cost'],
+  ['op', 'Actuals Operating Cost (AC + VAS)'], ['offCost', 'Actuals Experience Centre Cost + Partner Payout'],
+  ['corp', 'Actuals Corp. Overheads'],
+]
+function buildB2CCashflowTable(ctx) {
+  const c = ctx || {}
+  const raw = c.raw || {}
+  const day = raw.day || {}
+  const mtd = raw.mtd || {}
+  const fy = raw.fy || {}
+  const row = function (key, label, bold) {
+    const f = bold ? cellBold : cellText
+    return [f(label), f(money(day[key])), f(money(mtd[key])), f(money(fy[key]))]
+  }
+  const rows = [[cellBold('Line Item'), cellBold('Last Day'), cellBold('MTD'), cellBold(fy.label ? fy.label + ' (YTD)' : 'YTD')]]
+  CASHFLOW_LINES.forEach(function (d) { rows.push(row(d[0], d[1])) })
+  rows.push(row('rev', 'Total Cash Inflow', true))
+  CASHFLOW_HEADS.forEach(function (d) { rows.push(row(d[0], d[1])) })
+  rows.push(row('cost', 'Total Cash Outflow', true))
+  rows.push(row('net', 'Net cash inflow', true))
+  const cols = rows[0].map(function (_, i) { return i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' } })
+  const L = []
+  L.push(':bar_chart: *B2C - Daily Cashflow*')
+  L.push('_Last completed day, month to date and year to date. ' + (c.through ? 'Through ' + c.through + '.' : '') + '_')
+  return [{
+    key: 'b2c_cashflow_full', label: 'B2C - Daily Cashflow', attach: true,
+    text: L.join('\n'),
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: L[1] }] },
+      { type: 'table', block_id: 'b2c_cashflow_table', column_settings: cols, rows: rows },
+    ],
+  }]
+}
+
+export const B2C_CASHFLOW_TABLE_VERSIONS = [{
+  id: 'b2c_cashflow_full',
+  code: 'B2C-CF',
+  msgKeys: ['b2c_cashflow_full'],
+  name: 'B2C - Daily Cashflow (native table)',
+  tagline: 'One native Slack table, Cash Flow\'s own line items, Last Day / MTD / YTD.',
+  what: [
+    'Every line item verbatim off the Daily Cash Flow tab -- SR, AC Online, VAS Online, Offline revenue, Total Cash Inflow, each cost head, Total Cash Outflow, then Net cash inflow',
+    'Three columns: Last Day, MTD, and year to date',
+    'A real Slack table block, not a code block or an image',
+  ],
+  build: buildB2CCashflowTable,
+}]
+
 export const B2C_REPORT_VERSIONS = [{
   id: 'b2c',
   code: 'B2C',
