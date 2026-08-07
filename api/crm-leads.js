@@ -569,8 +569,13 @@ async function handleBigQuery(req, res, me) {
   }
   try {
     if (mode === 'careers_leads') {
+      // lsq_careers_opprtunities isn't partitioned in a way this filter can prune,
+      // so every call scans the whole table (~11.5GB as of Aug 2026, well under
+      // $0.10 at BigQuery's per-TiB rate) regardless of the since/until window --
+      // same cost profile the pre-existing 'leverage_careers' saved query already
+      // had. 20GB cap leaves headroom as the table grows before this needs revisiting.
       const { since, until } = req.query || {}
-      const out = await bq.bigQuerySelect(careersLeadsSql(since, until), { maxBytes: 2_000_000_000 })
+      const out = await bq.bigQuerySelect(careersLeadsSql(since, until), { maxBytes: 20_000_000_000 })
       return res.status(200).json({ configured: true, rows: out.rows || [], totalBytesProcessed: out.totalBytesProcessed })
     }
     if (mode === 'datasets') {
