@@ -757,12 +757,19 @@ const B2C_PNL_COLS = {
   // needed to catch.
   totalCost: 'total cost', net: 'ebitda',
 };
+// sr and offCost were both silently reading null: the sheet's real headers
+// are 'Actuals SR Revenue (Online + Offline)' (was mapped to the stale
+// '...(Total)' wording) and 'Actuals Experience Centre Cost + Partner
+// Payout' (contains no 'offline' text at all, unlike its P&L-tab sibling) --
+// confirmed against the live sheet. Both now use a short, stable substring
+// so the 4th "contains anywhere" matcher tier (api/crm-leads.js b2cRows())
+// finds them regardless of the 'Actuals ...' decoration around them.
 const B2C_CASHFLOW_COLS = {
   date: 'date', month: 'month',
-  sr: 'sr revenue (total)', ac: 'ac online revenue', vas: 'vas online revenue',
+  sr: 'sr revenue', ac: 'ac online revenue', vas: 'vas online revenue',
   offRev: 'offline revenue (ac + vas)', totalRev: 'total cash inflow',
   people: 'people cost', pm: 'pm cost', op: 'operating cost',
-  offCost: 'offline cost', corp: 'corp. overheads',
+  offCost: 'experience centre cost', corp: 'corp. overheads',
   totalCost: 'total cash outflow', net: 'net cash inflow',
 };
 const B2C_VALUE_KEYS = ['sr', 'ac', 'vas', 'offRev', 'totalRev', 'people', 'pm', 'op', 'offCost', 'corp', 'totalCost', 'net'];
