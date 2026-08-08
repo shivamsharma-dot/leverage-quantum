@@ -119,14 +119,17 @@ const STATEMENT_LABELS = {
   pnl: {
     dataKey: 'pnl', pageTitle: 'Daily P&L',
     revGroup: 'Revenue', costGroup: 'Cost',
-    totalRev: 'Total Revenue', totalCost: 'Total Cost', net: 'Net Inflow',
+    // The sheet's own bottom line here is EBITDA, not a cash concept -- see
+    // api/crm-leads.js's net:'ebitda' column mapping. Every P&L-only label
+    // below says so; Cash Flow's own net/kpiNet/etc. (below) are untouched.
+    totalRev: 'Total Revenue', totalCost: 'Total Cost', net: 'EBITDA',
     // Root words for the KPI cards -- the active date preset (MTD/Last Day/
     // Last 7D/Range) prefixes these at render time instead of hardcoding MTD.
-    kpiRev: 'Revenue', kpiCost: 'Cost', kpiNet: 'Net Inflow',
-    tableTitle: 'Revenue → Cost → Net Inflow',
-    chartTitleDaily: 'Daily revenue, cost and net inflow',
-    chartTitleCum: 'Cumulative revenue, cost and net inflow',
-    fyWords: ['revenue', 'cost', 'net inflow'],
+    kpiRev: 'Revenue', kpiCost: 'Cost', kpiNet: 'EBITDA',
+    tableTitle: 'Revenue → Cost → EBITDA',
+    chartTitleDaily: 'Daily revenue, cost and EBITDA',
+    chartTitleCum: 'Cumulative revenue, cost and EBITDA',
+    fyWords: ['revenue', 'cost', 'EBITDA'],
   },
   cashflow: {
     dataKey: 'cashFlow', pageTitle: 'Daily Cash Flow',
@@ -324,6 +327,26 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   }, [fy, upto, REV])
   const h1Margin = h1 && h1.rev ? (h1.net / h1.rev) * 100 : null
 
+  // H2 of the same fiscal year: 1 October to 31 March. null until the YTD
+  // window actually reaches October -- there's nothing to show for a half
+  // that hasn't started yet. Once inside it, same in-progress/complete split
+  // as H1 above, just for the second half.
+  const h2 = useMemo(function () {
+    if (!fy) return null
+    const h2From = fy.from.slice(0, 4) + '-10-01'
+    if (fy.to < h2From) return null
+    const h2To = (parseInt(fy.from.slice(0, 4), 10) + 1) + '-03-31'
+    const complete = fy.to >= h2To
+    const to = complete ? h2To : fy.to
+    const t = totals(upto.filter(function (d) { return d.date >= h2From && d.date <= to }), REV)
+    t.from = h2From
+    t.to = to
+    t.complete = complete
+    t.label = 'H2 ' + fy.label.replace('FY ', '')
+    return t
+  }, [fy, upto, REV])
+  const h2Margin = h2 && h2.rev ? (h2.net / h2.rev) * 100 : null
+
   // Consolidated says 'August-2026'; the cost tabs say 'Aug-2026'.
   const shortMonth = useMemo(function () {
     const p = String(month || '').split('-')
@@ -514,7 +537,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / CEO B2C / {L.pageTitle}</p>
-            <h1 className={styles.pageTitle}>{L.pageTitle} &mdash; {isCashFlow ? 'cash inflow, outflow and net cash inflow' : 'cost, revenue and net inflow'}</h1>
+            <h1 className={styles.pageTitle}>{L.pageTitle} &mdash; {isCashFlow ? 'cash inflow, outflow and net cash inflow' : 'revenue, cost and EBITDA'}</h1>
           </div>
           <div className={styles.headerRight}>
             <span className={styles.badge}>Through {d1}</span>
@@ -668,14 +691,58 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                 </tbody>
               </table>
               {fy ? (
-                <p className={styles.note}>
-                  <strong>YTD</strong> &middot; {fy.label}, {fy.from} to {fy.to} &middot; {L.fyWords[0]} {full(fy.rev)} &middot; {L.fyWords[1]} {full(fy.cost)} &middot; {L.fyWords[2]} {full(fy.net)}{fyMargin == null ? '' : ' (' + fyMargin.toFixed(1) + '% margin)'}
-                </p>
-              ) : null}
-              {h1 ? (
-                <p className={styles.note}>
-                  <strong>H1</strong> &middot; {h1.label}, {h1.from} to {h1.to}{h1.complete ? '' : ' (in progress)'} &middot; {L.fyWords[0]} {full(h1.rev)} &middot; {L.fyWords[1]} {full(h1.cost)} &middot; {L.fyWords[2]} {full(h1.net)}{h1Margin == null ? '' : ' (' + h1Margin.toFixed(1) + '% margin)'}
-                </p>
+                <>
+                  <div style={{ marginTop: 20, marginBottom: 10 }}>
+                    <span className={styles.cardTitle}>{fy.label} view &mdash; YTD, H1, H2</span>
+                  </div>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>Period</th>
+                        <th>Range</th>
+                        <th>{L.totalRev}</th>
+                        <th>{L.totalCost}</th>
+                        <th>{L.net}</th>
+                        <th>Margin</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>YTD</td>
+                        <td>{fy.from} to {fy.to}</td>
+                        <td>{full(fy.rev)}</td>
+                        <td>{full(fy.cost)}</td>
+                        <td className={fy.net != null && fy.net < 0 ? styles.neg : styles.pos}>{full(fy.net)}</td>
+                        <td>{fyMargin == null ? '—' : fyMargin.toFixed(1) + '%'}</td>
+                      </tr>
+                      {h1 ? (
+                        <tr>
+                          <td>H1{h1.complete ? '' : ' (in progress)'}</td>
+                          <td>{h1.from} to {h1.to}</td>
+                          <td>{full(h1.rev)}</td>
+                          <td>{full(h1.cost)}</td>
+                          <td className={h1.net != null && h1.net < 0 ? styles.neg : styles.pos}>{full(h1.net)}</td>
+                          <td>{h1Margin == null ? '—' : h1Margin.toFixed(1) + '%'}</td>
+                        </tr>
+                      ) : null}
+                      {h2 ? (
+                        <tr>
+                          <td>H2{h2.complete ? '' : ' (in progress)'}</td>
+                          <td>{h2.from} to {h2.to}</td>
+                          <td>{full(h2.rev)}</td>
+                          <td>{full(h2.cost)}</td>
+                          <td className={h2.net != null && h2.net < 0 ? styles.neg : styles.pos}>{full(h2.net)}</td>
+                          <td>{h2Margin == null ? '—' : h2Margin.toFixed(1) + '%'}</td>
+                        </tr>
+                      ) : (
+                        <tr>
+                          <td>H2</td>
+                          <td colSpan={5} className={styles.empty} style={{ padding: '10px 14px', textAlign: 'left' }}>Not started yet &mdash; begins {fy.from.slice(0, 4)}-10-01</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </>
               ) : null}
               {isCashFlow ? (
                 <p className={styles.note}>
