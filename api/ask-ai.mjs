@@ -1143,12 +1143,35 @@ async function logAgentRun({ agentId, title, summary, content, status, error, to
   } catch { return null }
 }
 
+// Per-agent on/off switch, stored in app_preferences as 'agent_<id>_enabled'.
+// Missing row (never toggled) or any value other than the literal false
+// defaults to enabled, so this is additive -- an agent nobody has touched
+// in Settings/Agents keeps running exactly as it always has.
+async function isAgentEnabled(agentId) {
+  if (!SB_KEY) return true
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/app_preferences?select=value&key=eq.agent_${agentId}_enabled`, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!r.ok) return true
+    const rows = await r.json().catch(() => [])
+    return rows?.[0]?.value !== false
+  } catch { return true }
+}
+
 async function handleAgentRun(req, res, me) {
   const agentId = req.body?.agent_id || 'marketing_performance'
   const agent = AGENTS[agentId]
   if (!agent) return res.status(400).json({ error: 'Unknown agent_id: ' + agentId })
   const triggeredBy = me ? me.email : 'cron'
   const startedAt = new Date().toISOString()
+  // Blocks BOTH the scheduled cron run and a manual "Run now" click -- when off,
+  // nobody can trigger this agent until it's switched back on in Settings/Agents.
+  if (!(await isAgentEnabled(agentId))) {
+    await logAgentRun({ agentId, title: `${agent.label} — disabled`, summary: 'This agent is turned off.', content: '', status: 'skipped', toolCallsCount: 0, startedAt, finishedAt: startedAt, triggeredBy })
+    return res.status(200).json({ ok: false, skipped: true, reason: 'This agent is turned off in Settings/Agents.' })
+  }
   try {
     const systemText = await buildSystemPrompt((await getTokenFromSupabase()) || '', [])
     const { text: userText, since, until } = agent.buildPrompt()

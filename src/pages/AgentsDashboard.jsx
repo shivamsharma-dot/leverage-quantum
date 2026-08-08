@@ -44,7 +44,28 @@ function AgentMarkdown({ text }) {
   return <div>{out}</div>
 }
 
-const STATUS_STYLE = { ok: { bg: C.greenBg, fg: '#1F8F5B', label: 'OK' }, error: { bg: C.navyBg, fg: C.navy, label: 'ERROR' } }
+const STATUS_STYLE = { ok: { bg: C.greenBg, fg: '#1F8F5B', label: 'OK' }, error: { bg: C.navyBg, fg: C.navy, label: 'ERROR' }, skipped: { bg: C.blueBg, fg: C.blue, label: 'SKIPPED' } }
+
+// Small on/off switch, styled to match this page's own inline-styled controls
+// (no shared Toggle component exists yet in this codebase to reuse).
+function Switch({ on, onChange, disabled }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      style={{
+        width: 34, height: 19, borderRadius: 999, border: 'none', padding: 2, flexShrink: 0,
+        background: on ? C.green : '#D8DEE8', cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.6 : 1, transition: 'background .15s', display: 'inline-flex', alignItems: 'center',
+      }}
+    >
+      <span style={{ width: 15, height: 15, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', transform: on ? 'translateX(15px)' : 'translateX(0)', transition: 'transform .15s' }} />
+    </button>
+  )
+}
 function StatusPill({ status }) {
   const s = STATUS_STYLE[status] || STATUS_STYLE.error
   return <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.04em', color: s.fg, background: s.bg, borderRadius: 6, padding: '3px 8px', fontFamily: FONT }}>{s.label}</span>
@@ -64,6 +85,10 @@ export default function AgentsDashboard() {
   const [running, setRunning] = useState(null) // agentId currently running, or null
   const [expanded, setExpanded] = useState(null) // run id currently expanded
   const [runError, setRunError] = useState('')
+  // Per-agent on/off, keyed by agent_<id>_enabled in app_preferences. Missing
+  // key defaults to true (an agent nobody has toggled keeps running as before).
+  const [enabled, setEnabled] = useState({})
+  const [togglingId, setTogglingId] = useState(null)
 
   const loadRuns = useCallback(async () => {
     const rows = await sbGet('agent_runs', '?select=*&order=created_at.desc&limit=30')
@@ -71,7 +96,34 @@ export default function AgentsDashboard() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { loadRuns() }, [loadRuns])
+  const loadEnabled = useCallback(async () => {
+    try {
+      const r = await fetch('/api/preferences', { credentials: 'include' })
+      const data = await r.json().catch(() => ({}))
+      const prefs = data.prefs || {}
+      const next = {}
+      AGENTS.forEach(a => { next[a.id] = prefs[`agent_${a.id}_enabled`] !== false })
+      setEnabled(next)
+    } catch { /* defaults (all enabled) stay in place */ }
+  }, [])
+
+  useEffect(() => { loadRuns(); loadEnabled() }, [loadRuns, loadEnabled])
+
+  const toggleAgent = async (agentId, next) => {
+    setTogglingId(agentId)
+    setEnabled(e => ({ ...e, [agentId]: next })) // optimistic
+    try {
+      const r = await fetch('/api/preferences', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: `agent_${agentId}_enabled`, value: next }),
+      })
+      if (!r.ok) throw new Error()
+    } catch {
+      setEnabled(e => ({ ...e, [agentId]: !next })) // revert on failure
+    } finally {
+      setTogglingId(null)
+    }
+  }
 
   const runAgent = async (agentId) => {
     setRunning(agentId); setRunError('')
@@ -112,18 +164,23 @@ export default function AgentsDashboard() {
 
           {AGENTS.map(agent => {
             const last = lastRunFor(agent.id)
+            const isOn = enabled[agent.id] !== false
             return (
               <div key={agent.id} style={{ marginBottom: 20 }}>
                 <Card
                   title={agent.label}
-                  sub={`${agent.schedule} · Last run: ${last ? fmtWhen(last.created_at) : 'never'}${last ? ' · ' + (STATUS_STYLE[last.status]?.label || last.status) : ''}`}
+                  sub={`${agent.schedule} · Last run: ${last ? fmtWhen(last.created_at) : 'never'}${last ? ' · ' + (STATUS_STYLE[last.status]?.label || last.status) : ''}${isOn ? '' : ' · Disabled'}`}
                   action={isAdmin ? (
-                    <Button size="sm" onClick={() => runAgent(agent.id)} disabled={running === agent.id}>
-                      {running === agent.id ? 'Running… (up to a minute)' : 'Run now'}
-                    </Button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Switch on={isOn} disabled={togglingId === agent.id} onChange={next => toggleAgent(agent.id, next)} />
+                      <Button size="sm" onClick={() => runAgent(agent.id)} disabled={running === agent.id || !isOn}>
+                        {running === agent.id ? 'Running… (up to a minute)' : 'Run now'}
+                      </Button>
+                    </div>
                   ) : null}
                 >
                   <p style={{ margin: 0, fontSize: 13, color: C.sub, lineHeight: 1.6 }}>{agent.description}</p>
+                  {!isOn && <p style={{ margin: '10px 0 0', fontSize: 12, color: C.muted }}>This agent is turned off — the scheduled run will be skipped and "Run now" is disabled.</p>}
                   {runError && running !== agent.id && <p style={{ margin: '10px 0 0', fontSize: 12, color: C.navy, fontWeight: 600 }}>{runError}</p>}
                 </Card>
               </div>
