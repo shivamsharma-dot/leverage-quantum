@@ -1163,7 +1163,24 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const prevWindow = useMemo(() => {
     if (activeFilter === 'month') {
       const mk = monthKeyByLabel.get(selMonth)
-      return mk == null ? null : { type:'month', mk: mk - 1 }
+      if (mk == null) return null
+      // A closed/past month is complete on both sides, so full-month-vs-full-month
+      // is already a fair comparison -- only the CURRENT, still-running month needs
+      // day-matching (see below), otherwise e.g. 9 real days of August get compared
+      // against all 31 days of July and every KPI reads as a collapse regardless of
+      // real performance.
+      if (!isCurrentMonth) return { type:'month', mk: mk - 1 }
+      // Day-count is taken off the month's own real data (the latest date actually
+      // present), not "today" -- so this stays correct even when the sheet lags a
+      // day or two behind the calendar.
+      let maxDate = null
+      dateFilteredRows.forEach(r => { if (r.date && (!maxDate || r.date > maxDate)) maxDate = r.date })
+      if (!maxDate) return { type:'month', mk: mk - 1 }
+      const prevMonthLastDay = new Date(maxDate.getFullYear(), maxDate.getMonth(), 0) // last day of the previous month
+      const day = Math.min(maxDate.getDate(), prevMonthLastDay.getDate())
+      const from = new Date(prevMonthLastDay.getFullYear(), prevMonthLastDay.getMonth(), 1)
+      const to = new Date(prevMonthLastDay.getFullYear(), prevMonthLastDay.getMonth(), day, 23, 59, 59, 999)
+      return { type:'range', from, to }
     }
     if (dateWindow) {
       const days = Math.round((dateWindow.to - dateWindow.from) / 86400000) + 1
@@ -1172,7 +1189,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       return { type:'range', from:prevFrom, to:prevTo }
     }
     return null
-  }, [activeFilter, dateWindow, selMonth, monthKeyByLabel])
+  }, [activeFilter, dateWindow, selMonth, monthKeyByLabel, isCurrentMonth, dateFilteredRows])
 
   const prevFiltered = useMemo(() => {
     if (!prevWindow) return []
