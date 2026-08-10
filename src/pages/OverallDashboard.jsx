@@ -1183,7 +1183,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       return { type:'range', from, to }
     }
     if (dateWindow) {
-      const days = Math.round((dateWindow.to - dateWindow.from) / 86400000) + 1
+      // Custom ranges set .to to 23:59:59.999 (end of day) while .from stays at
+      // 00:00:00 -- diffing those raw timestamps gives 8.9999... days for a
+      // genuine 9-day range, which rounds to 9 and then +1 overcounts to 10.
+      // Stripping the time-of-day first gives the true calendar-day count on
+      // every preset (LD/L7D/MTD already had no time-of-day padding, so this
+      // is a no-op for them -- only custom ranges were ever affected).
+      const fromMid = new Date(dateWindow.from.getFullYear(), dateWindow.from.getMonth(), dateWindow.from.getDate())
+      const toMid = new Date(dateWindow.to.getFullYear(), dateWindow.to.getMonth(), dateWindow.to.getDate())
+      const days = Math.round((toMid - fromMid) / 86400000) + 1
       const prevTo = new Date(dateWindow.from); prevTo.setDate(prevTo.getDate() - 1); prevTo.setHours(23, 59, 59, 999)
       const prevFrom = new Date(prevTo); prevFrom.setDate(prevTo.getDate() - (days - 1)); prevFrom.setHours(0, 0, 0, 0)
       return { type:'range', from:prevFrom, to:prevTo }
