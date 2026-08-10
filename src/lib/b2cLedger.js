@@ -17,7 +17,7 @@
 //
 // One limit is stated plainly rather than papered over. The finance sheet books
 // cost by head -- people, operating, performance marketing, offline, corporate
-// overheads -- and not by business line. There is no cost of SR, of AC or of VAS
+// overheads -- and not by business line. There is no cost of SR, of AC or of Leverage One
 // anywhere in the data. Splitting the total across the lines on an assumed ratio
 // would be an invention, and nothing in this report is invented.
 
@@ -30,12 +30,12 @@ const PLAN = [
   ['band', 'REVENUE'],
   ['sr', 'SR (Online + Offline)'],
   ['ac', 'AC Online'],
-  ['vas', 'VAS Online'],
-  ['offRev', 'Offline (AC + VAS)'],
+  ['vas', 'Leverage One Online'],
+  ['offRev', 'Offline (AC + Leverage One)'],
   ['rev', 'Total revenue'],
   ['band', 'COST'],
   ['people', 'People'],
-  ['op', 'Operating (AC + VAS)'],
+  ['op', 'Operating (AC + Leverage One)'],
   ['pm', 'Performance Marketing'],
   ['offCost', 'Offline (rent, staff, maintenance)'],
   ['corp', 'Corporate Overheads'],
@@ -53,7 +53,7 @@ const NAME = {}
 PLAN.forEach(function (p) { if (p[0] !== 'band') NAME[p[0]] = p[1] })
 
 const SR_NOTE = 'SR is Online and Offline together in the sheet today. The split is coming shortly.'
-const COST_NOTE = 'Cost is booked by head, and a head is a cost category \u2014 People, Operating (AC + VAS), Performance Marketing, Offline (rent, staff, maintenance), Corporate Overheads \u2014 each one covering the whole business. It is not booked by business line, so there is no cost of SR, of AC or of VAS in this sheet to publish yet.'
+const COST_NOTE = 'Cost is booked by head, and a head is a cost category \u2014 People, Operating (AC + Leverage One), Performance Marketing, Offline (rent, staff, maintenance), Corporate Overheads \u2014 each one covering the whole business. It is not booked by business line, so there is no cost of SR, of AC or of Leverage One in this sheet to publish yet.'
 
 function money(n) {
   if (n == null || !isFinite(n)) return '\u2014'
@@ -262,13 +262,13 @@ export const B2C_LEDGER_VERSIONS = [{
   what: [
     'One table with revenue above cost, so the two are read against each other instead of in separate blocks',
     'Three columns on every line: the last completed day, month to date, and the financial year to date',
-    'SR (Online + Offline), AC Online, VAS Online and Offline (AC + VAS) on the revenue side',
-    'People, Operating (AC + VAS), Performance Marketing, Offline (rent, staff, maintenance) and Corporate Overheads on the cost side',
+    'SR (Online + Offline), AC Online, Leverage One Online and Offline (AC + Leverage One) on the revenue side',
+    'People, Operating (AC + Leverage One), Performance Marketing, Offline (rent, staff, maintenance) and Corporate Overheads on the cost side',
     'A Total on revenue, a Total on cost, and net inflow closing the table',
     'A second table with the same lines as a share of that period\u2019s own revenue, which is what makes a day, a month and a year comparable',
     'Slack\u2019s own table block, not a monospace code block, so a phone lays the columns out instead of wrapping them',
     'A per-day reading when the two months compared are different lengths, so a 31 day month is never flattered by a 30 day one',
-    'A plain statement of what a cost head is \u2014 a cost category, not a business line \u2014 so nobody hunts the table for a cost of SR, AC or VAS that the sheet does not carry',
+    'A plain statement of what a cost head is \u2014 a cost category, not a business line \u2014 so nobody hunts the table for a cost of SR, AC or Leverage One that the sheet does not carry',
     'What moved and what would close the gap, both arithmetic on the windows above',
     'The table image and a CSV land in the thread'
   ],

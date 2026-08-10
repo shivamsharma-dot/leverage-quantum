@@ -23,8 +23,8 @@ const WIDTH = 30
 const LINES = [
   ['SR (Online + Offline)', 'SR', 'sr'],
   ['AC Online', 'AC Online', 'ac'],
-  ['VAS Online', 'VAS Online', 'vas'],
-  ['Offline (AC + VAS)', 'Offline', 'off']
+  ['Leverage One Online', 'Leverage One Online', 'vas'],
+  ['Offline (AC + Leverage One)', 'Offline', 'off']
 ]
 const HEADS = [
   ['Perf. Marketing', 'Marketing', 'pm'],
@@ -265,11 +265,11 @@ function buildB2C(ctx) {
 const cellText = function (v) { return { type: 'raw_text', text: v == null || v === '' ? '—' : String(v) } }
 const cellBold = function (v) { return { type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: v == null || v === '' ? '—' : String(v), style: { bold: true } }] }] } }
 const FULL_LINES = [
-  ['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'VAS Online'],
-  ['srOffline', 'SR Offline'], ['acOffline', 'AC Offline'], ['vasOffline', 'VAS Offline'],
+  ['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'Leverage One Online'],
+  ['srOffline', 'SR Offline'], ['acOffline', 'AC Offline'], ['vasOffline', 'Leverage One Offline'],
 ]
 const FULL_HEADS = [
-  ['people', 'People'], ['pm', 'Performance Marketing'], ['op', 'Product Operating Cost (AC, VAS)'],
+  ['people', 'People'], ['pm', 'Performance Marketing'], ['op', 'Product Operating Cost (AC, Leverage One)'],
   ['offCost', 'Offline Cost (partner payout + experience centre)'], ['corp', 'Corp. Overheads'],
 ]
 function buildB2CFullTable(ctx) {
@@ -310,7 +310,7 @@ export const B2C_FULL_TABLE_VERSIONS = [{
   name: 'B2C — full particulars (native table)',
   tagline: 'One native Slack table, every revenue line and cost head, Last Day / MTD / YTD.',
   what: [
-    'Every line item exactly as the Daily P&L page shows it -- SR/AC/VAS Online, SR/AC/VAS Offline, Total Revenue, each cost head, Total Cost, then EBITDA',
+    'Every line item exactly as the Daily P&L page shows it -- SR/AC/Leverage One Online, SR/AC/Leverage One Offline, Total Revenue, each cost head, Total Cost, then EBITDA',
     'Three columns: Last Day, MTD, and year to date',
     'A real Slack table block, not a code block or an image',
   ],
@@ -325,11 +325,11 @@ export const B2C_FULL_TABLE_VERSIONS = [{
 // the sheet's own bottom line here is still "Net cash inflow", never renamed.
 const CASHFLOW_LINES = [
   ['sr', 'Actuals SR Revenue (Online + Offline)'], ['ac', 'Actuals AC Online Revenue'],
-  ['vas', 'Actuals VAS Online Revenue'], ['offRev', 'Actuals Offline Revenue (AC + VAS)'],
+  ['vas', 'Actuals Leverage One Online Revenue'], ['offRev', 'Actuals Offline Revenue (AC + Leverage One)'],
 ]
 const CASHFLOW_HEADS = [
   ['people', 'Actuals People Cost (incl. corporate people)'], ['pm', 'Actuals PM Cost'],
-  ['op', 'Actuals Operating Cost (AC + VAS)'], ['offCost', 'Actuals Experience Centre Cost + Partner Payout'],
+  ['op', 'Actuals Operating Cost (AC + Leverage One)'], ['offCost', 'Actuals Experience Centre Cost + Partner Payout'],
   ['corp', 'Actuals Corp. Overheads'],
 ]
 function buildB2CCashflowTable(ctx) {
@@ -370,7 +370,7 @@ export const B2C_CASHFLOW_TABLE_VERSIONS = [{
   name: 'B2C - Daily Cashflow (native table)',
   tagline: 'One native Slack table, Cash Flow\'s own line items, Last Day / MTD / YTD.',
   what: [
-    'Every line item verbatim off the Daily Cash Flow tab -- SR, AC Online, VAS Online, Offline revenue, Total Cash Inflow, each cost head, Total Cash Outflow, then Net cash inflow',
+    'Every line item verbatim off the Daily Cash Flow tab -- SR, AC Online, Leverage One Online, Offline revenue, Total Cash Inflow, each cost head, Total Cash Outflow, then Net cash inflow',
     'Three columns: Last Day, MTD, and year to date',
     'A real Slack table block, not a code block or an image',
   ],

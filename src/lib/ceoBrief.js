@@ -128,10 +128,10 @@ const cellMoneyVs = (o, p, k, invert) => {
 const HEADS = [
   ['SR (Online + Offline)', 'Revenue', 'sr', 'SR'],
   ['AC Online', 'Revenue', 'ac', 'AC'],
-  ['VAS Online', 'Revenue', 'vas', 'VAS'],
-  ['Offline (AC + VAS)', 'Revenue', 'offRev', 'Offline rev'],
+  ['Leverage One Online', 'Revenue', 'vas', 'Leverage One'],
+  ['Offline (AC + Leverage One)', 'Revenue', 'offRev', 'Offline rev'],
   ['Perf. Marketing', 'Cost', 'pm', 'Marketing'],
-  ['Operating (AC + VAS)', 'Cost', 'op', 'Operating'],
+  ['Operating (AC + Leverage One)', 'Cost', 'op', 'Operating'],
   ['Offline (rent, staff, upkeep)', 'Cost', 'offCost', 'Offline cost'],
   ['Corp. Overheads', 'Cost', 'corp', 'Overheads'],
   ['People', 'Cost', 'people', 'People'],
@@ -273,12 +273,12 @@ function briefBlocks(c, w, day, margin, peopleOutside, notes, caveats, dx, p) {
     card('revenue', dotFor(d.rev != null ? tone(d.rev) : 'green') + ' Revenue',
       money(w.rev) + (move(d.rev) ? ' \u00b7 ' + move(d.rev) : ''),
       'SR (Online + Offline) ' + money(w.sr) + '\nAC Online ' + money(w.ac)
-        + '\nVAS Online ' + money(w.vas)
-        + (w.offRev == null ? '' : '\nOffline (AC + VAS) ' + money(w.offRev)),
+        + '\nLeverage One Online ' + money(w.vas)
+        + (w.offRev == null ? '' : '\nOffline (AC + Leverage One) ' + money(w.offRev)),
       { image: charts.revenue }),
     card('cost', dotFor(d.cost != null ? tone(d.cost, true) : costTone) + ' Cost',
       money(w.cost) + (move(d.cost) ? ' \u00b7 ' + move(d.cost) : ''),
-      'Perf. Marketing ' + money(w.pm) + '\nOperating (AC + VAS) ' + money(w.op)
+      'Perf. Marketing ' + money(w.pm) + '\nOperating (AC + Leverage One) ' + money(w.op)
         + '\nOffline (rent, staff, upkeep) ' + money(w.offCost)
         + '\nCorp. Overheads ' + money(w.corp) + '\nPeople ' + money(w.people),
       { image: charts.cost }),

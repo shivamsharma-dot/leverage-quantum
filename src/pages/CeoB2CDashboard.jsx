@@ -18,25 +18,25 @@ import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } fr
 // not -- its SR column was always a single combined total -- so each
 // statement gets its own revenue-line list rather than sharing one.
 // The same tab later split its combined offline-revenue column into AC
-// Offline / VAS Offline too (still P&L only) -- shown here the same way SR
+// Offline / Leverage One Offline too (still P&L only) -- shown here the same way SR
 // was, as two separate lines rather than one combined row. 'offRev' (their
 // sum, derived server-side) still exists on each row for anything that wants
 // the combined total (Slack reports etc.) -- just no longer rendered as its
 // own table row here.
-const REV_PNL = [['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'VAS Online'], ['srOffline', 'SR Offline'], ['acOffline', 'AC Offline'], ['vasOffline', 'VAS Offline']]
+const REV_PNL = [['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'Leverage One Online'], ['srOffline', 'SR Offline'], ['acOffline', 'AC Offline'], ['vasOffline', 'Leverage One Offline']]
 // Verbatim off the Daily Cash Flow - Ramesh tab, C2:F2 -- shown exactly as
 // Finance titled them, not shortened like the P&L page's Online/Offline split.
 const REV_CASHFLOW = [
   ['sr', 'Actuals SR Revenue (Online + Offline)'], ['ac', 'Actuals AC Online Revenue'],
-  ['vas', 'Actuals VAS Online Revenue'], ['offRev', 'Actuals Offline Revenue (AC + VAS)'],
+  ['vas', 'Actuals Leverage One Online Revenue'], ['offRev', 'Actuals Offline Revenue (AC + Leverage One)'],
 ]
-const COST = [['people', 'People'], ['pm', 'Performance Marketing'], ['op', 'Product Operating Cost (AC, VAS)'], ['offCost', 'Offline Cost (partner payout + experience centre)'], ['corp', 'Corp. Overheads']]
+const COST = [['people', 'People'], ['pm', 'Performance Marketing'], ['op', 'Product Operating Cost (AC, Leverage One)'], ['offCost', 'Offline Cost (partner payout + experience centre)'], ['corp', 'Corp. Overheads']]
 // Verbatim off the same tab, H2:L2 -- Cash Flow's own wording, which differs
 // slightly from the P&L labels above (e.g. "Actuals PM Cost" vs "Performance
 // Marketing (Total)"), so it needs its own array rather than sharing COST.
 const COST_CASHFLOW = [
   ['people', 'Actuals People Cost (incl. corporate people)'], ['pm', 'Actuals PM Cost'],
-  ['op', 'Actuals Operating Cost (AC + VAS)'], ['offCost', 'Actuals Experience Centre Cost + Partner Payout'],
+  ['op', 'Actuals Operating Cost (AC + Leverage One)'], ['offCost', 'Actuals Experience Centre Cost + Partner Payout'],
   ['corp', 'Actuals Corp. Overheads'],
 ]
 const PLAN = [['people', 'People'], ['operating', 'Operating'], ['corp', 'Corp. Overheads'], ['offline', 'Offline (rent + staff)']]
@@ -537,7 +537,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / CEO B2C / {L.pageTitle}</p>
-            <h1 className={styles.pageTitle}>{L.pageTitle} &mdash; {isCashFlow ? 'cash inflow, outflow and net cash inflow' : 'revenue, cost and EBITDA'}</h1>
+            <h1 className={styles.pageTitle}>{L.pageTitle} &mdash; {isCashFlow ? 'cash inflow, outflow and net cash inflow' : 'revenue, cost and EBITDA'}<sup style={{ fontSize: 12, color: 'var(--text3)', marginLeft: 2 }}>*</sup></h1>
           </div>
           <div className={styles.headerRight}>
             <span className={styles.badge}>Through {d1}</span>
@@ -588,6 +588,9 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
           </div>
         </div>
         <div className={styles.content}>
+          <p className={styles.defNote}>
+            <b>* Revenue vs Cash Flow</b> &mdash; In the P&amp;L statement, revenue is recognized on the date an actual sale is recorded &mdash; when a package is sold to the customer. For AC and Leverage One (E2E), 15% is deducted to account for future refunds, based on historical data. For SR, revenue is estimated as Deposits &times; 70% &times; ₹3.5L, based on historical data. In the Cash Flow statement, actual cash inflow or outflow is recorded as it happens, irrespective of when the sale took place &mdash; this data comes directly from the Finance team.
+          </p>
           {loading ? <div className={styles.card}><div className={styles.empty}>Reading the finance sheet&hellip;</div></div> : null}
           {!loading && err ? (
             <div className={styles.card}><div className={styles.empty}>Could not read the finance sheet. {err}</div></div>

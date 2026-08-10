@@ -43,6 +43,14 @@
 .presetPill:hover { border-color:#1C9FD4; color:#1F3C84; }
 .presetPillActive { color:#fff; border:1px solid #1F3C84; background:#1F3C84; }
 .note   { font-size:13px; color:var(--text3); line-height:1.6; margin:12px 0 0; }
+/* Standing reference note, top of both P&L and Cash Flow -- what "revenue"
+   means differs by statement, so it is spelled out once, in the same place,
+   on both pages, rather than left for someone to guess from the numbers. */
+.defNote {
+  background:rgba(28,159,212,0.06); border:1px solid rgba(28,159,212,0.18);
+  border-radius:12px; padding:12px 16px; font-size:13px; color:var(--text2); line-height:1.6;
+}
+.defNote b { color:var(--text); }
 /* .total td sets the bold text colour, so the sign colours need to win on
    specificity or the Net Inflow row loses its green / red. */
 .total td.pos { color:#15803D; }
