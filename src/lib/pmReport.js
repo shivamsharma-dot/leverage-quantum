@@ -341,7 +341,9 @@ function buildV2(ctx) {
     '',
     ...v2KpiLines(ctx, ctx.now, ctx.prev, V2_MONTH_KPIS),
     '',
-    '_Every movement reads ' + (ctx.periodLabel || 'this period') + ' against ' + (ctx.prevLabel || 'the period before it') + ', the same-length window immediately before it. The figure after the arrow is what it moved from._',
+    '_Every movement reads ' + (ctx.periodLabel || 'this period') + ' against ' + (ctx.prevLabel || 'the period before it') + ', '
+      + (ctx.prevIsCalendarShift ? 'the same days in the month before it' : 'the same-length window immediately before it')
+      + '. The figure after the arrow is what it moved from._',
     csvNote(ctx),
   ]
   msgs.push({ key:'mtd', label:'MTD performance', text: one.filter(l => l != null).join('\n'), table: v2CmpTable(ctx, 'Source', ctx.cmpRows, ctx.cmpTotalSpend, vsLast, true), attach: true })
@@ -434,7 +436,8 @@ const eList = arr => arr.filter(Boolean).join('\n')
 function deltaNote(ctx) {
   if (!ctx.hasPrev) return ':information_source: No comparable previous period is loaded, so no movement is shown.'
   return ':information_source: *How to read the \u25b2\u25bc* ' + DASH + ' *' + ctx.periodLabel + '* against *' + ctx.prevLabel
-    + '*, the same-length period immediately before it, on the same Source and Corridor filters. CPL and CPQL divide spend by PAID leads and PAID QLs only, so free channels never make acquisition look cheaper than it was.'
+    + '*, ' + (ctx.prevIsCalendarShift ? 'the same days in the month before it' : 'the same-length period immediately before it')
+    + ', on the same Source and Corridor filters. CPL and CPQL divide spend by PAID leads and PAID QLs only, so free channels never make acquisition look cheaper than it was.'
 }
 
 // The KPI grid: two columns, eight cells, every one carrying its own previous-period

@@ -1169,18 +1169,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // day-matching (see below), otherwise e.g. 9 real days of August get compared
       // against all 31 days of July and every KPI reads as a collapse regardless of
       // real performance.
-      if (!isCurrentMonth) return { type:'month', mk: mk - 1 }
+      if (!isCurrentMonth) return { type:'month', mk: mk - 1, calendarShift:true }
       // Day-count is taken off the month's own real data (the latest date actually
       // present), not "today" -- so this stays correct even when the sheet lags a
       // day or two behind the calendar.
       let maxDate = null
       dateFilteredRows.forEach(r => { if (r.date && (!maxDate || r.date > maxDate)) maxDate = r.date })
-      if (!maxDate) return { type:'month', mk: mk - 1 }
+      if (!maxDate) return { type:'month', mk: mk - 1, calendarShift:true }
       const prevMonthLastDay = new Date(maxDate.getFullYear(), maxDate.getMonth(), 0) // last day of the previous month
       const day = Math.min(maxDate.getDate(), prevMonthLastDay.getDate())
       const from = new Date(prevMonthLastDay.getFullYear(), prevMonthLastDay.getMonth(), 1)
       const to = new Date(prevMonthLastDay.getFullYear(), prevMonthLastDay.getMonth(), day, 23, 59, 59, 999)
-      return { type:'range', from, to }
+      return { type:'range', from, to, calendarShift:true }
     }
     if (dateWindow) {
       // Custom ranges set .to to 23:59:59.999 (end of day) while .from stays at
@@ -1204,7 +1204,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         const day = Math.min(daySpan, prevMonthLastDay.getDate())
         const prevFrom = new Date(prevMonthLastDay.getFullYear(), prevMonthLastDay.getMonth(), 1)
         const prevTo = new Date(prevMonthLastDay.getFullYear(), prevMonthLastDay.getMonth(), day, 23, 59, 59, 999)
-        return { type:'range', from:prevFrom, to:prevTo }
+        return { type:'range', from:prevFrom, to:prevTo, calendarShift:true }
       }
       // Otherwise (Last Day, Last 7 Days, or a mid-month custom range) the
       // natural comparison really is the same-length window immediately before it.
@@ -2710,10 +2710,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       })(),
       hasPrev: prevKpis.leads > 0 || prevKpis.spend > 0,
       partialPeriod: activeFilter === 'month' ? isCurrentMonth : activeFilter === 'preset',
+      prevIsCalendarShift: !!(prevWindow && prevWindow.calendarShift),
     }
   }, [grpByLabel, periodLabel, filterLine, filtered, sortedFilteredRows, totalsRow, kpis, prevKpis,
     cpl, cpql, cpa, prevCpl, prevCpql, prevCpa, conversionChain, bySource, byCorridor,
-    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, reportCmp, v5Report, v6Report, selectedSources, sourceLabel, corridorFilter, mtdCmp, ydayCmp, dowCmp])
+    aggregateRows, slackTable, estimatedRaus, activeFilter, isCurrentMonth, prevLabel, prevWindow, reportCmp, v5Report, v6Report, selectedSources, sourceLabel, corridorFilter, mtdCmp, ydayCmp, dowCmp])
 
   // The picture of the table plus the all-columns CSV. The row limit is lifted to
   // "all" for the capture and restored right after, so the image always carries every
