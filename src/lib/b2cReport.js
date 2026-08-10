@@ -19,6 +19,12 @@ const CR = 1e7
 const LAKH = 1e5
 const WIDTH = 30
 
+// Same wording as the standing note at the top of both Daily P&L and Daily
+// Cash Flow on the live page -- printed once here so the two full-particulars
+// tables (b2c_full, b2c_cashflow_full) carry the same definition rather than
+// leaving a reader to guess why the two statements' numbers do not match.
+const REV_VS_CASHFLOW_NOTE = ':information_source: *Revenue vs Cash Flow* — P&L revenue is recognised on the date a sale is recorded: AC and Leverage One (E2E) net of a 15% deduction for expected future refunds, SR estimated as Deposits × 70% × ₹3.5L, all off historical data. Cash Flow records actual cash moved, whenever it happens, straight from the Finance team.'
+
 // Full name for prose, short name for the tables, key into the context.
 const LINES = [
   ['SR (Online + Offline)', 'SR', 'sr'],
@@ -299,6 +305,7 @@ function buildB2CFullTable(ctx) {
       { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
       { type: 'context', elements: [{ type: 'mrkdwn', text: L[1] }] },
       { type: 'table', block_id: 'b2c_full_table', column_settings: cols, rows: rows },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: REV_VS_CASHFLOW_NOTE }] },
     ],
   }]
 }
@@ -313,6 +320,7 @@ export const B2C_FULL_TABLE_VERSIONS = [{
     'Every line item exactly as the Daily P&L page shows it -- SR/AC/Leverage One Online, SR/AC/Leverage One Offline, Total Revenue, each cost head, Total Cost, then EBITDA',
     'Three columns: Last Day, MTD, and year to date',
     'A real Slack table block, not a code block or an image',
+    'The same Revenue-vs-Cash-Flow definition note the page carries, so a reader never has to guess why this differs from the Cash Flow report',
   ],
   build: buildB2CFullTable,
 }]
@@ -359,6 +367,7 @@ function buildB2CCashflowTable(ctx) {
       { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
       { type: 'context', elements: [{ type: 'mrkdwn', text: L[1] }] },
       { type: 'table', block_id: 'b2c_cashflow_table', column_settings: cols, rows: rows },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: REV_VS_CASHFLOW_NOTE }] },
     ],
   }]
 }
@@ -373,6 +382,7 @@ export const B2C_CASHFLOW_TABLE_VERSIONS = [{
     'Every line item verbatim off the Daily Cash Flow tab -- SR, AC Online, Leverage One Online, Offline revenue, Total Cash Inflow, each cost head, Total Cash Outflow, then Net cash inflow',
     'Three columns: Last Day, MTD, and year to date',
     'A real Slack table block, not a code block or an image',
+    'The same Revenue-vs-Cash-Flow definition note the page carries, so a reader never has to guess why this differs from the Daily P&L report',
   ],
   build: buildB2CCashflowTable,
 }]
