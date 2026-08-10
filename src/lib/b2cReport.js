@@ -270,6 +270,18 @@ function buildB2C(ctx) {
 // purpose (Slack asked for one continuous list, the page keeps the headers).
 const cellText = function (v) { return { type: 'raw_text', text: v == null || v === '' ? '—' : String(v) } }
 const cellBold = function (v) { return { type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: v == null || v === '' ? '—' : String(v), style: { bold: true } }] }] } }
+// Plain string back out of a native-table cell, for the Quantum in-app
+// preview -- TablePreview renders {columns,rows,strongRows} of plain values,
+// it does not know about Slack's raw_text/rich_text cell shapes. A cell built
+// by cellBold is always type 'rich_text', so checking the row's first cell's
+// type is enough to tell which rows (the Total/EBITDA/Net rows) are bold,
+// with no hardcoded row index to keep in sync as line items are added.
+const cellPlain = function (c) {
+  if (!c) return ''
+  if (c.type === 'raw_text') return c.text
+  const el = c.elements && c.elements[0] && c.elements[0].elements && c.elements[0].elements[0]
+  return el ? el.text : ''
+}
 const FULL_LINES = [
   ['srOnline', 'SR Online'], ['ac', 'AC Online'], ['vas', 'Leverage One Online'],
   ['srOffline', 'SR Offline'], ['acOffline', 'AC Offline'], ['vasOffline', 'Leverage One Offline'],
@@ -307,6 +319,16 @@ function buildB2CFullTable(ctx) {
       { type: 'table', block_id: 'b2c_full_table', column_settings: cols, rows: rows },
       { type: 'context', elements: [{ type: 'mrkdwn', text: REV_VS_CASHFLOW_NOTE }] },
     ],
+    // Mirrors the blocks above in the plain-value shape the Quantum preview
+    // (not the real Slack send, which always takes the blocks array above)
+    // knows how to render, so "read the preview, then send" is actually true
+    // for this native-table version instead of showing just the header line.
+    table: {
+      columns: rows[0].map(cellPlain),
+      rows: rows.slice(1).map(function (r) { return r.map(cellPlain) }),
+      strongRows: rows.slice(1).map(function (r, i) { return r[0].type === 'rich_text' ? i : -1 }).filter(function (i) { return i >= 0 }),
+    },
+    context: REV_VS_CASHFLOW_NOTE,
   }]
 }
 
@@ -369,6 +391,14 @@ function buildB2CCashflowTable(ctx) {
       { type: 'table', block_id: 'b2c_cashflow_table', column_settings: cols, rows: rows },
       { type: 'context', elements: [{ type: 'mrkdwn', text: REV_VS_CASHFLOW_NOTE }] },
     ],
+    // Same reasoning as buildB2CFullTable above -- plain-value mirror of the
+    // blocks array, for an accurate Quantum preview only.
+    table: {
+      columns: rows[0].map(cellPlain),
+      rows: rows.slice(1).map(function (r) { return r.map(cellPlain) }),
+      strongRows: rows.slice(1).map(function (r, i) { return r[0].type === 'rich_text' ? i : -1 }).filter(function (i) { return i >= 0 }),
+    },
+    context: REV_VS_CASHFLOW_NOTE,
   }]
 }
 
