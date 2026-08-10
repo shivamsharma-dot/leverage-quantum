@@ -1191,13 +1191,30 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // is a no-op for them -- only custom ranges were ever affected).
       const fromMid = new Date(dateWindow.from.getFullYear(), dateWindow.from.getMonth(), dateWindow.from.getDate())
       const toMid = new Date(dateWindow.to.getFullYear(), dateWindow.to.getMonth(), dateWindow.to.getDate())
+      // MTD (or a Custom range someone picked that also happens to start on the
+      // 1st of a month) reads as "the month so far" -- the natural comparison is
+      // the SAME day-of-month range in the PREVIOUS calendar month (1-9 Aug vs
+      // 1-9 Jul), not a trailing window immediately before it (which would land
+      // on 23-31 Jul and compare against days that have nothing to do with "the
+      // start of the month"). This mirrors the exact day-clamp logic the Month
+      // dropdown already uses for an in-progress month.
+      if (datePreset === 'MTD' || (datePreset === 'custom' && fromMid.getDate() === 1)) {
+        const prevMonthLastDay = new Date(fromMid.getFullYear(), fromMid.getMonth(), 0)
+        const daySpan = Math.round((toMid - fromMid) / 86400000) + 1
+        const day = Math.min(daySpan, prevMonthLastDay.getDate())
+        const prevFrom = new Date(prevMonthLastDay.getFullYear(), prevMonthLastDay.getMonth(), 1)
+        const prevTo = new Date(prevMonthLastDay.getFullYear(), prevMonthLastDay.getMonth(), day, 23, 59, 59, 999)
+        return { type:'range', from:prevFrom, to:prevTo }
+      }
+      // Otherwise (Last Day, Last 7 Days, or a mid-month custom range) the
+      // natural comparison really is the same-length window immediately before it.
       const days = Math.round((toMid - fromMid) / 86400000) + 1
       const prevTo = new Date(dateWindow.from); prevTo.setDate(prevTo.getDate() - 1); prevTo.setHours(23, 59, 59, 999)
       const prevFrom = new Date(prevTo); prevFrom.setDate(prevTo.getDate() - (days - 1)); prevFrom.setHours(0, 0, 0, 0)
       return { type:'range', from:prevFrom, to:prevTo }
     }
     return null
-  }, [activeFilter, dateWindow, selMonth, monthKeyByLabel, isCurrentMonth, dateFilteredRows])
+  }, [activeFilter, dateWindow, datePreset, selMonth, monthKeyByLabel, isCurrentMonth, dateFilteredRows])
 
   const prevFiltered = useMemo(() => {
     if (!prevWindow) return []
