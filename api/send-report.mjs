@@ -1221,6 +1221,21 @@ async function handleSlackAppMention(event) {
     ], threadTs).catch(() => {})
     return
   }
+  // A Claude + tool-use round trip is 5-20s -- long enough that the channel
+  // otherwise goes silent with no sign the mention was even seen. Post a
+  // placeholder immediately and EDIT that same message in place (chat.update)
+  // once the real answer is ready, rather than posting a second message.
+  let placeholderTs = null
+  try {
+    placeholderTs = await slackPostBlocks(token, channel, 'Checking Overall data…', [
+      { type: 'section', text: { type: 'mrkdwn', text: ':mag: Checking Overall data…' } },
+    ], threadTs)
+  } catch { /* if even the placeholder fails, still try to post the real answer below */ }
+
+  const deliver = (fallbackText, blocks) => placeholderTs
+    ? slackUpdateBlocks(token, channel, placeholderTs, fallbackText, blocks)
+    : slackPostBlocks(token, channel, fallbackText, blocks, threadTs)
+
   try {
     const today = new Date().toISOString().slice(0, 10)
     const { text, toolLog } = await runAgentToolLoop({
@@ -1239,11 +1254,11 @@ async function handleSlackAppMention(event) {
       if (table) blocks.push(slackTableBlock(table))
     }
     blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: ':information_source: AI-generated from Overall’s live data — verify anything decision-critical on the dashboard.' }] })
-    await slackPostBlocks(token, channel, (text || 'Overall answer').slice(0, 200), blocks, threadTs)
+    await deliver((text || 'Overall answer').slice(0, 200), blocks)
   } catch (e) {
-    await slackPostBlocks(token, channel, "Sorry, I couldn't pull that up.", [
+    await deliver("Sorry, I couldn't pull that up.", [
       { type: 'section', text: { type: 'mrkdwn', text: "Sorry, I couldn't pull that up just now (" + String(e.message || 'error').slice(0, 150) + ').' } },
-    ], threadTs).catch(() => {})
+    ]).catch(() => {})
   }
 }
 
