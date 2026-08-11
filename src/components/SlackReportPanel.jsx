@@ -107,6 +107,10 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   const [pin, setPin] = useState('')
   const [pinInfo, setPinInfo] = useState(null)
   const [gateErr, setGateErr] = useState('')
+  // With 2+ sandbox channels configured, there is no safe "default" to send a
+  // test to silently -- the point of naming several is that they're for
+  // different people/purposes. Send refuses until one is explicitly clicked.
+  const [testPickErr, setTestPickErr] = useState(false)
   const [lastSent, setLastSent] = useState({})
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 940)
 
@@ -125,7 +129,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
       .catch(() => {})
   }, [open])
   useEffect(() => {
-    setArmed(false); setPhrase(''); setPin(''); setGateErr('')
+    setArmed(false); setPhrase(''); setPin(''); setGateErr(''); setTestPickErr(false)
   }, [target, versionId])
 
   // The PIN status is read fresh every time a locked channel is picked. It never
@@ -170,6 +174,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
     // second, separate click. The server re-checks all three, so nothing on
     // this side of the wire is the real protection.
     const spec = DEST(target)
+    if (spec.isTest && testChannels.length > 1 && !testPick) { setTestPickErr(true); return }
     if (!spec.isTest && !spec.guarded && !armed) { setArmed(true); return }
     if (spec.guarded) {
       if (!(pinInfo && pinInfo.set)) { setGateErr('No CEO PIN is set. An admin has to set it in Settings > Reports.'); return }
@@ -358,12 +363,12 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
             </div>
             {target === TEST_KEY && testChannels.length > 1 && (
               <div style={{ display:'flex', gap:5, flexWrap:'wrap', alignItems:'center' }}>
-                <span style={{ ...LABEL, marginBottom:0 }}>Which sandbox</span>
+                <span style={{ ...LABEL, marginBottom:0, color: testPickErr ? '#B42318' : C.muted }}>Which sandbox{testPickErr ? ' — pick one' : ''}</span>
                 {testChannels.map(c => {
-                  const sel = (testPick || testChannels[0].id) === c.id
+                  const sel = testPick === c.id
                   return (
-                    <button key={c.id} onClick={() => setTestPick(c.id)} style={{
-                      border:`1px solid ${sel ? C.navy : C.border}`, background: sel ? 'rgba(31,60,132,0.07)' : '#fff',
+                    <button key={c.id} onClick={() => { setTestPick(c.id); setTestPickErr(false) }} style={{
+                      border: `1px solid ${sel ? C.navy : (testPickErr ? '#B42318' : C.border)}`, background: sel ? 'rgba(31,60,132,0.07)' : '#fff',
                       color: sel ? C.navy : C.sub, fontWeight: sel ? 800 : 600, fontSize:11, borderRadius:7,
                       padding:'5px 9px', cursor:'pointer', fontFamily:MONO
                     }}>{'#' + c.name}</button>
@@ -372,9 +377,11 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
               </div>
             )}
             <div style={{ display:'flex', alignItems:'baseline', gap:6, fontSize:11, lineHeight:1.5, flexWrap:'wrap' }}>
-              <span style={{ color: DEST(target).guarded ? C.navy : C.muted, fontWeight: DEST(target).guarded ? 700 : 500 }}>
-                {target === TEST_KEY && testChannels.length
-                  ? 'Goes to #' + ((testChannels.find(c => c.id === (testPick || testChannels[0].id)) || {}).name || 'a test channel') + ' only.'
+              <span style={{ color: testPickErr ? '#B42318' : (DEST(target).guarded ? C.navy : C.muted), fontWeight: (testPickErr || DEST(target).guarded) ? 700 : 500 }}>
+                {target === TEST_KEY && testChannels.length > 1
+                  ? (testPick ? 'Goes to #' + ((testChannels.find(c => c.id === testPick) || {}).name || '') + ' only.' : 'Pick which sandbox channel before sending.')
+                  : target === TEST_KEY && testChannels.length === 1
+                  ? 'Goes to #' + testChannels[0].name + ' only.'
                   : DEST(target).reads}
               </span>
               {DEST(target).guarded && <span style={{ color:C.sub, fontWeight:600 }}>Admin, phrase and PIN.</span>}
