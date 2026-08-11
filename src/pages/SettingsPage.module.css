@@ -645,3 +645,107 @@
 .bqTd { padding: 7px 12px; border-bottom: 0.5px solid var(--border-2); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: nowrap; max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
 .bqClear { border: none; background: transparent; color: var(--text-3); font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 2px; }
 .bqClear:hover { color: #1F3C84; }
+
+/* ============================================================
+   AUG 2026 — SETTINGS DESIGN-CONSISTENCY PASS
+   Appended last on purpose. Settings grew feature-by-feature and
+   the control metrics / radii / focus states drifted apart; this
+   block normalises them without rewriting the per-feature
+   sections above. Scale: 16px outer surfaces, 12px inner tiles,
+   9px controls, 36px control height.
+   ============================================================ */
+
+.layout {
+  --ctl-h: 36px;
+  --ctl-r: 9px;
+  --focus: #1C9FD4;
+}
+
+/* ---- 1 - one height + radius for every Settings control ---- */
+.primaryBtn,
+.ghostBtn,
+.refreshBtn,
+.iconBtn,
+.dsAddBtn,
+.dsBtnGhost,
+.dsBtnPrimary,
+.pvReset,
+.deleteBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: var(--ctl-h);
+  padding-top: 0;
+  padding-bottom: 0;
+  border-radius: var(--ctl-r);
+  line-height: 1;
+  white-space: nowrap;
+}
+.primaryBtn,
+.dsBtnPrimary { padding-left: 16px; padding-right: 16px; font-size: 13px; font-weight: 650; }
+.ghostBtn,
+.dsBtnGhost,
+.refreshBtn,
+.iconBtn,
+.pvReset,
+.dsAddBtn { padding-left: 14px; padding-right: 14px; font-size: 13px; font-weight: 600; }
+.deleteBtn { padding-left: 10px; padding-right: 10px; }
+
+/* text inputs land on the same baseline as the buttons beside them */
+input.input,
+input.searchInput,
+.dsField input { box-sizing: border-box; min-height: var(--ctl-h); padding-top: 0; padding-bottom: 0; border-radius: var(--ctl-r); }
+input.searchInput { padding-left: 34px; }
+
+/* card header rows: title block and its action centred against each other */
+.accessHeader,
+.activityHeader,
+.alHeaderRow,
+.uaHeader,
+.dsListHead { align-items: center; }
+
+/* ---- 2 - keyboard focus is visible on every control ---- */
+.content button:focus-visible,
+.content a:focus-visible,
+.content input:focus-visible,
+.content textarea:focus-visible,
+.content [role="button"]:focus-visible,
+.content [tabindex]:focus-visible,
+.dsModalOverlay button:focus-visible,
+.dsModalOverlay a:focus-visible,
+.dsModalOverlay input:focus-visible,
+.dsModalOverlay textarea:focus-visible,
+.dsModalOverlay [tabindex]:focus-visible {
+  outline: 2px solid var(--focus, #1C9FD4);
+  outline-offset: 2px;
+}
+.content :focus:not(:focus-visible) { outline: none; }
+
+/* ---- 3 - long tables scroll inside their own card with a sticky
+   header, matching the BigQuery result table above ---- */
+.alCard .tableWrap { max-height: 560px; overflow: auto; }
+.alHead th { position: sticky; top: 0; z-index: 2; }
+
+/* ---- 4 - tab bar scrolls instead of orphaning a pill onto row 2 ---- */
+.tabBar { max-width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.tabBar::-webkit-scrollbar { display: none; }
+.tab { flex: 0 0 auto; }
+
+/* ---- 5 - radius rhythm: 16 outer surfaces / 12 inner tiles ---- */
+.alCard,
+.tableCard,
+.pxHero,
+.pxStatCard,
+.dsModal,
+.editModalCard,
+.rpModalCard { border-radius: 16px; }
+.dsRow,
+.dsCatCard,
+.pvCard,
+.pxDetailItem { border-radius: 12px; }
+
+/* ---- 6 - profile spacing rhythm ---- */
+.pxStatRow { gap: 18px; }
+.pxDetailGrid { gap: 12px 18px; margin-top: 16px; }
