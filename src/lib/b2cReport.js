@@ -23,7 +23,7 @@ const WIDTH = 30
 // Cash Flow on the live page -- printed once here so the two full-particulars
 // tables (b2c_full, b2c_cashflow_full) carry the same definition rather than
 // leaving a reader to guess why the two statements' numbers do not match.
-const REV_VS_CASHFLOW_NOTE = ':information_source: *Revenue vs Cash Flow* — P&L revenue is recognised on the date a sale is recorded: AC and Leverage One (E2E) net of a 15% deduction for expected future refunds, SR estimated as Deposits × 70% × ₹3.5L, all off historical data. Cash Flow records actual cash moved, whenever it happens, straight from the Finance team.'
+const REV_VS_CASHFLOW_NOTE = ':information_source: *Revenue vs Cash Flow* — P&L revenue is recognised on the date a sale is recorded: AC and Leverage One (E2E) net of a 15% deduction for expected future refunds, SR estimated as Deposits × 70% × ₹3.5L, all off historical data. Cash Flow records actual cash moved, whenever it happens, after verification by the finance team.'
 
 // Full name for prose, short name for the tables, key into the context.
 const LINES = [
