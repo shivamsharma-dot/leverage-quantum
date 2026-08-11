@@ -13,20 +13,19 @@ const C = { navy:'#1F3C84', blue:'#1C9FD4', cyan:'#29B9C3', green:'#4CAE6F', bor
 const FONT = 'Inter,-apple-system,BlinkMacSystemFont,sans-serif'
 const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace'
 const LAST_KEY = 'lq_slack_report_last_sent'
-// Every Slack channel Quantum can post to comes from shared/slackChannels.mjs, the
+// Every REAL channel Quantum can post to comes from shared/slackChannels.mjs, the
 // same file the API reads. The panel can therefore never offer a room the server
 // does not know about, and a channel added there shows up here with no edit at all.
-// 'test' is the one entry that is not a real channel: it stands for the sandbox
-// channels an admin names in Settings > Reports, and it sits first because it is
-// the only one nobody else can see.
-const TEST_KEY = 'test'
-const DESTS = [{
-  key: TEST_KEY, label: 'Test channel', name: '', guarded: false, isTest: true,
-  reads: 'Only the sandbox channel you pick. Nobody else sees it.'
-}].concat(SLACK_CHANNELS.map(c => ({
-  key: c.id, label: c.label, name: c.name, guarded: !!c.guarded, isTest: false, reads: c.reads
-})))
-const DEST = k => DESTS.find(d => d.key === k) || DESTS[0]
+// The sandbox side is different: those are admin-named in Settings > Reports and
+// loaded fresh each time the panel opens (see the testChannels state below), so
+// each one is offered as its own chip by its real name -- never a generic "Test
+// channel" stand-in -- with one fallback entry for an account that has not named
+// any yet. Nothing is pre-selected in either group: every send starts unanswered.
+const LEGACY_TEST_DEST = {
+  key: 'test', label: 'Test channel', name: '', guarded: false, isTest: true,
+  reads: 'The one sandbox channel configured in Settings > Reports. Nobody else sees it.',
+}
+const NO_DEST = { key: '', label: '', name: '', guarded: false, isTest: false, reads: 'Pick a channel above before sending.' }
 
 // A closed padlock at 9px, drawn rather than an emoji so it takes the chip's colour.
 const Lock = ({ color }) => (
@@ -94,11 +93,11 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   // A page may hand in its own report library; Overall keeps the shared one.
   const VERSIONS = versions && versions.length ? versions : REPORT_VERSIONS
   const [versionId, setVersionId] = useState(versions && versions.length ? versions[0].id : DEFAULT_VERSION_ID)
-  const [target, setTarget] = useState('test')
-  // Which specific named test channel, when more than one is configured (Settings >
-  // Reports > Slack). '' means "the default" (the first configured one).
+  // No destination is pre-selected -- every open, and every version switch,
+  // starts from an unanswered "where does this go" rather than quietly
+  // reusing whatever was picked last time.
+  const [target, setTarget] = useState('')
   const [testChannels, setTestChannels] = useState([])
-  const [testPick, setTestPick] = useState('')
   const [busy, setBusy] = useState(false)
   // The main channel needs a second, deliberate click. No browser confirm dialog:
   // the preview above IS the confirmation, this just stops a stray click.
@@ -107,19 +106,18 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   const [pin, setPin] = useState('')
   const [pinInfo, setPinInfo] = useState(null)
   const [gateErr, setGateErr] = useState('')
-  // With 2+ sandbox channels configured, there is no safe "default" to send a
-  // test to silently -- the point of naming several is that they're for
-  // different people/purposes. Send refuses until one is explicitly clicked.
-  const [testPickErr, setTestPickErr] = useState(false)
+  // Nothing sends until a chip is actually clicked -- this flags the attempt so
+  // the picker can say so instead of guessing a "default" nobody chose.
+  const [pickErr, setPickErr] = useState(false)
   const [lastSent, setLastSent] = useState({})
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 940)
 
-  useEffect(() => { if (open) { setLastSent(readLastSent()); setArmed(false) } }, [open])
+  useEffect(() => { if (open) { setLastSent(readLastSent()); setArmed(false); setTarget('') } }, [open])
   // Named test channels are admin-configured in Settings > Reports > Slack. Loaded
   // fresh each time the panel opens -- channel ids/names only, never a credential.
   useEffect(() => {
     if (!open) return
-    setTestChannels([]); setTestPick('')
+    setTestChannels([])
     fetch('/api/preferences', { credentials: 'include' })
       .then(r => r.ok ? r.json() : { prefs: {} })
       .then(d => {
@@ -129,8 +127,26 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
       .catch(() => {})
   }, [open])
   useEffect(() => {
-    setArmed(false); setPhrase(''); setPin(''); setGateErr(''); setTestPickErr(false)
+    setArmed(false); setPhrase(''); setPin(''); setGateErr(''); setPickErr(false)
   }, [target, versionId])
+
+  // Sandbox chips are built fresh from whatever is actually named in Settings --
+  // each named channel is its own first-class destination, not a value hidden
+  // behind one generic "Test channel" pill. Falls back to that generic pill only
+  // for an account that has never named a sandbox at all.
+  const sandboxDests = useMemo(() => (
+    testChannels.length
+      ? testChannels.map(c => ({
+          key: 'test:' + c.id, label: '#' + c.name, name: c.name, guarded: false, isTest: true,
+          reads: 'Sandbox — only visible in #' + c.name + '.',
+        }))
+      : [LEGACY_TEST_DEST]
+  ), [testChannels])
+  const realDests = useMemo(() => SLACK_CHANNELS.map(c => ({
+    key: c.id, label: c.label, name: c.name, guarded: !!c.guarded, isTest: false, reads: c.reads,
+  })), [])
+  const DESTS = useMemo(() => sandboxDests.concat(realDests), [sandboxDests, realDests])
+  const DEST = k => DESTS.find(d => d.key === k) || NO_DEST
 
   // The PIN status is read fresh every time a locked channel is picked. It never
   // carries the PIN or the hash, only whether one is set and whether we are
@@ -164,7 +180,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   // code path that could drift from what actually gets posted.
   const messages = useMemo(() => {
     if (!open) return []
-    try { return buildReportMessages(versionId, { ...buildContext(), isTest: target === TEST_KEY }, VERSIONS) }
+    try { return buildReportMessages(versionId, { ...buildContext(), isTest: !!DEST(target).isTest }, VERSIONS) }
     catch (e) { return [{ key:'error', label:'Preview failed', text: e.message || 'Could not build this version' }] }
   }, [open, versionId, target, buildContext])
 
@@ -174,7 +190,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
     // second, separate click. The server re-checks all three, so nothing on
     // this side of the wire is the real protection.
     const spec = DEST(target)
-    if (spec.isTest && testChannels.length > 1 && !testPick) { setTestPickErr(true); return }
+    if (!spec.key) { setPickErr(true); return }
     if (!spec.isTest && !spec.guarded && !armed) { setArmed(true); return }
     if (spec.guarded) {
       if (!(pinInfo && pinInfo.set)) { setGateErr('No CEO PIN is set. An admin has to set it in Settings > Reports.'); return }
@@ -187,7 +203,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
     setBusy(true)
     try {
       const files = await captureFiles()
-      const slackTarget = target === TEST_KEY && testPick ? 'test:' + testPick : target
+      const slackTarget = target
       const r = await fetch('/api/send-report', {
         method: 'POST',
         credentials: 'include',
@@ -237,10 +253,11 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   const LABEL = { fontSize:10, fontWeight:800, letterSpacing:'0.07em', textTransform:'uppercase', color:C.muted, marginBottom:9 }
   // One channel chip. The selected one goes solid navy. A guarded channel keeps a
   // darker hairline even when it is not selected, so the locked rooms read as locked
-  // before anybody clicks them.
-  const chip = (active, guarded) => ({
+  // before anybody clicks them. `err` tints an unselected chip red after a Send
+  // attempt with nothing picked, so the whole picker visibly says "choose one".
+  const chip = (active, guarded, err) => ({
     display:'flex', alignItems:'center', gap:6, padding:'6px 10px', cursor:'pointer',
-    border:`1px solid ${active ? C.navy : (guarded ? C.sub : C.border)}`,
+    border:`1px solid ${active ? C.navy : err ? '#F1B5AC' : (guarded ? C.sub : C.border)}`,
     borderRadius:9, background: active ? C.navy : '#fff', fontFamily:FONT,
     color: active ? '#fff' : C.ink, transition:'background .12s, border-color .12s',
     boxShadow: active ? '0 1px 2px rgba(15,23,42,0.12)' : 'none'
@@ -346,43 +363,42 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
         </div>
 
         <div style={{ padding:'12px 16px', borderTop:`1px solid ${C.border}`, display:'flex', flexDirection:'column', gap:10 }}>
-          {/* The channel picker. Every chip is a real room, spelled the way Slack spells it. */}
-          <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
-              {DESTS.map(d => {
-                const on = target === d.key
-                return (
-                  <button key={d.key} onClick={() => setTarget(d.key)} style={chip(on, d.guarded)}>
-                    {d.guarded && <Lock color={on ? '#fff' : C.sub} />}
-                    <span style={{ fontSize: d.isTest ? 12 : 11.5, fontWeight:700, fontFamily: d.isTest ? FONT : MONO }}>
-                      {d.isTest ? d.label : '#' + d.name}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            {target === TEST_KEY && testChannels.length > 1 && (
-              <div style={{ display:'flex', gap:5, flexWrap:'wrap', alignItems:'center' }}>
-                <span style={{ ...LABEL, marginBottom:0, color: testPickErr ? '#B42318' : C.muted }}>Which sandbox{testPickErr ? ' — pick one' : ''}</span>
-                {testChannels.map(c => {
-                  const sel = testPick === c.id
+          {/* The channel picker. Two flat groups, every chip a real room spelled the
+              way Slack spells it -- no "Test channel" stand-in hiding a second pick
+              behind it. Nothing here is pre-selected; a send always starts unanswered. */}
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            <div>
+              <div style={{ ...LABEL, marginBottom:6, color: pickErr ? '#B42318' : C.muted }}>
+                Sandbox — pick one to test with
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
+                {sandboxDests.map(d => {
+                  const on = target === d.key
                   return (
-                    <button key={c.id} onClick={() => { setTestPick(c.id); setTestPickErr(false) }} style={{
-                      border: `1px solid ${sel ? C.navy : (testPickErr ? '#B42318' : C.border)}`, background: sel ? 'rgba(31,60,132,0.07)' : '#fff',
-                      color: sel ? C.navy : C.sub, fontWeight: sel ? 800 : 600, fontSize:11, borderRadius:7,
-                      padding:'5px 9px', cursor:'pointer', fontFamily:MONO
-                    }}>{'#' + c.name}</button>
+                    <button key={d.key} onClick={() => setTarget(d.key)} style={chip(on, false, pickErr)}>
+                      <span style={{ fontSize: d.name ? 11.5 : 12, fontWeight:700, fontFamily: d.name ? MONO : FONT }}>{d.label}</span>
+                    </button>
                   )
                 })}
               </div>
-            )}
+            </div>
+            <div>
+              <div style={{ ...LABEL, marginBottom:6, color: pickErr ? '#B42318' : C.muted }}>Real channels</div>
+              <div style={{ display:'flex', alignItems:'center', gap:7, flexWrap:'wrap' }}>
+                {realDests.map(d => {
+                  const on = target === d.key
+                  return (
+                    <button key={d.key} onClick={() => setTarget(d.key)} style={chip(on, d.guarded, pickErr)}>
+                      {d.guarded && <Lock color={on ? '#fff' : C.sub} />}
+                      <span style={{ fontSize:11.5, fontWeight:700, fontFamily:MONO }}>{'#' + d.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
             <div style={{ display:'flex', alignItems:'baseline', gap:6, fontSize:11, lineHeight:1.5, flexWrap:'wrap' }}>
-              <span style={{ color: testPickErr ? '#B42318' : (DEST(target).guarded ? C.navy : C.muted), fontWeight: (testPickErr || DEST(target).guarded) ? 700 : 500 }}>
-                {target === TEST_KEY && testChannels.length > 1
-                  ? (testPick ? 'Goes to #' + ((testChannels.find(c => c.id === testPick) || {}).name || '') + ' only.' : 'Pick which sandbox channel before sending.')
-                  : target === TEST_KEY && testChannels.length === 1
-                  ? 'Goes to #' + testChannels[0].name + ' only.'
-                  : DEST(target).reads}
+              <span style={{ color: pickErr ? '#B42318' : (DEST(target).guarded ? C.navy : C.muted), fontWeight: (pickErr || DEST(target).guarded) ? 700 : 500 }}>
+                {pickErr ? 'Pick a channel above before sending.' : DEST(target).reads}
               </span>
               {DEST(target).guarded && <span style={{ color:C.sub, fontWeight:600 }}>Admin, phrase and PIN.</span>}
             </div>
