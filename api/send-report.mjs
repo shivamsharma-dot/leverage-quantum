@@ -1,6 +1,15 @@
 import { SLACK_CHANNELS, DEFAULT_CHANNEL_ID, channelHandle, confirmPhrase, phraseMatches } from '../shared/slackChannels.mjs'
+import { runAgentToolLoop, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL } from './ask-ai.mjs'
+import crypto from 'node:crypto'
 
 export const maxDuration = 60
+// Slack's Events API signature (verifySlackSignature below) is an HMAC over the
+// EXACT raw request bytes -- by the time Vercel's default bodyParser hands over
+// an already-parsed req.body object, those bytes are gone. bodyParser is off for
+// this whole file so the handler can read them once, itself, up front; every
+// existing dispatch below still gets a normal parsed req.body, just populated
+// manually instead of by the platform (see the top of the default export).
+export const config = { api: { bodyParser: false } }
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SUPABASE_KEY         = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
@@ -1148,15 +1157,112 @@ function slackTableBlock(table) {
   return { type: 'table', column_settings: cols.map((_, i) => (i === 0 ? { is_wrapped: !!table.wrapFirst } : { align: 'right' })), rows }
 }
 
-async function slackPostBlocks(token, channel, text, blocks) {
+async function slackPostBlocks(token, channel, text, blocks, threadTs) {
   const res = await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({ channel, text, blocks }),
+    body: JSON.stringify(threadTs ? { channel, text, blocks, thread_ts: threadTs } : { channel, text, blocks }),
   })
   const d = await res.json().catch(() => ({}))
   if (!d.ok) throw new Error('Slack: ' + (d.error || 'message rejected'))
   return d.ts
+}
+
+// ── Slack: @mention Q&A on the Overall dashboard, AI-powered ────────────────────
+// Someone @pm_analyst's the bot in any channel it's in and asks a question about
+// Overall (spend/leads/QLs/CPQL/by-source/why-did-it-change) -- Claude decides
+// what to fetch via the same get_overall_totals/analyze_campaign_contribution
+// tools Ask AI itself uses (imported from ask-ai.mjs, not duplicated), writes the
+// explanation, and THIS code -- not Claude -- renders the actual numbers it
+// returned into a real Slack table block, so the table is always exact.
+const OVERALL_QA_SYSTEM = today => `You are Quantum's Slack assistant, answering one question at a time in a Slack channel.
+
+You can ONLY answer questions about the Overall marketing dashboard: spend, leads, Total QL (qualified leads), applications, offers, deposits, RAUs, CPL, CPQL, CPA, broken down by source/channel if asked, and "why did it change" contribution analysis. If asked about anything else (Meta Ads/Google Ads specifics, QL Ops, B2C revenue or cash flow, or anything unrelated), say plainly that you can currently only answer Overall-dashboard questions -- do not guess or make up a number for something outside that.
+
+Today's date is ${today}. All figures are in Indian Rupees (₹). Resolve relative dates (today, yesterday, this month, last month, a named month) to real YYYY-MM-DD ranges yourself before calling a tool.
+
+Use get_overall_totals for a direct "what was X" question. Use analyze_campaign_contribution only for a "why did it change" / "what's driving it" question between two periods.
+
+Keep your answer to 1-4 short sentences, in plain text (no markdown table, no bullet list of raw numbers) -- the exact figures from your tool call are rendered as a real table separately, right under your answer, so do not restate every number yourself. If a tool call fails or returns no data, say so plainly instead of guessing.`
+
+function fmtN(n) { return n == null ? '—' : Math.round(n).toLocaleString('en-IN') }
+
+// get_overall_totals's {rows:[{label,spend,leads,totalQL,cpl,cpql,cpa,apps,offers,deposits,raus}]}
+function overallTotalsTable(result) {
+  const rows = Array.isArray(result?.rows) ? result.rows : []
+  if (!rows.length) return null
+  return {
+    columns: ['Source', 'Spend', 'Leads', 'Total QL', 'CPQL', 'CPL', 'Applications', 'Offers', 'Deposits', 'RAUs'],
+    rows: rows.map(r => [r.label, fmtINR(r.spend), fmtN(r.leads), fmtN(r.totalQL), r.cpql == null ? '—' : fmtINR(r.cpql), r.cpl == null ? '—' : fmtINR(r.cpl), fmtN(r.apps), fmtN(r.offers), fmtN(r.deposits), fmtN(r.raus)]),
+  }
+}
+
+// analyze_campaign_contribution's {contributors:[{campaign,channel,currentQL,previousQL,deltaQL,shareOfChangePct,cpql,action}]}
+function contributionTable(result) {
+  const rows = Array.isArray(result?.contributors) ? result.contributors : []
+  if (!rows.length) return null
+  return {
+    columns: ['Campaign', 'Channel', 'Total QL', 'vs prev', 'Δ QL', 'Share', 'CPQL', 'Action'],
+    rows: rows.map(r => [r.campaign, r.channel, fmtN(r.currentQL), fmtN(r.previousQL), (r.deltaQL >= 0 ? '+' : '') + fmtN(r.deltaQL), (r.shareOfChangePct == null ? '—' : r.shareOfChangePct + '%'), r.cpql == null ? '—' : fmtINR(r.cpql), r.action || '—']),
+    wrapFirst: true,
+  }
+}
+
+async function handleSlackAppMention(event) {
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token) return
+  const channel = event.channel
+  const threadTs = event.thread_ts || event.ts
+  // Slack's raw mention text always leads with the literal <@BOTID> token.
+  const question = String(event.text || '').replace(/<@[^>]+>/g, '').trim()
+  if (!question) {
+    await slackPostBlocks(token, channel, 'Ask me about Overall.', [
+      { type: 'section', text: { type: 'mrkdwn', text: "Ask me something about Overall — spend, leads, QLs, CPQL, by source, or what's driving a change." } },
+    ], threadTs).catch(() => {})
+    return
+  }
+  try {
+    const today = new Date().toISOString().slice(0, 10)
+    const { text, toolLog } = await runAgentToolLoop({
+      system: [{ type: 'text', text: OVERALL_QA_SYSTEM(today) }],
+      userText: question,
+      tools: [OVERALL_TOTALS_TOOL, CONTRIBUTION_TOOL],
+      agentId: 'slack_overall_qa',
+    })
+    const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: (text || 'I could not find an answer for that.').slice(0, 2900) } }]
+    // Render the table from whichever tool call actually returned usable data,
+    // most recent first -- Claude's OWN text never carries the numbers, so the
+    // table is always exactly what the tool returned, not what the model recalled.
+    const lastGood = [...(toolLog || [])].reverse().find(t => t.result && !t.result.error && (Array.isArray(t.result.rows) || Array.isArray(t.result.contributors)))
+    if (lastGood) {
+      const table = lastGood.name === 'get_overall_totals' ? overallTotalsTable(lastGood.result) : contributionTable(lastGood.result)
+      if (table) blocks.push(slackTableBlock(table))
+    }
+    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: ':information_source: AI-generated from Overall’s live data — verify anything decision-critical on the dashboard.' }] })
+    await slackPostBlocks(token, channel, (text || 'Overall answer').slice(0, 200), blocks, threadTs)
+  } catch (e) {
+    await slackPostBlocks(token, channel, "Sorry, I couldn't pull that up.", [
+      { type: 'section', text: { type: 'mrkdwn', text: "Sorry, I couldn't pull that up just now (" + String(e.message || 'error').slice(0, 150) + ').' } },
+    ], threadTs).catch(() => {})
+  }
+}
+
+async function readRawBody(req) {
+  const chunks = []
+  for await (const chunk of req) chunks.push(chunk)
+  return Buffer.concat(chunks)
+}
+
+// v0=HMAC-SHA256("v0:{timestamp}:{raw body}", signing secret) -- Slack's own
+// request-signing scheme. A >5-minute-old timestamp is rejected too, so a
+// captured request can't be replayed later.
+function verifySlackSignature(rawBody, timestamp, signature) {
+  const secret = process.env.SLACK_SIGNING_SECRET
+  if (!secret || !timestamp || !signature) return false
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false
+  const base = `v0:${timestamp}:${rawBody.toString('utf8')}`
+  const expected = 'v0=' + crypto.createHmac('sha256', secret).update(base).digest('hex')
+  try { return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature)) } catch { return false }
 }
 
 async function slackUpdateBlocks(token, channel, ts, text, blocks) {
@@ -1654,6 +1760,38 @@ async function handleSlackReport(req, res) {
 }
 export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
+
+  // bodyParser is off for this whole file (see the config export above) so every
+  // request's JSON body -- Quantum's own callers and Slack's Events API alike --
+  // is parsed here, once, from the raw bytes. Only Slack's own requests carry an
+  // X-Slack-Signature header; everything else falls straight through unaffected.
+  const rawBody = await readRawBody(req)
+  const slackSig = req.headers['x-slack-signature']
+  if (slackSig && !verifySlackSignature(rawBody, req.headers['x-slack-request-timestamp'], slackSig)) {
+    return res.status(401).end('Invalid Slack signature')
+  }
+  try { req.body = rawBody.length ? JSON.parse(rawBody.toString('utf8')) : {} } catch { req.body = {} }
+
+  // Slack's own Events API payloads. url_verification is the one-time handshake
+  // when Event Subscriptions is first turned on; event_callback is every real
+  // event after that (only app_mention is subscribed to).
+  if (req.body?.type === 'url_verification') {
+    return res.status(200).json({ challenge: req.body.challenge })
+  }
+  if (req.body?.type === 'event_callback') {
+    // A Claude round trip easily exceeds Slack's 3s ack window, so Slack re-sends
+    // the SAME event with this header once it gives up waiting -- acknowledge and
+    // do nothing, rather than answering the question a second time. The reply
+    // itself is a separate outbound call (chat.postMessage) that doesn't depend
+    // on this response reaching Slack in time, so awaiting it here is safe even
+    // though it means this response is slow.
+    if (req.headers['x-slack-retry-num']) return res.status(200).end()
+    const event = req.body.event || {}
+    if (event.type === 'app_mention' && !event.bot_id) {
+      await handleSlackAppMention(event).catch(e => console.error('slack app_mention failed', e))
+    }
+    return res.status(200).end()
+  }
 
   if ((req.body?.type || req.query?.type) === 'chat_answer') {
     return handleChatAnswerEmail(req, res)

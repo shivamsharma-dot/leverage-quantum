@@ -40,7 +40,7 @@ function resultRowCount(result) {
   if (!result || result.error) return 0
   if (typeof result.count === 'number') return result.count
   if (typeof result.rows === 'number') return result.rows
-  for (const k of ['campaigns', 'adGroups', 'keywords', 'searchTerms', 'points', 'data', 'contributors']) {
+  for (const k of ['campaigns', 'adGroups', 'keywords', 'searchTerms', 'points', 'data', 'contributors', 'rows']) {
     if (Array.isArray(result[k])) return result[k].length
   }
   return null
@@ -74,6 +74,7 @@ function buildToolSummary(name, input) {
   if (name === 'query_meta_crm_leads') return `Checked Meta CRM leads (${range})`
   if (name === 'query_google_crm_leads') return `Checked Google CRM leads (${range})`
   if (name === 'analyze_campaign_contribution') return `Ranked campaign contribution to QL change (${input.previous_since || '?'}..${input.previous_until || '?'} vs ${input.current_since || '?'}..${input.current_until || '?'})`
+  if (name === 'get_overall_totals') return `Checked Overall totals${input.group_by === 'source' ? ' by source' : ''} (${input.since || '?'} to ${input.until || '?'})`
   return `Ran ${name}`
 }
 
@@ -389,6 +390,60 @@ async function fetchOverallCampaignTotals({ since, until }) {
   }
   return { byCampaign }
 }
+
+// A direct "what was X for period Y" answer -- account-wide, or split by
+// Source -- as opposed to analyzeCampaignContribution above, which is only
+// for a "why did it change between two periods" campaign-level ranking.
+// Reads the same hourly-synced overall_funnel_daily cache; no live-sheet
+// fallback (a plain totals question doesn't justify a 45s CSV download when
+// the cache is briefly stale -- it just returns an error to say so).
+async function fetchOverallTotals({ since, until, group_by }) {
+  if (!since || !until) return { error: 'since and until are both required (YYYY-MM-DD).' }
+  if (!SB_URL || !SB_KEY) return { error: 'Overall data cache is not configured.' }
+  try {
+    const params = new URLSearchParams({ select: 'source,leads,queued,total_ql,spend,apps,offers,deposits,raus' })
+    params.set('date', `gte.${since}`)
+    params.append('date', `lte.${until}`)
+    const url = `${SB_URL}/rest/v1/overall_funnel_daily?${params.toString()}`
+    const PAGE = 1000
+    let offset = 0, allRows = []
+    for (let guard = 0; guard < 50; guard++) {
+      const r = await fetch(url, {
+        headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Range: `${offset}-${offset + PAGE - 1}` },
+        signal: AbortSignal.timeout(8000),
+      })
+      if (!r.ok) return { error: 'Overall cache query failed (HTTP ' + r.status + ').' }
+      const page = await r.json()
+      if (!Array.isArray(page)) return { error: 'Overall cache query returned an unexpected shape.' }
+      allRows = allRows.concat(page)
+      if (page.length < PAGE) break
+      offset += PAGE
+    }
+    if (!allRows.length) return { error: 'No Overall data found for ' + since + ' to ' + until + '.' }
+    const byGroup = group_by === 'source'
+    const buckets = {}
+    for (const row of allRows) {
+      const key = byGroup ? (mapChannel(row.source)) : 'All'
+      const e = buckets[key] || (buckets[key] = { label: key, spend: 0, leads: 0, totalQL: 0, apps: 0, offers: 0, deposits: 0, raus: 0 })
+      e.spend += Number(row.spend) || 0
+      e.leads += Number(row.leads) || 0
+      e.totalQL += Number(row.total_ql) || 0
+      e.apps += Number(row.apps) || 0
+      e.offers += Number(row.offers) || 0
+      e.deposits += Number(row.deposits) || 0
+      e.raus += Number(row.raus) || 0
+      buckets[key] = e
+    }
+    const rows = Object.values(buckets).map(e => ({
+      ...e,
+      spend: Math.round(e.spend),
+      cpl: e.leads > 0 ? Math.round(e.spend / e.leads) : null,
+      cpql: e.totalQL > 0 ? Math.round(e.spend / e.totalQL) : null,
+      cpa: e.apps > 0 ? Math.round(e.spend / e.apps) : null,
+    })).sort((a, b) => b.spend - a.spend)
+    return { since, until, group_by: byGroup ? 'source' : 'none', rows }
+  } catch (e) { return { error: e.message || 'Overall cache query failed.' } }
+}
 async function analyzeCampaignContribution({ current_since, current_until, previous_since, previous_until, top_n, channel }) {
   if (!current_since || !current_until || !previous_since || !previous_until) {
     return { error: 'current_since, current_until, previous_since, and previous_until are all required (YYYY-MM-DD).' }
@@ -586,6 +641,20 @@ const CONTRIBUTION_TOOL = {
       channel: { type: 'string', description: 'Restrict to one channel: Meta Ads, Google Ads, Remarketing, Affiliate, Organic, or Other. Omit or pass "All" for every channel at once.' }
     },
     required: ['current_since', 'current_until', 'previous_since', 'previous_until']
+  }
+}
+
+const OVERALL_TOTALS_TOOL = {
+  name: 'get_overall_totals',
+  description: `Returns aggregate Overall-dashboard KPIs -- spend, leads, Total QL, applications, offers, deposits, RAUs, and the derived CPL/CPQL/CPA -- for ONE date range, either as one account-wide total or split by Source (Meta Ads/Google Ads/Remarketing/Affiliate/Organic/Other). Use this for a direct "what was X" question (spend/leads/QLs/CPQL for today, yesterday, this month, a named month, etc.) -- NOT for "why did it change", which is analyze_campaign_contribution instead. Reads the same Overall PM funnel data the Overall dashboard itself is built from.`,
+  input_schema: {
+    type: 'object',
+    properties: {
+      since: { type: 'string', description: 'Start date, YYYY-MM-DD' },
+      until: { type: 'string', description: 'End date, YYYY-MM-DD' },
+      group_by: { type: 'string', enum: ['none', 'source'], description: 'Omit or "none" for one account-wide row. "source" to split the totals by channel.' }
+    },
+    required: ['since', 'until']
   }
 }
 
@@ -913,6 +982,7 @@ When a user asks you to diagnose, explain a change, or find underperformers:
 4. Distinguish what merely correlates from the likely driver - do not present a coincidence as a cause.
 5. Close with one specific, prioritized action, using the tool's own action/evidence fields when available rather than inventing your own recommendation.
 Never hand-wave a "why" - always ground it in the ranked contributors from the tools.
+For a direct "what was X" question (not a "why did it change" one) about Overall-dashboard figures -- spend, leads, Total QL, applications, offers, deposits, RAUs, CPL, CPQL, CPA, for a period or by source -- call get_overall_totals instead of analyze_campaign_contribution or hand-summing raw rows yourself.
 
 ===============================================
 BUSINESS & FUNNEL CONTEXT
@@ -1085,6 +1155,10 @@ const AGENTS = {
 async function runAgentToolLoop({ system, userText, tools, agentId }) {
   let currentMessages = [{ role: 'user', content: userText }]
   let totalInputTokens = 0, totalOutputTokens = 0, toolCallsCount = 0
+  // Every tool call this run made, in order -- additive to the return shape so a
+  // caller that wants the raw data behind the final text (e.g. to render its own
+  // table from the last successful call) can, without a second round trip.
+  const toolLog = []
   const MAX_ROUNDS = 5
   const runOne = async toolUse => {
     toolCallsCount++
@@ -1095,8 +1169,10 @@ async function runAgentToolLoop({ system, userText, tools, agentId }) {
     else if (toolUse.name === 'query_meta_crm_leads') result = await fetchCrmLeads((await getSheetOverride('sheet_url_fbleads')) || FB_LEADS_SHEET, toolUse.input || {})
     else if (toolUse.name === 'query_google_crm_leads') result = await fetchCrmLeads((await getSheetOverride('sheet_url_googleleads')) || GOOGLE_LEADS_SHEET, toolUse.input || {})
     else if (toolUse.name === 'analyze_campaign_contribution') result = await analyzeCampaignContribution(toolUse.input || {})
+    else if (toolUse.name === 'get_overall_totals') result = await fetchOverallTotals(toolUse.input || {})
     else result = { error: 'Unknown tool: ' + toolUse.name }
     await logToolCall({ convId: null, userId: 'agent:' + agentId, toolName: toolUse.name, params: toolUse.input, rowCount: resultRowCount(result), latencyMs: Date.now() - _t0, hadError: !!(result && result.error) })
+    toolLog.push({ name: toolUse.name, input: toolUse.input || {}, result })
     return { type: 'tool_result', tool_use_id: toolUse.id, content: JSON.stringify(result) }
   }
   for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -1111,7 +1187,7 @@ async function runAgentToolLoop({ system, userText, tools, agentId }) {
     const toolUseBlocks = (response.content || []).filter(b => b.type === 'tool_use')
     if (toolUseBlocks.length === 0) {
       const text = (response.content || []).filter(b => b.type === 'text').map(b => b.text).join('')
-      return { text, totalInputTokens, totalOutputTokens, toolCallsCount }
+      return { text, totalInputTokens, totalOutputTokens, toolCallsCount, toolLog }
     }
     const assistantMessage = { role: 'assistant', content: response.content }
     const toolResults = await Promise.all(toolUseBlocks.map(runOne))
@@ -1126,7 +1202,7 @@ async function runAgentToolLoop({ system, userText, tools, agentId }) {
   const response = await r.json()
   if (response.usage) { totalInputTokens += response.usage.input_tokens || 0; totalOutputTokens += response.usage.output_tokens || 0 }
   const text = (response.content || []).filter(b => b.type === 'text').map(b => b.text).join('')
-  return { text, totalInputTokens, totalOutputTokens, toolCallsCount }
+  return { text, totalInputTokens, totalOutputTokens, toolCallsCount, toolLog }
 }
 
 async function logAgentRun({ agentId, title, summary, content, status, error, toolCallsCount, startedAt, finishedAt, triggeredBy }) {
@@ -1264,9 +1340,9 @@ export default async function handler(req, res) {
     // User can scope the platform via the composer dropdown — restrict which
     // tools the model even sees, instead of relying on it to infer scope from
     // the question text (faster + more accurate tool decisions).
-    const ALL_TOOLS = platformScope === 'meta' ? [META_TOOL, META_CRM_TOOL, CONTRIBUTION_TOOL]
-      : platformScope === 'google' ? [GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL, CONTRIBUTION_TOOL]
-      : [META_TOOL, META_CRM_TOOL, GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL, CONTRIBUTION_TOOL]
+    const ALL_TOOLS = platformScope === 'meta' ? [META_TOOL, META_CRM_TOOL, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL]
+      : platformScope === 'google' ? [GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL]
+      : [META_TOOL, META_CRM_TOOL, GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL]
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       const anthropicRes = await fetch(ANTHROPIC_URL, {
@@ -1339,7 +1415,7 @@ export default async function handler(req, res) {
       // so run them concurrently instead of one at a time -- a cross-channel
       // question that needs both Meta and Google data was previously paying
       // for two sequential API round-trips instead of the slower of the two.
-      const CACHEABLE_TOOLS = new Set(['query_meta_ads', 'query_google_ads', 'query_meta_crm_leads', 'query_google_crm_leads', 'analyze_campaign_contribution'])
+      const CACHEABLE_TOOLS = new Set(['query_meta_ads', 'query_google_ads', 'query_meta_crm_leads', 'query_google_crm_leads', 'analyze_campaign_contribution', 'get_overall_totals'])
       const runOneTool = async (toolUse) => {
         const cacheKey = CACHEABLE_TOOLS.has(toolUse.name) ? toolCacheKey(toolUse.name, toolUse.input) : null
         const cached = cacheKey ? getCachedToolResult(cacheKey) : null
@@ -1359,6 +1435,8 @@ export default async function handler(req, res) {
           result = await fetchCrmLeads(url, toolUse.input || {})
         } else if (toolUse.name === 'analyze_campaign_contribution') {
           result = await analyzeCampaignContribution(toolUse.input || {})
+        } else if (toolUse.name === 'get_overall_totals') {
+          result = await fetchOverallTotals(toolUse.input || {})
         } else {
           result = { error: 'Unknown tool: ' + toolUse.name }
         }
@@ -1453,3 +1531,9 @@ export default async function handler(req, res) {
     else res.status(500).json({ error: msg })
   }
 }
+
+// Named exports for send-report.mjs's Slack @mention Q&A (api/send-report.mjs) --
+// a plain, non-streaming way to run the same Claude + tool-use loop this file's
+// own default handler and autonomous agents use, without importing the whole
+// interactive/SSE machinery. Nothing here changes behavior for the default export.
+export { runAgentToolLoop, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL }
