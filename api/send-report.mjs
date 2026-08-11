@@ -1208,7 +1208,15 @@ function contributionTable(result) {
   }
 }
 
+// TESTING GATE -- this feature is still being tried out, so it stays active in
+// ONLY this one channel (#voxpath) no matter how many other channels/groups the
+// bot gets invited to in the meantime. A mention anywhere else is silently
+// ignored (no reply at all, not even an error) rather than answering broadly.
+// Remove this whole check (and the env override below) once out of testing.
+const SLACK_QA_TEST_CHANNEL_ID = process.env.SLACK_QA_TEST_CHANNEL_ID || 'C0B6FKV1XEJ' // #voxpath
+
 async function handleSlackAppMention(event) {
+  if (event.channel !== SLACK_QA_TEST_CHANNEL_ID) return
   const token = process.env.SLACK_BOT_TOKEN
   if (!token) return
   const channel = event.channel
