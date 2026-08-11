@@ -651,13 +651,18 @@
    Appended last on purpose. Settings grew feature-by-feature and
    the control metrics / radii / focus states drifted apart; this
    block normalises them without rewriting the per-feature
-   sections above. Scale: 16px outer surfaces, 12px inner tiles,
-   9px controls, 36px control height.
+   sections above.
+   Reference is the shared Button (components/Button.jsx, size
+   "sm" = 7px 14px / 13.5px / radius 11) so the hand-rolled module
+   buttons sit on exactly the same baseline as the 49 shared
+   <Button>s already on this page.
+   Scale: 16px outer surfaces, 12px inner tiles, 11px controls,
+   32px control height.
    ============================================================ */
 
 .layout {
-  --ctl-h: 36px;
-  --ctl-r: 9px;
+  --ctl-h: 32px;
+  --ctl-r: 11px;
   --focus: #1C9FD4;
 }
 
@@ -680,18 +685,19 @@
   padding-top: 0;
   padding-bottom: 0;
   border-radius: var(--ctl-r);
+  font-size: 13.5px;
   line-height: 1;
   white-space: nowrap;
 }
 .primaryBtn,
-.dsBtnPrimary { padding-left: 16px; padding-right: 16px; font-size: 13px; font-weight: 650; }
+.dsBtnPrimary { padding-left: 14px; padding-right: 14px; font-weight: 700; }
 .ghostBtn,
 .dsBtnGhost,
 .refreshBtn,
 .iconBtn,
 .pvReset,
-.dsAddBtn { padding-left: 14px; padding-right: 14px; font-size: 13px; font-weight: 600; }
-.deleteBtn { padding-left: 10px; padding-right: 10px; }
+.dsAddBtn { padding-left: 14px; padding-right: 14px; font-weight: 600; }
+.deleteBtn { padding-left: 9px; padding-right: 9px; }
 
 /* text inputs land on the same baseline as the buttons beside them */
 input.input,
