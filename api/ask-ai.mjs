@@ -397,11 +397,11 @@ async function fetchOverallCampaignTotals({ since, until }) {
 // Reads the same hourly-synced overall_funnel_daily cache; no live-sheet
 // fallback (a plain totals question doesn't justify a 45s CSV download when
 // the cache is briefly stale -- it just returns an error to say so).
-async function fetchOverallTotals({ since, until, group_by }) {
+async function fetchOverallTotals({ since, until, group_by, campaign_contains }) {
   if (!since || !until) return { error: 'since and until are both required (YYYY-MM-DD).' }
   if (!SB_URL || !SB_KEY) return { error: 'Overall data cache is not configured.' }
   try {
-    const params = new URLSearchParams({ select: 'source,leads,queued,total_ql,spend,apps,offers,deposits,raus' })
+    const params = new URLSearchParams({ select: 'campaign,source,leads,queued,total_ql,spend,apps,offers,deposits,raus' })
     params.set('date', `gte.${since}`)
     params.append('date', `lte.${until}`)
     const url = `${SB_URL}/rest/v1/overall_funnel_daily?${params.toString()}`
@@ -420,10 +420,16 @@ async function fetchOverallTotals({ since, until, group_by }) {
       offset += PAGE
     }
     if (!allRows.length) return { error: 'No Overall data found for ' + since + ' to ' + until + '.' }
-    const byGroup = group_by === 'source'
+    let rows = allRows
+    if (campaign_contains) {
+      const needle = String(campaign_contains).toLowerCase()
+      rows = rows.filter(r => (r.campaign || '').toLowerCase().includes(needle))
+      if (!rows.length) return { error: 'No campaigns matching "' + campaign_contains + '" found for ' + since + ' to ' + until + '.' }
+    }
+    const mode = group_by === 'source' ? 'source' : group_by === 'campaign' ? 'campaign' : 'none'
     const buckets = {}
-    for (const row of allRows) {
-      const key = byGroup ? (mapChannel(row.source)) : 'All'
+    for (const row of rows) {
+      const key = mode === 'source' ? mapChannel(row.source) : mode === 'campaign' ? ((row.campaign || '').trim() || 'Unknown') : 'All'
       const e = buckets[key] || (buckets[key] = { label: key, spend: 0, leads: 0, totalQL: 0, apps: 0, offers: 0, deposits: 0, raus: 0 })
       e.spend += Number(row.spend) || 0
       e.leads += Number(row.leads) || 0
@@ -434,14 +440,14 @@ async function fetchOverallTotals({ since, until, group_by }) {
       e.raus += Number(row.raus) || 0
       buckets[key] = e
     }
-    const rows = Object.values(buckets).map(e => ({
+    const outRows = Object.values(buckets).map(e => ({
       ...e,
       spend: Math.round(e.spend),
       cpl: e.leads > 0 ? Math.round(e.spend / e.leads) : null,
       cpql: e.totalQL > 0 ? Math.round(e.spend / e.totalQL) : null,
       cpa: e.apps > 0 ? Math.round(e.spend / e.apps) : null,
     })).sort((a, b) => b.spend - a.spend)
-    return { since, until, group_by: byGroup ? 'source' : 'none', rows }
+    return { since, until, group_by: mode, campaign_filter: campaign_contains || null, matched_campaigns: campaign_contains ? new Set(rows.map(r => r.campaign)).size : undefined, rows: outRows }
   } catch (e) { return { error: e.message || 'Overall cache query failed.' } }
 }
 async function analyzeCampaignContribution({ current_since, current_until, previous_since, previous_until, top_n, channel }) {
@@ -646,13 +652,18 @@ const CONTRIBUTION_TOOL = {
 
 const OVERALL_TOTALS_TOOL = {
   name: 'get_overall_totals',
-  description: `Returns aggregate Overall-dashboard KPIs -- spend, leads, Total QL, applications, offers, deposits, RAUs, and the derived CPL/CPQL/CPA -- for ONE date range, either as one account-wide total or split by Source (Meta Ads/Google Ads/Remarketing/Affiliate/Organic/Other). Use this for a direct "what was X" question (spend/leads/QLs/CPQL for today, yesterday, this month, a named month, etc.) -- NOT for "why did it change", which is analyze_campaign_contribution instead. Reads the same Overall PM funnel data the Overall dashboard itself is built from.`,
+  description: `Returns aggregate Overall-dashboard KPIs -- spend, leads, Total QL, applications, offers, deposits, RAUs, and the derived CPL/CPQL/CPA -- for ONE date range. Use this for a direct "what was X" question (spend/leads/QLs/CPQL for today, yesterday, this month, a named month, etc.) -- NOT for "why did it change", which is analyze_campaign_contribution instead. Reads the same Overall PM funnel data the Overall dashboard itself is built from.
+
+Two independent ways to scope it, usable together:
+- group_by splits the totals into rows: "source" for Meta Ads/Google Ads/Remarketing/Affiliate/Organic/Other, "campaign" for one row per distinct matching campaign. Omit or "none" for a single account-wide row.
+- campaign_contains filters to campaigns whose NAME contains a given substring (case-insensitive) BEFORE totaling -- use this whenever the user names a specific campaign, product line, or keyword rather than a Source (e.g. "inbound phone call", "MBBS", a corridor name). If the user's term turns out not to match a Source in a prior call, retry with campaign_contains instead of giving up.`,
   input_schema: {
     type: 'object',
     properties: {
       since: { type: 'string', description: 'Start date, YYYY-MM-DD' },
       until: { type: 'string', description: 'End date, YYYY-MM-DD' },
-      group_by: { type: 'string', enum: ['none', 'source'], description: 'Omit or "none" for one account-wide row. "source" to split the totals by channel.' }
+      group_by: { type: 'string', enum: ['none', 'source', 'campaign'], description: 'Omit or "none" for one account-wide row. "source" to split by channel, "campaign" to split by each matching campaign name.' },
+      campaign_contains: { type: 'string', description: 'Case-insensitive substring to filter campaign names by, e.g. "inbound phone call". Omit for no campaign filter.' }
     },
     required: ['since', 'until']
   }

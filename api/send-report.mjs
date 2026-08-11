@@ -1181,19 +1181,21 @@ You can ONLY answer questions about the Overall marketing dashboard: spend, lead
 
 Today's date is ${today}. All figures are in Indian Rupees (₹). Resolve relative dates (today, yesterday, this month, last month, a named month) to real YYYY-MM-DD ranges yourself before calling a tool.
 
-Use get_overall_totals for a direct "what was X" question. Use analyze_campaign_contribution only for a "why did it change" / "what's driving it" question between two periods.
+Use get_overall_totals for a direct "what was X" question. Use analyze_campaign_contribution only for a "why did it change" / "what's driving it" question between two periods. If the user names a specific campaign, product line, or keyword (not one of the six Sources: Meta Ads, Google Ads, Remarketing, Affiliate, Organic, Other), call get_overall_totals again with campaign_contains set to that term instead of saying it isn't tracked -- only say a term is unsupported after that retry also finds nothing.
 
 Keep your answer to 1-4 short sentences, in plain text (no markdown table, no bullet list of raw numbers) -- the exact figures from your tool call are rendered as a real table separately, right under your answer, so do not restate every number yourself. If a tool call fails or returns no data, say so plainly instead of guessing.`
 
 function fmtN(n) { return n == null ? '—' : Math.round(n).toLocaleString('en-IN') }
 
-// get_overall_totals's {rows:[{label,spend,leads,totalQL,cpl,cpql,cpa,apps,offers,deposits,raus}]}
+// get_overall_totals's {rows:[{label,spend,leads,totalQL,cpl,cpql,cpa,apps,offers,deposits,raus}], group_by:'none'|'source'|'campaign'}
 function overallTotalsTable(result) {
   const rows = Array.isArray(result?.rows) ? result.rows : []
   if (!rows.length) return null
+  const firstCol = result.group_by === 'campaign' ? 'Campaign' : result.group_by === 'source' ? 'Source' : 'Total'
   return {
-    columns: ['Source', 'Spend', 'Leads', 'Total QL', 'CPQL', 'CPL', 'Applications', 'Offers', 'Deposits', 'RAUs'],
+    columns: [firstCol, 'Spend', 'Leads', 'Total QL', 'CPQL', 'CPL', 'Applications', 'Offers', 'Deposits', 'RAUs'],
     rows: rows.map(r => [r.label, fmtINR(r.spend), fmtN(r.leads), fmtN(r.totalQL), r.cpql == null ? '—' : fmtINR(r.cpql), r.cpl == null ? '—' : fmtINR(r.cpl), fmtN(r.apps), fmtN(r.offers), fmtN(r.deposits), fmtN(r.raus)]),
+    wrapFirst: result.group_by === 'campaign',
   }
 }
 
@@ -1215,40 +1217,62 @@ function contributionTable(result) {
 // Remove this whole check (and the env override below) once out of testing.
 const SLACK_QA_TEST_CHANNEL_ID = process.env.SLACK_QA_TEST_CHANNEL_ID || 'C0B6FKV1XEJ' // #voxpath
 
-async function handleSlackAppMention(event) {
-  if (event.channel !== SLACK_QA_TEST_CHANNEL_ID) return
-  const token = process.env.SLACK_BOT_TOKEN
-  if (!token) return
-  const channel = event.channel
-  const threadTs = event.thread_ts || event.ts
-  // Slack's raw mention text always leads with the literal <@BOTID> token.
-  const question = String(event.text || '').replace(/<@[^>]+>/g, '').trim()
-  if (!question) {
-    await slackPostBlocks(token, channel, 'Ask me about Overall.', [
-      { type: 'section', text: { type: 'mrkdwn', text: "Ask me something about Overall — spend, leads, QLs, CPQL, by source, or what's driving a change." } },
-    ], threadTs).catch(() => {})
-    return
-  }
-  // A Claude + tool-use round trip is 5-20s -- long enough that the channel
-  // otherwise goes silent with no sign the mention was even seen. Post a
-  // placeholder immediately and EDIT that same message in place (chat.update)
-  // once the real answer is ready, rather than posting a second message.
+// Every Slack thread this bot has ever replied in, so a plain follow-up typed
+// in that thread (no re-mention) can be recognised as ours and answered with
+// context, instead of either being ignored or the bot answering every message
+// in the channel. turns is capped to the last 6 exchanges client-side.
+async function loadQaThread(channel, threadTs) {
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/slack_qa_threads?select=turns&channel=eq.${encodeURIComponent(channel)}&thread_ts=eq.${encodeURIComponent(threadTs)}`
+    const r = await fetch(url, {
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!r.ok) return []
+    const rows = await r.json().catch(() => [])
+    return Array.isArray(rows?.[0]?.turns) ? rows[0].turns : []
+  } catch { return [] }
+}
+async function saveQaThread(channel, threadTs, turns) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/slack_qa_threads`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ channel, thread_ts: threadTs, turns: turns.slice(-6), updated_at: new Date().toISOString() }),
+      signal: AbortSignal.timeout(5000),
+    })
+  } catch { /* thread memory is a nice-to-have -- a failed save must not break the reply that already went out */ }
+}
+
+// A Claude + tool-use round trip is 5-20s -- long enough that the channel
+// otherwise goes silent with no sign the message was even seen. Post a
+// placeholder immediately and let the caller EDIT that same message in place
+// (chat.update) once the real answer is ready, rather than posting a second
+// message -- falls back to a normal new post if the placeholder itself fails.
+async function postPlaceholder(token, channel, threadTs) {
   let placeholderTs = null
   try {
     placeholderTs = await slackPostBlocks(token, channel, 'Checking Overall data…', [
       { type: 'section', text: { type: 'mrkdwn', text: ':mag: Checking Overall data…' } },
     ], threadTs)
-  } catch { /* if even the placeholder fails, still try to post the real answer below */ }
-
-  const deliver = (fallbackText, blocks) => placeholderTs
+  } catch {}
+  return (fallbackText, blocks) => placeholderTs
     ? slackUpdateBlocks(token, channel, placeholderTs, fallbackText, blocks)
     : slackPostBlocks(token, channel, fallbackText, blocks, threadTs)
+}
 
+// The shared core behind both an @mention and a plain thread follow-up:
+// build the question (with prior turns as context, if any), run the same
+// Claude + tool-use loop, render whichever tool call returned real data into
+// a table, deliver it, then remember this exchange for the NEXT follow-up.
+async function answerOverallQuestion({ channel, threadTs, question, priorTurns, deliver }) {
   try {
     const today = new Date().toISOString().slice(0, 10)
+    const historyText = (priorTurns || []).map(t => `Q: ${t.q}\nA: ${t.a}`).join('\n\n')
+    const userText = historyText ? `Conversation so far in this thread:\n${historyText}\n\nFollow-up question: ${question}` : question
     const { text, toolLog } = await runAgentToolLoop({
       system: [{ type: 'text', text: OVERALL_QA_SYSTEM(today) }],
-      userText: question,
+      userText,
       tools: [OVERALL_TOTALS_TOOL, CONTRIBUTION_TOOL],
       agentId: 'slack_overall_qa',
     })
@@ -1263,11 +1287,54 @@ async function handleSlackAppMention(event) {
     }
     blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: ':information_source: AI-generated from Overall’s live data — verify anything decision-critical on the dashboard.' }] })
     await deliver((text || 'Overall answer').slice(0, 200), blocks)
+    await saveQaThread(channel, threadTs, [...(priorTurns || []), { q: question, a: (text || '').slice(0, 800) }])
   } catch (e) {
     await deliver("Sorry, I couldn't pull that up.", [
       { type: 'section', text: { type: 'mrkdwn', text: "Sorry, I couldn't pull that up just now (" + String(e.message || 'error').slice(0, 150) + ').' } },
     ]).catch(() => {})
   }
+}
+
+async function handleSlackAppMention(event) {
+  if (event.channel !== SLACK_QA_TEST_CHANNEL_ID) return
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token) return
+  const channel = event.channel
+  const threadTs = event.thread_ts || event.ts
+  // Slack's raw mention text always leads with the literal <@BOTID> token.
+  const question = String(event.text || '').replace(/<@[^>]+>/g, '').trim()
+  if (!question) {
+    await slackPostBlocks(token, channel, 'Ask me about Overall.', [
+      { type: 'section', text: { type: 'mrkdwn', text: "Ask me something about Overall — spend, leads, QLs, CPQL, by source, or what's driving a change." } },
+    ], threadTs).catch(() => {})
+    return
+  }
+  // A re-mention INSIDE a thread we already answered in still gets that
+  // thread's history, same as a plain follow-up would.
+  const priorTurns = event.thread_ts ? await loadQaThread(channel, event.thread_ts) : []
+  const deliver = await postPlaceholder(token, channel, threadTs)
+  await answerOverallQuestion({ channel, threadTs, question, priorTurns, deliver })
+}
+
+// A plain reply typed in a thread, with no @mention at all -- Slack's
+// message.groups event (see the Event Subscriptions setup this needs). Filtered
+// hard: only inside the test channel, never a bot message (including our own
+// replies, which would otherwise trigger themselves), only an actual threaded
+// reply (not a fresh top-level message), and only when we genuinely have prior
+// history for that exact thread -- otherwise this is unrelated channel chatter
+// the bot was never asked about and must leave alone.
+async function handleSlackThreadReply(event) {
+  if (event.channel !== SLACK_QA_TEST_CHANNEL_ID) return
+  if (event.bot_id || event.subtype) return
+  if (!event.thread_ts || event.thread_ts === event.ts) return
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token) return
+  const priorTurns = await loadQaThread(event.channel, event.thread_ts)
+  if (!priorTurns.length) return
+  const question = String(event.text || '').trim()
+  if (!question) return
+  const deliver = await postPlaceholder(token, event.channel, event.thread_ts)
+  await answerOverallQuestion({ channel: event.channel, threadTs: event.thread_ts, question, priorTurns, deliver })
 }
 
 async function readRawBody(req) {
@@ -1812,6 +1879,8 @@ export default async function handler(req, res) {
     const event = req.body.event || {}
     if (event.type === 'app_mention' && !event.bot_id) {
       await handleSlackAppMention(event).catch(e => console.error('slack app_mention failed', e))
+    } else if (event.type === 'message') {
+      await handleSlackThreadReply(event).catch(e => console.error('slack thread reply failed', e))
     }
     return res.status(200).end()
   }
