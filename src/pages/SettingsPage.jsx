@@ -301,7 +301,7 @@ function sourceCategory(s) {
 
 
 // Mini SVG icon renderer for KPI icon picker
-function KpiIconPreview({ name, color = '#94A3B8' }) {
+function KpiIconPreview({ name, color = 'var(--text-3)' }) {
   const s = { width:16, height:16, viewBox:'0 0 24 24', fill:'none', stroke: color, strokeWidth:2, strokeLinecap:'round', strokeLinejoin:'round' }
   const icons = {
     'rupee':       <svg {...s}><path d="M6 3h12M6 8h12M6 13l9 8"/><path d="M6 8a6 6 0 000 5h4"/></svg>,
@@ -359,10 +359,10 @@ const RP_CAMPS = [
 const RP_AI_SAMPLE = `
 <div style="padding:10px 14px;border-radius:8px;background:#E9F8EF;border-left:3px solid #4CAE6F;color:#1F3C84;margin-bottom:8px;font-size:13px;line-height:1.6">Biggest win: PMX_FB_Ger_NAS_10June2026_Ad2 is delivering <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">64 leads</strong> at a CTR of 1.12% — your most efficient campaign this period.</div>
 <div style="padding:10px 14px;border-radius:8px;background:#E8EFF9;border-left:3px solid #1F3C84;color:#1F3C84;margin-bottom:8px;font-size:13px;line-height:1.6">Biggest risk: PMX_FB_UK_LeadGen_NAS_11_May26-Ad4 is showing frequency <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">4.2x</strong> with CTR down to 0.61% — classic fatigue signal.</div>
-<div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #F1F5F9">CAMPAIGN FLAGS</div>
+<div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bg3)">CAMPAIGN FLAGS</div>
 <div style="padding:10px 14px;border-radius:8px;background:#EFF6FF;border-left:3px solid #3B82F6;color:#1E3A8A;margin-bottom:8px;font-size:13px;line-height:1.6">PMX_FB_UK_LeadGen_NAS_11_May26-Ad4: frequency above 3.5x threshold, CTR trending down — refresh creative.</div>
-<div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #F1F5F9">TOP 3 ACTIONS</div>
-<div style="font-size:13px;line-height:1.7;color:#334155">1. Refresh creative on Ad4 (UK) this week — frequency fatigue is capping reach.<br>2. Increase budget on Ad2 (Germany) — still efficient at scale.<br>3. Review Remarketing_13July26_Sep26Intake — paused but held 22 leads at strong CTR; consider reactivating.</div>`
+<div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bg3)">TOP 3 ACTIONS</div>
+<div style="font-size:13px;line-height:1.7;color:var(--text)">1. Refresh creative on Ad4 (UK) this week — frequency fatigue is capping reach.<br>2. Increase budget on Ad2 (Germany) — still efficient at scale.<br>3. Review Remarketing_13July26_Sep26Intake — paused but held 22 leads at strong CTR; consider reactivating.</div>`
 
 function rpFmtINR(n) {
   n = parseFloat(n) || 0
@@ -372,27 +372,27 @@ function rpFmtINR(n) {
   return '₹' + Math.round(n)
 }
 function rpKpiCard(label, value, sub, accent) {
-  return `<td width="20%" style="padding:4px"><div style="background:#F8FAFC;border-radius:10px;border:0.5px solid #E2E8F0;border-top:3px solid ${accent};padding:12px 14px"><div style="font-size:20px;font-weight:800;color:#0F172A;letter-spacing:-0.03em;line-height:1">${value}</div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#94A3B8;margin-top:5px">${label}</div>${sub ? `<div style="font-size:10.5px;color:#94A3B8;margin-top:3px">${sub}</div>` : ''}</div></td>`
+  return `<td width="20%" style="padding:4px"><div style="background:var(--bg3);border-radius:10px;border:0.5px solid var(--border);border-top:3px solid ${accent};padding:12px 14px"><div style="font-size:20px;font-weight:800;color:var(--text);letter-spacing:-0.03em;line-height:1">${value}</div><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--text-3);margin-top:5px">${label}</div>${sub ? `<div style="font-size:10.5px;color:var(--text-3);margin-top:3px">${sub}</div>` : ''}</div></td>`
 }
 function rpCampTable(camps, avgCTR) {
   const rows = camps.map((c, i) => {
     const cpl = c.leads > 0 ? c.spend / c.leads : 0
     const fatigue = c.freq > 3.5 || c.ctr < avgCTR * 0.5
-    const rowBg = i % 2 === 0 ? '#fff' : '#FAFBFC'
+    const rowBg = i % 2 === 0 ? 'var(--card)' : 'var(--bg3)'
     return `<tr style="background:${fatigue ? '#FFFBF0' : rowBg}">
-      <td style="padding:9px 12px;font-size:12px;font-weight:600;color:#0F172A;white-space:nowrap">${c.name.length > 40 ? c.name.slice(0, 38) + '…' : c.name}</td>
-      <td style="padding:9px 8px;text-align:center"><span style="display:inline-block;padding:2px 7px;border-radius:12px;font-size:10px;font-weight:700;background:${c.status === 'ACTIVE' ? '#DCFCE7' : '#F1F5F9'};color:${c.status === 'ACTIVE' ? '#166534' : '#94A3B8'}">${c.status}</span></td>
-      <td style="padding:9px 8px;font-size:12px;font-weight:700;color:#0F172A;text-align:right">${rpFmtINR(c.spend)}</td>
+      <td style="padding:9px 12px;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap">${c.name.length > 40 ? c.name.slice(0, 38) + '…' : c.name}</td>
+      <td style="padding:9px 8px;text-align:center"><span style="display:inline-block;padding:2px 7px;border-radius:12px;font-size:10px;font-weight:700;background:${c.status === 'ACTIVE' ? '#DCFCE7' : 'var(--bg3)'};color:${c.status === 'ACTIVE' ? '#166534' : 'var(--text-3)'}">${c.status}</span></td>
+      <td style="padding:9px 8px;font-size:12px;font-weight:700;color:var(--text);text-align:right">${rpFmtINR(c.spend)}</td>
       <td style="padding:9px 8px;font-size:12px;text-align:right;font-weight:600;color:${c.ctr >= 1 ? '#166534' : c.ctr >= avgCTR ? '#1E3A8A' : '#991B1B'}">${c.ctr.toFixed(2)}%</td>
-      <td style="padding:9px 8px;font-size:12px;text-align:right;font-weight:600;color:${c.freq > 3.5 ? '#C2410C' : '#475569'}">${c.freq.toFixed(1)}x${c.freq > 3.5 ? ' ⚠' : ''}</td>
-      <td style="padding:9px 8px;font-size:12px;font-weight:700;text-align:right;color:#0F172A">${c.leads.toLocaleString('en-IN')}</td>
-      <td style="padding:9px 8px;font-size:12px;text-align:right;color:#475569">${cpl > 0 ? rpFmtINR(cpl) : '—'}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;font-weight:600;color:${c.freq > 3.5 ? '#C2410C' : 'var(--text-2)'}">${c.freq.toFixed(1)}x${c.freq > 3.5 ? ' ⚠' : ''}</td>
+      <td style="padding:9px 8px;font-size:12px;font-weight:700;text-align:right;color:var(--text)">${c.leads.toLocaleString('en-IN')}</td>
+      <td style="padding:9px 8px;font-size:12px;text-align:right;color:var(--text-2)">${cpl > 0 ? rpFmtINR(cpl) : '—'}</td>
     </tr>`
   }).join('')
-  return `<div style="overflow-x:auto;margin-top:4px"><table style="width:100%;border-collapse:collapse;font-family:${'-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif'}"><thead><tr style="background:#F8FAFC;border-bottom:2px solid #E2E8F0">${['Campaign', 'Status', 'Spend', 'CTR', 'Freq', 'Leads', 'CPL'].map(h => `<th style="padding:9px ${h === 'Campaign' ? '12px' : '8px'};font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#64748B;text-align:${h === 'Campaign' ? 'left' : 'right'};white-space:nowrap">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`
+  return `<div style="overflow-x:auto;margin-top:4px"><table style="width:100%;border-collapse:collapse;font-family:${'-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif'}"><thead><tr style="background:var(--bg3);border-bottom:2px solid var(--border)">${['Campaign', 'Status', 'Spend', 'CTR', 'Freq', 'Leads', 'CPL'].map(h => `<th style="padding:9px ${h === 'Campaign' ? '12px' : '8px'};font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-2);text-align:${h === 'Campaign' ? 'left' : 'right'};white-space:nowrap">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`
 }
 function rpSectionTitle(emoji, title) {
-  return `<div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#94A3B8;padding:16px 0 10px;border-bottom:1px solid #F1F5F9;margin-bottom:14px">${emoji}&nbsp; ${title}</div>`
+  return `<div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3);padding:16px 0 10px;border-bottom:1px solid var(--bg3);margin-bottom:14px">${emoji}&nbsp; ${title}</div>`
 }
 function buildReportPreviewHTML(reportType, senderName) {
   const NAVY = '#1F3C84', BLUE = '#1C9FD4', CYAN = '#29B9C3', GREEN = '#4CAE6F'
@@ -404,7 +404,7 @@ function buildReportPreviewHTML(reportType, senderName) {
   const cpl = s.leads > 0 ? s.spend / s.leads : 0
   const eps = s.leads > 0 ? (s.leads / s.days).toFixed(1) : '0'
   const todayLabel = '15 Jul 2026'
-  return `<div style="margin:0;padding:32px 12px;background-color:#F4F6F9;font-family:${FONT}">
+  return `<div style="margin:0;padding:32px 12px;background-color:var(--bg3);font-family:${FONT}">
   <div style="max-width:680px;margin:0 auto">
 
     <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:20px 20px 0 0;overflow:hidden">
@@ -416,12 +416,12 @@ function buildReportPreviewHTML(reportType, senderName) {
       </tr>
     </table>
 
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;box-shadow:0 24px 60px -24px rgba(15,23,42,0.18);border-left:1px solid #EEF1F6;border-right:1px solid #EEF1F6">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;box-shadow:0 24px 60px -24px rgba(15,23,42,0.18);border-left:1px solid var(--border);border-right:1px solid var(--border)">
 
       <tr><td style="padding:32px 36px 24px">
         <table cellpadding="0" cellspacing="0"><tr>
           <td style="vertical-align:middle;padding-right:12px">
-            <table cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #EEF1F6;border-radius:10px;box-shadow:0 3px 10px rgba(15,23,42,0.10)">
+            <table cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid var(--border);border-radius:10px;box-shadow:0 3px 10px rgba(15,23,42,0.10)">
               <tr><td style="padding:9px 11px"><table cellpadding="0" cellspacing="0"><tr>
                 <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:9px;background-color:${GREEN};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
                 <td valign="bottom" style="padding-right:2px"><div style="width:4px;height:14px;background-color:${CYAN};border-radius:1.5px;font-size:0;line-height:0">&nbsp;</div></td>
@@ -432,11 +432,11 @@ function buildReportPreviewHTML(reportType, senderName) {
           <td style="vertical-align:middle"><div style="font-size:16px;font-weight:800;color:${NAVY};letter-spacing:.02em;line-height:1.2">${senderName}</div></td>
         </tr></table>
         <div style="margin-top:22px"><span style="display:inline-block;padding:4px 11px;border-radius:20px;background-color:${accentTint};font-size:10px;font-weight:700;color:${accentColor};letter-spacing:.08em;text-transform:uppercase">${typeLabel} Report</span></div>
-        <div style="font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.35;margin:12px 0 6px">Meta Ads Performance</div>
-        <div style="font-size:12.5px;color:#94A3B8">${s.periodLabel} &middot; <span style="color:#64748B;font-weight:600">act_641914389215638</span> &middot; Generated ${todayLabel}</div>
+        <div style="font-size:22px;font-weight:800;color:var(--text);letter-spacing:-.01em;line-height:1.35;margin:12px 0 6px">Meta Ads Performance</div>
+        <div style="font-size:12.5px;color:var(--text-3)">${s.periodLabel} &middot; <span style="color:var(--text-2);font-weight:600">act_641914389215638</span> &middot; Generated ${todayLabel}</div>
       </td></tr>
 
-      <tr><td style="padding:0 36px"><div style="height:1px;background-color:#EEF1F6"></div></td></tr>
+      <tr><td style="padding:0 36px"><div style="height:1px;background-color:var(--border)"></div></td></tr>
 
       <tr><td style="padding:24px 26px 4px"><table cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed"><tr>
         ${rpKpiCard('Spend', rpFmtINR(s.spend), RP_CAMPS.length + ' campaigns', accentColor)}
@@ -446,24 +446,24 @@ function buildReportPreviewHTML(reportType, senderName) {
         ${rpKpiCard('Freq', s.freq.toFixed(2) + 'x', s.freq > 3.5 ? '⚠ Fatigue risk' : '✓ OK', s.freq > 3.5 ? '#1F3C84' : '#4CAE6F')}
       </tr></table></td></tr>
       <tr><td style="padding:4px 36px 8px"><table cellpadding="0" cellspacing="0"><tr>
-        <td style="padding-right:20px"><span style="font-size:11.5px;color:#64748B">Impressions</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${s.impr.toLocaleString('en-IN')}</span></td>
-        <td style="padding-right:20px"><span style="font-size:11.5px;color:#64748B">Reach</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${s.reach.toLocaleString('en-IN')}</span></td>
-        <td style="padding-right:20px"><span style="font-size:11.5px;color:#64748B">CPM</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${rpFmtINR(s.cpm)}</span></td>
-        <td><span style="font-size:11.5px;color:#64748B">Clicks</span><span style="font-size:12px;font-weight:700;color:#0F172A;margin-left:6px">${s.clicks.toLocaleString('en-IN')}</span></td>
+        <td style="padding-right:20px"><span style="font-size:11.5px;color:var(--text-2)">Impressions</span><span style="font-size:12px;font-weight:700;color:var(--text);margin-left:6px">${s.impr.toLocaleString('en-IN')}</span></td>
+        <td style="padding-right:20px"><span style="font-size:11.5px;color:var(--text-2)">Reach</span><span style="font-size:12px;font-weight:700;color:var(--text);margin-left:6px">${s.reach.toLocaleString('en-IN')}</span></td>
+        <td style="padding-right:20px"><span style="font-size:11.5px;color:var(--text-2)">CPM</span><span style="font-size:12px;font-weight:700;color:var(--text);margin-left:6px">${rpFmtINR(s.cpm)}</span></td>
+        <td><span style="font-size:11.5px;color:var(--text-2)">Clicks</span><span style="font-size:12px;font-weight:700;color:var(--text);margin-left:6px">${s.clicks.toLocaleString('en-IN')}</span></td>
       </tr></table></td></tr>
 
-      <tr><td style="padding:0 36px"><div style="height:1px;background-color:#EEF1F6;margin-top:12px"></div></td></tr>
+      <tr><td style="padding:0 36px"><div style="height:1px;background-color:var(--border);margin-top:12px"></div></td></tr>
 
       <tr><td style="padding:20px 26px 8px">${rpSectionTitle('📊', 'Campaign Breakdown')}${rpCampTable(RP_CAMPS, s.ctr)}</td></tr>
 
-      <tr><td style="padding:0 36px"><div style="height:1px;background-color:#EEF1F6"></div></td></tr>
+      <tr><td style="padding:0 36px"><div style="height:1px;background-color:var(--border)"></div></td></tr>
 
       <tr><td style="padding:20px 26px 32px">${rpSectionTitle('🤖', 'AI Analysis — Claude Sonnet')}${RP_AI_SAMPLE}</td></tr>
 
     </table>
 
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F8FAFC;border-radius:0 0 20px 20px;border:1px solid #EEF1F6;border-top:none">
-      <tr><td style="padding:16px 36px;text-align:center"><span style="font-size:10.5px;color:#94A3B8">Leverage Quantum &middot; Auto-generated &middot; ${todayLabel} &middot; Do not reply</span></td></tr>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:var(--bg3);border-radius:0 0 20px 20px;border:1px solid var(--border);border-top:none">
+      <tr><td style="padding:16px 36px;text-align:center"><span style="font-size:10.5px;color:var(--text-3)">Leverage Quantum &middot; Auto-generated &middot; ${todayLabel} &middot; Do not reply</span></td></tr>
     </table>
 
   </div>
@@ -1820,7 +1820,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 )}
                 {String(bqName || '').trim() && <span className={styles.bqType}>id: {bqSlug(bqName)}</span>}
               </div>
-              {bqSaveMsg && <p className={styles.note} style={{ color: '#94A3B8', marginTop: 0 }}>{bqSaveMsg}</p>}
+              {bqSaveMsg && <p className={styles.note} style={{ color: 'var(--text-3)', marginTop: 0 }}>{bqSaveMsg}</p>}
               <textarea
                 className={styles.sqlEditor}
                 spellCheck={false}
@@ -1875,7 +1875,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </div>
                   )}
                   {bqRes.jobId && (
-                    <p className={styles.note} style={{ color: '#94A3B8' }}>Job {bqRes.jobId} in {bqRes.projectId} ({bqRes.location})</p>
+                    <p className={styles.note} style={{ color: 'var(--text-3)' }}>Job {bqRes.jobId} in {bqRes.projectId} ({bqRes.location})</p>
                   )}
                 </>
               )}
@@ -1899,11 +1899,11 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <h3 className={styles.cardTitle} style={{ marginBottom: 0 }}>Data Sources</h3>
                   <Button size="sm" onClick={checkAllSources} disabled={checkingAll}>{checkingAll ? 'Checking all...' : 'Check all sources'}</Button>
                 </div>
-                <div style={{ marginTop: 12, padding: '14px 16px', background: '#F9FAFB', border: '0.5px solid #EEF1F6', borderRadius: 12 }}>
+                <div style={{ marginTop: 12, padding: '14px 16px', background: 'var(--bg3)', border: '0.5px solid var(--border)', borderRadius: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                     <div style={{ minWidth: 200 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Automated checks</div>
-                      <div style={{ fontSize: 11.5, color: '#9CA3AF', lineHeight: 1.4 }}>Runs via GitHub Actions — "Check all sources" above is still available anytime.</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Automated checks</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.4 }}>Runs via GitHub Actions — "Check all sources" above is still available anytime.</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
                       <Dropdown
@@ -1924,17 +1924,17 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </div>
                   </div>
                   {sourceHealth.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '0.5px solid #EEF1F6' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '0.5px solid var(--border)' }}>
                       {sourceHealth.map(h => {
                         const color = h.status === 'warn' ? '#1C9FD4' : h.status === 'error' ? '#1F3C84' : '#4CAE6F'
                         const mins = h.checked_at ? Math.round((Date.now() - new Date(h.checked_at).getTime()) / 60000) : null
                         const rel = mins == null ? '' : mins < 60 ? mins + 'm ago' : mins < 1440 ? Math.round(mins / 60) + 'h ago' : Math.round(mins / 1440) + 'd ago'
                         return (
-                          <div key={h.name} title={h.message || 'OK'} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 10, transition: 'box-shadow .15s ease, border-color .15s ease' }}>
+                          <div key={h.name} title={h.message || 'OK'} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--card)', border: '0.5px solid var(--border)', borderRadius: 10, transition: 'box-shadow .15s ease, border-color .15s ease' }}>
                             <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: '0 0 0 3px ' + color + '1A' }} />
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontSize: 12, fontWeight: 650, color: '#1F2937', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.name}</div>
-                              <div style={{ fontSize: 10.5, color: '#9CA3AF', marginTop: 1 }}>{rel}</div>
+                              <div style={{ fontSize: 12, fontWeight: 650, color: 'var(--text)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.name}</div>
+                              <div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 1 }}>{rel}</div>
                             </div>
                           </div>
                         )
@@ -1996,7 +1996,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <span className={styles.dsStatus} data-st={s.editKey ? (sheetUrls[s.editKey] ? 'custom' : 'default') : 'live'}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Live'}</span>{s.bqTest && userIsAdmin && (<Button size="sm" variant="secondary" onClick={() => testBigQuery()} disabled={bqTesting}>{bqTesting ? 'Testing...' : 'Test connection'}</Button>)}{s.bqTest && bqMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: bqMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{bqMsg.type === 'err' ? '\u2715 ' : '\u2713 '}{bqMsg.text}</p>)}{s.apiTestMode && (<Button size="sm" variant="secondary" onClick={() => testLeadSquared(s.apiTestMode)} disabled={lsqTesting === s.apiTestMode}>{lsqTesting === s.apiTestMode ? 'Testing...' : 'Test connection'}</Button>)}{s.apiTestMode && lsqMsg[s.apiTestMode] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: lsqMsg[s.apiTestMode].type === 'err' ? '#c0392b' : '#15803D' }}>{lsqMsg[s.apiTestMode].type === 'err' ? '✕ ' : '✓ '}{lsqMsg[s.apiTestMode].text}</p>)}{s.editKey && (<Button size="sm" variant="secondary" onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</Button>)}{s.editKey && userIsAdmin && (<Button size="sm" onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</Button>)}{s.custom && userIsAdmin && (<Button size="sm" danger onClick={() => removeCustomSource(s.editKey)}>Remove</Button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste the sheet link or a CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><Button size="sm" onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</Button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}{s.disconnectable && userIsAdmin && (<Button size="sm" danger onClick={disconnectMeta} disabled={metaDisconnecting}>{metaDisconnecting ? 'Disconnecting...' : 'Disconnect'}</Button>)}{s.disconnectable && metaDisconnectMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: metaDisconnectMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{metaDisconnectMsg.type === 'err' ? '✕ ' : '✓ '}{metaDisconnectMsg.text}</p>)}
                     {s.editKey && sheetTest[s.editKey] && !sheetTest[s.editKey].loading && (
                       <div style={{ position: 'relative', flexBasis: '100%', width: '100%', marginTop: 8, padding: '10px 36px 10px 12px', borderRadius: 8, border: '1px solid ' + (sheetTest[s.editKey].error ? '#FECACA' : '#DCFCE7'), background: sheetTest[s.editKey].error ? '#FEF2F2' : '#F0FDF4' }}>
-                        <button type="button" onClick={() => setSheetTest(prev => { const next = { ...prev }; delete next[s.editKey]; return next })} title="Close" style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 5, border: 'none', background: 'transparent', color: '#6B7280', fontSize: 14, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                        <button type="button" onClick={() => setSheetTest(prev => { const next = { ...prev }; delete next[s.editKey]; return next })} title="Close" style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 5, border: 'none', background: 'transparent', color: 'var(--text-2)', fontSize: 14, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                         {sheetTest[s.editKey].error ? (
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#c0392b' }}>✕ {sheetTest[s.editKey].error}</div>
                         ) : (
@@ -2037,8 +2037,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                               )
                             })()}
                             {testDetailsOpen[s.editKey] && (
-                              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '0.5px solid #E5E7EB' }}>
-                                <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Columns</div>
+                              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '0.5px solid var(--border)' }}>
+                                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Columns</div>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sheetTest[s.editKey].monthCounts ? 12 : 0 }}>
                                   {sheetTest[s.editKey].columns.map((c, i) => (
                                     <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #C7D7F5', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
@@ -2046,22 +2046,22 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 </div>
                                 {sheetTest[s.editKey].monthCounts && (
                                   <div style={{ marginBottom: 12 }}>
-                                    <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Rows by month ({sheetTest[s.editKey].dateCol})</div>
+                                    <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Rows by month ({sheetTest[s.editKey].dateCol})</div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                                       {sheetTest[s.editKey].monthCounts.map(([m, n]) => (
-                                        <span key={m} style={{ fontSize: 10.5, fontWeight: 600, color: '#374151', background: '#F3F4F6', border: '0.5px solid #E5E7EB', borderRadius: 5, padding: '2px 7px' }}>{m}: {n.toLocaleString('en-IN')}</span>
+                                        <span key={m} style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-2)', background: 'var(--bg3)', border: '0.5px solid var(--border)', borderRadius: 5, padding: '2px 7px' }}>{m}: {n.toLocaleString('en-IN')}</span>
                                       ))}
                                     </div>
                                   </div>
                                 )}
                                 {sheetTest[s.editKey].sampleRows && sheetTest[s.editKey].sampleRows.length > 0 && (
                                   <div style={{ overflowX: 'auto' }}>
-                                    <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Sample rows</div>
+                                    <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Sample rows</div>
                                     <table style={{ borderCollapse: 'collapse', fontSize: 10.5, whiteSpace: 'nowrap' }}>
-                                      <thead><tr>{sheetTest[s.editKey].columns.map((c, i) => (<th key={i} style={{ textAlign: 'left', padding: '3px 8px', color: '#9CA3AF', fontWeight: 700, borderBottom: '0.5px solid #E5E7EB' }}>{c || '(blank)'}</th>))}</tr></thead>
+                                      <thead><tr>{sheetTest[s.editKey].columns.map((c, i) => (<th key={i} style={{ textAlign: 'left', padding: '3px 8px', color: 'var(--text-3)', fontWeight: 700, borderBottom: '0.5px solid var(--border)' }}>{c || '(blank)'}</th>))}</tr></thead>
                                       <tbody>
                                         {sheetTest[s.editKey].sampleRows.map((row, ri) => (
-                                          <tr key={ri}>{row.map((v, ci) => (<td key={ci} style={{ padding: '3px 8px', color: '#374151', borderBottom: '0.5px solid #F3F4F6' }}>{v || '—'}</td>))}</tr>
+                                          <tr key={ri}>{row.map((v, ci) => (<td key={ci} style={{ padding: '3px 8px', color: 'var(--text-2)', borderBottom: '0.5px solid var(--bg3)' }}>{v || '—'}</td>))}</tr>
                                         ))}
                                       </tbody>
                                     </table>
@@ -2135,7 +2135,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <input type="month" value={affSpendMonth} onChange={e => setAffSpendMonth(e.target.value)}
                     className={styles.input} style={{ width: 160 }} />
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', fontSize: 13, fontWeight: 700, pointerEvents: 'none' }}>₹</span>
+                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)', fontSize: 13, fontWeight: 700, pointerEvents: 'none' }}>₹</span>
                     <input type="number" min="0" placeholder="Spend amount" value={affSpendAmount} onChange={e => setAffSpendAmount(e.target.value)}
                       className={styles.input} style={{ width: 160, paddingLeft: 22 }} />
                   </div>
@@ -2143,17 +2143,17 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 </div>
 
                 {Object.keys(affiliateSpend).length === 0 ? (
-                  <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>No affiliate spend entered yet — Affiliate will show ₹0 spend on the Overall dashboard until a month is added above.</p>
+                  <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>No affiliate spend entered yet — Affiliate will show ₹0 spend on the Overall dashboard until a month is added above.</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {Object.entries(affiliateSpend).sort((a, b) => b[0].localeCompare(a[0])).map(([ym, amount]) => (
-                      <div key={ym} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: '#F8FAFC', border: '0.5px solid #E5E7EB' }}>
-                        <div style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: '#0F172A' }}>{new Date(ym + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
+                      <div key={ym} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--bg3)', border: '0.5px solid var(--border)' }}>
+                        <div style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: 'var(--text)' }}>{new Date(ym + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
                         <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1F3C84' }}>&#8377;{Number(amount).toLocaleString('en-IN')}</div>
                         <button type="button" onClick={() => { setAffSpendMonth(ym); setAffSpendAmount(String(amount)) }}
                           style={{ border: 'none', background: 'transparent', color: '#1F3C84', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
                         <button type="button" onClick={() => removeAffiliateSpendMonth(ym)}
-                          style={{ border: 'none', background: 'transparent', color: '#94A3B8', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Remove</button>
+                          style={{ border: 'none', background: 'transparent', color: 'var(--text-3)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Remove</button>
                       </div>
                     ))}
                   </div>
