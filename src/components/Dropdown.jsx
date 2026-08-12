@@ -30,7 +30,7 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
           onClick={() => setOpen(v => !v)}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            padding: '7px 12px', borderRadius: 8,
+            padding: '7px 12px', borderRadius: 11,
             border: '0.5px solid ' + (open ? NAVY : 'var(--card-border)'),
             background: open ? NAVY_TINT : 'var(--card)',
             color: open ? NAVY : 'var(--text)',

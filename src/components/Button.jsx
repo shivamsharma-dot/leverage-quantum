@@ -48,14 +48,14 @@ export default function Button({
     ...style,
   }
 
+  const ringBg = extra?.ringDanger
+    ? '#B91C1C'
+    : 'conic-gradient(from 0deg, #1F3C84, #1C9FD4, #29B9C3, #4CAE6F, #1F3C84)'
+  // Variant 16: the ring spins, the button must not. The gradient now lives on
+  // a square layer rotating behind the button inside a clipped wrapper --
+  // animating the wrapper itself used to rotate the label along with it.
   const wrapperStyle = extra?.spinRing
-    ? {
-        display: 'inline-block', borderRadius: 12, padding: 2,
-        background: extra.ringDanger
-          ? '#B91C1C'
-          : `conic-gradient(from 0deg, #1F3C84, #1C9FD4, #29B9C3, #4CAE6F, #1F3C84)`,
-        animation: `qBtnSpin ${extra.spinSpeed} linear infinite`,
-      }
+    ? { display: 'inline-block', position: 'relative', borderRadius: 12, padding: 2, overflow: 'hidden' }
     : null
 
   const btn = (
@@ -103,5 +103,12 @@ export default function Button({
   )
 
   if (!wrapperStyle) return btn
-  return <span style={wrapperStyle}>{btn}</span>
+  return (
+    <span style={wrapperStyle}>
+      <span aria-hidden="true" style={{ position: 'absolute', left: '50%', top: '50%', width: '150%', aspectRatio: '1', transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
+        <span style={{ display: 'block', width: '100%', height: '100%', background: ringBg, animation: `qBtnSpin ${extra.spinSpeed} linear infinite` }} />
+      </span>
+      <span style={{ position: 'relative', display: 'block' }}>{btn}</span>
+    </span>
+  )
 }

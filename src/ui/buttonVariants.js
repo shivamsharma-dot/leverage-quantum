@@ -218,6 +218,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
           border: '1px solid var(--card-border, #E2E6EF)',
           color: 'var(--text, #0F1B33)',
           transform: hover ? 'translateY(-1px)' : 'none',
+          overflow: 'hidden',
         },
         extra: { cornerNotch: true, notchColor: danger ? `linear-gradient(135deg, ${RED}, #E0524F)` : `linear-gradient(135deg, ${BLUE}, ${CYAN})` },
       }
