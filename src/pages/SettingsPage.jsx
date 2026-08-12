@@ -2181,7 +2181,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </Button>
                   </div>
                 </div>
-                {prefLoading?<div style={{fontSize:12,color:'#94A3B8'}}>Loading…</div>:
+                {prefLoading?<div style={{fontSize:12,color:'var(--text-3)'}}>Loading…</div>:
                   <div className={styles.pvGrid}>
                 {PAGE_ACCESS_GROUPS.map(row => {
                   const renderTile = (page, isChild) => {
@@ -2222,7 +2222,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 }
                 {hiddenPages.length>0&&!prefLoading&&<div style={{marginTop:10}}><Button size="sm" variant="secondary" icon={<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>} onClick={()=>{setHiddenPages([]);setPrefSaveMsg(null)}}>Reset — show all</Button></div>}
               </div>
-              <div style={{borderTop:'0.5px solid #F1F5F9',margin:'22px 0'}}/>
+              <div style={{borderTop:'0.5px solid var(--bg3)',margin:'22px 0'}}/>
               {/* page header */}
               <div className={styles.uaHeader}>
                 <div>
@@ -2341,7 +2341,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           <div className={styles.uUserText}>
                             <span className={styles.userName}>{u.email.split('@')[0]}{isYou && <span className={styles.youTag}>YOU</span>}</span>
                             <span className={styles.uEmail}>{u.email}</span>
-                            {(u.job_title||u.department)&&<span style={{fontSize:10.5,color:'#94A3B8',fontWeight:500,marginTop:1}}>{[u.job_title,u.department].filter(Boolean).join(' · ')}</span>}
+                            {(u.job_title||u.department)&&<span style={{fontSize:10.5,color:'var(--text-3)',fontWeight:500,marginTop:1}}>{[u.job_title,u.department].filter(Boolean).join(' · ')}</span>}
                           </div>
                         </div>
                         <div><span className={styles.roleBadge} style={{background:rm.bg||'#E8EFF9',color:rm.color||'#1F3C84',borderRadius:20,padding:'3px 10px',fontSize:11,fontWeight:700}}>{rm.label}</span></div>
@@ -2433,7 +2433,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                     <input type="checkbox" checked={checked} disabled={gHidden}
                                       onChange={()=>!gHidden&&setEditIds(p=>checked?p.filter(x=>x!==d.id):[...p,d.id])} />
                                     {d.label}
-                                    {gHidden&&<span style={{fontSize:9,display:'block',color:'#94A3B8',fontWeight:600,lineHeight:1.2,marginTop:2}}>{checked?'granted, hidden for everyone':'hidden for everyone'}</span>}
+                                    {gHidden&&<span style={{fontSize:9,display:'block',color:'var(--text-3)',fontWeight:600,lineHeight:1.2,marginTop:2}}>{checked?'granted, hidden for everyone':'hidden for everyone'}</span>}
                                   </label>
                                 )
                               })}
@@ -2442,14 +2442,14 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
                           <div className={styles.editFieldsRow}>
                             <div>
-                              <label style={{fontSize:11,fontWeight:600,color:'#64748B',display:'block',marginBottom:6,letterSpacing:'0.05em'}}>JOB TITLE</label>
+                              <label style={{fontSize:11,fontWeight:600,color:'var(--text-2)',display:'block',marginBottom:6,letterSpacing:'0.05em'}}>JOB TITLE</label>
                               <input value={editJobTitle} onChange={e=>setEditJobTitle(e.target.value)} placeholder="e.g. Data Analyst"
-                                style={{width:'100%',padding:'9px 11px',borderRadius:9,border:'0.5px solid #E2E8F0',fontSize:12.5,fontFamily:"'Plus Jakarta Sans',sans-serif",outline:'none',boxSizing:'border-box'}}/>
+                                style={{width:'100%',padding:'9px 11px',borderRadius:9,border:'0.5px solid var(--border)',fontSize:12.5,fontFamily:"'Plus Jakarta Sans',sans-serif",outline:'none',boxSizing:'border-box'}}/>
                             </div>
                             <div>
-                              <label style={{fontSize:11,fontWeight:600,color:'#64748B',display:'block',marginBottom:6,letterSpacing:'0.05em'}}>DEPARTMENT</label>
+                              <label style={{fontSize:11,fontWeight:600,color:'var(--text-2)',display:'block',marginBottom:6,letterSpacing:'0.05em'}}>DEPARTMENT</label>
                               <input value={editDepartment} onChange={e=>setEditDepartment(e.target.value)} placeholder="e.g. Performance Marketing"
-                                style={{width:'100%',padding:'9px 11px',borderRadius:9,border:'0.5px solid #E2E8F0',fontSize:12.5,fontFamily:"'Plus Jakarta Sans',sans-serif",outline:'none',boxSizing:'border-box'}}/>
+                                style={{width:'100%',padding:'9px 11px',borderRadius:9,border:'0.5px solid var(--border)',fontSize:12.5,fontFamily:"'Plus Jakarta Sans',sans-serif",outline:'none',boxSizing:'border-box'}}/>
                             </div>
                           </div>
 
@@ -2489,10 +2489,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               {recentCommits.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   {recentCommits.map(c => (
-                    <a key={c.sha} href={c.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '7px 4px', borderBottom: '0.5px solid #F3F4F6', textDecoration: 'none', color: 'inherit' }}>
-                      <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#94A3B8', flexShrink: 0 }}>{c.sha}</span>
-                      <span style={{ fontSize: 12.5, color: '#1F2937', flex: 1 }}>{c.message}</span>
-                      <span style={{ fontSize: 11, color: '#94A3B8', whiteSpace: 'nowrap', flexShrink: 0 }}>{relTime(c.date)}</span>
+                    <a key={c.sha} href={c.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '7px 4px', borderBottom: '0.5px solid var(--bg3)', textDecoration: 'none', color: 'inherit' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-3)', flexShrink: 0 }}>{c.sha}</span>
+                      <span style={{ fontSize: 12.5, color: 'var(--text)', flex: 1 }}>{c.message}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>{relTime(c.date)}</span>
                     </a>
                   ))}
                 </div>
@@ -2553,11 +2553,11 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           tab: {c:'#16868F', bg:'#E4F8F9'},
                           login: {c:'#2E7D4F', bg:'#E9F8EF'},
                           logout: {c:'#1577A0', bg:'#E3F5FD'},
-                          leave: {c:'#64748B', bg:'#F1F5F9'},
+                          leave: {c:'var(--text-2)', bg:'var(--bg3)'},
                           search: {c:'#1577A0', bg:'#E3F5FD'},
                           export: {c:'#2E7D4F', bg:'#E9F8EF'},
                         }
-                        const a = ACT[log.action] || {c:'#64748B', bg:'#F1F5F9'}
+                        const a = ACT[log.action] || {c:'var(--text-2)', bg:'var(--bg3)'}
                         const dt = new Date(log.created_at)
                         const dateStr = dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
                         const timeStr = dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})
@@ -2724,8 +2724,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           ))}
                           <div className={styles.reportsToggleRow}>
                             <div>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>Automatic reports</div>
-                              <div style={{ fontSize: 11.5, color: '#94A3B8' }}>Scheduled (cron) sends run on their own. Turning this off only stops automatic sends -- Send Report still works.</div>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Automatic reports</div>
+                              <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Scheduled (cron) sends run on their own. Turning this off only stops automatic sends -- Send Report still works.</div>
                             </div>
                             <input type="checkbox" className={styles.premToggle} checked={rcAuto} onChange={e => setRcAuto(e.target.checked)} />
                           </div>
@@ -2813,12 +2813,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                   </div>
                                 )}
                                 {filteredRecipients.length === 0 ? (
-                                  <p style={{ fontSize: 12, color: '#94A3B8', marginTop: 10 }}>No recipients match "{recipSearch}".</p>
+                                  <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 10 }}>No recipients match "{recipSearch}".</p>
                                 ) : (
                                   <>
                                     {filteredRecipients.length > 1 && (
                                       <div className={styles.recipRow + ' ' + styles.recipBulkRow}>
-                                        <span className={styles.recipName} style={{ color: '#94A3B8', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                                        <span className={styles.recipName} style={{ color: 'var(--text-3)', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>
                                           {recipSearch ? 'Toggle for shown' : 'Toggle for all'}
                                         </span>
                                         <div className={styles.recipTypes}>
@@ -2864,9 +2864,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             )
                           })()}
                           {recipCount === 0 && (
-                            <p style={{ fontSize: 12, color: '#94A3B8' }}>No recipients yet -- enable people in the User Access tab.</p>
+                            <p style={{ fontSize: 12, color: 'var(--text-3)' }}>No recipients yet -- enable people in the User Access tab.</p>
                           )}
-                          <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 12, lineHeight: 1.5 }}>If no one is opted in, reports fall back to the admin account ({user?.email || 'admin'}) so sends never go nowhere.</p>
+                          <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 12, lineHeight: 1.5 }}>If no one is opted in, reports fall back to the admin account ({user?.email || 'admin'}) so sends never go nowhere.</p>
                           <div className={styles.dsModalActions}>
                             <Button size="sm" variant="secondary" onClick={() => setRecipientsOpen(false)}>Close</Button>
                           </div>
@@ -2895,9 +2895,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <input type="text" className={styles.input} placeholder="#pm-analyst-test  (or a channel ID like C0123ABCD)" value={c.channel}
                       onChange={e => updateTestChannel(c.id, { channel: e.target.value })}
                       style={{ fontFamily: 'monospace', fontSize: 12.5, flex: 1 }} />
-                    {i === 0 && <span style={{ fontSize: 10, fontWeight: 800, color: '#94A3B8', letterSpacing: '0.04em', flexShrink: 0 }}>DEFAULT</span>}
+                    {i === 0 && <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-3)', letterSpacing: '0.04em', flexShrink: 0 }}>DEFAULT</span>}
                     <button type="button" onClick={() => removeTestChannel(c.id)} title="Remove"
-                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: 16, lineHeight: 1, padding: '2px 6px', flexShrink: 0 }}>&times;</button>
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 16, lineHeight: 1, padding: '2px 6px', flexShrink: 0 }}>&times;</button>
                   </div>
                 ))}
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -2984,7 +2984,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     onChange={e => setSlackWebhook(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#374151' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-2)' }}>
                     <input type="checkbox" checked={slackAuto} onChange={e => setSlackAuto(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
                     Also post a summary card to Slack for every scheduled report
                   </label>
@@ -3008,9 +3008,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <h3 className={styles.cardTitle}>Unassigned Leads Alert</h3>
                 <p className={styles.cardDesc}>QL Ops &middot; flags leads still owned by a bot/vendor placeholder (Futwork/Futwork AI/Superbot) instead of a real floor owner. Fixed recipient, separate from the scheduled reports above — not part of the general opt-in recipient list.</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 24px', margin: '4px 0 14px', fontSize: 13 }}>
-                  <div><span style={{ color: '#94A3B8' }}>To:</span> <strong>akash.saxena@leverageedu.com</strong></div>
-                  <div><span style={{ color: '#94A3B8' }}>CC:</span> <strong>shivam.sharma@leverageedu.com</strong></div>
-                  <div><span style={{ color: '#94A3B8' }}>Schedule:</span> <strong>Daily, 9:00 AM IST</strong></div>
+                  <div><span style={{ color: 'var(--text-3)' }}>To:</span> <strong>akash.saxena@leverageedu.com</strong></div>
+                  <div><span style={{ color: 'var(--text-3)' }}>CC:</span> <strong>shivam.sharma@leverageedu.com</strong></div>
+                  <div><span style={{ color: 'var(--text-3)' }}>Schedule:</span> <strong>Daily, 9:00 AM IST</strong></div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   <Button size="sm" onClick={sendUnassignedNow} disabled={unassignedSending}>{unassignedSending ? 'Sending…' : 'Send now'}</Button>
@@ -3051,13 +3051,13 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             skipped: { c:'#1C9FD4', bg:'#E8F6FA', label:'Skipped' },
                             failed:  { c:'#FFFFFF', bg:'#1F3C84', label:'Failed' },
                           }
-                          const s = STATUS[log.status] || { c:'#64748B', bg:'#F1F5F9', label: log.status||'Unknown' }
+                          const s = STATUS[log.status] || { c:'var(--text-2)', bg:'var(--bg3)', label: log.status||'Unknown' }
                           const isAuto = log.triggered_by === 'cron'
                           const trigMode = isAuto ? 'Auto' : 'Manual'
                           const trigWho = isAuto ? 'Scheduled run \u00b7 GitHub Actions cron'
                             : log.triggered_by === 'test' ? 'Test send from Settings'
                             : (log.triggered_by || 'Unknown')
-                          const trigTag = isAuto ? { c: '#475569', bg: '#F1F5F9' } : { c: '#1F3C84', bg: '#E8EFF9' }
+                          const trigTag = isAuto ? { c: 'var(--text-2)', bg: 'var(--bg3)' } : { c: '#1F3C84', bg: '#E8EFF9' }
                           const dt = log.sent_at ? new Date(log.sent_at) : null
                           const dateStr = dt ? dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'
                           const timeStr = dt ? dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}) : ''
@@ -3068,7 +3068,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                               <td className={styles.alTd}>
                                 <span className={styles.alTag} style={{background:s.bg,color:s.c}}>{s.label}</span>
                               </td>
-                              <td className={styles.alTd}><span className={styles.alTag} style={{ background: trigTag.bg, color: trigTag.c }}>{trigMode}</span><div style={{ fontSize: 10.5, color: '#8A94A6', marginTop: 3, textTransform: 'none', letterSpacing: 0 }}>{trigWho}</div></td>
+                              <td className={styles.alTd}><span className={styles.alTag} style={{ background: trigTag.bg, color: trigTag.c }}>{trigMode}</span><div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 3, textTransform: 'none', letterSpacing: 0 }}>{trigWho}</div></td>
                               <td className={styles.alTd}>{rcptCount > 0 ? `${rcptCount} recipient${rcptCount!==1?'s':''}` : '—'}</td>
                               <td className={styles.alTd}>{dateStr}{timeStr ? ` \u00b7 ${timeStr}` : ''}</td>
                               <td className={`${styles.alTd} ${styles.alDetail}`} title={log.error||''}>{log.error || '—'}</td>
