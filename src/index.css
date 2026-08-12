@@ -43,6 +43,49 @@
   --chart-tick:    #94A3B8;
   --sb-thumb:      rgba(15,23,42,0.15);
 }
+/* ---------------------------------------------------------------------------
+   TOKEN ALIASES -- do not add new names here, this is a repair.
+   A previous Settings pass wrote a whole token vocabulary that was never
+   defined: SettingsPage.module.css alone makes 168 var() references and 123 of
+   them named tokens that do not exist (--text-3 x36, --text-2 x17, --border-2
+   x12, --accent x12, --border x11, ...). An undefined custom property makes the
+   whole declaration invalid at computed-value time, so all 123 silently fell
+   back to inherited or initial values -- muted labels rendered at full text
+   colour, var()-based borders rendered not at all, and none of it could ever
+   follow a theme. That is the single biggest reason Settings read as a utility
+   page rather than a designed one, and why it did not theme.
+   Aliased here rather than renamed at 123 call sites because custom-property
+   substitution is lazy: these resolve against whatever the active
+   [data-theme] block last set, so all four themes work with one edit, and any
+   other file carrying the same mistake is fixed too.
+   --------------------------------------------------------------------------- */
+:root {
+  --text-2:      var(--text2);
+  --text-3:      var(--text3);
+
+  --border:      var(--card-border);
+  --border-2:    var(--input-border);
+
+  --primary:     var(--navy);
+  --primary-h:   #17306A;
+  --primary-h:   color-mix(in srgb, var(--navy) 86%, black);
+  --accent:      var(--blue);
+  --ring:        var(--blue);
+  --focus:       var(--blue);
+
+  --ok:          var(--green);
+  --ok-bg:       var(--green-tint);
+  --err:         var(--red);
+  --err-bg:      var(--red-tint);
+
+  --shadow-sm:   var(--shadow);
+
+  --font:        'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius:      11px;   /* Button radius, normalised 2026-08-12 */
+  --ctl-h:       32px;   /* control height, normalised 2026-08-12 */
+  --ctl-r:       11px;
+}
+
 
 html, body, #root {
   height: 100%;
