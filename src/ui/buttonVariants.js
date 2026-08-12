@@ -14,8 +14,25 @@ const CYAN = '#29B9C3'
 const GREEN = '#4CAE6F'
 const RED = '#B91C1C'
 
+// --- Text-safe brand inks --------------------------------------------------
+// NAVY/BLUE/RED above are tuned for white surfaces. Used as *text* they break
+// on the dark and navy themes: #1F3C84 on --card (#1E293B) measures 1.42:1,
+// i.e. an unreadable ghost/secondary button on every page that uses one.
+// The --*-ink tokens in src/index.css are redefined per [data-theme] and clear
+// 4.5:1 against that theme's --card in all four themes -- measured navy/blue/
+// red: light 10.3/5.2/5.0, stone 9.9/5.0/4.8, dark 8.4/8.8/7.7, navy 10.0/9.0/
+// 8.8. So text -- and any border drawn over a transparent surface -- uses
+// these, while fills, gradients and `${accent}66` shadow alphas keep the raw
+// hexes: var() cannot be string-concatenated, and those are not text surfaces.
+// Fallbacks equal the light-theme token values, so nothing shifts pre-CSS.
+const NAVY_INK = 'var(--navy-ink, #1F3C84)'
+const BLUE_INK = 'var(--blue-ink, #15749B)'
+const RED_INK  = 'var(--red-ink, #B42318)'
+
 export function getButtonVariantStyle(variantId, { mode = 'primary', danger = false, hover = false, disabled = false } = {}) {
   const accent = danger ? RED : BLUE
+  const ink = danger ? RED_INK : BLUE_INK
+  const navyInk = danger ? RED_INK : NAVY_INK
   const isGhost = mode === 'ghost'
   const isSecondary = mode === 'secondary'
 
@@ -25,8 +42,8 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
       return {
         style: {
           background: isGhost ? 'transparent' : fill,
-          border: isGhost ? '1px solid transparent' : (isSecondary ? `1px solid ${danger ? RED : NAVY}` : 'none'),
-          color: isSecondary || isGhost ? (danger ? RED : NAVY) : '#fff',
+          border: isGhost ? '1px solid transparent' : (isSecondary ? `1px solid ${navyInk}` : 'none'),
+          color: isSecondary || isGhost ? navyInk : '#fff',
           boxShadow: (!isSecondary && !isGhost) ? (hover ? '0 2px 4px rgba(15,27,51,0.18), 0 12px 24px -8px rgba(31,60,132,0.6)' : '0 1px 2px rgba(15,27,51,0.15), 0 8px 18px -8px rgba(31,60,132,0.55)') : 'none',
           transform: hover ? 'translateY(-1px)' : 'none',
         },
@@ -37,8 +54,8 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
       return {
         style: {
           background: (isSecondary || isGhost) ? 'transparent' : grad,
-          border: (isSecondary || isGhost) ? `1.5px solid ${accent}` : 'none',
-          color: (isSecondary || isGhost) ? accent : '#fff',
+          border: (isSecondary || isGhost) ? `1.5px solid ${ink}` : 'none',
+          color: (isSecondary || isGhost) ? ink : '#fff',
           boxShadow: (!isSecondary && !isGhost) ? (hover ? `0 14px 30px -8px ${accent}66` : `0 10px 24px -10px ${accent}55`) : 'none',
           transform: hover ? 'translateY(-1px)' : 'none',
         },
@@ -49,7 +66,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
         style: {
           background: hover ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.13)',
           border: `1px solid ${hover ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.26)'}`,
-          color: isGhost ? accent : '#fff',
+          color: isGhost ? ink : '#fff',
           boxShadow: '0 8px 20px -10px rgba(0,0,0,0.35)',
           backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
         },
@@ -60,8 +77,8 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
       return {
         style: {
           background: fillOnHover ? accent : 'transparent',
-          border: `1.5px solid ${accent}`,
-          color: fillOnHover ? '#fff' : accent,
+          border: `1.5px solid ${fillOnHover ? accent : ink}`,
+          color: fillOnHover ? '#fff' : ink,
         },
       }
     }
@@ -72,7 +89,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
         style: {
           background: isGhost ? 'transparent' : (hover ? tintHover : tint),
           border: isGhost ? '1px solid transparent' : 'none',
-          color: danger ? RED : '#137AAE',
+          color: ink,
         },
       }
     }
@@ -81,8 +98,8 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
       return {
         style: {
           background: (isSecondary || isGhost) ? 'transparent' : grad,
-          border: (isSecondary || isGhost) ? `1.5px solid ${accent}` : 'none',
-          color: (isSecondary || isGhost) ? accent : '#fff',
+          border: (isSecondary || isGhost) ? `1.5px solid ${ink}` : 'none',
+          color: (isSecondary || isGhost) ? ink : '#fff',
           borderRadius: 999,
           boxShadow: (!isSecondary && !isGhost) ? (hover ? `0 14px 28px -8px ${accent}66` : `0 10px 22px -10px ${accent}5A`) : 'none',
           transform: hover ? 'translateY(-1px)' : 'none',
@@ -94,7 +111,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
         style: {
           background: 'var(--card, #fff)',
           border: '1px solid var(--card-border, #E2E6EF)',
-          color: danger ? RED : NAVY,
+          color: navyInk,
           boxShadow: hover ? '0 1px 2px rgba(15,27,51,0.05), 0 10px 22px -14px rgba(15,27,51,0.25)' : '0 1px 2px rgba(15,27,51,0.04)',
           transform: hover ? 'translateY(-1px)' : 'none',
           paddingLeft: 22,
@@ -106,7 +123,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
       return {
         style: {
           background: 'transparent', border: 'none', boxShadow: 'none',
-          color: danger ? RED : '#137AAE', padding: '6px 2px',
+          color: ink, padding: '6px 2px',
         },
         extra: { underline: true, underlineColor: danger ? RED : CYAN, underlineOn: hover },
       }
@@ -116,8 +133,8 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
       return {
         style: {
           background: (isSecondary || isGhost) ? 'transparent' : grad,
-          border: (isSecondary || isGhost) ? `1.5px solid ${accent}` : 'none',
-          color: (isSecondary || isGhost) ? accent : '#fff',
+          border: (isSecondary || isGhost) ? `1.5px solid ${ink}` : 'none',
+          color: (isSecondary || isGhost) ? ink : '#fff',
           borderRadius: 14,
           filter: (!isSecondary && !isGhost && hover) ? 'brightness(1.08)' : 'none',
         },
@@ -131,7 +148,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
         style: {
           background: 'var(--card, #fff)',
           border: `1px solid ${hover ? hoverBorderColor : restBorderColor}`,
-          color: danger ? RED : (isSecondary ? 'var(--text2, #5B6577)' : NAVY),
+          color: danger ? RED_INK : (isSecondary ? 'var(--text2, #5B6577)' : NAVY_INK),
           boxShadow: (isGhost && !hover)
             ? 'none'
             : hover
@@ -146,7 +163,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
         style: {
           background: 'var(--card, #fff)',
           border: `1px solid ${hover ? accent : 'var(--card-border, #E2E6EF)'}`,
-          color: danger ? RED : NAVY,
+          color: navyInk,
           boxShadow: hover ? `0 8px 20px -12px ${accent}72` : '0 1px 2px rgba(15,27,51,0.04)',
           transform: hover ? 'translateY(-1px)' : 'none',
         },
@@ -159,7 +176,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
           background: `linear-gradient(var(--card, #fff), var(--card, #fff)), ${typeof ring === 'string' && ring.startsWith('linear') ? ring : `linear-gradient(${ring}, ${ring})`}`,
           backgroundOrigin: 'border-box', backgroundClip: 'padding-box, border-box',
           border: '2px solid transparent',
-          color: danger ? RED : NAVY,
+          color: navyInk,
           boxShadow: hover ? `0 10px 24px -12px ${accent}55` : '0 1px 2px rgba(15,27,51,0.04)',
           transform: hover ? 'translateY(-1px)' : 'none',
         },
@@ -172,7 +189,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
           border: '1px solid var(--card-border, #E2E6EF)',
           borderBottom: 'none',
           borderRadius: '11px 11px 0 0',
-          color: hover ? (danger ? RED : NAVY) : 'var(--text, #0F1B33)',
+          color: hover ? navyInk : 'var(--text, #0F1B33)',
           paddingBottom: 9,
         },
         extra: { bottomBar: true, barColor: danger ? RED : `linear-gradient(90deg, ${NAVY}, ${CYAN})` },
@@ -240,7 +257,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
         style: {
           background: 'var(--card, #fff)',
           border: '1px solid var(--card-border, #E2E6EF)',
-          color: danger ? RED : NAVY,
+          color: navyInk,
           textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: 13.5,
           transform: hover ? 'translateY(-1px)' : 'none',
         },
@@ -252,7 +269,7 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
         style: {
           background: 'var(--card, #fff)',
           border: `1px solid ${hover ? 'var(--text3, #94A0B4)' : 'var(--card-border, #E2E6EF)'}`,
-          color: danger ? RED : 'var(--text, #0F1B33)',
+          color: danger ? RED_INK : 'var(--text, #0F1B33)',
           boxShadow: hover
             ? '0 1px 0 rgba(255,255,255,0.5) inset, 0 14px 28px -14px rgba(15,27,51,0.35)'
             : '0 1px 0 rgba(255,255,255,0.5) inset, 0 1px 2px rgba(15,27,51,0.06)',
