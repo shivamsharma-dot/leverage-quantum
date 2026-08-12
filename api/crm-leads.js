@@ -587,6 +587,9 @@ async function handleBigQuery(req, res, me) {
       const out = await bq.bigQuerySelect(sql, {
         dryRun: String((req.query && req.query.dryRun) || '') === '1',
         maxResults: req.query && req.query.maxResults,
+        // Only ever a request for a TIGHTER cap: lib/bigquery.mjs clamps this
+        // to BQ_BYTES_CEILING and applies that ceiling when it is absent, so a
+        // hand-crafted ?maxBytes can no longer raise the billing ceiling.
         maxBytes: req.query && req.query.maxBytes,
       })
       return res.status(200).json({ configured: true, ...out })

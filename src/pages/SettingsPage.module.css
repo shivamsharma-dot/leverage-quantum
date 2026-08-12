@@ -761,3 +761,11 @@ input.searchInput { padding-left: 34px; }
 .pvGroupBlock { grid-column: 1 / -1; margin: 4px 0; padding: 12px 14px 14px; background: #fff; border: 1px solid #EEF1F6; border-radius: 12px; }
 .pvGroupBlock .pvGroupHeader { margin-top: 0; padding-top: 0; border-top: none; margin-bottom: 10px; }
 .pvGroupGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+
+/* The Global Page Visibility tiles are real role="switch" controls now (they were
+   divs with onClick and tabIndex -1), so keyboard users need to see where they
+   are. Same ring treatment as the other focusable surfaces on this page. */
+.pvCard:focus-visible {
+  outline: 2px solid #1C9FD4;
+  outline-offset: 2px;
+}

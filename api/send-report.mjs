@@ -89,6 +89,50 @@ async function getRecipients(reportType) {
   } catch { return [] }
 }
 
+// Any caller-supplied recipient list is attacker-controllable, and the Ask AI
+// email path (handleChatAnswerEmail) is reachable by ANY signed-in viewer -- not
+// just an admin -- while sending caller-supplied HTML from the company's verified
+// Resend domain. Unrestricted, that is an open relay wearing our From: address.
+// An address is accepted only if it is on the company domain or already has a row
+// in allowed_users; everything else is reported back as rejected rather than
+// silently dropped, so the caller can see what happened.
+const RECIPIENT_DOMAIN = 'leverageedu.com'
+const MAX_RECIPIENTS = 25
+const EMAIL_RE = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[A-Za-z]{2,}$/
+
+async function rosterEmails() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/allowed_users?select=email`, {
+      headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
+    })
+    const rows = (await res.json()) || []
+    return new Set(rows.map(r => String(r.email || '').trim().toLowerCase()).filter(Boolean))
+  } catch { return new Set() }
+}
+
+async function vetRecipients(list) {
+  const seen = []
+  for (const x of (list || [])) {
+    const a = String(x == null ? '' : x).trim().toLowerCase()
+    if (a && seen.indexOf(a) === -1) seen.push(a)
+  }
+  const allowed = []
+  const rejected = []
+  let roster = null
+  for (const a of seen) {
+    if (!EMAIL_RE.test(a)) { rejected.push(a); continue }
+    if (a.endsWith('@' + RECIPIENT_DOMAIN)) { allowed.push(a); continue }
+    if (roster === null) roster = await rosterEmails()
+    if (roster.has(a)) allowed.push(a)
+    else rejected.push(a)
+  }
+  return { allowed: allowed.slice(0, MAX_RECIPIENTS), rejected }
+}
+
+function rejectedRecipientError(vetted) {
+  return 'Recipients must be @' + RECIPIENT_DOMAIN + ' addresses or existing Quantum members. Refused: ' + vetted.rejected.join(', ')
+}
+
 // Every preference the report path reads, in one list. The per channel keys come
 // from shared/slackChannels.mjs, so adding a channel there widens this query by
 // itself and nobody has to remember to edit a comma separated string down here.
@@ -488,9 +532,12 @@ async function handleChatAnswerEmail(req, res) {
   if (!RESEND_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not configured' })
 
   const { question, answerHtml } = req.body || {}
-  const recipients = Array.isArray(req.body?.recipients) ? req.body.recipients.filter(Boolean) : []
+  const asked = Array.isArray(req.body?.recipients) ? req.body.recipients : []
   if (!answerHtml) return res.status(400).json({ error: 'No answer content to send' })
-  if (!recipients.length) return res.status(400).json({ error: 'No recipients specified' })
+  if (!asked.length) return res.status(400).json({ error: 'No recipients specified' })
+  const vetted = await vetRecipients(asked)
+  if (!vetted.allowed.length) return res.status(400).json({ error: rejectedRecipientError(vetted), rejected: vetted.rejected })
+  const recipients = vetted.allowed
 
   try {
     const cfg = await getReportConfig()
@@ -1961,7 +2008,11 @@ export default async function handler(req, res) {
     const bodyRecipients = Array.isArray(req.body?.recipients) ? req.body.recipients.filter(Boolean) : []
     if (triggered_by === 'test' && bodyRecipients.length) {
       // Test send: honour the explicit recipient list from the request (never the full DB list)
-      recipients = bodyRecipients
+      const vettedTest = await vetRecipients(bodyRecipients)
+      if (!vettedTest.allowed.length) {
+        return res.status(400).json({ error: rejectedRecipientError(vettedTest), rejected: vettedTest.rejected })
+      }
+      recipients = vettedTest.allowed
     } else {
       recipients = await getRecipients(report_type)
       if (!recipients.length) recipients = ['shivam.sharma@leverageedu.com']

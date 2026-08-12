@@ -12,6 +12,38 @@ import { renderKpiVariant } from '../ui/kpiVariants.jsx'
 import styles from './SettingsPage.module.css'
 import { SLACK_CHANNELS, confirmPhrase } from '../../shared/slackChannels.mjs'
 
+// An offline or black-holed request leaves fetch() pending forever, which is how
+// a Settings save could sit on "Saving..." with no error and no way back. Every
+// /api/ call on this page goes through fetchT so a dead network always surfaces
+// as a real message instead of a spinner that never resolves.
+const REQ_TIMEOUT_MS = 20000
+
+async function fetchT(url, opts = {}, ms = REQ_TIMEOUT_MS) {
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), ms)
+  try {
+    return await fetch(url, { ...opts, signal: ac.signal })
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('The request timed out - check your connection and try again.')
+    throw new Error('Network error - check your connection and try again.')
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Same protection for promises that are not our own fetch (the shared
+// updateUserRole/addUserAccess helpers in useAuth.jsx).
+function withTimeout(promise, ms = REQ_TIMEOUT_MS) {
+  let timer
+  return Promise.race([
+    Promise.resolve(promise).finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('The request timed out - check your connection and try again.')), ms)
+    }),
+  ])
+}
+
+
 // The locked rooms, in the order shared/slackChannels.mjs lists them. Settings only
 // has to name them; which ones are locked is decided in that one file, not here.
 const GUARDED = SLACK_CHANNELS.filter(c => c.guarded)
@@ -511,7 +543,7 @@ export default function SettingsPage() {
     setAskaiBudgetSaving(true); setAskaiBudgetMsg(null)
     try {
       const n = parseFloat(askaiBudgetInput) || 0
-      const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'ask_ai_monthly_budget_usd', value: n }) })
+      const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'ask_ai_monthly_budget_usd', value: n }) })
       if (!r.ok) throw new Error('Save failed')
       setAskaiBudgetMsg({ type: 'ok', text: 'Saved' })
     } catch (e) {
@@ -584,7 +616,7 @@ export default function SettingsPage() {
         const v = bizFields[f.key]
         value[f.key] = f.type === 'tags' ? (v || []) : (v || '').trim()
       }))
-      const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'business_context', value }) })
+      const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'business_context', value }) })
       if (!r.ok) throw new Error('Save failed')
       setBizMsg({ type: 'ok', text: 'Saved' })
     } catch (e) {
@@ -626,7 +658,7 @@ export default function SettingsPage() {
       setAffiliateSpend(next)
       setAffSpendSaving(true); setAffSpendMsg(null)
       try {
-        const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'affiliate_spend_manual', value: next }) })
+        const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'affiliate_spend_manual', value: next }) })
         if (!r.ok) throw new Error('Save failed')
         setAffSpendMsg({ type: 'ok', text: successMsg || 'Saved' })
       } catch (e) {
@@ -653,7 +685,7 @@ export default function SettingsPage() {
       if (!window.confirm('Disconnect the shared Meta Ads token? Meta Ads, Ask AI, and email reports will stop showing live data for everyone until an admin reconnects.')) return
       setMetaDisconnecting(true); setMetaDisconnectMsg(null)
       try {
-        const r = await fetch('/api/meta-token', { method: 'DELETE', credentials: 'include' })
+        const r = await fetchT('/api/meta-token', { method: 'DELETE', credentials: 'include' })
         const d = await r.json().catch(() => ({}))
         if (!r.ok) throw new Error(d.error || 'Failed to disconnect')
         setMetaDisconnectMsg({ type: 'ok', text: 'Disconnected' })
@@ -670,7 +702,7 @@ export default function SettingsPage() {
       setSavingSchedule(true)
       setScheduleMsg(null)
       try {
-        const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'source_health_schedule', value: next }) })
+        const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'source_health_schedule', value: next }) })
         if (!r.ok) throw new Error('Save failed')
         setScheduleMsg({ type: 'ok', text: 'Saved' })
       } catch (e) {
@@ -718,7 +750,7 @@ export default function SettingsPage() {
       setNewSourceForm({ name: '', url: '' })
       setAddSourceMsg(null)
       try {
-        const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'custom_data_sources', value: next }) })
+        const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'custom_data_sources', value: next }) })
         if (!r.ok) throw new Error('Save failed')
         setAddSourceMsg({ type: 'ok', text: 'Added' })
         setAddSourceOpen(false)
@@ -733,7 +765,7 @@ export default function SettingsPage() {
       const next = customSources.filter(s => s.editKey !== editKey)
       setCustomSources(next)
       try {
-        const r = await fetch('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'custom_data_sources', value: next }) })
+        const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'custom_data_sources', value: next }) })
         if (!r.ok) throw new Error('Save failed')
       } catch (e) {
         setCustomSources(prev) // revert -- otherwise it looks deleted but reappears on next reload with no error shown
@@ -757,7 +789,7 @@ export default function SettingsPage() {
   // Load from server on mount (admin only)
   React.useEffect(() => {
     if (!userIsAdmin) { setPrefLoading(false); return }
-    fetch('/api/preferences', { credentials: 'include' })
+    fetchT('/api/preferences', { credentials: 'include' })
       .then(r => r.ok ? r.json() : { prefs: {} })
       .then(data => {
         const hp = data.prefs?.hidden_pages || []
@@ -813,7 +845,7 @@ export default function SettingsPage() {
     setPrefSaving(true)
     setPrefSaveMsg(null)
     try {
-      const r = await fetch('/api/preferences', {
+      const r = await fetchT('/api/preferences', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -987,7 +1019,7 @@ export default function SettingsPage() {
               setSheetSaving(prev => ({ ...prev, [key]: true }))
               setSheetMsg(prev => ({ ...prev, [key]: null }))
               try {
-                        const r = await fetch('/api/preferences', {
+                        const r = await fetchT('/api/preferences', {
                                     method: 'POST',
                                     credentials: 'include',
                                     headers: { 'Content-Type': 'application/json' },
@@ -1223,7 +1255,7 @@ export default function SettingsPage() {
   const testBigQuery = async () => {
     setBqTesting(true); setBqMsg(null)
     try {
-      const r = await fetch('/api/crm-leads?source=bigquery&mode=datasets', { credentials: 'include' })
+      const r = await fetchT('/api/crm-leads?source=bigquery&mode=datasets', { credentials: 'include' })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Failed')
       const shown = (d.datasets || []).slice(0, 4).join(', ')
@@ -1284,7 +1316,7 @@ export default function SettingsPage() {
     return String(v)
   }
   const bqCall = async (extra) => {
-    const r = await fetch('/api/crm-leads?source=bigquery&mode=query' + extra, {
+    const r = await fetchT('/api/crm-leads?source=bigquery&mode=query' + extra, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1296,7 +1328,7 @@ export default function SettingsPage() {
   }
   const bqEstimate = async () => {
     if (!String(bqSql || '').trim()) { setBqErr('Nothing to estimate.'); return }
-    setBqErr(''); setBqWarn(''); setBqRes(null); setBqBusy('est')
+    setBqErr(''); setBqWarn(''); setBqRes(null); setBqArmed(''); setBqBusy('est')
     try {
       setBqEst(await bqCall('&dryRun=1'))
     } catch (e) {
@@ -1331,7 +1363,7 @@ export default function SettingsPage() {
 
   const bqFetchSaved = async () => {
     try {
-      const r = await fetch('/api/preferences', { credentials: 'include' })
+      const r = await fetchT('/api/preferences', { credentials: 'include' })
       const d = r.ok ? await r.json() : { prefs: {} }
       const list = d && d.prefs ? d.prefs[BQ_SAVED_KEY] : null
       setBqSaved(Array.isArray(list) ? list : [])
@@ -1343,7 +1375,7 @@ export default function SettingsPage() {
     if (userIsAdmin) bqFetchSaved()
   }, [userIsAdmin])
   const bqPersist = async (list) => {
-    const r = await fetch('/api/preferences', {
+    const r = await fetchT('/api/preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -1501,14 +1533,23 @@ export default function SettingsPage() {
   const saveEdit = async (email) => {
     setUsersLoading(true)
     const role = buildRoleString(editIds, editIsAdmin)
-    const ok = await updateUserRole(email, role)
-    await fetch('/api/users', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, job_title: editJobTitle, department: editDepartment }) })
-    if (ok) { setMsg('Access updated'); await loadUsers() } else setMsg('Failed')
-    setEditingUser(null)
-    setUsersLoading(false)
+    try {
+      // Neither call used to be guarded: with the network cut, this button sat on
+      // "Saving..." indefinitely with the modal still open and no error anywhere
+      // (reproduced live, 11s+ and still spinning). Now a dead request always
+      // surfaces and the button always comes back.
+      const ok = await withTimeout(updateUserRole(email, role))
+      await fetchT('/api/users', { method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, job_title: editJobTitle, department: editDepartment }) })
+      if (ok) { setMsg('Access updated'); await loadUsers() } else setMsg("Couldn't update access - nothing was changed.")
+      setEditingUser(null)
+    } catch (e) {
+      setMsg((e && e.message) || 'Save failed')
+    } finally {
+      setUsersLoading(false)
+    }
   }
   const toggleReports = async (u, checked) => {
-    await fetch('/api/users', {
+    await fetchT('/api/users', {
       method: 'PATCH', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: u.email, receive_reports: checked }),
@@ -1519,7 +1560,7 @@ export default function SettingsPage() {
   const toggleReportType = async (u, type, checked) => {
     const current = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily','weekly','monthly']
     const next = checked ? Array.from(new Set([...current, type])) : current.filter(t => t !== type)
-    await fetch('/api/users', {
+    await fetchT('/api/users', {
       method: 'PATCH', credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: u.email, report_types: next }),
@@ -1541,7 +1582,7 @@ export default function SettingsPage() {
       await Promise.all(recipients.map(u => {
         const current = Array.isArray(u.report_types) && u.report_types.length ? u.report_types : ['daily', 'weekly', 'monthly']
         const next = nextChecked ? Array.from(new Set([...current, type])) : current.filter(t => t !== type)
-        return fetch('/api/users', {
+        return fetchT('/api/users', {
           method: 'PATCH', credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: u.email, report_types: next }),
@@ -1564,7 +1605,7 @@ export default function SettingsPage() {
         ['auto_reports_enabled', rcAuto],
       ]
       for (const [key, value] of entries) {
-        const r = await fetch('/api/preferences', {
+        const r = await fetchT('/api/preferences', {
           method: 'POST', credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key, value }),
@@ -1580,7 +1621,7 @@ export default function SettingsPage() {
   // Never the PIN, never the hash, never the salt or the pepper.
   const loadCeoPin = async () => {
     try {
-      const r = await fetch('/api/send-report', {
+      const r = await fetchT('/api/send-report', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'ceo_pin', action: 'status' }),
@@ -1595,7 +1636,7 @@ export default function SettingsPage() {
     if (ceoPinNew !== ceoPinNew2) { setCeoPinMsg('x The two PINs do not match'); return }
     setCeoPinBusy(true)
     try {
-      const r = await fetch('/api/send-report', {
+      const r = await fetchT('/api/send-report', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'ceo_pin', action: 'set', pin: ceoPinNew, currentPin: ceoPinCur }),
@@ -1628,7 +1669,7 @@ export default function SettingsPage() {
         ['slack_auto_reports_enabled', slackAuto],
       ]
       for (const [key, value] of entries) {
-        const r = await fetch('/api/preferences', {
+        const r = await fetchT('/api/preferences', {
           method: 'POST', credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key, value }),
@@ -1644,7 +1685,7 @@ export default function SettingsPage() {
     setSlackTesting(true); setSlackCfgMsg('')
     try {
       const pick = slackTestPick || (slackTestChannels[0] && slackTestChannels[0].id) || ''
-      const r = await fetch('/api/send-report', {
+      const r = await fetchT('/api/send-report', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'slack_test', slackTarget: pick ? 'test:' + pick : 'test' }),
@@ -1674,7 +1715,7 @@ export default function SettingsPage() {
   const sendTestReport = async () => {
     setRcTesting(true); setRcMsg('')
     try {
-      const r = await fetch('/api/send-report', {
+      const r = await fetchT('/api/send-report', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: rcSendType, recipients: [user?.email].filter(Boolean), triggered_by: 'test' }),
@@ -1689,7 +1730,7 @@ export default function SettingsPage() {
   const sendReportNow = async () => {
 setRcSending(true); setRcMsg('')
 try {
-  const r = await fetch('/api/send-report', {
+  const r = await fetchT('/api/send-report', {
   method: 'POST', credentials: 'include',
 headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify({ type: rcSendType, triggered_by: user?.email || 'manual' })
@@ -1704,7 +1745,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
   const sendUnassignedNow = async () => {
     setUnassignedSending(true); setUnassignedMsg('')
     try {
-      const r = await fetch('/api/send-report', {
+      const r = await fetchT('/api/send-report', {
         method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'unassigned_leads', triggered_by: user?.email || 'manual' })
@@ -1782,7 +1823,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <Button size="sm" variant="secondary" onClick={bqEstimate} disabled={!!bqBusy}>{bqBusy === 'est' ? 'Estimating...' : 'Estimate'}</Button>
                 <Dropdown minWidth={132} value={bqLimit} options={[{ value: '100', label: '100 rows' }, { value: '500', label: '500 rows' }, { value: '2000', label: '2,000 rows' }, { value: '10000', label: '10,000 rows' }]} onChange={(v) => setBqLimit(v)} />
                 {(bqRes || bqEst || bqErr || bqWarn) && (
-                  <button type="button" className={styles.bqClear} onClick={() => { setBqRes(null); setBqEst(null); setBqErr(''); setBqWarn('') }}>Clear</button>
+                  <button type="button" className={styles.bqClear} onClick={() => { setBqRes(null); setBqEst(null); setBqErr(''); setBqWarn(''); setBqArmed('') }}>Clear</button>
                 )}
               </div>
               {bqWarn && <p className={styles.note} style={{ color: '#1F3C84' }}>{bqWarn}</p>}
@@ -2136,7 +2177,11 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   const renderTile = (page, isChild) => {
                     const isHidden = hiddenPages.includes(page.id)
                     return (
-                      <div key={page.id} onClick={()=>togglePageVisibility(page.id)} className={`${styles.pvCard} ${isHidden?styles.pvCardHidden:''} ${isChild?styles.pvCardChild:''}`}>
+                      <div key={page.id} role="switch" tabIndex={0} aria-checked={!isHidden}
+                  aria-label={page.label + (isHidden ? ': hidden from everyone' : ': visible to everyone')}
+                  onClick={()=>togglePageVisibility(page.id)}
+                  onKeyDown={e=>{ if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); togglePageVisibility(page.id) } }}
+                  className={`${styles.pvCard} ${isHidden?styles.pvCardHidden:''} ${isChild?styles.pvCardChild:''}`}>
                         <div className={styles.pvIcon}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                             {isHidden?<><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></>:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>}

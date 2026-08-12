@@ -1,5 +1,19 @@
 import { getSessionUser, supabaseAdmin, ALLOWED_DOMAIN } from '../lib/auth.mjs'
 
+// Roles are free text in the DB, but only these shapes mean anything to
+// lib/auth.mjs -- anything else falls through canAccessDashboard's unknown-role
+// branch, which is not a place a real user should ever land. Validated here so a
+// typo, or a hand-rolled PATCH, cannot quietly create a user nobody can reason
+// about.
+const PLAIN_ROLE = /^(admin|viewer|roas_only)$/
+const SCOPED_ROLE = /^(viewer|custom):([a-z0-9_]+(,[a-z0-9_]+)*)?$/
+
+function validRole(role) {
+  const r = String(role == null ? '' : role).trim()
+  if (!r) return false
+  return PLAIN_ROLE.test(r) || SCOPED_ROLE.test(r)
+}
+
 export default async function handler(req, res) {
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })
@@ -15,6 +29,7 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const { email, role = 'viewer' } = req.body || {}
     const clean = (email || '').toLowerCase().trim()
+    if (!validRole(role)) return res.status(400).json({ error: 'Invalid role.' })
     if (!clean.endsWith(`@${ALLOWED_DOMAIN}`)) {
       return res.status(400).json({ error: `Only @${ALLOWED_DOMAIN} emails are allowed.` })
     }
@@ -33,6 +48,15 @@ export default async function handler(req, res) {
     const { email, role, receive_reports, job_title, department, report_types } = req.body || {}
     const clean = (email || '').toLowerCase().trim()
     if (!clean) return res.status(400).json({ error: 'email is required' })
+    if (role !== undefined && !validRole(role)) {
+      return res.status(400).json({ error: 'Invalid role.' })
+    }
+    // An admin clearing their own admin bit locks themselves out of this very
+    // endpoint, and there is no guarantee another admin is around to undo it.
+    // DELETE already refuses self-removal; this closes the same door on PATCH.
+    if (role !== undefined && clean === me.email && role !== 'admin') {
+      return res.status(400).json({ error: "You can't change your own role. Ask another admin to do it." })
+    }
     const patch = {}
     if (role !== undefined) patch.role = role
     if (receive_reports !== undefined) patch.receive_reports = receive_reports
