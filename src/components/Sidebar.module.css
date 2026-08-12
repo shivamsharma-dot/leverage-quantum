@@ -236,7 +236,7 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.logoutBtnActive { color: var(--brand-ink) !important; background: #E8EFF9; }
+.logoutBtnActive { color: #1F3C84 !important; background: #E8EFF9; }
 .logoutBtn {
   background: none; border: none;
   color: #D1D5DB;
@@ -263,7 +263,7 @@
   transition: all .15s;
 }
 .collapseBtn:hover { color: var(--brand-ink); border-color: var(--brand-ink); }
-.collapseBtn:hover { background: #E8EFF9; color: var(--brand-ink); }
+.collapseBtn:hover { background: #E8EFF9; color: #1F3C84; }
 
 .collapseBtnExpanded {
   position: fixed;
@@ -459,8 +459,8 @@
   color: var(--text2); background: transparent; border: none; cursor: pointer;
   text-decoration: none; transition: background .15s, color .15s;
 }
-.gearBtn:hover { color: var(--brand-ink); background: #E8EFF9; }
-.gearBtnActive { color: var(--brand-ink); background: #E8EFF9; }
+.gearBtn:hover { color: #1F3C84; background: #E8EFF9; }
+.gearBtnActive { color: #1F3C84; background: #E8EFF9; }
 .footDivider {
   width: 1px; height: 18px; background: var(--card-border); margin: 0 2px; flex-shrink: 0;
 }
@@ -608,7 +608,7 @@
   flex: 0 1 auto;
   font-size: 14px;
   font-weight: 600;
-  color: #1F2A44;
+  color: var(--text);
   letter-spacing: -.01em;
   line-height: 1.25;
   white-space: nowrap;

@@ -135,13 +135,13 @@ async function getRecentCommits(limit = 15) {
 }
 
 const getRoleMeta = (role) => {
-  if (role === 'admin') return { label: 'Admin', color: 'var(--brand-ink)', bg: '#E8EFF9' }
-  if (role === 'viewer') return { label: 'Viewer', color: 'var(--brand-ink)', bg: '#E3F5FD' }
+  if (role === 'admin') return { label: 'Admin', color: '#1F3C84', bg: '#E8EFF9' }
+  if (role === 'viewer') return { label: 'Viewer', color: '#1F3C84', bg: '#E3F5FD' }
   // viewer:home,meta_ads,... or custom:... => Custom badge
   if (typeof role === 'string' && (role.startsWith('viewer:') || role.startsWith('custom:'))) {
-    return { label: 'Custom', color: 'var(--brand-ink)', bg: '#E4F8F9' }
+    return { label: 'Custom', color: '#1F3C84', bg: '#E4F8F9' }
   }
-  return { label: 'Viewer', color: 'var(--brand-ink)', bg: '#E3F5FD' }
+  return { label: 'Viewer', color: '#1F3C84', bg: '#E3F5FD' }
 }
 
 const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings')
@@ -357,8 +357,8 @@ const RP_CAMPS = [
   { name: 'Remarketing_13July26_Sep26Intake', status: 'PAUSED', spend: 62000, ctr: 0.88, freq: 1.6, leads: 22 },
 ]
 const RP_AI_SAMPLE = `
-<div style="padding:10px 14px;border-radius:8px;background:#E9F8EF;border-left:3px solid #4CAE6F;color:var(--brand-ink);margin-bottom:8px;font-size:13px;line-height:1.6">Biggest win: PMX_FB_Ger_NAS_10June2026_Ad2 is delivering <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">64 leads</strong> at a CTR of 1.12% — your most efficient campaign this period.</div>
-<div style="padding:10px 14px;border-radius:8px;background:#E8EFF9;border-left:3px solid #1F3C84;color:var(--brand-ink);margin-bottom:8px;font-size:13px;line-height:1.6">Biggest risk: PMX_FB_UK_LeadGen_NAS_11_May26-Ad4 is showing frequency <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">4.2x</strong> with CTR down to 0.61% — classic fatigue signal.</div>
+<div style="padding:10px 14px;border-radius:8px;background:#E9F8EF;border-left:3px solid #4CAE6F;color:#1F3C84;margin-bottom:8px;font-size:13px;line-height:1.6">Biggest win: PMX_FB_Ger_NAS_10June2026_Ad2 is delivering <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">64 leads</strong> at a CTR of 1.12% — your most efficient campaign this period.</div>
+<div style="padding:10px 14px;border-radius:8px;background:#E8EFF9;border-left:3px solid #1F3C84;color:#1F3C84;margin-bottom:8px;font-size:13px;line-height:1.6">Biggest risk: PMX_FB_UK_LeadGen_NAS_11_May26-Ad4 is showing frequency <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">4.2x</strong> with CTR down to 0.61% — classic fatigue signal.</div>
 <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bg3)">CAMPAIGN FLAGS</div>
 <div style="padding:10px 14px;border-radius:8px;background:#EFF6FF;border-left:3px solid #3B82F6;color:#1E3A8A;margin-bottom:8px;font-size:13px;line-height:1.6">PMX_FB_UK_LeadGen_NAS_11_May26-Ad4: frequency above 3.5x threshold, CTR trending down — refresh creative.</div>
 <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bg3)">TOP 3 ACTIONS</div>
@@ -2041,7 +2041,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Columns</div>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sheetTest[s.editKey].monthCounts ? 12 : 0 }}>
                                   {sheetTest[s.editKey].columns.map((c, i) => (
-                                    <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--brand-ink)', background: '#E8EFF9', border: '0.5px solid #C7D7F5', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
+                                    <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #C7D7F5', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
                                   ))}
                                 </div>
                                 {sheetTest[s.editKey].monthCounts && (
@@ -2344,7 +2344,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             {(u.job_title||u.department)&&<span style={{fontSize:10.5,color:'var(--text-3)',fontWeight:500,marginTop:1}}>{[u.job_title,u.department].filter(Boolean).join(' · ')}</span>}
                           </div>
                         </div>
-                        <div><span className={styles.roleBadge} style={{background:rm.bg||'#E8EFF9',color:rm.color||'var(--brand-ink)',borderRadius:20,padding:'3px 10px',fontSize:11,fontWeight:700}}>{rm.label}</span></div>
+                        <div><span className={styles.roleBadge} style={{background:rm.bg||'#E8EFF9',color:rm.color||'#1F3C84',borderRadius:20,padding:'3px 10px',fontSize:11,fontWeight:700}}>{rm.label}</span></div>
                         <div className={styles.uAccess}>{accessLabel(u.role)}</div>
                         <div>
                           <label className={styles.reportsToggle} title="Receive daily report">
@@ -3228,7 +3228,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             <div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: (bizFields[f.key] || []).length ? 7 : 0 }}>
                                 {(bizFields[f.key] || []).map((tag, i) => (
-                                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--brand-ink)', background: '#E8EFF9', border: '0.5px solid #D6E2F5', borderRadius: 999, padding: '4px 6px 4px 11px' }}>
+                                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #D6E2F5', borderRadius: 999, padding: '4px 6px 4px 11px' }}>
                                     {tag}
                                     <span onClick={() => removeBizTag(f.key, i)} style={{ cursor: 'pointer', color: '#1C9FD4', fontWeight: 800, lineHeight: 1, padding: '0 4px' }}>×</span>
                                   </span>
@@ -3284,7 +3284,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 <td className={styles.alTd}>{c.row_count == null ? '—' : c.row_count}</td>
                                 <td className={styles.alTd}>{c.latency_ms != null ? `${c.latency_ms}ms` : '—'}</td>
                                 <td className={styles.alTd}>
-                                  <span className={styles.alTag} style={{ background: c.had_error ? '#E8EFF9' : '#EAF7EE', color: c.had_error ? 'var(--brand-ink)' : '#4CAE6F' }}>{c.had_error ? 'Error' : 'OK'}</span>
+                                  <span className={styles.alTag} style={{ background: c.had_error ? '#E8EFF9' : '#EAF7EE', color: c.had_error ? '#1F3C84' : '#4CAE6F' }}>{c.had_error ? 'Error' : 'OK'}</span>
                                 </td>
                                 <td className={styles.alTd}>{dateStr}{timeStr ? ` · ${timeStr}` : ''}</td>
                                 <td className={styles.alTd}>
