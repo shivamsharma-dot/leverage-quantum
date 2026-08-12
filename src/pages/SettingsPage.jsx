@@ -3147,16 +3147,16 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                 </div>
 
-                <div style={{ marginTop: 16, padding: '14px 16px', background: '#F9FAFB', border: '0.5px solid #EEF1F6', borderRadius: 12 }}>
+                <div style={{ marginTop: 16, padding: '14px 16px', background: 'var(--bg3)', border: '0.5px solid var(--border)', borderRadius: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: budgetNum > 0 ? 10 : 0 }}>
                     <div style={{ minWidth: 200 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Monthly budget (self-declared)</div>
-                      <div style={{ fontSize: 11.5, color: '#9CA3AF', lineHeight: 1.4 }}>No public Anthropic API exposes remaining account credits — set your own monthly ceiling to get an early warning as estimated spend approaches it.</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Monthly budget (self-declared)</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.4 }}>No public Anthropic API exposes remaining account credits — set your own monthly ceiling to get an early warning as estimated spend approaches it.</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                      <span style={{ fontSize: 13, color: '#64748B', fontWeight: 600 }}>$</span>
+                      <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>$</span>
                       <input type="number" min="0" step="1" value={askaiBudgetInput} onChange={e => setAskaiBudgetInput(e.target.value)}
-                        style={{ width: 90, padding: '7px 10px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif" }} />
+                        style={{ width: 90, padding: '7px 10px', borderRadius: 8, border: '0.5px solid var(--border)', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif" }} />
                       <Button size="sm" onClick={saveAskaiBudget} disabled={askaiBudgetSaving}>
                         {askaiBudgetSaving ? 'Saving…' : 'Save'}
                       </Button>
@@ -3165,10 +3165,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                   {budgetNum > 0 && (
                     <div>
-                      <div style={{ height: 8, borderRadius: 4, background: '#E5E7EB', overflow: 'hidden' }}>
+                      <div style={{ height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${budgetPct}%`, background: budgetColor, borderRadius: 4, transition: 'width .3s ease' }} />
                       </div>
-                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 5 }}>${monthCost.toFixed(2)} of ${budgetNum.toFixed(2)} used this month ({budgetPct.toFixed(0)}%){budgetPct >= 90 ? ' — approaching the ceiling' : ''}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 5 }}>${monthCost.toFixed(2)} of ${budgetNum.toFixed(2)} used this month ({budgetPct.toFixed(0)}%){budgetPct >= 90 ? ' — approaching the ceiling' : ''}</div>
                     </div>
                   )}
                 </div>
@@ -3215,14 +3215,14 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
                 {BIZ_GROUPS.map(group => (
                   <div key={group.title} style={{ marginTop: 18 }}>
-                    <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1F3C84', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid #EEF1F6' }}>{group.title}</div>
+                    <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1F3C84', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>{group.title}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                       {group.fields.map(f => (
                         <div key={f.key}>
-                          <label style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>{f.label}</label>
+                          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>{f.label}</label>
                           {f.type === 'textarea' && (
                             <textarea value={bizFields[f.key] || ''} onChange={e => setBizField(f.key, e.target.value)} rows={2} placeholder={f.placeholder}
-                              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", resize: 'vertical' }} />
+                              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '0.5px solid var(--border)', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", resize: 'vertical' }} />
                           )}
                           {f.type === 'tags' && (
                             <div>
@@ -3237,7 +3237,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                               <input type="text" value={bizTagDraft[f.key] || ''} onChange={e => setBizTagDraft(prev => ({ ...prev, [f.key]: e.target.value }))}
                                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addBizTag(f.key) } }}
                                 placeholder={f.placeholder}
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '0.5px solid #E2E8F0', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif" }} />
+                                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '0.5px solid var(--border)', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif" }} />
                             </div>
                           )}
                         </div>
@@ -3313,8 +3313,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <p className={styles.dsModalSub}>
                       {askaiDetail.created_at ? new Date(askaiDetail.created_at).toLocaleString('en-IN') : ''} &middot; {askaiDetail.user_id || 'unknown user'} &middot; {askaiDetail.row_count == null ? '—' : askaiDetail.row_count} rows &middot; {askaiDetail.latency_ms != null ? `${askaiDetail.latency_ms}ms` : '—'}
                     </p>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Parameters</div>
-                    <pre style={{ margin: 0, padding: 12, background: '#F8FAFC', border: '0.5px solid #EEF1F6', borderRadius: 10, fontSize: 12, fontFamily: 'monospace', color: '#1E293B', overflowX: 'auto', maxHeight: 280, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Parameters</div>
+                    <pre style={{ margin: 0, padding: 12, background: 'var(--bg3)', border: '0.5px solid var(--border)', borderRadius: 10, fontSize: 12, fontFamily: 'monospace', color: '#1E293B', overflowX: 'auto', maxHeight: 280, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
                       {(() => { try { return JSON.stringify(JSON.parse(askaiDetail.params || '{}'), null, 2) } catch { return askaiDetail.params || '{}' } })()}
                     </pre>
                     <div className={styles.dsModalActions}>
@@ -3336,10 +3336,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </div>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:700,color:'#0F172A',marginBottom:2}}>Global Page Visibility</div>
-                  <div style={{fontSize:12,color:'#94A3B8',lineHeight:1.5}}>Unified with per-user access in the <strong>User Access</strong> tab — manage global and individual page access together.</div>
+                  <div style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:2}}>Global Page Visibility</div>
+                  <div style={{fontSize:12,color:'var(--text-3)',lineHeight:1.5}}>Unified with per-user access in the <strong>User Access</strong> tab — manage global and individual page access together.</div>
                 </div>
-                <button onClick={()=>setActiveTab('users')} style={{padding:'7px 14px',borderRadius:8,background:'#F8FAFC',border:'0.5px solid #E2E8F0',fontSize:12,fontWeight:600,color:'#1F3C84',cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                <button onClick={()=>setActiveTab('users')} style={{padding:'7px 14px',borderRadius:8,background:'var(--bg3)',border:'0.5px solid var(--border)',fontSize:12,fontWeight:600,color:'#1F3C84',cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
                   User Access →
                 </button>
               </div>
@@ -3356,12 +3356,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const active = buttonStyleId === id
                     return (
                       <div key={id} onClick={() => pickDesignStyle('button', id)} style={{
-                        cursor: 'pointer', borderRadius: 12, padding: 12, border: `1.5px solid ${active ? '#1F3C84' : '#E2E8F0'}`,
-                        background: active ? '#F0FBFF' : '#fff', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
+                        cursor: 'pointer', borderRadius: 12, padding: 12, border: `1.5px solid ${active ? '#1F3C84' : 'var(--border)'}`,
+                        background: active ? '#F0FBFF' : 'var(--card)', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
                         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center',
                       }}>
                         <Button previewVariantId={id} size="sm">Preview</Button>
-                        <div style={{ fontSize: 10.5, fontWeight: 600, color: active ? '#1F3C84' : '#64748B', textAlign: 'center', lineHeight: 1.3 }}>{id}. {name}</div>
+                        <div style={{ fontSize: 10.5, fontWeight: 600, color: active ? '#1F3C84' : 'var(--text-2)', textAlign: 'center', lineHeight: 1.3 }}>{id}. {name}</div>
                       </div>
                     )
                   })}
@@ -3377,14 +3377,14 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const active = kpiStyleId === id
                     return (
                       <div key={id} onClick={() => pickDesignStyle('kpi', id)} style={{
-                        cursor: 'pointer', borderRadius: 12, padding: 10, border: `1.5px solid ${active ? '#1F3C84' : '#E2E8F0'}`,
-                        background: active ? '#F0FBFF' : '#fff', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
+                        cursor: 'pointer', borderRadius: 12, padding: 10, border: `1.5px solid ${active ? '#1F3C84' : 'var(--border)'}`,
+                        background: active ? '#F0FBFF' : 'var(--card)', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
                         display: 'flex', flexDirection: 'column', gap: 8,
                       }}>
                         <div style={{ transform: 'scale(0.82)', transformOrigin: 'top left', width: '122%', pointerEvents: 'none' }}>
                           {renderKpiVariant(id, { label: 'Total Leads', value: '84,848', sub: 'generated', deltaText: '▼ 12.4%', isGood: false, icon: null, accent: '#1F3C84' })}
                         </div>
-                        <div style={{ fontSize: 10.5, fontWeight: 600, color: active ? '#1F3C84' : '#64748B', textAlign: 'center' }}>{id}. {name}</div>
+                        <div style={{ fontSize: 10.5, fontWeight: 600, color: active ? '#1F3C84' : 'var(--text-2)', textAlign: 'center' }}>{id}. {name}</div>
                       </div>
                     )
                   })}
@@ -3401,9 +3401,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     return (
                       <div key={theme.id} onClick={() => applyTheme(theme.id)} className={styles.pxThemeCard}
                         style={{
-                          borderRadius:12,border:`1.5px solid ${isActive ? '#1F3C84' : '#E2E8F0'}`,
+                          borderRadius:12,border:`1.5px solid ${isActive ? '#1F3C84' : 'var(--border)'}`,
                           padding:'14px 16px',cursor:'pointer',transition:'all .15s',
-                          background: isActive ? '#F0FBFF' : '#fff',
+                          background: isActive ? '#F0FBFF' : 'var(--card)',
                           boxShadow: isActive ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
                           position:'relative',
                         }}>
@@ -3418,8 +3418,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             <div key={ci} style={{height:28,flex:1,borderRadius:6,background:col,border:'0.5px solid rgba(0,0,0,0.06)'}}/>
                           ))}
                         </div>
-                        <div style={{fontSize:13,fontWeight:700,color:'#0F172A',marginBottom:2}}>{theme.name}</div>
-                        <div style={{fontSize:11.5,color:'#94A3B8'}}>{theme.desc}</div>
+                        <div style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:2}}>{theme.name}</div>
+                        <div style={{fontSize:11.5,color:'var(--text-3)'}}>{theme.desc}</div>
                       </div>
                     )
                   })}
@@ -3435,7 +3435,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const active = kpiIcons[slot] || cfg.icons[0]
                     return (
                       <div key={slot}>
-                        <div style={{fontSize:11,fontWeight:700,color:'#94A3B8',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:8}}>{cfg.label}</div>
+                        <div style={{fontSize:11,fontWeight:700,color:'var(--text-3)',letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:8}}>{cfg.label}</div>
                         <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                           {cfg.icons.map(icon => {
                             const isSelected = active === icon
@@ -3443,13 +3443,13 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                               <button key={icon} onClick={() => setKpiIcon(slot, icon)}
                                 title={icon}
                                 style={{
-                                  width:38,height:38,borderRadius:9,border:`1.5px solid ${isSelected ? '#1F3C84' : '#E2E8F0'}`,
-                                  background: isSelected ? '#E3F5FD' : '#F8FAFC',
+                                  width:38,height:38,borderRadius:9,border:`1.5px solid ${isSelected ? '#1F3C84' : 'var(--border)'}`,
+                                  background: isSelected ? '#E3F5FD' : 'var(--bg3)',
                                   display:'flex',alignItems:'center',justifyContent:'center',
                                   cursor:'pointer',transition:'all .15s',
                                   boxShadow: isSelected ? '0 0 0 3px rgba(31,60,132,0.1)' : 'none',
                                 }}>
-                                <KpiIconPreview name={icon} color={isSelected ? '#1F3C84' : '#94A3B8'} />
+                                <KpiIconPreview name={icon} color={isSelected ? '#1F3C84' : 'var(--text-3)'} />
                               </button>
                             )
                           })}
@@ -3458,9 +3458,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     )
                   })}
                 </div>
-                <div style={{marginTop:16,padding:'12px 14px',background:'#F8FAFC',borderRadius:9,border:'0.5px solid #E2E8F0',display:'flex',alignItems:'center',gap:10}}>
+                <div style={{marginTop:16,padding:'12px 14px',background:'var(--bg3)',borderRadius:9,border:'0.5px solid var(--border)',display:'flex',alignItems:'center',gap:10}}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                  <span style={{fontSize:12,color:'#94A3B8'}}>Icon preferences are saved locally. Assign icons to each metric category to match your team's mental model.</span>
+                  <span style={{fontSize:12,color:'var(--text-3)'}}>Icon preferences are saved locally. Assign icons to each metric category to match your team's mental model.</span>
                 </div>
               </div>
 
@@ -3473,10 +3473,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const isActive = sidebarMode === mode.id
                     return (
                       <div key={mode.id} onClick={() => applySidebarMode(mode.id)}
-                        style={{flex:'1 1 150px',padding:'14px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive ? '#1F3C84' : '#E2E8F0'}`,background:isActive?'#F0FBFF':'#fff',boxShadow:isActive?'0 0 0 3px rgba(31,60,132,0.1)':'0 1px 3px rgba(15,23,42,0.04)',position:'relative'}}>
+                        style={{flex:'1 1 150px',padding:'14px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive ? '#1F3C84' : 'var(--border)'}`,background:isActive?'#F0FBFF':'var(--card)',boxShadow:isActive?'0 0 0 3px rgba(31,60,132,0.1)':'0 1px 3px rgba(15,23,42,0.04)',position:'relative'}}>
                         {isActive && <div style={{position:'absolute',top:10,right:10,width:18,height:18,borderRadius:9,background:'#1F3C84',display:'flex',alignItems:'center',justifyContent:'center'}}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>}
-                        <div style={{fontSize:13,fontWeight:700,color:'#0F172A',marginBottom:3}}>{mode.label}</div>
-                        <div style={{fontSize:11.5,color:'#94A3B8'}}>{mode.desc}</div>
+                        <div style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:3}}>{mode.label}</div>
+                        <div style={{fontSize:11.5,color:'var(--text-3)'}}>{mode.desc}</div>
                       </div>
                     )
                   })}
@@ -3492,12 +3492,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const isActive = numberFormat === fmt.id
                     return (
                       <div key={fmt.id} onClick={() => applyNumberFormat(fmt.id)}
-                        style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1F3C84':'#E2E8F0'}`,background:isActive?'#F0FBFF':'#fff'}}>
+                        style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1F3C84':'var(--border)'}`,background:isActive?'#F0FBFF':'var(--card)'}}>
                         <div>
-                          <div style={{fontSize:13,fontWeight:600,color:'#0F172A',marginBottom:2}}>{fmt.label}</div>
-                          <div style={{fontSize:11.5,color:'#94A3B8'}}>{fmt.desc}</div>
+                          <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:2}}>{fmt.label}</div>
+                          <div style={{fontSize:11.5,color:'var(--text-3)'}}>{fmt.desc}</div>
                         </div>
-                        <div style={{fontFamily:'monospace',fontSize:12,color:isActive?'#1F3C84':'#94A3B8',fontWeight:600,textAlign:'right',flexShrink:0,marginLeft:12}}>{fmt.example}</div>
+                        <div style={{fontFamily:'monospace',fontSize:12,color:isActive?'#1F3C84':'var(--text-3)',fontWeight:600,textAlign:'right',flexShrink:0,marginLeft:12}}>{fmt.example}</div>
                       </div>
                     )
                   })}
@@ -3513,10 +3513,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const isActive = defaultDateRange === range.id
                     return (
                       <div key={range.id} onClick={() => applyDefaultDate(range.id)}
-                        style={{padding:'12px 14px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1F3C84':'#E2E8F0'}`,background:isActive?'#F0FBFF':'#fff',position:'relative'}}>
+                        style={{padding:'12px 14px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1F3C84':'var(--border)'}`,background:isActive?'#F0FBFF':'var(--card)',position:'relative'}}>
                         {isActive && <div style={{position:'absolute',top:10,right:10,width:16,height:16,borderRadius:8,background:'#1F3C84',display:'flex',alignItems:'center',justifyContent:'center'}}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>}
-                        <div style={{fontSize:13,fontWeight:600,color:'#0F172A',marginBottom:3}}>{range.label}</div>
-                        <div style={{fontSize:11.5,color:'#94A3B8'}}>{range.desc}</div>
+                        <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:3}}>{range.label}</div>
+                        <div style={{fontSize:11.5,color:'var(--text-3)'}}>{range.desc}</div>
                       </div>
                     )
                   })}
@@ -3532,19 +3532,19 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const isActive = tableDensity === den.id
                     return (
                       <div key={den.id} onClick={() => applyDensity(den.id)}
-                        style={{flex:'1 1 140px',cursor:'pointer',borderRadius:10,transition:'all .15s',overflow:'hidden',border:`1.5px solid ${isActive?'#1F3C84':'#E2E8F0'}`,boxShadow:isActive?'0 0 0 3px rgba(31,60,132,0.1)':'none'}}>
-                        <div style={{padding:'10px 12px 6px',background:isActive?'#F0FBFF':'#F8FAFC'}}>
+                        style={{flex:'1 1 140px',cursor:'pointer',borderRadius:10,transition:'all .15s',overflow:'hidden',border:`1.5px solid ${isActive?'#1F3C84':'var(--border)'}`,boxShadow:isActive?'0 0 0 3px rgba(31,60,132,0.1)':'none'}}>
+                        <div style={{padding:'10px 12px 6px',background:isActive?'#F0FBFF':'var(--bg3)'}}>
                           {[1,2,3].map(row => (
-                            <div key={row} style={{display:'flex',gap:6,padding:`${den.rowH} 0`,borderBottom:'0.5px solid #E2E8F0'}}>
-                              <div style={{width:'40%',height:8,borderRadius:3,background:isActive?'#BAE3F9':'#E2E8F0'}}/>
+                            <div key={row} style={{display:'flex',gap:6,padding:`${den.rowH} 0`,borderBottom:'0.5px solid var(--border)'}}>
+                              <div style={{width:'40%',height:8,borderRadius:3,background:isActive?'#BAE3F9':'var(--border)'}}/>
                               <div style={{width:'30%',height:8,borderRadius:3,background:isActive?'#D1EEFB':'#EEF0F3'}}/>
                               <div style={{width:'20%',height:8,borderRadius:3,background:isActive?'#D1EEFB':'#EEF0F3'}}/>
                             </div>
                           ))}
                         </div>
-                        <div style={{padding:'10px 12px',borderTop:`1.5px solid ${isActive?'#1F3C84':'#E2E8F0'}`,background:'#fff'}}>
-                          <div style={{fontSize:12,fontWeight:700,color:isActive?'#1F3C84':'#0F172A'}}>{den.label}</div>
-                          <div style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{den.desc}</div>
+                        <div style={{padding:'10px 12px',borderTop:`1.5px solid ${isActive?'#1F3C84':'var(--border)'}`,background:'var(--card)'}}>
+                          <div style={{fontSize:12,fontWeight:700,color:isActive?'#1F3C84':'var(--text)'}}>{den.label}</div>
+                          <div style={{fontSize:11,color:'var(--text-3)',marginTop:2}}>{den.desc}</div>
                         </div>
                       </div>
                     )
