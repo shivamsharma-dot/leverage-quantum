@@ -614,7 +614,7 @@ export default function Sidebar() {
         {/* Quantum logo mark — visible when collapsed */}
         <div style={{
           height: 58, display:'flex', alignItems:'center', justifyContent:'center',
-          flexShrink: 0, borderBottom: '0.5px solid #F3F4F6', width:'100%'
+          flexShrink: 0, borderBottom: '0.5px solid var(--card-border)', width:'100%'
         }}>
           <div style={{
             width:44, height:44, borderRadius:11, background:'var(--card)',
