@@ -2550,7 +2550,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         const ACT = {
                           view: {c:'var(--blue-ink)', bg:'var(--blue-tint)'},
                           click: {c:'var(--navy-ink)', bg:'var(--navy-tint)'},
-                          tab: {c:'#16868F', bg:'var(--cyan-tint)'},
+                          tab: {c:'var(--cyan-ink)', bg:'var(--cyan-tint)'},
                           login: {c:'var(--green-ink)', bg:'var(--green-tint)'},
                           logout: {c:'var(--blue-ink)', bg:'var(--blue-tint)'},
                           leave: {c:'var(--text-2)', bg:'var(--bg3)'},
@@ -3228,7 +3228,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             <div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: (bizFields[f.key] || []).length ? 7 : 0 }}>
                                 {(bizFields[f.key] || []).map((tag, i) => (
-                                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--navy-ink)', background: 'var(--navy-tint)', border: '0.5px solid #D6E2F5', borderRadius: 999, padding: '4px 6px 4px 11px' }}>
+                                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--navy-ink)', background: 'var(--navy-tint)', border: '0.5px solid var(--navy-line)', borderRadius: 999, padding: '4px 6px 4px 11px' }}>
                                     {tag}
                                     <span onClick={() => removeBizTag(f.key, i)} style={{ cursor: 'pointer', color: '#1C9FD4', fontWeight: 800, lineHeight: 1, padding: '0 4px' }}>×</span>
                                   </span>
