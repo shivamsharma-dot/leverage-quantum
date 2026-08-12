@@ -83,12 +83,21 @@ export function getButtonVariantStyle(variantId, { mode = 'primary', danger = fa
       }
     }
     case 5: { // Soft tint fill
-      const tint = danger ? 'rgba(185,28,28,0.12)' : 'rgba(28,159,212,0.12)'
-      const tintHover = danger ? 'rgba(185,28,28,0.20)' : 'rgba(28,159,212,0.20)'
+      // The tint has to be the *paired* token for `ink`, not an ad-hoc rgba.
+      // The old rgba(28,159,212,0.12 / 0.20) composited to #DFEFF4 at rest and
+      // #CEE8F1 on hover over the stone card, dropping --blue-ink to 4.45:1 and
+      // 4.10:1 -- both measured live on the deployed app, not derived on paper.
+      // --*-tint is the exact surface --*-ink was chosen against, so the pair
+      // clears 4.5:1 in every theme (blue 4.67 light / 4.59 stone / 6.69 dark,
+      // red 6.01 / 5.66 / 6.51). Hover therefore signals with the --*-line
+      // hairline rather than by deepening the fill, because deepening the fill
+      // is exactly what broke the contrast on the two light themes.
+      const tint = danger ? 'var(--red-tint)' : 'var(--blue-tint)'
+      const line = danger ? 'var(--red-line)' : 'var(--blue-line)'
       return {
         style: {
-          background: isGhost ? 'transparent' : (hover ? tintHover : tint),
-          border: isGhost ? '1px solid transparent' : 'none',
+          background: isGhost ? 'transparent' : tint,
+          border: `1px solid ${(isGhost || !hover) ? 'transparent' : line}`,
           color: ink,
         },
       }
