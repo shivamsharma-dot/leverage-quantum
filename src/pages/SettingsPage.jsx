@@ -2152,13 +2152,13 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   }
                   if (row.type === 'group') {
                     return (
-                      <React.Fragment key={row.label}>
+                      <div className={styles.pvGroupBlock} key={row.label}>
                         <div className={styles.pvGroupHeader}>
                           <span className={styles.pvGroupLabel}>{row.label}</span>
                           <span className={styles.pvGroupCount}>{row.children.length} pages</span>
                         </div>
-                        {row.children.map(page => renderTile(page, true))}
-                      </React.Fragment>
+                        <div className={styles.pvGroupGrid}>{row.children.map(page => renderTile(page, true))}</div>
+                      </div>
                     )
                   }
                   return renderTile(row.dash, false)
@@ -2973,7 +2973,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           const STATUS = {
                             sent:    { c:'#4CAE6F', bg:'#EAF7EE', label:'Sent' },
                             skipped: { c:'#1C9FD4', bg:'#E8F6FA', label:'Skipped' },
-                            failed:  { c:'#1F3C84', bg:'#E8EFF9', label:'Failed' },
+                            failed:  { c:'#FFFFFF', bg:'#1F3C84', label:'Failed' },
                           }
                           const s = STATUS[log.status] || { c:'#64748B', bg:'#F1F5F9', label: log.status||'Unknown' }
                           const isAuto = log.triggered_by === 'cron'
@@ -2981,7 +2981,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           const trigWho = isAuto ? 'Scheduled run \u00b7 GitHub Actions cron'
                             : log.triggered_by === 'test' ? 'Test send from Settings'
                             : (log.triggered_by || 'Unknown')
-                          const trigTag = isAuto ? { c: '#1C9FD4', bg: '#E8F6FA' } : { c: '#1F3C84', bg: '#EAEEF8' }
+                          const trigTag = isAuto ? { c: '#475569', bg: '#F1F5F9' } : { c: '#1F3C84', bg: '#E8EFF9' }
                           const dt = log.sent_at ? new Date(log.sent_at) : null
                           const dateStr = dt ? dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'
                           const timeStr = dt ? dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}) : ''

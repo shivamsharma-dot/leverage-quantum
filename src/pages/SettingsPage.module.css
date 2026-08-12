@@ -755,3 +755,9 @@ input.searchInput { padding-left: 34px; }
 /* ---- 6 - profile spacing rhythm ---- */
 .pxStatRow { gap: 18px; }
 .pxDetailGrid { gap: 12px 18px; margin-top: 16px; }
+
+/* ---- 7 - page-visibility groups own their own band, so the ungrouped
+   pages that follow a group no longer read as members of it ---- */
+.pvGroupBlock { grid-column: 1 / -1; margin-top: 4px; padding-top: 10px; border-top: 1px dashed #E2E8F0; }
+.pvGroupBlock .pvGroupHeader { margin-top: 0; padding-top: 0; border-top: none; margin-bottom: 10px; }
+.pvGroupGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
