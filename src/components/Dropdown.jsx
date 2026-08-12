@@ -6,15 +6,43 @@ import React, { useState, useRef, useEffect } from 'react'
 // correctly under light / dark / navy / stone.
 const NAVY = '#1F3C84'
 const NAVY_TINT = '#E8EFF9'
+const MENU_MAX = 280   // tallest the option list is ever allowed to be
+const GAP = 6          // breathing room between trigger and menu
+const EDGE = 8         // never let the menu touch the viewport edge
 
 function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabled }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const btnRef = useRef(null)
+
+  // A dropdown near the bottom of the viewport used to open downwards regardless
+  // and get cut off by the fold -- measured live on the Settings > Reports channel
+  // picker: trigger bottom 1085, viewport 1117, menu 1092-1187, so its last option
+  // was entirely below the fold and unreachable. ExportButton.jsx already solved
+  // this; putting it here means every consumer of the shared Dropdown inherits it.
+  const [drop, setDrop] = useState({ up: false, maxH: MENU_MAX })
+
+  const toggle = () => {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      const below = window.innerHeight - r.bottom - GAP - EDGE
+      const above = r.top - GAP - EDGE
+      // Only flip when there genuinely is not room below AND there is more above,
+      // so the common case keeps opening downwards as people expect.
+      const up = below < Math.min(MENU_MAX, 160) && above > below
+      setDrop({ up, maxH: Math.max(140, Math.min(MENU_MAX, up ? above : below)) })
+    }
+    setOpen(v => !v)
+  }
 
   useEffect(() => {
     const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    // Escape closed nothing before this, which left keyboard users with no way out
+    // of an open menu except tabbing through every option.
+    const k = e => { if (e.key === 'Escape') setOpen(false) }
     document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
+    document.addEventListener('keydown', k)
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', k) }
   }, [])
 
   const items = options.map(o => (o && typeof o === 'object' ? o : { value: o, label: o }))
@@ -27,7 +55,10 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
         <button
           type="button"
           disabled={disabled}
-          onClick={() => setOpen(v => !v)}
+          ref={btnRef}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={toggle}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '7px 12px', borderRadius: 11,
@@ -49,11 +80,13 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
 
         {open && (
           <div style={{
-            position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 500,
+            position: 'absolute', left: 0, zIndex: 500,
+            top: drop.up ? 'auto' : 'calc(100% + ' + GAP + 'px)',
+            bottom: drop.up ? 'calc(100% + ' + GAP + 'px)' : 'auto',
             background: 'var(--card)', border: '0.5px solid var(--card-border)',
             borderRadius: 12, boxShadow: '0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)',
             padding: 6, minWidth: Math.max(minWidth, 150),
-            maxHeight: 280, overflowY: 'auto', scrollbarWidth: 'none'
+            maxHeight: drop.maxH, overflowY: 'auto', scrollbarWidth: 'none'
           }}>
             {items.map(opt => {
               const active = opt.value === value
