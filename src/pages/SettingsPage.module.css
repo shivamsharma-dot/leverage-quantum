@@ -22,6 +22,8 @@
   --shadow-md:   0 4px 14px -6px rgba(16,24,40,0.12);
   --font:        'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;
   --radius:      12px;
+  --ctl-h:       32px;   /* referenced by .dsField / .dsField input */
+  --ctl-r:       11px;
 
   display: flex;
   height: 100vh;

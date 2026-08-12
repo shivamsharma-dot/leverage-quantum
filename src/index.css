@@ -44,50 +44,16 @@
   --sb-thumb:      rgba(15,23,42,0.15);
 }
 /* ---------------------------------------------------------------------------
-   TOKEN ALIASES -- do not add new names here, this is a repair.
-   A previous Settings pass wrote a whole token vocabulary that was never
-   defined: SettingsPage.module.css alone makes 168 var() references and 123 of
-   them named tokens that do not exist (--text-3 x36, --text-2 x17, --border-2
-   x12, --accent x12, --border x11, ...). An undefined custom property makes the
-   whole declaration invalid at computed-value time, so all 123 silently fell
-   back to inherited or initial values -- muted labels rendered at full text
-   colour, var()-based borders rendered not at all, and none of it could ever
-   follow a theme. That is the single biggest reason Settings read as a utility
-   page rather than a designed one, and why it did not theme.
-   Aliased here rather than renamed at 123 call sites because custom-property
-   substitution is lazy: these resolve against whatever the active
-   [data-theme] block last set, so all four themes work with one edit, and any
-   other file carrying the same mistake is fixed too.
+   NOTE (2026-08-12): SettingsPage.module.css uses a second token vocabulary
+   (--text-2, --text-3, --border, --border-2, --accent, --primary, --ok, --err,
+   --ring, --shadow-sm, --radius ...). Those are deliberately NOT defined here:
+   they are declared locally on `.layout` at the top of SettingsPage.module.css
+   and inherit down to every node in that page, so they already resolve.
+   Do not re-declare them at :root -- `--primary` and `--ring` are a gradient
+   and a box-shadow in that file but would read as flat colours here, so one
+   name would mean two different types depending on the subtree.
    --------------------------------------------------------------------------- */
-:root {
-  --text-2:      var(--text2);
-  --text-3:      var(--text3);
 
-  --border:      var(--card-border);
-  /* --input-border is only ever declared in :root, so aliasing --border-2 to it
-     would have frozen 12 borders at light-mode #E2E8F0 in dark/navy/stone.
-     Pointed at --card-border, which every theme block does override. */
-  --border-2:    var(--card-border);
-
-  --primary:     var(--navy);
-  --primary-h:   #17306A;
-  --primary-h:   color-mix(in srgb, var(--navy) 86%, black);
-  --accent:      var(--blue);
-  --ring:        var(--blue);
-  --focus:       var(--blue);
-
-  --ok:          var(--green);
-  --ok-bg:       var(--green-tint);
-  --err:         var(--red);
-  --err-bg:      var(--red-tint);
-
-  --shadow-sm:   var(--shadow);
-
-  --font:        'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --radius:      11px;   /* Button radius, normalised 2026-08-12 */
-  --ctl-h:       32px;   /* control height, normalised 2026-08-12 */
-  --ctl-r:       11px;
-}
 
 
 html, body, #root {
@@ -147,7 +113,7 @@ input, select, textarea { font-family: inherit; }
 
 /* ── SKELETON ─────────────────────────────────────────────────── */
 .skeleton {
-  background: linear-gradient(90deg, #E5E7EB 25%, #F1F5F9 50%, #E5E7EB 75%);
+  background: linear-gradient(90deg, var(--card-border) 25%, var(--bg3) 50%, var(--card-border) 75%);
   background-size: 400px 100%;
   animation: shimmer 1.4s ease-in-out infinite;
   border-radius: 8px;
@@ -181,8 +147,12 @@ button:active:not(:disabled) {
 }
 input:focus, textarea:focus {
   outline: none;
-  box-shadow: none !important;
-  border-color: #CBD5E1 !important;
+  /* Was `box-shadow: none !important; border-color: #CBD5E1 !important`.
+     Both !important, so no component could style its own focus state:
+     Settings .input:focus (border var(--accent) + ring var(--ring)) never
+     rendered at all, and the fallback border was a light-mode literal that
+     stayed light grey in dark/navy. Now overridable, and themed. */
+  border-color: var(--blue);
 }
 .page-enter {
   animation: fadeUp .2s ease both;
@@ -255,6 +225,9 @@ input:focus, textarea:focus {
   --text:          #F1F5F9;
   --text2:         #94A3B8;
   --text3:         #64748B;
+  --input-bg:     #172032;
+  --input-border: #2D3748;
+  --sb-thumb:     rgba(226,232,240,0.18);
 }
 
 [data-theme="navy"] {
@@ -269,6 +242,9 @@ input:focus, textarea:focus {
   --text:          #E8EFF9;
   --text2:         #93A3C8;
   --text3:         #5B6FA8;
+  --input-bg:     #101A44;
+  --input-border: #1E2D6B;
+  --sb-thumb:     rgba(232,239,249,0.20);
 }
 
 [data-theme="stone"] {
@@ -283,6 +259,9 @@ input:focus, textarea:focus {
   --text:          #1C1917;
   --text2:         #57534E;
   --text3:         #A8A29E;
+  --input-bg:     #F5F4F1;
+  --input-border: #E0DDD8;
+  --sb-thumb:     rgba(28,25,23,0.18);
 }
 
 [data-theme="light"] {
@@ -297,6 +276,9 @@ input:focus, textarea:focus {
   --text:          #0F172A;
   --text2:         #475569;
   --text3:         #94A3B8;
+  --input-bg:     #F8FAFC;
+  --input-border: #E2E8F0;
+  --sb-thumb:     rgba(15,23,42,0.15);
 }
 
 /* ── Table density ──────────────────────────────────────────────────────── */
