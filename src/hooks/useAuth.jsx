@@ -64,13 +64,37 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
+  // Re-asks the server "who am I / what can I see" and updates `user` in place.
+  // This is the ONLY thing that keeps a signed-in tab's permissions current --
+  // /api/auth?action=me itself already re-checks allowed_users on every call and
+  // reissues the cookie if the role moved (see api/auth.mjs), but that's useless
+  // if nothing ever calls it again after the initial mount. Before this existed,
+  // an admin granting/revoking a page had no effect on anyone already signed in
+  // until they happened to hard-refresh or their 8h session expired -- clicking
+  // around the SPA (React Router navigation) never re-hits the server at all.
+  // Deliberately does NOT touch `loading`/`prefsReady` -- those only gate the
+  // very first paint; toggling them again here would blank the whole page on
+  // every subsequent call (e.g. on every route change), not just refresh data.
+  const refreshUser = () => {
+    return fetch('/api/auth?action=me', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : { user: null }))
+      .then(d => { const u = d.user || null; setUser(u); return u })
+      .catch(() => { setUser(null); return null })
+  }
+
   // On load, ask the server who we are (reads the secure cookie).
   useEffect(() => {
-    fetch('/api/auth?action=me', { credentials: 'include' })
-      .then(r => (r.ok ? r.json() : { user: null }))
-      .then(d => setUser(d.user || null))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false))
+    refreshUser().finally(() => setLoading(false))
+  }, [])
+
+  // Belt-and-suspenders for a tab left open and backgrounded for a while (the
+  // route-change trigger in App.jsx's ProtectedRoute covers the common case --
+  // this catches "granted access, then just switched back to an already-open
+  // tab without navigating anywhere new").
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshUser() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
   }, [])
 
   // Hidden-pages preference, fetched here (not in Sidebar) so it runs in true parallel
@@ -275,7 +299,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, hiddenPages, prefsReady, loginWithGoogle, requestMagicLink, verifyMagicLink, logout, ALLOWED_DOMAIN }}>
+    <AuthContext.Provider value={{ user, loading, hiddenPages, prefsReady, loginWithGoogle, requestMagicLink, verifyMagicLink, logout, refreshUser, ALLOWED_DOMAIN }}>
       {children}
     </AuthContext.Provider>
   )

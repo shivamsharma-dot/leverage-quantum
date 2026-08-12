@@ -129,8 +129,13 @@ const DASHBOARD_FALLBACK_ORDER = [
 ]
 
 function ProtectedRoute({ children, dashboardId }) {
-  const { user, loading, hiddenPages, prefsReady } = useAuth()
+  const { user, loading, hiddenPages, prefsReady, refreshUser } = useAuth()
   const location = useLocation(); /* warm the Summary page cache once per session, as soon as we know who is logged in */ useEffect(() => { if (user && user.email) prefetchSummaryAnalysis() }, [user && user.email])
+
+  // Re-check access on every navigation so a permission grant/revoke made while
+  // this tab is open takes effect on the user's very next click, instead of
+  // needing a hard refresh (AuthProvider's own mount-time check only runs once).
+  useEffect(() => { refreshUser && refreshUser() }, [location.pathname])
 
   // Warm every page's JS chunk in idle time once logged in, so switching sections
   // almost never shows the Suspense loader (only the very first, unwarmed navigation would).
