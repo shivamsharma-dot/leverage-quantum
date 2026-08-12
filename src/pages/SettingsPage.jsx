@@ -1489,15 +1489,25 @@ export default function SettingsPage() {
   }
   const buildRoleString = (ids, isAdmin) => {
     if (isAdmin) return 'admin'
-    // always store explicit list so access is unambiguous
+    // A bare 'viewer' means "everything except Ask AI", resolved at read time, so
+    // such a person picks up newly added pages automatically. Freezing that into an
+    // explicit id list -- which this did on EVERY save, including a save where the
+    // admin changed nothing -- quietly opted them out of anything added later.
+    // Only write an explicit list when the selection really differs from the default.
+    const dflt = DASHBOARDS.filter(d => d.id !== 'ask_ai').map(d => d.id)
+    const isDefault = ids.length === dflt.length && dflt.every(id => ids.includes(id))
+    if (isDefault) return 'viewer'
     return 'viewer:' + ids.join(',')
   }
 
   const accessLabel = (role) => {
-    if (role === 'admin' || role === 'viewer') return 'All dashboards'
+    if (role === 'admin') return 'All dashboards'
     if (role === 'roas_only') return 'ROAS only'
-    const n = parsePermissions(role).length
-    return n + (n === 1 ? ' dashboard' : ' dashboards')
+    // Count what the person will really SEE, not what is ticked in the DB. A page
+    // that is granted but globally hidden is not access, and counting it is how a
+    // row could read "7 dashboards" while the modal showed nothing selected.
+    const visible = parsePermissions(role).filter(id => !hiddenPages.includes(id))
+    return visible.length + ' of ' + DASHBOARDS.length + ' pages'
   }
   const fmtDate = (d) => {
     if (!d) return '—'
@@ -2189,7 +2199,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         </div>
                         <div className={styles.pvBody}>
                           <div className={styles.pvName}>{page.label}</div>
-                          <div className={styles.pvSub}>{isHidden?'Hidden — all users':'Visible to all'}</div>
+                          <div className={styles.pvSub}>{isHidden?'Hidden for everyone':'Visible to everyone'}</div>
                         </div>
                         <div className={styles.pvToggle}><div className={styles.pvKnob}/></div>
                       </div>
@@ -2384,6 +2394,27 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
                           {editIsAdmin && <p className={styles.cardDesc}>Admin has full access to all dashboards and settings.</p>}
 
+                {editIsViewer && (() => {
+                  const granted = DASHBOARDS.filter(d => editIds.includes(d.id))
+                  const visible = granted.filter(d => !hiddenPages.includes(d.id))
+                  const blocked = granted.length - visible.length
+                  const names = visible.map(d => d.label)
+                  const shown = names.length > 6
+                    ? names.slice(0, 6).join(', ') + ' and ' + (names.length - 6) + ' more'
+                    : names.join(', ')
+                  return (
+                    <div className={styles.accessSummary}>
+                      <span><strong>Can see:</strong> {names.length ? shown : 'nothing yet - no pages selected'}</span>
+                      <span className={styles.accessSummaryCount}>{visible.length} of {DASHBOARDS.length} pages</span>
+                      {blocked > 0 && (
+                        <div className={styles.accessSummaryNote}>
+                          {blocked} more {blocked === 1 ? 'page is' : 'pages are'} ticked below but hidden for everyone in Global Page Visibility, so this person will not see {blocked === 1 ? 'it' : 'them'} until that changes.
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
                           {editIsViewer && (
                             <div className={styles.dashGrid}>
                               {PAGE_ACCESS_GROUPS.flatMap(row => row.type === 'group'
@@ -2396,13 +2427,13 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 const gHidden = hiddenPages.includes(d.id)
                                 return (
                                   <label key={d.id}
-                                    title={gHidden?'Globally hidden — change in Global Page Visibility above':undefined}
-                                    className={`${styles.dashChip} ${checked&&!gHidden?styles.dashChipActive:''} ${row.isChild?styles.dashChipChild:''}`}
+                                    title={gHidden?(checked?'Granted, but hidden for everyone in Global Page Visibility above':'Hidden for everyone in Global Page Visibility above'):undefined}
+                                    className={`${styles.dashChip} ${checked?styles.dashChipActive:''} ${row.isChild?styles.dashChipChild:''}`}
                                     style={gHidden?{opacity:0.38,cursor:'not-allowed',filter:'grayscale(1)'}:{}}>
-                                    <input type="checkbox" checked={checked&&!gHidden} disabled={gHidden}
+                                    <input type="checkbox" checked={checked} disabled={gHidden}
                                       onChange={()=>!gHidden&&setEditIds(p=>checked?p.filter(x=>x!==d.id):[...p,d.id])} />
                                     {d.label}
-                                    {gHidden&&<span style={{fontSize:9,display:'block',color:'#94A3B8',fontWeight:600,lineHeight:1,marginTop:2}}>globally off</span>}
+                                    {gHidden&&<span style={{fontSize:9,display:'block',color:'#94A3B8',fontWeight:600,lineHeight:1.2,marginTop:2}}>{checked?'granted, hidden for everyone':'hidden for everyone'}</span>}
                                   </label>
                                 )
                               })}

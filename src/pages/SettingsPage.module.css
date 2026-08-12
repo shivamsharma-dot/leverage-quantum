@@ -769,3 +769,47 @@ input.searchInput { padding-left: 34px; }
   outline: 2px solid #1C9FD4;
   outline-offset: 2px;
 }
+
+/* Plain-English summary of what a person will actually end up seeing, above the
+   per-page checkbox grid. Two real production fixes this week traced back to an
+   admin not being able to read that off the grid alone. */
+.accessSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 0.5px solid #E2E8F0;
+  border-left: 2px solid #1C9FD4;
+  border-radius: 9px;
+  background: #F8FAFC;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #0F172A;
+}
+
+.accessSummary strong {
+  font-weight: 700;
+}
+
+.accessSummaryCount {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #EEF1FB;
+  color: #1F3C84;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.accessSummaryNote {
+  flex-basis: 100%;
+  margin-top: 2px;
+  color: #64748B;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+}
