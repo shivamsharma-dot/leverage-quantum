@@ -4418,3 +4418,87 @@ This is the root cause of two separate punch-list items -- "Settings still reads
 2. **`src/ui/buttonVariants.js` -- app-wide, newly found, not yet touched.** The shared 20-variant button system hardcodes `NAVY = '#1F3C84'`, `BLUE = '#1C9FD4'`, `RED = '#B91C1C'` and `'#137AAE'`, and uses them as *text* colour for the ghost / secondary / soft-tint modes. Measured on the Appearance gallery: navy label on the dark card = **1.42:1** across 4 variants, `#137AAE` = 2.58:1. So every ghost/secondary button in the app is unreadable in dark and navy, and blue-as-text on white is 2.79:1 in light. Safe shape: `NAVY -> var(--brand-ink)` (byte-identical in light and stone, readable in dark/navy), `BLUE` and `#137AAE` -> `var(--blue-ink)`, `RED`-as-text -> `var(--red-ink)`, touching only `color` and `border` positions and never the white-on-gradient fills. Left for its own pass because it changes button rendering on every page, including pages outside Settings.
 
 3. **Frosted-glass KPI preview.** `#0F172A` and `#64748B` on `#3E4756` (1.90:1 and 1.97:1) in dark -- a fixed translucent-white fill with fixed dark text. Settings-scoped, one variant, only inside the style gallery.
+
+## 2026-08-12 -- Settings part 6: the shared button component never themed its text (commits `3de8c30`, `6b408c9`)
+
+Flagged as out of scope at the end of part 5 and then explicitly pulled back in:
+unlike `--text3`, this is one shared file with a precisely located failure, so it
+was worth fixing properly rather than deferring.
+
+**What was wrong.** `src/ui/buttonVariants.js` defined the brand palette as bare
+constants (`NAVY #1F3C84`, `BLUE #1C9FD4`, `RED #B91C1C`, plus a stray `#137AAE`)
+and used those hexes directly as the *text* colour for every non-filled button
+state. They are tuned for a white surface. `--card` is `#1E293B` in dark and
+`#162155` in navy, so the text simply never themed:
+
+    #1F3C84 on #1E293B  = 1.42:1     <- variant 10, the shipped default
+    #1F3C84 on #162155  = 1.42:1
+    #1C9FD4 on #FFFFFF  = 2.58:1     <- light was failing too, just less visibly
+
+15 of the 20 selectable button styles were affected (1-13, 19, 20). Styles 14-18
+already used `var(--text)` and were fine -- which is why nobody had noticed: the
+workspace happens to have style 14 selected. Anyone on the default (10), or on
+any of the other 14 broken styles, was getting navy-on-navy.
+
+**Why it is not a Settings bug.** `Button.jsx` is shared. `variant="secondary"`
+or `"ghost"` appears at roughly 64 call sites across 14 files, so this was every
+secondary action in the app, not a Settings surface.
+
+**The fix.** Route text -- and any border drawn over a transparent surface --
+through the per-theme `--navy-ink` / `--blue-ink` / `--red-ink` tokens added for
+the tint chips in part 5, rather than inventing a second vocabulary. Fills,
+gradients and the `${accent}66` shadow alphas keep the raw hexes: `var()` cannot
+be string-concatenated with an alpha suffix, and none of those are text surfaces.
+Light and stone are effectively unchanged (`--navy-ink` *is* `#1F3C84` there); the
+only light-theme movement is blue text going `#1C9FD4` -> `#15749B`, which is the
+2.58 -> 5.23 fix.
+
+**Verification -- 80 combinations, driven through the real UI.** The Appearance
+tab renders all 20 styles as live previews and applies a chosen style app-wide
+immediately, so each of the 20 styles was selected by clicking its card, and then
+the nine real `<Button>` instances on the Reports tab were measured, in each of
+the four themes. Every one of the 80 style/theme pairs passes except style 3
+(below). The measured inks match the values computed beforehand -- e.g. navy-ink
+8.36:1 on the dark card, predicted 8.36.
+
+**A second bug, found during that verification and fixed (`6b408c9`).** Style 5
+("Soft tint") built its own background from raw brand alphas instead of the tint
+token its ink was chosen against. Over the stone card that composited to `#DFEFF4`
+at rest and `#CEE8F1` on hover, giving 4.45:1 and 4.10:1 -- both measured live.
+Same class of mistake as the half-converted chip pairs in `586e91e`: the ink was
+themed and the surface under it was not, so the pair drifted. It was worse on
+hover than at rest, i.e. the state you enter deliberately was the least readable.
+Now uses `var(--*-tint)`, and hover signals with the paired `var(--*-line)`
+hairline rather than by deepening the fill, since deepening the fill is exactly
+what broke it.
+
+**Method note -- hidden tabs throttle timers, not just rAF.** Part 5 established
+that a background tab never advances CSS transitions, hence `__freeze()`. The
+same visibility state also clamps `setTimeout` to about one tick per second, which
+silently turned a 20-step sweep into a 20-minute one and looked like a hung
+renderer. Sweeps now schedule with `MessageChannel`, which is not clamped. Two
+other traps worth remembering: `innerText` returns text *after* `text-transform`,
+so style 19 (uppercase) broke every exact-match selector; and a style selection
+does not commit synchronously, so measurements have to wait on the gallery's own
+selected-card indicator or they read the previous style.
+
+**Correction to a number in `3de8c30`.** That commit message quotes red-ink
+contrast as 5.01 (light) and 4.79 (stone). Both are wrong -- the correct values
+are 6.57 and 6.29; the denominator used the wrong luminance. The error was in the
+conservative direction and both always passed, but the figures in that message
+should not be trusted. Navy and blue figures there were verified correct against
+live measurement.
+
+**Still open (unchanged from part 5, plus one new):**
+- **NEW, and the worst single finding of this pass:** button style 3 ("Frosted
+  glass") is `color:'#fff'` on `rgba(255,255,255,0.13)` over a white card, which
+  measures **1.00:1 in light and 1.04:1 in stone** -- the label is completely
+  invisible, confirmed by screenshot. Deliberately not fixed here: it belongs to
+  the deferred frosted-glass family, and the fix is a design decision (darken the
+  glass, or drop white text in favour of `--text`) rather than a retheme.
+- `--text3` is 2.62:1 on the dark card and 2.10:1 in light in several places.
+  App-wide token issue; still deserves its own pass.
+- The frosted-glass KPI card preview, same class as the button above.
+- Three `color:'#fff'`-on-brand-fill cases remain in `buttonVariants.js` (white on
+  `#1C9FD4` is 2.4:1). That is a brand-palette question, not a theming one, and it
+  fails identically in all four themes.
