@@ -358,6 +358,16 @@ export default function Sidebar() {
   // itself IS a real PAGE_LIST id.) Visible if the user can see at least one sub-page.
   const isRouteGroup = item => item.subItems && item.subItems.every(s => s.matchType === 'route')
   const subVisible = sub => canSee(idMap[sub.label]) && isPageVisible(sub.label)
+  // The parent row's own click/hover target when there's no explicit defaultTo (route
+  // groups like QL Ops, where every sub-item is its own real, separately-gated page --
+  // unlike Meta Ads/Google Ads/Agents/CEO B2C/LeadSquared, whose subItems are matchType
+  // 'query' tabs on one shared page and always carry a defaultTo). Falling back to a
+  // hardcoded subItems[0] here sent a user granted only e.g. Human/AI QL Detail (not
+  // Daily QLs) to a page they don't have access to the instant they clicked "QL Ops"
+  // itself -- ProtectedRoute correctly bounced them back to Home, but from the user's
+  // side that just looked like "QL Ops doesn't work at all", even though every one of
+  // their actually-granted sub-pages loads fine once reached directly.
+  const firstReachableSubTo = item => (item.subItems.find(subVisible) || item.subItems[0]).to
   const groupVisible = item => isRouteGroup(item)
     ? item.subItems.some(subVisible)
     : canSee(idMap[item.label]) && isPageVisible(item.label)
@@ -485,9 +495,9 @@ export default function Sidebar() {
                   <div key={item.label}>
                     <button
                       className={`${styles.navItem} ${parentActive ? styles.active : ''}`}
-                      onClick={() => { setExpanded(item.label)(e => !e); if (!parentActive) navigate(item.defaultTo || item.subItems[0].to) }}
+                      onClick={() => { setExpanded(item.label)(e => !e); if (!parentActive) navigate(item.defaultTo || firstReachableSubTo(item)) }}
                       onContextMenu={!isRouteGroup(item) ? (e) => openHideMenu(e, idMap[item.label], item.label) : undefined}
-                      onMouseEnter={()=>prefetchRoute(item.defaultTo || item.subItems[0].to)} onFocus={()=>prefetchRoute(item.defaultTo || item.subItems[0].to)}
+                      onMouseEnter={()=>prefetchRoute(item.defaultTo || firstReachableSubTo(item))} onFocus={()=>prefetchRoute(item.defaultTo || firstReachableSubTo(item))}
                       style={{width:'100%',textAlign:'left',background:'none',border:'none',cursor:'pointer',font:'inherit'}}>
                       <span className={styles.navIcon}>{item.icon}</span>
                       <span style={{flex:1}}>{item.label}</span>
@@ -625,8 +635,8 @@ export default function Sidebar() {
               <div key={item.label} style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}
                 onMouseEnter={(e) => openFlyout(item, e.currentTarget)}
                 onMouseLeave={scheduleCloseFlyout}>
-                <NavLink to={item.defaultTo || item.subItems[0].to} end={item.end}
-                  onFocus={()=>prefetchRoute(item.defaultTo || item.subItems[0].to)}
+                <NavLink to={item.defaultTo || firstReachableSubTo(item)} end={item.end}
+                  onFocus={()=>prefetchRoute(item.defaultTo || firstReachableSubTo(item))}
                   onContextMenu={!isRouteGroup(item) ? (e) => openHideMenu(e, idMap[item.label], item.label) : undefined}
                   className={`${styles.collapsedItem} ${parentActiveFor(item) ? styles.collapsedActive : ''}`}
                   title={item.label}>
