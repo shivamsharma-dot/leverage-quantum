@@ -42,6 +42,10 @@
   --chart-grid:    #F1F5F9;
   --chart-tick:    #94A3B8;
   --sb-thumb:      rgba(15,23,42,0.15);  --surface-hover: rgba(15,23,42,0.04);
+  --navy-ink:#1F3C84; --blue-ink:#15749B; --cyan-ink:#0F6E75;
+  --green-ink:#2E7D4F; --amber-ink:#8A5A00; --red-ink:#B42318;
+  --navy-line:#C7D7F5; --blue-line:#B6E2F4; --cyan-line:#B4E6E9;
+  --green-line:#BFE6CE; --amber-line:#F3E3A3; --red-line:#F6C9C4;
 }
 /* ---------------------------------------------------------------------------
    NOTE (2026-08-12): SettingsPage.module.css uses a second token vocabulary
@@ -231,6 +235,14 @@ input:focus, textarea:focus {
   --surface-hover: rgba(226,232,240,0.06);
   --brand-ink:     #1C9FD4;
   --sel-bg:        rgba(28,159,212,0.14);
+  --navy-tint:rgba(78,124,224,0.20); --blue-tint:rgba(28,159,212,0.18);
+  --cyan-tint:rgba(41,185,195,0.18); --green-tint:rgba(76,174,111,0.18);
+  --amber-tint:rgba(245,158,11,0.18); --red-tint:rgba(239,68,68,0.18);
+  --navy-ink:#A8C4FF; --blue-ink:#7DD3FC; --cyan-ink:#7EE0E6;
+  --green-ink:#6EDB9B; --amber-ink:#FCD34D; --red-ink:#FCA5A5;
+  --navy-line:rgba(168,196,255,0.30); --blue-line:rgba(125,211,252,0.30);
+  --cyan-line:rgba(126,224,230,0.30); --green-line:rgba(110,219,155,0.30);
+  --amber-line:rgba(252,211,77,0.30); --red-line:rgba(252,165,165,0.30);
 }
 
 [data-theme="navy"] {
@@ -251,6 +263,14 @@ input:focus, textarea:focus {
   --surface-hover: rgba(232,239,249,0.07);
   --brand-ink:     #1C9FD4;
   --sel-bg:        rgba(28,159,212,0.18);
+  --navy-tint:rgba(120,160,255,0.18); --blue-tint:rgba(28,159,212,0.22);
+  --cyan-tint:rgba(41,185,195,0.22); --green-tint:rgba(76,174,111,0.22);
+  --amber-tint:rgba(245,158,11,0.22); --red-tint:rgba(239,68,68,0.22);
+  --navy-ink:#BCD2FF; --blue-ink:#8FDCFA; --cyan-ink:#8AE5EB;
+  --green-ink:#7FE3A8; --amber-ink:#FBD667; --red-ink:#FDB2B2;
+  --navy-line:rgba(188,210,255,0.32); --blue-line:rgba(143,220,250,0.32);
+  --cyan-line:rgba(138,229,235,0.32); --green-line:rgba(127,227,168,0.32);
+  --amber-line:rgba(251,214,103,0.32); --red-line:rgba(253,178,178,0.32);
 }
 
 [data-theme="stone"] {
@@ -271,6 +291,12 @@ input:focus, textarea:focus {
   --surface-hover: rgba(28,25,23,0.045);
   --brand-ink:     #1F3C84;
   --sel-bg:        #EDF5F8;
+  --navy-tint:#EAEEF7; --blue-tint:#E6F2F8; --cyan-tint:#E6F4F4;
+  --green-tint:#EAF4EE; --amber-tint:#FAF2D8; --red-tint:#F9EBE8;
+  --navy-ink:#1F3C84; --blue-ink:#15749B; --cyan-ink:#0F6E75;
+  --green-ink:#2E7D4F; --amber-ink:#8A5A00; --red-ink:#B42318;
+  --navy-line:#CBD8F0; --blue-line:#BCDEEC; --cyan-line:#BAE2E2;
+  --green-line:#C4E2CF; --amber-line:#EFDFAE; --red-line:#F0C9C2;
 }
 
 [data-theme="light"] {
@@ -289,8 +315,6 @@ input:focus, textarea:focus {
   --input-border: #E2E8F0;
   --sb-thumb:     rgba(15,23,42,0.15);
   --surface-hover: rgba(15,23,42,0.04);  --brand-ink:     #1F3C84;
-  --sel-bg:        #F0FBFF;
-  --brand-ink:     #1F3C84;
   --sel-bg:        #F0FBFF;
 }
 

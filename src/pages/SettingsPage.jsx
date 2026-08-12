@@ -135,13 +135,13 @@ async function getRecentCommits(limit = 15) {
 }
 
 const getRoleMeta = (role) => {
-  if (role === 'admin') return { label: 'Admin', color: '#1F3C84', bg: '#E8EFF9' }
-  if (role === 'viewer') return { label: 'Viewer', color: '#1F3C84', bg: '#E3F5FD' }
+  if (role === 'admin') return { label: 'Admin', color: 'var(--navy-ink)', bg: 'var(--navy-tint)' }
+  if (role === 'viewer') return { label: 'Viewer', color: 'var(--navy-ink)', bg: 'var(--blue-tint)' }
   // viewer:home,meta_ads,... or custom:... => Custom badge
   if (typeof role === 'string' && (role.startsWith('viewer:') || role.startsWith('custom:'))) {
-    return { label: 'Custom', color: '#1F3C84', bg: '#E4F8F9' }
+    return { label: 'Custom', color: 'var(--navy-ink)', bg: 'var(--cyan-tint)' }
   }
-  return { label: 'Viewer', color: '#1F3C84', bg: '#E3F5FD' }
+  return { label: 'Viewer', color: 'var(--navy-ink)', bg: 'var(--blue-tint)' }
 }
 
 const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings')
@@ -357,8 +357,8 @@ const RP_CAMPS = [
   { name: 'Remarketing_13July26_Sep26Intake', status: 'PAUSED', spend: 62000, ctr: 0.88, freq: 1.6, leads: 22 },
 ]
 const RP_AI_SAMPLE = `
-<div style="padding:10px 14px;border-radius:8px;background:#E9F8EF;border-left:3px solid #4CAE6F;color:#1F3C84;margin-bottom:8px;font-size:13px;line-height:1.6">Biggest win: PMX_FB_Ger_NAS_10June2026_Ad2 is delivering <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">64 leads</strong> at a CTR of 1.12% — your most efficient campaign this period.</div>
-<div style="padding:10px 14px;border-radius:8px;background:#E8EFF9;border-left:3px solid #1F3C84;color:#1F3C84;margin-bottom:8px;font-size:13px;line-height:1.6">Biggest risk: PMX_FB_UK_LeadGen_NAS_11_May26-Ad4 is showing frequency <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">4.2x</strong> with CTR down to 0.61% — classic fatigue signal.</div>
+<div style="padding:10px 14px;border-radius:8px;background:var(--green-tint);border-left:3px solid var(--green-ink);color:var(--navy-ink);margin-bottom:8px;font-size:13px;line-height:1.6">Biggest win: PMX_FB_Ger_NAS_10June2026_Ad2 is delivering <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">64 leads</strong> at a CTR of 1.12% — your most efficient campaign this period.</div>
+<div style="padding:10px 14px;border-radius:8px;background:var(--navy-tint);border-left:3px solid var(--navy-ink);color:var(--navy-ink);margin-bottom:8px;font-size:13px;line-height:1.6">Biggest risk: PMX_FB_UK_LeadGen_NAS_11_May26-Ad4 is showing frequency <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">4.2x</strong> with CTR down to 0.61% — classic fatigue signal.</div>
 <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bg3)">CAMPAIGN FLAGS</div>
 <div style="padding:10px 14px;border-radius:8px;background:#EFF6FF;border-left:3px solid #3B82F6;color:#1E3A8A;margin-bottom:8px;font-size:13px;line-height:1.6">PMX_FB_UK_LeadGen_NAS_11_May26-Ad4: frequency above 3.5x threshold, CTR trending down — refresh creative.</div>
 <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bg3)">TOP 3 ACTIONS</div>
@@ -2041,7 +2041,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Columns</div>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sheetTest[s.editKey].monthCounts ? 12 : 0 }}>
                                   {sheetTest[s.editKey].columns.map((c, i) => (
-                                    <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #C7D7F5', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
+                                    <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--navy-ink)', background: 'var(--navy-tint)', border: '0.5px solid var(--navy-line)', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
                                   ))}
                                 </div>
                                 {sheetTest[s.editKey].monthCounts && (
@@ -2344,7 +2344,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             {(u.job_title||u.department)&&<span style={{fontSize:10.5,color:'var(--text-3)',fontWeight:500,marginTop:1}}>{[u.job_title,u.department].filter(Boolean).join(' · ')}</span>}
                           </div>
                         </div>
-                        <div><span className={styles.roleBadge} style={{background:rm.bg||'#E8EFF9',color:rm.color||'#1F3C84',borderRadius:20,padding:'3px 10px',fontSize:11,fontWeight:700}}>{rm.label}</span></div>
+                        <div><span className={styles.roleBadge} style={{background:rm.bg||'var(--navy-tint)',color:rm.color||'var(--navy-ink)',borderRadius:20,padding:'3px 10px',fontSize:11,fontWeight:700}}>{rm.label}</span></div>
                         <div className={styles.uAccess}>{accessLabel(u.role)}</div>
                         <div>
                           <label className={styles.reportsToggle} title="Receive daily report">
@@ -2548,14 +2548,14 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         const pg = (log.page||'app').replace('/dashboard/','').replace('/','').split('?')[0]||'app'
                         const pgLabel = pg==='app'?'Summary':pg.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ')
                         const ACT = {
-                          view: {c:'#1577A0', bg:'#E3F5FD'},
-                          click: {c:'#1F3C84', bg:'#E8EFF9'},
-                          tab: {c:'#16868F', bg:'#E4F8F9'},
-                          login: {c:'#2E7D4F', bg:'#E9F8EF'},
-                          logout: {c:'#1577A0', bg:'#E3F5FD'},
+                          view: {c:'var(--blue-ink)', bg:'var(--blue-tint)'},
+                          click: {c:'var(--navy-ink)', bg:'var(--navy-tint)'},
+                          tab: {c:'#16868F', bg:'var(--cyan-tint)'},
+                          login: {c:'var(--green-ink)', bg:'var(--green-tint)'},
+                          logout: {c:'var(--blue-ink)', bg:'var(--blue-tint)'},
                           leave: {c:'var(--text-2)', bg:'var(--bg3)'},
-                          search: {c:'#1577A0', bg:'#E3F5FD'},
-                          export: {c:'#2E7D4F', bg:'#E9F8EF'},
+                          search: {c:'var(--blue-ink)', bg:'var(--blue-tint)'},
+                          export: {c:'var(--green-ink)', bg:'var(--green-tint)'},
                         }
                         const a = ACT[log.action] || {c:'var(--text-2)', bg:'var(--bg3)'}
                         const dt = new Date(log.created_at)
@@ -3047,8 +3047,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <tbody>
                         {reportLogsList.map((log,idx)=>{
                           const STATUS = {
-                            sent:    { c:'#4CAE6F', bg:'#EAF7EE', label:'Sent' },
-                            skipped: { c:'#1C9FD4', bg:'#E8F6FA', label:'Skipped' },
+                            sent:    { c:'var(--green-ink)', bg:'var(--green-tint)', label:'Sent' },
+                            skipped: { c:'var(--blue-ink)', bg:'var(--blue-tint)', label:'Skipped' },
                             failed:  { c:'#FFFFFF', bg:'#1F3C84', label:'Failed' },
                           }
                           const s = STATUS[log.status] || { c:'var(--text-2)', bg:'var(--bg3)', label: log.status||'Unknown' }
@@ -3057,7 +3057,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           const trigWho = isAuto ? 'Scheduled run \u00b7 GitHub Actions cron'
                             : log.triggered_by === 'test' ? 'Test send from Settings'
                             : (log.triggered_by || 'Unknown')
-                          const trigTag = isAuto ? { c: 'var(--text-2)', bg: 'var(--bg3)' } : { c: '#1F3C84', bg: '#E8EFF9' }
+                          const trigTag = isAuto ? { c: 'var(--text-2)', bg: 'var(--bg3)' } : { c: 'var(--navy-ink)', bg: 'var(--navy-tint)' }
                           const dt = log.sent_at ? new Date(log.sent_at) : null
                           const dateStr = dt ? dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'
                           const timeStr = dt ? dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}) : ''
@@ -3228,7 +3228,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             <div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: (bizFields[f.key] || []).length ? 7 : 0 }}>
                                 {(bizFields[f.key] || []).map((tag, i) => (
-                                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #D6E2F5', borderRadius: 999, padding: '4px 6px 4px 11px' }}>
+                                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--navy-ink)', background: 'var(--navy-tint)', border: '0.5px solid #D6E2F5', borderRadius: 999, padding: '4px 6px 4px 11px' }}>
                                     {tag}
                                     <span onClick={() => removeBizTag(f.key, i)} style={{ cursor: 'pointer', color: '#1C9FD4', fontWeight: 800, lineHeight: 1, padding: '0 4px' }}>×</span>
                                   </span>
@@ -3284,7 +3284,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 <td className={styles.alTd}>{c.row_count == null ? '—' : c.row_count}</td>
                                 <td className={styles.alTd}>{c.latency_ms != null ? `${c.latency_ms}ms` : '—'}</td>
                                 <td className={styles.alTd}>
-                                  <span className={styles.alTag} style={{ background: c.had_error ? '#E8EFF9' : '#EAF7EE', color: c.had_error ? '#1F3C84' : '#4CAE6F' }}>{c.had_error ? 'Error' : 'OK'}</span>
+                                  <span className={styles.alTag} style={{ background: c.had_error ? 'var(--navy-tint)' : 'var(--green-tint)', color: c.had_error ? 'var(--navy-ink)' : 'var(--green-ink)' }}>{c.had_error ? 'Error' : 'OK'}</span>
                                 </td>
                                 <td className={styles.alTd}>{dateStr}{timeStr ? ` · ${timeStr}` : ''}</td>
                                 <td className={styles.alTd}>
@@ -3332,7 +3332,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             <>
               {/* PAGE VISIBILITY → now in User Access tab */}
               <div className={styles.card} style={{display:'flex',alignItems:'center',gap:14,padding:'14px 18px'}}>
-                <div style={{width:34,height:34,borderRadius:9,background:'#E8EFF9',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <div style={{width:34,height:34,borderRadius:9,background:'var(--navy-tint)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </div>
                 <div style={{flex:1}}>
@@ -3444,7 +3444,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 title={icon}
                                 style={{
                                   width:38,height:38,borderRadius:9,border:`1.5px solid ${isSelected ? '#1F3C84' : 'var(--border)'}`,
-                                  background: isSelected ? '#E3F5FD' : 'var(--bg3)',
+                                  background: isSelected ? 'var(--blue-tint)' : 'var(--bg3)',
                                   display:'flex',alignItems:'center',justifyContent:'center',
                                   cursor:'pointer',transition:'all .15s',
                                   boxShadow: isSelected ? '0 0 0 3px rgba(31,60,132,0.1)' : 'none',
