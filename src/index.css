@@ -64,7 +64,10 @@
   --text-3:      var(--text3);
 
   --border:      var(--card-border);
-  --border-2:    var(--input-border);
+  /* --input-border is only ever declared in :root, so aliasing --border-2 to it
+     would have frozen 12 borders at light-mode #E2E8F0 in dark/navy/stone.
+     Pointed at --card-border, which every theme block does override. */
+  --border-2:    var(--card-border);
 
   --primary:     var(--navy);
   --primary-h:   #17306A;
