@@ -1838,7 +1838,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <span className={styles.prefix}>₹</span>
                   <input type="number" className={styles.input} style={{ maxWidth: 220 }} value={srFeeInput}
                     onChange={e => setSrFeeInput(e.target.value)} />
-                  <Button onClick={saveSrFee}>{srFeeSaved ? 'Saved' : 'Save'}</Button>
+                  <Button size="sm" onClick={saveSrFee}>{srFeeSaved ? 'Saved' : 'Save'}</Button>
                 </div>
                 <p className={styles.note}>Current: ₹{parseInt(srFeeInput || 350000).toLocaleString('en-IN')} per RAU</p>
               </div>
@@ -2057,8 +2057,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           <p className={styles.note} style={{ margin: '-6px 0 12px', color: '#c0392b' }}>✕ {addSourceMsg.text}</p>
                         )}
                         <div className={styles.dsModalActions}>
-                          <Button variant="secondary" onClick={() => setAddSourceOpen(false)}>Cancel</Button>
-                          <Button disabled={!canSubmit} onClick={addCustomSource}>Add source</Button>
+                          <Button size="sm" variant="secondary" onClick={() => setAddSourceOpen(false)}>Cancel</Button>
+                          <Button size="sm" disabled={!canSubmit} onClick={addCustomSource}>Add source</Button>
                         </div>
                       </div>
                     </div>
@@ -2223,7 +2223,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   options={[{ value: 'all', label: 'All roles' }, { value: 'admin', label: 'Admin' }, { value: 'viewer', label: 'Viewer' }, { value: 'custom', label: 'Custom' }]}
                   minWidth={120}
                 />
-                <Button onClick={() => { setNewEmail(''); setAccessMsg(''); setAddMemberOpen(true) }}>
+                <Button size="sm" onClick={() => { setNewEmail(''); setAccessMsg(''); setAddMemberOpen(true) }}>
                   + Add member
                 </Button>
               </div>
@@ -2245,8 +2245,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </div>
                     {accessMsg && !isOkMsg && (<p className={styles.note} style={{ margin: '-6px 0 12px', color: '#c0392b' }}>✕ {accessMsg}</p>)}
                     <div className={styles.dsModalActions}>
-                      <Button variant="secondary" onClick={() => setAddMemberOpen(false)}>Cancel</Button>
-                      <Button disabled={!newEmail.trim() || usersLoading} onClick={addUser}>
+                      <Button size="sm" variant="secondary" onClick={() => setAddMemberOpen(false)}>Cancel</Button>
+                      <Button size="sm" disabled={!newEmail.trim() || usersLoading} onClick={addUser}>
                         {usersLoading ? 'Adding…' : 'Add member'}
                       </Button>
                     </div>
@@ -2378,10 +2378,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           </div>
 
                           <div className={styles.editActions}>
-                            <Button onClick={() => saveEdit(u.email)} disabled={usersLoading}>
+                            <Button size="sm" onClick={() => saveEdit(u.email)} disabled={usersLoading}>
                               {usersLoading ? 'Saving…' : 'Save changes'}
                             </Button>
-                            <Button variant="secondary" onClick={() => setEditingUser(null)}>Cancel</Button>
+                            <Button size="sm" variant="secondary" onClick={() => setEditingUser(null)}>Cancel</Button>
                           </div>
                         </div>
                         </div>
@@ -2537,9 +2537,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         </button>
                       </div>
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <Button variant="secondary" onClick={() => setPreviewOpen(true)}>Preview email</Button>
-                        <Button variant="secondary" onClick={() => setEditReportOpen(true)}>Edit settings</Button>
-                        <Button icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>} onClick={() => { setSendAudience('test'); setRcMsg(''); setSendReportOpen(true) }}>
+                        <Button size="sm" variant="secondary" onClick={() => setPreviewOpen(true)}>Preview email</Button>
+                        <Button size="sm" variant="secondary" onClick={() => setEditReportOpen(true)}>Edit settings</Button>
+                        <Button size="sm" icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>} onClick={() => { setSendAudience('test'); setRcMsg(''); setSendReportOpen(true) }}>
                           Send Report
                         </Button>
                       </div>
@@ -2655,8 +2655,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           </div>
                           {rcMsg && <p className={styles.rcFeedback + ' ' + (rcMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{rcMsg}</p>}
                           <div className={styles.dsModalActions}>
-                            <Button variant="secondary" onClick={() => setEditReportOpen(false)}>Cancel</Button>
-                            <Button onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving…' : 'Save changes'}</Button>
+                            <Button size="sm" variant="secondary" onClick={() => setEditReportOpen(false)}>Cancel</Button>
+                            <Button size="sm" onClick={saveReportConfig} disabled={rcSaving}>{rcSaving ? 'Saving…' : 'Save changes'}</Button>
                           </div>
                         </div>
                       </div>
@@ -2701,8 +2701,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           )}
                           {rcMsg && <p className={styles.rcFeedback + ' ' + (rcMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{rcMsg}</p>}
                           <div className={styles.dsModalActions}>
-                            <Button variant="secondary" onClick={() => setSendReportOpen(false)}>Cancel</Button>
-                            <Button disabled={rcTesting || rcSending} onClick={() => sendAudience === 'test' ? sendTestReport() : sendReportNow()}>
+                            <Button size="sm" variant="secondary" onClick={() => setSendReportOpen(false)}>Cancel</Button>
+                            <Button size="sm" disabled={rcTesting || rcSending} onClick={() => sendAudience === 'test' ? sendTestReport() : sendReportNow()}>
                               {sendAudience === 'test' ? (rcTesting ? 'Sending…' : 'Send test') : (rcSending ? 'Sending…' : 'Send to ' + recipCount + ' recipient' + (recipCount === 1 ? '' : 's'))}
                             </Button>
                           </div>
@@ -2792,7 +2792,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           )}
                           <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 12, lineHeight: 1.5 }}>If no one is opted in, reports fall back to the admin account ({user?.email || 'admin'}) so sends never go nowhere.</p>
                           <div className={styles.dsModalActions}>
-                            <Button variant="secondary" onClick={() => setRecipientsOpen(false)}>Close</Button>
+                            <Button size="sm" variant="secondary" onClick={() => setRecipientsOpen(false)}>Close</Button>
                           </div>
                         </div>
                       </div>
@@ -2831,7 +2831,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     onChange={e => setNewTestChanValue(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTestChannel() } }}
                     style={{ fontFamily: 'monospace', fontSize: 12.5, flex: 1 }} />
-                  <Button variant="secondary" onClick={addTestChannel} disabled={!newTestChanName.trim() || !newTestChanValue.trim()}>+ Add</Button>
+                  <Button size="sm" variant="secondary" onClick={addTestChannel} disabled={!newTestChanName.trim() || !newTestChanValue.trim()}>+ Add</Button>
                 </div>
           <label className={styles.fieldLabel} style={{ marginTop: 14 }}>Team channel &middot; the whole team reads it</label>
           <div className={styles.inputGroup}>
@@ -2888,7 +2888,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             <PinInput value={ceoPinNew2} onChange={setCeoPinNew2} placeholder="Repeat the new PIN" className={styles.input} inputStyle={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
-            <Button variant="secondary" onClick={saveCeoPin} disabled={ceoPinBusy || ceoPinNew.length < 6}>
+            <Button size="sm" variant="secondary" onClick={saveCeoPin} disabled={ceoPinBusy || ceoPinNew.length < 6}>
               {ceoPinBusy ? 'Saving\u2026' : (ceoPinInfo && ceoPinInfo.set ? 'Change PIN' : 'Set PIN')}
             </Button>
             {ceoPinMsg && <span className={styles.rcFeedback + ' ' + (ceoPinMsg.charAt(0) === 'x' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{ceoPinMsg}</span>}
@@ -2914,7 +2914,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </label>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Button onClick={saveSlackConfig} disabled={slackCfgSaving}>{slackCfgSaving ? 'Saving…' : 'Save'}</Button>
+                  <Button size="sm" onClick={saveSlackConfig} disabled={slackCfgSaving}>{slackCfgSaving ? 'Saving…' : 'Save'}</Button>
                   {slackTestChannels.length > 1 && (
                     <Dropdown
                       minWidth={160}
@@ -2923,7 +2923,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       onChange={setSlackTestPick}
                     />
                   )}
-                  <Button variant="secondary" onClick={sendSlackTest} disabled={slackTesting || (!slackTestChannels.length && !slackWebhookTest.trim())}>{slackTesting ? 'Sending…' : 'Send test message'}</Button>
+                  <Button size="sm" variant="secondary" onClick={sendSlackTest} disabled={slackTesting || (!slackTestChannels.length && !slackWebhookTest.trim())}>{slackTesting ? 'Sending…' : 'Send test message'}</Button>
                   {slackCfgMsg && <span className={styles.rcFeedback + ' ' + (slackCfgMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{slackCfgMsg}</span>}
                 </div>
               </div>
@@ -2937,7 +2937,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <div><span style={{ color: '#94A3B8' }}>Schedule:</span> <strong>Daily, 9:00 AM IST</strong></div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <Button onClick={sendUnassignedNow} disabled={unassignedSending}>{unassignedSending ? 'Sending…' : 'Send now'}</Button>
+                  <Button size="sm" onClick={sendUnassignedNow} disabled={unassignedSending}>{unassignedSending ? 'Sending…' : 'Send now'}</Button>
                   {unassignedMsg && <span className={styles.rcFeedback + ' ' + (unassignedMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{unassignedMsg}</span>}
                 </div>
               </div>
@@ -3242,7 +3242,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       {(() => { try { return JSON.stringify(JSON.parse(askaiDetail.params || '{}'), null, 2) } catch { return askaiDetail.params || '{}' } })()}
                     </pre>
                     <div className={styles.dsModalActions}>
-                      <Button variant="secondary" onClick={() => setAskaiDetail(null)}>Close</Button>
+                      <Button size="sm" variant="secondary" onClick={() => setAskaiDetail(null)}>Close</Button>
                     </div>
                   </div>
                 </div>
