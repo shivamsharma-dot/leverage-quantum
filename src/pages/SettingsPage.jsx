@@ -135,13 +135,13 @@ async function getRecentCommits(limit = 15) {
 }
 
 const getRoleMeta = (role) => {
-  if (role === 'admin') return { label: 'Admin', color: '#1F3C84', bg: '#E8EFF9' }
-  if (role === 'viewer') return { label: 'Viewer', color: '#1F3C84', bg: '#E3F5FD' }
+  if (role === 'admin') return { label: 'Admin', color: 'var(--brand-ink)', bg: '#E8EFF9' }
+  if (role === 'viewer') return { label: 'Viewer', color: 'var(--brand-ink)', bg: '#E3F5FD' }
   // viewer:home,meta_ads,... or custom:... => Custom badge
   if (typeof role === 'string' && (role.startsWith('viewer:') || role.startsWith('custom:'))) {
-    return { label: 'Custom', color: '#1F3C84', bg: '#E4F8F9' }
+    return { label: 'Custom', color: 'var(--brand-ink)', bg: '#E4F8F9' }
   }
-  return { label: 'Viewer', color: '#1F3C84', bg: '#E3F5FD' }
+  return { label: 'Viewer', color: 'var(--brand-ink)', bg: '#E3F5FD' }
 }
 
 const DASHBOARDS = PAGE_LIST.filter(p => p.id !== 'settings')
@@ -357,8 +357,8 @@ const RP_CAMPS = [
   { name: 'Remarketing_13July26_Sep26Intake', status: 'PAUSED', spend: 62000, ctr: 0.88, freq: 1.6, leads: 22 },
 ]
 const RP_AI_SAMPLE = `
-<div style="padding:10px 14px;border-radius:8px;background:#E9F8EF;border-left:3px solid #4CAE6F;color:#1F3C84;margin-bottom:8px;font-size:13px;line-height:1.6">Biggest win: PMX_FB_Ger_NAS_10June2026_Ad2 is delivering <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">64 leads</strong> at a CTR of 1.12% — your most efficient campaign this period.</div>
-<div style="padding:10px 14px;border-radius:8px;background:#E8EFF9;border-left:3px solid #1F3C84;color:#1F3C84;margin-bottom:8px;font-size:13px;line-height:1.6">Biggest risk: PMX_FB_UK_LeadGen_NAS_11_May26-Ad4 is showing frequency <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">4.2x</strong> with CTR down to 0.61% — classic fatigue signal.</div>
+<div style="padding:10px 14px;border-radius:8px;background:#E9F8EF;border-left:3px solid #4CAE6F;color:var(--brand-ink);margin-bottom:8px;font-size:13px;line-height:1.6">Biggest win: PMX_FB_Ger_NAS_10June2026_Ad2 is delivering <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">64 leads</strong> at a CTR of 1.12% — your most efficient campaign this period.</div>
+<div style="padding:10px 14px;border-radius:8px;background:#E8EFF9;border-left:3px solid #1F3C84;color:var(--brand-ink);margin-bottom:8px;font-size:13px;line-height:1.6">Biggest risk: PMX_FB_UK_LeadGen_NAS_11_May26-Ad4 is showing frequency <strong style="background:#FEF9C3;padding:1px 3px;border-radius:3px">4.2x</strong> with CTR down to 0.61% — classic fatigue signal.</div>
 <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bg3)">CAMPAIGN FLAGS</div>
 <div style="padding:10px 14px;border-radius:8px;background:#EFF6FF;border-left:3px solid #3B82F6;color:#1E3A8A;margin-bottom:8px;font-size:13px;line-height:1.6">PMX_FB_UK_LeadGen_NAS_11_May26-Ad4: frequency above 3.5x threshold, CTR trending down — refresh creative.</div>
 <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--bg3)">TOP 3 ACTIONS</div>
@@ -1836,7 +1836,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <button type="button" className={styles.bqClear} onClick={() => { setBqRes(null); setBqEst(null); setBqErr(''); setBqWarn(''); setBqArmed('') }}>Clear</button>
                 )}
               </div>
-              {bqWarn && <p className={styles.note} style={{ color: '#1F3C84' }}>{bqWarn}</p>}
+              {bqWarn && <p className={styles.note} style={{ color: 'var(--brand-ink)' }}>{bqWarn}</p>}
               {bqErr && <p className={styles.note} style={{ color: '#c0392b' }}>{'\u2715'} {bqErr}</p>}
               {bqEst && !bqRes && !bqWarn && (
                 <p className={styles.note}>Dry run only: this query would scan {bqBytes(bqEst.totalBytesProcessed)} ({bqCost(bqEst.totalBytesProcessed)}). Nothing was billed.</p>
@@ -1920,7 +1920,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           options={Array.from({ length: 24 }, (_, h) => ({ value: h, label: (h === 0 ? '12 AM' : h < 12 ? h + ' AM' : h === 12 ? '12 PM' : (h - 12) + ' PM') + ' IST' }))}
                         />
                       )}
-                      {scheduleMsg && <span style={{ fontSize: 11, fontWeight: 700, color: scheduleMsg.type === 'err' ? '#1F3C84' : '#15803D', whiteSpace: 'nowrap' }}>{scheduleMsg.type === 'err' ? '✕ ' : '✓ '}{scheduleMsg.text}</span>}
+                      {scheduleMsg && <span style={{ fontSize: 11, fontWeight: 700, color: scheduleMsg.type === 'err' ? 'var(--brand-ink)' : '#15803D', whiteSpace: 'nowrap' }}>{scheduleMsg.type === 'err' ? '✕ ' : '✓ '}{scheduleMsg.text}</span>}
                     </div>
                   </div>
                   {sourceHealth.length > 0 && (
@@ -2007,8 +2007,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 {sheetTest[s.editKey].monthCounts && <span style={{ fontWeight: 500, color: '#4B7A5A' }}> · {sheetTest[s.editKey].minDate && sheetTest[s.editKey].minDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} – {sheetTest[s.editKey].maxDate && sheetTest[s.editKey].maxDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>}
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                                <button type="button" onClick={() => setTestDetailsOpen(prev => ({ ...prev, [s.editKey]: !prev[s.editKey] }))} style={{ border: 'none', background: 'transparent', color: '#1F3C84', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{testDetailsOpen[s.editKey] ? 'Hide details' : 'Show details'}</button>
-                                <button type="button" onClick={() => exportDiagnostics(s)} style={{ border: 'none', background: 'transparent', color: '#1F3C84', fontSize: 11, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>Export</button>
+                                <button type="button" onClick={() => setTestDetailsOpen(prev => ({ ...prev, [s.editKey]: !prev[s.editKey] }))} style={{ border: 'none', background: 'transparent', color: 'var(--brand-ink)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{testDetailsOpen[s.editKey] ? 'Hide details' : 'Show details'}</button>
+                                <button type="button" onClick={() => exportDiagnostics(s)} style={{ border: 'none', background: 'transparent', color: 'var(--brand-ink)', fontSize: 11, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>Export</button>
                               </div>
                             </div>
                             {sheetTest[s.editKey].drift && (
@@ -2041,7 +2041,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Columns</div>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sheetTest[s.editKey].monthCounts ? 12 : 0 }}>
                                   {sheetTest[s.editKey].columns.map((c, i) => (
-                                    <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #C7D7F5', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
+                                    <span key={i} style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--brand-ink)', background: '#E8EFF9', border: '0.5px solid #C7D7F5', borderRadius: 5, padding: '2px 7px' }}>{c || '(blank)'}</span>
                                   ))}
                                 </div>
                                 {sheetTest[s.editKey].monthCounts && (
@@ -2149,9 +2149,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     {Object.entries(affiliateSpend).sort((a, b) => b[0].localeCompare(a[0])).map(([ym, amount]) => (
                       <div key={ym} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--bg3)', border: '0.5px solid var(--border)' }}>
                         <div style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: 'var(--text)' }}>{new Date(ym + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
-                        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1F3C84' }}>&#8377;{Number(amount).toLocaleString('en-IN')}</div>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--brand-ink)' }}>&#8377;{Number(amount).toLocaleString('en-IN')}</div>
                         <button type="button" onClick={() => { setAffSpendMonth(ym); setAffSpendAmount(String(amount)) }}
-                          style={{ border: 'none', background: 'transparent', color: '#1F3C84', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                          style={{ border: 'none', background: 'transparent', color: 'var(--brand-ink)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
                         <button type="button" onClick={() => removeAffiliateSpendMonth(ym)}
                           style={{ border: 'none', background: 'transparent', color: 'var(--text-3)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Remove</button>
                       </div>
@@ -2344,7 +2344,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             {(u.job_title||u.department)&&<span style={{fontSize:10.5,color:'var(--text-3)',fontWeight:500,marginTop:1}}>{[u.job_title,u.department].filter(Boolean).join(' · ')}</span>}
                           </div>
                         </div>
-                        <div><span className={styles.roleBadge} style={{background:rm.bg||'#E8EFF9',color:rm.color||'#1F3C84',borderRadius:20,padding:'3px 10px',fontSize:11,fontWeight:700}}>{rm.label}</span></div>
+                        <div><span className={styles.roleBadge} style={{background:rm.bg||'#E8EFF9',color:rm.color||'var(--brand-ink)',borderRadius:20,padding:'3px 10px',fontSize:11,fontWeight:700}}>{rm.label}</span></div>
                         <div className={styles.uAccess}>{accessLabel(u.role)}</div>
                         <div>
                           <label className={styles.reportsToggle} title="Receive daily report">
@@ -3160,7 +3160,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <Button size="sm" onClick={saveAskaiBudget} disabled={askaiBudgetSaving}>
                         {askaiBudgetSaving ? 'Saving…' : 'Save'}
                       </Button>
-                      {askaiBudgetMsg && <span style={{ fontSize: 11, fontWeight: 700, color: askaiBudgetMsg.type === 'err' ? '#1F3C84' : '#15803D', whiteSpace: 'nowrap' }}>{askaiBudgetMsg.type === 'err' ? '✕ ' : '✓ '}{askaiBudgetMsg.text}</span>}
+                      {askaiBudgetMsg && <span style={{ fontSize: 11, fontWeight: 700, color: askaiBudgetMsg.type === 'err' ? 'var(--brand-ink)' : '#15803D', whiteSpace: 'nowrap' }}>{askaiBudgetMsg.type === 'err' ? '✕ ' : '✓ '}{askaiBudgetMsg.text}</span>}
                     </div>
                   </div>
                   {budgetNum > 0 && (
@@ -3211,11 +3211,11 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     {bizSaving ? 'Saving…' : 'Save all'}
                   </Button>
                 </div>
-                {bizMsg && <div style={{ marginTop: 8 }}><span style={{ fontSize: 11, fontWeight: 700, color: bizMsg.type === 'err' ? '#1F3C84' : '#15803D' }}>{bizMsg.type === 'err' ? '✕ ' : '✓ '}{bizMsg.text}</span></div>}
+                {bizMsg && <div style={{ marginTop: 8 }}><span style={{ fontSize: 11, fontWeight: 700, color: bizMsg.type === 'err' ? 'var(--brand-ink)' : '#15803D' }}>{bizMsg.type === 'err' ? '✕ ' : '✓ '}{bizMsg.text}</span></div>}
 
                 {BIZ_GROUPS.map(group => (
                   <div key={group.title} style={{ marginTop: 18 }}>
-                    <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1F3C84', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>{group.title}</div>
+                    <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--brand-ink)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>{group.title}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                       {group.fields.map(f => (
                         <div key={f.key}>
@@ -3228,7 +3228,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             <div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: (bizFields[f.key] || []).length ? 7 : 0 }}>
                                 {(bizFields[f.key] || []).map((tag, i) => (
-                                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#1F3C84', background: '#E8EFF9', border: '0.5px solid #D6E2F5', borderRadius: 999, padding: '4px 6px 4px 11px' }}>
+                                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--brand-ink)', background: '#E8EFF9', border: '0.5px solid #D6E2F5', borderRadius: 999, padding: '4px 6px 4px 11px' }}>
                                     {tag}
                                     <span onClick={() => removeBizTag(f.key, i)} style={{ cursor: 'pointer', color: '#1C9FD4', fontWeight: 800, lineHeight: 1, padding: '0 4px' }}>×</span>
                                   </span>
@@ -3284,7 +3284,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 <td className={styles.alTd}>{c.row_count == null ? '—' : c.row_count}</td>
                                 <td className={styles.alTd}>{c.latency_ms != null ? `${c.latency_ms}ms` : '—'}</td>
                                 <td className={styles.alTd}>
-                                  <span className={styles.alTag} style={{ background: c.had_error ? '#E8EFF9' : '#EAF7EE', color: c.had_error ? '#1F3C84' : '#4CAE6F' }}>{c.had_error ? 'Error' : 'OK'}</span>
+                                  <span className={styles.alTag} style={{ background: c.had_error ? '#E8EFF9' : '#EAF7EE', color: c.had_error ? 'var(--brand-ink)' : '#4CAE6F' }}>{c.had_error ? 'Error' : 'OK'}</span>
                                 </td>
                                 <td className={styles.alTd}>{dateStr}{timeStr ? ` · ${timeStr}` : ''}</td>
                                 <td className={styles.alTd}>
@@ -3339,7 +3339,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <div style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:2}}>Global Page Visibility</div>
                   <div style={{fontSize:12,color:'var(--text-3)',lineHeight:1.5}}>Unified with per-user access in the <strong>User Access</strong> tab — manage global and individual page access together.</div>
                 </div>
-                <button onClick={()=>setActiveTab('users')} style={{padding:'7px 14px',borderRadius:8,background:'var(--bg3)',border:'0.5px solid var(--border)',fontSize:12,fontWeight:600,color:'#1F3C84',cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                <button onClick={()=>setActiveTab('users')} style={{padding:'7px 14px',borderRadius:8,background:'var(--bg3)',border:'0.5px solid var(--border)',fontSize:12,fontWeight:600,color:'var(--brand-ink)',cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
                   User Access →
                 </button>
               </div>
@@ -3357,11 +3357,11 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     return (
                       <div key={id} onClick={() => pickDesignStyle('button', id)} style={{
                         cursor: 'pointer', borderRadius: 12, padding: 12, border: `1.5px solid ${active ? '#1F3C84' : 'var(--border)'}`,
-                        background: active ? '#F0FBFF' : 'var(--card)', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
+                        background: active ? 'var(--sel-bg)' : 'var(--card)', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
                         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center',
                       }}>
                         <Button previewVariantId={id} size="sm">Preview</Button>
-                        <div style={{ fontSize: 10.5, fontWeight: 600, color: active ? '#1F3C84' : 'var(--text-2)', textAlign: 'center', lineHeight: 1.3 }}>{id}. {name}</div>
+                        <div style={{ fontSize: 10.5, fontWeight: 600, color: active ? 'var(--brand-ink)' : 'var(--text-2)', textAlign: 'center', lineHeight: 1.3 }}>{id}. {name}</div>
                       </div>
                     )
                   })}
@@ -3378,13 +3378,13 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     return (
                       <div key={id} onClick={() => pickDesignStyle('kpi', id)} style={{
                         cursor: 'pointer', borderRadius: 12, padding: 10, border: `1.5px solid ${active ? '#1F3C84' : 'var(--border)'}`,
-                        background: active ? '#F0FBFF' : 'var(--card)', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
+                        background: active ? 'var(--sel-bg)' : 'var(--card)', boxShadow: active ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
                         display: 'flex', flexDirection: 'column', gap: 8,
                       }}>
                         <div style={{ transform: 'scale(0.82)', transformOrigin: 'top left', width: '122%', pointerEvents: 'none' }}>
                           {renderKpiVariant(id, { label: 'Total Leads', value: '84,848', sub: 'generated', deltaText: '▼ 12.4%', isGood: false, icon: null, accent: '#1F3C84' })}
                         </div>
-                        <div style={{ fontSize: 10.5, fontWeight: 600, color: active ? '#1F3C84' : 'var(--text-2)', textAlign: 'center' }}>{id}. {name}</div>
+                        <div style={{ fontSize: 10.5, fontWeight: 600, color: active ? 'var(--brand-ink)' : 'var(--text-2)', textAlign: 'center' }}>{id}. {name}</div>
                       </div>
                     )
                   })}
@@ -3403,7 +3403,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         style={{
                           borderRadius:12,border:`1.5px solid ${isActive ? '#1F3C84' : 'var(--border)'}`,
                           padding:'14px 16px',cursor:'pointer',transition:'all .15s',
-                          background: isActive ? '#F0FBFF' : 'var(--card)',
+                          background: isActive ? 'var(--sel-bg)' : 'var(--card)',
                           boxShadow: isActive ? '0 0 0 3px rgba(31,60,132,0.12)' : '0 1px 3px rgba(15,23,42,0.04)',
                           position:'relative',
                         }}>
@@ -3473,7 +3473,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const isActive = sidebarMode === mode.id
                     return (
                       <div key={mode.id} onClick={() => applySidebarMode(mode.id)}
-                        style={{flex:'1 1 150px',padding:'14px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive ? '#1F3C84' : 'var(--border)'}`,background:isActive?'#F0FBFF':'var(--card)',boxShadow:isActive?'0 0 0 3px rgba(31,60,132,0.1)':'0 1px 3px rgba(15,23,42,0.04)',position:'relative'}}>
+                        style={{flex:'1 1 150px',padding:'14px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive ? '#1F3C84' : 'var(--border)'}`,background:isActive?'var(--sel-bg)':'var(--card)',boxShadow:isActive?'0 0 0 3px rgba(31,60,132,0.1)':'0 1px 3px rgba(15,23,42,0.04)',position:'relative'}}>
                         {isActive && <div style={{position:'absolute',top:10,right:10,width:18,height:18,borderRadius:9,background:'#1F3C84',display:'flex',alignItems:'center',justifyContent:'center'}}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>}
                         <div style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:3}}>{mode.label}</div>
                         <div style={{fontSize:11.5,color:'var(--text-3)'}}>{mode.desc}</div>
@@ -3492,12 +3492,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const isActive = numberFormat === fmt.id
                     return (
                       <div key={fmt.id} onClick={() => applyNumberFormat(fmt.id)}
-                        style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1F3C84':'var(--border)'}`,background:isActive?'#F0FBFF':'var(--card)'}}>
+                        style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 16px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1F3C84':'var(--border)'}`,background:isActive?'var(--sel-bg)':'var(--card)'}}>
                         <div>
                           <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:2}}>{fmt.label}</div>
                           <div style={{fontSize:11.5,color:'var(--text-3)'}}>{fmt.desc}</div>
                         </div>
-                        <div style={{fontFamily:'monospace',fontSize:12,color:isActive?'#1F3C84':'var(--text-3)',fontWeight:600,textAlign:'right',flexShrink:0,marginLeft:12}}>{fmt.example}</div>
+                        <div style={{fontFamily:'monospace',fontSize:12,color:isActive?'var(--brand-ink)':'var(--text-3)',fontWeight:600,textAlign:'right',flexShrink:0,marginLeft:12}}>{fmt.example}</div>
                       </div>
                     )
                   })}
@@ -3513,7 +3513,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     const isActive = defaultDateRange === range.id
                     return (
                       <div key={range.id} onClick={() => applyDefaultDate(range.id)}
-                        style={{padding:'12px 14px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1F3C84':'var(--border)'}`,background:isActive?'#F0FBFF':'var(--card)',position:'relative'}}>
+                        style={{padding:'12px 14px',borderRadius:10,cursor:'pointer',transition:'all .15s',border:`1.5px solid ${isActive?'#1F3C84':'var(--border)'}`,background:isActive?'var(--sel-bg)':'var(--card)',position:'relative'}}>
                         {isActive && <div style={{position:'absolute',top:10,right:10,width:16,height:16,borderRadius:8,background:'#1F3C84',display:'flex',alignItems:'center',justifyContent:'center'}}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg></div>}
                         <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:3}}>{range.label}</div>
                         <div style={{fontSize:11.5,color:'var(--text-3)'}}>{range.desc}</div>
@@ -3533,7 +3533,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     return (
                       <div key={den.id} onClick={() => applyDensity(den.id)}
                         style={{flex:'1 1 140px',cursor:'pointer',borderRadius:10,transition:'all .15s',overflow:'hidden',border:`1.5px solid ${isActive?'#1F3C84':'var(--border)'}`,boxShadow:isActive?'0 0 0 3px rgba(31,60,132,0.1)':'none'}}>
-                        <div style={{padding:'10px 12px 6px',background:isActive?'#F0FBFF':'var(--bg3)'}}>
+                        <div style={{padding:'10px 12px 6px',background:isActive?'var(--sel-bg)':'var(--bg3)'}}>
                           {[1,2,3].map(row => (
                             <div key={row} style={{display:'flex',gap:6,padding:`${den.rowH} 0`,borderBottom:'0.5px solid var(--border)'}}>
                               <div style={{width:'40%',height:8,borderRadius:3,background:isActive?'#BAE3F9':'var(--border)'}}/>
@@ -3543,7 +3543,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           ))}
                         </div>
                         <div style={{padding:'10px 12px',borderTop:`1.5px solid ${isActive?'#1F3C84':'var(--border)'}`,background:'var(--card)'}}>
-                          <div style={{fontSize:12,fontWeight:700,color:isActive?'#1F3C84':'var(--text)'}}>{den.label}</div>
+                          <div style={{fontSize:12,fontWeight:700,color:isActive?'var(--brand-ink)':'var(--text)'}}>{den.label}</div>
                           <div style={{fontSize:11,color:'var(--text-3)',marginTop:2}}>{den.desc}</div>
                         </div>
                       </div>

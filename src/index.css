@@ -229,6 +229,8 @@ input:focus, textarea:focus {
   --input-border: #2D3748;
   --sb-thumb:     rgba(226,232,240,0.18);
   --surface-hover: rgba(226,232,240,0.06);
+  --brand-ink:     #1C9FD4;
+  --sel-bg:        rgba(28,159,212,0.14);
 }
 
 [data-theme="navy"] {
@@ -247,6 +249,8 @@ input:focus, textarea:focus {
   --input-border: #1E2D6B;
   --sb-thumb:     rgba(232,239,249,0.20);
   --surface-hover: rgba(232,239,249,0.07);
+  --brand-ink:     #1C9FD4;
+  --sel-bg:        rgba(28,159,212,0.18);
 }
 
 [data-theme="stone"] {
@@ -265,6 +269,8 @@ input:focus, textarea:focus {
   --input-border: #E0DDD8;
   --sb-thumb:     rgba(28,25,23,0.18);
   --surface-hover: rgba(28,25,23,0.045);
+  --brand-ink:     #1F3C84;
+  --sel-bg:        #EDF5F8;
 }
 
 [data-theme="light"] {
@@ -282,7 +288,10 @@ input:focus, textarea:focus {
   --input-bg:     #F8FAFC;
   --input-border: #E2E8F0;
   --sb-thumb:     rgba(15,23,42,0.15);
-  --surface-hover: rgba(15,23,42,0.04);
+  --surface-hover: rgba(15,23,42,0.04);  --brand-ink:     #1F3C84;
+  --sel-bg:        #F0FBFF;
+  --brand-ink:     #1F3C84;
+  --sel-bg:        #F0FBFF;
 }
 
 /* ── Table density ──────────────────────────────────────────────────────── */

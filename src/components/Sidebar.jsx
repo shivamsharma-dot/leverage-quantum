@@ -588,7 +588,7 @@ export default function Sidebar() {
           <svg width="20" height="20" viewBox={BRAND_LOGO_VIEWBOX} fill="none">{BRAND_LOGO_BARS.map((b,i)=><rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} rx="1.5" fill={b.color}/>)}</svg>
           <span style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:'#1C9FD4',letterSpacing:'2px',textTransform:'uppercase'}}>QUANTUM</span>
         </div>
-        <button onClick={()=>setMobileOpen(o=>!o)} style={{background:'none',border:'none',cursor:'pointer',padding:6,color:'#374151',display:'flex',alignItems:'center'}}>
+        <button onClick={()=>setMobileOpen(o=>!o)} style={{background:'none',border:'none',cursor:'pointer',padding:6,color:'var(--text2)',display:'flex',alignItems:'center'}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
       </div>
@@ -597,10 +597,10 @@ export default function Sidebar() {
           <div style={{width:240,height:'100%',background:'var(--sidebar-bg)',borderRight:'0.5px solid var(--card-border)',overflowY:'auto',paddingTop:'calc(60px + env(safe-area-inset-top))'}} onClick={e=>e.stopPropagation()}>
             {NAV.map(group=>(group.items.filter(item => groupVisible(item)).length===0?null:(
               <div key={group.label} style={{marginBottom:8,padding:'0 10px'}}>
-                <div style={{fontSize:10,fontWeight:600,color:'#9CA3AF',letterSpacing:'0.08em',textTransform:'uppercase',padding:'10px 6px 4px'}}>{group.label}</div>
+                <div style={{fontSize:10,fontWeight:600,color:'var(--text3)',letterSpacing:'0.08em',textTransform:'uppercase',padding:'10px 6px 4px'}}>{group.label}</div>
                 {group.items.filter(item => groupVisible(item)).map(item=>(
                   <a key={item.to} href={item.to} onClick={()=>setMobileOpen(false)} onTouchStart={()=>prefetchRoute(item.defaultTo || item.to)}
-                    style={{display:'flex',alignItems:'center',gap:9,padding:'9px 10px',borderRadius:9,textDecoration:'none',color:'#374151',fontSize:13,fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                    style={{display:'flex',alignItems:'center',gap:9,padding:'9px 10px',borderRadius:9,textDecoration:'none',color:'var(--text2)',fontSize:13,fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
                     {item.icon}{item.label}
                   </a>
                 ))}
@@ -617,8 +617,8 @@ export default function Sidebar() {
           flexShrink: 0, borderBottom: '0.5px solid #F3F4F6', width:'100%'
         }}>
           <div style={{
-            width:44, height:44, borderRadius:11, background:'#fff',
-            border:'0.5px solid #EEF1F6', boxShadow:'0 1px 3px rgba(15,23,42,0.06)',
+            width:44, height:44, borderRadius:11, background:'var(--card)',
+            border:'0.5px solid var(--card-border)', boxShadow:'0 1px 3px rgba(15,23,42,0.06)',
             display:'flex', alignItems:'center', justifyContent:'center'
           }}>
             <svg width="24" height="24" viewBox={BRAND_LOGO_VIEWBOX} fill="none">
