@@ -3230,7 +3230,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                 {(bizFields[f.key] || []).map((tag, i) => (
                                   <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--navy-ink)', background: 'var(--navy-tint)', border: '0.5px solid var(--navy-line)', borderRadius: 999, padding: '4px 6px 4px 11px' }}>
                                     {tag}
-                                    <span onClick={() => removeBizTag(f.key, i)} style={{ cursor: 'pointer', color: '#1C9FD4', fontWeight: 800, lineHeight: 1, padding: '0 4px' }}>×</span>
+                                    <button type="button" onClick={() => removeBizTag(f.key, i)} aria-label={`Remove ${tag}`} title={`Remove ${tag}`} style={{ cursor: 'pointer', color: 'var(--navy-ink)', fontWeight: 800, lineHeight: 1, padding: '0 4px', background: 'none', border: 'none', font: 'inherit' }}>×</button>
                                   </span>
                                 ))}
                               </div>
