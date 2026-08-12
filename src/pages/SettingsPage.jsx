@@ -2332,7 +2332,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div className={`${styles.uRow} ${isEditing ? styles.uRowEdit : ''}`}>
                         <div className={styles.uUser}>
                           <div className={styles.userAvatar} style={{
-                            background:`linear-gradient(135deg,${['#1F3C84','#1F3C84','#4CAE6F','#1F3C84','#8B5CF6'][((u.email||'').charCodeAt(0)||65)%5]},${['#1F3C84','#1F3C84','#4CAE6F','#1F3C84','#1F3C84'][((u.email||'').charCodeAt(1)||66)%5]})`,
+                            background:`linear-gradient(135deg,${['#1F3C84','#1F3C84','#4CAE6F','#1F3C84','#29B9C3'][((u.email||'').charCodeAt(0)||65)%5]},${['#1F3C84','#1F3C84','#4CAE6F','#1F3C84','#1F3C84'][((u.email||'').charCodeAt(1)||66)%5]})`,
                             width:36,height:36,borderRadius:10,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
                             color:'#fff',fontSize:12,fontWeight:700,letterSpacing:'0.5px',boxShadow:'0 2px 8px rgba(15,23,42,0.18)',
                           }}>
