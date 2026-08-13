@@ -551,6 +551,25 @@ jobs:
               raise SystemExit('Post-sync row count mismatch in %s: table holds %s, expected %d.'
                                % (AGG_TABLE, after_agg, len(agg_records)))
 
+          # Log this sync's own BigQuery job into bigquery_jobs, so Settings >
+          # Data > BigQuery Usage reflects every real job Quantum triggers --
+          # not just the ones fired through lib/bigquery.mjs (Leverage Careers /
+          # the Settings Console). Best-effort: a failure here must never fail
+          # the sync itself, since the real cache write already succeeded.
+          try:
+              job_log = json.dumps({
+                  'job_id': job_id, 'project_id': PROJECT, 'location': job_loc,
+                  'mode': 'cron_sync', 'dashboard_id': None, 'user_email': None,
+                  'total_bytes_processed': int(res.get('totalBytesProcessed') or 0),
+                  'total_rows': total_rows, 'cache_hit': bool(res.get('cacheHit')),
+                  'latency_ms': None,
+              }).encode('utf-8')
+              req = sb(SB_URL + '/rest/v1/bigquery_jobs', 'POST', job_log, {'Prefer': 'return=minimal'})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  r.read()
+          except Exception as e:
+              print('bigquery_jobs log failed (non-fatal):', repr(e))
+
           print('Sync complete.')
           PYEOF
 

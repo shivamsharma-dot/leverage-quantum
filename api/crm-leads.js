@@ -584,7 +584,9 @@ async function handleBigQuery(req, res, me) {
       // same cost profile the pre-existing 'leverage_careers' saved query already
       // had. 20GB cap leaves headroom as the table grows before this needs revisiting.
       const { since, until } = req.query || {}
-      const out = await bq.bigQuerySelect(careersLeadsSql(since, until), { maxBytes: 20_000_000_000 })
+      const out = await bq.bigQuerySelect(careersLeadsSql(since, until), {
+        maxBytes: 20_000_000_000, mode: 'careers_leads', dashboardId: 'leverage_careers', userEmail: me.email,
+      })
       return res.status(200).json({ configured: true, rows: out.rows || [], totalBytesProcessed: out.totalBytesProcessed })
     }
     if (mode === 'datasets') {
@@ -600,6 +602,7 @@ async function handleBigQuery(req, res, me) {
         // to BQ_BYTES_CEILING and applies that ceiling when it is absent, so a
         // hand-crafted ?maxBytes can no longer raise the billing ceiling.
         maxBytes: req.query && req.query.maxBytes,
+        mode: 'query', dashboardId: 'settings', userEmail: me.email,
       })
       return res.status(200).json({ configured: true, ...out })
     }

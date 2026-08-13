@@ -115,6 +115,22 @@ async function getAskAiUsage(days = 30) {
   } catch { return [] }
 }
 
+// Every real BigQuery job Quantum has triggered -- written server-side (service-role
+// key) by lib/bigquery.mjs's bigQuerySelect() and, for the separate cron path, by
+// .github/workflows/overall-bq-sync.yml itself. Read here via the anon key, same
+// pattern as ask_ai_usage above. limit=2000 (not 200) since a job row is cheap and
+// "whole history" is the explicit point of this table.
+async function getBigQueryJobs(limit = 2000) {
+  try {
+    const res = await fetch(
+      `${RL_SB_URL}/rest/v1/bigquery_jobs?select=*&order=created_at.desc&limit=${limit}`,
+      { headers: { apikey: RL_SB_KEY, Authorization: `Bearer ${RL_SB_KEY}` } }
+    )
+    if (!res.ok) return []
+    return await res.json()
+  } catch { return [] }
+}
+
 // GitHub's public commit API -- no token needed since this repo is public (60 req/hr per IP
 // is plenty for an occasional Settings-tab load). Doubles as a "what's new" changelog and,
 // sitting right above Activity Log, an easy eyeball-correlation between a deploy and a
@@ -715,6 +731,22 @@ export default function SettingsPage() {
     const _shRef = useRef(false)
     useEffect(() => {
       if (activeTab === 'data' && userIsAdmin && !_shRef.current) { _shRef.current = true; getSourceHealth().then(setSourceHealth) }
+    }, [activeTab, userIsAdmin])
+
+    // BigQuery Usage -- every real job Quantum has triggered (Leverage Careers page,
+    // the Settings Console above, and the overall_bq_daily cron), with a job id.
+    const _bqJobsRef = useRef(false)
+    const [bqJobs, setBqJobs] = useState([])
+    const [bqJobsLoading, setBqJobsLoading] = useState(false)
+    const [bqJobDetail, setBqJobDetail] = useState(null)
+    const [bqJobFilter, setBqJobFilter] = useState('all')
+    const loadBqJobs = async () => {
+      setBqJobsLoading(true)
+      setBqJobs(await getBigQueryJobs(2000))
+      setBqJobsLoading(false)
+    }
+    useEffect(() => {
+      if (activeTab === 'data' && userIsAdmin && !_bqJobsRef.current) { _bqJobsRef.current = true; loadBqJobs() }
     }, [activeTab, userIsAdmin])
 
     const [recentCommits, setRecentCommits] = useState([])
@@ -1880,6 +1912,159 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 </>
               )}
             </div>
+
+            <div className={styles.card}>
+              <div className={styles.activityHeader}>
+                <div>
+                  <h3 className={styles.cardTitle}>BigQuery Usage</h3>
+                  <p className={styles.cardDesc} style={{ margin: 0 }}>Every real BigQuery job Quantum has triggered — the Leverage Careers page, a Run in the console above, and the Overall cache's own cron sync. A dry run (Estimate, or the connection check) never appears here since it creates no billable job.</p>
+                </div>
+                <Button size="sm" variant="secondary" onClick={loadBqJobs}>{bqJobsLoading ? 'Loading…' : '↻ Refresh'}</Button>
+              </div>
+
+              {(() => {
+                const todayStr = new Date().toISOString().slice(0, 10)
+                const monthStr = todayStr.slice(0, 7)
+                const byDay = {}
+                bqJobs.forEach(j => {
+                  const day = (j.created_at || '').slice(0, 10)
+                  if (!byDay[day]) byDay[day] = { day, jobs: 0, bytes: 0 }
+                  byDay[day].jobs += 1
+                  byDay[day].bytes += Number(j.total_bytes_processed || 0)
+                })
+                const bqDaily = Object.values(byDay).sort((a, b) => b.day.localeCompare(a.day))
+                const todayRow = byDay[todayStr] || { jobs: 0, bytes: 0 }
+                const monthDays = bqDaily.filter(d => d.day.startsWith(monthStr))
+                const monthJobs = monthDays.reduce((s, d) => s + d.jobs, 0)
+                const monthBytes = monthDays.reduce((s, d) => s + d.bytes, 0)
+                const bqModes = Array.from(new Set(bqJobs.map(j => j.mode).filter(Boolean))).sort()
+                const bqFiltered = bqJobFilter === 'all' ? bqJobs : bqJobs.filter(j => j.mode === bqJobFilter)
+                return (
+                  <>
+                    <div className={styles.statStrip}>
+                      <div className={styles.statCard}>
+                        <div><div className={styles.statLabel}>Jobs today</div><div className={styles.statValue}>{todayRow.jobs}</div></div>
+                        <span className={`${styles.statIcon} ${styles.statIconNavy}`}>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                        </span>
+                      </div>
+                      <div className={styles.statCard}>
+                        <div><div className={styles.statLabel}>Jobs this month</div><div className={styles.statValue}>{monthJobs}</div></div>
+                        <span className={`${styles.statIcon} ${styles.statIconBlue}`}>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>
+                        </span>
+                      </div>
+                      <div className={styles.statCard}>
+                        <div><div className={styles.statLabel}>Jobs, all time</div><div className={styles.statValue}>{bqJobs.length}</div></div>
+                        <span className={`${styles.statIcon} ${styles.statIconCyan}`}>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+                        </span>
+                      </div>
+                      <div className={styles.statCard}>
+                        <div><div className={styles.statLabel}>Bytes billed this month</div><div className={styles.statValue}>{bqBytes(monthBytes)}</div></div>
+                        <span className={`${styles.statIcon} ${styles.statIconGreen}`}>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>
+                        </span>
+                      </div>
+                    </div>
+
+                    {bqDaily.length > 0 && (
+                      <div className={styles.alCard} style={{ marginTop: 16 }}>
+                        <div className={styles.tableWrap}>
+                          <table className={styles.alTable}>
+                            <thead className={styles.alHead}>
+                              <tr>{['DATE', 'JOBS', 'BYTES BILLED', 'EST. COST'].map(h => <th key={h}>{h}</th>)}</tr>
+                            </thead>
+                            <tbody>
+                              {bqDaily.slice(0, 30).map(d => (
+                                <tr key={d.day} className={styles.alRow}>
+                                  <td className={styles.alTd}>{new Date(d.day + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                                  <td className={styles.alTd}>{d.jobs}</td>
+                                  <td className={styles.alTd}>{bqBytes(d.bytes)}</td>
+                                  <td className={styles.alTd}>{bqCost(d.bytes)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className={styles.alFoot}>Showing last {Math.min(bqDaily.length, 30)} days</div>
+                      </div>
+                    )}
+                    {bqDaily.length === 0 && !bqJobsLoading && (
+                      <div className={styles.empty} style={{ marginTop: 16 }}>No BigQuery jobs logged yet.</div>
+                    )}
+
+                    <div className={styles.activityHeader} style={{ marginTop: 20 }}>
+                      <h3 className={styles.cardTitle} style={{ fontSize: 13 }}>Job Log — every job, with its job id</h3>
+                      <Dropdown value={bqJobFilter} onChange={setBqJobFilter}
+                        options={[{ value: 'all', label: 'All modes' }, ...bqModes.map(m => ({ value: m, label: m }))]} />
+                    </div>
+
+                    {bqFiltered.length > 0 && (
+                      <div className={styles.alCard}>
+                        <div className={styles.tableWrap}>
+                          <table className={styles.alTable}>
+                            <thead className={styles.alHead}>
+                              <tr>{['MODE', 'DASHBOARD', 'BYTES', 'ROWS', 'CACHE', 'WHEN', ''].map(h => <th key={h}>{h}</th>)}</tr>
+                            </thead>
+                            <tbody>
+                              {bqFiltered.slice(0, 300).map((j, idx) => {
+                                const dt = j.created_at ? new Date(j.created_at) : null
+                                const dateStr = dt ? dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'
+                                const timeStr = dt ? dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : ''
+                                return (
+                                  <tr key={j.id || idx} className={styles.alRow}>
+                                    <td className={`${styles.alTd} ${styles.alPage}`}>{j.mode || '—'}</td>
+                                    <td className={styles.alTd}>{j.dashboard_id || '—'}</td>
+                                    <td className={styles.alTd}>{bqBytes(j.total_bytes_processed)}</td>
+                                    <td className={styles.alTd}>{j.total_rows == null ? '—' : Number(j.total_rows).toLocaleString('en-IN')}</td>
+                                    <td className={styles.alTd}>
+                                      <span className={styles.alTag} style={{ background: j.cache_hit ? 'var(--green-tint)' : 'var(--bg3)', color: j.cache_hit ? 'var(--green-ink)' : 'var(--text-2)' }}>{j.cache_hit ? 'Cache' : 'Scanned'}</span>
+                                    </td>
+                                    <td className={styles.alTd}>{dateStr}{timeStr ? ` · ${timeStr}` : ''}</td>
+                                    <td className={styles.alTd}>
+                                      <Button size="sm" variant="secondary" onClick={() => setBqJobDetail(j)}>View</Button>
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className={styles.alFoot}>Showing {Math.min(bqFiltered.length, 300)} of {bqFiltered.length} {bqFiltered.length === 1 ? 'job' : 'jobs'}</div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+            </div>
+
+            {bqJobDetail && (
+              <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setBqJobDetail(null) }}>
+                <div className={styles.dsModal}>
+                  <div className={styles.dsModalHead}>
+                    <div className={styles.dsModalTitle}>{bqJobDetail.mode || 'BigQuery job'}</div>
+                    <button type="button" className={styles.dsModalClose} onClick={() => setBqJobDetail(null)}>
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    </button>
+                  </div>
+                  <p className={styles.dsModalSub}>
+                    {bqJobDetail.created_at ? new Date(bqJobDetail.created_at).toLocaleString('en-IN') : ''} &middot; {bqJobDetail.dashboard_id || 'no dashboard'} &middot; {bqJobDetail.user_email || 'system (cron)'}
+                  </p>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Job</div>
+                  <pre style={{ margin: 0, padding: 12, background: 'var(--bg3)', border: '0.5px solid var(--border)', borderRadius: 10, fontSize: 12, fontFamily: 'monospace', color: '#1E293B', overflowX: 'auto', maxHeight: 280, overflowY: 'auto', whiteSpace: 'pre-wrap' }}>
+                    {JSON.stringify({
+                      job_id: bqJobDetail.job_id, project_id: bqJobDetail.project_id, location: bqJobDetail.location,
+                      total_bytes_processed: bqJobDetail.total_bytes_processed, total_rows: bqJobDetail.total_rows,
+                      cache_hit: bqJobDetail.cache_hit, latency_ms: bqJobDetail.latency_ms,
+                    }, null, 2)}
+                  </pre>
+                  <div className={styles.dsModalActions}>
+                    <Button size="sm" variant="secondary" onClick={() => setBqJobDetail(null)}>Close</Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>SR Revenue Assumptions</h3>

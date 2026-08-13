@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList,
   CartesianGrid, LineChart, Line, Legend,
@@ -8,9 +8,12 @@ import Button from '../components/Button'
 import ExportButton from '../components/ExportButton'
 import DateRangePicker from '../components/DateRangePicker'
 import Dropdown from '../components/Dropdown'
+import SlackReportPanel from '../components/SlackReportPanel'
 import { InlineLoader } from '../components/SkeletonLoader'
 import { toast } from '../components/ToastHost'
 import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS_H } from '../ui/dashboardKit'
+import { CAREERS_REPORT_VERSIONS } from '../lib/careersReport'
+import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import styles from './LeverageCareersDashboard.module.css'
 
 // Separate ad account -- "Leverage Careers" -- distinct from the main Meta Ads
@@ -276,6 +279,9 @@ export default function LeverageCareersDashboard() {
   const [compareLoading, setCompareLoading] = useState(false)
   const [compareError, setCompareError] = useState('')
 
+  const [slackOpen, setSlackOpen] = useState(false)
+  const tableRef = useRef(null)
+
   const d1 = ist(0)
   const activeWindow = useMemo(() => {
     if (preset === 'ld') return { from: shiftDate(d1, -1), to: shiftDate(d1, -1) }
@@ -358,6 +364,23 @@ export default function LeverageCareersDashboard() {
     'CPL (Meta)': r.cpl != null ? Math.round(r.cpl) : '', 'CPL (CRM)': r.cplCrm != null ? Math.round(r.cplCrm) : '',
     CPI: r.cpi != null ? Math.round(r.cpi) : '', CPS: r.cps != null ? Math.round(r.cps) : '',
   })), [tableRows, tableDim])
+
+  // Slack "Send to Slack" -- a dedicated button + preview panel (SlackReportPanel),
+  // not the plain ExportButton's inline Slack menu items. buildContext is read
+  // synchronously by the panel to build BOTH the live preview and the real send
+  // (see SlackReportPanel.jsx), so it must never depend on anything async.
+  const buildCareersContext = useCallback(() => ({
+    windowLabel, totals, tableDim,
+    tableRows: tableRows.map(r => ({ ...r, label: labelForDim(tableDim, r.label) })),
+    matchedCount, campaignCount: campaignRows.length, unmatchedCrmLeads,
+  }), [windowLabel, totals, tableDim, tableRows, matchedCount, campaignRows.length, unmatchedCrmLeads])
+
+  const captureCareersFiles = useCallback(async () => {
+    await nextPaint()
+    const node = tableRef.current
+    const shot = node ? await captureNodePng(node, { ratios: [2, 1.5, 1] }) : null
+    return { pngBase64: shot ? shot.base64 : null, pixelRatio: shot ? shot.pixelRatio : null, csv: rowsToCsv(Object.keys(exportRawRows[0] || {}), exportRawRows) }
+  }, [exportRawRows])
 
   // ---- Trend Analysis ----
   const trendPeriodUnit = trendDim === 'Day' ? 'days' : trendDim === 'Month' ? 'months'
@@ -625,11 +648,15 @@ export default function LeverageCareersDashboard() {
                     <input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder={`Search ${tableDim === 'campaign' ? 'campaign' : tableDim}…`}
                       style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: C.text, width: '100%' }} />
                   </div>
-                  <div style={{ marginLeft: 'auto' }}>
-                    <ExportButton data={exportRows} rawData={exportRawRows} filename={'leverage_careers_' + tableDim} dashboardId="leverage_careers" />
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                    <Button
+                      size="sm" variant="secondary" onClick={() => setSlackOpen(true)}
+                      icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" /></svg>}
+                    >Send to Slack</Button>
+                    <ExportButton data={exportRows} rawData={exportRawRows} filename={'leverage_careers_' + tableDim} dashboardId="leverage_careers" hideSlack />
                   </div>
                 </div>
-                <div style={{ overflowX: 'auto' }}>
+                <div ref={tableRef} style={{ overflowX: 'auto' }}>
                   <table className={styles.table}>
                     <thead>
                       <tr>
@@ -814,6 +841,17 @@ export default function LeverageCareersDashboard() {
           </div>
         </div>
       )}
+
+      <SlackReportPanel
+        open={slackOpen}
+        onClose={() => setSlackOpen(false)}
+        versions={CAREERS_REPORT_VERSIONS}
+        buildContext={buildCareersContext}
+        captureFiles={captureCareersFiles}
+        dashboardId="leverage_careers"
+        filename={'leverage_careers_' + tableDim}
+        rowCount={tableRows.length}
+      />
     </div>
   )
 }
