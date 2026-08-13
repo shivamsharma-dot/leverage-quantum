@@ -551,7 +551,6 @@ export default function LeverageCareersDashboard() {
               onClick={load} disabled={loading || !token} size="sm" variant="secondary"
               icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>}
             >{loading ? 'Refreshing' : 'Refresh'}</Button>
-            <ExportButton data={exportRows} rawData={exportRawRows} filename="leverage_careers" dashboardId="leverage_careers" />
           </div>
         </div>
 
@@ -625,6 +624,9 @@ export default function LeverageCareersDashboard() {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
                     <input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder={`Search ${tableDim === 'campaign' ? 'campaign' : tableDim}…`}
                       style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: C.text, width: '100%' }} />
+                  </div>
+                  <div style={{ marginLeft: 'auto' }}>
+                    <ExportButton data={exportRows} rawData={exportRawRows} filename={'leverage_careers_' + tableDim} dashboardId="leverage_careers" />
                   </div>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
