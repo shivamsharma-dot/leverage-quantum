@@ -1994,6 +1994,15 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div className={styles.empty} style={{ marginTop: 16 }}>No BigQuery jobs logged yet.</div>
                     )}
 
+                    {(() => {
+                      const backfilled = bqJobs.filter(j => j.job_id == null).length
+                      return backfilled > 0 ? (
+                        <p className={styles.note} style={{ marginTop: 12 }}>
+                          {backfilled} of these were backfilled from GitHub Actions' own run history (real date/time, no job id or byte/row detail was captured for jobs before live tracking started) — every job logged from today onward carries the full detail.
+                        </p>
+                      ) : null
+                    })()}
+
                     <div className={styles.activityHeader} style={{ marginTop: 20 }}>
                       <h3 className={styles.cardTitle} style={{ fontSize: 13 }}>Job Log — every job, with its job id</h3>
                       <Dropdown value={bqJobFilter} onChange={setBqJobFilter}
@@ -2016,10 +2025,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                                   <tr key={j.id || idx} className={styles.alRow}>
                                     <td className={`${styles.alTd} ${styles.alPage}`}>{j.mode || '—'}</td>
                                     <td className={styles.alTd}>{j.dashboard_id || '—'}</td>
-                                    <td className={styles.alTd}>{bqBytes(j.total_bytes_processed)}</td>
+                                    <td className={styles.alTd} title={j.job_id == null ? 'Backfilled from GitHub Actions run history -- byte/row detail was never captured for jobs before live tracking started' : ''}>{j.total_bytes_processed == null ? '—' : bqBytes(j.total_bytes_processed)}</td>
                                     <td className={styles.alTd}>{j.total_rows == null ? '—' : Number(j.total_rows).toLocaleString('en-IN')}</td>
                                     <td className={styles.alTd}>
-                                      <span className={styles.alTag} style={{ background: j.cache_hit ? 'var(--green-tint)' : 'var(--bg3)', color: j.cache_hit ? 'var(--green-ink)' : 'var(--text-2)' }}>{j.cache_hit ? 'Cache' : 'Scanned'}</span>
+                                      {j.cache_hit == null ? <span style={{ color: 'var(--text-3)' }}>—</span> : (
+                                        <span className={styles.alTag} style={{ background: j.cache_hit ? 'var(--green-tint)' : 'var(--bg3)', color: j.cache_hit ? 'var(--green-ink)' : 'var(--text-2)' }}>{j.cache_hit ? 'Cache' : 'Scanned'}</span>
+                                      )}
                                     </td>
                                     <td className={styles.alTd}>{dateStr}{timeStr ? ` · ${timeStr}` : ''}</td>
                                     <td className={styles.alTd}>
