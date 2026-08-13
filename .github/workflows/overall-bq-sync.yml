@@ -21,11 +21,14 @@ name: Overall BigQuery Cache Sync
 
 on:
   schedule:
-    # Every 30 minutes. Do NOT treat that as a freshness guarantee: GitHub
-    # heavily throttles scheduled workflows on low-activity repos and observed
-    # spacing on this repo is 2-3.5 hours even with an hourly cron. Correctness,
-    # not freshness, is the point of this pipeline. Cron is UTC.
-    - cron: '5,35 * * * *'
+    # 3x/day IST (9:00, 10:00, 22:00), converted to UTC below (IST = UTC+5:30).
+    # This data isn't real-time, so a 30-min ask bought nothing -- GitHub
+    # throttles low-activity repos regardless of what interval you request,
+    # and 3 fixed times/day is a normal-enough cadence that it should actually
+    # run close to on time, unlike the old high-frequency ask.
+    - cron: '30 3 * * *'   # 9:00 AM IST
+    - cron: '30 4 * * *'   # 10:00 AM IST
+    - cron: '30 16 * * *'  # 10:00 PM IST
   workflow_dispatch:
 
 # One sync at a time. Two overlapping runs would interleave their sync_id stamps
