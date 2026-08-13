@@ -3168,23 +3168,23 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           ))}
 
           {/* Where the B2C daily report's Slack "Approve" button actually posts to.
-              Safe-by-default while this is still being tried: an empty/unset value
-              resolves to the first configured test channel, never straight to the
-              real, guarded b2c_core channel -- that only happens once this is
-              deliberately pointed there. */}
-          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>B2C approval destination &middot; while testing</label>
+              Deliberately test-channel-only right now, by request -- the real
+              b2c_core channel is not offered here at all, and the server enforces
+              the same rule independently (see handleSlackBlockAction in
+              api/send-report.mjs), so this can't be pointed at the real channel
+              even by editing the stored preference directly. Going live needs an
+              actual code change later, not a Settings switch. */}
+          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>B2C approval destination &middot; test channel only</label>
           <p className={styles.cardDesc} style={{ marginTop: 4, marginBottom: 8 }}>
             Where the daily P&amp;L / Cash Flow report's "Approve" button in Slack actually posts to.
-            Point this at a test channel while you're confident it's right, then switch it to the real
-            channel below when you're ready to go live &mdash; no code change or redeploy needed either way.
+            Locked to a test channel on purpose &mdash; the real, guarded channel isn't offered here, and
+            the server refuses it too even if this preference were edited directly. Going live will need
+            a deliberate code change, not a Settings switch.
           </p>
           <Dropdown
             value={b2cApproveDest || (slackTestChannels[0] ? 'test:' + slackTestChannels[0].id : 'test')}
             onChange={setB2cApproveDest}
-            options={[
-              ...slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#' + c.channel + '  (test — ' + c.name + ')' })),
-              ...GUARDED.filter(c => c.id === 'b2c_core').map(c => ({ value: c.id, label: '#' + c.name + '  (REAL — the CEO reads this)' })),
-            ]}
+            options={slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#' + c.channel + '  (test — ' + c.name + ')' }))}
           />
 
           <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO PIN &middot; shared by every locked channel</label>

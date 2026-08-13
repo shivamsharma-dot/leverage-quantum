@@ -1974,13 +1974,15 @@ async function handleSlackBlockAction(payload) {
 
   const token = process.env.SLACK_BOT_TOKEN
   const cfg = await getReportConfig()
-  // Admin-configurable in Settings > Reports ("B2C approval destination") --
-  // safe-by-default: unset resolves to 'test' (the first configured sandbox
-  // channel), never straight to the real, guarded b2c_core channel. Only
-  // reaches production once someone deliberately points it there, and that
-  // can be flipped back with no code change or redeploy either way.
-  const destination = cfg.b2c_approve_destination || 'test'
-  const hook = resolveSlackTarget(cfg, destination, { allowGuarded: true })
+  // Test-channel only, by explicit request -- Settings > Reports only ever
+  // offers a test-channel value for this preference, but that alone is just
+  // the UI; enforced here too, independently, so the real b2c_core channel
+  // is unreachable from this button even if the stored preference were
+  // edited directly to something else. Going live needs a real code change
+  // later (dropping this guard on purpose), not a Settings switch.
+  const configuredDest = cfg.b2c_approve_destination || 'test'
+  const destination = normaliseTarget(configuredDest).family === 'test' ? configuredDest : 'test'
+  const hook = resolveSlackTarget(cfg, destination, {})
   if (hook.mode !== 'bot' || !hook.channel) {
     if (responseUrl) await postSlackResponseUrl(responseUrl, { text: hook.missing || 'Could not reach the configured destination.', replace_original: false })
     return
