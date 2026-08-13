@@ -526,22 +526,31 @@ function isIsoDate(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.te
 // Fixed, non-editable query behind the Leverage Careers page -- unlike
 // mode=query (arbitrary SQL, admin-only) this is reachable by anyone with
 // leverage_careers page access, so it must never take raw SQL from the request.
-// Groups leads by career_campaign_name (the LeadSquared/BigQuery field that
-// carries the literal Meta ad name, confirmed 1:1 with Campaign_Name /
-// lead_First_Campaign_name on this table) so the frontend can join it to a
-// Meta ad by exact name match.
+// Grain is (day, campaign): career_campaign_name is the LeadSquared/BigQuery
+// field carrying the literal Meta ad name (confirmed 1:1 with Campaign_Name /
+// lead_First_Campaign_name on this table), joined to the frontend's day-level
+// Meta ad insights by exact name match -- this is what makes Trend/Compare/the
+// Campaign|Month|Day table groupings possible without a second query shape.
+// total_interested and won mirror the 'leverage_careers' saved query in the
+// BigQuery Console (Settings > Data) as of 2026-08-13 -- ever_got_interested
+// is the real interest flag (opp_stage_leverage_careers was the old, looser
+// one this replaces), opp_status LIKE '%won%' is new. Date range stays
+// page-driven (since/until from the request), unlike that saved query's own
+// fixed '> 2025-12-31' floor.
 function careersLeadsSql(since, until) {
   const clauses = ["career_campaign_name IS NOT NULL", "career_campaign_name != ''"]
   if (isIsoDate(since)) clauses.push(`DATE(opp_created_on) >= '${since}'`)
   if (isIsoDate(until)) clauses.push(`DATE(opp_created_on) <= '${until}'`)
   return `SELECT
   career_campaign_name AS campaign,
+  DATE(opp_created_on) AS lead_date,
   COUNT(prospectid) AS total_leads,
-  COUNT(CASE WHEN LOWER(opp_stage_leverage_careers) LIKE '%int%' THEN prospectid END) AS total_interested
+  COUNT(CASE WHEN LOWER(ever_got_interested) = 'yes' THEN prospectid END) AS total_interested,
+  COUNT(CASE WHEN LOWER(opp_status) LIKE '%won%' THEN prospectid END) AS won
 FROM \`leverage_direct.lsq_careers_opprtunities\`
 WHERE ${clauses.join(' AND ')}
-GROUP BY 1
-ORDER BY total_leads DESC`
+GROUP BY 1, 2
+ORDER BY lead_date, campaign`
 }
 
 // BigQuery lives behind this handler rather than its own file because the
