@@ -492,28 +492,36 @@ export default function LeverageCareersDashboard() {
     'Won (this)': r.a.won, 'Won (compare)': r.b.won, 'Δ Won': r.dWon, 'Δ CRM Leads': r.dCrmLeads,
   })), [compareResult, windowLabel])
 
+  const showRefreshing = loading && !!dayRows
+
   return (
-    <div className={styles.layout}>
+    <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
       <Sidebar />
-      <div className={styles.main}>
-        <div className={styles.header}>
-          <div className={styles.headerLeft}>
-            <div className={styles.breadcrumb}>Meta Ads</div>
-            <h1 className={styles.pageTitle}>Leverage Careers</h1>
+      <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid #EEF1F6', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+
+        {/* HEADER — same structure/behavior as Overall's own header (floating card, pill
+            date group, Trend/Compare buttons, Synced/Refreshing tag, spin-on-refresh). */}
+        <div style={{ background: 'var(--card)', borderBottom: `0.5px solid ${C.border}`, padding: '10px 28px', minHeight: 56, height: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, overflow: 'visible', flexWrap: 'wrap' }}>
+          <div>
+            <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Meta Ads / Leverage Careers</p>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px', fontFamily: FONT }}>
+              Leverage Careers{' — '}<span style={{ fontSize: 13, fontWeight: 600, color: C.blue }}>{windowLabel}</span>
+            </h1>
           </div>
-          <div className={styles.headerRight}>
-            <div className={styles.presetRow}>
+          <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', overflow: 'visible', flexShrink: 1, minWidth: 0 }}>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F8FAFC', padding: '6px 10px', borderRadius: 12, border: '0.5px solid #E5E7EB' }}>
               {PRESETS.map(p => (
-                <button key={p.id} type="button" className={preset === p.id ? styles.presetPillActive : styles.presetPill} onClick={() => setPreset(p.id)}>{p.label}</button>
+                <button key={p.id} type="button" onClick={() => setPreset(p.id)} style={{ padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT, background: preset === p.id ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent', color: preset === p.id ? '#fff' : '#64748B', boxShadow: preset === p.id ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none', transition: 'all .15s' }}>{p.label}</button>
               ))}
               <div style={{ position: 'relative' }}>
-                <button type="button" className={preset === 'custom' ? styles.presetPillActive : styles.presetPill} onClick={() => { setPreset('custom'); setCustomOpen(true) }}>
-                  {preset === 'custom' && customFrom && customTo ? customFrom + ' → ' + customTo : 'Custom range'}
+                <button type="button" onClick={() => { setPreset('custom'); setCustomOpen(v => !v) }} style={{ padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT, background: preset === 'custom' ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent', color: preset === 'custom' ? '#fff' : '#64748B', boxShadow: preset === 'custom' ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none', transition: 'all .15s', whiteSpace: 'nowrap' }}>
+                  {preset === 'custom' && customFrom && customTo ? customFrom + ' → ' + customTo : 'Custom'}
                 </button>
                 {customOpen ? (
                   <>
                     <div onClick={() => { setCustomOpen(false); if (!(customFrom && customTo)) setPreset('mtd') }} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
-                    <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 400 }}>
+                    <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400, background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 14, boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', overflow: 'hidden' }}>
                       <DateRangePicker
                         from={isoToDate(customFrom)} to={isoToDate(customTo)}
                         onChange={(f, t) => { setCustomFrom(f); setCustomTo(t); if (f && t) setCustomOpen(false) }}
@@ -524,15 +532,31 @@ export default function LeverageCareersDashboard() {
                 ) : null}
               </div>
             </div>
-            {synced ? <span className={styles.note} style={{ margin: 0 }}>Synced {synced.toLocaleTimeString()}</span> : null}
-            <Button size="sm" variant="secondary" onClick={load} disabled={loading || !token}>Refresh</Button>
-            <Button size="sm" variant="secondary" onClick={() => setTrendOpen(true)} disabled={!token}>Trend</Button>
-            <Button size="sm" variant="secondary" onClick={() => setCompareOpen(true)} disabled={!token}>Compare</Button>
+
+            <Button
+              size="sm" variant="secondary" onClick={() => setCompareOpen(true)} disabled={!token}
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3m0 8v3a2 2 0 002 2h3m8 0h3a2 2 0 002-2v-3m0-8V5a2 2 0 00-2-2h-3" /><line x1="8" y1="12" x2="16" y2="12" /></svg>}
+            >Compare</Button>
+            <Button
+              size="sm" variant="secondary" onClick={() => setTrendOpen(true)} disabled={!token}
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 17 9 11 13 15 21 6" /><polyline points="15 6 21 6 21 12" /></svg>}
+            >Trend</Button>
+
+            {tokenChecked && token && (
+              <span style={{ fontSize: 11, color: loading ? C.blue : C.muted, fontWeight: loading ? 700 : 400, fontFamily: FONT, whiteSpace: 'nowrap' }}>
+                {loading ? (dayRows ? 'Refreshing…' : 'Loading…') : (synced ? 'Synced ' + synced.toLocaleTimeString() : '')}
+              </span>
+            )}
+            <Button
+              onClick={load} disabled={loading || !token} size="sm" variant="secondary"
+              icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>}
+            >{loading ? 'Refreshing' : 'Refresh'}</Button>
             <ExportButton data={exportRows} rawData={exportRawRows} filename="leverage_careers" dashboardId="leverage_careers" />
           </div>
         </div>
 
-        <div className={styles.content}>
+        {/* SCROLLABLE CONTENT */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
           {!tokenChecked ? (
             <InlineLoader label="Checking Meta connection" />
           ) : !token ? (
@@ -552,19 +576,20 @@ export default function LeverageCareersDashboard() {
               <div className={styles.empty}>{error}</div>
             </div>
           ) : (
-            <>
-              <div className={styles.kpis}>
+            <div style={{ opacity: showRefreshing ? 0.55 : 1, pointerEvents: showRefreshing ? 'none' : 'auto', transition: 'opacity .2s' }}>
+              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: 12, marginBottom: 12 }}>
                 <PremKPI label="SPEND" value={fmtINR(totals.spend)} sub={windowLabel} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
                 <PremKPI label="META LEADS" value={fmtN(totals.metaLeads)} sub="onsite_conversion.lead_grouped" accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
                 <PremKPI label="CRM LEADS" value={fmtN(totals.crmLeads)} sub={matchedCount + ' of ' + campaignRows.length + ' names matched'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
                 <PremKPI label="INTERESTED" value={fmtN(totals.interested)} sub={pct(totals.interested, totals.crmLeads) + ' of CRM leads'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
                 <PremKPI label="WON" value={fmtN(totals.won)} sub={pct(totals.won, totals.interested) + ' of interested'} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
               </div>
-              <div className={styles.kpis}>
+              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: 12, marginBottom: 20 }}>
                 <PremKPI label="CPL (META)" value={fmtINR(totals.cpl)} sub="spend / Meta leads" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.globe} invert />
                 <PremKPI label="CPL (CRM)" value={fmtINR(totals.cplCrm)} sub="spend / CRM leads" accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe} invert />
                 <PremKPI label="CPI" value={fmtINR(totals.cpi)} sub="spend / interested" accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} invert />
                 <PremKPI label="CPS" value={fmtINR(totals.cps)} sub="spend / Won" accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.globe} invert />
+                <PremKPI label="CTR" value={pct(totals.clicks, totals.impressions)} sub="clicks / impressions" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.globe} />
               </div>
 
               <Card noPad>
@@ -648,7 +673,7 @@ export default function LeverageCareersDashboard() {
                   </p>
                 ) : null}
               </Card>
-            </>
+            </div>
           )}
         </div>
       </div>
