@@ -33,6 +33,12 @@
 const SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 const TABLE = 'overall_bq_daily'
+// Pre-aggregated day+Source companion, populated by the same sync run --
+// see supabase/sql/overall_bq_agg_setup.sql for why this exists. At most a
+// few thousand rows for the entire history (vs. TABLE's one-row-per-campaign
+// growth), which is what makes fetchOverallBqAggRows() fast regardless of
+// the date range picked.
+const AGG_TABLE = 'overall_bq_daily_agg'
 
 // The toggle is a per-device preference, like every other lq_* setting (theme, SR
 // fee, number format...). The key and the event name live here, not in either page,
@@ -67,11 +73,11 @@ const SELECT = BQ_COLUMNS.map(c => (/^[a-z_]+$/.test(c) ? c : '"' + c + '"')).jo
 
 const headers = extra => Object.assign({ apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, extra || {})
 
-async function sbGet(params, extraHeaders) {
-  const r = await fetch(SB_URL + '/rest/v1/' + TABLE + '?' + params.toString(), { headers: headers(extraHeaders) })
-  if (!r.ok) throw new Error('overall_bq_daily read failed (' + r.status + ')')
+async function sbGet(params, extraHeaders, table = TABLE) {
+  const r = await fetch(SB_URL + '/rest/v1/' + table + '?' + params.toString(), { headers: headers(extraHeaders) })
+  if (!r.ok) throw new Error(table + ' read failed (' + r.status + ')')
   const j = await r.json()
-  if (!Array.isArray(j)) throw new Error('overall_bq_daily returned a non-array response')
+  if (!Array.isArray(j)) throw new Error(table + ' returned a non-array response')
   return j
 }
 
@@ -98,30 +104,30 @@ async function sbGet(params, extraHeaders) {
 // reliably finishing a wide fetch at all, so this trades peak speed for actually working.
 const PAGE = 1000
 
-async function sbGetPage(params, cursor) {
+async function sbGetPage(params, cursor, table = TABLE) {
   const p = new URLSearchParams(params)
   if (cursor != null) p.set('row_key', 'gt.' + cursor)
   p.set('limit', String(PAGE))
-  const r = await fetch(SB_URL + '/rest/v1/' + TABLE + '?' + p.toString(), { headers: headers() })
-  if (!r.ok) throw new Error('overall_bq_daily read failed (' + r.status + ')')
+  const r = await fetch(SB_URL + '/rest/v1/' + table + '?' + p.toString(), { headers: headers() })
+  if (!r.ok) throw new Error(table + ' read failed (' + r.status + ')')
   const rows = await r.json()
-  if (!Array.isArray(rows)) throw new Error('overall_bq_daily returned a non-array response')
+  if (!Array.isArray(rows)) throw new Error(table + ' returned a non-array response')
   return rows
 }
 
 // A cursor seek is cheap regardless of depth, so a page should rarely fail at all now --
 // this is a light safety net for a genuine one-off network blip, not the primary
 // reliability mechanism the way retrying used to be under OFFSET pagination.
-async function sbGetPageRetry(params, cursor, attempts = 3, delay = 400) {
+async function sbGetPageRetry(params, cursor, table, attempts = 3, delay = 400) {
   let lastErr
   for (let i = 0; i < attempts; i++) {
-    try { return await sbGetPage(params, cursor) }
+    try { return await sbGetPage(params, cursor, table) }
     catch (e) { lastErr = e; if (i < attempts - 1) await new Promise(res => setTimeout(res, delay * (i + 1))) }
   }
   throw lastErr
 }
 
-async function fetchAllPaginated(params) {
+async function fetchAllPaginated(params, table = TABLE) {
   // row_key is the cursor column -- make sure it rides along even if a caller's own
   // select list never asked for it, then strip it back off before returning so every
   // caller still sees exactly the row shape mapRow() has always expected.
@@ -132,7 +138,7 @@ async function fetchAllPaginated(params) {
   let all = []
   let cursor = null
   for (let guard = 0; guard < 2000; guard++) { // 20,00,000-row safety valve
-    const rows = await sbGetPageRetry(p, cursor)
+    const rows = await sbGetPageRetry(p, cursor, table)
     if (!rows.length) break
     all = all.concat(rows)
     if (rows.length < PAGE) break
@@ -160,6 +166,36 @@ export async function fetchOverallBqRows({ since, until, sources }) {
   const list = (sources || []).filter(s => s && s !== 'All')
   if (list.length) params.set('Source', 'in.' + inList(list))
   return fetchAllPaginated(params)
+}
+
+// Same 11 metric columns as BQ_COLUMNS, minus campaign_name (aggregated away --
+// see supabase/sql/overall_bq_agg_setup.sql) -- lead_date/month/Source carried
+// straight through so mapRow() (src/pages/OverallDashboard.jsx) needs no changes
+// at all; campaign_name simply comes back as undefined, which mapRow() already
+// treats as ''.
+const AGG_COLUMNS = [
+  'lead_date', 'month', 'Source',
+  'Total Leads Generated', 'floor_queued', 'Queued on Futwork', 'Queued on Superbot',
+  'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
+  'Total_Spends', 'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
+]
+const AGG_SELECT = AGG_COLUMNS.map(c => (/^[a-z_]+$/.test(c) ? c : '"' + c + '"')).join(',')
+
+// The fast path: reads overall_bq_daily_agg (at most a few thousand rows for the
+// whole history) instead of overall_bq_daily (one row per campaign, only grows).
+// Same since/until/sources contract as fetchOverallBqRows() -- callers that only
+// need Source/Month/Day-level numbers (KPI cards, the funnel chart, everything
+// except the Campaign and Corridor groupings, which need per-campaign rows and
+// must keep using fetchOverallBqRows) can swap straight to this for the same
+// date-range behaviour, just fast regardless of how wide the range is.
+export async function fetchOverallBqAggRows({ since, until, sources }) {
+  if (!since || !until) throw new Error('fetchOverallBqAggRows needs both since and until')
+  const params = new URLSearchParams({ select: AGG_SELECT, order: 'row_key.asc' })
+  params.set('lead_date_iso', 'gte.' + since)
+  params.append('lead_date_iso', 'lte.' + until)
+  const list = (sources || []).filter(s => s && s !== 'All')
+  if (list.length) params.set('Source', 'in.' + inList(list))
+  return fetchAllPaginated(params, AGG_TABLE)
 }
 
 // Oldest and newest lead_date_iso in the cache, as two single-row reads. The CSV path

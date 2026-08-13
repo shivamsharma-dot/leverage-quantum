@@ -22,7 +22,7 @@ import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, B
 // source this page instance reads is now fixed by the `dataSource` prop (two
 // separate routes/pages -- see App.jsx), not a per-device Settings toggle.
 import {
-  fetchOverallBqRows, fetchOverallBqBounds, fetchOverallBqSyncedAt,
+  fetchOverallBqRows, fetchOverallBqAggRows, fetchOverallBqBounds, fetchOverallBqSyncedAt,
 } from '../lib/overallBqCache'
 
 // "Overall PM" — added by the admin as a custom Data Source (Settings > Data > Google Sheets).
@@ -1375,11 +1375,20 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     setSelMonth(monthLabel(maxKey >= curKey ? curKey : maxKey))
   }, [bqMode, bqBounds, selMonth])
 
+  // Campaign and Corridor groupings classify/group by campaign name, which the
+  // fast aggregated table doesn't carry (it's summed away at day+Source grain --
+  // see supabase/sql/overall_bq_agg_setup.sql). Every other view (KPI cards, the
+  // funnel chart, Source/Month/Day groupings) never needed campaign-level rows,
+  // so they get the fast path. Switching grpBy to/from campaign or corridor
+  // re-triggers this effect and swaps which table gets read -- the date-range
+  // logic above (bqSince/bqUntil/bqRange) is completely unchanged either way.
+  const bqNeedsCampaignDetail = grpBy === 'campaign' || grpBy === 'corridor'
   useEffect(() => {
     if (!bqMode || !bqSince || !bqUntil) return
     let dead = false
     setBqBusy(true)
-    retryFetch(() => fetchOverallBqRows({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources }))
+    const fetcher = bqNeedsCampaignDetail ? fetchOverallBqRows : fetchOverallBqAggRows
+    retryFetch(() => fetcher({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources }))
       .then(raw => {
         if (dead) return
         setBqRows(raw.map(mapRow))
@@ -1398,7 +1407,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       })
       .finally(() => { if (!dead) { setBqBusy(false); setLoading(false) } })
     return () => { dead = true }
-  }, [bqMode, bqSince, bqUntil, sourceIsAll, selectedSources, bqNonce, loadData])
+  }, [bqMode, bqSince, bqUntil, sourceIsAll, selectedSources, bqNonce, loadData, bqNeedsCampaignDetail])
 
   // Period A (the "current" side) is normally whatever the main page filter is --
   // correct for 'prev'/'yoy' modes, since those are explicitly "vs the period I'm

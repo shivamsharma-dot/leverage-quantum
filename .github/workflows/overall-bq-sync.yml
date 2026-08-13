@@ -60,6 +60,9 @@ jobs:
           SB_URL = os.environ['SB_URL']
           SB_KEY = os.environ['SB_KEY']
           TABLE = 'overall_bq_daily'
+          # Pre-aggregated day+source companion table -- see
+          # supabase/sql/overall_bq_agg_setup.sql for why this exists.
+          AGG_TABLE = 'overall_bq_daily_agg'
 
           CLIENT_ID = os.environ.get('BQ_CLIENT_ID', '')
           CLIENT_SECRET = os.environ.get('BQ_CLIENT_SECRET', '')
@@ -421,6 +424,99 @@ jobs:
           if after.isdigit() and int(after) != len(records):
               raise SystemExit('Post-sync row count mismatch: table holds %s, expected %d.'
                                % (after, len(records)))
+
+          # ---------------------------------------------------------------
+          # Pre-aggregated day+source companion (overall_bq_daily_agg) --
+          # built from the SAME `records` already read above, no second
+          # BigQuery query. This is what makes the dashboard's fast path
+          # fast: at most a few thousand (date, Source) rows for the whole
+          # history, versus overall_bq_daily's one-row-per-campaign growth.
+          # See supabase/sql/overall_bq_agg_setup.sql for the schema.
+          SUM_FIELDS = [
+              'Total Leads Generated', 'floor_queued',
+              'Queued on Futwork', 'Queued on Superbot',
+              'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
+              'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
+          ]
+
+          agg = {}
+          for r in records:
+              key = (r['lead_date_iso'], r['Source'])
+              a = agg.get(key)
+              if a is None:
+                  a = {
+                      'row_key': (r['lead_date_iso'] or '') + '|' + (r['Source'] or ''),
+                      'lead_date_iso': r['lead_date_iso'],
+                      'Source': r['Source'],
+                      # Carried over from whichever raw row is seen first for
+                      # this (date, Source) -- every row in the group shares
+                      # the same date, so any one of them is fine.
+                      'lead_date': r['lead_date'],
+                      'month': r['month'],
+                      'Total_Spends': 0.0,
+                      'sync_id': sync_id,
+                      'synced_at': now_iso,
+                  }
+                  for f in SUM_FIELDS:
+                      a[f] = 0
+                  agg[key] = a
+              for f in SUM_FIELDS:
+                  a[f] += (r[f] or 0)
+              # Total_Spends is a STRING on `records` (see the comment above
+              # where it's built) so it round-trips through Postgres NUMERIC
+              # exactly. float() here is fine: it's only ever summed, never
+              # written back out at full precision the way the raw table's
+              # own value is.
+              if r['Total_Spends'] is not None:
+                  a['Total_Spends'] += float(r['Total_Spends'])
+
+          agg_records = list(agg.values())
+          print('Aggregated', len(records), 'raw records into', len(agg_records),
+                '(date, Source) rows for', AGG_TABLE, '.')
+
+          agg_upsert_url = SB_URL + '/rest/v1/' + AGG_TABLE + '?on_conflict=row_key'
+          for i in range(0, len(agg_records), BATCH):
+              body = json.dumps(agg_records[i:i + BATCH]).encode('utf-8')
+              for attempt in range(3):
+                  try:
+                      req = sb(agg_upsert_url, 'POST', body,
+                               {'Prefer': 'resolution=merge-duplicates,return=minimal'})
+                      with urllib.request.urlopen(req, timeout=60) as r:
+                          r.read()
+                      break
+                  except Exception as e:
+                      detail = ''
+                      try:
+                          if hasattr(e, 'read'):
+                              detail = ' | body: ' + e.read().decode('utf-8')[:500]
+                      except Exception:
+                          pass
+                      print('agg batch', i, 'attempt', attempt, 'failed:', repr(e) + detail)
+                      if attempt == 2:
+                          raise
+                      time.sleep(2 * (attempt + 1))
+              done = min(i + BATCH, len(agg_records))
+              print('  agg upserted', done, '/', len(agg_records))
+
+          # Same prune pattern as the raw table -- delete anything not
+          # stamped with this sync's id, only after every batch has landed.
+          agg_prune_url = (SB_URL + '/rest/v1/' + AGG_TABLE + '?or=(sync_id.neq.'
+                           + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
+          req = sb(agg_prune_url, 'DELETE', None, {'Prefer': 'return=minimal'})
+          with urllib.request.urlopen(req, timeout=120) as r:
+              r.read()
+          print('Pruned', AGG_TABLE, 'of every row not stamped with this sync_id.')
+
+          req = sb(SB_URL + '/rest/v1/' + AGG_TABLE + '?select=row_key&limit=1', 'GET',
+                   None, {'Prefer': 'count=exact', 'Range': '0-0'})
+          with urllib.request.urlopen(req, timeout=60) as r:
+              r.read()
+              content_range = r.headers.get('Content-Range') or ''
+          after_agg = content_range.split('/')[-1]
+          print('Rows in', AGG_TABLE, 'after sync:', after_agg, '| expected:', len(agg_records))
+          if after_agg.isdigit() and int(after_agg) != len(agg_records):
+              raise SystemExit('Post-sync row count mismatch in %s: table holds %s, expected %d.'
+                               % (AGG_TABLE, after_agg, len(agg_records)))
 
           print('Sync complete.')
           PYEOF
