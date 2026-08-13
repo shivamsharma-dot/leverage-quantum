@@ -1974,9 +1974,15 @@ async function handleSlackBlockAction(payload) {
 
   const token = process.env.SLACK_BOT_TOKEN
   const cfg = await getReportConfig()
-  const hook = resolveSlackTarget(cfg, 'b2c_core', { allowGuarded: true })
+  // Admin-configurable in Settings > Reports ("B2C approval destination") --
+  // safe-by-default: unset resolves to 'test' (the first configured sandbox
+  // channel), never straight to the real, guarded b2c_core channel. Only
+  // reaches production once someone deliberately points it there, and that
+  // can be flipped back with no code change or redeploy either way.
+  const destination = cfg.b2c_approve_destination || 'test'
+  const hook = resolveSlackTarget(cfg, destination, { allowGuarded: true })
   if (hook.mode !== 'bot' || !hook.channel) {
-    if (responseUrl) await postSlackResponseUrl(responseUrl, { text: hook.missing || 'Could not reach #b2c-leverage-core.', replace_original: false })
+    if (responseUrl) await postSlackResponseUrl(responseUrl, { text: hook.missing || 'Could not reach the configured destination.', replace_original: false })
     return
   }
 
@@ -1984,7 +1990,11 @@ async function handleSlackBlockAction(payload) {
   try {
     for (const m of (row.messages || [])) await slackPostReportMessage(token, hook.channel, m)
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: approver })
-    if (responseUrl) await postSlackResponseUrl(responseUrl, { replace_original: true, text: `✅ Approved by @${approver} — sent to ${channelHandle('b2c_core')}.` })
+    // hook.label is a bare display name for a test destination (e.g. "voxpath")
+    // but a generic phrase like "B2C core channel" for a real one -- channelHandle
+    // gives the actual #name for the latter, straight off shared/slackChannels.mjs.
+    const destLabel = hook.isTest ? '#' + hook.label : channelHandle(hook.key)
+    if (responseUrl) await postSlackResponseUrl(responseUrl, { replace_original: true, text: `✅ Approved by @${approver} — sent to ${destLabel}.` })
   } catch (e) {
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'failed', error: e.message, triggered_by: approver })
     if (responseUrl) await postSlackResponseUrl(responseUrl, { text: `Failed to post: ${e.message}`, replace_original: false })

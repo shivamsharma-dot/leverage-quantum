@@ -839,6 +839,7 @@ export default function SettingsPage() {
           setSlackTestChannels([{ id: 'legacy', name: 'Test channel', channel: pf.slack_channel_test }])
         }
         setGuardedChan(Object.fromEntries(GUARDED.map(c => [c.id, pf[c.pref] != null ? pf[c.pref] : ''])))
+        if (pf.b2c_approve_destination != null) setB2cApproveDest(pf.b2c_approve_destination)
         if (pf.slack_auto_reports_enabled != null) setSlackAuto(pf.slack_auto_reports_enabled !== false)
         setSavedHiddenPages(hp)
         setHiddenPages(hp)
@@ -1249,6 +1250,11 @@ export default function SettingsPage() {
   const [newTestChanValue, setNewTestChanValue] = useState('')
   const [slackTestPick, setSlackTestPick] = useState('')
   const [guardedChan, setGuardedChan] = useState({})
+  // Where the B2C daily report's Slack "Approve" button actually posts to.
+  // Defaults to the first configured test channel (never the real, guarded
+  // b2c_core channel) until an admin deliberately points it at production --
+  // deliberately safe-by-default while this is still being tried out.
+  const [b2cApproveDest, setB2cApproveDest] = useState('')
   // The CEO PIN is managed through its own endpoint, never through preferences,
   // so nothing about it is ever held in this page's state except its status.
   const [ceoPinInfo, setCeoPinInfo] = useState(null)
@@ -1708,6 +1714,7 @@ export default function SettingsPage() {
         ['slack_channel_main', slackChannelMain.trim()],
         ['slack_test_channels', slackTestChannels.filter(c => c.name.trim() && c.channel.trim())],
         ...GUARDED.map(c => [c.pref, String(guardedChan[c.id] || '').trim()]),
+        ['b2c_approve_destination', b2cApproveDest],
         ['slack_auto_reports_enabled', slackAuto],
       ]
       for (const [key, value] of entries) {
@@ -3159,6 +3166,26 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               </p>
             </div>
           ))}
+
+          {/* Where the B2C daily report's Slack "Approve" button actually posts to.
+              Safe-by-default while this is still being tried: an empty/unset value
+              resolves to the first configured test channel, never straight to the
+              real, guarded b2c_core channel -- that only happens once this is
+              deliberately pointed there. */}
+          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>B2C approval destination &middot; while testing</label>
+          <p className={styles.cardDesc} style={{ marginTop: 4, marginBottom: 8 }}>
+            Where the daily P&amp;L / Cash Flow report's "Approve" button in Slack actually posts to.
+            Point this at a test channel while you're confident it's right, then switch it to the real
+            channel below when you're ready to go live &mdash; no code change or redeploy needed either way.
+          </p>
+          <Dropdown
+            value={b2cApproveDest || (slackTestChannels[0] ? 'test:' + slackTestChannels[0].id : 'test')}
+            onChange={setB2cApproveDest}
+            options={[
+              ...slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#' + c.channel + '  (test — ' + c.name + ')' })),
+              ...GUARDED.filter(c => c.id === 'b2c_core').map(c => ({ value: c.id, label: '#' + c.name + '  (REAL — the CEO reads this)' })),
+            ]}
+          />
 
           <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO PIN &middot; shared by every locked channel</label>
           <p className={styles.cardDesc} style={{ marginTop: 4 }}>
