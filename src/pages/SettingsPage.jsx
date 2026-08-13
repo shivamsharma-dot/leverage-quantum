@@ -2214,15 +2214,24 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 const byDay = {}
                 bqJobs.forEach(j => {
                   const day = (j.created_at || '').slice(0, 10)
-                  if (!byDay[day]) byDay[day] = { day, jobs: 0, bytes: 0 }
+                  if (!byDay[day]) byDay[day] = { day, jobs: 0, measuredBytes: 0, unmeasured: 0 }
                   byDay[day].jobs += 1
-                  byDay[day].bytes += Number(j.total_bytes_processed || 0)
+                  // A backfilled job (job_id null) never had a byte figure captured at all --
+                  // summing it as 0 would quietly turn "unknown" into a confident "measured
+                  // zero cost". Keep the two separate: measuredBytes only sums jobs that
+                  // actually carry a real number; unmeasured counts everything else, INCLUDING
+                  // a real cache-hit job that legitimately scanned 0 bytes (job_id is not null
+                  // there, so it's counted as measured, correctly, at its true value of 0).
+                  if (j.total_bytes_processed == null) byDay[day].unmeasured += 1
+                  else byDay[day].measuredBytes += Number(j.total_bytes_processed)
                 })
                 const bqDaily = Object.values(byDay).sort((a, b) => b.day.localeCompare(a.day))
-                const todayRow = byDay[todayStr] || { jobs: 0, bytes: 0 }
+                const todayRow = byDay[todayStr] || { jobs: 0, measuredBytes: 0, unmeasured: 0 }
                 const monthDays = bqDaily.filter(d => d.day.startsWith(monthStr))
                 const monthJobs = monthDays.reduce((s, d) => s + d.jobs, 0)
-                const monthBytes = monthDays.reduce((s, d) => s + d.bytes, 0)
+                const monthMeasuredBytes = monthDays.reduce((s, d) => s + d.measuredBytes, 0)
+                const monthUnmeasured = monthDays.reduce((s, d) => s + d.unmeasured, 0)
+                const monthMeasuredJobs = monthJobs - monthUnmeasured
                 const bqModes = Array.from(new Set(bqJobs.map(j => j.mode).filter(Boolean))).sort()
                 const bqFiltered = bqJobFilter === 'all' ? bqJobs : bqJobs.filter(j => j.mode === bqJobFilter)
                 return (
@@ -2247,7 +2256,15 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         </span>
                       </div>
                       <div className={styles.statCard}>
-                        <div><div className={styles.statLabel}>Bytes billed this month</div><div className={styles.statValue}>{bqBytes(monthBytes)}</div></div>
+                        <div>
+                          <div className={styles.statLabel}>Bytes billed this month</div>
+                          <div className={styles.statValue}>{monthMeasuredJobs === 0 ? '—' : bqBytes(monthMeasuredBytes)}</div>
+                          {monthUnmeasured > 0 && (
+                            <div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 2 }}>
+                              {monthMeasuredJobs === 0 ? `all ${monthUnmeasured} job${monthUnmeasured === 1 ? '' : 's'} unmeasured` : `+${monthUnmeasured} unmeasured`}
+                            </div>
+                          )}
+                        </div>
                         <span className={`${styles.statIcon} ${styles.statIconGreen}`}>
                           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>
                         </span>
@@ -2262,18 +2279,25 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                               <tr>{['DATE', 'JOBS', 'BYTES BILLED', 'EST. COST'].map(h => <th key={h}>{h}</th>)}</tr>
                             </thead>
                             <tbody>
-                              {bqDaily.slice(0, 30).map(d => (
-                                <tr key={d.day} className={styles.alRow}>
-                                  <td className={styles.alTd}>{new Date(d.day + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                                  <td className={styles.alTd}>{d.jobs}</td>
-                                  <td className={styles.alTd}>{bqBytes(d.bytes)}</td>
-                                  <td className={styles.alTd}>{bqCost(d.bytes)}</td>
-                                </tr>
-                              ))}
+                              {bqDaily.slice(0, 30).map(d => {
+                                const measuredJobs = d.jobs - d.unmeasured
+                                const label = measuredJobs === 0 ? null : bqBytes(d.measuredBytes) + (d.unmeasured > 0 ? '*' : '')
+                                return (
+                                  <tr key={d.day} className={styles.alRow}>
+                                    <td className={styles.alTd}>{new Date(d.day + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                                    <td className={styles.alTd}>{d.jobs}</td>
+                                    <td className={styles.alTd} title={d.unmeasured > 0 ? `${d.unmeasured} of ${d.jobs} job(s) that day have no byte data (backfilled)` : ''}>{label || '—'}</td>
+                                    <td className={styles.alTd}>{measuredJobs === 0 ? '—' : bqCost(d.measuredBytes)}</td>
+                                  </tr>
+                                )
+                              })}
                             </tbody>
                           </table>
                         </div>
                         <div className={styles.alFoot}>Showing last {Math.min(bqDaily.length, 30)} days</div>
+                        {bqDaily.slice(0, 30).some(d => d.unmeasured > 0) && (
+                          <div className={styles.alFoot} style={{ borderTop: 'none', paddingTop: 0 }}>* includes job(s) with no byte data (backfilled) — figure covers only the jobs actually measured that day</div>
+                        )}
                       </div>
                     )}
                     {bqDaily.length === 0 && !bqJobsLoading && (
