@@ -1,5 +1,10 @@
 import { SLACK_CHANNELS, DEFAULT_CHANNEL_ID, channelHandle, confirmPhrase, phraseMatches } from '../shared/slackChannels.mjs'
 import { runAgentToolLoop, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL } from './ask-ai.mjs'
+// Plain ESM, no React/DOM -- safe as a static import from this .mjs handler
+// (unlike api/crm-leads.js below, which is bundled CommonJS and must only
+// ever be reached via a dynamic import()).
+import { B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS } from '../src/lib/b2cReport.js'
+import { buildB2CServerContext } from '../lib/b2cServerContext.mjs'
 import crypto from 'node:crypto'
 
 export const maxDuration = 60
@@ -1813,6 +1818,179 @@ async function handleCeoPin(req, res) {
   return res.status(400).json({ error: 'Unknown action' })
 }
 
+// ── B2C daily report: automated 3pm send, gated behind a Slack-button approval ──
+//
+// The cron posts BOTH the P&L and Cash Flow full-particulars reports to the
+// #dashboard-testing sandbox channel (never straight to the real, CEO-visible
+// #b2c-leverage-core channel) with an "Approve" button attached to each
+// message. Clicking that button IS the approval step -- no PIN/phrase modal
+// here, since a human looking at the exact rendered report and pressing a
+// real button in Slack already is the human-in-the-loop gate the user asked
+// for. The PIN gate that protects the *manual* Send-to-Slack panel is a
+// separate, complementary control for a different code path and is
+// untouched by this.
+//
+// Built server-side, no browser: buildB2CServerContext (lib/b2cServerContext.mjs)
+// ports the exact day/mtd/fy arithmetic CeoB2CDashboard.jsx computes
+// client-side, so these numbers can never drift from what the page itself
+// would show. No PNG table screenshot is sent (that needs a real DOM, which a
+// cron has none of) -- the native Slack table block these builders produce
+// already carries every line item, so nothing is lost, only the bonus image.
+//
+// api/crm-leads.js is bundled as CommonJS (its own top-of-file comment says
+// so) -- a STATIC import of it from this ESM file risks the exact
+// ERR_REQUIRE_ESM class of bug this repo has hit before, so it's reached only
+// through a dynamic import(), same safe pattern used everywhere else in this
+// codebase for this exact hazard.
+async function fetchB2CDataSafe() {
+  const { fetchB2CData } = await import('./crm-leads.js')
+  return fetchB2CData()
+}
+
+function findTestChannelId(cfg, wantedName) {
+  const list = Array.isArray(cfg.slack_test_channels) ? cfg.slack_test_channels : []
+  const hit = list.find(c => c && c.id && String(c.name || '').toLowerCase() === wantedName.toLowerCase())
+  return hit ? hit.id : null
+}
+
+async function savePendingB2CReport(statement, messages) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/b2c_pending_reports`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json', Prefer: 'return=representation',
+    },
+    body: JSON.stringify({ statement, messages, status: 'pending' }),
+  })
+  const rows = await r.json().catch(() => [])
+  if (!r.ok || !rows[0]) throw new Error('Could not save the pending report (has supabase/sql/b2c_pending_reports_setup.sql been run?)')
+  return rows[0].id
+}
+
+// Applied only to the SANDBOX copy of the message -- the pristine, button-free
+// version is what's stored and what actually gets posted to the real channel
+// on approval, so #b2c-leverage-core never shows a stale, already-used button.
+function withApproveButton(message, pendingId) {
+  const blocks = Array.isArray(message.blocks) ? message.blocks.slice() : []
+  blocks.push({
+    type: 'actions',
+    block_id: 'b2c_approve_' + pendingId,
+    elements: [{
+      type: 'button',
+      action_id: 'approve_b2c_report',
+      style: 'primary',
+      text: { type: 'plain_text', text: 'Approve → #b2c-leverage-core', emoji: true },
+      value: String(pendingId),
+    }],
+  })
+  return { ...message, blocks }
+}
+
+async function handleB2CDailyReport(req, res) {
+  // Vercel's own cron feature sends Authorization: Bearer $CRON_SECRET
+  // automatically once CRON_SECRET is set on the project -- the same secret
+  // the GitHub Actions crons already send as x-cron-secret, just delivered a
+  // different way depending on which scheduler is calling. Both are accepted
+  // so this endpoint doesn't care which one triggers it.
+  const bearer = req.headers.authorization || ''
+  const isVercelCron = !!process.env.CRON_SECRET && bearer === 'Bearer ' + process.env.CRON_SECRET
+  const isManualCron = !!process.env.CRON_SECRET && req.headers['x-cron-secret'] === process.env.CRON_SECRET
+  if (!isVercelCron && !isManualCron) {
+    const { getSessionUser } = await import('../lib/auth.mjs')
+    const me = getSessionUser(req)
+    if (!me || me.role !== 'admin') return res.status(401).json({ error: 'Not signed in' })
+  }
+
+  try {
+    const data = await fetchB2CDataSafe()
+    if (!data || data.configured === false) {
+      return res.status(500).json({ error: 'B2C sheet is not configured -- set it in Settings > Data.' })
+    }
+    const cfg = await getReportConfig()
+    const testId = findTestChannelId(cfg, 'dashboard-testing')
+    const hook = resolveSlackTarget(cfg, testId ? 'test:' + testId : 'test', {})
+    if (hook.mode !== 'bot' || !hook.channel) {
+      return res.status(400).json({ error: hook.missing || 'The #dashboard-testing sandbox channel is not configured.' })
+    }
+
+    const jobs = [
+      { statement: 'pnl', days: data.pnl && data.pnl.days, version: B2C_FULL_TABLE_VERSIONS[0] },
+      { statement: 'cashflow', days: data.cashFlow && data.cashFlow.days, version: B2C_CASHFLOW_TABLE_VERSIONS[0] },
+    ]
+    const posted = []
+    for (const job of jobs) {
+      const ctx = buildB2CServerContext(job.days || [], job.statement)
+      const messages = job.version.build(ctx) // pristine -- this exact array is what gets stored AND what the real channel receives on approval
+      const pendingId = await savePendingB2CReport(job.statement, messages)
+      const ts = await slackPostReportMessage(hook.token, hook.channel, withApproveButton(messages[0], pendingId))
+      posted.push({ statement: job.statement, pendingId, ts })
+    }
+    await logReport({ report_type: 'b2c daily report (sandbox)', recipients: ['slack:' + hook.label], status: 'sent', triggered_by: (isVercelCron || isManualCron) ? 'cron' : 'admin' })
+    return res.status(200).json({ ok: true, posted })
+  } catch (e) {
+    await logReport({ report_type: 'b2c daily report (sandbox)', recipients: [], status: 'failed', error: e.message, triggered_by: 'cron' })
+    return res.status(500).json({ error: e.message })
+  }
+}
+
+async function postSlackResponseUrl(url, payload) {
+  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
+}
+
+// Slack Interactivity block_actions handler -- the "Approve" button click.
+async function handleSlackBlockAction(payload) {
+  const action = (payload.actions || [])[0]
+  if (!action || action.action_id !== 'approve_b2c_report') return
+  const responseUrl = payload.response_url
+  const approver = (payload.user && (payload.user.username || payload.user.name)) || 'someone'
+
+  // Optional allowlist -- unset means anyone who can see #dashboard-testing
+  // (and therefore click the button at all) can approve.
+  const allowedIds = String(process.env.SLACK_APPROVER_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
+  if (allowedIds.length && !allowedIds.includes(payload.user && payload.user.id)) {
+    if (responseUrl) await postSlackResponseUrl(responseUrl, { text: 'You are not authorized to approve this.', replace_original: false })
+    return
+  }
+
+  const pendingId = action.value
+  // Atomic claim: the UPDATE itself is conditioned on status still being
+  // 'pending' and only proceeds if a row actually came back -- guards against
+  // Slack retrying a slow-to-ack interaction (or two people clicking at once)
+  // and posting the same report to the real channel twice.
+  const claimRes = await fetch(`${SUPABASE_URL}/rest/v1/b2c_pending_reports?id=eq.${encodeURIComponent(pendingId)}&status=eq.pending`, {
+    method: 'PATCH',
+    headers: {
+      apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json', Prefer: 'return=representation',
+    },
+    body: JSON.stringify({ status: 'approved', approved_by: approver, approved_at: new Date().toISOString() }),
+  })
+  const claimed = await claimRes.json().catch(() => [])
+  const row = claimed[0]
+  if (!row) {
+    if (responseUrl) await postSlackResponseUrl(responseUrl, { text: 'Already handled (or this report no longer exists).', replace_original: false })
+    return
+  }
+
+  const token = process.env.SLACK_BOT_TOKEN
+  const cfg = await getReportConfig()
+  const hook = resolveSlackTarget(cfg, 'b2c_core', { allowGuarded: true })
+  if (hook.mode !== 'bot' || !hook.channel) {
+    if (responseUrl) await postSlackResponseUrl(responseUrl, { text: hook.missing || 'Could not reach #b2c-leverage-core.', replace_original: false })
+    return
+  }
+
+  const logType = 'b2c ' + row.statement + ' report (approved)'
+  try {
+    for (const m of (row.messages || [])) await slackPostReportMessage(token, hook.channel, m)
+    await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: approver })
+    if (responseUrl) await postSlackResponseUrl(responseUrl, { replace_original: true, text: `✅ Approved by @${approver} — sent to ${channelHandle('b2c_core')}.` })
+  } catch (e) {
+    await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'failed', error: e.message, triggered_by: approver })
+    if (responseUrl) await postSlackResponseUrl(responseUrl, { text: `Failed to post: ${e.message}`, replace_original: false })
+  }
+}
+
 async function handleSlackReport(req, res) {
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
@@ -1907,6 +2085,24 @@ export default async function handler(req, res) {
   if (slackSig && !verifySlackSignature(rawBody, req.headers['x-slack-request-timestamp'], slackSig)) {
     return res.status(401).end('Invalid Slack signature')
   }
+
+  // Slack Interactivity (a button click) arrives form-encoded with a `payload`
+  // field, never as the JSON body every other caller here sends -- branched
+  // off BEFORE the JSON.parse below, or the payload silently falls into that
+  // parse's catch-and-ignore fallback and is lost. Signature verification
+  // above already covers this request too (Slack signs Interactivity payloads
+  // the same v0=HMAC scheme as Events API).
+  const contentType = String(req.headers['content-type'] || '')
+  if (contentType.includes('application/x-www-form-urlencoded')) {
+    const form = new URLSearchParams(rawBody.toString('utf8'))
+    let payload = null
+    try { payload = JSON.parse(form.get('payload') || 'null') } catch { payload = null }
+    if (payload && payload.type === 'block_actions') {
+      await handleSlackBlockAction(payload).catch(e => console.error('Slack block_actions failed:', e))
+    }
+    return res.status(200).end()
+  }
+
   try { req.body = rawBody.length ? JSON.parse(rawBody.toString('utf8')) : {} } catch { req.body = {} }
 
   // Slack's own Events API payloads. url_verification is the one-time handshake
@@ -1967,6 +2163,9 @@ export default async function handler(req, res) {
   }
   if ((req.body?.type || req.query?.type) === 'unassigned_leads') {
     return handleUnassignedLeadsReport(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'b2c_daily_report') {
+    return handleB2CDailyReport(req, res)
   }
 
   const RESEND_KEY = process.env.RESEND_API_KEY

@@ -844,38 +844,48 @@ function b2cParseDays(csv, cols) {
   return { days: days, gridFrom: gridFrom, gridTo: gridTo };
 }
 
-async function handleB2C(req, res, me) {
-  const { canAccessDashboard } = await import('../lib/auth.mjs');
-  if (!canAccessDashboard(me.role, 'ceo_b2c_pnl') && !canAccessDashboard(me.role, 'ceo_b2c_cashflow')) return res.status(403).json({ error: 'Forbidden' });
+// Pure data fetch, no req/res -- factored out of handleB2C so a server-side
+// caller with no HTTP request in hand (the b2c_daily_report cron in
+// api/send-report.mjs) can get the exact same {pnl, cashFlow, monthly} shape
+// the CeoB2CDashboard page reads, without going through an HTTP round trip
+// (which would also need a session cookie this caller doesn't have).
+export async function fetchB2CData() {
   const id = await getB2CSheetId();
-  if (!id) return res.status(200).json({ configured: false, pnl: { days: [] }, cashFlow: { days: [] }, monthly: {}, ts: Date.now() });
+  if (!id) return { configured: false, pnl: { days: [] }, cashFlow: { days: [] }, monthly: {}, ts: Date.now() };
   const base = 'https://docs.google.com/spreadsheets/d/' + id + '/gviz/tq?tqx=out:csv';
   const grab = async function (u) {
     const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0' } });
     if (!r.ok) throw new Error('sheet ' + r.status);
     return r.text();
   };
+  const csvs = await Promise.all([
+    grab(base + '&sheet=' + encodeURIComponent(B2C_PNL_SHEET_TAB)),
+    grab(base + '&sheet=' + encodeURIComponent(B2C_CASHFLOW_SHEET_TAB)),
+  ].concat(
+    B2C_MONTH_TABS.map(function (t) { return grab(base + '&sheet=' + encodeURIComponent(t[1])) })
+  ));
+  const pnl = b2cParseDays(csvs[0], B2C_PNL_COLS);
+  const cashFlow = b2cParseDays(csvs[1], B2C_CASHFLOW_COLS);
+  const monthly = {};
+  B2C_MONTH_TABS.forEach(function (t, i) {
+    const p = b2cRows(csvs[i + 2], { month: 'month', actual: 'actual', forecast: 'forecast' });
+    monthly[t[0]] = p.rows.map(function (r) {
+      return {
+        month: String(r[p.at.month] == null ? '' : r[p.at.month]).trim(),
+        actual: p.at.actual >= 0 ? b2cNum(r[p.at.actual]) : null,
+        forecast: p.at.forecast >= 0 ? b2cNum(r[p.at.forecast]) : null,
+      };
+    }).filter(function (m) { return m.month });
+  });
+  return { configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, ts: Date.now() };
+}
+
+async function handleB2C(req, res, me) {
+  const { canAccessDashboard } = await import('../lib/auth.mjs');
+  if (!canAccessDashboard(me.role, 'ceo_b2c_pnl') && !canAccessDashboard(me.role, 'ceo_b2c_cashflow')) return res.status(403).json({ error: 'Forbidden' });
   try {
-    const csvs = await Promise.all([
-      grab(base + '&sheet=' + encodeURIComponent(B2C_PNL_SHEET_TAB)),
-      grab(base + '&sheet=' + encodeURIComponent(B2C_CASHFLOW_SHEET_TAB)),
-    ].concat(
-      B2C_MONTH_TABS.map(function (t) { return grab(base + '&sheet=' + encodeURIComponent(t[1])) })
-    ));
-    const pnl = b2cParseDays(csvs[0], B2C_PNL_COLS);
-    const cashFlow = b2cParseDays(csvs[1], B2C_CASHFLOW_COLS);
-    const monthly = {};
-    B2C_MONTH_TABS.forEach(function (t, i) {
-      const p = b2cRows(csvs[i + 2], { month: 'month', actual: 'actual', forecast: 'forecast' });
-      monthly[t[0]] = p.rows.map(function (r) {
-        return {
-          month: String(r[p.at.month] == null ? '' : r[p.at.month]).trim(),
-          actual: p.at.actual >= 0 ? b2cNum(r[p.at.actual]) : null,
-          forecast: p.at.forecast >= 0 ? b2cNum(r[p.at.forecast]) : null,
-        };
-      }).filter(function (m) { return m.month });
-    });
-    return res.status(200).json({ configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, ts: Date.now() });
+    const data = await fetchB2CData();
+    return res.status(200).json(data);
   } catch (e) {
     return res.status(502).json({ error: 'sheet fetch failed', detail: String((e && e.message) || e) });
   }

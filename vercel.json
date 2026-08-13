@@ -9,5 +9,11 @@
       "source": "/(.*)",
       "destination": "/"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/send-report?type=b2c_daily_report",
+      "schedule": "30 9 * * *"
+    }
   ]
 }
