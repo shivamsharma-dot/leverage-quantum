@@ -1887,20 +1887,53 @@ function approvalDestinationLabel(hook) {
 // Applied only to the SANDBOX copy of the message -- the pristine, button-free
 // version is what's stored and what actually gets posted to the real channel
 // on approval, so #b2c-leverage-core never shows a stale, already-used button.
-function withApproveButton(message, pendingId, destLabel) {
+// Disapprove needs no lock -- flagging an issue isn't the sensitive action,
+// only pushing the report onward is.
+function withApproveButtons(message, pendingId, destLabel) {
   const blocks = Array.isArray(message.blocks) ? message.blocks.slice() : []
   blocks.push({
     type: 'actions',
     block_id: 'b2c_approve_' + pendingId,
-    elements: [{
-      type: 'button',
-      action_id: 'approve_b2c_report',
-      style: 'primary',
-      text: { type: 'plain_text', text: 'Approve → ' + destLabel, emoji: true },
-      value: String(pendingId),
-    }],
+    elements: [
+      {
+        type: 'button', action_id: 'approve_b2c_report', style: 'primary',
+        text: { type: 'plain_text', text: 'Approve → ' + destLabel, emoji: true },
+        value: String(pendingId),
+      },
+      {
+        type: 'button', action_id: 'disapprove_b2c_report', style: 'danger',
+        text: { type: 'plain_text', text: 'Disapprove', emoji: true },
+        value: String(pendingId),
+      },
+    ],
   })
   return { ...message, blocks }
+}
+
+async function slackOpenView(token, triggerId, view) {
+  const res = await fetch('https://slack.com/api/views.open', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ trigger_id: triggerId, view }),
+  })
+  const d = await res.json().catch(() => ({}))
+  if (!d.ok) throw new Error('Slack views.open: ' + (d.error || 'rejected'))
+  return d.view
+}
+
+// A DM by Slack member id, not by email -- users.lookupByEmail needs a
+// users:read.email scope this app's bot token doesn't have, and adding it
+// would need a Reinstall to Workspace. Posting chat.postMessage straight at
+// a user id opens (or reuses) the DM with them, no extra scope required.
+async function slackSendDM(token, userId, text) {
+  const res = await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ channel: userId, text }),
+  })
+  const d = await res.json().catch(() => ({}))
+  if (!d.ok) throw new Error('Slack DM: ' + (d.error || 'rejected'))
+  return d.ts
 }
 
 async function handleB2CDailyReport(req, res) {
@@ -1946,7 +1979,7 @@ async function handleB2CDailyReport(req, res) {
       const ctx = buildB2CServerContext(job.days || [], job.statement)
       const messages = job.version.build(ctx) // pristine -- this exact array is what gets stored AND what the real channel receives on approval
       const pendingId = await savePendingB2CReport(job.statement, messages)
-      const ts = await slackPostReportMessage(hook.token, hook.channel, withApproveButton(messages[0], pendingId, approvalLabel))
+      const ts = await slackPostReportMessage(hook.token, hook.channel, withApproveButtons(messages[0], pendingId, approvalLabel))
       posted.push({ statement: job.statement, pendingId, ts })
     }
     await logReport({ report_type: 'b2c daily report (sandbox)', recipients: ['slack:' + hook.label], status: 'sent', triggered_by: (isVercelCron || isManualCron) ? 'cron' : 'admin' })
@@ -1957,64 +1990,166 @@ async function handleB2CDailyReport(req, res) {
   }
 }
 
-async function postSlackResponseUrl(url, payload) {
-  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {})
-}
-
-// Slack Interactivity block_actions handler -- the "Approve" button click.
+// Slack Interactivity block_actions handler -- Approve/Disapprove button
+// clicks. Neither button acts immediately: Approve opens a modal asking for
+// the CEO PIN (the same one that already gates the real Send-to-Slack
+// panel), Disapprove opens a modal asking what's wrong. The actual work
+// happens in handleSlackViewSubmission once one of those is submitted.
+// private_metadata carries just enough (pendingId + the original message's
+// channel/ts) to claim the row and update that same message afterward.
 async function handleSlackBlockAction(payload) {
   const action = (payload.actions || [])[0]
-  if (!action || action.action_id !== 'approve_b2c_report') return
-  const responseUrl = payload.response_url
-  const approver = (payload.user && (payload.user.username || payload.user.name)) || 'someone'
+  if (!action) return
+  const token = process.env.SLACK_BOT_TOKEN
+  const pendingId = action.value
+  const meta = JSON.stringify({
+    pendingId,
+    channel: payload.channel && payload.channel.id,
+    ts: payload.message && payload.message.ts,
+  })
 
-  // Optional allowlist -- unset means anyone who can see #dashboard-testing
-  // (and therefore click the button at all) can approve.
+  // Optional allowlist -- unset means anyone who can see the sandbox channel
+  // (and therefore click a button at all) can approve or disapprove.
   const allowedIds = String(process.env.SLACK_APPROVER_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
   if (allowedIds.length && !allowedIds.includes(payload.user && payload.user.id)) {
-    if (responseUrl) await postSlackResponseUrl(responseUrl, { text: 'You are not authorized to approve this.', replace_original: false })
+    // No modal to show an error in yet at this point (trigger_id is only good
+    // for opening one), so this is silently ignored for an unauthorized click
+    // -- acceptable since the allowlist is an optional extra, not the main gate.
     return
   }
 
-  const pendingId = action.value
-  // Atomic claim: the UPDATE itself is conditioned on status still being
-  // 'pending' and only proceeds if a row actually came back -- guards against
-  // Slack retrying a slow-to-ack interaction (or two people clicking at once)
-  // and posting the same report to the real channel twice.
-  const claimRes = await fetch(`${SUPABASE_URL}/rest/v1/b2c_pending_reports?id=eq.${encodeURIComponent(pendingId)}&status=eq.pending`, {
-    method: 'PATCH',
-    headers: {
-      apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-      'Content-Type': 'application/json', Prefer: 'return=representation',
-    },
-    body: JSON.stringify({ status: 'approved', approved_by: approver, approved_at: new Date().toISOString() }),
-  })
-  const claimed = await claimRes.json().catch(() => [])
-  const row = claimed[0]
-  if (!row) {
-    if (responseUrl) await postSlackResponseUrl(responseUrl, { text: 'Already handled (or this report no longer exists).', replace_original: false })
+  if (action.action_id === 'approve_b2c_report') {
+    await slackOpenView(token, payload.trigger_id, {
+      type: 'modal',
+      callback_id: 'b2c_approve_pin_modal',
+      private_metadata: meta,
+      title: { type: 'plain_text', text: 'Approve report' },
+      submit: { type: 'plain_text', text: 'Confirm' },
+      close: { type: 'plain_text', text: 'Cancel' },
+      blocks: [{
+        type: 'input', block_id: 'pin_block',
+        label: { type: 'plain_text', text: 'CEO PIN' },
+        element: { type: 'plain_text_input', action_id: 'pin_input' },
+      }],
+    }).catch(e => console.error('Slack views.open (approve) failed:', e))
     return
   }
 
+  if (action.action_id === 'disapprove_b2c_report') {
+    await slackOpenView(token, payload.trigger_id, {
+      type: 'modal',
+      callback_id: 'b2c_disapprove_modal',
+      private_metadata: meta,
+      title: { type: 'plain_text', text: 'Disapprove report' },
+      submit: { type: 'plain_text', text: 'Send' },
+      close: { type: 'plain_text', text: 'Cancel' },
+      blocks: [{
+        type: 'input', block_id: 'reason_block',
+        label: { type: 'plain_text', text: "What's incorrect?" },
+        element: { type: 'plain_text_input', action_id: 'reason_input', multiline: true },
+      }],
+    }).catch(e => console.error('Slack views.open (disapprove) failed:', e))
+    return
+  }
+}
+
+function modalFieldValue(view, blockId, actionId) {
+  const v = view.state && view.state.values && view.state.values[blockId] && view.state.values[blockId][actionId]
+  return (v && v.value) || ''
+}
+
+// The modal's Confirm/Send button -- PIN verified or reason collected here,
+// after the button click above already opened the right one.
+async function handleSlackViewSubmission(payload) {
+  const view = payload.view || {}
+  let meta = {}
+  try { meta = JSON.parse(view.private_metadata || '{}') } catch { meta = {} }
+  const pendingId = meta.pendingId
+  const actor = (payload.user && (payload.user.username || payload.user.name)) || 'someone'
   const token = process.env.SLACK_BOT_TOKEN
-  const cfg = await getReportConfig()
-  // Same resolveApprovalDestination() the sandbox message's own button label
-  // was built from -- this is what makes the two impossible to disagree.
-  const hook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), {})
-  if (hook.mode !== 'bot' || !hook.channel) {
-    if (responseUrl) await postSlackResponseUrl(responseUrl, { text: hook.missing || 'Could not reach the configured destination.', replace_original: false })
-    return
+
+  async function claim(fields) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/b2c_pending_reports?id=eq.${encodeURIComponent(pendingId)}&status=eq.pending`, {
+      method: 'PATCH',
+      headers: {
+        apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json', Prefer: 'return=representation',
+      },
+      body: JSON.stringify(fields),
+    })
+    const rows = await r.json().catch(() => [])
+    return rows[0] || null
   }
 
-  const logType = 'b2c ' + row.statement + ' report (approved)'
-  try {
-    for (const m of (row.messages || [])) await slackPostReportMessage(token, hook.channel, m)
-    await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: approver })
-    if (responseUrl) await postSlackResponseUrl(responseUrl, { replace_original: true, text: `✅ Approved by @${approver} — sent to ${approvalDestinationLabel(hook)}.` })
-  } catch (e) {
-    await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'failed', error: e.message, triggered_by: approver })
-    if (responseUrl) await postSlackResponseUrl(responseUrl, { text: `Failed to post: ${e.message}`, replace_original: false })
+  if (view.callback_id === 'b2c_approve_pin_modal') {
+    const pin = modalFieldValue(view, 'pin_block', 'pin_input')
+    const chk = await verifyCeoPin(pin, actor)
+    if (!chk.ok) return { response_action: 'errors', errors: { pin_block: chk.message } }
+
+    // Atomic claim: only proceeds if the row was still 'pending' -- guards
+    // against a slow ack retry or a second click posting the report twice.
+    const row = await claim({ status: 'approved', approved_by: actor, approved_at: new Date().toISOString() })
+    if (!row) {
+      if (meta.channel && meta.ts) {
+        await slackUpdateBlocks(token, meta.channel, meta.ts, 'Already handled', [
+          { type: 'section', text: { type: 'mrkdwn', text: 'Already handled.' } },
+        ]).catch(() => {})
+      }
+      return { response_action: 'clear' }
+    }
+
+    const cfg = await getReportConfig()
+    const hook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), {})
+    const logType = 'b2c ' + row.statement + ' report (approved)'
+    try {
+      if (hook.mode === 'bot' && hook.channel) {
+        for (const m of (row.messages || [])) await slackPostReportMessage(token, hook.channel, m)
+      }
+      await logReport({ report_type: logType, recipients: ['slack:' + (hook.label || '?')], status: 'sent', triggered_by: actor })
+      if (meta.channel && meta.ts) {
+        const destLabel = hook.mode === 'bot' && hook.channel ? approvalDestinationLabel(hook) : '(destination not configured)'
+        await slackUpdateBlocks(token, meta.channel, meta.ts, 'Approved', [
+          { type: 'section', text: { type: 'mrkdwn', text: `✅ *Approved by @${actor}* — sent to ${destLabel}.` } },
+        ]).catch(() => {})
+      }
+    } catch (e) {
+      await logReport({ report_type: logType, recipients: [], status: 'failed', error: e.message, triggered_by: actor })
+    }
+    return { response_action: 'clear' }
   }
+
+  if (view.callback_id === 'b2c_disapprove_modal') {
+    const reason = modalFieldValue(view, 'reason_block', 'reason_input').trim()
+    if (!reason) return { response_action: 'errors', errors: { reason_block: "Say what's incorrect before sending." } }
+
+    const row = await claim({ status: 'rejected', reason, rejected_by: actor, rejected_at: new Date().toISOString() })
+    if (!row) return { response_action: 'clear' } // already handled
+
+    if (meta.channel && meta.ts) {
+      await slackUpdateBlocks(token, meta.channel, meta.ts, 'Disapproved', [
+        { type: 'section', text: { type: 'mrkdwn', text: `❌ *Disapproved by @${actor}*\n>${reason}` } },
+      ]).catch(() => {})
+    }
+
+    const label = row.statement === 'cashflow' ? 'Cash Flow' : 'P&L'
+    const notifyId = process.env.SLACK_DISAPPROVE_NOTIFY_USER_ID
+    if (notifyId) {
+      await slackSendDM(token, notifyId, `❌ *B2C ${label} report disapproved* by @${actor}\n>${reason}`)
+        .catch(e => console.error('Slack DM to SLACK_DISAPPROVE_NOTIFY_USER_ID failed:', e))
+    } else {
+      console.error('SLACK_DISAPPROVE_NOTIFY_USER_ID is not set -- the disapprove reason was not DM\'d to anyone.')
+    }
+    await logReport({
+      report_type: 'b2c ' + row.statement + ' report (disapproved)',
+      recipients: notifyId ? ['slack:dm:' + notifyId] : [],
+      status: notifyId ? 'sent' : 'failed',
+      error: notifyId ? null : 'SLACK_DISAPPROVE_NOTIFY_USER_ID not set',
+      triggered_by: actor,
+    })
+    return { response_action: 'clear' }
+  }
+
+  return { response_action: 'clear' }
 }
 
 async function handleSlackReport(req, res) {
@@ -2125,6 +2260,19 @@ export default async function handler(req, res) {
     try { payload = JSON.parse(form.get('payload') || 'null') } catch { payload = null }
     if (payload && payload.type === 'block_actions') {
       await handleSlackBlockAction(payload).catch(e => console.error('Slack block_actions failed:', e))
+      return res.status(200).end()
+    }
+    if (payload && payload.type === 'view_submission') {
+      // Slack needs this ack within 3s and reads response_action from the
+      // body -- 'errors' keeps the modal open with an inline message (wrong
+      // PIN, blank reason), 'clear' closes it once the real work is done.
+      try {
+        const result = await handleSlackViewSubmission(payload)
+        return res.status(200).json(result || { response_action: 'clear' })
+      } catch (e) {
+        console.error('Slack view_submission failed:', e)
+        return res.status(200).json({ response_action: 'clear' })
+      }
     }
     return res.status(200).end()
   }
