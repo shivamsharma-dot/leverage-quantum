@@ -1382,7 +1382,24 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // so they get the fast path. Switching grpBy to/from campaign or corridor
   // re-triggers this effect and swaps which table gets read -- the date-range
   // logic above (bqSince/bqUntil/bqRange) is completely unchanged either way.
-  const bqNeedsCampaignDetail = grpBy === 'campaign' || grpBy === 'corridor'
+  //
+  // Trend Analysis (trendDim) and Compare (compareGroupBy for the movers list,
+  // compareTableDim for the deep-analysis table) have their OWN dimension
+  // pickers, independent of the main table's grpBy -- both default to
+  // 'corridor'. Everything on this page derives from the same `bqRows`, so if
+  // either panel is open on a campaign/corridor dimension while grpBy itself is
+  // still 'source', the fast (day+Source only) table would silently make every
+  // campaign/corridor number in that panel wrong (blank campaign, "Unclassified"
+  // corridor) rather than just being unavailable. Gated on *Open so a panel that
+  // has never been opened doesn't force the slow path just because its default
+  // dimension happens to be 'corridor'.
+  const bqNeedsCampaignDetail =
+    grpBy === 'campaign' || grpBy === 'corridor' ||
+    (trendOpen && (trendDim === 'campaign' || trendDim === 'corridor')) ||
+    (compareOpen && (
+      compareGroupBy === 'campaign' || compareGroupBy === 'corridor' ||
+      compareTableDim === 'campaign' || compareTableDim === 'corridor'
+    ))
   useEffect(() => {
     if (!bqMode || !bqSince || !bqUntil) return
     let dead = false
