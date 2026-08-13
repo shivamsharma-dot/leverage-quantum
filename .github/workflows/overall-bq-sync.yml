@@ -370,6 +370,33 @@ jobs:
               return urllib.request.Request(url, data=data, method=method, headers=headers)
 
 
+          def delete_with_retry(url, label):
+              # A bare, unguarded DELETE here previously failed with a plain
+              # "HTTP Error 500: Internal Server Error" and no further detail --
+              # unlike the upsert loop above, which already retries and captures
+              # the response body on failure. This gives the prune step the same
+              # two things: a second/third chance at a transient blip, and the
+              # actual Supabase error text if it keeps failing, instead of a dead
+              # end that has to be reproduced all over again to even see why.
+              for attempt in range(3):
+                  try:
+                      req = sb(url, 'DELETE', None, {'Prefer': 'return=minimal'})
+                      with urllib.request.urlopen(req, timeout=120) as r:
+                          r.read()
+                      return
+                  except Exception as e:
+                      detail = ''
+                      try:
+                          if hasattr(e, 'read'):
+                              detail = ' | body: ' + e.read().decode('utf-8')[:800]
+                      except Exception:
+                          pass
+                      print(label, 'prune attempt', attempt, 'failed:', repr(e) + detail)
+                      if attempt == 2:
+                          raise
+                      time.sleep(3 * (attempt + 1))
+
+
           upsert_url = SB_URL + '/rest/v1/' + TABLE + '?on_conflict=row_key'
           for i in range(0, len(records), BATCH):
               body = json.dumps(records[i:i + BATCH]).encode('utf-8')
@@ -406,9 +433,7 @@ jobs:
           # which a bare neq. would skip because NULL != x is not true in SQL.
           prune_url = (SB_URL + '/rest/v1/' + TABLE + '?or=(sync_id.neq.'
                        + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
-          req = sb(prune_url, 'DELETE', None, {'Prefer': 'return=minimal'})
-          with urllib.request.urlopen(req, timeout=120) as r:
-              r.read()
+          delete_with_retry(prune_url, TABLE)
           print('Pruned every row not stamped with this sync_id.')
 
           # Final proof, server-side: the table must now hold exactly as many rows
@@ -512,9 +537,7 @@ jobs:
           # stamped with this sync's id, only after every batch has landed.
           agg_prune_url = (SB_URL + '/rest/v1/' + AGG_TABLE + '?or=(sync_id.neq.'
                            + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
-          req = sb(agg_prune_url, 'DELETE', None, {'Prefer': 'return=minimal'})
-          with urllib.request.urlopen(req, timeout=120) as r:
-              r.read()
+          delete_with_retry(agg_prune_url, AGG_TABLE)
           print('Pruned', AGG_TABLE, 'of every row not stamped with this sync_id.')
 
           req = sb(SB_URL + '/rest/v1/' + AGG_TABLE + '?select=row_key&limit=1', 'GET',
