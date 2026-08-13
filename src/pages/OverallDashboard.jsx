@@ -871,6 +871,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // because bqRange's own trendBqSpan, much earlier in the file, needs it too.
   const trendIsSingleSeries = trendDim === 'month' || trendDim === 'day'
   const trendEffectiveGranularity = trendDim === 'month' ? 'month' : trendDim === 'day' ? 'day' : trendGranularity
+  // While the wider trailing-window fetch is still in flight (the banner just above
+  // the chart already says so), a period reading exactly 0 is indistinguishable from
+  // "not fetched yet" -- the underlying read is all-or-nothing, not per-bucket, so
+  // there's no finer signal available. Treating every zero as provisional during this
+  // window is a deliberate over-approximation: a handful of genuinely-zero periods
+  // will show a loading skeleton too, but that beats a confident "0" that's actually
+  // just missing data, which was the whole complaint this exists to fix.
+  const trendMaybeLoading = bqMode && bqBusy
 
   // Deep-analysis-only narrowing -- separate from the page's own toolbar filters
   // (Source/Corridor/Campaign up top) so zooming into "just Facebook" or "just this
@@ -3648,7 +3656,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                               <XAxis dataKey="period" tick={{ fontSize:12.5, fill:C.muted }} axisLine={false} tickLine={false} />
                               <YAxis tick={{ fontSize:12.5, fill:C.muted }} axisLine={false} tickLine={false} width={54} />
                               <Tooltip formatter={v => DEEP_METRICS.find(m => m.key === trendMetric)?.fmt(v)} contentStyle={{ fontSize:13.5, borderRadius:8, border:`0.5px solid ${C.border}` }} />
-                              <Line type="monotone" dataKey="value" name={DEEP_METRICS.find(m => m.key === trendMetric)?.label} stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }} />
+                              <Line type="monotone" dataKey="value" name={DEEP_METRICS.find(m => m.key === trendMetric)?.label} stroke={C.navy} strokeWidth={2.5} strokeDasharray={trendMaybeLoading ? '5 4' : undefined} dot={{ r:3 }} />
                             </LineChart>
                           ) : (
                             <LineChart data={trendResult.chartRows} margin={{ left:0, right:12, top:4, bottom:4 }}>
@@ -3658,7 +3666,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                               <Tooltip formatter={v => DEEP_METRICS.find(m => m.key === trendMetric)?.fmt(v)} contentStyle={{ fontSize:13.5, borderRadius:8, border:`0.5px solid ${C.border}` }} />
                               <Legend wrapperStyle={{ fontSize:12.5 }} />
                               {trendResult.seriesKeys.map((k, i) => (
-                                <Line key={k} type="monotone" dataKey={k} name={trendResult.seriesLabels[k]} stroke={brandColor(i)} strokeWidth={2} dot={{ r:2.5 }} />
+                                <Line key={k} type="monotone" dataKey={k} name={trendResult.seriesLabels[k]} stroke={brandColor(i)} strokeWidth={2} strokeDasharray={trendMaybeLoading ? '5 4' : undefined} dot={{ r:2.5 }} />
                               ))}
                             </LineChart>
                           )}
@@ -3698,7 +3706,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                               <tr>
                                 <td style={{ padding:'6px 10px', fontWeight:800, color:C.text, borderBottom:`0.5px solid ${C.border}`, background:'var(--card)' }}>Total</td>
                                 {trendResult.grandTotal.map((v, i) => (
-                                  <td key={i} style={{ padding:'6px 10px', textAlign:'right', fontWeight:800, color:C.text, borderBottom:`0.5px solid ${C.border}`, background:'var(--card)', whiteSpace:'nowrap' }}>{trendMetricDef.fmt(v)}</td>
+                                  <td key={i} style={{ padding:'6px 10px', textAlign:'right', fontWeight:800, color:C.text, borderBottom:`0.5px solid ${C.border}`, background:'var(--card)', whiteSpace:'nowrap' }}>
+                                    {trendMaybeLoading && !v ? <span className="skeleton" style={{ display:'inline-block', width:34, height:11, verticalAlign:'middle' }} /> : trendMetricDef.fmt(v)}
+                                  </td>
                                 ))}
                               </tr>
                             )}
@@ -3710,7 +3720,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                               <tr key={row.label} style={{ background: i % 2 ? 'var(--bg2)' : 'transparent' }}>
                                 <td style={{ padding:'6px 10px', fontWeight:600, color:C.text, whiteSpace:'nowrap', maxWidth:220, overflow:'hidden', textOverflow:'ellipsis' }}>{row.label}</td>
                                 {row.values.map((v, j) => (
-                                  <td key={j} style={{ padding:'6px 10px', textAlign:'right', color:C.sub, whiteSpace:'nowrap' }}>{trendMetricDef.fmt(v)}</td>
+                                  <td key={j} style={{ padding:'6px 10px', textAlign:'right', color:C.sub, whiteSpace:'nowrap' }}>
+                                    {trendMaybeLoading && !v ? <span className="skeleton" style={{ display:'inline-block', width:28, height:11, verticalAlign:'middle' }} /> : trendMetricDef.fmt(v)}
+                                  </td>
                                 ))}
                               </tr>
                             ))}
