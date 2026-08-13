@@ -22,7 +22,7 @@ import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, B
 // source this page instance reads is now fixed by the `dataSource` prop (two
 // separate routes/pages -- see App.jsx), not a per-device Settings toggle.
 import {
-  fetchOverallBqRows, fetchOverallBqAggRows, fetchOverallBqBounds, fetchOverallBqSyncedAt,
+  fetchOverallBqRows, fetchOverallBqBounds, fetchOverallBqSyncedAt,
 } from '../lib/overallBqCache'
 
 // "Overall PM" — added by the admin as a custom Data Source (Settings > Data > Google Sheets).
@@ -1375,36 +1375,24 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     setSelMonth(monthLabel(maxKey >= curKey ? curKey : maxKey))
   }, [bqMode, bqBounds, selMonth])
 
-  // Campaign and Corridor groupings classify/group by campaign name, which the
-  // fast aggregated table doesn't carry (it's summed away at day+Source grain --
-  // see supabase/sql/overall_bq_agg_setup.sql). Every other view (KPI cards, the
-  // funnel chart, Source/Month/Day groupings) never needed campaign-level rows,
-  // so they get the fast path. Switching grpBy to/from campaign or corridor
-  // re-triggers this effect and swaps which table gets read -- the date-range
-  // logic above (bqSince/bqUntil/bqRange) is completely unchanged either way.
-  //
-  // Trend Analysis (trendDim) and Compare (compareGroupBy for the movers list,
-  // compareTableDim for the deep-analysis table) have their OWN dimension
-  // pickers, independent of the main table's grpBy -- both default to
-  // 'corridor'. Everything on this page derives from the same `bqRows`, so if
-  // either panel is open on a campaign/corridor dimension while grpBy itself is
-  // still 'source', the fast (day+Source only) table would silently make every
-  // campaign/corridor number in that panel wrong (blank campaign, "Unclassified"
-  // corridor) rather than just being unavailable. Gated on *Open so a panel that
-  // has never been opened doesn't force the slow path just because its default
-  // dimension happens to be 'corridor'.
-  const bqNeedsCampaignDetail =
-    grpBy === 'campaign' || grpBy === 'corridor' ||
-    (trendOpen && (trendDim === 'campaign' || trendDim === 'corridor')) ||
-    (compareOpen && (
-      compareGroupBy === 'campaign' || compareGroupBy === 'corridor' ||
-      compareTableDim === 'campaign' || compareTableDim === 'corridor'
-    ))
+  // ALWAYS full per-row detail (campaign_name included), never the aggregated
+  // day+Source table. Tried gating this on grpBy/trendDim/compareGroupBy first
+  // (fast path unless the CURRENTLY VISIBLE view needed campaign detail), but
+  // that missed a whole region of the page: reportCmp (the source for
+  // CpqlBySource/SpendVsQuality/CorridorRanking/AdRanking/NotPerforming, all
+  // rendered unconditionally below the main table, not gated by grpBy or any
+  // open/closed panel state) classifies EVERY row's corridor from r.campaign.
+  // With the aggregated table (no campaign_name) that silently collapsed the
+  // whole account into a single "Unclassified" corridor holding 100% of spend
+  // -- wrong, not just slow. Since that section is always on screen, there is
+  // no view of this page that can safely skip campaign-level rows, so the fast
+  // aggregated table (fetchOverallBqAggRows, supabase/sql/overall_bq_agg_setup.sql)
+  // is left unused here for now rather than partially applied and unsafe.
   useEffect(() => {
     if (!bqMode || !bqSince || !bqUntil) return
     let dead = false
     setBqBusy(true)
-    const fetcher = bqNeedsCampaignDetail ? fetchOverallBqRows : fetchOverallBqAggRows
+    const fetcher = fetchOverallBqRows
     retryFetch(() => fetcher({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources }))
       .then(raw => {
         if (dead) return
@@ -1424,7 +1412,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       })
       .finally(() => { if (!dead) { setBqBusy(false); setLoading(false) } })
     return () => { dead = true }
-  }, [bqMode, bqSince, bqUntil, sourceIsAll, selectedSources, bqNonce, loadData, bqNeedsCampaignDetail])
+  }, [bqMode, bqSince, bqUntil, sourceIsAll, selectedSources, bqNonce, loadData])
 
   // Period A (the "current" side) is normally whatever the main page filter is --
   // correct for 'prev'/'yoy' modes, since those are explicitly "vs the period I'm
