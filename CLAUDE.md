@@ -4502,3 +4502,120 @@ live measurement.
 - Three `color:'#fff'`-on-brand-fill cases remain in `buttonVariants.js` (white on
   `#1C9FD4` is 2.4:1). That is a brand-palette question, not a theming one, and it
   fails identically in all four themes.
+
+## 2026-08-13 -- Overall (BigQuery): Trend Analysis loading signal (commit `b24f31b`)
+
+Follow-up to the BigQuery-cache correctness fix above (`4e3733a` reverting the
+fast/slow aggregated split). With the fetch back to unconditional full-detail,
+Trend Analysis on `/dashboard/overall-bigquery` had no way to distinguish "this
+period's number is a confirmed zero" from "this period hasn't loaded yet" --
+both looked identical (blank/zero) while `bqBusy` was true. Fixed with a small,
+deliberately-approximate honest signal rather than fine-grained per-period
+progress tracking (which the current fetch shape can't produce without a bigger
+restructure): `trendMaybeLoading = bqMode && bqBusy`, rendering the grand-total
+row's cells as skeleton placeholders (reusing the existing global `.skeleton`
+shimmer class) and both single-series/multi-series chart `<Line>`s with a dashed
+`strokeDasharray` while true. User confirmed this was the right level of effort
+("combination of 1 and 2" -- the honest-signal option -- over building real
+progress tracking) and verified the result live ("its okay").
+
+## 2026-08-13 (later) -- Leverage Careers: granular day+campaign rebuild -- Won/CPI/CPS, funnel, Trend, Compare, Slack (commit `9a3b28c`)
+
+User changed the CRM query behind this page (new saved BigQuery Console query,
+Settings > Data) and asked for a full rebuild: corrected field definitions, new
+computed metrics, and Overall-dashboard-equivalent Trend/Compare/funnel/export/
+Slack features, with "granular everything" -- explicitly ruled out settling for
+a campaign-only aggregate the way the page worked before.
+
+**Backend (`api/crm-leads.js`)**: `careersLeadsSql()` grain changed from
+`GROUP BY campaign` (one row per campaign, whole-window totals) to
+`GROUP BY campaign, DATE(opp_created_on)` (one row per day per campaign) --
+this is what makes Trend/Compare/the Campaign-Month-Day table groupings
+possible at all, since none of those can be built from a pre-aggregated
+campaign-only shape. Field corrections, matching the user's saved BigQuery
+Console query verbatim (confirmed by reading it directly out of
+`app_preferences.bq_saved_queries` via the anon key, same table every other
+saved-query feature in this app already reads): `total_interested` now uses
+`LOWER(ever_got_interested) = 'yes'` (was the looser
+`opp_stage_leverage_careers LIKE '%int%'`), and a new `won` field
+(`LOWER(opp_status) LIKE '%won%'`). Date range stays page-driven
+(`since`/`until` from the request), unlike the saved query's own fixed
+`> 2025-12-31` floor -- the saved query and this endpoint are allowed to diverge
+on that one point since the page's own date picker is the source of truth here.
+
+**Frontend (`src/pages/LeverageCareersDashboard.jsx`, full rewrite)**: replaced
+the old two-fetch (`ads` + `bqRows`, joined at whole-window grain) architecture
+with a single `fetchGranular(token, since, until)` helper -- Meta's ad insights
+now fetch with `time_increment: 1` (day-level per ad, mirroring the pattern
+already used elsewhere in this app for Month-on-Month/Day-on-Day tabs) joined
+against the BigQuery day+campaign rows by exact normalized name, per calendar
+day. Everything downstream (KPI cards, the table, the funnel, Trend, Compare)
+reads real per-day data instead of one aggregate per campaign for the whole
+window -- e.g. a campaign's "Matched" status is now correctly per-day rather
+than bleeding across the entire selected range.
+
+- **New KPI cards**: Won, CPL (CRM) (spend / CRM leads, distinct from the
+  existing CPL (Meta) = spend / Meta leads), CPI (spend / interested), CPS
+  (spend / Won) -- 9 cards total across two rows.
+- **New funnel chart**: CRM Leads -> Interested -> Won, same horizontal
+  bar-chart treatment as Overall's own funnel (`BarGrad`/`barFill`/`BAR_RADIUS_H`
+  from `dashboardKit.jsx`).
+- **Main table restructured** into Campaign / Month / Day grouping tabs
+  (`groupRows(rows, dim)`, mirroring Overall's `grpBy` Source/Campaign/Corridor/
+  Month/Day pattern) -- sortable columns (click-to-sort, matching the fix
+  applied to Overall's own tables), a bolded TOTAL row re-deriving every ratio
+  from the summed totals rather than averaging rows, and the pre-existing
+  "N LeadSquared leads didn't match any Meta ad" note carried over (now scoped
+  to per-day matching, not whole-window).
+- **New Trend Analysis modal**: dimension (Month / Day / Campaign) x metric
+  picker (9 metrics) x trailing-periods control. Month/Day dimensions chart a
+  single series (that dimension IS the period axis); Campaign dimension charts
+  up to 8 lines (top campaigns by the chosen metric) bucketed by a separate
+  Day/Week/Month granularity picker, with an explicit "charting the top N of M
+  -- every one is in the export" note, matching Overall's own Trend Analysis
+  cap-and-disclose convention. Fetches its own range independently of the main
+  page's `activeWindow` (deliberately NOT the union-range machinery Overall's
+  BigQuery page needed -- Leverage Careers' data volume is small enough that a
+  dedicated per-modal fetch is simpler and lower-risk than threading a shared
+  range union through the main page's fetch).
+- **New Compare modal**: previous period / same period last year / custom
+  (both sides independently editable, avoiding the exact previous-period-length
+  mismatch bug documented on Overall's own Compare feature), a deterministic
+  verdict line (Won direction + cost-per-Won direction), KPI delta cards, and a
+  campaign-level "what's driving it" table ranked by `|Δ Won|` -- deliberately
+  scoped to Campaign only (Month/Day aren't meaningful breakdown dimensions
+  when the comparison itself is already across time, stated directly in the
+  modal's own subtitle rather than silently omitted).
+- **Export + Slack**: no new code needed for Slack -- the page's existing
+  `<ExportButton>` usage already includes "Send to Slack -- test/main channel"
+  by default (`hideSlack` was never passed), so wiring the same component onto
+  the new table/Trend/Compare instances gave CSV/JSON/Sheets/Slack export "for
+  free". This is what the user meant by "Slack -- Simple": the existing
+  test/main-channel mechanism, not a new bespoke report builder.
+
+**Live-verified end-to-end** (admin session): KPI row shows real MTD figures
+(Spend Rs8,66,896; CRM Leads 5,561, 29 of 67 names matched; Interested 300;
+Won 23; CPL (CRM) Rs156; CPI Rs2,890; CPS Rs37,691); funnel chart renders the
+3-stage bar correctly proportioned; Campaign/Month/Day table tabs all render
+with a correct bolded TOTAL row and sortable headers; Export menu shows all 6
+options including both Slack destinations. Trend Analysis: Month dimension at
+3 months trailing rendered a clean single-series line chart; Campaign dimension
+(Day bucket, 3 days trailing) rendered a correct 8-line chart with a real
+per-day tooltip and the "top 8 of 49 campaigns" disclosure note. Compare:
+Previous-period mode correctly computed a 13-day equal-length prior window,
+verdict read "Won is down 28.1%, and cost per Won is up 28.7%", and the
+campaign-level movers table populated with real per-campaign this-vs-vs figures.
+Zero console errors throughout.
+
+**One real, honest finding, not glossed over**: requesting Trend at a full
+6-month trailing window (Campaign/Month dimension, day-level per-ad Meta
+insights across the whole account) hit Meta's own account-level rate limit
+("Application request limit reached") -- confirmed via the Network tab that the
+correct request actually fired (`time_increment=1`, correct 6-month
+`time_range`) and was rejected by Meta itself, not a bug in the fetch logic.
+3-month and shorter windows worked cleanly. This is the same class of
+Meta-account rate-limit risk documented extensively elsewhere in this file for
+the main Meta Ads account (error 80004) -- a real, inherent tradeoff of
+requesting genuinely granular day-level history over a wide window from a
+single ad account, not something fixable by retrying harder. Worth knowing if a
+future session widens Trend's default trailing-period options.
