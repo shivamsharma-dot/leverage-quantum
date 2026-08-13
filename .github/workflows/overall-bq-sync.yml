@@ -441,13 +441,23 @@ jobs:
 
           agg = {}
           for r in records:
-              key = (r['lead_date_iso'], r['Source'])
+              # BigQuery genuinely returns a NULL Source for a small number of rows
+              # (the saved query's CASE passes source_1 through unchanged when it
+              # doesn't match any bucket, and source_1 itself is occasionally NULL).
+              # overall_bq_daily allows that (matches BigQuery as-is); the aggregated
+              # table's "Source" column is NOT NULL, since it's part of the key, so it
+              # has to be normalised HERE -- not just inside row_key -- to something
+              # real. 'Unknown' matches the client's own fallback (mapRow() already
+              # turns a blank/missing Source into 'Unknown'), so this doesn't invent a
+              # new label, it just applies the existing one one step earlier.
+              src = r['Source'] or 'Unknown'
+              key = (r['lead_date_iso'], src)
               a = agg.get(key)
               if a is None:
                   a = {
-                      'row_key': (r['lead_date_iso'] or '') + '|' + (r['Source'] or ''),
+                      'row_key': (r['lead_date_iso'] or '') + '|' + src,
                       'lead_date_iso': r['lead_date_iso'],
-                      'Source': r['Source'],
+                      'Source': src,
                       # Carried over from whichever raw row is seen first for
                       # this (date, Source) -- every row in the group shares
                       # the same date, so any one of them is fine.
