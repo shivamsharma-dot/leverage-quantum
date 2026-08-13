@@ -1867,10 +1867,27 @@ async function savePendingB2CReport(statement, messages) {
   return rows[0].id
 }
 
+// The ONE place that decides where the Approve button actually goes -- both
+// the button's own LABEL (below) and handleSlackBlockAction's real send call
+// this, so the two can never disagree about the destination the way the
+// button's old hardcoded '#b2c-leverage-core' text did (it was written before
+// this became configurable, and never updated -- the button said one thing
+// and the code did another). Test-channel-only, by explicit request: refuses
+// anything that isn't a test-family target, even if the stored preference
+// were edited directly to something else.
+function resolveApprovalDestination(cfg) {
+  const configured = cfg.b2c_approve_destination || 'test'
+  return normaliseTarget(configured).family === 'test' ? configured : 'test'
+}
+
+function approvalDestinationLabel(hook) {
+  return hook.isTest ? '#' + hook.label : channelHandle(hook.key)
+}
+
 // Applied only to the SANDBOX copy of the message -- the pristine, button-free
 // version is what's stored and what actually gets posted to the real channel
 // on approval, so #b2c-leverage-core never shows a stale, already-used button.
-function withApproveButton(message, pendingId) {
+function withApproveButton(message, pendingId, destLabel) {
   const blocks = Array.isArray(message.blocks) ? message.blocks.slice() : []
   blocks.push({
     type: 'actions',
@@ -1879,7 +1896,7 @@ function withApproveButton(message, pendingId) {
       type: 'button',
       action_id: 'approve_b2c_report',
       style: 'primary',
-      text: { type: 'plain_text', text: 'Approve → #b2c-leverage-core', emoji: true },
+      text: { type: 'plain_text', text: 'Approve → ' + destLabel, emoji: true },
       value: String(pendingId),
     }],
   })
@@ -1912,6 +1929,13 @@ async function handleB2CDailyReport(req, res) {
     if (hook.mode !== 'bot' || !hook.channel) {
       return res.status(400).json({ error: hook.missing || 'The #dashboard-testing sandbox channel is not configured.' })
     }
+    // The button's label reflects wherever it will ACTUALLY post -- same
+    // resolver handleSlackBlockAction uses for the real send, so the two can
+    // never drift apart again.
+    const approvalHook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), {})
+    const approvalLabel = approvalHook.mode === 'bot' && approvalHook.channel
+      ? approvalDestinationLabel(approvalHook)
+      : '(destination not configured)'
 
     const jobs = [
       { statement: 'pnl', days: data.pnl && data.pnl.days, version: B2C_FULL_TABLE_VERSIONS[0] },
@@ -1922,7 +1946,7 @@ async function handleB2CDailyReport(req, res) {
       const ctx = buildB2CServerContext(job.days || [], job.statement)
       const messages = job.version.build(ctx) // pristine -- this exact array is what gets stored AND what the real channel receives on approval
       const pendingId = await savePendingB2CReport(job.statement, messages)
-      const ts = await slackPostReportMessage(hook.token, hook.channel, withApproveButton(messages[0], pendingId))
+      const ts = await slackPostReportMessage(hook.token, hook.channel, withApproveButton(messages[0], pendingId, approvalLabel))
       posted.push({ statement: job.statement, pendingId, ts })
     }
     await logReport({ report_type: 'b2c daily report (sandbox)', recipients: ['slack:' + hook.label], status: 'sent', triggered_by: (isVercelCron || isManualCron) ? 'cron' : 'admin' })
@@ -1974,15 +1998,9 @@ async function handleSlackBlockAction(payload) {
 
   const token = process.env.SLACK_BOT_TOKEN
   const cfg = await getReportConfig()
-  // Test-channel only, by explicit request -- Settings > Reports only ever
-  // offers a test-channel value for this preference, but that alone is just
-  // the UI; enforced here too, independently, so the real b2c_core channel
-  // is unreachable from this button even if the stored preference were
-  // edited directly to something else. Going live needs a real code change
-  // later (dropping this guard on purpose), not a Settings switch.
-  const configuredDest = cfg.b2c_approve_destination || 'test'
-  const destination = normaliseTarget(configuredDest).family === 'test' ? configuredDest : 'test'
-  const hook = resolveSlackTarget(cfg, destination, {})
+  // Same resolveApprovalDestination() the sandbox message's own button label
+  // was built from -- this is what makes the two impossible to disagree.
+  const hook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), {})
   if (hook.mode !== 'bot' || !hook.channel) {
     if (responseUrl) await postSlackResponseUrl(responseUrl, { text: hook.missing || 'Could not reach the configured destination.', replace_original: false })
     return
@@ -1992,11 +2010,7 @@ async function handleSlackBlockAction(payload) {
   try {
     for (const m of (row.messages || [])) await slackPostReportMessage(token, hook.channel, m)
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'sent', triggered_by: approver })
-    // hook.label is a bare display name for a test destination (e.g. "voxpath")
-    // but a generic phrase like "B2C core channel" for a real one -- channelHandle
-    // gives the actual #name for the latter, straight off shared/slackChannels.mjs.
-    const destLabel = hook.isTest ? '#' + hook.label : channelHandle(hook.key)
-    if (responseUrl) await postSlackResponseUrl(responseUrl, { replace_original: true, text: `✅ Approved by @${approver} — sent to ${destLabel}.` })
+    if (responseUrl) await postSlackResponseUrl(responseUrl, { replace_original: true, text: `✅ Approved by @${approver} — sent to ${approvalDestinationLabel(hook)}.` })
   } catch (e) {
     await logReport({ report_type: logType, recipients: ['slack:' + hook.label], status: 'failed', error: e.message, triggered_by: approver })
     if (responseUrl) await postSlackResponseUrl(responseUrl, { text: `Failed to post: ${e.message}`, replace_original: false })
