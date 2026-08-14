@@ -245,7 +245,7 @@ function buildV3(ctx) {
   return msgs
 }
 
-// ---- v2: MTD, YTD (yesterday) and day on day -------------------------------
+// ---- v2: MTD, Last Day (yesterday) and day on day --------------------------
 // One click posts three separate messages. Every one has the same shape: a KPI
 // stack where each figure carries its own comparison, then a native Slack table
 // where each metric column is followed by a "vs" column holding both the
@@ -351,7 +351,7 @@ function buildV2(ctx) {
   const d = ctx.day
   if (d && d.now) {
     const two = [
-      '*:calendar: YTD Performance*',
+      '*:calendar: Last Day Performance*',
       '*Yesterday \u00b7 ' + d.label + '*',
       (d.prevLabel ? 'Against ' + d.prevLabel + ' \u00b7 ' : '') + (ctx.scopeLine || ''),
       d.isYesterday ? null : '_' + d.label + ' is the most recent day carrying data, so it is the day reported._',
@@ -360,7 +360,7 @@ function buildV2(ctx) {
       '',
       '_Every movement reads ' + d.label + ' against ' + (d.prevLabel || 'the day before') + '. The figure after the arrow is what it moved from._',
     ]
-    msgs.push({ key:'yday', label:'YTD performance', text: two.filter(l => l != null).join('\n'), table: v2CmpTable(ctx, 'Source', d.rows, d.totalSpend, 'vs ' + (d.prevLabel || 'prev day'), true) })
+    msgs.push({ key:'yday', label:'Last Day performance', text: two.filter(l => l != null).join('\n'), table: v2CmpTable(ctx, 'Source', d.rows, d.totalSpend, 'vs ' + (d.prevLabel || 'prev day'), true) })
   }
 
   const dow = ctx.dow
@@ -1148,11 +1148,11 @@ id: 'v4',
     id: 'v2',
     code: 'V2',
     msgKeys: ['mtd', 'yday', 'dow'],
-    name: 'Summary + table ' + DASH + ' MTD, YTD, day on day',
+    name: 'Summary + table ' + DASH + ' MTD, Last Day, day on day',
     tagline: 'Three messages: month to date, yesterday, and every day against the day before.',
     what: [
       'Message 1 ' + DASH + ' MTD Performance: the KPI stack and the Paid vs Non-Paid native table',
-      'Message 2 ' + DASH + ' YTD Performance: yesterday, read against the day before it',
+      'Message 2 ' + DASH + ' Last Day Performance: yesterday, read against the day before it',
       'Message 3 ' + DASH + ' Day on Day Performance: one row per day, newest first',
       'Every metric column is followed by a vs column carrying the movement AND the figure it moved from',
       'Table image and the all-columns CSV in the thread of message 1',
