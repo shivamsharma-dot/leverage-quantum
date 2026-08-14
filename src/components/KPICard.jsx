@@ -17,8 +17,10 @@ import { renderKpiVariant } from '../ui/kpiVariants.jsx'
  * @param {boolean} [deltaInvert] — if true, negative delta is good (e.g. CPL — lower is better)
  * @param {string}  [deltaLabel]  — override delta pill text
  * @param {React.ReactNode} [icon] — optional 14x14 SVG icon (rendered as muted monochrome)
+ * @param {string}  [prevValue] — pre-formatted actual prior-period value; when set, the
+ *   delta pill becomes clickable and swaps between the % and "was <prevValue>" in place
  */
-export function KPICard({ label, value, sub, delta, deltaInvert = false, deltaLabel, icon }) {
+export function KPICard({ label, value, sub, delta, deltaInvert = false, deltaLabel, icon, prevValue }) {
   const variantId = useDesignStyle('kpi')
   const isGood = deltaInvert ? delta <= 0 : delta >= 0
   const deltaText = deltaLabel
@@ -27,7 +29,7 @@ export function KPICard({ label, value, sub, delta, deltaInvert = false, deltaLa
     ? `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`
     : null
 
-  return renderKpiVariant(variantId, { label, value, sub, deltaText, isGood: delta != null ? isGood : null, icon })
+  return renderKpiVariant(variantId, { label, value, sub, deltaText, isGood: delta != null ? isGood : null, icon, prevValue })
 }
 
 export default KPICard

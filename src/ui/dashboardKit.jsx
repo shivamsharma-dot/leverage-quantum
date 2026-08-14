@@ -108,12 +108,17 @@ export const KPI_ICONS = {
 // useDesignStyle('kpi') -- shared render engine with components/KPICard.jsx
 // at src/ui/kpiVariants.js, so picking a variant re-skins every KPI card in
 // the app at once. This component's own prop API never changes.
-export const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon, invert }) => {
+// prevValue (optional): a pre-formatted string of the actual prior-period
+// number (e.g. "\u20B956,35,000") -- when passed, the delta pill itself becomes
+// clickable and swaps its text between the percentage and "was <prevValue>"
+// on tap, in place, with no extra icon added to the card. Purely additive:
+// omitting it (every existing caller) leaves the pill exactly as it was.
+export const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon, invert, prevValue }) => {
   const variantId = useDesignStyle('kpi')
   const up = delta != null && delta >= 0
   const deltaText = delta != null ? `${up ? '\u25B2' : '\u25BC'} ${Math.abs(delta).toFixed(1)}%` : null
   const isGood = delta == null ? null : (invert ? !up : up)
-  return renderKpiVariant(variantId, { label, value, sub, deltaText, isGood, icon, accent })
+  return renderKpiVariant(variantId, { label, value, sub, deltaText, isGood, icon, accent, prevValue })
 }
 
 /* ===== Ranked horizontal bar list ===== */

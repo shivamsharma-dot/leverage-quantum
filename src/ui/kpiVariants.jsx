@@ -7,7 +7,7 @@ import React from 'react'
 // card in the app at once -- each component just normalizes its own props
 // into the shape below and calls renderKpiVariant.
 //
-// props: { label, value, sub, deltaText, isGood, icon, accent }
+// props: { label, value, sub, deltaText, isGood, icon, accent, prevValue }
 // Brand-only delta convention already used across this app: good = green tint,
 // not-good = navy tint (never red/amber on a KPI card).
 const NAVY = '#1F3C84'
@@ -18,17 +18,31 @@ const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 
 const wrap = { fontFamily: FONT, minWidth: 0 }
 
-function DeltaPill({ deltaText, isGood, inline }) {
+// prevValue (optional): a pre-formatted actual prior-period number. When
+// present, the pill itself becomes clickable and swaps its own text between
+// the percentage and "was <prevValue>" -- no extra icon added to the card,
+// just a click affordance (dotted underline) on the pill that's already there.
+function DeltaPill({ deltaText, isGood, inline, prevValue }) {
+  const [showPrev, setShowPrev] = React.useState(false)
   if (!deltaText) return null
+  const clickable = !!prevValue
   return (
-    <span style={{
-      fontSize: 12, fontWeight: 700, flexShrink: 0,
-      color: isGood ? '#15803D' : NAVY,
-      background: isGood ? '#E9F8EF' : '#EEF1FB',
-      padding: '2px 7px', borderRadius: 6,
-      display: 'inline-flex', alignItems: 'center', gap: 2,
-      marginLeft: inline ? 8 : 0,
-    }}>{deltaText}</span>
+    <span
+      onClick={clickable ? e => { e.stopPropagation(); setShowPrev(v => !v) } : undefined}
+      title={clickable ? (showPrev ? 'Showing the previous value — click for the % change' : 'Click to see the actual previous value') : undefined}
+      style={{
+        fontSize: 12, fontWeight: 700, flexShrink: 0,
+        color: isGood ? '#15803D' : NAVY,
+        background: isGood ? '#E9F8EF' : '#EEF1FB',
+        padding: '2px 7px', borderRadius: 6,
+        display: 'inline-flex', alignItems: 'center', gap: 2,
+        marginLeft: inline ? 8 : 0,
+        whiteSpace: 'nowrap',
+        cursor: clickable ? 'pointer' : 'default',
+        textDecoration: clickable ? 'underline dotted' : 'none',
+        textUnderlineOffset: 2,
+      }}
+    >{showPrev && prevValue ? 'was ' + prevValue : deltaText}</span>
   )
 }
 
@@ -63,7 +77,7 @@ function Ring({ value, color }) {
 }
 
 export function renderKpiVariant(variantId, props) {
-  const { label, value, sub, deltaText, isGood, icon, accent } = props
+  const { label, value, sub, deltaText, isGood, icon, accent, prevValue } = props
   const A = accent || NAVY
 
   switch (variantId) {
@@ -74,7 +88,7 @@ export function renderKpiVariant(variantId, props) {
           <div style={{ fontSize: 25, fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--text,#0F172A)', marginBottom: 4 }}>{value}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {sub && <span style={{ fontSize: 12.5, color: 'var(--text3,#94A3B8)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
-            <DeltaPill deltaText={deltaText} isGood={isGood} />
+            <DeltaPill deltaText={deltaText} isGood={isGood} prevValue={prevValue} />
           </div>
         </div>
       )
@@ -90,7 +104,7 @@ export function renderKpiVariant(variantId, props) {
           </div>
           <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.6px', color: 'var(--text,#0F1B33)', lineHeight: 1.05, position: 'relative' }}>{value}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, minHeight: 18, position: 'relative' }}>
-            <DeltaPill deltaText={deltaText} isGood={isGood} />
+            <DeltaPill deltaText={deltaText} isGood={isGood} prevValue={prevValue} />
             {sub && <span style={{ fontSize: 12.5, color: 'var(--text3,#8A94A6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
           </div>
         </div>
@@ -110,7 +124,7 @@ export function renderKpiVariant(variantId, props) {
           <div style={{ fontSize: 25, fontWeight: 800, color: 'var(--text,#0F172A)', marginBottom: 4 }}>{value}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {sub && <span style={{ fontSize: 12.5, color: 'var(--text3,#94A3B8)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
-            <DeltaPill deltaText={deltaText} isGood={isGood} />
+            <DeltaPill deltaText={deltaText} isGood={isGood} prevValue={prevValue} />
           </div>
         </div>
       )
@@ -122,7 +136,7 @@ export function renderKpiVariant(variantId, props) {
           <div style={{ fontSize: 25, fontWeight: 800, color: 'var(--text,#0F172A)', marginBottom: 4 }}>{value}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {sub && <span style={{ fontSize: 12.5, color: 'var(--text3,#94A3B8)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
-            <DeltaPill deltaText={deltaText} isGood={isGood} />
+            <DeltaPill deltaText={deltaText} isGood={isGood} prevValue={prevValue} />
           </div>
         </div>
       )
@@ -211,7 +225,7 @@ export function renderKpiVariant(variantId, props) {
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text3,#94A3B8)', marginBottom: 8 }}>{label}</div>
           <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--text,#0F172A)' }}>{value}</span>
-            <DeltaPill deltaText={deltaText} isGood={isGood} inline />
+            <DeltaPill deltaText={deltaText} isGood={isGood} inline prevValue={prevValue} />
           </div>
           {sub && <div style={{ fontSize: 12.5, color: 'var(--text3,#94A3B8)', marginTop: 4 }}>{sub}</div>}
         </div>
@@ -222,7 +236,7 @@ export function renderKpiVariant(variantId, props) {
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text3,#94A3B8)', marginBottom: 4 }}>{label}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 17, fontWeight: 800, color: 'var(--text,#0F172A)' }}>{value}</span>
-            <DeltaPill deltaText={deltaText} isGood={isGood} />
+            <DeltaPill deltaText={deltaText} isGood={isGood} prevValue={prevValue} />
           </div>
         </div>
       )
