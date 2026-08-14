@@ -108,8 +108,8 @@ export function renderKpiVariant(variantId, props) {
         <div style={{ ...wrap, background: 'var(--card,#fff)', border: '1px solid var(--card-border,#E7EAF1)', borderRadius: 14, padding: '16px 18px', boxShadow: `0 1px 2px rgba(15,27,51,0.05), 0 16px 30px -18px ${A}59` }}>
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text3,#94A3B8)', marginBottom: 8 }}>{label}</div>
           <div style={{ fontSize: 25, fontWeight: 800, color: 'var(--text,#0F172A)', marginBottom: 4 }}>{value}</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {sub && <span style={{ fontSize: 12.5, color: 'var(--text3,#94A3B8)', flex: 1 }}>{sub}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {sub && <span style={{ fontSize: 12.5, color: 'var(--text3,#94A3B8)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
             <DeltaPill deltaText={deltaText} isGood={isGood} />
           </div>
         </div>
@@ -120,8 +120,8 @@ export function renderKpiVariant(variantId, props) {
           <div style={{ position: 'absolute', top: -16, right: -16, width: 40, height: 40, borderRadius: 9, background: `linear-gradient(135deg, ${BLUE}, ${CYAN})`, transform: 'rotate(45deg)' }} />
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text3,#94A3B8)', marginBottom: 8 }}>{label}</div>
           <div style={{ fontSize: 25, fontWeight: 800, color: 'var(--text,#0F172A)', marginBottom: 4 }}>{value}</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {sub && <span style={{ fontSize: 12.5, color: 'var(--text3,#94A3B8)', flex: 1 }}>{sub}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {sub && <span style={{ fontSize: 12.5, color: 'var(--text3,#94A3B8)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
             <DeltaPill deltaText={deltaText} isGood={isGood} />
           </div>
         </div>
