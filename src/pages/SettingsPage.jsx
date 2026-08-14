@@ -1232,6 +1232,12 @@ export default function SettingsPage() {
   // --- Unassigned Leads alert (fixed recipient, not the general opt-in list) ---
   const [unassignedSending, setUnassignedSending] = useState(false)
   const [unassignedMsg, setUnassignedMsg] = useState('')
+  // Manual test-fire of the daily B2C P&L / Cash Flow Slack approval flow --
+  // same endpoint the 3 PM IST Vercel cron hits, which always previews into
+  // the #dashboard-testing sandbox channel regardless of the approval
+  // destination picked above.
+  const [b2cReportSending, setB2cReportSending] = useState(false)
+  const [b2cReportMsg, setB2cReportMsg] = useState('')
   // --- Slack config (webhook + auto-post toggle) ---
   const [slackWebhook, setSlackWebhook] = useState('')
   // An Incoming Webhook is bound to one channel, so a test channel needs its own webhook --
@@ -1790,6 +1796,21 @@ setRcMsg('Sent to ' + (d.recipients?.length || 0) + ' recipients')
 } catch (e) { setRcMsg('\u2715 ' + e.message) }
 finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 }
+
+  const sendB2CDailyReportNow = async () => {
+    setB2cReportSending(true); setB2cReportMsg('')
+    try {
+      const r = await fetchT('/api/send-report?type=b2c_daily_report', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'b2c_daily_report', triggered_by: user?.email || 'manual' })
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Failed')
+      setB2cReportMsg('Posted to #dashboard-testing \u2014 check Slack to Approve/Disapprove')
+    } catch (e) { setB2cReportMsg('\u2715 ' + e.message) }
+    finally { setB2cReportSending(false); setTimeout(() => setB2cReportMsg(''), 12000) }
+  }
 
   const sendUnassignedNow = async () => {
     setUnassignedSending(true); setUnassignedMsg('')
@@ -3188,6 +3209,21 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               { value: 'b2c_core', label: channelHandle('b2c_core') + '  (real — guarded)' },
             ]}
           />
+
+          {/* Manual test-fire of the same daily pipeline the 3 PM IST cron runs
+              (api/send-report.mjs handleB2CDailyReport). Unrelated to the CEO's
+              own ad-hoc "Send to Slack" export on the Daily P&L page. The preview
+              always lands in the #dashboard-testing sandbox channel -- the
+              destination picked above only governs where Approve finally posts. */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+            <Button size="sm" variant="secondary" onClick={sendB2CDailyReportNow} disabled={b2cReportSending}>
+              {b2cReportSending ? 'Sending\u2026' : 'Send report now'}
+            </Button>
+            <span className={styles.cardDesc} style={{ margin: 0 }}>
+              Posts today&rsquo;s Daily P&amp;L and Daily Cash Flow previews to <b>#dashboard-testing</b> with Approve / Disapprove buttons, exactly as the 3&nbsp;PM IST schedule does.
+            </span>
+            {b2cReportMsg && <span className={styles.rcFeedback + ' ' + (b2cReportMsg.charAt(0) === '\u2715' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{b2cReportMsg}</span>}
+          </div>
 
           <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO PIN &middot; shared by every locked channel</label>
           <p className={styles.cardDesc} style={{ marginTop: 4 }}>
