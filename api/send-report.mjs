@@ -2028,7 +2028,7 @@ async function handleSlackBlockAction(payload) {
       close: { type: 'plain_text', text: 'Cancel' },
       blocks: [{
         type: 'input', block_id: 'pin_block',
-        label: { type: 'plain_text', text: 'CEO PIN' },
+        label: { type: 'plain_text', text: 'PIN' },
         element: { type: 'plain_text_input', action_id: 'pin_input' },
       }],
     }).catch(e => console.error('Slack views.open (approve) failed:', e))
@@ -2133,17 +2133,25 @@ async function handleSlackViewSubmission(payload) {
 
     const label = row.statement === 'cashflow' ? 'Cash Flow' : 'P&L'
     const notifyId = process.env.SLACK_DISAPPROVE_NOTIFY_USER_ID
+    // Real bug fixed here: this used to log 'sent' just because notifyId was
+    // SET, never checking whether slackSendDM actually succeeded -- a failed
+    // DM (wrong/placeholder user id, revoked scope, anything) was silently
+    // recorded as a success, with the real error only reaching a server
+    // console nobody was watching. Now the DM's own outcome decides the log.
+    let dmError = notifyId ? null : 'SLACK_DISAPPROVE_NOTIFY_USER_ID is not set'
     if (notifyId) {
-      await slackSendDM(token, notifyId, `❌ *B2C ${label} report disapproved* by @${actor}\n>${reason}`)
-        .catch(e => console.error('Slack DM to SLACK_DISAPPROVE_NOTIFY_USER_ID failed:', e))
-    } else {
-      console.error('SLACK_DISAPPROVE_NOTIFY_USER_ID is not set -- the disapprove reason was not DM\'d to anyone.')
+      try {
+        await slackSendDM(token, notifyId, `❌ *B2C ${label} report disapproved* by @${actor}\n>${reason}`)
+      } catch (e) {
+        dmError = e.message
+        console.error('Slack DM to SLACK_DISAPPROVE_NOTIFY_USER_ID failed:', e)
+      }
     }
     await logReport({
       report_type: 'b2c ' + row.statement + ' report (disapproved)',
       recipients: notifyId ? ['slack:dm:' + notifyId] : [],
-      status: notifyId ? 'sent' : 'failed',
-      error: notifyId ? null : 'SLACK_DISAPPROVE_NOTIFY_USER_ID not set',
+      status: dmError ? 'failed' : 'sent',
+      error: dmError,
       triggered_by: actor,
     })
     return { response_action: 'clear' }
