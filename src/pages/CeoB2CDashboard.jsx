@@ -531,15 +531,18 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   }
 
   return (
-    <div className={styles.layout}>
+    <div className={'lq-page-shell ' + styles.layout}>
       <Sidebar />
+      {/* Same shell as OverallDashboard (the app's reference header): a floating
+          rounded/bordered/shadowed card inset from the viewport edge, with the
+          header as a normal child of it and a separate scroll region below. */}
       <div className={styles.main}>
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <p className={styles.breadcrumb}>Dashboards / B2C / {L.pageTitle}</p>
             <h1 className={styles.pageTitle}>{L.pageTitle} &mdash; {isCashFlow ? 'cash inflow, outflow and net cash inflow' : 'revenue, cost and EBITDA'}<sup style={{ fontSize: 12, color: 'var(--text3)', marginLeft: 2 }}>*</sup></h1>
           </div>
-          <div className={styles.headerRight}>
+          <div className={'lq-header-controls ' + styles.headerRight}>
             <span className={styles.badge}>Through {d1}</span>
             <div className={styles.presetRow}>
               <button type="button" className={preset === 'ld' ? styles.presetPillActive : styles.presetPill} onClick={function () { setPreset('ld') }}>Last Day</button>
@@ -587,6 +590,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
             />
           </div>
         </div>
+        <div className={styles.scroll}>
         <div className={styles.content}>
           <p className={styles.defNote}>
             <b>* Revenue vs Cash Flow</b> &mdash; In the P&amp;L statement, revenue is recognized on the date an actual sale is recorded &mdash; when a package is sold to the customer. For AC and Leverage One (E2E), 15% is deducted to account for future refunds, based on historical data. For SR, revenue is estimated as Deposits &times; 70% &times; ₹3.5L, based on historical data. In the Cash Flow statement, actual cash inflow or outflow is recorded as it happens, irrespective of when the sale took place &mdash; this data comes directly from the Finance team.
@@ -843,6 +847,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
               </p>
             </div>
           ) : null}
+        </div>
         </div>
       </div>
     </div>
