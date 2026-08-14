@@ -1990,6 +1990,53 @@ async function handleB2CDailyReport(req, res) {
   }
 }
 
+// Reads the pending row back (a plain SELECT -- distinct from claim()'s
+// atomic conditional PATCH used at submission time) purely to show the
+// approver what they're actually approving before they type a PIN.
+async function fetchPendingRow(pendingId) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/b2c_pending_reports?id=eq.${encodeURIComponent(pendingId)}&select=*`, {
+    headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+  })
+  const rows = await r.json().catch(() => [])
+  return rows[0] || null
+}
+
+// Pulls the bold rows (Total Revenue/Total Cost/EBITDA for P&L, or Total Cash
+// Inflow/Outflow/Net for Cash Flow) out of the native table already built for
+// this row's message -- table/strongRows already exist on the message purely
+// for the Quantum in-app preview (see b2cReport.js), reused here so the modal
+// shows real numbers instead of a bare "approve this?".
+function buildReportSummary(row) {
+  const label = row.statement === 'cashflow' ? 'Cash Flow' : 'P&L'
+  const msg = (row.messages || [])[0] || {}
+  const throughMatch = /Through (\d{4}-\d{2}-\d{2})/.exec(msg.text || '')
+  const through = throughMatch ? throughMatch[1] : null
+  const table = msg.table || {}
+  const rows = Array.isArray(table.rows) ? table.rows : []
+  const strong = Array.isArray(table.strongRows) ? table.strongRows : []
+  const headline = strong.map(i => {
+    const r = rows[i]
+    return r ? { name: r[0], mtd: r[2] } : null
+  }).filter(Boolean)
+  return { label, through, headline }
+}
+
+function summaryBlocks(summary) {
+  if (!summary) return []
+  const blocks = [{
+    type: 'section',
+    text: { type: 'mrkdwn', text: '*B2C — ' + summary.label + '*' + (summary.through ? '  ·  through ' + summary.through : '') },
+  }]
+  if (summary.headline.length) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: summary.headline.map(h => '*' + h.name + ' (MTD):* ' + h.mtd).join('\n') },
+    })
+  }
+  blocks.push({ type: 'divider' })
+  return blocks
+}
+
 // Slack Interactivity block_actions handler -- Approve/Disapprove button
 // clicks. Neither button acts immediately: Approve opens a modal asking for
 // the CEO PIN (the same one that already gates the real Send-to-Slack
@@ -2018,7 +2065,20 @@ async function handleSlackBlockAction(payload) {
     return
   }
 
+  // trigger_id is only valid for a few seconds, so the row (and, for Approve,
+  // the config needed to name the real destination) are fetched in parallel
+  // rather than one after another. A missing row just degrades to no summary
+  // context in the modal -- never blocks the approve/disapprove flow itself.
+  const [row, cfg] = await Promise.all([
+    fetchPendingRow(pendingId),
+    action.action_id === 'approve_b2c_report' ? getReportConfig() : Promise.resolve(null),
+  ])
+  const summary = row ? buildReportSummary(row) : null
+  const summaryHead = summaryBlocks(summary)
+
   if (action.action_id === 'approve_b2c_report') {
+    const hook = cfg ? resolveSlackTarget(cfg, resolveApprovalDestination(cfg), {}) : null
+    const destLabel = hook && hook.mode === 'bot' && hook.channel ? approvalDestinationLabel(hook) : '(destination not configured)'
     await slackOpenView(token, payload.trigger_id, {
       type: 'modal',
       callback_id: 'b2c_approve_pin_modal',
@@ -2026,11 +2086,20 @@ async function handleSlackBlockAction(payload) {
       title: { type: 'plain_text', text: 'Approve report' },
       submit: { type: 'plain_text', text: 'Confirm' },
       close: { type: 'plain_text', text: 'Cancel' },
-      blocks: [{
-        type: 'input', block_id: 'pin_block',
-        label: { type: 'plain_text', text: 'PIN' },
-        element: { type: 'plain_text_input', action_id: 'pin_input' },
-      }],
+      blocks: [
+        ...summaryHead,
+        { type: 'context', elements: [{ type: 'mrkdwn', text: 'This will post to *' + destLabel + '*.' }] },
+        {
+          type: 'input', block_id: 'pin_block',
+          label: { type: 'plain_text', text: 'PIN' },
+          element: { type: 'plain_text_input', action_id: 'pin_input' },
+        },
+        {
+          type: 'input', block_id: 'note_block', optional: true,
+          label: { type: 'plain_text', text: 'Any notes? (optional)' },
+          element: { type: 'plain_text_input', action_id: 'note_input', multiline: true },
+        },
+      ],
     }).catch(e => console.error('Slack views.open (approve) failed:', e))
     return
   }
@@ -2043,11 +2112,27 @@ async function handleSlackBlockAction(payload) {
       title: { type: 'plain_text', text: 'Disapprove report' },
       submit: { type: 'plain_text', text: 'Send' },
       close: { type: 'plain_text', text: 'Cancel' },
-      blocks: [{
-        type: 'input', block_id: 'reason_block',
-        label: { type: 'plain_text', text: "What's incorrect?" },
-        element: { type: 'plain_text_input', action_id: 'reason_input', multiline: true },
-      }],
+      blocks: [
+        ...summaryHead,
+        {
+          type: 'input', block_id: 'reason_category_block', optional: true,
+          label: { type: 'plain_text', text: 'What kind of issue?' },
+          element: {
+            type: 'static_select', action_id: 'reason_category_input',
+            options: [
+              { text: { type: 'plain_text', text: 'Wrong numbers' }, value: 'Wrong numbers' },
+              { text: { type: 'plain_text', text: 'Wrong period' }, value: 'Wrong period' },
+              { text: { type: 'plain_text', text: 'Formatting issue' }, value: 'Formatting issue' },
+              { text: { type: 'plain_text', text: 'Other' }, value: 'Other' },
+            ],
+          },
+        },
+        {
+          type: 'input', block_id: 'reason_block',
+          label: { type: 'plain_text', text: "What's incorrect?" },
+          element: { type: 'plain_text_input', action_id: 'reason_input', multiline: true },
+        },
+      ],
     }).catch(e => console.error('Slack views.open (disapprove) failed:', e))
     return
   }
@@ -2056,6 +2141,13 @@ async function handleSlackBlockAction(payload) {
 function modalFieldValue(view, blockId, actionId) {
   const v = view.state && view.state.values && view.state.values[blockId] && view.state.values[blockId][actionId]
   return (v && v.value) || ''
+}
+
+// static_select's answer lives at .selected_option.value, not .value like a
+// plain_text_input -- a separate reader rather than overloading modalFieldValue.
+function modalSelectValue(view, blockId, actionId) {
+  const v = view.state && view.state.values && view.state.values[blockId] && view.state.values[blockId][actionId]
+  return (v && v.selected_option && v.selected_option.value) || ''
 }
 
 // The modal's Confirm/Send button -- PIN verified or reason collected here,
@@ -2083,12 +2175,27 @@ async function handleSlackViewSubmission(payload) {
 
   if (view.callback_id === 'b2c_approve_pin_modal') {
     const pin = modalFieldValue(view, 'pin_block', 'pin_input')
+    const note = modalFieldValue(view, 'note_block', 'note_input').trim()
     const chk = await verifyCeoPin(pin, actor)
-    if (!chk.ok) return { response_action: 'errors', errors: { pin_block: chk.message } }
+    if (!chk.ok) {
+      let msg = chk.message
+      // Only 'wrong' carries a meaningful remaining-tries count -- 'locked'
+      // already states its own cooldown, and 'no_pin'/'tampered' have none.
+      if (chk.code === 'wrong' && chk.failsLeft != null) {
+        msg += ' (' + chk.failsLeft + (chk.failsLeft === 1 ? ' try' : ' tries') + ' left)'
+      }
+      return { response_action: 'errors', errors: { pin_block: msg } }
+    }
 
     // Atomic claim: only proceeds if the row was still 'pending' -- guards
     // against a slow ack retry or a second click posting the report twice.
-    const row = await claim({ status: 'approved', approved_by: actor, approved_at: new Date().toISOString() })
+    // approve_note is only sent when there's actually a note, so an approval
+    // with no note keeps working even before supabase/sql/
+    // b2c_pending_reports_add_approve_note.sql has been run (an unknown
+    // column in the PATCH body would otherwise fail the whole claim).
+    const patch = { status: 'approved', approved_by: actor, approved_at: new Date().toISOString() }
+    if (note) patch.approve_note = note
+    const row = await claim(patch)
     if (!row) {
       if (meta.channel && meta.ts) {
         await slackUpdateBlocks(token, meta.channel, meta.ts, 'Already handled', [
@@ -2108,8 +2215,9 @@ async function handleSlackViewSubmission(payload) {
       await logReport({ report_type: logType, recipients: ['slack:' + (hook.label || '?')], status: 'sent', triggered_by: actor })
       if (meta.channel && meta.ts) {
         const destLabel = hook.mode === 'bot' && hook.channel ? approvalDestinationLabel(hook) : '(destination not configured)'
+        const noteLine = note ? '\n>' + note : ''
         await slackUpdateBlocks(token, meta.channel, meta.ts, 'Approved', [
-          { type: 'section', text: { type: 'mrkdwn', text: `✅ *Approved by @${actor}* — sent to ${destLabel}.` } },
+          { type: 'section', text: { type: 'mrkdwn', text: `✅ *Approved by @${actor}* — sent to ${destLabel}.${noteLine}` } },
         ]).catch(() => {})
       }
     } catch (e) {
@@ -2119,8 +2227,10 @@ async function handleSlackViewSubmission(payload) {
   }
 
   if (view.callback_id === 'b2c_disapprove_modal') {
-    const reason = modalFieldValue(view, 'reason_block', 'reason_input').trim()
-    if (!reason) return { response_action: 'errors', errors: { reason_block: "Say what's incorrect before sending." } }
+    const category = modalSelectValue(view, 'reason_category_block', 'reason_category_input')
+    const reasonRaw = modalFieldValue(view, 'reason_block', 'reason_input').trim()
+    if (!reasonRaw) return { response_action: 'errors', errors: { reason_block: "Say what's incorrect before sending." } }
+    const reason = category ? '[' + category + '] ' + reasonRaw : reasonRaw
 
     const row = await claim({ status: 'rejected', reason, rejected_by: actor, rejected_at: new Date().toISOString() })
     if (!row) return { response_action: 'clear' } // already handled
