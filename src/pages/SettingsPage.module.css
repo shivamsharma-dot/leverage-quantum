@@ -714,22 +714,21 @@ input.searchInput { padding-left: 34px; }
 .uaHeader,
 .dsListHead { align-items: center; }
 
-/* ---- 2 - keyboard focus is visible on every control ---- */
-.content button:focus-visible,
-.content a:focus-visible,
-.content input:focus-visible,
-.content textarea:focus-visible,
-.content [role="button"]:focus-visible,
-.content [tabindex]:focus-visible,
-.dsModalOverlay button:focus-visible,
-.dsModalOverlay a:focus-visible,
-.dsModalOverlay input:focus-visible,
-.dsModalOverlay textarea:focus-visible,
-.dsModalOverlay [tabindex]:focus-visible {
-  outline: 2px solid var(--focus, #1C9FD4);
-  outline-offset: 2px;
+/* No focus ring anywhere in Settings, by explicit request -- neither this
+   custom one nor the browser's own default outline. */
+.content button:focus,
+.content a:focus,
+.content input:focus,
+.content textarea:focus,
+.content [role="button"]:focus,
+.content [tabindex]:focus,
+.dsModalOverlay button:focus,
+.dsModalOverlay a:focus,
+.dsModalOverlay input:focus,
+.dsModalOverlay textarea:focus,
+.dsModalOverlay [tabindex]:focus {
+  outline: none;
 }
-.content :focus:not(:focus-visible) { outline: none; }
 
 /* ---- 3 - long tables scroll inside their own card with a sticky
    header, matching the BigQuery result table above ---- */
