@@ -1886,24 +1886,10 @@ function approvalDestinationLabel(hook) {
   return hook.isTest ? '#' + hook.label : channelHandle(hook.key)
 }
 
-// Who's allowed to click Approve/Disapprove at all (optional -- unset means
-// anyone who can see the sandbox channel), and who's allowed to push all the
-// way to the real, guarded b2c_core channel specifically (mandatory there --
-// Slack carries no Quantum admin session, so this list is the only stand-in
-// for "admin" once a guarded destination is in play).
+// Optional allowlist for who can click Approve/Disapprove at all -- unset
+// means anyone who can see the sandbox channel can.
 function slackApproverAllowlist() {
   return String(process.env.SLACK_APPROVER_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
-}
-
-async function slackPostEphemeral(token, channel, user, text) {
-  const res = await fetch('https://slack.com/api/chat.postEphemeral', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
-    body: JSON.stringify({ channel, user, text }),
-  })
-  const d = await res.json().catch(() => ({}))
-  if (!d.ok) throw new Error('Slack chat.postEphemeral: ' + (d.error || 'rejected'))
-  return d
 }
 
 // Applied only to the SANDBOX copy of the message -- the pristine, button-free
@@ -2100,47 +2086,10 @@ async function handleSlackBlockAction(payload) {
 
   if (action.action_id === 'approve_b2c_report') {
     // allowGuarded:true here is safe -- resolveSlackTarget only returns metadata
-    // (channel/label), it never posts anything by itself. Actually reaching the
-    // real channel still needs the phrase + PIN checks below, and (for a guarded
-    // destination specifically) the clicking user to be on the approver list.
+    // (channel/label), it never posts anything by itself. Reaching the real
+    // channel still needs the PIN, same as every other approval.
     const hook = cfg ? resolveSlackTarget(cfg, resolveApprovalDestination(cfg), { allowGuarded: true }) : null
     const destLabel = hook && hook.mode === 'bot' && hook.channel ? approvalDestinationLabel(hook) : '(destination not configured)'
-    const guarded = !!(hook && hook.guarded)
-
-    if (guarded) {
-      const approverIds = slackApproverAllowlist()
-      if (!approverIds.length || !approverIds.includes(payload.user && payload.user.id)) {
-        await slackPostEphemeral(
-          token, payload.channel && payload.channel.id, payload.user && payload.user.id,
-          'Only a Slack user listed in SLACK_APPROVER_USER_IDS can push this to ' + destLabel + '.'
-        ).catch(() => {})
-        return
-      }
-    }
-
-    const blocks = [
-      ...summaryHead,
-      { type: 'context', elements: [{ type: 'mrkdwn', text: 'This will post to *' + destLabel + '*.' }] },
-    ]
-    if (guarded) {
-      blocks.push({
-        type: 'input', block_id: 'phrase_block',
-        label: { type: 'plain_text', text: 'Type ' + confirmPhrase('b2c_core') + ' to confirm' },
-        element: { type: 'plain_text_input', action_id: 'phrase_input' },
-      })
-    }
-    blocks.push(
-      {
-        type: 'input', block_id: 'pin_block',
-        label: { type: 'plain_text', text: 'PIN' },
-        element: { type: 'plain_text_input', action_id: 'pin_input' },
-      },
-      {
-        type: 'input', block_id: 'note_block', optional: true,
-        label: { type: 'plain_text', text: 'Any notes? (optional)' },
-        element: { type: 'plain_text_input', action_id: 'note_input', multiline: true },
-      },
-    )
 
     await slackOpenView(token, payload.trigger_id, {
       type: 'modal',
@@ -2149,7 +2098,20 @@ async function handleSlackBlockAction(payload) {
       title: { type: 'plain_text', text: 'Approve report' },
       submit: { type: 'plain_text', text: 'Confirm' },
       close: { type: 'plain_text', text: 'Cancel' },
-      blocks,
+      blocks: [
+        ...summaryHead,
+        { type: 'context', elements: [{ type: 'mrkdwn', text: 'This will post to *' + destLabel + '*.' }] },
+        {
+          type: 'input', block_id: 'pin_block',
+          label: { type: 'plain_text', text: 'PIN' },
+          element: { type: 'plain_text_input', action_id: 'pin_input' },
+        },
+        {
+          type: 'input', block_id: 'note_block', optional: true,
+          label: { type: 'plain_text', text: 'Any notes? (optional)' },
+          element: { type: 'plain_text_input', action_id: 'note_input', multiline: true },
+        },
+      ],
     }).catch(e => console.error('Slack views.open (approve) failed:', e))
     return
   }
@@ -2232,21 +2194,6 @@ async function handleSlackViewSubmission(payload) {
     // only used it to preview the label; THIS is the step that really posts).
     const cfg = await getReportConfig()
     const hook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), { allowGuarded: true })
-    const guarded = !!hook.guarded
-
-    // Defense in depth: the button-click step already refused to even open
-    // this modal for an unlisted user when the destination is guarded, but
-    // re-checked here too since this is the step that actually posts.
-    if (guarded) {
-      const approverIds = slackApproverAllowlist()
-      if (!approverIds.length || !approverIds.includes(payload.user && payload.user.id)) {
-        return { response_action: 'errors', errors: { pin_block: 'Only a Slack user listed in SLACK_APPROVER_USER_IDS can push this to the real channel.' } }
-      }
-      const phrase = modalFieldValue(view, 'phrase_block', 'phrase_input')
-      if (!phraseMatches('b2c_core', phrase)) {
-        return { response_action: 'errors', errors: { phrase_block: 'Type it exactly: ' + confirmPhrase('b2c_core') } }
-      }
-    }
 
     const chk = await verifyCeoPin(pin, actor)
     if (!chk.ok) {

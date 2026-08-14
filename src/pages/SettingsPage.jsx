@@ -3172,16 +3172,13 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               channel. The server (resolveApprovalDestination in api/send-report.mjs)
               independently refuses anything except test or b2c_core, so this can
               never be pointed at some OTHER channel even by editing the stored
-              preference directly. Picking the real channel adds its own
-              confirmation-phrase step in Slack on top of the PIN, and only Slack
-              users listed in the SLACK_APPROVER_USER_IDS env var can use it there. */}
+              preference directly. Approving still needs the CEO PIN below, same
+              as always -- picking the real channel doesn't add any extra step. */}
           <label className={styles.fieldLabel} style={{ marginTop: 14 }}>B2C approval destination</label>
           <p className={styles.cardDesc} style={{ marginTop: 4, marginBottom: 8 }}>
             Where the daily P&amp;L / Cash Flow report's "Approve" button in Slack actually posts to.
-            Pointing this at the real channel adds a confirmation-phrase step in Slack (same as every
-            other locked channel) on top of the PIN, and only Slack users listed in{' '}
-            <code>SLACK_APPROVER_USER_IDS</code> can use it there &mdash; anything other than test or the
-            real B2C channel is refused server-side regardless of what's picked here.
+            The CEO PIN below is still required either way &mdash; anything other than a test channel or
+            the real B2C channel is refused server-side regardless of what's picked here.
           </p>
           <Dropdown
             value={b2cApproveDest || (slackTestChannels[0] ? 'test:' + slackTestChannels[0].id : 'test')}
