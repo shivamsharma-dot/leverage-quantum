@@ -1738,18 +1738,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     }
   }), [grouped, srFee])
 
-  const summaryExportRow = g => ({
-    [grpByLabel]: g.label,
-    Spend: fmtINR(g.spend), Leads: g.leads, 'Total Queued': g.queued,
-    'Futwork Human QL': g.humanQL, 'Futwork AI QL': g.futworkAiQl, 'Superbot AI QL': g.superbotAiQl, 'Total QLs': g.totalQL,
-    Applications: g.apps, Offers: g.offers, Deposits: g.deposits, 'Actual RAUs': g.raus, 'Estimated RAU': fmtN(g.estimatedRaus),
-    'QL %': pct(g.totalQL, g.queued), 'App %': pct(g.apps, g.totalQL), 'Deposit %': pct(g.deposits, g.offers),
-    CPL: summaryFmt('cpl', summaryValue(g, 'cpl')), CPQL: summaryFmt('cpql', summaryValue(g, 'cpql')), CPA: summaryFmt('cpa', summaryValue(g, 'cpa')),
-    'Est. SR Revenue': fmtINR(g.estSrRevenue), 'Actual SR Revenue': fmtINR(g.actSrRevenue),
-    'Actual ROAS': g.roas.toFixed(2) + 'x', 'Est. ROAS': g.estimatedRoas.toFixed(2) + 'x',
-  })
-  const exportRows = useMemo(() => groupedWithRevenue.map(summaryExportRow), [groupedWithRevenue, grpByLabel])
-
   const maxSourceLeads = bySource.length ? Math.max(...bySource.map(s => s.leads)) : 1
   const totalSourceLeads = bySource.reduce((t, s) => t + s.leads, 0)
 
@@ -1850,7 +1838,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     displayCols.forEach(c => { o[c.label] = summaryFmt(c.key, summaryValue(totalsRow, c.key)) })
     return o
   }, [totalsRow, displayCols, grpByLabel])
-  const exportTotalRow = useMemo(() => summaryExportRow(totalsRow), [totalsRow, grpByLabel])
 
   // Unformatted twin of the table export: same columns and order, but the underlying
   // numbers rather than display strings, so a spreadsheet can sum/sort them. Percentages
@@ -2915,7 +2902,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             >
               {(loading || bqBusy) ? 'Refreshing' : 'Refresh'}
             </Button>
-            <ExportButton data={exportRows} totalRow={exportTotalRow} filename="overall-summary" dashboardId="overall" />
             <div style={{ position:'relative' }}>
               <button onClick={() => setShowInfo(v => !v)} title="How these metrics are calculated" style={{ width:30, height:30, borderRadius:8, border:`0.5px solid ${C.border}`, background: showInfo ? C.navyBg : 'var(--card)', color:C.navy, fontSize:14, fontWeight:700, fontStyle:'italic', fontFamily:'Georgia,serif', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>i</button>
               {showInfo && <div onClick={() => setShowInfo(false)} style={{ position:'fixed', inset:0, zIndex:150 }} />}
