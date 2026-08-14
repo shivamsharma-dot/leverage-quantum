@@ -1872,16 +1872,38 @@ async function savePendingB2CReport(statement, messages) {
 // this, so the two can never disagree about the destination the way the
 // button's old hardcoded '#b2c-leverage-core' text did (it was written before
 // this became configurable, and never updated -- the button said one thing
-// and the code did another). Test-channel-only, by explicit request: refuses
-// anything that isn't a test-family target, even if the stored preference
-// were edited directly to something else.
+// and the code did another). Was test-channel-only; now also allows the real,
+// guarded b2c_core channel (by explicit request, once the pipeline was proven
+// working) -- still refuses any OTHER channel (ceo/internal/anything else),
+// even if the stored preference were edited directly to something else.
 function resolveApprovalDestination(cfg) {
   const configured = cfg.b2c_approve_destination || 'test'
-  return normaliseTarget(configured).family === 'test' ? configured : 'test'
+  const fam = normaliseTarget(configured).family
+  return (fam === 'test' || fam === 'b2c_core') ? configured : 'test'
 }
 
 function approvalDestinationLabel(hook) {
   return hook.isTest ? '#' + hook.label : channelHandle(hook.key)
+}
+
+// Who's allowed to click Approve/Disapprove at all (optional -- unset means
+// anyone who can see the sandbox channel), and who's allowed to push all the
+// way to the real, guarded b2c_core channel specifically (mandatory there --
+// Slack carries no Quantum admin session, so this list is the only stand-in
+// for "admin" once a guarded destination is in play).
+function slackApproverAllowlist() {
+  return String(process.env.SLACK_APPROVER_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
+}
+
+async function slackPostEphemeral(token, channel, user, text) {
+  const res = await fetch('https://slack.com/api/chat.postEphemeral', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ channel, user, text }),
+  })
+  const d = await res.json().catch(() => ({}))
+  if (!d.ok) throw new Error('Slack chat.postEphemeral: ' + (d.error || 'rejected'))
+  return d
 }
 
 // Applied only to the SANDBOX copy of the message -- the pristine, button-free
@@ -2057,7 +2079,7 @@ async function handleSlackBlockAction(payload) {
 
   // Optional allowlist -- unset means anyone who can see the sandbox channel
   // (and therefore click a button at all) can approve or disapprove.
-  const allowedIds = String(process.env.SLACK_APPROVER_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
+  const allowedIds = slackApproverAllowlist()
   if (allowedIds.length && !allowedIds.includes(payload.user && payload.user.id)) {
     // No modal to show an error in yet at this point (trigger_id is only good
     // for opening one), so this is silently ignored for an unauthorized click
@@ -2077,8 +2099,49 @@ async function handleSlackBlockAction(payload) {
   const summaryHead = summaryBlocks(summary)
 
   if (action.action_id === 'approve_b2c_report') {
-    const hook = cfg ? resolveSlackTarget(cfg, resolveApprovalDestination(cfg), {}) : null
+    // allowGuarded:true here is safe -- resolveSlackTarget only returns metadata
+    // (channel/label), it never posts anything by itself. Actually reaching the
+    // real channel still needs the phrase + PIN checks below, and (for a guarded
+    // destination specifically) the clicking user to be on the approver list.
+    const hook = cfg ? resolveSlackTarget(cfg, resolveApprovalDestination(cfg), { allowGuarded: true }) : null
     const destLabel = hook && hook.mode === 'bot' && hook.channel ? approvalDestinationLabel(hook) : '(destination not configured)'
+    const guarded = !!(hook && hook.guarded)
+
+    if (guarded) {
+      const approverIds = slackApproverAllowlist()
+      if (!approverIds.length || !approverIds.includes(payload.user && payload.user.id)) {
+        await slackPostEphemeral(
+          token, payload.channel && payload.channel.id, payload.user && payload.user.id,
+          'Only a Slack user listed in SLACK_APPROVER_USER_IDS can push this to ' + destLabel + '.'
+        ).catch(() => {})
+        return
+      }
+    }
+
+    const blocks = [
+      ...summaryHead,
+      { type: 'context', elements: [{ type: 'mrkdwn', text: 'This will post to *' + destLabel + '*.' }] },
+    ]
+    if (guarded) {
+      blocks.push({
+        type: 'input', block_id: 'phrase_block',
+        label: { type: 'plain_text', text: 'Type ' + confirmPhrase('b2c_core') + ' to confirm' },
+        element: { type: 'plain_text_input', action_id: 'phrase_input' },
+      })
+    }
+    blocks.push(
+      {
+        type: 'input', block_id: 'pin_block',
+        label: { type: 'plain_text', text: 'PIN' },
+        element: { type: 'plain_text_input', action_id: 'pin_input' },
+      },
+      {
+        type: 'input', block_id: 'note_block', optional: true,
+        label: { type: 'plain_text', text: 'Any notes? (optional)' },
+        element: { type: 'plain_text_input', action_id: 'note_input', multiline: true },
+      },
+    )
+
     await slackOpenView(token, payload.trigger_id, {
       type: 'modal',
       callback_id: 'b2c_approve_pin_modal',
@@ -2086,20 +2149,7 @@ async function handleSlackBlockAction(payload) {
       title: { type: 'plain_text', text: 'Approve report' },
       submit: { type: 'plain_text', text: 'Confirm' },
       close: { type: 'plain_text', text: 'Cancel' },
-      blocks: [
-        ...summaryHead,
-        { type: 'context', elements: [{ type: 'mrkdwn', text: 'This will post to *' + destLabel + '*.' }] },
-        {
-          type: 'input', block_id: 'pin_block',
-          label: { type: 'plain_text', text: 'PIN' },
-          element: { type: 'plain_text_input', action_id: 'pin_input' },
-        },
-        {
-          type: 'input', block_id: 'note_block', optional: true,
-          label: { type: 'plain_text', text: 'Any notes? (optional)' },
-          element: { type: 'plain_text_input', action_id: 'note_input', multiline: true },
-        },
-      ],
+      blocks,
     }).catch(e => console.error('Slack views.open (approve) failed:', e))
     return
   }
@@ -2176,6 +2226,28 @@ async function handleSlackViewSubmission(payload) {
   if (view.callback_id === 'b2c_approve_pin_modal') {
     const pin = modalFieldValue(view, 'pin_block', 'pin_input')
     const note = modalFieldValue(view, 'note_block', 'note_input').trim()
+
+    // Resolved once, up front, and reused all the way through -- this is also
+    // where allowGuarded:true actually gets exercised (the button-click step
+    // only used it to preview the label; THIS is the step that really posts).
+    const cfg = await getReportConfig()
+    const hook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), { allowGuarded: true })
+    const guarded = !!hook.guarded
+
+    // Defense in depth: the button-click step already refused to even open
+    // this modal for an unlisted user when the destination is guarded, but
+    // re-checked here too since this is the step that actually posts.
+    if (guarded) {
+      const approverIds = slackApproverAllowlist()
+      if (!approverIds.length || !approverIds.includes(payload.user && payload.user.id)) {
+        return { response_action: 'errors', errors: { pin_block: 'Only a Slack user listed in SLACK_APPROVER_USER_IDS can push this to the real channel.' } }
+      }
+      const phrase = modalFieldValue(view, 'phrase_block', 'phrase_input')
+      if (!phraseMatches('b2c_core', phrase)) {
+        return { response_action: 'errors', errors: { phrase_block: 'Type it exactly: ' + confirmPhrase('b2c_core') } }
+      }
+    }
+
     const chk = await verifyCeoPin(pin, actor)
     if (!chk.ok) {
       let msg = chk.message
@@ -2205,8 +2277,6 @@ async function handleSlackViewSubmission(payload) {
       return { response_action: 'clear' }
     }
 
-    const cfg = await getReportConfig()
-    const hook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), {})
     const logType = 'b2c ' + row.statement + ' report (approved)'
     try {
       if (hook.mode === 'bot' && hook.channel) {

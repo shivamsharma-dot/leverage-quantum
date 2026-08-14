@@ -10,7 +10,7 @@ import PinInput from '../components/PinInput'
 import { useDesignStyle, saveDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
 import styles from './SettingsPage.module.css'
-import { SLACK_CHANNELS, confirmPhrase } from '../../shared/slackChannels.mjs'
+import { SLACK_CHANNELS, confirmPhrase, channelHandle } from '../../shared/slackChannels.mjs'
 
 // An offline or black-holed request leaves fetch() pending forever, which is how
 // a Settings save could sit on "Saving..." with no error and no way back. Every
@@ -3168,23 +3168,28 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           ))}
 
           {/* Where the B2C daily report's Slack "Approve" button actually posts to.
-              Deliberately test-channel-only right now, by request -- the real
-              b2c_core channel is not offered here at all, and the server enforces
-              the same rule independently (see handleSlackBlockAction in
-              api/send-report.mjs), so this can't be pointed at the real channel
-              even by editing the stored preference directly. Going live needs an
-              actual code change later, not a Settings switch. */}
-          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>B2C approval destination &middot; test channel only</label>
+              Was test-channel-only; now also offers the real, guarded b2c_core
+              channel. The server (resolveApprovalDestination in api/send-report.mjs)
+              independently refuses anything except test or b2c_core, so this can
+              never be pointed at some OTHER channel even by editing the stored
+              preference directly. Picking the real channel adds its own
+              confirmation-phrase step in Slack on top of the PIN, and only Slack
+              users listed in the SLACK_APPROVER_USER_IDS env var can use it there. */}
+          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>B2C approval destination</label>
           <p className={styles.cardDesc} style={{ marginTop: 4, marginBottom: 8 }}>
             Where the daily P&amp;L / Cash Flow report's "Approve" button in Slack actually posts to.
-            Locked to a test channel on purpose &mdash; the real, guarded channel isn't offered here, and
-            the server refuses it too even if this preference were edited directly. Going live will need
-            a deliberate code change, not a Settings switch.
+            Pointing this at the real channel adds a confirmation-phrase step in Slack (same as every
+            other locked channel) on top of the PIN, and only Slack users listed in{' '}
+            <code>SLACK_APPROVER_USER_IDS</code> can use it there &mdash; anything other than test or the
+            real B2C channel is refused server-side regardless of what's picked here.
           </p>
           <Dropdown
             value={b2cApproveDest || (slackTestChannels[0] ? 'test:' + slackTestChannels[0].id : 'test')}
             onChange={setB2cApproveDest}
-            options={slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#' + c.channel + '  (test — ' + c.name + ')' }))}
+            options={[
+              ...slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#' + c.channel + '  (test — ' + c.name + ')' })),
+              { value: 'b2c_core', label: channelHandle('b2c_core') + '  (real — guarded)' },
+            ]}
           />
 
           <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO PIN &middot; shared by every locked channel</label>
