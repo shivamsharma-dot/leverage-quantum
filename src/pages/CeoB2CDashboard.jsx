@@ -536,7 +536,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       <div className={styles.main}>
         <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <p className={styles.breadcrumb}>Dashboards / CEO B2C / {L.pageTitle}</p>
+            <p className={styles.breadcrumb}>Dashboards / B2C / {L.pageTitle}</p>
             <h1 className={styles.pageTitle}>{L.pageTitle} &mdash; {isCashFlow ? 'cash inflow, outflow and net cash inflow' : 'revenue, cost and EBITDA'}<sup style={{ fontSize: 12, color: 'var(--text3)', marginLeft: 2 }}>*</sup></h1>
           </div>
           <div className={styles.headerRight}>

@@ -41,7 +41,7 @@ export const NAV = [
       {
         to: '/dashboard/ceo-b2c-pnl',
         icon: <RevenueIcon />,
-        label: 'CEO B2C',
+        label: 'B2C',
         defaultTo: '/dashboard/ceo-b2c-pnl',
         end: false,
         subItems: [
@@ -197,7 +197,7 @@ function CashFlowIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" 
 const ICON_MAP = {
   'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'Overall (BigQuery)': <OverallIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
   'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
-  'Revenue': <RevenueIcon/>, 'CEO B2C': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>, 'Leverage Careers': <CareersIcon/>,
+  'Revenue': <RevenueIcon/>, 'B2C': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>, 'Leverage Careers': <CareersIcon/>,
   'Google Ads': <GoogleAdsIcon/>, 'QL Ops': <PeopleIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
   'Human QL Detail': <FunnelIcon/>,
   'AI QL Detail': <BotIcon/>,
@@ -301,8 +301,8 @@ export default function Sidebar() {
   const [ceoB2CExpanded, setCeoB2CExpanded] = React.useState(isCeoB2CParentActive)
   React.useEffect(() => { if (isCeoB2CParentActive) setCeoB2CExpanded(true) }, [isCeoB2CParentActive])
 
-  const getExpanded = (label) => label === 'Meta Ads' ? metaExpanded : label === 'Google Ads' ? googleExpanded : label === 'QL Ops' ? qlOpsExpanded : label === 'Agents' ? agentsExpanded : label === 'LeadSquared' ? leadSquaredExpanded : label === 'CEO B2C' ? ceoB2CExpanded : false
-  const setExpanded = (label) => label === 'Meta Ads' ? setMetaExpanded : label === 'Google Ads' ? setGoogleExpanded : label === 'QL Ops' ? setQlOpsExpanded : label === 'Agents' ? setAgentsExpanded : label === 'LeadSquared' ? setLeadSquaredExpanded : label === 'CEO B2C' ? setCeoB2CExpanded : () => {}
+  const getExpanded = (label) => label === 'Meta Ads' ? metaExpanded : label === 'Google Ads' ? googleExpanded : label === 'QL Ops' ? qlOpsExpanded : label === 'Agents' ? agentsExpanded : label === 'LeadSquared' ? leadSquaredExpanded : label === 'B2C' ? ceoB2CExpanded : false
+  const setExpanded = (label) => label === 'Meta Ads' ? setMetaExpanded : label === 'Google Ads' ? setGoogleExpanded : label === 'QL Ops' ? setQlOpsExpanded : label === 'Agents' ? setAgentsExpanded : label === 'LeadSquared' ? setLeadSquaredExpanded : label === 'B2C' ? setCeoB2CExpanded : () => {}
 
   const toggle = () => {
     const next = !collapsed
@@ -360,7 +360,7 @@ export default function Sidebar() {
   const subVisible = sub => canSee(idMap[sub.label]) && isPageVisible(sub.label)
   // The parent row's own click/hover target when there's no explicit defaultTo (route
   // groups like QL Ops, where every sub-item is its own real, separately-gated page --
-  // unlike Meta Ads/Google Ads/Agents/CEO B2C/LeadSquared, whose subItems are matchType
+  // unlike Meta Ads/Google Ads/Agents/B2C/LeadSquared, whose subItems are matchType
   // 'query' tabs on one shared page and always carry a defaultTo). Falling back to a
   // hardcoded subItems[0] here sent a user granted only e.g. Human/AI QL Detail (not
   // Daily QLs) to a page they don't have access to the instant they clicked "QL Ops"
@@ -385,7 +385,7 @@ export default function Sidebar() {
     item.label === 'QL Ops' ? isQlOpsParentActive :
     item.label === 'Agents' ? isAgentsParentActive :
     item.label === 'LeadSquared' ? isLeadSquaredParentActive :
-    item.label === 'CEO B2C' ? isCeoB2CParentActive : false
+    item.label === 'B2C' ? isCeoB2CParentActive : false
 
   // Collapsed-rail flyout: hovering a parent item with subItems opens a fixed-position
   // panel listing its sub-pages, since the icon-only rail has no room to show them inline.
