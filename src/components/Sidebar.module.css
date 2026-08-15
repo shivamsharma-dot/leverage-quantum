@@ -37,9 +37,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  /* right padding reserves the toggle's 24px + 14px inset + an 8px gap, so the
-     QUANTUM wordmark can never run up against it (it was sitting 1px away). */
-  padding: 16px 46px 14px 18px;
+  padding: 16px 18px 14px;
   border-bottom: 0.5px solid var(--card-border);
 }
 
@@ -404,20 +402,26 @@
 .avatar { box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(31,60,132,0.15) !important; }
 .logoutBtn:hover { color: var(--brand-ink) !important; background: var(--red-tint) !important; }
 
-/* === Expand/collapse toggle — ONE definition, same vertical slot in both states ===
-   Previously this control was declared four times (two position:fixed layers, a
-   "floating circular edge control", then this one) and, worse, used a different
-   layout mode per state: absolute top-right when expanded, position:static
-   in-flow when collapsed. Measured live, that moved the button 179px across and
-   56px down the moment you clicked it -- so collapse -> expand was never a
-   repeatable click. Both states now anchor to their own <aside> (both are
-   position:relative) at the SAME top, so the only movement is horizontal, which
-   is the sidebar edge itself moving. */
+/* === Expand/collapse toggle — restored to the placement it had before this
+   session's redesign attempts, at the user's request.
+   Expanded: a 24px rounded square inside the header, top-right.
+   Collapsed: in normal flow, centred below the logo tile.
+   Known and accepted: because the two states use different layout modes, the
+   button moves 179px across and 56px down on click (measured live), so
+   collapse -> expand is not a repeatable double-click. Two attempts to fix that
+   were rejected on looks; the placement below is the one that was approved, so
+   the travel stays. If it is ever worth revisiting, the fix is to give both
+   states the same anchor -- not to re-tune this block.
+   The two dead position:fixed layers and the dead "floating circular edge
+   control" that used to sit above this in the file are NOT restored: they were
+   overridden by this block in every state and had no effect on what rendered.
+   This block reproduces the original computed result exactly. */
 .collapseBtn, .collapseBtnExpanded {
   position: absolute !important;
   top: 16px !important;
-  bottom: auto !important;
+  right: 14px !important;
   left: auto !important;
+  bottom: auto !important;
   width: 24px !important;
   height: 24px !important;
   border-radius: 7px !important;
@@ -430,14 +434,9 @@
   color: var(--brand-ink) !important;
   cursor: pointer !important;
   z-index: 5 !important;
-  flex-shrink: 0 !important;
-  transform: none !important;
-  transition: background .18s ease, color .18s ease !important;
+  transition: background .18s ease, color .18s ease, transform .18s ease !important;
   padding: 0 !important;
 }
-.collapseBtnExpanded { right: 14px !important; }
-/* 78px rail: 8 logo inset + 30 logo + 8 gap + 24 toggle + 8 = 78 exactly. */
-.collapseBtn { right: 8px !important; }
 .collapseBtn:hover, .collapseBtnExpanded:hover {
   background: #1F3C84 !important;
   color: #fff !important;
@@ -445,6 +444,30 @@
   box-shadow: 0 2px 6px rgba(31,60,132,0.28) !important;
 }
 .collapseBtn svg, .collapseBtnExpanded svg { width: 13px !important; height: 13px !important; }
+
+/* collapsed-state toggle: centred under the logo (avoid overlapping logo icon) */
+.collapseBtn {
+  top: 56px !important;
+  right: auto !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+.collapseBtn:hover {
+  transform: translateX(-50%) !important;
+}
+
+/* === collapsed toggle: in-flow, no overlap with Ask AI === */
+.sidebarCollapsed .collapseBtn {
+  position: static !important;
+  transform: none !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  align-self: center !important;
+  margin: 2px auto 8px !important;
+  z-index: 1 !important;
+}
+.sidebarCollapsed .collapseBtn:hover { transform: none !important; }
 
 /* === kill janky expand/collapse drag animation === */
 .collapseBtn, .collapseBtnExpanded { transition: background 0.12s ease, color 0.12s ease !important; }

@@ -685,22 +685,20 @@ export default function Sidebar() {
         </div>
       )}
       <aside className={styles.sidebarCollapsed}>
-        {/* Collapsed header. The logo mark is 30px rather than 44px so the toggle
-            can sit beside it at the SAME vertical offset it occupies when the
-            sidebar is expanded -- at 44px the tile filled the whole band and the
-            toggle had to drop below it, which is what made the control jump 56px
-            down (and 179px across) on every click. 8 + 30 + 8 + 24 + 8 = 78. */}
+        {/* Quantum logo mark — visible when collapsed. Centred 44px tile, matching
+            the 40px nav tiles below it. The toggle sits in normal flow underneath
+            this band (see .sidebarCollapsed .collapseBtn), which is why the tile
+            gets the whole band to itself. */}
         <div style={{
-          height: 58, display:'flex', alignItems:'center', justifyContent:'flex-start',
-          flexShrink: 0, borderBottom: '0.5px solid var(--card-border)', width:'100%',
-          padding: '0 8px', boxSizing: 'border-box'
+          height: 58, display:'flex', alignItems:'center', justifyContent:'center',
+          flexShrink: 0, borderBottom: '0.5px solid var(--card-border)', width:'100%'
         }}>
           <div style={{
-            width:30, height:30, borderRadius:8, background:'var(--card)',
+            width:44, height:44, borderRadius:11, background:'var(--card)',
             border:'0.5px solid var(--card-border)', boxShadow:'0 1px 3px rgba(15,23,42,0.06)',
             display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0
           }}>
-            <svg width="17" height="17" viewBox={BRAND_LOGO_VIEWBOX} fill="none">
+            <svg width="24" height="24" viewBox={BRAND_LOGO_VIEWBOX} fill="none">
               {BRAND_LOGO_BARS.map((b,i)=><rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} rx="1.5" fill={b.color}/>)}
             </svg>
           </div>
