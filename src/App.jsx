@@ -6,6 +6,7 @@ import { useAuth } from './hooks/useAuth'
 import { logActivity, pageLabel, installActivityTracker } from './components/ActivityLogger'
 import LoginPage from './pages/LoginPage'; import { prefetchSummaryAnalysis } from './lib/summaryData'
 import { COMPONENT_IMPORTS, prefetchAllRoutes } from './lib/routePrefetch'
+import { canAccessDashboard } from '../shared/access.mjs'
 const DashboardHome = lazy(COMPONENT_IMPORTS.DashboardHome)
 const OverallDashboard = lazy(COMPONENT_IMPORTS.OverallDashboard)
 const ROASDashboard = lazy(COMPONENT_IMPORTS.ROASDashboard)
@@ -97,29 +98,11 @@ function PageLoader() {
   )
 }
 
-// Genuinely restricted to one person, not one role -- see lib/auth.mjs's own copy
-// (server-side is what actually protects the route; this is the client-side mirror).
-const OVERALL_BIGQUERY_EMAILS = ['shivam.sharma@leverageedu.com']
-
-// Mirrors Sidebar.jsx's canSee() exactly — this is the REAL access gate (nav
-// visibility alone is cosmetic; this is what actually blocks direct URL access).
-function canAccess(role, dashboardId, email) {
-  if (dashboardId === 'overall_bigquery') return OVERALL_BIGQUERY_EMAILS.includes(String(email || '').toLowerCase())
-  const userRole = role || 'viewer'
-  if (dashboardId === 'settings') return userRole === 'admin'
-  if (userRole === 'admin') return true
-  if (userRole === 'viewer') return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance' && dashboardId !== 'ceo_b2c_pnl' && dashboardId !== 'ceo_b2c_cashflow'
-  if (userRole.startsWith('viewer:')) {
-    const granted = userRole.replace('viewer:', '').split(',').filter(Boolean)
-    return granted.includes(dashboardId)
-  }
-  if (userRole === 'roas_only') return dashboardId === 'roas'
-  if (userRole.startsWith('custom:')) {
-    return userRole.replace('custom:', '').split(',').filter(Boolean).includes(dashboardId)
-  }
-  // Unknown/malformed role — fail safe (no ask-ai, no agents, no settings), not fail-open
-  return dashboardId !== 'ask_ai' && dashboardId !== 'agents' && dashboardId !== 'marketing_performance' && dashboardId !== 'ceo_b2c_pnl' && dashboardId !== 'ceo_b2c_cashflow'
-}
+// Access rules come from shared/access.mjs -- the same function lib/auth.mjs
+// re-exports for the server-side gate, so the route guard and the API can no
+// longer drift apart. Server-side is what actually protects data; this blocks
+// direct URL access in the client.
+const canAccess = canAccessDashboard
 
 // Ordered fallback for a denied route — first entry the role can actually access
 const DASHBOARD_FALLBACK_ORDER = [

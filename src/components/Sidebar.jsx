@@ -6,6 +6,7 @@ import SnapshotTool from './SnapshotTool'
 import CalculatorTool from './CalculatorTool'
 import { prefetchRoute } from '../lib/routePrefetch'
 import { BRAND_LOGO_BARS, BRAND_LOGO_VIEWBOX, BRAND_LOGO_BASELINE } from '../../shared/brandLogo.mjs'
+import { canAccessDashboard } from '../../shared/access.mjs'
 import { toast } from './ToastHost'
 
 // Exported so Settings > User Access can derive its page-visibility grouping
@@ -319,29 +320,16 @@ export default function Sidebar() {
     // Auth still loading -- show nothing rather than falling back to the permissive
     // default 'viewer' role, which would briefly grant every dashboard (including ones
     // a restricted custom-viewer account was never actually given) until the real
-    // role loads a moment later.
+    // role loads a moment later. This guard is nav-specific, which is why it stays
+    // here rather than moving into the shared rule.
     if (!user) return false
-    // Settings is always admin-only
-    if (id === 'settings') return userRole === 'admin'
-    // Genuinely restricted to Shivam's own email, not just 'admin' -- nishant.bhatia
-    // is also admin and must not see this. Checked before the admin-sees-everything
-    // branch below, since that branch would otherwise override this for him.
-    if (id === 'overall_bigquery') return (user?.email || '').toLowerCase() === 'shivam.sharma@leverageedu.com'
-    // Admin sees everything
-    if (userRole === 'admin') return true
-    // Plain viewer = all dashboards EXCEPT ask-ai/agents (must be explicitly granted)
-    if (userRole === 'viewer') return id !== 'ask_ai' && id !== 'agents' && id !== 'marketing_performance' && id !== 'ceo_b2c_pnl' && id !== 'ceo_b2c_cashflow'
-    // Custom viewer access: "viewer:home,meta_ads,..." — only granted ids are visible
-    if (userRole?.startsWith('viewer:')) {
-      const granted = userRole.replace('viewer:', '').split(',').filter(Boolean)
-      return granted.includes(id)
-    }
-    // Legacy support
-    if (userRole === 'roas_only') return id === 'roas'
-    if (userRole?.startsWith('custom:')) return userRole.replace('custom:', '').split(',').filter(Boolean).includes(id)
-    // Fallback: treat unknown as viewer (no ask-ai/agents)
-    return id !== 'ask_ai' && id !== 'agents' && id !== 'marketing_performance' && id !== 'ceo_b2c_pnl' && id !== 'ceo_b2c_cashflow'
+    // Every actual rule (settings, the overall_bigquery email restriction, admin,
+    // plain viewer, viewer:/custom: grants, legacy roles, fail-safe default) now comes
+    // from shared/access.mjs -- the same function the route guard and the server-side
+    // API gate use, so nav visibility can no longer disagree with either of them.
+    return canAccessDashboard(userRole, id, user?.email)
   }
+
 
   const initials = user?.name
     ? user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
