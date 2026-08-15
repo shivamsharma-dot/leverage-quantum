@@ -631,17 +631,22 @@ export default function Sidebar() {
         </div>
       )}
       <aside className={styles.sidebarCollapsed}>
-        {/* Quantum logo mark — visible when collapsed */}
+        {/* Collapsed header. The logo mark is 30px rather than 44px so the toggle
+            can sit beside it at the SAME vertical offset it occupies when the
+            sidebar is expanded -- at 44px the tile filled the whole band and the
+            toggle had to drop below it, which is what made the control jump 56px
+            down (and 179px across) on every click. 8 + 30 + 8 + 24 + 8 = 78. */}
         <div style={{
-          height: 58, display:'flex', alignItems:'center', justifyContent:'center',
-          flexShrink: 0, borderBottom: '0.5px solid var(--card-border)', width:'100%'
+          height: 58, display:'flex', alignItems:'center', justifyContent:'flex-start',
+          flexShrink: 0, borderBottom: '0.5px solid var(--card-border)', width:'100%',
+          padding: '0 8px', boxSizing: 'border-box'
         }}>
           <div style={{
-            width:44, height:44, borderRadius:11, background:'var(--card)',
+            width:30, height:30, borderRadius:8, background:'var(--card)',
             border:'0.5px solid var(--card-border)', boxShadow:'0 1px 3px rgba(15,23,42,0.06)',
-            display:'flex', alignItems:'center', justifyContent:'center'
+            display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0
           }}>
-            <svg width="24" height="24" viewBox={BRAND_LOGO_VIEWBOX} fill="none">
+            <svg width="17" height="17" viewBox={BRAND_LOGO_VIEWBOX} fill="none">
               {BRAND_LOGO_BARS.map((b,i)=><rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} rx="1.5" fill={b.color}/>)}
             </svg>
           </div>
@@ -688,7 +693,7 @@ export default function Sidebar() {
           <div className={styles.collapsedFlyout} style={{ top: panelTop }}
             role="group" aria-label={flyout.label}
             onMouseEnter={cancelCloseFlyout} onMouseLeave={scheduleCloseFlyout}>
-            <div className={styles.collapsedFlyoutNotch} style={{ top: flyout.centerY - panelTop - 6 }} />
+            <div className={styles.collapsedFlyoutNotch} style={{ top: flyout.centerY - panelTop }} />
             <div className={styles.collapsedFlyoutHeader}>{flyout.label}</div>
             {flyout.subItems.map(sub => (
               /* <button>, not a click-only <div> -- these were unreachable by keyboard

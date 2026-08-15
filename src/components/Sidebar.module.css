@@ -42,7 +42,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 18px 14px;
+  /* right padding reserves the toggle's 24px + 14px inset + an 8px gap, so the
+     QUANTUM wordmark can never run up against it (it was sitting 1px away). */
+  padding: 16px 46px 14px 18px;
   border-bottom: 0.5px solid var(--card-border);
 }
 
@@ -246,43 +248,6 @@
 }
 .logoutBtn:hover { color: #EF4444; background: var(--red-tint); }
 
-.collapseBtn {
-  position: fixed;
-  left: 40px;
-  top: 24px;
-  width: 24px; height: 24px;
-  background: var(--sidebar-bg);
-  border: 0.5px solid var(--card-border);
-  border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(15,23,42,0.10);
-  color: var(--text2);
-  cursor: pointer;
-  z-index: 200;
-  flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  transition: all .15s;
-}
-.collapseBtn:hover { color: var(--brand-ink); border-color: var(--brand-ink); }
-.collapseBtn:hover { background: #E8EFF9; color: #1F3C84; }
-
-.collapseBtnExpanded {
-  position: fixed;
-  left: 220px;
-  top: 24px;
-  width: 24px; height: 24px;
-  background: var(--sidebar-bg);
-  border: 0.5px solid var(--card-border);
-  border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(15,23,42,0.10);
-  color: var(--text2);
-  cursor: pointer;
-  z-index: 200;
-  transition: left .2s ease, all .15s;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 6px; transition: all .15s; flex-shrink: 0;
-}
-.collapseBtnExpanded:hover { background: var(--bg3); color: var(--text2); }
-
 .sidebarCollapsed {
   position: relative;
   width: 52px; height: 100vh;
@@ -307,25 +272,30 @@
   border: 1px solid transparent; position: relative;
 }
 .collapsedItem svg { width: 21px !important; height: 21px !important; stroke-width: 2.2 !important; }
-.collapsedItem:hover { background: var(--bg3); color: var(--brand-ink); }
 .collapsedItem:hover { background: var(--bg3); color: var(--text2); }
 .collapsedActive {
   background: #E8EFF9 !important;
   color: var(--brand-ink) !important;
   border-color: transparent !important;
 }
+/* Same accent as the expanded nav (.navItem.active::before): 3x18px, navy->blue
+   gradient. It used to be a flat #1F3C84 bar stretched to the full tile height
+   (26.8px measured), so the same state read as two different designs. */
 .collapsedActive::before {
   content: '';
-  position: absolute; left: 0; top: 6px; bottom: 6px;
-  width: 3px; border-radius: 0 3px 3px 0;
-  background: #1F3C84;
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 18px; border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #1C9FD4, #1F3C84);
 }
 
 .collapsedAvatar { margin-top: auto; padding: 8px 0; }
 
 .collapsedFlyout {
   position: fixed;
-  left: 60px;
+  /* Rail is 78px wide + 12px page margin = right edge at 90px; this was still
+     60px from when the rail was 52px, so the panel overlapped the rail by 33px
+     and covered the very icon being hovered. 90 + 8px gap. */
+  left: 98px;
   min-width: 224px;
   background: var(--card);
   border: 0.5px solid var(--card-border);
@@ -348,7 +318,9 @@
   background: var(--card);
   border-left: 0.5px solid var(--card-border);
   border-bottom: 0.5px solid var(--card-border);
-  transform: rotate(45deg);
+  /* translateY(-50%) lets the JSX pass the item's centre directly instead of
+     guessing a -6px fudge, which left it 7px low. */
+  transform: translateY(-50%) rotate(45deg);
   border-radius: 0 0 0 3px;
 }
 .collapsedFlyoutHeader {
@@ -477,26 +449,26 @@
 .navItem:hover .navIcon { opacity: 1 !important; }
 .groupLabel { font-size: 11.5px !important; font-weight: 700 !important; letter-spacing: 0.09em !important; color: var(--text2) !important; padding: 14px 12px 6px !important; }
 .group { margin-bottom: 6px !important; gap: 6px !important; }
-/* Toggle redesign: floating circular edge control */
-.collapseBtnExpanded { position: absolute !important; top: 70px !important; right: -13px !important; width: 26px !important; height: 26px !important; border-radius: 50% !important; background: var(--card) !important; border: 1px solid var(--card-border) !important; box-shadow: 0 4px 12px -2px rgba(31,60,132,0.25), 0 2px 4px rgba(15,23,42,0.08) !important; display: flex !important; align-items: center !important; justify-content: center !important; color: var(--brand-ink) !important; cursor: pointer !important; z-index: 20 !important; transition: transform .2s ease, box-shadow .2s ease, background .2s ease !important; padding: 0 !important; }
-.collapseBtnExpanded:hover { background: #1F3C84 !important; color: var(--card) !important; transform: scale(1.12) !important; box-shadow: 0 6px 16px -2px rgba(31,60,132,0.40) !important; }
-.collapseBtnExpanded svg { width: 13px !important; height: 13px !important; }
-.collapseBtn { position: absolute !important; top: 70px !important; right: -13px !important; width: 26px !important; height: 26px !important; border-radius: 50% !important; background: var(--card) !important; border: 1px solid var(--card-border) !important; box-shadow: 0 4px 12px -2px rgba(31,60,132,0.25), 0 2px 4px rgba(15,23,42,0.08) !important; display: flex !important; align-items: center !important; justify-content: center !important; color: var(--brand-ink) !important; cursor: pointer !important; z-index: 20 !important; transition: transform .2s ease, box-shadow .2s ease, background .2s ease !important; padding: 0 !important; }
-.collapseBtn:hover { background: #1F3C84 !important; color: var(--card) !important; transform: scale(1.12) !important; }
-.collapseBtn svg { width: 13px !important; height: 13px !important; }
 .collapsedItem, .collapsedItem a { border-radius: 12px !important; transition: all .15s ease !important; }
 .collapsedItem:hover { background: var(--bg3) !important; color: var(--brand-ink) !important; }
 .collapsedActive { background: linear-gradient(135deg, rgba(28,159,212,0.12), rgba(31,60,132,0.08)) !important; color: var(--brand-ink) !important; }
 .avatar { box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(31,60,132,0.15) !important; }
 .logoutBtn:hover { color: var(--brand-ink) !important; background: var(--red-tint) !important; }
 
-/* === toggle embedded inside sidebar (fix half-out + Ask AI overlap) === */
+/* === Expand/collapse toggle — ONE definition, same vertical slot in both states ===
+   Previously this control was declared four times (two position:fixed layers, a
+   "floating circular edge control", then this one) and, worse, used a different
+   layout mode per state: absolute top-right when expanded, position:static
+   in-flow when collapsed. Measured live, that moved the button 179px across and
+   56px down the moment you clicked it -- so collapse -> expand was never a
+   repeatable click. Both states now anchor to their own <aside> (both are
+   position:relative) at the SAME top, so the only movement is horizontal, which
+   is the sidebar edge itself moving. */
 .collapseBtn, .collapseBtnExpanded {
   position: absolute !important;
   top: 16px !important;
-  right: 14px !important;
-  left: auto !important;
   bottom: auto !important;
+  left: auto !important;
   width: 24px !important;
   height: 24px !important;
   border-radius: 7px !important;
@@ -509,9 +481,14 @@
   color: var(--brand-ink) !important;
   cursor: pointer !important;
   z-index: 5 !important;
-  transition: background .18s ease, color .18s ease, transform .18s ease !important;
+  flex-shrink: 0 !important;
+  transform: none !important;
+  transition: background .18s ease, color .18s ease !important;
   padding: 0 !important;
 }
+.collapseBtnExpanded { right: 14px !important; }
+/* 78px rail: 8 logo inset + 30 logo + 8 gap + 24 toggle + 8 = 78 exactly. */
+.collapseBtn { right: 8px !important; }
 .collapseBtn:hover, .collapseBtnExpanded:hover {
   background: #1F3C84 !important;
   color: #fff !important;
@@ -519,30 +496,6 @@
   box-shadow: 0 2px 6px rgba(31,60,132,0.28) !important;
 }
 .collapseBtn svg, .collapseBtnExpanded svg { width: 13px !important; height: 13px !important; }
-
-/* collapsed-state toggle: centered under the logo (avoid overlapping logo icon) */
-.collapseBtn {
-  top: 56px !important;
-  right: auto !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-}
-.collapseBtn:hover {
-  transform: translateX(-50%) !important;
-}
-
-/* === collapsed toggle: in-flow, no overlap with Ask AI === */
-.sidebarCollapsed .collapseBtn {
-  position: static !important;
-  transform: none !important;
-  top: auto !important;
-  left: auto !important;
-  right: auto !important;
-  align-self: center !important;
-  margin: 2px auto 8px !important;
-  z-index: 1 !important;
-}
-.sidebarCollapsed .collapseBtn:hover { transform: none !important; }
 
 /* === kill janky expand/collapse drag animation === */
 .collapseBtn, .collapseBtnExpanded { transition: background 0.12s ease, color 0.12s ease !important; }
