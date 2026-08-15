@@ -9,6 +9,13 @@ import { BRAND_LOGO_BARS, BRAND_LOGO_VIEWBOX, BRAND_LOGO_BASELINE } from '../../
 import { canAccessDashboard } from '../../shared/access.mjs'
 import { toast } from './ToastHost'
 
+// navKey on every expandable item is the STABLE identity for that nav group --
+// expand/collapse state and parent-active highlighting key off it, never off the
+// display label. Labels used to be the key, which meant renaming one silently
+// broke the group's icon, its chevron and its active state with no error anywhere
+// (this is exactly what happened when 'CEO B2C' was renamed to 'B2C'). Labels are
+// display text now; change them freely.
+//
 // Exported so Settings > User Access can derive its page-visibility grouping
 // from this exact same structure (single source of truth for the sidebar's
 // parent -> sub-page hierarchy), instead of a second, hand-maintained mapping
@@ -20,6 +27,7 @@ export const NAV = [
       { to: '/ask-ai', icon: <AskAIIcon />, label: 'Ask AI', end: true },
       {
         to: '/dashboard/agents',
+        navKey: 'agents',
         icon: <AgentsIcon />,
         label: 'Agents',
         defaultTo: '/dashboard/agents',
@@ -41,6 +49,7 @@ export const NAV = [
       { to: '/dashboard/overall-bigquery', icon: <OverallIcon />, label: 'Overall (BigQuery)', end: false },
       {
         to: '/dashboard/ceo-b2c-pnl',
+        navKey: 'b2c',
         icon: <RevenueIcon />,
         label: 'B2C',
         defaultTo: '/dashboard/ceo-b2c-pnl',
@@ -57,6 +66,7 @@ export const NAV = [
     items: [
       {
         to: '/dashboard/meta-ads',
+        navKey: 'meta_ads',
         icon: <MetaIcon />,
         label: 'Meta Ads',
         defaultTo: '/dashboard/meta-ads?tab=campaigns',
@@ -71,6 +81,7 @@ export const NAV = [
       { to: '/dashboard/leverage-careers', icon: <CareersIcon />, label: 'Leverage Careers', end: false },
       {
         to: '/dashboard/google-ads',
+        navKey: 'google_ads',
         icon: <GoogleAdsIcon />,
         label: 'Google Ads',
         end: false,
@@ -97,6 +108,7 @@ export const NAV = [
       { to: '/dashboard/revenue',      icon: <RevenueIcon />,  label: 'Revenue',      end: false },
       {
         to: '/dashboard/lq-ops',
+        navKey: 'ql_ops',
         icon: <PeopleIcon />,
         label: 'QL Ops',
         end: false,
@@ -114,6 +126,7 @@ export const NAV = [
       { to: '/dashboard/leads-assigned', icon: <LeadsAssignedIcon />, label: 'Leads Assigned', end: false },
       {
         to: '/dashboard/leadsquared',
+        navKey: 'leadsquared',
         icon: <LeadSquaredIcon />,
         label: 'LeadSquared',
         defaultTo: '/dashboard/leadsquared?tab=leads',
@@ -277,33 +290,39 @@ export default function Sidebar() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  const isMetaParentActive = location.pathname.startsWith('/dashboard/meta-ads')
-  const isGoogleParentActive = location.pathname.startsWith('/dashboard/google-ads')
-  const isQlOpsParentActive = location.pathname === '/dashboard/lq-ops' || location.pathname === '/dashboard/lq-ops-monthly' || location.pathname === '/dashboard/lq-ops-detail' || location.pathname === '/dashboard/lq-ops-ai-detail' || location.pathname === '/dashboard/lq-ops-human-unassigned' || location.pathname === '/dashboard/lq-ops-ai-unassigned'
-  const isAgentsParentActive = location.pathname === '/dashboard/agents' || location.pathname === '/dashboard/marketing-performance'
-  const isLeadSquaredParentActive = location.pathname.startsWith('/dashboard/leadsquared')
-  const isCeoB2CParentActive = location.pathname === '/dashboard/ceo-b2c-pnl' || location.pathname === '/dashboard/ceo-b2c-cashflow'
+  // A nav group is "active" when the current route is one of its own sub-items --
+  // derived straight from the subItems each group already declares, rather than
+  // from six separately hand-maintained path lists that had to be updated in
+  // lockstep whenever a sub-page was added. Route groups match the exact path;
+  // query-tab groups (whose subItems are ?tab= links on one shared page) match
+  // that shared base path.
+  const parentActiveFor = React.useCallback((item) => (item.subItems || []).some(sub => (
+    sub.matchType === 'route'
+      ? location.pathname === sub.to
+      : location.pathname.startsWith(sub.to.split('?')[0])
+  )), [location.pathname])
 
-  const [metaExpanded, setMetaExpanded] = React.useState(isMetaParentActive)
-  React.useEffect(() => { if (isMetaParentActive) setMetaExpanded(true) }, [isMetaParentActive])
+  // One map keyed by navKey, replacing six near-identical useState/useEffect pairs
+  // and the two six-branch ternaries that looked groups up by display label.
+  // Adding a nav group now needs no changes in this component at all.
+  const activeParentKey = React.useMemo(() => {
+    for (const group of NAV) {
+      for (const item of group.items) {
+        if (item.subItems && parentActiveFor(item)) return item.navKey
+      }
+    }
+    return null
+  }, [parentActiveFor])
 
-  const [googleExpanded, setGoogleExpanded] = React.useState(isGoogleParentActive)
-  React.useEffect(() => { if (isGoogleParentActive) setGoogleExpanded(true) }, [isGoogleParentActive])
+  const [expandedKeys, setExpandedKeys] = React.useState(() => activeParentKey ? { [activeParentKey]: true } : {})
+  // Navigating into a group opens it. Groups are never force-closed, so one the
+  // user opened by hand stays open -- same behaviour as the old per-group effects.
+  React.useEffect(() => {
+    if (activeParentKey) setExpandedKeys(prev => (prev[activeParentKey] ? prev : { ...prev, [activeParentKey]: true }))
+  }, [activeParentKey])
 
-  const [qlOpsExpanded, setQlOpsExpanded] = React.useState(isQlOpsParentActive)
-  React.useEffect(() => { if (isQlOpsParentActive) setQlOpsExpanded(true) }, [isQlOpsParentActive])
-
-  const [agentsExpanded, setAgentsExpanded] = React.useState(isAgentsParentActive)
-  React.useEffect(() => { if (isAgentsParentActive) setAgentsExpanded(true) }, [isAgentsParentActive])
-
-  const [leadSquaredExpanded, setLeadSquaredExpanded] = React.useState(isLeadSquaredParentActive)
-  React.useEffect(() => { if (isLeadSquaredParentActive) setLeadSquaredExpanded(true) }, [isLeadSquaredParentActive])
-
-  const [ceoB2CExpanded, setCeoB2CExpanded] = React.useState(isCeoB2CParentActive)
-  React.useEffect(() => { if (isCeoB2CParentActive) setCeoB2CExpanded(true) }, [isCeoB2CParentActive])
-
-  const getExpanded = (label) => label === 'Meta Ads' ? metaExpanded : label === 'Google Ads' ? googleExpanded : label === 'QL Ops' ? qlOpsExpanded : label === 'Agents' ? agentsExpanded : label === 'LeadSquared' ? leadSquaredExpanded : label === 'B2C' ? ceoB2CExpanded : false
-  const setExpanded = (label) => label === 'Meta Ads' ? setMetaExpanded : label === 'Google Ads' ? setGoogleExpanded : label === 'QL Ops' ? setQlOpsExpanded : label === 'Agents' ? setAgentsExpanded : label === 'LeadSquared' ? setLeadSquaredExpanded : label === 'B2C' ? setCeoB2CExpanded : () => {}
+  const isExpanded = (item) => !!expandedKeys[item.navKey]
+  const toggleExpanded = (item) => setExpandedKeys(prev => ({ ...prev, [item.navKey]: !prev[item.navKey] }))
 
   const toggle = () => {
     const next = !collapsed
@@ -324,18 +343,20 @@ export default function Sidebar() {
     // here rather than moving into the shared rule.
     if (!user) return false
     // Every actual rule (settings, the overall_bigquery email restriction, admin,
-    // plain viewer, viewer:/custom: grants, legacy roles, fail-safe default) now comes
+    // plain viewer, viewer:/custom: grants, legacy roles, fail-safe default) comes
     // from shared/access.mjs -- the same function the route guard and the server-side
     // API gate use, so nav visibility can no longer disagree with either of them.
     return canAccessDashboard(userRole, id, user?.email)
   }
 
-
   const initials = user?.name
     ? user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
     : user?.email?.[0]?.toUpperCase() || 'LQ'
 
-  const idMap = Object.fromEntries(PAGE_LIST.map(p => [p.label, p.id]))
+  // PAGE_LIST is module-level and never changes, so this join is built once for the
+  // lifetime of the app rather than on every render (Sidebar re-renders on every
+  // navigation).
+  const idMap = React.useMemo(() => Object.fromEntries(PAGE_LIST.map(p => [p.label, p.id])), [])
 
   // Nav parents whose subItems are real, separately-access-controlled pages (matchType
   // 'route', e.g. QL Ops's Daily/Monthly/Human-Detail/AI-Detail) don't have their own
@@ -367,14 +388,6 @@ export default function Sidebar() {
     return location.pathname.startsWith(sub.to.split('?')[0]) && currentTab === sub.tabKey
   }
 
-  const parentActiveFor = (item) =>
-    item.label === 'Meta Ads' ? isMetaParentActive :
-    item.label === 'Google Ads' ? isGoogleParentActive :
-    item.label === 'QL Ops' ? isQlOpsParentActive :
-    item.label === 'Agents' ? isAgentsParentActive :
-    item.label === 'LeadSquared' ? isLeadSquaredParentActive :
-    item.label === 'B2C' ? isCeoB2CParentActive : false
-
   // Collapsed-rail flyout: hovering a parent item with subItems opens a fixed-position
   // panel listing its sub-pages, since the icon-only rail has no room to show them inline.
   const [flyout, setFlyout] = React.useState(null)
@@ -393,6 +406,15 @@ export default function Sidebar() {
   const cancelCloseFlyout = () => {
     if (flyoutCloseTimer.current) { clearTimeout(flyoutCloseTimer.current); flyoutCloseTimer.current = null }
   }
+  // The collapsed rail's flyout was hover-only -- onMouseEnter/onMouseLeave with no
+  // focus or keyboard path -- so a keyboard user with the sidebar collapsed could
+  // not reach ANY sub-page at all. It now opens on focus too, and Escape closes it.
+  React.useEffect(() => {
+    if (!flyout) return
+    const onKey = (e) => { if (e.key === 'Escape') setFlyout(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [flyout])
 
   // Right-click "hide from sidebar" -- admin only, writes to the EXACT SAME
   // app_preferences.hidden_pages key Settings > User Access > Global Page
@@ -473,29 +495,38 @@ export default function Sidebar() {
       </div>
 
       <nav className={styles.nav}>
-        {NAV.map(group => (group.items.filter(item => groupVisible(item)).length===0?null:(
+        {NAV.map(group => {
+          // Computed once per group. This used to run groupVisible() over every
+          // item twice -- once for the is-it-empty check, once for the map -- and
+          // groupVisible walks subItems and re-evaluates the access rules each time.
+          const visibleItems = group.items.filter(groupVisible)
+          if (visibleItems.length === 0) return null
+          return (
           <div key={group.label} className={styles.group}>
             {group.label !== 'Intelligence' && <p className={styles.groupLabel}>{group.label}</p>}
-            {group.items.filter(item => groupVisible(item)).map(item => {
+            {visibleItems.map(item => {
               if (item.subItems) {
                 const parentActive = parentActiveFor(item)
                 return (
                   <div key={item.label}>
                     <button
                       className={`${styles.navItem} ${parentActive ? styles.active : ''}`}
-                      onClick={() => { setExpanded(item.label)(e => !e); if (!parentActive) navigate(item.defaultTo || firstReachableSubTo(item)) }}
+                      aria-expanded={isExpanded(item)}
+                      aria-controls={`lq-subnav-${item.navKey}`}
+                      onClick={() => { toggleExpanded(item); if (!parentActive) navigate(item.defaultTo || firstReachableSubTo(item)) }}
                       onContextMenu={!isRouteGroup(item) ? (e) => openHideMenu(e, idMap[item.label], item.label) : undefined}
                       onMouseEnter={()=>prefetchRoute(item.defaultTo || firstReachableSubTo(item))} onFocus={()=>prefetchRoute(item.defaultTo || firstReachableSubTo(item))}
                       style={{width:'100%',textAlign:'left',background:'none',border:'none',cursor:'pointer',font:'inherit'}}>
-                      <span className={styles.navIcon}>{item.icon}</span>
+                      <span className={styles.navIcon} aria-hidden="true">{item.icon}</span>
                       <span style={{flex:1}}>{item.label}</span>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-                        style={{transform: getExpanded(item.label) ? 'rotate(180deg)' : 'none', transition:'transform .2s', opacity:.4}}>
+                        aria-hidden="true"
+                        style={{transform: isExpanded(item) ? 'rotate(180deg)' : 'none', transition:'transform .2s', opacity:.4}}>
                         <polyline points="6 9 12 15 18 9"/>
                       </svg>
                     </button>
-                    {getExpanded(item.label) && (
-                      <div className={styles.subNav}>
+                    {isExpanded(item) && (
+                      <div className={styles.subNav} id={`lq-subnav-${item.navKey}`} role="group" aria-label={item.label}>
                         {item.subItems.filter(sub => sub.matchType !== 'route' || subVisible(sub)).map(sub => (
                           <button key={sub.label}
                             className={`${styles.subNavItem} ${isSubActive(sub) ? styles.subNavActive : ''}`}
@@ -523,7 +554,8 @@ export default function Sidebar() {
               )
             })}
           </div>
-        )))}
+          )
+        })}
       </nav>
 
 
@@ -622,13 +654,15 @@ export default function Sidebar() {
             item.subItems ? (
               <div key={item.label} style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}
                 onMouseEnter={(e) => openFlyout(item, e.currentTarget)}
-                onMouseLeave={scheduleCloseFlyout}>
+                onMouseLeave={scheduleCloseFlyout}
+                onFocus={(e) => openFlyout(item, e.currentTarget)}
+                onBlur={scheduleCloseFlyout}>
                 <NavLink to={item.defaultTo || firstReachableSubTo(item)} end={item.end}
                   onFocus={()=>prefetchRoute(item.defaultTo || firstReachableSubTo(item))}
                   onContextMenu={!isRouteGroup(item) ? (e) => openHideMenu(e, idMap[item.label], item.label) : undefined}
                   className={`${styles.collapsedItem} ${parentActiveFor(item) ? styles.collapsedActive : ''}`}
                   title={item.label}>
-                  {ICON_MAP[item.label]}
+                  {item.icon}
                 </NavLink>
               </div>
             ) : (
@@ -637,7 +671,7 @@ export default function Sidebar() {
                 onContextMenu={(e) => openHideMenu(e, idMap[item.label], item.label)}
                 className={({ isActive }) => `${styles.collapsedItem} ${isActive ? styles.collapsedActive : ''}`}
                 title={item.label}>
-                {ICON_MAP[item.label]}
+                {item.icon}
               </NavLink>
             )
           )))}
@@ -646,18 +680,24 @@ export default function Sidebar() {
           const panelTop = Math.min(flyout.top, window.innerHeight - 16 - flyout.subItems.length * 44 - 48)
           return (
           <div className={styles.collapsedFlyout} style={{ top: panelTop }}
+            role="group" aria-label={flyout.label}
             onMouseEnter={cancelCloseFlyout} onMouseLeave={scheduleCloseFlyout}>
             <div className={styles.collapsedFlyoutNotch} style={{ top: flyout.centerY - panelTop - 6 }} />
             <div className={styles.collapsedFlyoutHeader}>{flyout.label}</div>
             {flyout.subItems.map(sub => (
-              <div key={sub.to}
+              /* <button>, not a click-only <div> -- these were unreachable by keyboard
+                 and invisible to screen readers. */
+              <button key={sub.to} type="button"
                 className={`${styles.collapsedFlyoutItem} ${isSubActive(sub) ? styles.collapsedFlyoutItemActive : ''}`}
+                aria-current={isSubActive(sub) ? 'page' : undefined}
                 onMouseEnter={()=>prefetchRoute(sub.to)}
+                onFocus={()=>{ cancelCloseFlyout(); prefetchRoute(sub.to) }}
                 onClick={() => { navigate(sub.to); setFlyout(null) }}
-                onContextMenu={(e) => openHideMenu(e, idMap[sub.label], sub.label)}>
-                <span className={styles.collapsedFlyoutIcon}>{ICON_MAP[sub.label]}</span>
+                onContextMenu={(e) => openHideMenu(e, idMap[sub.label], sub.label)}
+                style={{ background:'none', border:'none', font:'inherit', cursor:'pointer', textAlign:'left', width:'100%' }}>
+                <span className={styles.collapsedFlyoutIcon} aria-hidden="true">{ICON_MAP[sub.label]}</span>
                 {sub.label}
-              </div>
+              </button>
             ))}
           </div>
           )
