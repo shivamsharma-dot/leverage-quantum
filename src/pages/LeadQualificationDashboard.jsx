@@ -7,6 +7,7 @@ import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton, InlineLoader } from '../components/SkeletonLoader'
 import KPICard from '../components/KPICard'
 import ExportButton from '../components/ExportButton'
+import { ExcelIcon } from '../components/icons/BrandIcons'
 import Button from '../components/Button'
 import Dropdown from '../components/Dropdown'
 import DateRangePicker from '../components/DateRangePicker'
@@ -332,12 +333,12 @@ const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
             <div style={{display:'flex',gap:6,padding:'2px 4px 4px'}}>
               {[['CSV','csv'],['JSON','json']].map(([lbl,type])=>(
                 <Button key={type} size="sm" variant="secondary" onClick={()=>download(type)} style={{flex:1}}
-                  icon={
+                  icon={type==='csv' ? <ExcelIcon size={11} /> : (
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                       <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
                       <polyline points="14 2 14 8 20 8"/>
                     </svg>
-                  }>
+                  )}>
                   {lbl}
                 </Button>
               ))}

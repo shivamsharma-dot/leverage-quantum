@@ -4,6 +4,7 @@ import { toast } from './ToastHost'
 import PinInput from './PinInput'
 import { REPORT_VERSIONS, DEFAULT_VERSION_ID, buildReportMessages } from '../lib/pmReport'
 import { SLACK_CHANNELS, channelHandle, confirmPhrase, phraseMatches } from '../../shared/slackChannels.mjs'
+import { SlackIcon } from './icons/BrandIcons'
 
 // Send to Slack, with the version library and the preview living entirely inside
 // Quantum. Nothing is created in Slack to keep track of layouts -- Slack only ever
@@ -277,9 +278,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
 
         <div style={{ padding:'15px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ width:32, height:32, borderRadius:9, background:'rgba(31,60,132,0.07)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
-            </svg>
+            <SlackIcon size={17} />
           </div>
           <div style={{ flex:1, minWidth:0 }}>
             <div style={{ fontSize:15, fontWeight:800, color:C.ink, letterSpacing:'-0.01em' }}>Send to Slack</div>

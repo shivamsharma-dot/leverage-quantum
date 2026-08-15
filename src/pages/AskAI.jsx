@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import Sidebar from '../components/Sidebar'
 import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
+import { SlackIcon } from '../components/icons/BrandIcons'
 
 /* ─── tokens ──────────────────────────────────────────────────── */
 const NAVY   = '#1F3C84'
@@ -164,6 +165,10 @@ function Markdown({text}){
 
 /* ─── icons ───────────────────────────────────────────────────── */
 function Ico({n,s=16,c='currentColor',sw=2}){
+  // Real Slack brand mark instead of a generic chat-bubble path -- it's a
+  // fixed multi-color SVG (its own fills/viewBox), not a stroke path, so it
+  // bypasses the shared <svg stroke={c}> shell the rest of this map uses.
+  if(n==='slack') return <SlackIcon size={s} />
   const d={
     new:      <><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></>,
     history:  <><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></>,
@@ -184,7 +189,6 @@ function Ico({n,s=16,c='currentColor',sw=2}){
     edit:     <><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 013 3L12 15l-4 1 1-4z"/></>,
     mic:      <><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></>,
     mail:     <><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></>,
-    slack:    <><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></>,
   }
   return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d[n]}</svg>
 }

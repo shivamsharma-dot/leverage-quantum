@@ -12,6 +12,7 @@ import { B2C_LEDGER_VERSIONS } from '../lib/b2cLedger'
 import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
 import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
+import { SlackIcon } from '../components/icons/BrandIcons'
 
 // Line items exactly as the finance sheet names them, in sheet order. The
 // Daily P&L tab splits SR into Online/Offline (2026-08); Daily Cash Flow does
@@ -579,7 +580,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                 Flow gets its own single native-table version instead. */}
             {ready ? (
               <Button size="sm" variant="secondary" onClick={function () { setSlackOpen(true) }}
-                icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4Z" /></svg>}>
+                icon={<SlackIcon size={13} />}>
                 Send to Slack
               </Button>
             ) : null}
