@@ -614,18 +614,72 @@ export default function Sidebar() {
       </div>
       {mobileOpen && (
         <div style={{position:'fixed',inset:0,zIndex:999,display:'flex'}} onClick={()=>setMobileOpen(false)}>
-          <div style={{width:240,height:'100%',background:'var(--sidebar-bg)',borderRight:'0.5px solid var(--card-border)',overflowY:'auto',paddingTop:'calc(60px + env(safe-area-inset-top))'}} onClick={e=>e.stopPropagation()}>
-            {NAV.map(group=>(group.items.filter(item => groupVisible(item)).length===0?null:(
+          <div style={{width:260,height:'100%',background:'var(--sidebar-bg)',borderRight:'0.5px solid var(--card-border)',overflowY:'auto',display:'flex',flexDirection:'column',paddingTop:'calc(52px + env(safe-area-inset-top))'}} onClick={e=>e.stopPropagation()}>
+            <div style={{flex:1}}>
+            {NAV.map(group=>{
+              const vis = group.items.filter(groupVisible)
+              if (!vis.length) return null
+              return (
               <div key={group.label} style={{marginBottom:8,padding:'0 10px'}}>
-                <div style={{fontSize:10,fontWeight:600,color:'var(--text3)',letterSpacing:'0.08em',textTransform:'uppercase',padding:'10px 6px 4px'}}>{group.label}</div>
-                {group.items.filter(item => groupVisible(item)).map(item=>(
-                  <a key={item.to} href={item.to} onClick={()=>setMobileOpen(false)} onTouchStart={()=>prefetchRoute(item.defaultTo || item.to)}
-                    style={{display:'flex',alignItems:'center',gap:9,padding:'9px 10px',borderRadius:9,textDecoration:'none',color:'var(--text2)',fontSize:13,fontWeight:500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                    {item.icon}{item.label}
-                  </a>
-                ))}
+                {group.label !== 'Intelligence' && (
+                  <div style={{fontSize:11,fontWeight:700,color:'var(--text2)',letterSpacing:'0.09em',textTransform:'uppercase',padding:'12px 6px 4px'}}>{group.label}</div>
+                )}
+                {vis.map(item=>{
+                  const parentActive = item.subItems ? parentActiveFor(item) : location.pathname === item.to
+                  return (
+                  <div key={item.to}>
+                    <button type="button"
+                      onClick={()=>{ navigate(item.defaultTo || (item.subItems ? firstReachableSubTo(item) : item.to)); setMobileOpen(false) }}
+                      onTouchStart={()=>prefetchRoute(item.defaultTo || item.to)}
+                      aria-current={parentActive ? 'page' : undefined}
+                      style={{display:'flex',alignItems:'center',gap:10,width:'100%',minHeight:44,padding:'11px 10px',borderRadius:10,border:'none',textAlign:'left',cursor:'pointer',
+                        background: parentActive ? 'linear-gradient(90deg, rgba(28,159,212,0.10), rgba(31,60,132,0.06))' : 'none',
+                        color: parentActive ? 'var(--brand-ink)' : 'var(--text2)',
+                        fontSize:14.5,fontWeight: parentActive ? 750 : 650,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                      <span style={{display:'flex',flexShrink:0}} aria-hidden="true">{item.icon}</span>{item.label}
+                    </button>
+                    {/* Sub-pages were simply absent on mobile before this: the drawer
+                        rendered only item.label, so Daily P&L, Daily Cash Flow, the QL
+                        Ops detail pages, the Meta/Google tabs and everything else behind
+                        a group were unreachable on a phone entirely. */}
+                    {item.subItems && parentActive && (
+                      <div style={{display:'flex',flexDirection:'column',gap:2,margin:'2px 0 6px 30px'}}>
+                        {item.subItems.filter(sub => sub.matchType !== 'route' || subVisible(sub)).map(sub=>(
+                          <button key={sub.to} type="button"
+                            onClick={()=>{ navigate(sub.to); setMobileOpen(false) }}
+                            onTouchStart={()=>prefetchRoute(sub.to)}
+                            aria-current={isSubActive(sub) ? 'page' : undefined}
+                            style={{display:'flex',alignItems:'center',gap:8,width:'100%',minHeight:40,padding:'9px 10px',borderRadius:8,border:'none',textAlign:'left',cursor:'pointer',
+                              background: isSubActive(sub) ? '#E8EFF9' : 'none',
+                              color: isSubActive(sub) ? 'var(--brand-ink)' : 'var(--text3)',
+                              fontSize:14,fontWeight: isSubActive(sub) ? 600 : 500,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                            <span style={{width:5,height:5,borderRadius:'50%',flexShrink:0,background:isSubActive(sub)?'#1F3C84':'#D1D5DB'}} aria-hidden="true"/>
+                            {sub.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )})}
               </div>
-            )))}
+            )})}
+            </div>
+            {/* Settings and Sign out existed only in the desktop footer, so there
+                was no way to reach either from a phone. */}
+            <div style={{borderTop:'1px solid var(--card-border)',padding:'8px 10px calc(10px + env(safe-area-inset-bottom))',display:'flex',flexDirection:'column',gap:2}}>
+              {canSee('settings') && (
+                <button type="button" onClick={()=>{ navigate('/settings'); setMobileOpen(false) }}
+                  style={{display:'flex',alignItems:'center',gap:10,width:'100%',minHeight:44,padding:'11px 10px',borderRadius:10,border:'none',background:'none',textAlign:'left',cursor:'pointer',color:'var(--text2)',fontSize:14.5,fontWeight:650,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                  <span style={{display:'flex',flexShrink:0}} aria-hidden="true"><SettingsIcon/></span>Settings
+                </button>
+              )}
+              <button type="button" onClick={handleLogout}
+                style={{display:'flex',alignItems:'center',gap:10,width:'100%',minHeight:44,padding:'11px 10px',borderRadius:10,border:'none',background:'none',textAlign:'left',cursor:'pointer',color:'var(--text2)',fontSize:14.5,fontWeight:650,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
+                <span style={{display:'flex',flexShrink:0}} aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </span>Sign out
+              </button>
+            </div>
           </div>
           <div style={{flex:1,background:'rgba(0,0,0,0.3)'}}/>
         </div>
