@@ -607,6 +607,17 @@
    beside it, per the palette rule (brand colours only, no red/amber/purple on
    any element). The red tint went with them; a danger-coloured background under
    a brand-coloured icon was the visible half of the same bug. */
-.gearBtn:hover, .logoutBtn:hover { background: var(--navy-tint); color: var(--brand-ink); }
+/* var(--brand-ink, #1F3C84), NOT var(--brand-ink). That token is only declared
+   under [data-theme="light"|"dark"|"navy"|"stone"], and the ThemeProvider that
+   sets data-theme on <html> is never mounted anywhere in the app -- so in the
+   state that actually ships, --brand-ink is UNDEFINED. An invalid var() makes
+   the whole declaration compute to `unset`, and colour is inherited, so
+   `color: var(--brand-ink)` here rendered the icon in its parent's colour and
+   the hover changed nothing but the background. Measured: undefined token ->
+   rgb(148,163,184) (the inherited value); with the fallback -> rgb(31,60,132).
+   The fallback still yields to a real theme when one is set (dark gives
+   rgb(28,159,212)). See the CLAUDE.md entry -- 44 uses of this token across the
+   app have no fallback and are silently in the same state. */
+.gearBtn:hover, .logoutBtn:hover { background: var(--navy-tint); color: var(--brand-ink, #1F3C84); }
 .footDivider { display: none; }
 
