@@ -747,7 +747,7 @@ export default function Sidebar() {
           <div className={styles.collapsedFlyout} style={{ top: panelTop }}
             role="group" aria-label={flyout.label}
             onMouseEnter={cancelCloseFlyout} onMouseLeave={scheduleCloseFlyout}>
-            <div className={styles.collapsedFlyoutNotch} style={{ top: flyout.centerY - panelTop }} />
+            <div className={styles.collapsedFlyoutNotch} style={{ top: flyout.centerY - panelTop - 6 }} />
             <div className={styles.collapsedFlyoutHeader}>{flyout.label}</div>
             {flyout.subItems.map(sub => (
               /* <button>, not a click-only <div> -- these were unreachable by keyboard

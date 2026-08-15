@@ -289,9 +289,7 @@
   background: var(--card);
   border-left: 0.5px solid var(--card-border);
   border-bottom: 0.5px solid var(--card-border);
-  /* translateY(-50%) lets the JSX pass the item's centre directly instead of
-     guessing a -6px fudge, which left it 7px low. */
-  transform: translateY(-50%) rotate(45deg);
+  transform: rotate(45deg);
   border-radius: 0 0 0 3px;
 }
 .collapsedFlyoutHeader {
