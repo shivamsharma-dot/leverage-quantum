@@ -495,9 +495,15 @@ async function fetchLeadSquaredOpportunityMeta(creds, { eventCode }) {
 }
 
 async function handleLeadSquared(req, res, me) {
-  // Opportunities and activities are pipeline/ops data, gated the same as QL Ops rather
-  // than the meta_ads/google_ads gate the sheet-based CRM path below uses.
-  if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, 'lq_ops')) {
+  // Gated on 'leadsquared' -- the id the LeadSquared page's own route guard uses
+  // (src/App.jsx). This previously checked 'lq_ops' instead, which meant the
+  // Settings checkbox that grants the LeadSquared page did not actually grant its
+  // data: a custom viewer given 'leadsquared' got an empty, 403-ing page, while
+  // one given 'lq_ops' could read LeadSquared data through the API without being
+  // able to open the page. Matching the route guard makes the grant mean what the
+  // UI says it means. (Admins and plain viewers are unaffected -- both ids resolve
+  // the same for them.)
+  if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, 'leadsquared')) {
     return res.status(403).json({ error: 'Forbidden' })
   }
   const creds = leadsquaredCreds()
@@ -882,10 +888,23 @@ export async function fetchB2CData() {
 
 async function handleB2C(req, res, me) {
   const { canAccessDashboard } = await import('../lib/auth.mjs');
-  if (!canAccessDashboard(me.role, 'ceo_b2c_pnl') && !canAccessDashboard(me.role, 'ceo_b2c_cashflow')) return res.status(403).json({ error: 'Forbidden' });
+  const canPnl = canAccessDashboard(me.role, 'ceo_b2c_pnl');
+  const canCashFlow = canAccessDashboard(me.role, 'ceo_b2c_cashflow');
+  if (!canPnl && !canCashFlow) return res.status(403).json({ error: 'Forbidden' });
   try {
     const data = await fetchB2CData();
-    return res.status(200).json(data);
+    // The gate above is an OR, so someone granted only ONE of the two statements
+    // still reaches this point -- and the raw payload carries both. That meant a
+    // viewer granted only Daily Cash Flow could read P&L revenue, cost and EBITDA
+    // straight off the API, even though the route guard hides the page itself.
+    // Return only the statement(s) the caller is actually entitled to. `monthly`
+    // is the shared plan/forecast series both statements render, so it follows
+    // either grant.
+    return res.status(200).json({
+      ...data,
+      pnl: canPnl ? data.pnl : { days: [] },
+      cashFlow: canCashFlow ? data.cashFlow : { days: [] },
+    });
   } catch (e) {
     return res.status(502).json({ error: 'sheet fetch failed', detail: String((e && e.message) || e) });
   }
