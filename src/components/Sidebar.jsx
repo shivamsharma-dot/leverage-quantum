@@ -655,10 +655,16 @@ export default function Sidebar() {
               <div key={item.label} style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}
                 onMouseEnter={(e) => openFlyout(item, e.currentTarget)}
                 onMouseLeave={scheduleCloseFlyout}
-                onFocus={(e) => openFlyout(item, e.currentTarget)}
-                onBlur={scheduleCloseFlyout}>
+                // Only close when focus actually leaves this item -- moving into the
+                // flyout itself must not dismiss it.
+                onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) scheduleCloseFlyout() }}>
+                {/* openFlyout sits on the NavLink, not the wrapper: the NavLink is the
+                    element that actually receives focus, and putting it on the wrapper
+                    (relying on the focus event bubbling up) did not fire at all -- verified
+                    live, the flyout never opened for a keyboard user. Positioning still
+                    uses the wrapper's rect so focus and hover open it in the same place. */}
                 <NavLink to={item.defaultTo || firstReachableSubTo(item)} end={item.end}
-                  onFocus={()=>prefetchRoute(item.defaultTo || firstReachableSubTo(item))}
+                  onFocus={(e)=>{ openFlyout(item, e.currentTarget.parentElement); prefetchRoute(item.defaultTo || firstReachableSubTo(item)) }}
                   onContextMenu={!isRouteGroup(item) ? (e) => openHideMenu(e, idMap[item.label], item.label) : undefined}
                   className={`${styles.collapsedItem} ${parentActiveFor(item) ? styles.collapsedActive : ''}`}
                   title={item.label}>
