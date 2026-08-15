@@ -544,12 +544,17 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
           </div>
           <div className={'lq-header-controls ' + styles.headerRight}>
             <span className={styles.badge}>Through {d1}</span>
-            <div className={styles.presetRow}>
-              <button type="button" className={preset === 'ld' ? styles.presetPillActive : styles.presetPill} onClick={function () { setPreset('ld') }}>Last Day</button>
-              <button type="button" className={preset === 'l7d' ? styles.presetPillActive : styles.presetPill} onClick={function () { setPreset('l7d') }}>Last 7D</button>
-              <button type="button" className={preset === 'mtd' ? styles.presetPillActive : styles.presetPill} onClick={function () { setPreset('mtd') }}>MTD</button>
+            {/* Filter bar laid out exactly like Overall's: the three presets in an
+                inset track, then Custom range and the month dropdown alongside
+                them, all inside one rounded panel. */}
+            <div className={styles.filterBar}>
+              <div className={styles.presetRow}>
+                <button type="button" className={preset === 'ld' ? styles.presetPillActive : styles.presetPill} onClick={function () { setPreset('ld') }}>Last Day</button>
+                <button type="button" className={preset === 'l7d' ? styles.presetPillActive : styles.presetPill} onClick={function () { setPreset('l7d') }}>Last 7D</button>
+                <button type="button" className={preset === 'mtd' ? styles.presetPillActive : styles.presetPill} onClick={function () { setPreset('mtd') }}>MTD</button>
+              </div>
               <div style={{ position: 'relative' }}>
-                <button type="button" className={preset === 'custom' ? styles.presetPillActive : styles.presetPill}
+                <button type="button" className={preset === 'custom' ? styles.customBtnActive : styles.customBtn}
                   onClick={function () { setPreset('custom'); setCustomOpen(true) }}>
                   {preset === 'custom' && customFrom && customTo ? customFrom + ' → ' + customTo : 'Custom range'}
                 </button>
@@ -567,8 +572,8 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                   </>
                 ) : null}
               </div>
+              {preset === 'mtd' && months.length > 0 ? <Dropdown options={monthOpts} value={month} onChange={setMonth} minWidth={150} /> : null}
             </div>
-            {preset === 'mtd' && months.length > 0 ? <Dropdown options={monthOpts} value={month} onChange={setMonth} minWidth={150} /> : null}
             {/* CEO_BRIEF_VERSIONS/B2C_REPORT_VERSIONS/B2C_LEDGER_VERSIONS hardcode
                 "Revenue"/"Cost" wording throughout, so they stay P&L-only. Cash
                 Flow gets its own single native-table version instead. */}

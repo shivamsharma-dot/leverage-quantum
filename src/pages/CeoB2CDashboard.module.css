@@ -38,15 +38,32 @@
 .neg    { color:#c0392b; }
 .empty  { padding:40px 12px; text-align:center; color:var(--text3); font-size:15px; line-height:1.7; }
 .badge  { font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text3); border:1px solid var(--card-border); border-radius:999px; padding:4px 10px; }
-.presetRow { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+/* Filter bar, copied from OverallDashboard.jsx (~2796): the presets + month
+   dropdown + custom-range button all sit inside one #F8FAFC rounded panel,
+   and the LD/L7D/MTD presets themselves sit in an inset track inside that.
+   These were previously loose outlined pills with a flat navy active fill,
+   which is what made this header still read as a different design from
+   Overall's even after the surrounding shell was matched. */
+.filterBar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#F8FAFC; padding:6px 10px; border-radius:12px; border:0.5px solid #E5E7EB; }
+.presetRow { display:flex; align-items:center; gap:4px; background:var(--bg3); border-radius:9px; padding:3px; }
 .presetPill, .presetPillActive {
-  font-family:'Plus Jakarta Sans','Inter',sans-serif; font-size:12px; font-weight:700; letter-spacing:.01em;
-  border-radius:999px; padding:6px 12px; cursor:pointer; white-space:nowrap;
-  transition:background .12s, border-color .12s, color .12s;
+  font-family:'Plus Jakarta Sans','Inter',sans-serif; font-size:11.5px; font-weight:700;
+  border:none; border-radius:7px; padding:5px 11px; cursor:pointer; white-space:nowrap;
+  transition:all .15s;
 }
-.presetPill { color:var(--text2); border:1px solid var(--card-border); background:var(--card); }
-.presetPill:hover { border-color:#1C9FD4; color:#1F3C84; }
-.presetPillActive { color:#fff; border:1px solid #1F3C84; background:#1F3C84; }
+.presetPill { color:#64748B; background:transparent; }
+.presetPill:hover { color:#1F3C84; }
+/* Brand navy -> blue, same gradient and shadow Overall uses for its active preset. */
+.presetPillActive { color:#fff; background:linear-gradient(135deg, #1F3C84, #1C9FD4); box-shadow:0 4px 10px -3px rgba(31,60,132,0.5); }
+/* Overall keeps its "Custom" outside the inset track, as a plain white bordered
+   button rather than a preset -- same here for "Custom range". */
+.customBtn, .customBtnActive {
+  font-family:'Plus Jakarta Sans','Inter',sans-serif; font-size:11.5px; font-weight:700;
+  border-radius:8px; padding:6px 11px; cursor:pointer; white-space:nowrap; transition:all .15s;
+}
+.customBtn { color:#475569; background:var(--card); border:0.5px solid var(--card-border); }
+.customBtn:hover { border-color:#1C9FD4; color:#1F3C84; }
+.customBtnActive { color:#fff; background:linear-gradient(135deg, #1F3C84, #1C9FD4); border:0.5px solid transparent; box-shadow:0 4px 10px -3px rgba(31,60,132,0.5); }
 .note   { font-size:13px; color:var(--text3); line-height:1.6; margin:12px 0 0; }
 /* Standing reference note, top of both P&L and Cash Flow -- what "revenue"
    means differs by statement, so it is spelled out once, in the same place,
