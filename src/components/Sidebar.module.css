@@ -215,7 +215,6 @@
   padding: 5px; border-radius: 6px;
   transition: all 0.15s; flex-shrink: 0; cursor: pointer;
 }
-.logoutBtn:hover { color: #EF4444; background: var(--red-tint); }
 
 .sidebarCollapsed {
   position: relative;
@@ -400,7 +399,6 @@
 .collapsedItem:hover { background: var(--bg3) !important; color: var(--brand-ink) !important; }
 .collapsedActive { background: linear-gradient(135deg, rgba(28,159,212,0.12), rgba(31,60,132,0.08)) !important; color: var(--brand-ink) !important; }
 .avatar { box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(31,60,132,0.15) !important; }
-.logoutBtn:hover { color: var(--brand-ink) !important; background: var(--red-tint) !important; }
 
 /* === Expand/collapse toggle — restored to the placement it had before this
    session's redesign attempts, at the user's request.
@@ -601,7 +599,14 @@
 .logoutBtn { grid-column: 4; }
 .userArea { grid-template-columns: 34px 1fr auto auto; }
 .gearBtn svg, .logoutBtn svg { width: 15px; height: 15px; }
-.gearBtn:hover { background: var(--navy-tint); color: var(--brand-ink); }
-.logoutBtn:hover { background: var(--red-tint); color: #E5484D; }
+/* One rule for both footer controls. Sign out used to have THREE competing
+   :hover declarations -- #EF4444, var(--brand-ink) !important, and #E5484D --
+   and because the middle one carried !important it won, rendering a navy icon
+   on a red-tint background: the two red colours were dead, and the surviving
+   result matched neither intent. Brand-ink on navy-tint, identical to the gear
+   beside it, per the palette rule (brand colours only, no red/amber/purple on
+   any element). The red tint went with them; a danger-coloured background under
+   a brand-coloured icon was the visible half of the same bug. */
+.gearBtn:hover, .logoutBtn:hover { background: var(--navy-tint); color: var(--brand-ink); }
 .footDivider { display: none; }
 
