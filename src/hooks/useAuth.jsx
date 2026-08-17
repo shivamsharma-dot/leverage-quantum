@@ -76,10 +76,31 @@ export function AuthProvider({ children }) {
   // very first paint; toggling them again here would blank the whole page on
   // every subsequent call (e.g. on every route change), not just refresh data.
   const refreshUser = () => {
-    return fetch('/api/auth?action=me', { credentials: 'include' })
+    // A real "you're not signed in" is a completed 401 response (r.ok===false,
+    // handled below by treating it as {user:null} -- that's a genuine logout and
+    // is correct to apply). A *network-level* failure (fetch() itself throwing --
+    // offline, DNS, timeout, a dropped connection, CORS) tells us nothing about
+    // whether the session is actually still valid, so it must NOT be treated the
+    // same way. This matters a lot more since refreshUser() started firing on
+    // every route change and every tab refocus (see ProtectedRoute in App.jsx) --
+    // before that it only ran once on mount, so a transient blip here was rare to
+    // hit. Now any brief connectivity hiccup, anywhere in a session, was forcing a
+    // real logout + bounce to /login even though the person never actually signed
+    // out -- reported live as frequent, unexplained "Network error" logouts.
+    const attempt = () => fetch('/api/auth?action=me', { credentials: 'include' })
+    return attempt()
+      .catch(() => attempt()) // one retry -- most blips clear within a few hundred ms
       .then(r => (r.ok ? r.json() : { user: null }))
       .then(d => { const u = d.user || null; setUser(u); return u })
-      .catch(() => { setUser(null); return null })
+      .catch(() => {
+        // Both attempts failed at the network level. Leave `user` exactly as it
+        // was rather than forcing it to null -- a real session expiry will still
+        // be caught by the next successful check (next nav, next tab focus, or a
+        // 401 surfacing from any other API call), so nothing is silently missed;
+        // we're only refusing to log someone out over a connectivity blip we
+        // can't actually attribute to their session being invalid.
+        return null
+      })
   }
 
   // On load, ask the server who we are (reads the secure cookie).
