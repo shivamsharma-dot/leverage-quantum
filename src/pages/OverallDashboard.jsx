@@ -121,6 +121,11 @@ function mapRow(r) {
     date: d,
     mk: d ? monthKey(d) : null,
     source: (r.Source || '').trim() || 'Unknown',
+    // Sub_Source sits between Source and campaign_name in the sheet (added 2026-08).
+    // Rows from the BigQuery path share this same mapRow() but that saved query does not
+    // select Sub_Source yet, so it will read 'Unknown' there until that query is updated --
+    // a graceful default, not a crash.
+    subSource: (r.Sub_Source || '').trim() || 'Unknown',
     campaign: (r.campaign_name || '').trim(),
     leads: parseNum(r['Total Leads Generated']),
     floorQueued: parseNum(r.floor_queued),
@@ -481,8 +486,19 @@ const heatBg = v => v == null ? 'transparent' : v >= 50 ? C.greenBg : v >= 25 ? 
 // per-view export button — same "creative table" pattern as Meta Ads Creatives.
 const SUMMARY_COLUMNS = [
   { key:'corridor', label:'Corridor' },
+  // Source/Sub Source -- only meaningful (and only ever shown, see displayCols below) in
+  // Campaign view, right after Corridor -- both are landed on their dominant (highest-lead)
+  // Source/Sub_Source combination per campaign via byCampaign's own aggregation, since a
+  // campaign name is expected to sit under one Source/Sub Source pair throughout the sheet.
+  { key:'source', label:'Source' },
+  { key:'subSource', label:'Sub Source' },
   { key:'spend', label:'Spend' },
   { key:'leads', label:'Leads' },
+  // Contribution % -- what share of a chosen metric's grand total this row represents.
+  // The metric is switchable via a small picker in the column header (default Leads);
+  // see contribMetric/valueWithContrib below. Ends in "Pct" deliberately so it inherits
+  // summaryFmt's percentage formatting and the heat-color treatment for free.
+  { key:'contribPct', label:'Contribution %' },
   { key:'queued', label:'Total Queued' },
   { key:'humanQL', label:'Futwork Human QL' },
   { key:'futworkAiQl', label:'Futwork AI QL' },
@@ -562,7 +578,7 @@ function summaryValue(g, key) {
 }
 function summaryFmt(key, v) {
   if (v == null) return '—'
-  if (key === 'corridor') return v
+  if (key === 'corridor' || key === 'source' || key === 'subSource') return v
   if (key === 'roas' || key === 'estimatedRoas') return v.toFixed(2) + 'x'
   if (key.endsWith('Pct')) return v.toFixed(1) + '%'
   if (key.endsWith('SrRevenue') || key === 'spend' || key === 'cpl' || key === 'cpql' || key === 'cpa') return fmtINR(v)
@@ -586,6 +602,20 @@ function summaryColor(key) {
   return '#475569'
 }
 const SUMMARY_BOLD_COLS = ['leads', 'spend', 'raus', 'qlPct', 'appPct', 'depositPct', 'estSrRevenue', 'actSrRevenue', 'roas', 'estimatedRoas']
+// Text (not numeric) columns -- left-aligned, muted, no heat/bold treatment. Corridor/
+// Source/Sub Source only ever appear together (campaign view only, see displayCols).
+const TEXT_COL_KEYS = ['corridor', 'source', 'subSource']
+
+// Small expand/collapse indicator for the Source view's tree rows (Source -> Sub Source ->
+// Campaign). Rotates 90deg open, matching the caret convention already used by Dropdown.
+function TreeChevron({ open }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+      style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition:'transform .15s', flexShrink:0 }}>
+      <polyline points="9 6 15 12 9 18" />
+    </svg>
+  )
+}
 
 // Shared metric list for Deep Analysis (Compare's full table + Trend Analysis) --
 // one definition so the two features can never disagree on what "CPQL" means or
@@ -603,6 +633,18 @@ const DEEP_METRICS = [
   { key:'cpql', label:'CPQL', fmt:v => v == null ? '—' : fmtINR(v) },
   { key:'cpa', label:'CPA', fmt:v => v == null ? '—' : fmtINR(v) },
 ]
+// Metrics the Contribution % column can be switched to via its header picker.
+const CONTRIB_METRICS = [
+  { key:'leads', label:'Leads' },
+  { key:'queued', label:'Total Queued' },
+  { key:'totalQL', label:'Total QLs' },
+  { key:'apps', label:'Applications' },
+  { key:'offers', label:'Offers' },
+  { key:'deposits', label:'Deposits' },
+  { key:'spend', label:'Spend' },
+]
+const CONTRIB_METRIC_STORAGE_KEY = 'lq_overall_contrib_metric'
+
 const DEEP_DIMENSIONS = [
   { key:'corridor', label:'Corridor' },
   { key:'source', label:'Source' },
@@ -897,6 +939,28 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [rowLimit, setRowLimit] = useState(25)
   const [showColsPicker, setShowColsPicker] = useState(false)
   const [showRatesPicker, setShowRatesPicker] = useState(false)
+  const [showContribPicker, setShowContribPicker] = useState(false)
+  const [contribMetric, setContribMetric] = useState(() => {
+    try { return localStorage.getItem(CONTRIB_METRIC_STORAGE_KEY) || 'leads' } catch { return 'leads' }
+  })
+  useEffect(() => { try { localStorage.setItem(CONTRIB_METRIC_STORAGE_KEY, contribMetric) } catch {} }, [contribMetric])
+  // Source view's expand/collapse tree state -- which Source rows are expanded (revealing
+  // their Sub Sources) and which Source||SubSource pairs are expanded (revealing campaigns).
+  // Not persisted -- a fresh page load starts fully collapsed, same as any other transient
+  // UI state on this page (search, sort, row limit all reset too).
+  const [expandedSources, setExpandedSources] = useState(() => new Set())
+  const [expandedSubSources, setExpandedSubSources] = useState(() => new Set())
+  const toggleSourceExpand = (source) => setExpandedSources(s => {
+    const next = new Set(s)
+    if (next.has(source)) next.delete(source); else next.add(source)
+    return next
+  })
+  const toggleSubSourceExpand = (source, subSource) => setExpandedSubSources(s => {
+    const key = source + '||' + subSource
+    const next = new Set(s)
+    if (next.has(key)) next.delete(key); else next.add(key)
+    return next
+  })
   const [srFee] = useState(() => {
     try { const s = localStorage.getItem(SR_FEE_KEY); const n = s ? Number(s) : SR_FEE_DEFAULT; return isNaN(n) || n <= 0 ? SR_FEE_DEFAULT : n }
     catch { return SR_FEE_DEFAULT }
@@ -1627,16 +1691,29 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const m = new Map()
     filtered.forEach(r => {
       if (!r.campaign) return
-      const e = m.get(r.campaign) || { campaign:r.campaign, corridor:corridorLabel(classifyCorridor(r.campaign)), paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      let e = m.get(r.campaign)
+      if (!e) {
+        e = { campaign:r.campaign, corridor:corridorLabel(classifyCorridor(r.campaign)), paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, _srcLeads: new Map(), _subLeads: new Map() }
+        m.set(r.campaign, e)
+      }
       e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
       // paid-only denominators for CPL/CPQL/CPA -- keyed on the row's SOURCE, since spend
       // and leads often sit on different rows (see the paidSources note above)
       if (paidSources.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
-      m.set(r.campaign, e)
+      // A campaign name is expected to sit under one Source/Sub Source pair throughout the
+      // sheet, but tally by leads rather than just taking the first row seen, so a genuine
+      // edge case (the same campaign name reused under a different source) still resolves
+      // to whichever pairing actually carries the volume instead of an arbitrary row order.
+      e._srcLeads.set(r.source, (e._srcLeads.get(r.source) || 0) + r.leads)
+      e._subLeads.set(r.subSource, (e._subLeads.get(r.subSource) || 0) + r.leads)
     })
-    return [...m.values()].sort((a, b) => b.leads - a.leads)
+    const topOf = mp => [...mp.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'Unknown'
+    return [...m.values()].map(e => {
+      const { _srcLeads, _subLeads, ...rest } = e
+      return { ...rest, source: topOf(_srcLeads), subSource: topOf(_subLeads) }
+    }).sort((a, b) => b.leads - a.leads)
   }, [filtered, paidSources])
 
   const byCorridor = useMemo(() => {
@@ -1711,7 +1788,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       label:s.source, paidLeads:s.paidLeads, paidQL:s.paidQL, paidApps:s.paidApps, leads:s.leads, queued:s.queued, humanQL:s.humanQL, futworkAiQl:s.futworkAiQl, superbotAiQl:s.superbotAiQl, totalQL:s.totalQL, apps:s.apps, offers:s.offers, deposits:s.deposits, raus:s.raus, spend:s.spend,
     }))
     if (grpBy === 'campaign') return byCampaign.map(c => ({
-      label:c.campaign, corridor:c.corridor, paidLeads:c.paidLeads, paidQL:c.paidQL, paidApps:c.paidApps, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
+      label:c.campaign, corridor:c.corridor, source:c.source, subSource:c.subSource, paidLeads:c.paidLeads, paidQL:c.paidQL, paidApps:c.paidApps, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
     }))
     if (grpBy === 'corridor') return byCorridor.map(c => ({
       label:c.corridor, paidLeads:c.paidLeads, paidQL:c.paidQL, paidApps:c.paidApps, leads:c.leads, queued:c.queued, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
@@ -1738,7 +1815,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
   // SR Revenue — Estimated (Deposits × rate) and Actual (RAUs × rate). Both rates are
   // user-configurable in the toolbar below and persist to localStorage.
-  const groupedWithRevenue = useMemo(() => grouped.map(g => {
+  // Shared by groupedWithRevenue below AND sourceSubBreakdown's tree nodes, so the Source
+  // view's Sub Source/Campaign rows compute Est./Actual SR Revenue and ROAS by the exact
+  // same formula as every top-level row -- one place, no risk of the two drifting apart.
+  const withSrRevenue = useCallback((g) => {
     const estimatedRaus = g.deposits * RAU_CONVERSION_FACTOR
     const estSrRevenue = estimatedRaus * srFee
     const actSrRevenue = g.raus * srFee
@@ -1747,24 +1827,64 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       roas: g.spend > 0 ? actSrRevenue / g.spend : 0,
       estimatedRoas: g.spend > 0 ? estSrRevenue / g.spend : 0,
     }
-  }), [grouped, srFee])
+  }, [srFee])
+
+  const groupedWithRevenue = useMemo(() => grouped.map(withSrRevenue), [grouped, withSrRevenue])
 
   const maxSourceLeads = bySource.length ? Math.max(...bySource.map(s => s.leads)) : 1
   const totalSourceLeads = bySource.reduce((t, s) => t + s.leads, 0)
 
+  // Source view's expand-on-click tree: for every Source, its Sub Sources (each carrying
+  // its own Campaigns), aggregated straight from `filtered` -- kept as a SEPARATE structure
+  // from `grouped`/`groupedWithRevenue` rather than replacing them, so totals/exports/sort/
+  // search over the top-level Source rows are completely unaffected; this only feeds the
+  // expand/collapse rows rendered inside the Source view's table body.
+  const sourceSubBreakdown = useMemo(() => {
+    if (grpBy !== 'source') return null
+    const blank = () => ({ paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 })
+    const add = (e, r) => {
+      e.leads += r.leads; e.queued += r.futworkQ + r.superbotQ; e.humanQL += r.humanQL
+      e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
+      e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      if (paidSources.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+    }
+    const bySrc = new Map()
+    filtered.forEach(r => {
+      if (!bySrc.has(r.source)) bySrc.set(r.source, new Map())
+      const subMap = bySrc.get(r.source)
+      const subKey = r.subSource || 'Unknown'
+      if (!subMap.has(subKey)) subMap.set(subKey, { label:subKey, ...blank(), campaigns: new Map() })
+      const ss = subMap.get(subKey)
+      add(ss, r)
+      const campKey = r.campaign || '(no campaign)'
+      if (!ss.campaigns.has(campKey)) ss.campaigns.set(campKey, { label:campKey, ...blank() })
+      add(ss.campaigns.get(campKey), r)
+    })
+    const out = new Map()
+    bySrc.forEach((subMap, source) => {
+      out.set(source, [...subMap.values()].map(ss => ({
+        ...withSrRevenue(ss),
+        campaigns: [...ss.campaigns.values()].map(withSrRevenue).sort((a, b) => b.leads - a.leads),
+      })).sort((a, b) => b.leads - a.leads))
+    })
+    return out
+  }, [grpBy, filtered, paidSources, withSrRevenue])
+
   const displayCols = useMemo(() => (
     colOrder.filter(k => visibleCols.includes(k))
-      // Corridor only carries a value when grouping by campaign. Every other grouping
-      // either has no corridor on the row at all (source / month / day -- it rendered as
-      // a column of "—") or IS the corridor already (the corridor grouping's own label
-      // column), so showing it there is pure noise.
-      .filter(k => k !== 'corridor' || grpBy === 'campaign')
+      // Corridor/Source/Sub Source only carry a value when grouping by campaign -- every
+      // other grouping either has no such field on the row (source view's own label already
+      // IS the source) or would just be noise (a column of "—" everywhere).
+      .filter(k => (k !== 'corridor' && k !== 'source' && k !== 'subSource') || grpBy === 'campaign')
       .map(k => SUMMARY_COLUMNS.find(c => c.key === k)).filter(Boolean)
   ), [colOrder, visibleCols, grpBy])
 
   // Sorted + search-filtered, but NOT sliced to the on-screen row limit -- this is the set
   // that export should always draw from, so "Show 10/25/50" (a display-density control) never
   // silently truncates what you download. tableRows (below) slices this for on-screen display.
+  // Sub Source/Campaign rows revealed by expanding a Source are NOT part of this set -- search,
+  // sort and the row limit only ever apply to the top-level rows, matching how "Show N" and
+  // search already only counted top-level rows before this feature existed.
   const sortedFilteredRows = useMemo(() => {
     let rs = groupedWithRevenue
     const q = tableSearch.trim().toLowerCase()
@@ -1779,15 +1899,23 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           : a.label.localeCompare(b.label)
         return sortDir === 'asc' ? cmp : -cmp
       }
-      if (sortKey === 'corridor') {
-        const cmp = (a.corridor || '').localeCompare(b.corridor || '')
+      if (sortKey === 'corridor' || sortKey === 'source' || sortKey === 'subSource') {
+        const cmp = (a[sortKey] || '').localeCompare(b[sortKey] || '')
         return sortDir === 'asc' ? cmp : -cmp
+      }
+      // Contribution % of any row is (its metric value / a fixed grand total) -- dividing
+      // every row by the same positive constant never changes relative order, so sorting by
+      // it is exactly sorting by the raw metric. This also sidesteps a real circularity: the
+      // grand total (totalsRow, below) is itself built FROM this sorted array.
+      if (sortKey === 'contribPct') {
+        const av = summaryValue(a, contribMetric) || 0, bv = summaryValue(b, contribMetric) || 0
+        return sortDir === 'asc' ? av - bv : bv - av
       }
       const av = summaryValue(a, sortKey), bv = summaryValue(b, sortKey)
       const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv
       return sortDir === 'asc' ? an - bn : bn - an
     })
-  }, [groupedWithRevenue, tableSearch, sortKey, sortDir])
+  }, [groupedWithRevenue, tableSearch, sortKey, sortDir, contribMetric])
 
   const tableRows = useMemo(() => (
     rowLimit === 'all' ? sortedFilteredRows : sortedFilteredRows.slice(0, rowLimit)
@@ -1817,9 +1945,31 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   }, [])
   const totalsRow = useMemo(() => aggregateRows(sortedFilteredRows, 'TOTAL'), [aggregateRows, sortedFilteredRows])
 
+  // Contribution %'s grand total for whichever metric is currently picked (default Leads).
+  // A row's contribution is its own metric value divided by this fixed constant -- computed
+  // once here so every render site (table cells, band row, TOTAL row, Sub Source/Campaign
+  // tree rows, exports) reads the exact same denominator and can never disagree with each
+  // other. summaryValue(totalsRow, key) already IS the correct grand total, since totalsRow
+  // sums every additive field across the full search-filtered set.
+  const contribTotal = summaryValue(totalsRow, contribMetric)
+  const valueWithContrib = useCallback((g, key) => {
+    if (key === 'contribPct') {
+      const num = summaryValue(g, contribMetric)
+      if (num == null || !contribTotal) return null
+      return (num / contribTotal) * 100
+    }
+    return summaryValue(g, key)
+  }, [contribMetric, contribTotal])
+
   // Paid / Non-Paid banding, source view only. Band subtotals are computed over
   // the whole filtered set -- like TOTAL, and unlike the "Show N" slice -- so a
   // band can never silently under-report what is above it.
+  //
+  // Source view additionally nests each Source's Sub Sources (and each Sub Source's
+  // Campaigns) as expand-on-click rows, sourced from sourceSubBreakdown -- click state
+  // lives in expandedSources/expandedSubSources. Sub Source/Campaign rows are NOT part of
+  // tableRows/sortedFilteredRows (they're revealed on demand, not searched/sorted/limited),
+  // so they're spliced in here purely for rendering.
   const tableBodyRows = useMemo(() => {
     const flat = tableRows.map((row, i) => ({ kind: 'row', row, i }))
     if (grpBy !== 'source') return flat
@@ -1829,26 +1979,40 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       if (!shown.length) return
       const all = sortedFilteredRows.filter(r => isPaidSource(r.label) === wantPaid)
       out.push({ kind: 'band', label: name, row: aggregateRows(all, name) })
-      shown.forEach((row, i) => out.push({ kind: 'row', row, i }))
+      shown.forEach((row, i) => {
+        out.push({ kind: 'source', row, i })
+        if (!expandedSources.has(row.label)) return
+        const subs = sourceSubBreakdown?.get(row.label) || []
+        subs.forEach(ss => {
+          const hasCampaigns = ss.campaigns.length > 0
+          const subKey = row.label + '||' + ss.label
+          out.push({ kind: 'subsource', row: ss, parentSource: row.label, hasCampaigns })
+          if (hasCampaigns && expandedSubSources.has(subKey)) {
+            ss.campaigns.forEach(camp => out.push({ kind: 'campaign', row: camp, parentKey: subKey }))
+          }
+        })
+      })
     })
     return out
-  }, [grpBy, tableRows, sortedFilteredRows, aggregateRows])
+  }, [grpBy, tableRows, sortedFilteredRows, aggregateRows, expandedSources, expandedSubSources, sourceSubBreakdown])
 
   // Exports the FULL search-filtered/sorted set, not just the on-screen "Show N" slice --
-  // the row-limit control is a display density preference, not a data cap.
+  // the row-limit control is a display density preference, not a data cap. Deliberately the
+  // top-level rows only (not expanded Sub Source/Campaign detail) -- same scope the table's
+  // search/sort/row-limit already had before the Source tree existed.
   const tableExportRows = useMemo(() => sortedFilteredRows.map(g => {
     const o = { [grpByLabel]: g.label }
-    displayCols.forEach(c => { o[c.label] = summaryFmt(c.key, summaryValue(g, c.key)) })
+    displayCols.forEach(c => { o[c.label] = summaryFmt(c.key, valueWithContrib(g, c.key)) })
     return o
-  }), [sortedFilteredRows, displayCols, grpByLabel])
+  }), [sortedFilteredRows, displayCols, grpByLabel, valueWithContrib])
 
   // Exports lead with the same TOTAL the table shows, built from totalsRow through the very
   // same formatters -- so a downloaded file can't disagree with what's on screen.
   const tableTotalExportRow = useMemo(() => {
     const o = { [grpByLabel]: 'TOTAL' }
-    displayCols.forEach(c => { o[c.label] = summaryFmt(c.key, summaryValue(totalsRow, c.key)) })
+    displayCols.forEach(c => { o[c.label] = summaryFmt(c.key, valueWithContrib(totalsRow, c.key)) })
     return o
-  }, [totalsRow, displayCols, grpByLabel])
+  }, [totalsRow, displayCols, grpByLabel, valueWithContrib])
 
   // Unformatted twin of the table export: same columns and order, but the underlying
   // numbers rather than display strings, so a spreadsheet can sum/sort them. Percentages
@@ -1856,15 +2020,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const rawExportRow = (g, label) => {
     const o = { [grpByLabel]: label ?? g.label }
     displayCols.forEach(c => {
-      const v = summaryValue(g, c.key)
+      const v = valueWithContrib(g, c.key)
       o[c.label] = v == null ? '' : (typeof v === 'number' ? Number(v.toFixed(2)) : v)
     })
     return o
   }
   const tableExportRowsRaw = useMemo(() => sortedFilteredRows.map(g => rawExportRow(g)),
-    [sortedFilteredRows, displayCols, grpByLabel])
+    [sortedFilteredRows, displayCols, grpByLabel, valueWithContrib])
   const tableTotalExportRowRaw = useMemo(() => rawExportRow(totalsRow, 'TOTAL'),
-    [totalsRow, displayCols, grpByLabel])
+    [totalsRow, displayCols, grpByLabel, valueWithContrib])
 
   // Slack share for this table. Slack has no table primitive and its text blocks cap at
   // 3000 characters, so a 24-column funnel summary can only cross over truthfully as a
@@ -2761,6 +2925,30 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // On screen we always render displayCols. captureCols wins only mid-capture.
   const renderCols = captureCols || displayCols
 
+  // Shared metric-cell renderer for every row kind the summary table can show (plain row,
+  // Source, Sub Source, Campaign) -- one definition so all four render identically instead
+  // of four copies of the same styling logic silently drifting apart over time. `opts` lets
+  // a kind override font size / a flat color (used by the Paid/Non-Paid band row only).
+  const renderSummaryValueCells = (rowData, opts = {}) => renderCols.map(col => {
+    const v = valueWithContrib(rowData, col.key)
+    const isTextCol = TEXT_COL_KEYS.includes(col.key)
+    const isPct = col.key.endsWith('Pct')
+    const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
+    return (
+      <td key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
+        style={{
+          padding: opts.padding || '11px 10px', fontSize: opts.fontSize || 14,
+          textAlign: isTextCol ? 'left' : 'right',
+          color: opts.colorOverride || (isTextCol ? '#64748B' : (isPct ? heatColor(v) : summaryColor(col.key))),
+          fontWeight: opts.fontWeight != null ? opts.fontWeight : (isTextCol ? 500 : (SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400)),
+          background: isPct ? heatBg(v) : 'transparent',
+          whiteSpace: isTextCol ? 'nowrap' : 'normal',
+        }}>
+        {summaryFmt(col.key, v)}
+      </td>
+    )
+  })
+
   if (loading) {
     return (
       <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
@@ -3103,12 +3291,37 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           onDragEnd={() => { setDragKey(null); setDragOverKey(null) }}
                           title="Click to sort — drag to reorder"
                           style={{
-                            padding:'11px 10px', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
-                            color: sortKey === col.key ? C.navy : '#64748B', textAlign: col.key === 'corridor' ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
+                            position:'relative', padding:'11px 10px', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
+                            color: sortKey === col.key ? C.navy : '#64748B', textAlign: TEXT_COL_KEYS.includes(col.key) ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
                             opacity: dragKey === col.key ? 0.35 : 1,
                             boxShadow: dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none',
                           }}>
-                          {col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
+                          {col.key === 'contribPct' ? (
+                            <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
+                              <span>{col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}</span>
+                              <span
+                                onClick={e => { e.stopPropagation(); setShowContribPicker(v => !v) }}
+                                title="Choose the metric this contribution % is based on"
+                                style={{ padding:'2px 6px', borderRadius:6, background: showContribPicker ? C.navy : '#E2E8F0', color: showContribPicker ? '#fff' : '#475569', fontSize:9.5, fontWeight:800, textTransform:'none', letterSpacing:0, cursor:'pointer', whiteSpace:'nowrap' }}>
+                                {CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads'} ▾
+                              </span>
+                              {showContribPicker && (
+                                <>
+                                  <div onClick={e => { e.stopPropagation(); setShowContribPicker(false) }} style={{ position:'fixed', inset:0, zIndex:399 }} />
+                                  <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:160 }}>
+                                    {CONTRIB_METRICS.map(m => (
+                                      <button key={m.key} onClick={e => { e.stopPropagation(); setContribMetric(m.key); setShowContribPicker(false) }}
+                                        style={{ display:'block', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight: m.key === contribMetric ? 700 : 400, textTransform:'none', letterSpacing:0, background: m.key === contribMetric ? C.navyBg : 'transparent', color: m.key === contribMetric ? C.navy : C.text }}>
+                                        {m.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                            </span>
+                          ) : (
+                            <>{col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}</>
+                          )}
                         </th>
                       ))}
                     </tr>
@@ -3125,12 +3338,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           Total
                         </th>
                         {renderCols.map(col => {
-                          const v = summaryValue(totalsRow, col.key)
-                          const isCorridor = col.key === 'corridor'
+                          const v = valueWithContrib(totalsRow, col.key)
+                          const isTextCol = TEXT_COL_KEYS.includes(col.key)
                           const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
                           return (
                             <th key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
-                              style={{ padding:'10px 10px', fontSize:14, fontWeight:800, textAlign: isCorridor ? 'left' : 'right', color: isCorridor ? '#CBD5E1' : '#0F172A', whiteSpace:'nowrap' }}>
+                              style={{ padding:'10px 10px', fontSize:14, fontWeight:800, textAlign: isTextCol ? 'left' : 'right', color: isTextCol ? '#CBD5E1' : '#0F172A', whiteSpace:'nowrap' }}>
                               {summaryFmt(col.key, v)}
                             </th>
                           )
@@ -3139,37 +3352,50 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     )}
                   </thead>
                   <tbody>
-                    {tableBodyRows.map(item => item.kind === 'band' ? (
-                      <tr key={'band-' + item.label} style={{ background:'#EEF3FA', borderTop:'2px solid #D8E3F0', borderBottom:'1px solid #E2E8F0' }}>
-                        <td style={{ padding:'9px 12px', fontSize:10.5, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.08em', color:C.navy, whiteSpace:'nowrap' }}>{item.label}</td>
-                        {renderCols.map(col => {
-                          const v = summaryValue(item.row, col.key)
-                          const isCorridor = col.key === 'corridor'
-                          const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
-                          return (
-                            <td key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
-                              style={{ padding:'9px 10px', fontSize:13, fontWeight:800, textAlign: isCorridor ? 'left' : 'right', color: isCorridor ? '#CBD5E1' : C.navy, whiteSpace:'nowrap' }}>
-                              {summaryFmt(col.key, v)}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ) : (
-                      <tr key={item.row.label} style={{ background: item.i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
-                        <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A' }}>{item.row.label}</td>
-                        {renderCols.map(col => {
-                          const v = summaryValue(item.row, col.key)
-                          const isCorridor = col.key === 'corridor'
-                          const isPct = col.key.endsWith('Pct')
-                          const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
-                          return (
-                            <td key={col.key} title={isMoney ? fmtINRShort(v) : undefined} style={{ padding:'11px 10px', textAlign: isCorridor ? 'left' : 'right', color: isCorridor ? '#64748B' : (isPct ? heatColor(v) : summaryColor(col.key)), fontWeight: isCorridor ? 500 : (SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400), background: isPct ? heatBg(v) : 'transparent', whiteSpace: isCorridor ? 'nowrap' : 'normal' }}>
-                              {summaryFmt(col.key, v)}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
+                    {tableBodyRows.map(item => {
+                      if (item.kind === 'band') return (
+                        <tr key={'band-' + item.label} style={{ background:'#EEF3FA', borderTop:'2px solid #D8E3F0', borderBottom:'1px solid #E2E8F0' }}>
+                          <td style={{ padding:'9px 12px', fontSize:10.5, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.08em', color:C.navy, whiteSpace:'nowrap' }}>{item.label}</td>
+                          {renderSummaryValueCells(item.row, { padding:'9px 10px', fontSize:13, fontWeight:800, colorOverride:C.navy })}
+                        </tr>
+                      )
+                      if (item.kind === 'source') return (
+                        <tr key={'src-' + item.row.label} style={{ background: item.i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
+                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A', cursor:'pointer', userSelect:'none' }}
+                            onClick={() => toggleSourceExpand(item.row.label)}>
+                            <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                              <TreeChevron open={expandedSources.has(item.row.label)} />
+                              {item.row.label}
+                            </span>
+                          </td>
+                          {renderSummaryValueCells(item.row)}
+                        </tr>
+                      )
+                      if (item.kind === 'subsource') return (
+                        <tr key={'sub-' + item.parentSource + '-' + item.row.label} style={{ background:'#F8FAFC' }}>
+                          <td style={{ padding:'9px 12px 9px 32px', fontWeight:600, fontSize:13, color:'#334155', cursor: item.hasCampaigns ? 'pointer' : 'default', userSelect:'none' }}
+                            onClick={() => item.hasCampaigns && toggleSubSourceExpand(item.parentSource, item.row.label)}>
+                            <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
+                              {item.hasCampaigns && <TreeChevron open={expandedSubSources.has(item.parentSource + '||' + item.row.label)} />}
+                              {item.row.label}
+                            </span>
+                          </td>
+                          {renderSummaryValueCells(item.row, { fontSize:12.5 })}
+                        </tr>
+                      )
+                      if (item.kind === 'campaign') return (
+                        <tr key={'camp-' + item.parentKey + '-' + item.row.label} style={{ background:'#fff' }}>
+                          <td style={{ padding:'8px 12px 8px 56px', fontWeight:400, fontSize:12.5, color:'#64748B' }}>{item.row.label}</td>
+                          {renderSummaryValueCells(item.row, { fontSize:12 })}
+                        </tr>
+                      )
+                      return (
+                        <tr key={item.row.label} style={{ background: item.i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
+                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A' }}>{item.row.label}</td>
+                          {renderSummaryValueCells(item.row)}
+                        </tr>
+                      )
+                    })}
                     {tableRows.length === 0 && (
                       <tr><td colSpan={renderCols.length + 1} style={{ padding:'20px', textAlign:'center', color:'#94A3B8' }}>No data for this selection.</td></tr>
                     )}
