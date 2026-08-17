@@ -42,6 +42,22 @@ export async function updateUserRole(email, newRole) {
 
 const LOGOUT_SIGNAL_KEY = 'lq_logout_signal'
 
+// One retry on a network-level failure (fetch() itself throwing -- offline, DNS,
+// a dropped connection, a cold-start hiccup -- never a completed HTTP response,
+// which is handled by the caller's own r.ok check same as before). This is the
+// exact same fix already applied to refreshUser() below, extended to the actual
+// sign-in calls: a transient blip during login was showing "Network error. Please
+// try again." with no recovery, on a request that has no side effect to worry
+// about re-sending (the server never saw the first attempt if it never arrived).
+async function fetchRetry(url, opts, attempts = 2, delay = 400) {
+  let lastErr
+  for (let i = 0; i < attempts; i++) {
+    try { return await fetch(url, opts) }
+    catch (e) { lastErr = e; if (i < attempts - 1) await new Promise(res => setTimeout(res, delay)) }
+  }
+  throw lastErr
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -179,7 +195,7 @@ export function AuthProvider({ children }) {
 
   const loginWithGoogle = async (credentialResponse) => {
     try {
-      const r = await fetch('/api/auth?action=google', {
+      const r = await fetchRetry('/api/auth?action=google', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -202,7 +218,7 @@ export function AuthProvider({ children }) {
   // to branch on here either.
   const requestMagicLink = async (email) => {
     try {
-      const r = await fetch('/api/auth?action=magic-request', {
+      const r = await fetchRetry('/api/auth?action=magic-request', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -218,7 +234,7 @@ export function AuthProvider({ children }) {
   // Consume a one-time link (the token from ?token= in the URL).
   const verifyMagicLink = async (token) => {
     try {
-      const r = await fetch('/api/auth?action=magic-verify', {
+      const r = await fetchRetry('/api/auth?action=magic-verify', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
