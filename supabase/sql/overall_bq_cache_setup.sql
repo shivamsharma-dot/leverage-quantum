@@ -37,19 +37,28 @@
 --   1  lead_date                STRING          'DD-Mon-YYYY', e.g. 20-Jun-2026
 --   2  month                    STRING          "Month'YYYY", e.g. June'2026
 --   3  Source                   STRING          bucketed by the query CASE
---   4  campaign_name            STRING          nullable (673 NULLs observed)
---   5  Total Leads Generated    INTEGER
---   6  floor_queued             INTEGER
---   7  Queued on Futwork        INTEGER
---   8  Queued on Superbot       INTEGER
---   9  Futwork Human QL         INTEGER         nullable
---  10  Futwork AI QL            INTEGER         nullable
---  11  Superbot AI QL           INTEGER         nullable
---  12  Total_Spends             FLOAT
---  13  Total Apps               INTEGER
---  14  Total Offers             INTEGER
---  15  Total Deposits           INTEGER
---  16  Total RAUs               INTEGER
+--   4  Sub_Source               STRING          sub_source_updated -- added 2026-08-17,
+--                                               matches the Overall PM sheet's own
+--                                               Sub_Source column added the same day
+--   5  campaign_name            STRING          nullable (673 NULLs observed)
+--   6  Total Leads Generated    INTEGER
+--   7  floor_queued             INTEGER
+--   8  Queued on Futwork        INTEGER
+--   9  Queued on Superbot       INTEGER
+--  10  Futwork Human QL         INTEGER         nullable
+--  11  Futwork AI QL            INTEGER         nullable
+--  12  Superbot AI QL           INTEGER         nullable
+--  13  Total_Spends             FLOAT
+--  14  Total Apps               INTEGER
+--  15  Total Offers             INTEGER
+--  16  Total Deposits           INTEGER
+--  17  Total RAUs               INTEGER
+--
+-- NOTE (fresh installs only): if you are running this file for the very first time
+-- after 2026-08-17, the CREATE TABLE below already includes "Sub_Source". If this
+-- table already exists in your database (i.e. you ran this file before 2026-08-17),
+-- CREATE TABLE IF NOT EXISTS is a no-op and you need
+-- supabase/sql/overall_bq_add_sub_source.sql instead.
 --
 -- The metric columns are deliberately NULLABLE with NO DEFAULT 0. BigQuery
 -- really does return NULL for some of them and NULL is not the same fact as 0.
@@ -94,11 +103,12 @@
 CREATE TABLE IF NOT EXISTS public.overall_bq_daily (
   row_key                 TEXT PRIMARY KEY,
 
-  -- The 16 columns of the saved query. Same names, same order, nothing
+  -- The 17 columns of the saved query. Same names, same order, nothing
   -- dropped, nothing aggregated.
   "lead_date"             TEXT,
   "month"                 TEXT,
   "Source"                TEXT,
+  "Sub_Source"            TEXT,
   "campaign_name"         TEXT,
   "Total Leads Generated" BIGINT,
   "floor_queued"          BIGINT,

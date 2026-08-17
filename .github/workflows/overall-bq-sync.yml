@@ -81,10 +81,16 @@ jobs:
               raise SystemExit(0)
 
           # The saved query named "Overall", copied verbatim from the BigQuery
-          # Console on 2026-08-05. Saved queries are console-only objects and are
-          # NOT reachable over the REST API, so the text has to live here. If the
-          # saved query is ever edited, edit this too. The schema guard below fails
-          # loudly on a changed column list, but it cannot see a changed WHERE.
+          # Console on 2026-08-05, then updated 2026-08-17 to add Sub_Source
+          # (sub_source_updated -- confirmed via INFORMATION_SCHEMA.COLUMNS +
+          # a real GROUP BY sample: real values like 'Facebook', 'Collegehai',
+          # 'Affiliate Nitro', matching the Overall PM sheet's own Sub_Source
+          # column exactly). Saved queries are console-only objects and are NOT
+          # reachable over the REST API, so the text has to live here -- the
+          # LIVE saved query in the Console was updated to match this same SQL.
+          # If the saved query is ever edited again, edit this too. The schema
+          # guard below fails loudly on a changed column list, but it cannot
+          # see a changed WHERE.
           SQL = '''
           SELECT
               FORMAT_DATE('%d-%b-%Y', DATE(date_of_transaction)) AS lead_date,
@@ -95,6 +101,7 @@ jobs:
                   WHEN LOWER(source_1) IN ('lead source na', 'others', 'offline') THEN 'Others'
                   ELSE source_1
               END AS Source,
+              sub_source_updated AS Sub_Source,
               campaign_name,
               count_opps AS `Total Leads Generated`,
               floor_queued,
@@ -113,7 +120,7 @@ jobs:
           '''
 
           EXPECTED = [
-              'lead_date', 'month', 'Source', 'campaign_name',
+              'lead_date', 'month', 'Source', 'Sub_Source', 'campaign_name',
               'Total Leads Generated', 'floor_queued',
               'Queued on Futwork', 'Queued on Superbot',
               'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
@@ -293,9 +300,14 @@ jobs:
           # ordinal within the duplicate group, the group being ordered by its
           # serialised metric values so the same source row keeps the same key
           # across syncs (merge-duplicates then does a real in-place UPDATE).
+          # Sub_Source (now vals[3]) is NOT part of this key -- it is additional data
+          # carried along per row, not part of what defines row uniqueness. Keeping the
+          # key exactly as it was (campaign_name shifted from vals[3] to vals[4]) means
+          # every existing row_key hash is unchanged, so this sync updates rows in place
+          # instead of rewriting the whole table under new keys.
           groups = {}
           for vals in raw:
-              groups.setdefault((vals[0], vals[2], vals[3]), []).append(vals)
+              groups.setdefault((vals[0], vals[2], vals[4]), []).append(vals)
 
           dup_groups = sum(1 for v in groups.values() if len(v) > 1)
           print('Distinct (lead_date, Source, campaign_name):', len(groups),
@@ -315,7 +327,7 @@ jobs:
           records = []
           for k in sorted(groups.keys(), key=lambda t: tuple(keypart(x) for x in t)):
               bucket = groups[k]
-              bucket.sort(key=lambda vals: json.dumps(vals[4:], sort_keys=True))
+              bucket.sort(key=lambda vals: json.dumps(vals[5:], sort_keys=True))
               for ordinal, vals in enumerate(bucket):
                   seed = '\x1f'.join([keypart(k[0]), keypart(k[1]), keypart(k[2]),
                                       str(ordinal)])
@@ -324,25 +336,26 @@ jobs:
                       'lead_date': vals[0],
                       'month': vals[1],
                       'Source': vals[2],
-                      'campaign_name': vals[3],
-                      'Total Leads Generated': as_int(vals[4]),
-                      'floor_queued': as_int(vals[5]),
-                      'Queued on Futwork': as_int(vals[6]),
-                      'Queued on Superbot': as_int(vals[7]),
-                      'Futwork Human QL': as_int(vals[8]),
-                      'Futwork AI QL': as_int(vals[9]),
-                      'Superbot AI QL': as_int(vals[10]),
+                      'Sub_Source': vals[3],
+                      'campaign_name': vals[4],
+                      'Total Leads Generated': as_int(vals[5]),
+                      'floor_queued': as_int(vals[6]),
+                      'Queued on Futwork': as_int(vals[7]),
+                      'Queued on Superbot': as_int(vals[8]),
+                      'Futwork Human QL': as_int(vals[9]),
+                      'Futwork AI QL': as_int(vals[10]),
+                      'Superbot AI QL': as_int(vals[11]),
                       # Total_Spends goes into a Postgres NUMERIC as the STRING
                       # BigQuery returned (it arrives like 4.0660831692071205E8).
                       # float() here would be a lossy round-trip; NUMERIC parses
                       # scientific notation exactly.
                       'Total_Spends': (None
-                                       if vals[11] is None or str(vals[11]).strip() == ''
-                                       else str(vals[11]).strip()),
-                      'Total Apps': as_int(vals[12]),
-                      'Total Offers': as_int(vals[13]),
-                      'Total Deposits': as_int(vals[14]),
-                      'Total RAUs': as_int(vals[15]),
+                                       if vals[12] is None or str(vals[12]).strip() == ''
+                                       else str(vals[12]).strip()),
+                      'Total Apps': as_int(vals[13]),
+                      'Total Offers': as_int(vals[14]),
+                      'Total Deposits': as_int(vals[15]),
+                      'Total RAUs': as_int(vals[16]),
                       'lead_date_iso': iso_date(vals[0]),
                       'sync_id': sync_id,
                       'synced_at': now_iso,

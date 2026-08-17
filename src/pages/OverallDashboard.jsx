@@ -3308,7 +3308,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                               {showContribPicker && (
                                 <>
                                   <div onClick={e => { e.stopPropagation(); setShowContribPicker(false) }} style={{ position:'fixed', inset:0, zIndex:399 }} />
-                                  <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:160 }}>
+                                  <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:240 }}>
+                                    <div style={{ padding:'6px 10px 10px', marginBottom:4, borderBottom:`0.5px solid ${C.border}` }}>
+                                      <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:5 }}>How this is calculated</div>
+                                      <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.55, fontWeight:400 }}>
+                                        Each row's <b>{(CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads')}</b> divided by the grand total {(CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads')} for the current filters, ×100.
+                                      </div>
+                                      <div style={{ fontSize:10.5, color:C.muted, lineHeight:1.5, marginTop:6 }}>TOTAL is always 100%. Paid/Non-Paid bands and Source/Sub Source/Campaign tree rows all read against that same account-wide total — never their parent row's.</div>
+                                    </div>
                                     {CONTRIB_METRICS.map(m => (
                                       <button key={m.key} onClick={e => { e.stopPropagation(); setContribMetric(m.key); setShowContribPicker(false) }}
                                         style={{ display:'block', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight: m.key === contribMetric ? 700 : 400, textTransform:'none', letterSpacing:0, background: m.key === contribMetric ? C.navyBg : 'transparent', color: m.key === contribMetric ? C.navy : C.text }}>
