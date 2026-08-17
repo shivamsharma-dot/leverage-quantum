@@ -970,6 +970,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [showCustom, setShowCustom] = useState(false)
+  // The popup is ~505px wide and was always anchored right:0 -- fine when the
+  // "Custom" button sits far enough right, but on an ordinary wide desktop
+  // window the button can land close enough to the left that a right-anchored,
+  // leftward-growing popup lands its left edge underneath the 232px sidebar
+  // (reproduced live: button at x=711, popup left edge at x=206). Measured at
+  // open time, same pattern as ExportButton.jsx's openUp.
+  const [customOpenLeft, setCustomOpenLeft] = useState(false)
+  const customBtnRef = useRef(null)
+  const CUSTOM_POPUP_WIDTH = 520
+  const SIDEBAR_SAFE_EDGE = 248
   const [hoveredPreset, setHoveredPreset] = useState(null)
   const hasSetInitial = useRef(false)
   const CACHE_KEY = 'overall'
@@ -2843,7 +2853,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               )}
 
               <div style={{ position:'relative' }}>
-                <button onClick={() => { setShowCustom(v => !v); if (!showCustom) setDatePreset('month') }}
+                <button ref={customBtnRef} onClick={() => {
+                    if (!showCustom && customBtnRef.current) {
+                      const rect = customBtnRef.current.getBoundingClientRect()
+                      setCustomOpenLeft(rect.right - CUSTOM_POPUP_WIDTH < SIDEBAR_SAFE_EDGE)
+                    }
+                    setShowCustom(v => !v); if (!showCustom) setDatePreset('month')
+                  }}
                   style={{ padding:'6px 11px', borderRadius:8, border:`0.5px solid ${datePreset === 'custom' ? C.navy : C.border}`, background: datePreset === 'custom' ? C.navyBg : 'var(--card)', color: datePreset === 'custom' ? C.navy : C.sub, fontSize:11.5, fontWeight:600, fontFamily:FONT, cursor:'pointer', display:'flex', alignItems:'center', gap:5, boxShadow: showCustom ? '0 0 0 3px rgba(31,60,132,0.08)' : 'none', transition:'all .15s' }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
                   {datePreset === 'custom' && customFrom ? customFrom + ' -> ' + customTo : 'Custom'}
@@ -2851,7 +2867,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 {showCustom && (
                   <>
                     <div onClick={() => setShowCustom(false)} style={{ position:'fixed', inset:0, zIndex:399 }} />
-                    <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:14, boxShadow:'0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', overflow:'hidden' }}>
+                    <div style={{ position:'absolute', ...(customOpenLeft ? { left:0 } : { right:0 }), top:'calc(100% + 8px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:14, boxShadow:'0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', overflow:'hidden' }}>
                       <DateRangePicker
                         from={customFrom ? (() => { const [y, m, d] = customFrom.split('-').map(Number); return new Date(y, m - 1, d) })() : null}
                         to={customTo ? (() => { const [y, m, d] = customTo.split('-').map(Number); return new Date(y, m - 1, d) })() : null}
