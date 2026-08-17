@@ -940,6 +940,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [showColsPicker, setShowColsPicker] = useState(false)
   const [showRatesPicker, setShowRatesPicker] = useState(false)
   const [showContribPicker, setShowContribPicker] = useState(false)
+  // Screen coordinates for the fixed-position Contribution % popover, computed at
+  // open time from the pill's own getBoundingClientRect() -- see the click handler.
+  const [contribPickerPos, setContribPickerPos] = useState(null)
   const [contribMetric, setContribMetric] = useState(() => {
     try { return localStorage.getItem(CONTRIB_METRIC_STORAGE_KEY) || 'leads' } catch { return 'leads' }
   })
@@ -3300,15 +3303,28 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                             <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
                               <span>{col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}</span>
                               <span
-                                onClick={e => { e.stopPropagation(); setShowContribPicker(v => !v) }}
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  // position:fixed, anchored to the pill's own screen coordinates at click
+                                  // time -- NOT position:absolute relative to the <th>. This header sits
+                                  // inside a horizontally-scrolling table with a sticky-ish header row; an
+                                  // absolute popover there rendered in the DOM with correct content (real
+                                  // getBoundingClientRect, real text) but was never visually reachable --
+                                  // clipped by the scroll container's overflow no matter how the page was
+                                  // scrolled. Fixed positioning escapes that ancestor entirely.
+                                  if (showContribPicker) { setShowContribPicker(false); return }
+                                  const r = e.currentTarget.getBoundingClientRect()
+                                  setContribPickerPos({ top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 260) })
+                                  setShowContribPicker(true)
+                                }}
                                 title="Choose the metric this contribution % is based on"
                                 style={{ padding:'2px 6px', borderRadius:6, background: showContribPicker ? C.navy : '#E2E8F0', color: showContribPicker ? '#fff' : '#475569', fontSize:9.5, fontWeight:800, textTransform:'none', letterSpacing:0, cursor:'pointer', whiteSpace:'nowrap' }}>
                                 {CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads'} ▾
                               </span>
-                              {showContribPicker && (
+                              {showContribPicker && contribPickerPos && (
                                 <>
                                   <div onClick={e => { e.stopPropagation(); setShowContribPicker(false) }} style={{ position:'fixed', inset:0, zIndex:399 }} />
-                                  <div onClick={e => e.stopPropagation()} style={{ position:'absolute', top:'calc(100% + 4px)', right:0, zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:240 }}>
+                                  <div onClick={e => e.stopPropagation()} style={{ position:'fixed', top:contribPickerPos.top, left:contribPickerPos.left, zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:240 }}>
                                     <div style={{ padding:'6px 10px 10px', marginBottom:4, borderBottom:`0.5px solid ${C.border}` }}>
                                       <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:5 }}>How this is calculated</div>
                                       <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.55, fontWeight:400 }}>
