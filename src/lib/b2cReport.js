@@ -306,7 +306,7 @@ function buildB2CFullTable(ctx) {
   FULL_HEADS.forEach(function (d) { rows.push(row(d[0], d[1])) })
   rows.push(row('cost', 'Total Cost', true))
   rows.push(row('ebitdaBeforeCorp', 'EBITDA Before Corp. Overheads', true))
-  rows.push(row('net', 'EBITDA', true))
+  rows.push(row('net', 'EBITDA After Corp. Overheads', true))
   const cols = rows[0].map(function (_, i) { return i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' } })
   const L = []
   L.push(':bar_chart: *B2C - Daily P & L*')
@@ -340,7 +340,7 @@ export const B2C_FULL_TABLE_VERSIONS = [{
   name: 'B2C — full particulars (native table)',
   tagline: 'One native Slack table, every revenue line and cost head, Last Day / MTD / YTD.',
   what: [
-    'Every line item exactly as the Daily P&L page shows it -- SR/AC/Leverage One Online, SR/AC/Leverage One Offline, Total Revenue, each cost head, Total Cost, EBITDA Before Corp. Overheads, then EBITDA (after Corp. Overheads)',
+    'Every line item exactly as the Daily P&L page shows it -- SR/AC/Leverage One Online, SR/AC/Leverage One Offline, Total Revenue, each cost head, Total Cost, EBITDA Before Corp. Overheads, then EBITDA After Corp. Overheads',
     'Three columns: Last Day, MTD, and year to date',
     'A real Slack table block, not a code block or an image',
     'The same Revenue-vs-Cash-Flow definition note the page carries, so a reader never has to guess why this differs from the Cash Flow report',
