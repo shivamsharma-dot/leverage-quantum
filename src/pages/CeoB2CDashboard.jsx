@@ -86,6 +86,12 @@ function totals(rs, revDefs) {
   o.rev = col(rs, 'totalRev'); if (o.rev == null) o.rev = roll(o, revDefs)
   o.cost = col(rs, 'totalCost'); if (o.cost == null) o.cost = roll(o, COST)
   o.net = col(rs, 'net'); if (o.net == null) o.net = sub(o.rev, o.cost)
+  // P&L only -- the sheet's own 'EBITDA Before Corp. Overheads' column, summed
+  // the same way as every other total; if a row is blank, derive it by adding
+  // Corp. Overheads back onto the after-corp EBITDA above (the exact inverse
+  // of what 'net' subtracts). Cash Flow rows carry no such field at all, so
+  // this stays null there and is never rendered on that statement.
+  o.ebitdaBeforeCorp = col(rs, 'ebitdaBeforeCorp'); if (o.ebitdaBeforeCorp == null) o.ebitdaBeforeCorp = plus(o.net, o.corp)
   // 'sr' is always the combined online+offline total regardless of whether
   // revDefs shows it split into two lines -- the backend already computed it
   // per row (api/crm-leads.js), so just sum that field directly rather than
@@ -248,6 +254,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     o.rev = last.totalRev != null ? last.totalRev : roll(o, REV)
     o.cost = last.totalCost != null ? last.totalCost : roll(o, COST)
     o.net = last.net != null ? last.net : sub(o.rev, o.cost)
+    o.ebitdaBeforeCorp = last.ebitdaBeforeCorp != null ? last.ebitdaBeforeCorp : plus(o.net, o.corp)
     return o
   }, [last, REV])
 
@@ -503,7 +510,9 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
     const shot = node ? await captureNodePng(node, { ratios: [3, 2, 1.5, 1] }) : null
     const cols = ['Line item', day ? day.date : 'Latest day', periodLabel]
     if (hasPrev) cols.push(prevLab)
-    const spec = REV.concat([['rev', L.totalRev]]).concat(isCashFlow ? COST_CASHFLOW : COST).concat([['cost', L.totalCost], ['net', L.net]])
+    const spec = REV.concat([['rev', L.totalRev]]).concat(isCashFlow ? COST_CASHFLOW : COST).concat([['cost', L.totalCost]])
+      .concat(isCashFlow ? [] : [['ebitdaBeforeCorp', 'EBITDA Before Corp. Overheads']])
+      .concat([['net', L.net]])
     const body = spec.map(function (d) {
       const r = {}
       r[cols[0]] = d[1]
@@ -693,6 +702,16 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                     {hasPrev ? dcell(chg(mtd.cost, prev.cost), true) : null}
                     <td>{mtd.rev && mtd.cost != null ? ((mtd.cost / mtd.rev) * 100).toFixed(1) + '%' : '\u2014'}</td>
                   </tr>
+                  {!isCashFlow ? (
+                    <tr className={styles.total}>
+                      <td>EBITDA Before Corp. Overheads</td>
+                      <td className={day && day.ebitdaBeforeCorp != null && day.ebitdaBeforeCorp < 0 ? styles.neg : styles.pos}>{full(day && day.ebitdaBeforeCorp)}</td>
+                      <td className={mtd.ebitdaBeforeCorp != null && mtd.ebitdaBeforeCorp < 0 ? styles.neg : styles.pos}>{full(mtd.ebitdaBeforeCorp)}</td>
+                      {hasPrev ? <td>{full(prev.ebitdaBeforeCorp)}</td> : null}
+                      {hasPrev ? dcell(chg(mtd.ebitdaBeforeCorp, prev.ebitdaBeforeCorp), false) : null}
+                      <td>{mtd.rev && mtd.ebitdaBeforeCorp != null ? ((mtd.ebitdaBeforeCorp / mtd.rev) * 100).toFixed(1) + '%' : '\u2014'}</td>
+                    </tr>
+                  ) : null}
                   <tr className={styles.total}>
                     <td>{L.net}</td>
                     <td className={day && day.net != null && day.net < 0 ? styles.neg : styles.pos}>{full(day && day.net)}</td>

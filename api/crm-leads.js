@@ -772,11 +772,19 @@ const B2C_PNL_COLS = {
   offRev: 'calculated offline revenue', totalRev: 'total revenue',
   people: 'people cost', pm: 'pm cost', op: 'operating cost',
   offCost: 'offline cost', corp: 'corp. overheads',
-  // 'Net Inflow' was renamed to 'EBITDA' in the same pass (confirmed against
-  // the live sheet) -- a straight rename with no other wording around it, so
-  // this is a direct remap rather than something the new contains-tier below
-  // needed to catch.
-  totalCost: 'total cost', net: 'ebitda',
+  totalCost: 'total cost',
+  // 'Net Inflow' was renamed to 'EBITDA' in an earlier pass, then split into
+  // two real columns (2026-08, confirmed against the live sheet): 'EBITDA
+  // Before Corp. Overheads' and 'EBITDA After Corp. Overheads'. 'net' is
+  // pinned to the exact 'after corp' string on purpose -- both headers
+  // contain 'ebitda' and both start with it, so the generic tiered matcher in
+  // b2cRows() would otherwise resolve 'ebitda' ambiguously to whichever of
+  // the two comes first in the header row (which was 'Before Corp' -- a real,
+  // live bug: every 'net'/EBITDA figure this app has ever shown was silently
+  // the BEFORE-corp figure, not the after-corp bottom line the rest of the
+  // page implies). ebitdaBeforeCorp is exposed as its own field so the page
+  // can show both, never derived from one another.
+  net: 'ebitda after corp. overheads', ebitdaBeforeCorp: 'ebitda before corp. overheads',
 };
 // sr and offCost were both silently reading null: the sheet's real headers
 // are 'Actuals SR Revenue (Online + Offline)' (was mapped to the stale
@@ -793,7 +801,10 @@ const B2C_CASHFLOW_COLS = {
   offCost: 'experience centre cost', corp: 'corp. overheads',
   totalCost: 'total cash outflow', net: 'net cash inflow',
 };
-const B2C_VALUE_KEYS = ['sr', 'ac', 'vas', 'offRev', 'totalRev', 'people', 'pm', 'op', 'offCost', 'corp', 'totalCost', 'net'];
+// ebitdaBeforeCorp only ever resolves on P&L (Cash Flow's cols has no such
+// key, so at.ebitdaBeforeCorp is undefined there and this stays null on every
+// Cash Flow row -- harmless, just never read by anything on that statement).
+const B2C_VALUE_KEYS = ['sr', 'ac', 'vas', 'offRev', 'totalRev', 'people', 'pm', 'op', 'offCost', 'corp', 'totalCost', 'net', 'ebitdaBeforeCorp'];
 
 function b2cParseDays(csv, cols) {
   const parsed = b2cRows(csv, cols);
