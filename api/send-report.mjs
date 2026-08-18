@@ -144,7 +144,12 @@ function rejectedRecipientError(vetted) {
 const PREF_KEYS = Array.from(new Set([
   'report_from_name', 'report_from_email', 'report_subjects', 'auto_reports_enabled',
   'slack_webhook_url', 'slack_webhook_url_test', 'slack_channel_main',
-  'slack_channel_test', 'slack_test_channels', 'slack_auto_reports_enabled'
+  'slack_channel_test', 'slack_test_channels', 'slack_auto_reports_enabled',
+  // Missing here meant handleB2CDailyReport's resolveApprovalDestination() could
+  // never see whatever the admin actually picked in Settings -- cfg.b2c_approve_destination
+  // was always undefined regardless of what was saved, so the Approve button always
+  // fell back to the default test channel (voxpath) even after picking b2c_core.
+  'b2c_approve_destination',
 ]
   .concat(SLACK_CHANNELS.map(function (c) { return c.pref }))
   .concat(SLACK_CHANNELS.map(function (c) { return c.altPref }))

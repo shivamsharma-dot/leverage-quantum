@@ -3201,11 +3201,15 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             The CEO PIN below is still required either way &mdash; anything other than a test channel or
             the real B2C channel is refused server-side regardless of what's picked here.
           </p>
+          {/* c.channel is the raw Slack channel ID (e.g. C0B6FKV1XEJ) used to actually
+              post -- it was being shown here as if it were the name, which is exactly
+              the "random name" every option looked like. c.name is the human label the
+              admin actually typed ("voxpath", "dashboard-testing"). */}
           <Dropdown
             value={b2cApproveDest || (slackTestChannels[0] ? 'test:' + slackTestChannels[0].id : 'test')}
             onChange={setB2cApproveDest}
             options={[
-              ...slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#' + c.channel + '  (test — ' + c.name + ')' })),
+              ...slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#' + c.name + '  (test channel)' })),
               { value: 'b2c_core', label: channelHandle('b2c_core') + '  (real — guarded)' },
             ]}
           />
