@@ -48,6 +48,61 @@ function withTimeout(promise, ms = REQ_TIMEOUT_MS) {
 // has to name them; which ones are locked is decided in that one file, not here.
 const GUARDED = SLACK_CHANNELS.filter(c => c.guarded)
 
+// Who reads a locked channel is per-channel data, but today every guarded entry
+// in shared/slackChannels.mjs carries the same `reads` sentence, so rendering it
+// once per channel printed the same line twice four rows apart. Hoisted when it
+// is shared, still rendered per channel the moment a future channel differs --
+// so the source of truth stays the one file and nothing has to be kept in step.
+const GUARD_READS = GUARDED.map(c => c.reads).filter((r, i, a) => a.indexOf(r) === i)
+const sharedGuardReads = GUARD_READS.length === 1 ? GUARD_READS[0] : null
+
+// A closed padlock, drawn rather than an emoji (standing rule: no emojis in
+// Quantum's own UI) so it takes its label's colour. Same glyph the Send to Slack
+// picker draws, so a locked room looks locked in both places.
+const SlackLock = () => (
+  <svg width="10" height="12" viewBox="0 0 9 11" fill="none" aria-hidden="true">
+    <rect x="0.65" y="4.4" width="7.7" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.15" />
+    <path d="M2.45 4.4V2.95a2.05 2.05 0 0 1 4.1 0V4.4" stroke="currentColor" strokeWidth="1.15" />
+  </svg>
+)
+
+const SlackChannelIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
+    <line x1="3.5" y1="9" x2="20.5" y2="9" /><line x1="3.5" y1="15" x2="20.5" y2="15" />
+    <line x1="10" y1="2.5" x2="8" y2="21.5" /><line x1="16" y1="2.5" x2="14" y2="21.5" />
+  </svg>
+)
+
+// The information popover nine dashboard pages already carry as a copy-pasted
+// idiom. Settings had none, and there is no shared component to import; this is
+// that same idiom kept local, but with its colours in the stylesheet rather than
+// as inline hex literals. Escape closes it, per the house rule that every
+// popover must -- the shared Dropdown learned the same lesson.
+function InfoTip({ id, open, onToggle, align, label, children }) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = e => { if (e.key === 'Escape') onToggle(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onToggle])
+  return (
+    <div className={styles.skInfoWrap}>
+      <button type="button"
+        className={styles.skInfoBtn + (open ? ' ' + styles.skInfoBtnOpen : '') + ' ' + styles.skRing}
+        aria-expanded={open} aria-label={label} title={label}
+        onClick={() => onToggle(open ? null : id)}>i</button>
+      {open && (
+        <>
+          <div className={styles.skInfoBackdrop} onClick={() => onToggle(null)} />
+          <div className={styles.skInfoPop + (align === 'right' ? ' ' + styles.skInfoPopRight : '')} role="dialog" aria-label={label}>
+            {children}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // Short labels for the design-system pickers below -- the actual visual
 // rendering lives in buttonVariants.js / kpiVariants.jsx / LoginScene.jsx.
 const BUTTON_STYLE_NAMES = [
@@ -1270,6 +1325,8 @@ export default function SettingsPage() {
   const [ceoPinBusy, setCeoPinBusy] = useState(false)
   const [ceoPinMsg, setCeoPinMsg] = useState('')
   const [slackAuto, setSlackAuto] = useState(true)
+  // Which of the Slack card's two info popovers is open ('auth' | 'pin' | null).
+  const [skHelp, setSkHelp] = useState(null)
   const [slackCfgSaving, setSlackCfgSaving] = useState(false)
   const [slackCfgMsg, setSlackCfgMsg] = useState('')
   const [slackTesting, setSlackTesting] = useState(false)
@@ -3131,176 +3188,270 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 )
               })()}
 
+              {/* ----------------------------------------------------------------
+                  Slack. Regrouped Aug 2026: seven concerns (auth, the test-channel
+                  roster, the team channel, two guarded channels, the CEO PIN that
+                  gates them, B2C approval routing, and the legacy webhook fallback)
+                  used to sit in one flat 498-word stack, so nothing read as grouped.
+                  They are bordered panels now, on the .pvGroupBlock model that was
+                  built for exactly this failure on the Page Visibility grid.
+
+                  Presentation only. Every piece of logic below -- the test-channel
+                  array, the guarded-channel PIN gate, confirmPhrase, the B2C
+                  approval-destination options, the webhook fallback and
+                  saveSlackConfig -- is untouched.
+                  ---------------------------------------------------------------- */}
               <div className={styles.card}>
-                <h3 className={styles.cardTitle}>Slack</h3>
-                <p className={styles.cardDesc}>Post Ask AI answers, page exports, and a compact summary of every scheduled report to Slack, as the workspace’s bot (<b>@pm_analyst</b>).</p>
-                <p className={styles.cardDesc} style={{ marginTop: 6 }}>
-                  <b>Preferred: bot token.</b> Set <code>SLACK_BOT_TOKEN</code> in the Vercel env (Slack app &gt; OAuth &amp; Permissions &gt; Bot User OAuth Token, needs <code>chat:write</code>), then just name the channels below — one token reaches any channel. The token is intentionally not stored here: this settings table is readable with the app’s public key, so a token kept here would be exposed. Remember to invite the bot to each channel with <code>/invite @pm_analyst</code>, or posting fails with “not in channel”.
-                </p>
-                <label className={styles.fieldLabel}>Test channels &middot; as many as you like</label>
-                <p className={styles.cardDesc} style={{ marginTop: 2, marginBottom: 8 }}>
-                  Name each one so Send to Slack can offer a real picker (e.g. one channel per person, or one per feature you're checking). The first one is used whenever something posts to "test" without picking a specific one (e.g. a scheduled report's own auto-post copy).
-                </p>
-                {slackTestChannels.map((c, i) => (
-                  <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                    <input type="text" className={styles.input} placeholder="Name (e.g. Shivam's test)" value={c.name}
-                      onChange={e => updateTestChannel(c.id, { name: e.target.value })}
-                      style={{ fontSize: 12.5, flex: '0 0 180px' }} />
-                    <input type="text" className={styles.input} placeholder="#pm-analyst-test  (or a channel ID like C0123ABCD)" value={c.channel}
-                      onChange={e => updateTestChannel(c.id, { channel: e.target.value })}
-                      style={{ fontFamily: 'monospace', fontSize: 12.5, flex: 1 }} />
-                    {i === 0 && <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-3)', letterSpacing: '0.04em', flexShrink: 0 }}>DEFAULT</span>}
-                    <button type="button" onClick={() => removeTestChannel(c.id)} title="Remove"
-                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 16, lineHeight: 1, padding: '2px 6px', flexShrink: 0 }}>&times;</button>
+                <div className={styles.cardHead}>
+                  <span className={styles.secIcon}><SlackChannelIcon /></span>
+                  <div className={styles.cardHeadText}>
+                    <h3 className={styles.cardTitle}>Slack</h3>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>
+                      Posts Ask AI answers, page exports and a compact summary of every scheduled
+                      report as <b>@pm_analyst</b>. Preferred auth is a bot token in the Vercel
+                      env &mdash; one token reaches every channel.
+                    </p>
                   </div>
-                ))}
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input type="text" className={styles.input} placeholder="Name" value={newTestChanName}
-                    onChange={e => setNewTestChanName(e.target.value)} style={{ fontSize: 12.5, flex: '0 0 180px' }} />
-                  <input type="text" className={styles.input} placeholder="#channel or channel ID" value={newTestChanValue}
-                    onChange={e => setNewTestChanValue(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTestChannel() } }}
-                    style={{ fontFamily: 'monospace', fontSize: 12.5, flex: 1 }} />
-                  <Button size="sm" variant="secondary" onClick={addTestChannel} disabled={!newTestChanName.trim() || !newTestChanValue.trim()}>+ Add</Button>
+                  {/* The 60 words of setup detail that used to sit here permanently. */}
+                  <div className={styles.skHeadInfo}>
+                    <InfoTip id="auth" open={skHelp === 'auth'} onToggle={setSkHelp} align="right"
+                      label="How the bot token is set up">
+                      <p>Set <code>SLACK_BOT_TOKEN</code> in the Vercel env: Slack app &gt; OAuth &amp; Permissions &gt; Bot User OAuth Token, with the <code>chat:write</code> scope.</p>
+                      <p>The token is intentionally not stored here. This settings table is readable with the app&rsquo;s public key, so a token kept here would be exposed.</p>
+                      <p>Invite the bot to each channel with <code>/invite @pm_analyst</code>, or posting fails with &ldquo;not in channel&rdquo;.</p>
+                    </InfoTip>
+                  </div>
                 </div>
-          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>Team channel &middot; the whole team reads it</label>
-          <div className={styles.inputGroup}>
-            <input type="text" className={styles.input} placeholder="#team-performance-marketing" value={slackChannelMain}
-              onChange={e => setSlackChannelMain(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
-          </div>
-          {/* One block per guarded channel, straight off shared/slackChannels.mjs. Adding a
-              locked channel there grows this list by itself, phrase and all. */}
-          {GUARDED.map(c => (
-            <div key={c.id} style={{ marginTop: 14 }}>
-              <label className={styles.fieldLabel}>{c.label} &middot; locked</label>
-              <div className={styles.inputGroup}>
-                <input type="text" className={styles.input} placeholder={'#' + c.name}
-                  value={guardedChan[c.id] || ''}
-                  onChange={e => setGuardedChan(g => ({ ...g, [c.id]: e.target.value }))}
-                  style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
-              </div>
-              <p className={styles.cardDesc} style={{ marginTop: 6 }}>
-                {c.reads} Posting here needs an admin, the exact phrase <b>{confirmPhrase(c.id)}</b>, the
-                PIN below, and then a second confirm &mdash; every single time. Left blank, Quantum reads
-                the <code>{c.env}</code> environment variable{c.fallback ? <> and finally falls back to <code>{c.fallback}</code></> : <>, and with neither set nothing can reach it</>}.
-                Scheduled reports, Ask AI and table exports can never post here.
-              </p>
-            </div>
-          ))}
 
-          {/* Both channels have to be visible IN THE DROPDOWN ITSELF -- not in a
-              sentence beside it -- so every option (and therefore the collapsed
-              trigger too, since it just shows the matched option's own label)
-              spells out "posts for review here -> approving sends it here" as one
-              string. #dashboard-testing is fixed, not configurable (it's the one
-              sandbox channel handleB2CDailyReport always previews to), so it's a
-              literal prefix on every option rather than something read from state.
-              The server (resolveApprovalDestination in api/send-report.mjs)
-              independently refuses anything except a test channel or b2c_core, so
-              this dropdown can never be pointed at some OTHER channel even by
-              editing the stored preference directly -- and approving still needs
-              the CEO PIN below either way. */}
-          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>B2C approval destination</label>
-          <p className={styles.cardDesc} style={{ marginTop: 4, marginBottom: 8 }}>
-            Previews always post first to <b>#dashboard-testing</b> (from the 3&nbsp;PM IST schedule
-            or <b>Send report now</b> below). Pick where approving one sends the real report on to:
-          </p>
-          {/* c.channel is the raw Slack channel ID (e.g. C0B6FKV1XEJ) used to actually
-              post -- it was being shown here as if it were the name, which is exactly
-              the "random name" every option looked like. c.name is the human label the
-              admin actually typed ("voxpath", "dashboard-testing"). */}
-          <Dropdown
-            value={b2cApproveDest || (slackTestChannels[0] ? 'test:' + slackTestChannels[0].id : 'test')}
-            onChange={setB2cApproveDest}
-            minWidth={340}
-            options={[
-              ...slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#dashboard-testing  →  #' + c.name })),
-              { value: 'b2c_core', label: '#dashboard-testing  →  ' + channelHandle('b2c_core') + '  (guarded)' },
-            ]}
-          />
+                {/* ---- Channels: the plain, freely-editable roster ---- */}
+                <div className={styles.skGroup}>
+                  <span className={styles.skGroupLabel}>Channels</span>
 
-          {/* Manual test-fire of the same daily pipeline the 3 PM IST cron runs
-              (api/send-report.mjs handleB2CDailyReport). Unrelated to the CEO's
-              own ad-hoc "Send to Slack" export on the Daily P&L page. Where the
-              preview lands and where Approve sends it are both already stated in
-              the paragraph above -- this line only needs to say what the button
-              itself does, not repeat the destinations again. */}
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
-            <Button size="sm" variant="secondary" onClick={sendB2CDailyReportNow} disabled={b2cReportSending}>
-              {b2cReportSending ? 'Sending\u2026' : 'Send report now'}
-            </Button>
-            <span className={styles.cardDesc} style={{ margin: 0 }}>
-              Fires that same pipeline immediately, instead of waiting for 3&nbsp;PM IST.
-            </span>
-            {b2cReportMsg && <span className={styles.rcFeedback + ' ' + (b2cReportMsg.charAt(0) === '\u2715' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{b2cReportMsg}</span>}
-          </div>
+                  <div className={styles.skField}>
+                    <label className={styles.fieldLabel}>Team channel &middot; the whole team reads it</label>
+                    <div className={styles.inputGroup}>
+                      <input type="text" className={styles.input} placeholder="#team-performance-marketing" value={slackChannelMain}
+                        onChange={e => setSlackChannelMain(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                    </div>
+                  </div>
 
-          <label className={styles.fieldLabel} style={{ marginTop: 14 }}>CEO PIN &middot; shared by every locked channel</label>
-          <p className={styles.cardDesc} style={{ marginTop: 4 }}>
-            {ceoPinInfo === null ? 'Checking\u2026'
-              : ceoPinInfo.denied ? 'Only an admin can manage this PIN.'
-              : ceoPinInfo.invalid ? 'The stored PIN record does not verify, so every locked channel is sealed. Set a new PIN below to repair it.'
-              : !ceoPinInfo.set ? 'No PIN is set yet, so nothing can be posted to any locked channel.'
-              : 'A ' + ceoPinInfo.digits + '-digit PIN is set'
-                + (ceoPinInfo.setBy ? ' by ' + ceoPinInfo.setBy : '')
-                + (ceoPinInfo.setAt ? ' on ' + new Date(ceoPinInfo.setAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
-                + '. ' + (ceoPinInfo.locked
-                  ? 'Locked right now for ' + Math.ceil((ceoPinInfo.lockedForSec || 0) / 60) + ' more min.'
-                  : ceoPinInfo.failsLeft + ' wrong tries left before it locks itself.')}
-          </p>
-          <p className={styles.cardDesc} style={{ marginTop: 4 }}>
-            The PIN is never stored anywhere — only a salted, 310,000-round hash of it, signed with a key that
-            lives in the Vercel env and never in the database. 6 to 12 digits, at least 3 different ones, no counting
-            runs and no repeated halves. 5 wrong tries locks it for 15 min, then 30, then 60.
-          </p>
-          {ceoPinInfo && ceoPinInfo.set && !ceoPinInfo.invalid && (
-            <div className={styles.inputGroup}>
-              <PinInput value={ceoPinCur} onChange={setCeoPinCur} placeholder="Current PIN" className={styles.input} inputStyle={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
-            </div>
-          )}
-          <div className={styles.inputGroup} style={{ marginTop: 8 }}>
-            <PinInput value={ceoPinNew} onChange={setCeoPinNew} placeholder="New PIN" className={styles.input} inputStyle={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
-          </div>
-          <div className={styles.inputGroup} style={{ marginTop: 8 }}>
-            <PinInput value={ceoPinNew2} onChange={setCeoPinNew2} placeholder="Repeat the new PIN" className={styles.input} inputStyle={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
-            <Button size="sm" variant="secondary" onClick={saveCeoPin} disabled={ceoPinBusy || ceoPinNew.length < 6}>
-              {ceoPinBusy ? 'Saving\u2026' : (ceoPinInfo && ceoPinInfo.set ? 'Change PIN' : 'Set PIN')}
-            </Button>
-            {ceoPinMsg && <span className={styles.rcFeedback + ' ' + (ceoPinMsg.charAt(0) === 'x' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{ceoPinMsg}</span>}
-          </div>
-                <p className={styles.cardDesc} style={{ marginTop: 14 }}>
-                  <b>Fallback: Incoming Webhooks.</b> Only used when no bot token is set. A webhook is welded to a single channel, so it needs one URL per channel.
-                </p>
-                <label className={styles.fieldLabel}>Test channel webhook URL</label>
-                <div className={styles.inputGroup}>
-                  <input type="text" className={styles.input} placeholder="https://hooks.slack.com/services/…  (test channel)" value={slackWebhookTest}
-                    onChange={e => setSlackWebhookTest(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                  <div className={styles.skField}>
+                    <label className={styles.fieldLabel}>Test channels &middot; as many as you like</label>
+                    {/* Fixed grid tracks, and both trailing slots always rendered: the old
+                        flex row let a conditional DEFAULT badge and the x button eat into
+                        flex:1, so three stacked rows measured 1086 / 1140 / 1094px wide. */}
+                    {slackTestChannels.map((c, i) => (
+                      <div key={c.id} className={styles.skRow}>
+                        <input type="text" className={styles.input} placeholder="Name (e.g. Shivam's test)" value={c.name}
+                          onChange={e => updateTestChannel(c.id, { name: e.target.value })}
+                          style={{ fontSize: 12.5 }} />
+                        <input type="text" className={styles.input} placeholder="#pm-analyst-test  (or a channel ID like C0123ABCD)" value={c.channel}
+                          onChange={e => updateTestChannel(c.id, { channel: e.target.value })}
+                          style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                        <span className={styles.skRowSlot}>
+                          {i === 0 && <span className={styles.skDefault}>DEFAULT</span>}
+                        </span>
+                        <span className={styles.skRowSlot}>
+                          <button type="button" className={styles.skRemove + ' ' + styles.skRing}
+                            onClick={() => removeTestChannel(c.id)}
+                            title={'Remove ' + (c.name || 'this test channel')}
+                            aria-label={'Remove ' + (c.name || 'this test channel')}>&times;</button>
+                        </span>
+                      </div>
+                    ))}
+                    <div className={styles.skRow}>
+                      <input type="text" className={styles.input} placeholder="Name" value={newTestChanName}
+                        onChange={e => setNewTestChanName(e.target.value)} style={{ fontSize: 12.5 }} />
+                      <input type="text" className={styles.input} placeholder="#channel or channel ID" value={newTestChanValue}
+                        onChange={e => setNewTestChanValue(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTestChannel() } }}
+                        style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                      <span className={styles.skRowSlot} style={{ gridColumn: 'span 2' }}>
+                        <Button size="sm" variant="secondary" onClick={addTestChannel} disabled={!newTestChanName.trim() || !newTestChanValue.trim()}>+ Add</Button>
+                      </span>
+                    </div>
+                    <p className={styles.skNote}>
+                      The first one is used whenever something posts to &ldquo;test&rdquo; without picking a
+                      specific channel &mdash; a scheduled report&rsquo;s own auto-post copy, for instance.
+                      Naming each one lets Send to Slack offer a real picker.
+                    </p>
+                  </div>
                 </div>
-                <p className={styles.cardDesc} style={{ marginTop: 6 }}>Used by “Send test message” below and by the <b>Send to Slack — test channel</b> option in every page’s Export menu. Test posts are labelled as tests in Slack.</p>
-                <label className={styles.fieldLabel} style={{ marginTop: 14 }}>Main channel webhook URL</label>
-                <div className={styles.inputGroup}>
-                  <input type="text" className={styles.input} placeholder="https://hooks.slack.com/services/…  (team channel)" value={slackWebhook}
-                    onChange={e => setSlackWebhook(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+
+                {/* ---- Locked channels, and the one PIN that gates all of them ----
+                    The PIN block used to sit below the B2C approval block, i.e. two
+                    concerns away from the channels its own label says it locks. The
+                    shared mechanism is stated once here instead of once per channel;
+                    shared/slackChannels.mjs is untouched. */}
+                <div className={styles.skGroup}>
+                  <span className={styles.skGroupLabel}>Locked channels</span>
+                  <p className={styles.skGuardNote}>
+                    {sharedGuardReads ? sharedGuardReads + ' ' : ''}Posting to one of these needs an admin,
+                    the exact confirmation phrase for that channel, the CEO PIN below, and then a second
+                    confirm &mdash; every single time. Scheduled reports, Ask AI and table exports can never
+                    post here.
+                  </p>
+
+                  {GUARDED.map(c => (
+                    <div key={c.id} className={styles.skField + ' ' + styles.skLocked}>
+                      <span className={styles.skLockLabel}>
+                        <span className={styles.skLockIcon}><SlackLock /></span>
+                        <label className={styles.fieldLabel}>{c.label} &middot; locked</label>
+                      </span>
+                      <div className={styles.inputGroup}>
+                        <input type="text" className={styles.input} placeholder={'#' + c.name}
+                          value={guardedChan[c.id] || ''}
+                          onChange={e => setGuardedChan(g => ({ ...g, [c.id]: e.target.value }))}
+                          style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                      </div>
+                      <p className={styles.skNote}>
+                        {sharedGuardReads ? null : <>{c.reads} </>}Phrase <b>{confirmPhrase(c.id)}</b>.
+                        Left blank, Quantum reads <code>{c.env}</code>
+                        {c.fallback ? <> and finally falls back to <code>{c.fallback}</code></> : <>, and with neither set nothing can reach it</>}.
+                      </p>
+                    </div>
+                  ))}
+
+                  <div className={styles.skField}>
+                    <span className={styles.skLabelRow}>
+                      <label className={styles.fieldLabel}>CEO PIN &middot; shared by every locked channel</label>
+                      {/* The 44 words of PIN rules that used to be permanent body copy. */}
+                      <InfoTip id="pin" open={skHelp === 'pin'} onToggle={setSkHelp}
+                        label="How the CEO PIN is stored and rate-limited">
+                        <p>The PIN is never stored anywhere &mdash; only a salted, 310,000-round hash of it, signed with a key that lives in the Vercel env and never in the database.</p>
+                        <p>6 to 12 digits, at least 3 different ones, no counting runs and no repeated halves.</p>
+                        <p>5 wrong tries locks it for 15 min, then 30, then 60.</p>
+                      </InfoTip>
+                    </span>
+                    <p className={styles.skNote} style={{ margin: '0 0 8px' }}>
+                      {ceoPinInfo === null ? 'Checking…'
+                        : ceoPinInfo.denied ? 'Only an admin can manage this PIN.'
+                        : ceoPinInfo.invalid ? 'The stored PIN record does not verify, so every locked channel is sealed. Set a new PIN below to repair it.'
+                        : !ceoPinInfo.set ? 'No PIN is set yet, so nothing can be posted to any locked channel.'
+                        : 'A ' + ceoPinInfo.digits + '-digit PIN is set'
+                          + (ceoPinInfo.setBy ? ' by ' + ceoPinInfo.setBy : '')
+                          + (ceoPinInfo.setAt ? ' on ' + new Date(ceoPinInfo.setAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
+                          + '. ' + (ceoPinInfo.locked
+                            ? 'Locked right now for ' + Math.ceil((ceoPinInfo.lockedForSec || 0) / 60) + ' more min.'
+                            : ceoPinInfo.failsLeft + ' wrong tries left before it locks itself.')}
+                    </p>
+                    <div className={styles.skPinRow}>
+                      {ceoPinInfo && ceoPinInfo.set && !ceoPinInfo.invalid && (
+                        <PinInput value={ceoPinCur} onChange={setCeoPinCur} placeholder="Current PIN" className={styles.input} inputStyle={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
+                      )}
+                      <PinInput value={ceoPinNew} onChange={setCeoPinNew} placeholder="New PIN" className={styles.input} inputStyle={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
+                      <PinInput value={ceoPinNew2} onChange={setCeoPinNew2} placeholder="Repeat the new PIN" className={styles.input} inputStyle={{ fontFamily: 'monospace', fontSize: 12.5, letterSpacing: 2 }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
+                      <Button size="sm" variant="secondary" onClick={saveCeoPin} disabled={ceoPinBusy || ceoPinNew.length < 6}>
+                        {ceoPinBusy ? 'Saving…' : (ceoPinInfo && ceoPinInfo.set ? 'Change PIN' : 'Set PIN')}
+                      </Button>
+                      {ceoPinMsg && <span className={styles.rcFeedback + ' ' + (ceoPinMsg.charAt(0) === 'x' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{ceoPinMsg}</span>}
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--text-2)' }}>
-                    <input type="checkbox" checked={slackAuto} onChange={e => setSlackAuto(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-                    Also post a summary card to Slack for every scheduled report
-                  </label>
-                </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Button size="sm" onClick={saveSlackConfig} disabled={slackCfgSaving}>{slackCfgSaving ? 'Saving…' : 'Save'}</Button>
-                  {slackTestChannels.length > 1 && (
+
+                {/* ---- B2C daily report: the routing control and its manual fire ----
+                    Both channels are spelled out in the dropdown's own option labels
+                    (see the comment on the options array), so the paragraph that used
+                    to sit here restated the trigger word for word and is gone. Every
+                    option string, the value, minWidth and onChange are unchanged, as is
+                    resolveApprovalDestination server-side. */}
+                <div className={styles.skGroup}>
+                  <span className={styles.skGroupLabel}>B2C daily report</span>
+                  <div className={styles.skField}>
+                    <label className={styles.fieldLabel}>Approval sends to</label>
                     <Dropdown
-                      minWidth={160}
-                      options={slackTestChannels.map(c => ({ value: c.id, label: c.name }))}
-                      value={slackTestPick || slackTestChannels[0].id}
-                      onChange={setSlackTestPick}
+                      value={b2cApproveDest || (slackTestChannels[0] ? 'test:' + slackTestChannels[0].id : 'test')}
+                      onChange={setB2cApproveDest}
+                      minWidth={340}
+                      options={[
+                        ...slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#dashboard-testing  →  #' + c.name })),
+                        { value: 'b2c_core', label: '#dashboard-testing  →  ' + channelHandle('b2c_core') + '  (guarded)' },
+                      ]}
                     />
-                  )}
-                  <Button size="sm" variant="secondary" onClick={sendSlackTest} disabled={slackTesting || (!slackTestChannels.length && !slackWebhookTest.trim())}>{slackTesting ? 'Sending…' : 'Send test message'}</Button>
+                  </div>
+                  <div className={styles.skField} style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Button size="sm" variant="secondary" onClick={sendB2CDailyReportNow} disabled={b2cReportSending}>
+                      {b2cReportSending ? 'Sending…' : 'Send report now'}
+                    </Button>
+                    <span className={styles.skNote} style={{ margin: 0 }}>
+                      Fires that same pipeline immediately, instead of waiting for 3&nbsp;PM IST.
+                    </span>
+                    {b2cReportMsg && <span className={styles.rcFeedback + ' ' + (b2cReportMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{b2cReportMsg}</span>}
+                  </div>
+                </div>
+
+                {/* ---- Legacy fallback, collapsed: bot token is the preferred path ----
+                    Native <details>, styled off the one prior-art disclosure in this
+                    repo (MarketingPerformanceReport's "Definitions, coverage and
+                    limitations"); there is no Collapsible component in src/. */}
+                <details className={styles.skDetails}>
+                  <summary className={styles.skSummary}>
+                    <svg className={styles.skChevron} width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
+                      <path d="M1 1.5 5 4.75 9 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Fallback: Incoming Webhooks
+                    <span className={styles.skSummaryHint}>&mdash; only used when no bot token is set</span>
+                  </summary>
+                  <div className={styles.skDetailsBody}>
+                    <p className={styles.skNote} style={{ margin: '0 0 12px' }}>
+                      A webhook is welded to a single channel, so it needs one URL per channel.
+                    </p>
+                    <div className={styles.skField}>
+                      <label className={styles.fieldLabel}>Test channel webhook URL</label>
+                      <div className={styles.inputGroup}>
+                        <input type="text" className={styles.input} placeholder="https://hooks.slack.com/services/…  (test channel)" value={slackWebhookTest}
+                          onChange={e => setSlackWebhookTest(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                      </div>
+                      <p className={styles.skNote}>Used by &ldquo;Send test message&rdquo; below and by the <b>Send to Slack &mdash; test channel</b> option in every page&rsquo;s Export menu. Test posts are labelled as tests in Slack.</p>
+                    </div>
+                    <div className={styles.skField}>
+                      <label className={styles.fieldLabel}>Main channel webhook URL</label>
+                      <div className={styles.inputGroup}>
+                        <input type="text" className={styles.input} placeholder="https://hooks.slack.com/services/…  (team channel)" value={slackWebhook}
+                          onChange={e => setSlackWebhook(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
+                      </div>
+                    </div>
+                  </div>
+                </details>
+
+                {/* The auto-post setting was a bare native 16px checkbox with
+                    accent-color:auto -- the only un-tokened control in the card, at half
+                    the height of everything around it. Now the page's own .pvToggle
+                    metric as a real role="switch". Same slackAuto state. */}
+                <button type="button" role="switch" aria-checked={slackAuto}
+                  className={styles.skToggleRow + (slackAuto ? ' ' + styles.skToggleRowOn : '') + ' ' + styles.skRing}
+                  onClick={() => setSlackAuto(v => !v)}>
+                  <span className={styles.skToggle + (slackAuto ? ' ' + styles.skToggleOn : '')}>
+                    <span className={styles.skKnob} />
+                  </span>
+                  <span className={styles.skToggleText}>
+                    <span className={styles.skToggleTitle}>Also post a summary card to Slack for every scheduled report</span>
+                    <span className={styles.skToggleSub}>{slackAuto ? 'On · every scheduled report posts its own summary card' : 'Off · scheduled reports go out by email only'}</span>
+                  </span>
+                </button>
+
+                {/* Save and the test-send cluster used to be three identical 32px
+                    radius-11 chips in a row, the middle one a Dropdown. A hairline and
+                    a caption separate saving from test-sending. */}
+                <div className={styles.skActions}>
+                  <Button size="sm" onClick={saveSlackConfig} disabled={slackCfgSaving}>{slackCfgSaving ? 'Saving…' : 'Save'}</Button>
+                  <span className={styles.skActionsSep} aria-hidden="true" />
+                  <div className={styles.skTestCluster}>
+                    {slackTestChannels.length > 1 && (
+                      <>
+                        <span className={styles.skInlineLabel}>Test channel</span>
+                        <Dropdown
+                          minWidth={160}
+                          options={slackTestChannels.map(c => ({ value: c.id, label: c.name }))}
+                          value={slackTestPick || slackTestChannels[0].id}
+                          onChange={setSlackTestPick}
+                        />
+                      </>
+                    )}
+                    <Button size="sm" variant="secondary" onClick={sendSlackTest} disabled={slackTesting || (!slackTestChannels.length && !slackWebhookTest.trim())}>{slackTesting ? 'Sending…' : 'Send test message'}</Button>
+                  </div>
                   {slackCfgMsg && <span className={styles.rcFeedback + ' ' + (slackCfgMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{slackCfgMsg}</span>}
                 </div>
               </div>

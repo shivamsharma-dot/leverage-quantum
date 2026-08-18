@@ -814,3 +814,334 @@ input.searchInput { padding-left: 34px; }
   font-weight: 600;
   line-height: 1.45;
 }
+
+/* ============================================================
+   8 - Slack card regroup (Aug 2026)
+
+   The Slack card had grown to 498 words / 1427px (1.24 viewports) in one
+   flat stack: 10 paragraphs, 9 labels, 15 inputs and 12 buttons with nothing
+   but <label> + <p> + control between seven different concerns. Measured on
+   the live site, the gap INSIDE one field was 14px and the gap BETWEEN two
+   unrelated concerns was 18px -- a 4px delta, so grouping was invisible.
+
+   That is the same failure `.pvGroupBlock` was built for on the Page
+   Visibility grid, and the same answer: a bordered panel carries the
+   grouping instead of whitespace. Everything here is presentation only --
+   no channel, PIN or approval-destination logic is touched.
+
+   Section rhythm stays 18-20px (DESIGN_SYSTEM.md) and every control stays
+   on the page's --ctl-h / --ctl-r metric. Gaps inside a group are 4 / 8 /
+   12px only, so the 20px between groups always wins.
+============================================================ */
+
+/* ---- 8a - the bordered sub-panel, on the .pvGroupBlock model ---- */
+.skGroup {
+  padding: 12px 14px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+.skGroup:last-of-type { margin-bottom: 0; }
+
+/* Uppercase + 800 + tracking, so the group label out-ranks .cardDesc (13px/400)
+   by TREATMENT rather than by size. --text-2, not --text-3: the app-wide
+   --text3 contrast pass is still deferred (2.56:1 on white) and this must not
+   add to that debt. */
+.skGroupLabel {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin: 0 0 12px;
+}
+
+/* Helper line under a control. Ranks below .fieldLabel (12px/600) on weight
+   while staying at --text-2 for contrast. */
+.skNote {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+  margin: 4px 0 0;
+}
+.skField { margin-bottom: 12px; }
+.skField:last-child { margin-bottom: 0; }
+.skField .fieldLabel { margin-bottom: 8px; }
+
+/* ---- 8b - test-channel roster: fixed gutters kill the ragged right edge ----
+   The row was display:flex with a conditional DEFAULT span and a x button in
+   inline flow, so each row's flex:1 input took whatever was left: the three
+   stacked rows measured 1086 / 1140 / 1094px wide, an 84px ragged spread down
+   a single list. Fixed grid tracks, both trailing slots always present. */
+.skRow {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) 62px 28px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.skRow:last-child { margin-bottom: 0; }
+.skRowSlot { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
+
+/* DEFAULT was bare 10px letterspaced text; now a real pill on the .dsCatCount model. */
+.skDefault {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 3px 7px;
+  border-radius: 99px;
+  background: var(--navy-tint);
+  color: var(--navy-ink);
+  white-space: nowrap;
+}
+
+/* 22x20 failed WCAG 2.2 SC 2.5.8 (24x24 minimum); --text-3 measured 2.56:1 on
+   white. 28x28 and --text-2 (7.58:1) fix both locally, without pre-empting the
+   deferred app-wide --text3 pass. */
+.skRemove {
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s ease, color .15s ease;
+}
+.skRemove:hover { background: var(--bg3); color: var(--text); }
+
+/* ---- 8c - locked channels: more weight, no new colour, same 32px height ----
+   Follows the .pvCardChild border-left precedent. Lock semantics come from the
+   drawn padlock + the word "locked", never a colour and never an emoji. */
+.skLocked {
+  border-left: 2px solid var(--navy-line);
+  padding-left: 12px;
+}
+.skLockLabel,
+.skLabelRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.skLockLabel .fieldLabel,
+.skLabelRow .fieldLabel { margin: 0; }
+.skLockIcon { display: inline-flex; color: var(--navy-ink); flex: 0 0 auto; }
+
+/* The shared guarded-channel mechanism, stated once. Navy rather than red: red
+   IS sanctioned in this codebase, but narrowly -- as a semantic error/danger
+   token (--err / --err-bg / --red-tint / --red-ink, and Button's `danger` prop)
+   and never on a data element. This box is a standing explanation of how a
+   guarded send works, not an error state, so --err would be wrong here. Amber is
+   barred outright.
+
+   NOT copied from .sendWarnBox: that one pairs fixed light hexes
+   (#EEF1FB / #D8E2F5) with var(--brand-ink), and in dark --brand-ink is
+   #4FBBEA, which measured 1.93:1 on that fixed light background here. That is
+   the "half of a pair is worse than no pair" trap from the theming pass, and
+   .sendWarnBox still has it (flagged, not touched). This uses the full
+   tint / line / ink triad instead, every pair of which was verified >= 4.5:1
+   in all four themes. */
+.skGuardNote {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: var(--navy-tint);
+  border: 1px solid var(--navy-line);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--navy-ink);
+}
+
+/* ---- 8d - info popover ("i"), the 9-dashboard idiom, tokenised ----
+   Copied rather than extracted into a shared component by decision. Kept in
+   CSS instead of inline hexes: 324 inline hex literals in this file's JSX were
+   the exact debt the theming pass paid off. */
+.skInfoWrap { position: relative; display: inline-flex; flex: 0 0 auto; }
+/* 30x30 / 14px / 0.5px border / Georgia italic "i" -- the exact metric the nine
+   dashboard-page copies of this idiom use, so Settings does not become a
+   tenth-but-different one. Click-triggered with a fixed backdrop, never hover. */
+.skInfoBtn {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0.5px solid var(--border);
+  background: var(--card);
+  border-radius: 8px;
+  color: var(--navy-ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.skInfoBtn:hover { background: var(--navy-tint); }
+.skInfoBtnOpen { background: var(--navy-tint); border-color: var(--navy-line); }
+.skInfoBackdrop { position: fixed; inset: 0; z-index: 150; }
+.skInfoPop {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 200;
+  width: 360px;
+  max-width: min(360px, calc(100vw - 48px));
+  max-height: 74vh;
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 14px 40px rgba(15,23,42,0.16);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-2);
+  text-align: left;
+  font-style: normal;
+  font-weight: 400;
+  font-family: var(--font);
+}
+.skInfoPopRight { left: auto; right: 0; }
+.skInfoPop p { margin: 0 0 8px; }
+.skInfoPop p:last-child { margin-bottom: 0; }
+.skInfoPop code {
+  font-size: 11.5px;
+  background: var(--bg3);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+/* ---- 8e - the legacy webhook disclosure ----
+   No Collapsible/Accordion component exists in src/, so this is native
+   <details>, styled off the repo's one prior-art instance
+   (MarketingPerformanceReport.jsx "Definitions, coverage and limitations").
+   Radius 12 = the Settings inner-tile rhythm. */
+.skDetails {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  background: var(--card);
+}
+.skSummary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--text-2);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.skSummary::-webkit-details-marker { display: none; }
+.skSummary:hover { background: var(--bg3); }
+.skSummaryHint { font-weight: 500; color: var(--text-2); }
+.skChevron { transition: transform .18s ease; flex: 0 0 auto; color: var(--text-2); }
+.skDetails[open] .skChevron { transform: rotate(180deg); }
+.skDetailsBody { padding: 2px 14px 14px; }
+
+/* ---- 8f - the auto-post switch ----
+   Was the only un-tokened control in the card: a native 16px checkbox at
+   radius 0 with accent-color:auto, i.e. the OS blue, half the height of the
+   32px system beside it. Now the page's own .pvToggle metric, as a real
+   role="switch". */
+.skToggleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1.5px solid var(--border);
+  border-radius: 11px;
+  padding: 11px 13px;
+  margin-bottom: 16px;
+  background: var(--card);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color .15s ease, background .15s ease;
+}
+.skToggleRow:hover { border-color: var(--navy-line); }
+/* Deliberately NOT the #1C9FD4 active border .sendRadioCard uses. With it, a
+   minor auto-post preference became the loudest element in the card -- louder
+   than the locked channels, which is backwards. The filled switch already
+   carries the state; the border only needs to say "this is a control". */
+.skToggleRowOn { border-color: var(--navy-line); background: var(--bg3); }
+.skToggleText { display: block; flex: 1; min-width: 0; }
+.skToggleTitle { display: block; font-size: 13px; font-weight: 600; color: var(--text); }
+.skToggleSub { display: block; font-size: 11.5px; color: var(--text-2); margin-top: 4px; }
+.skToggle {
+  width: 36px; height: 20px; border-radius: 11px; flex: 0 0 auto;
+  background: var(--border); position: relative; margin-top: 1px;
+  transition: background .2s ease;
+}
+.skToggleOn { background: #1F3C84; }
+.skKnob {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 8px; background: var(--card);
+  box-shadow: 0 1px 3px rgba(0,0,0,.18); transition: left .2s ease;
+}
+.skToggleOn .skKnob { left: 18px; }
+
+/* ---- 8g - action row: Save is not the same kind of thing as a picker ----
+   Save / [voxpath v] / Send test message rendered as three identical 32px
+   radius-11 chips in a row, the middle one a Dropdown and the outer two
+   actions. A hairline splits saving from test-sending, and the Dropdown gets
+   its own caption via Dropdown's existing (previously unused) label prop. */
+.skActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.skActionsSep {
+  width: 1px;
+  align-self: stretch;
+  min-height: 26px;
+  background: var(--border);
+  flex: 0 0 auto;
+}
+.skTestCluster { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* Three 6-to-12-digit fields, side by side. Stacked full-width they were the
+   tallest single block in the card and a 1600px-wide box for six digits read
+   as a mistake. */
+.skPinRow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.skPinRow > * { min-width: 0; }
+
+/* The header's "i" sits at the far end of the .cardHead row. */
+.skHeadInfo { margin-left: auto; }
+
+/* Caption for a Dropdown that sits in a horizontal action row, where a block
+   .fieldLabel above it would break the row. Deliberately NOT Dropdown's own
+   `label` prop: that renders at var(--text3), which measures 2.56:1 on white
+   and is the subject of a still-deferred app-wide pass. */
+.skInlineLabel { font-size: 12px; font-weight: 600; color: var(--text-2); flex: 0 0 auto; }
+
+/* ---- 8h - focus ring, scoped to the controls this regroup ADDS ----
+   Settings switches every focus outline off in .content by explicit request
+   (block 2 above). That request predates these controls, and a <summary>, a
+   role="switch" and a popover trigger are all keyboard-operable -- shipping
+   them with no focus feedback would be a keyboard trap. Scoped narrowly so
+   the original request still holds everywhere it was actually about. */
+.content .skRing:focus-visible,
+.content .skSummary:focus-visible {
+  outline: 2px solid #1C9FD4;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ---- 8i - narrow widths: the roster collapses to stacked rows ---- */
+@media (max-width: 768px) {
+  .skPinRow { grid-template-columns: 1fr; }
+  .skRow { grid-template-columns: minmax(0, 1fr) 62px 28px; }
+  .skRow > :first-child { grid-column: 1 / -1; }
+  .skInfoPop { width: calc(100vw - 48px); left: auto; right: 0; }
+}
