@@ -1977,9 +1977,17 @@ async function handleB2CDailyReport(req, res) {
     }
     // The button's label reflects wherever it will ACTUALLY post -- same
     // resolver handleSlackBlockAction uses for the real send, so the two can
-    // never drift apart again.
+    // never drift apart again. Called WITHOUT allowGuarded (this is only a
+    // preview message, no PIN has been entered yet) -- so for the real,
+    // guarded b2c_core destination, .channel is deliberately left unset by
+    // resolveSlackTarget's guarded branch. That's fine for a plain text LABEL
+    // though: hook.guarded means "this is a real, known, locked channel",
+    // and its name (via channelHandle, a static lookup) needs no live
+    // credential to display -- only .guarded||.channel should gate whether a
+    // name is shown at all, not .channel alone, or a guarded pick always read
+    // as "not configured" even once correctly resolved.
     const approvalHook = resolveSlackTarget(cfg, resolveApprovalDestination(cfg), {})
-    const approvalLabel = approvalHook.mode === 'bot' && approvalHook.channel
+    const approvalLabel = approvalHook.mode === 'bot' && (approvalHook.channel || approvalHook.guarded)
       ? approvalDestinationLabel(approvalHook)
       : '(destination not configured)'
 
