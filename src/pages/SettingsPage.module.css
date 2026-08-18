@@ -832,17 +832,70 @@ input.searchInput { padding-left: 34px; }
    Section rhythm stays 18-20px (DESIGN_SYSTEM.md) and every control stays
    on the page's --ctl-h / --ctl-r metric. Gaps inside a group are 4 / 8 /
    12px only, so the 20px between groups always wins.
+
+   Aug 2026, later: the structure landed but read as a plain utility form --
+   flat borders, no logo, no icon per concern. This second pass borrows the
+   app's own premium vocabulary (PremKPI's gradient top bar + glowing icon
+   chip, .dsCatCard's soft-shadow elevation) instead of inventing anything.
 ============================================================ */
 
-/* ---- 8a - the bordered sub-panel, on the .pvGroupBlock model ---- */
+/* ---- 8-pre - the card itself: a brand gradient bar + the real Slack mark ----
+   .card is shared by every card on this page, so the top bar and the extra
+   overflow:hidden live on this ADDITIONAL class, scoped to just this card. */
+.skCardShell { position: relative; overflow: hidden; }
+.skCardShell::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(90deg, #1F3C84, #1C9FD4, #29B9C3, #4CAE6F);
+}
+/* Neutral white/card chip, not a tinted one -- Slack's mark is already four
+   colours, and a coloured background behind it would fight its own palette.
+   Matches DESIGN_SYSTEM.md's own carve-out: "third-party brand colours...
+   are for logos only." Soft shadow lifts it the same way a logo tile does
+   elsewhere in the app (the PWA icon, the login mark). */
+.skLogoChip {
+  width: 40px; height: 40px; border-radius: 11px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--card); box-shadow: 0 1px 3px rgba(16,30,68,.10), 0 6px 16px -6px rgba(16,30,68,.18);
+}
+
+/* ---- 8a - the sub-panel: soft elevation, not a flat line ----
+   DESIGN_SYSTEM.md: "Soft elevation, not borders. Cards float on subtle dual
+   shadows, not heavy 1px lines." Matches this file's own .dsCatCard/.pvCard
+   precedent -- a thin hairline for definition PLUS a real shadow doing the
+   visual work, with the same hover-lift those two already use, rather than
+   a flat 1px border carrying all of it alone. */
 .skGroup {
-  padding: 12px 14px 14px;
+  padding: 14px 16px 16px;
   background: var(--card);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border);
   border-radius: 12px;
   margin-bottom: 20px;
+  box-shadow: 0 1px 2px rgba(16,30,68,.04), 0 8px 20px -12px rgba(16,30,68,.12);
+  transition: transform .16s ease, box-shadow .16s ease;
 }
 .skGroup:last-of-type { margin-bottom: 0; }
+.skGroup:hover { transform: translateY(-2px); box-shadow: 0 1px 2px rgba(16,30,68,.05), 0 16px 32px -16px rgba(16,30,68,.20); }
+/* The one panel that matters most gets more shadow, not a different colour --
+   same move the redesign already made for the FAILED status chip (more
+   weight, same palette, never a hue change). Navy-tinted so the extra depth
+   still reads as "this panel", not as a generic darker shadow. */
+.skGroupLocked {
+  box-shadow: 0 1px 2px rgba(16,30,68,.05), 0 10px 26px -12px rgba(31,60,132,.22);
+}
+.skGroupLocked:hover { box-shadow: 0 1px 2px rgba(16,30,68,.06), 0 20px 40px -18px rgba(31,60,132,.30); }
+
+/* Icon chip + label, side by side -- the plain uppercase-only label read as
+   flat next to the header's new logo chip. Small, so it stays a label, not
+   another PremKPI card. */
+.skGroupHead { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.skGroupIconChip {
+  width: 22px; height: 22px; border-radius: 7px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.skGroupIconChip svg { width: 13px; height: 13px; }
+.skGroupIconChip[data-accent="blue"] { background: var(--blue-tint); color: var(--blue-ink); }
+.skGroupIconChip[data-accent="navy"] { background: var(--navy-tint); color: var(--navy-ink); }
+.skGroupIconChip[data-accent="cyan"] { background: var(--cyan-tint); color: var(--cyan-ink); }
 
 /* Uppercase + 800 + tracking, so the group label out-ranks .cardDesc (13px/400)
    by TREATMENT rather than by size. --text-2, not --text-3: the app-wide
@@ -855,7 +908,7 @@ input.searchInput { padding-left: 34px; }
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-2);
-  margin: 0 0 12px;
+  margin: 0;
 }
 
 /* Helper line under a control. Ranks below .fieldLabel (12px/600) on weight

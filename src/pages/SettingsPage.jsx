@@ -11,6 +11,7 @@ import { useDesignStyle, saveDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
 import styles from './SettingsPage.module.css'
 import { SLACK_CHANNELS, confirmPhrase, channelHandle } from '../../shared/slackChannels.mjs'
+import { SlackIcon } from '../components/icons/BrandIcons'
 
 // An offline or black-holed request leaves fetch() pending forever, which is how
 // a Settings save could sit on "Saving..." with no error and no way back. Every
@@ -70,6 +71,14 @@ const SlackChannelIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
     <line x1="3.5" y1="9" x2="20.5" y2="9" /><line x1="3.5" y1="15" x2="20.5" y2="15" />
     <line x1="10" y1="2.5" x2="8" y2="21.5" /><line x1="16" y1="2.5" x2="14" y2="21.5" />
+  </svg>
+)
+
+// Same minimalist line style as SlackChannelIcon/SlackLock, for the B2C daily
+// report group -- a paper plane rather than an emoji, per the no-emoji rule.
+const SlackSendIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 3 3 10.5l7.5 3L13.5 21 21 3Z" /><path d="M10.5 13.5 21 3" />
   </svg>
 )
 
@@ -3201,9 +3210,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   approval-destination options, the webhook fallback and
                   saveSlackConfig -- is untouched.
                   ---------------------------------------------------------------- */}
-              <div className={styles.card}>
+              <div className={styles.card + ' ' + styles.skCardShell}>
                 <div className={styles.cardHead}>
-                  <span className={styles.secIcon}><SlackChannelIcon /></span>
+                  {/* The real, true-colour Slack mark (already used on the Send to Slack
+                      button elsewhere) on a neutral white/card chip -- a gradient or tinted
+                      background would fight the logo's own four brand colours. */}
+                  <span className={styles.skLogoChip}><SlackIcon size={20} /></span>
                   <div className={styles.cardHeadText}>
                     <h3 className={styles.cardTitle}>Slack</h3>
                     <p className={styles.cardDesc} style={{ margin: 0 }}>
@@ -3225,7 +3237,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
                 {/* ---- Channels: the plain, freely-editable roster ---- */}
                 <div className={styles.skGroup}>
-                  <span className={styles.skGroupLabel}>Channels</span>
+                  <span className={styles.skGroupHead}>
+                    <span className={styles.skGroupIconChip} data-accent="blue"><SlackChannelIcon /></span>
+                    <span className={styles.skGroupLabel}>Channels</span>
+                  </span>
 
                   <div className={styles.skField}>
                     <label className={styles.fieldLabel}>Team channel &middot; the whole team reads it</label>
@@ -3283,8 +3298,11 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     concerns away from the channels its own label says it locks. The
                     shared mechanism is stated once here instead of once per channel;
                     shared/slackChannels.mjs is untouched. */}
-                <div className={styles.skGroup}>
-                  <span className={styles.skGroupLabel}>Locked channels</span>
+                <div className={styles.skGroup + ' ' + styles.skGroupLocked}>
+                  <span className={styles.skGroupHead}>
+                    <span className={styles.skGroupIconChip} data-accent="navy"><SlackLock /></span>
+                    <span className={styles.skGroupLabel}>Locked channels</span>
+                  </span>
                   <p className={styles.skGuardNote}>
                     {sharedGuardReads ? sharedGuardReads + ' ' : ''}Posting to one of these needs an admin,
                     the exact confirmation phrase for that channel, the CEO PIN below, and then a second
@@ -3358,7 +3376,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     option string, the value, minWidth and onChange are unchanged, as is
                     resolveApprovalDestination server-side. */}
                 <div className={styles.skGroup}>
-                  <span className={styles.skGroupLabel}>B2C daily report</span>
+                  <span className={styles.skGroupHead}>
+                    <span className={styles.skGroupIconChip} data-accent="cyan"><SlackSendIcon /></span>
+                    <span className={styles.skGroupLabel}>B2C daily report</span>
+                  </span>
                   <div className={styles.skField}>
                     <label className={styles.fieldLabel}>Approval sends to</label>
                     <Dropdown
