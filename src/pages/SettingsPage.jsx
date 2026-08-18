@@ -3188,21 +3188,22 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             </div>
           ))}
 
-          {/* One sentence stating the whole pipeline in the order it actually happens
-              -- preview channel, then approve, then final destination -- ending right
-              at the dropdown that picks the final piece. Previously this was two
-              separate paragraphs (one on the dropdown, one on the Send-now button)
-              that never said how the two connect, which read as confusing even once
-              each individual fact was correct. The server (resolveApprovalDestination
-              in api/send-report.mjs) independently refuses anything except a test
-              channel or b2c_core, so this dropdown can never be pointed at some OTHER
-              channel even by editing the stored preference directly -- and approving
-              still needs the CEO PIN below either way. */}
+          {/* Both channels have to be visible IN THE DROPDOWN ITSELF -- not in a
+              sentence beside it -- so every option (and therefore the collapsed
+              trigger too, since it just shows the matched option's own label)
+              spells out "posts for review here -> approving sends it here" as one
+              string. #dashboard-testing is fixed, not configurable (it's the one
+              sandbox channel handleB2CDailyReport always previews to), so it's a
+              literal prefix on every option rather than something read from state.
+              The server (resolveApprovalDestination in api/send-report.mjs)
+              independently refuses anything except a test channel or b2c_core, so
+              this dropdown can never be pointed at some OTHER channel even by
+              editing the stored preference directly -- and approving still needs
+              the CEO PIN below either way. */}
           <label className={styles.fieldLabel} style={{ marginTop: 14 }}>B2C approval destination</label>
           <p className={styles.cardDesc} style={{ marginTop: 4, marginBottom: 8 }}>
-            Every daily P&amp;L / Cash Flow preview &mdash; from the 3&nbsp;PM IST schedule or from
-            <b> Send report now</b> below &mdash; always posts first to <b>#dashboard-testing</b> for
-            review. Approving it there (PIN required) sends the real report on to:
+            Previews always post first to <b>#dashboard-testing</b> (from the 3&nbsp;PM IST schedule
+            or <b>Send report now</b> below). Pick where approving one sends the real report on to:
           </p>
           {/* c.channel is the raw Slack channel ID (e.g. C0B6FKV1XEJ) used to actually
               post -- it was being shown here as if it were the name, which is exactly
@@ -3211,9 +3212,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           <Dropdown
             value={b2cApproveDest || (slackTestChannels[0] ? 'test:' + slackTestChannels[0].id : 'test')}
             onChange={setB2cApproveDest}
+            minWidth={340}
             options={[
-              ...slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#' + c.name + '  (test channel)' })),
-              { value: 'b2c_core', label: channelHandle('b2c_core') + '  (real — guarded)' },
+              ...slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#dashboard-testing  →  #' + c.name })),
+              { value: 'b2c_core', label: '#dashboard-testing  →  ' + channelHandle('b2c_core') + '  (guarded)' },
             ]}
           />
 
