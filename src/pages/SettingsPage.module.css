@@ -928,13 +928,25 @@ input.searchInput { padding-left: 34px; }
    inline flow, so each row's flex:1 input took whatever was left: the three
    stacked rows measured 1086 / 1140 / 1094px wide, an 84px ragged spread down
    a single list. Fixed grid tracks, both trailing slots always present. */
+/* Small padding + an equal negative left/right margin so the row's own width
+   stays lined up with the header above, but a hover background now has a few
+   px of real room to actually show in -- without it, a grid row with opaque
+   inputs flush to its edges has nowhere for a container-level hover colour to
+   appear. Left/right only (never top/bottom), so this can't interact with
+   normal margin-collapsing against the .skNote paragraph below the roster.
+   Every other row-shaped control in this file (.dsRow, .pvCard) already has a
+   hover state; this roster was the one that did nothing on hover. */
 .skRow {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr) 62px 28px;
   gap: 8px;
   align-items: center;
-  margin-bottom: 8px;
+  padding: 3px;
+  margin: 0 -3px 8px -3px;
+  border-radius: 8px;
+  transition: background .15s ease;
 }
+.skRow:hover { background: var(--bg3); }
 .skRow:last-child { margin-bottom: 0; }
 .skRowSlot { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
 
@@ -986,6 +998,12 @@ input.searchInput { padding-left: 34px; }
 .skLockLabel .fieldLabel,
 .skLabelRow .fieldLabel { margin: 0; }
 .skLockIcon { display: inline-flex; color: var(--navy-ink); flex: 0 0 auto; }
+/* The only thing saying "this field is inside a locked zone" was the panel's
+   own shadow and the small per-row lock glyph above it -- the input itself
+   looked identical to any plain, unlocked field in the Channels group. A
+   faint navy wash carries that same signal down to the control itself. Text
+   colour/placeholder/padding/radius are all still inherited from .input. */
+.skLockedInput { background: var(--navy-tint); border-color: var(--navy-line); }
 
 /* The shared guarded-channel mechanism, stated once. Navy rather than red: red
    IS sanctioned in this codebase, but narrowly -- as a semantic error/danger
@@ -1097,6 +1115,16 @@ input.searchInput { padding-left: 34px; }
 .skSummary::-webkit-details-marker { display: none; }
 .skSummary:hover { background: var(--bg3); }
 .skSummaryHint { font-weight: 500; color: var(--text-2); }
+/* Deliberately NOT one of the three brand-tinted .skGroupIconChip variants --
+   this is the de-emphasised fallback path, so it gets a muted, un-tinted chip
+   instead. Giving it the same colour weight as Channels/Locked
+   channels/B2C daily report would say it's equally important, which it isn't. */
+.skSummaryIcon {
+  width: 20px; height: 20px; border-radius: 6px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--bg3); color: var(--text-2);
+}
+.skSummaryIcon svg { width: 12px; height: 12px; }
 .skChevron { transition: transform .18s ease; flex: 0 0 auto; color: var(--text-2); }
 .skDetails[open] .skChevron { transform: rotate(180deg); }
 .skDetailsBody { padding: 2px 14px 14px; }

@@ -82,6 +82,18 @@ const SlackSendIcon = () => (
   </svg>
 )
 
+// A broken/two-piece link, for the webhook fallback -- kept deliberately
+// neutral (not a brand-tinted chip like the three groups above it) since this
+// is the de-emphasised, non-preferred path; giving it the same visual weight
+// as Channels/Locked channels/B2C daily report would undo that hierarchy.
+const SlackWebhookIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
+    <path d="M9 15 15 9" />
+    <path d="M11 6.5 12.5 5A3.5 3.5 0 0 1 17.5 10L16 11.5" />
+    <path d="M13 17.5 11.5 19A3.5 3.5 0 0 1 6.5 14L8 12.5" />
+  </svg>
+)
+
 // The information popover nine dashboard pages already carry as a copy-pasted
 // idiom. Settings had none, and there is no shared component to import; this is
 // that same idiom kept local, but with its colours in the stylesheet rather than
@@ -3317,7 +3329,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                         <label className={styles.fieldLabel}>{c.label} &middot; locked</label>
                       </span>
                       <div className={styles.inputGroup}>
-                        <input type="text" className={styles.input} placeholder={'#' + c.name}
+                        <input type="text" className={styles.input + ' ' + styles.skLockedInput} placeholder={'#' + c.name}
                           value={guardedChan[c.id] || ''}
                           onChange={e => setGuardedChan(g => ({ ...g, [c.id]: e.target.value }))}
                           style={{ fontFamily: 'monospace', fontSize: 12.5 }} />
@@ -3412,6 +3424,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <svg className={styles.skChevron} width="10" height="6" viewBox="0 0 10 6" fill="none" aria-hidden="true">
                       <path d="M1 1.5 5 4.75 9 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
+                    <span className={styles.skSummaryIcon}><SlackWebhookIcon /></span>
                     Fallback: Incoming Webhooks
                     <span className={styles.skSummaryHint}>&mdash; only used when no bot token is set</span>
                   </summary>
