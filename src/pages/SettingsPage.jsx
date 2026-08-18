@@ -3188,18 +3188,21 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             </div>
           ))}
 
-          {/* Where the B2C daily report's Slack "Approve" button actually posts to.
-              Was test-channel-only; now also offers the real, guarded b2c_core
-              channel. The server (resolveApprovalDestination in api/send-report.mjs)
-              independently refuses anything except test or b2c_core, so this can
-              never be pointed at some OTHER channel even by editing the stored
-              preference directly. Approving still needs the CEO PIN below, same
-              as always -- picking the real channel doesn't add any extra step. */}
+          {/* One sentence stating the whole pipeline in the order it actually happens
+              -- preview channel, then approve, then final destination -- ending right
+              at the dropdown that picks the final piece. Previously this was two
+              separate paragraphs (one on the dropdown, one on the Send-now button)
+              that never said how the two connect, which read as confusing even once
+              each individual fact was correct. The server (resolveApprovalDestination
+              in api/send-report.mjs) independently refuses anything except a test
+              channel or b2c_core, so this dropdown can never be pointed at some OTHER
+              channel even by editing the stored preference directly -- and approving
+              still needs the CEO PIN below either way. */}
           <label className={styles.fieldLabel} style={{ marginTop: 14 }}>B2C approval destination</label>
           <p className={styles.cardDesc} style={{ marginTop: 4, marginBottom: 8 }}>
-            Where the daily P&amp;L / Cash Flow report's "Approve" button in Slack actually posts to.
-            The CEO PIN below is still required either way &mdash; anything other than a test channel or
-            the real B2C channel is refused server-side regardless of what's picked here.
+            Every daily P&amp;L / Cash Flow preview &mdash; from the 3&nbsp;PM IST schedule or from
+            <b> Send report now</b> below &mdash; always posts first to <b>#dashboard-testing</b> for
+            review. Approving it there (PIN required) sends the real report on to:
           </p>
           {/* c.channel is the raw Slack channel ID (e.g. C0B6FKV1XEJ) used to actually
               post -- it was being shown here as if it were the name, which is exactly
@@ -3216,15 +3219,16 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
           {/* Manual test-fire of the same daily pipeline the 3 PM IST cron runs
               (api/send-report.mjs handleB2CDailyReport). Unrelated to the CEO's
-              own ad-hoc "Send to Slack" export on the Daily P&L page. The preview
-              always lands in the #dashboard-testing sandbox channel -- the
-              destination picked above only governs where Approve finally posts. */}
+              own ad-hoc "Send to Slack" export on the Daily P&L page. Where the
+              preview lands and where Approve sends it are both already stated in
+              the paragraph above -- this line only needs to say what the button
+              itself does, not repeat the destinations again. */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
             <Button size="sm" variant="secondary" onClick={sendB2CDailyReportNow} disabled={b2cReportSending}>
               {b2cReportSending ? 'Sending\u2026' : 'Send report now'}
             </Button>
             <span className={styles.cardDesc} style={{ margin: 0 }}>
-              Posts today&rsquo;s Daily P&amp;L and Daily Cash Flow previews to <b>#dashboard-testing</b> with Approve / Disapprove buttons, exactly as the 3&nbsp;PM IST schedule does.
+              Fires that same pipeline immediately, instead of waiting for 3&nbsp;PM IST.
             </span>
             {b2cReportMsg && <span className={styles.rcFeedback + ' ' + (b2cReportMsg.charAt(0) === '\u2715' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{b2cReportMsg}</span>}
           </div>
