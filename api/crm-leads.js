@@ -540,12 +540,46 @@ async function fetchLeadSquaredActivityTypes(creds) {
 // instead of raw mx_Custom_2 / opaque values. Cached in-memory per cold start (metadata is
 // effectively static -- it only changes if someone edits Settings > Opportunities in LSQ).
 let _lsqOppMetaCache = null
-async function fetchLeadSquaredOpportunityMeta(creds, { eventCode }) {
+async function fetchLeadSquaredOpportunityMeta(creds, { eventCode }, bypassCache) {
   const code = Number(eventCode) || 12003
-  if (_lsqOppMetaCache && _lsqOppMetaCache.code === code) return _lsqOppMetaCache.data
+  if (!bypassCache && _lsqOppMetaCache && _lsqOppMetaCache.code === code) return _lsqOppMetaCache.data
   const data = await leadsquaredGet('/v2/OpportunityManagement.svc/GetOpportunityTypeMetadata', creds, { code: String(code) })
   _lsqOppMetaCache = { code, data }
   return data
+}
+
+// Field Schema page, Opportunity side. Same Field shape as GetActivitySetting
+// (confirmed live: identical key list), so this mirrors fetchLeadSquaredActivitySchema
+// exactly -- EXCEPT for dropdown values. Confirmed empirically (a real 500, not a
+// guess) that Activity's dropdown-values endpoint explicitly rejects an Opportunity
+// code ("Activity field should be of type independent dropdown") -- LeadSquared has
+// no separate API for Opportunity dropdown values at all. The only real values
+// available are whatever GetOpportunityTypeMetadata embeds directly in a field's own
+// OptionSet -- confirmed populated for the built-in "Status" field (Open/Won/Lost as
+// a JSON array with a Value per option) but empty for ordinary custom dropdown
+// fields like "Stage" (mx_Custom_2). So each field carries its inline options when
+// LeadSquared actually provides them, and null when it doesn't -- never a fake
+// "View options" button pointed at a call that would 500.
+async function fetchLeadSquaredOpportunitySchema(creds, { code, refresh }) {
+  const data = await fetchLeadSquaredOpportunityMeta(creds, { eventCode: code }, !!refresh)
+  const fields = Array.isArray(data && data.Fields) ? data.Fields
+    .slice()
+    .sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0))
+    .map(f => {
+      let inlineOptions = null
+      if (f.OptionSet) {
+        try {
+          const parsed = JSON.parse(f.OptionSet)
+          if (Array.isArray(parsed)) inlineOptions = parsed.map(o => o.Value).filter(v => v != null && v !== '')
+        } catch (_) { /* OptionSet isn't valid JSON for this field -- leave inlineOptions null */ }
+      }
+      return {
+        schemaName: f.SchemaName, displayName: f.DisplayName || f.SchemaName,
+        dataType: f.DataType || '', isMandatory: !!f.IsMandatory, inlineOptions,
+      }
+    }) : []
+  const resolvedCode = (data && (data.EventCode || data.EventCode === 0)) ? data.EventCode : (Number(code) || 12003)
+  return { code: String(resolvedCode), displayName: (data && data.DisplayName) || '', fields }
 }
 
 async function handleLeadSquared(req, res, me) {
@@ -563,7 +597,8 @@ async function handleLeadSquared(req, res, me) {
   // one can be granted/revoked independently of the other, matching how every other
   // sidebar page in this app gets its own PAGE_LIST id.
   const { mode } = req.query || {}
-  const gateId = (mode === 'activity_schema' || mode === 'activity_dropdown_options') ? 'lq_field_schema' : 'leadsquared'
+  const FIELD_SCHEMA_MODES = ['activity_schema', 'activity_dropdown_options', 'opportunity_schema']
+  const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
@@ -580,17 +615,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
-    // TEMP debug-only: testing whether ActivityField/Dropdown/Options/Get also works
-    // for an Opportunity Type's numeric EventCode (docs say Activity-only, but that's
-    // worth an empirical check before assuming). Remove once confirmed either way.
-    if (mode === 'opp_dropdown_options_test') {
-      try {
-        const r = await fetchLeadSquaredDropdownOptions(creds, { code, schemaName })
-        return res.status(200).json({ ok: true, result: r })
-      } catch (e) {
-        return res.status(200).json({ ok: false, error: String((e && e.message) || e) })
-      }
-    }
+    if (mode === 'opportunity_schema') return res.status(200).json(await fetchLeadSquaredOpportunitySchema(creds, { code, refresh: refresh === '1' }))
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })

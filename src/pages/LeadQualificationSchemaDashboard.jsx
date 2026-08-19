@@ -22,6 +22,7 @@ async function apiGet(mode, params) {
 function useSchema() {
   const [types, setTypes] = useState(null)
   const [schemas, setSchemas] = useState({})
+  const [oppSchema, setOppSchema] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
@@ -32,7 +33,10 @@ function useSchema() {
     if (!bypass) setLoading(true); else setRefreshing(true)
     setError(null)
     try {
-      const typesData = await apiGet('activity_types')
+      const [typesData, oppData] = await Promise.all([
+        apiGet('activity_types'),
+        apiGet('opportunity_schema', bypass ? { refresh: '1' } : {}).catch(e => ({ error: e.message })),
+      ])
       const futworkTypes = (typesData.rows || []).filter(t => (t.name || '').toLowerCase().includes('futwork'))
       const schemaResults = await Promise.all(
         futworkTypes.map(t => apiGet('activity_schema', { code: t.code, ...(bypass ? { refresh: '1' } : {}) }).catch(e => ({ code: String(t.code), error: e.message })))
@@ -41,6 +45,7 @@ function useSchema() {
       schemaResults.forEach(s => { map[s.code] = s })
       setTypes(futworkTypes)
       setSchemas(map)
+      setOppSchema(oppData)
       setLastSync(new Date())
     } catch (e) {
       setError(e.message)
@@ -51,7 +56,7 @@ function useSchema() {
   }
 
   useEffect(() => { load() }, [])
-  return { types, schemas, loading, error, lastSync, refreshing, refresh: () => load({ refresh: true }) }
+  return { types, schemas, oppSchema, loading, error, lastSync, refreshing, refresh: () => load({ refresh: true }) }
 }
 
 // Brand-only palette, one tone per DataType family so a long field list reads by
@@ -95,12 +100,23 @@ function IconChip({ accent, children }) {
 // One shared modal, opened by any row's "View options" button -- pops up the
 // real, live list of values LeadSquared will actually accept for that dropdown
 // field (ActivityField/Dropdown/Options/Get), rather than expanding inline.
+// Opportunity fields have no equivalent live-lookup API (confirmed empirically --
+// LeadSquared's Activity endpoint 500s when given an Opportunity code), so a
+// target carrying `presetOptions` skips the fetch entirely and shows those
+// values directly -- they're whatever GetOpportunityTypeMetadata itself embedded
+// in the field's own OptionSet, still real LeadSquared data, just sourced from a
+// different call.
 function DropdownOptionsModal({ target, onClose }) {
   const [state, setState] = useState('loading') // loading | loaded | empty | error
   const [options, setOptions] = useState([])
 
   useEffect(() => {
     if (!target) return
+    if (target.presetOptions) {
+      setOptions(target.presetOptions)
+      setState(target.presetOptions.length ? 'loaded' : 'empty')
+      return
+    }
     setState('loading'); setOptions([])
     apiGet('activity_dropdown_options', { code: target.code, schemaName: target.schemaName })
       .then(data => {
@@ -109,7 +125,7 @@ function DropdownOptionsModal({ target, onClose }) {
         setState(opts.length ? 'loaded' : 'empty')
       })
       .catch(() => setState('error'))
-  }, [target && target.code, target && target.schemaName])
+  }, [target && target.code, target && target.schemaName, target && target.presetOptions])
 
   useEffect(() => {
     if (!target) return
@@ -152,7 +168,7 @@ function DropdownOptionsModal({ target, onClose }) {
 
 const CARD_ACCENTS = [C.navy, C.blue, C.cyan, C.green]
 
-function SchemaTable({ code, fields, query, onViewOptions }) {
+function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
   const th = { padding: '10px 14px', textAlign: 'left', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1, borderBottom: '0.5px solid ' + C.border }
   const td = { padding: '10px 14px', fontSize: 12.5, color: C.text, verticalAlign: 'top', whiteSpace: 'nowrap' }
 
@@ -175,7 +191,12 @@ function SchemaTable({ code, fields, query, onViewOptions }) {
         <tbody>
           {filtered.map((f, i) => {
             const tm = typeMeta(f.dataType)
-            const hasOptions = isDropdownType(f.dataType)
+            const isDropdown = isDropdownType(f.dataType)
+            // Activity fields: every dropdown has a live lookup API. Opportunity fields:
+            // no such API exists (confirmed) -- only fields where LeadSquared's own
+            // metadata call happened to embed real values (f.inlineOptions) can show any.
+            const hasLiveOptions = entityType === 'opportunity' ? isDropdown && f.inlineOptions && f.inlineOptions.length > 0 : isDropdown
+            const isUnavailableDropdown = entityType === 'opportunity' && isDropdown && !hasLiveOptions
             return (
               <tr key={f.schemaName} style={{ background: i % 2 === 1 ? 'var(--bg3)' : 'transparent' }}>
                 <td style={{ ...td, fontWeight: 700, whiteSpace: 'normal' }}>{f.displayName}</td>
@@ -191,12 +212,14 @@ function SchemaTable({ code, fields, query, onViewOptions }) {
                     : <span style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, background: 'var(--bg3)', padding: '3px 9px', borderRadius: 999 }}>NO</span>}
                 </td>
                 <td style={td}>
-                  {hasOptions ? (
-                    <button type="button" onClick={() => onViewOptions(code, f.schemaName, f.displayName)}
+                  {hasLiveOptions ? (
+                    <button type="button" onClick={() => onViewOptions(code, f.schemaName, f.displayName, entityType === 'opportunity' ? f.inlineOptions : null)}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.blue, fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
                       View options
                     </button>
+                  ) : isUnavailableDropdown ? (
+                    <span style={{ fontSize: 11.5, color: C.muted }} title="LeadSquared has no API to read this field's values for Opportunity types">Not available via API</span>
                   ) : (
                     <span style={{ fontSize: 11.5, color: C.muted }}>Not applicable</span>
                   )}
@@ -213,7 +236,7 @@ function SchemaTable({ code, fields, query, onViewOptions }) {
   )
 }
 
-function ActivityCard({ type, schema, accent, cardRef, onViewOptions }) {
+function ActivityCard({ type, schema, accent, cardRef, onViewOptions, entityType = 'activity' }) {
   const [query, setQuery] = useState('')
   const fields = (schema && schema.fields) || []
   const mandatoryCount = fields.filter(f => f.isMandatory).length
@@ -242,7 +265,7 @@ function ActivityCard({ type, schema, accent, cardRef, onViewOptions }) {
         {schema && schema.error ? (
           <div style={{ padding: '16px', color: C.muted, fontSize: 12.5 }}>{schema.error}</div>
         ) : (
-          <SchemaTable code={type.code} fields={fields} query={query} onViewOptions={onViewOptions} />
+          <SchemaTable code={type.code} fields={fields} query={query} onViewOptions={onViewOptions} entityType={entityType} />
         )}
       </Card>
     </div>
@@ -250,9 +273,10 @@ function ActivityCard({ type, schema, accent, cardRef, onViewOptions }) {
 }
 
 export default function LeadQualificationSchemaDashboard() {
-  const { types, schemas, loading, error, lastSync, refreshing, refresh } = useSchema()
+  const { types, schemas, oppSchema, loading, error, lastSync, refreshing, refresh } = useSchema()
   const cardRefs = useRef({})
   const [optionsTarget, setOptionsTarget] = useState(null)
+  const oppType = oppSchema && !oppSchema.error ? { code: oppSchema.code, name: oppSchema.displayName || 'Opportunity Type' } : null
 
   const stats = useMemo(() => {
     const all = Object.values(schemas).filter(s => s && !s.error)
@@ -270,7 +294,7 @@ export default function LeadQualificationSchemaDashboard() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const openOptions = (code, schemaName, displayName) => setOptionsTarget({ code, schemaName, displayName })
+  const openOptions = (code, schemaName, displayName, presetOptions) => setOptionsTarget({ code, schemaName, displayName, presetOptions })
 
   if (loading) {
     return (
@@ -320,6 +344,13 @@ export default function LeadQualificationSchemaDashboard() {
               Only <strong>Dropdown</strong>-type fields carry a value list in LeadSquared --
               confirmed directly in Settings &rsaquo; Custom Notable Activity Type, where a
               String field's own edit screen has no options concept at all.
+              <br /><br />
+              The <strong>Opportunity Fields</strong> section below is the same schema for
+              Settings &rsaquo; Opportunities' field configuration. LeadSquared has no live
+              lookup API for Opportunity dropdown values (confirmed -- the Activity one
+              rejects an Opportunity code outright), so a dropdown field there only shows
+              options when LeadSquared's own metadata happens to embed them directly;
+              everything else reads "Not available via API" rather than a fake button.
             </p>
           </div>
 
@@ -330,7 +361,7 @@ export default function LeadQualificationSchemaDashboard() {
             <PremKPI label="Mandatory Fields" value={fmtN(stats.mandatoryCount)} sub="required on every postback" accent={C.green} icon={KPI_ICONS.agent} />
           </div>
 
-          {(types || []).length > 1 && (
+          {(types || []).length + (oppType ? 1 : 0) > 1 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
               {(types || []).map((t, i) => (
                 <button key={t.code} type="button" onClick={() => jumpTo(t.code)}
@@ -339,6 +370,13 @@ export default function LeadQualificationSchemaDashboard() {
                   {t.name}
                 </button>
               ))}
+              {oppType && (
+                <button type="button" onClick={() => jumpTo(oppType.code)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, border: '0.5px solid ' + C.border, background: 'var(--card)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.text }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.green, flexShrink: 0 }} />
+                  {oppType.name}
+                </button>
+              )}
             </div>
           )}
 
@@ -354,6 +392,18 @@ export default function LeadQualificationSchemaDashboard() {
             <ActivityCard key={t.code} type={t} schema={schemas[t.code]} accent={CARD_ACCENTS[i % CARD_ACCENTS.length]}
               cardRef={el => { cardRefs.current[t.code] = el }} onViewOptions={openOptions} />
           ))}
+
+          {(oppType || (oppSchema && oppSchema.error)) && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '4px 0 12px' }}>Opportunity Fields</div>
+              {oppType ? (
+                <ActivityCard type={oppType} schema={oppSchema} accent={C.green} entityType="opportunity"
+                  cardRef={el => { cardRefs.current[oppType.code] = el }} onViewOptions={openOptions} />
+              ) : (
+                <div style={{ padding: '16px', color: C.muted, fontSize: 12.5 }}>{oppSchema.error}</div>
+              )}
+            </>
+          )}
         </div>
       </div>
       <DropdownOptionsModal target={optionsTarget} onClose={() => setOptionsTarget(null)} />
