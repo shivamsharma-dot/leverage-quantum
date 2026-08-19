@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
 import Dropdown from '../components/Dropdown'
@@ -249,7 +249,7 @@ const ACTIVITY_VIEW_ORDER = [
   'Call Details from Futwork',
 ]
 
-function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
+function SchemaTable({ code, fields, query, typeFilter, onViewOptions, entityType }) {
   const th = { padding: '10px 14px', textAlign: 'left', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1, borderBottom: '0.5px solid ' + C.border }
   const td = { padding: '10px 14px', fontSize: 12.5, color: C.text, verticalAlign: 'top', whiteSpace: 'nowrap' }
   // Leads-only, and deliberately not extended to Opportunity: LeadSquared's
@@ -269,10 +269,12 @@ function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
   const isLead = entityType === 'lead'
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return fields
+    let list = fields
+    if (typeFilter && typeFilter !== 'All') list = list.filter(f => (f.dataType || 'Unknown') === typeFilter)
     const q = query.trim().toLowerCase()
-    return fields.filter(f => f.displayName.toLowerCase().includes(q) || f.schemaName.toLowerCase().includes(q))
-  }, [fields, query])
+    if (q) list = list.filter(f => f.displayName.toLowerCase().includes(q) || f.schemaName.toLowerCase().includes(q))
+    return list
+  }, [fields, query, typeFilter])
 
   const colCount = 5 + (isLead ? 4 : 0)
 
@@ -339,7 +341,9 @@ function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
             )
           })}
           {filtered.length === 0 && (
-            <tr><td colSpan={colCount} style={{ ...td, textAlign: 'center', color: C.muted, padding: '24px 12px', whiteSpace: 'normal' }}>No fields match "{query}".</td></tr>
+            <tr><td colSpan={colCount} style={{ ...td, textAlign: 'center', color: C.muted, padding: '24px 12px', whiteSpace: 'normal' }}>
+              No fields match{query.trim() ? ' "' + query + '"' : ''}{typeFilter && typeFilter !== 'All' ? ' with type ' + typeFilter : ''}.
+            </td></tr>
           )}
         </tbody>
       </table>
@@ -347,8 +351,59 @@ function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
   )
 }
 
-function ActivityCard({ type, schema, accent, onViewOptions, entityType = 'activity' }) {
-  const [query, setQuery] = useState('')
+// Header search box for filtering the currently-selected view's fields --
+// moved out of the card body per request, plus a typeahead suggestion panel
+// (matching display name or schema name) that appears while typing, similar
+// to the campaign-search pattern used elsewhere in this app. Picking a
+// suggestion sets the query to that field's exact display name, narrowing
+// the table to just that field; typing continues to live-filter the table
+// on every keystroke regardless of whether a suggestion is picked.
+function FieldSearchBox({ query, onChange, fields }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+
+  useEffect(() => {
+    const onDocClick = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
+  const suggestions = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    return fields
+      .filter(f => f.displayName.toLowerCase().includes(q) || f.schemaName.toLowerCase().includes(q))
+      .slice(0, 8)
+  }, [query, fields])
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <input
+        type="text" placeholder="Filter fields…" value={query}
+        onChange={e => { onChange(e.target.value); setOpen(true) }}
+        onFocus={() => { if (query.trim()) setOpen(true) }}
+        style={{ padding: '6px 11px', border: '0.5px solid ' + C.border, borderRadius: 8, fontSize: 12, fontFamily: FONT, outline: 'none', width: 190, background: 'var(--card)', color: C.text }}
+      />
+      {open && suggestions.length > 0 && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 300, width: 300, background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 10, boxShadow: '0 14px 40px rgba(15,23,42,0.16)', overflow: 'hidden' }}>
+          <div style={{ padding: '7px 12px', fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '0.5px solid ' + C.border }}>
+            {suggestions.length} match{suggestions.length === 1 ? '' : 'es'}
+          </div>
+          {suggestions.map((f, i) => (
+            <button key={f.schemaName} type="button"
+              onClick={() => { onChange(f.displayName); setOpen(false) }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', borderTop: i > 0 ? '0.5px solid ' + C.border : 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.displayName}</span>
+              <span style={{ fontSize: 10, color: C.muted, fontFamily: 'monospace', flexShrink: 0 }}>{f.schemaName}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ActivityCard({ type, schema, accent, query, typeFilter, onViewOptions, entityType = 'activity' }) {
   const fields = (schema && schema.fields) || []
   const mandatoryCount = fields.filter(f => f.isMandatory).length
 
@@ -366,17 +421,11 @@ function ActivityCard({ type, schema, accent, onViewOptions, entityType = 'activ
         }
         sub={schema && !schema.error ? fields.length + ' fields · ' + mandatoryCount + ' mandatory' : ''}
         noPad
-        action={
-          !schema || schema.error ? null : (
-            <input type="text" placeholder="Filter fields…" value={query} onChange={e => setQuery(e.target.value)}
-              style={{ padding: '6px 11px', border: '0.5px solid ' + C.border, borderRadius: 8, fontSize: 12, fontFamily: FONT, outline: 'none', width: 160, background: 'var(--card)', color: C.text }} />
-          )
-        }
       >
         {schema && schema.error ? (
           <div style={{ padding: '16px', color: C.muted, fontSize: 12.5 }}>{schema.error}</div>
         ) : (
-          <SchemaTable code={type.code} fields={fields} query={query} onViewOptions={onViewOptions} entityType={entityType} />
+          <SchemaTable code={type.code} fields={fields} query={query} typeFilter={typeFilter} onViewOptions={onViewOptions} entityType={entityType} />
         )}
       </Card>
     </div>
@@ -387,6 +436,8 @@ export default function LeadQualificationSchemaDashboard() {
   const { types, schemas, oppSchema, leadSchema, loading, error, lastSync, refreshing, refresh } = useSchema()
   const [optionsTarget, setOptionsTarget] = useState(null)
   const [selectedKey, setSelectedKey] = useState(null)
+  const [query, setQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState('All')
 
   // One flat list of everything selectable in the header dropdown -- each
   // Futwork activity type, then the Opportunity type, then Leads, in that
@@ -434,6 +485,17 @@ export default function LeadQualificationSchemaDashboard() {
   const selected = views.find(v => v.key === selectedKey) || null
   const selectedFields = (selected && selected.schema && selected.schema.fields) || []
 
+  // Search/type filter are scoped to whichever view is selected -- a query or
+  // type picked on Leads (403 fields) means nothing on a Futwork activity type
+  // (11 fields), so both reset whenever the Viewing dropdown changes rather
+  // than carrying a stale filter into a completely different field set.
+  useEffect(() => { setQuery(''); setTypeFilter('All') }, [selectedKey])
+
+  const typeOptions = useMemo(() => {
+    const set = new Set(selectedFields.map(f => f.dataType || 'Unknown'))
+    return ['All', ...Array.from(set).sort()]
+  }, [selectedFields])
+
   const stats = useMemo(() => ({
     typeCount: views.length,
     fieldCount: selectedFields.length,
@@ -478,6 +540,16 @@ export default function LeadQualificationSchemaDashboard() {
                 options={views.map(v => ({ value: v.key, label: v.name }))}
               />
             )}
+            {selectedFields.length > 0 && (
+              <Dropdown
+                label="Type"
+                value={typeFilter}
+                onChange={setTypeFilter}
+                minWidth={130}
+                options={typeOptions}
+              />
+            )}
+            {selected && <FieldSearchBox query={query} onChange={setQuery} fields={selectedFields} />}
             {lastSync && <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}{refreshing ? '…' : ''}</span>}
             <Button onClick={refresh} disabled={refreshing} size="sm">{refreshing ? 'Refreshing' : 'Refresh'}</Button>
             <FieldSchemaInfoButton />
@@ -502,6 +574,7 @@ export default function LeadQualificationSchemaDashboard() {
 
           {selected && (
             <ActivityCard type={selected} schema={selected.schema} accent={selected.accent}
+              query={query} typeFilter={typeFilter}
               entityType={selected.entityType} onViewOptions={openOptions} />
           )}
         </div>
