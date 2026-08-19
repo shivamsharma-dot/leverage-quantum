@@ -616,6 +616,20 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
     if (mode === 'opportunity_schema') return res.status(200).json(await fetchLeadSquaredOpportunitySchema(creds, { code, refresh: refresh === '1' }))
+    // TEMP debug-only: confirm real response shapes before committing to a mapper.
+    // Remove once Lead Field Schema + Opportunity drill-down are built for real.
+    if (mode === 'debug_leads_metadata') {
+      const data = await leadsquaredGet('/v2/LeadManagement.svc/LeadsMetaData.Get', creds, { excludeOptionSets: req.query.full === '1' ? undefined : '1' })
+      return res.status(200).json(data)
+    }
+    if (mode === 'debug_opportunity_detail') {
+      const data = await leadsquaredGet('/v2/OpportunityManagement.svc/GetOpportunityDetails', creds, { OpportunityId: req.query.opportunityId })
+      return res.status(200).json(data)
+    }
+    if (mode === 'debug_opportunity_activities') {
+      const data = await leadsquaredGet('/v2/OpportunityManagement.svc/GetActivitiesOfOpportunity', creds, { OpportunityId: req.query.opportunityId })
+      return res.status(200).json(data)
+    }
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
