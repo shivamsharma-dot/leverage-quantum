@@ -19,11 +19,18 @@ const CR = 1e7
 const LAKH = 1e5
 const WIDTH = 30
 
-// Same wording as the standing note at the top of both Daily P&L and Daily
-// Cash Flow on the live page -- printed once here so the two full-particulars
-// tables (b2c_full, b2c_cashflow_full) carry the same definition rather than
-// leaving a reader to guess why the two statements' numbers do not match.
-const REV_VS_CASHFLOW_NOTE = ':information_source: *Revenue vs Cash Flow* — P&L revenue is recognised on the date a sale is recorded: AC and Leverage One (E2E) net of a 15% deduction for expected future refunds, SR estimated as Deposits × 70% × ₹3.5L, all off historical data. Cash Flow records actual cash moved, whenever it happens, after verification by the finance team.'
+// The standing note explaining why P&L and Cash Flow show different numbers
+// for the same period. Editable from Settings > Data > "B2C Report Note"
+// (app_preferences key b2c_rev_vs_cashflow_note) -- CeoB2CDashboard.jsx reads
+// the same preference for the on-page note, and passes it through as
+// ctx.revVsCashflowNote so this one edit updates the live page AND both Slack
+// reports at once, instead of three copies drifting independently. This
+// constant is only the fallback for whenever nothing has been saved yet.
+export const DEFAULT_REV_VS_CASHFLOW_NOTE = 'P&L revenue is recognised on the date a sale is recorded: AC and Leverage One (E2E) net of 10% and 5% deduction respectively for expected future refunds, SR estimated as Deposits × 75% × ₹3.5L. Cash Flow records actual cash moved, whenever it happens, after verification by the finance team.'
+
+function noteMrkdwn(ctx) {
+  return ':information_source: *Revenue vs Cash Flow* — ' + ((ctx && ctx.revVsCashflowNote) || DEFAULT_REV_VS_CASHFLOW_NOTE)
+}
 
 // Full name for prose, short name for the tables, key into the context.
 const LINES = [
@@ -318,7 +325,7 @@ function buildB2CFullTable(ctx) {
       { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
       { type: 'context', elements: [{ type: 'mrkdwn', text: L[1] }] },
       { type: 'table', block_id: 'b2c_full_table', column_settings: cols, rows: rows },
-      { type: 'context', elements: [{ type: 'mrkdwn', text: REV_VS_CASHFLOW_NOTE }] },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: noteMrkdwn(c) }] },
     ],
     // Mirrors the blocks above in the plain-value shape the Quantum preview
     // (not the real Slack send, which always takes the blocks array above)
@@ -329,7 +336,7 @@ function buildB2CFullTable(ctx) {
       rows: rows.slice(1).map(function (r) { return r.map(cellPlain) }),
       strongRows: rows.slice(1).map(function (r, i) { return r[0].type === 'rich_text' ? i : -1 }).filter(function (i) { return i >= 0 }),
     },
-    context: REV_VS_CASHFLOW_NOTE,
+    context: noteMrkdwn(c),
   }]
 }
 
@@ -390,7 +397,7 @@ function buildB2CCashflowTable(ctx) {
       { type: 'section', text: { type: 'mrkdwn', text: L[0] } },
       { type: 'context', elements: [{ type: 'mrkdwn', text: L[1] }] },
       { type: 'table', block_id: 'b2c_cashflow_table', column_settings: cols, rows: rows },
-      { type: 'context', elements: [{ type: 'mrkdwn', text: REV_VS_CASHFLOW_NOTE }] },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: noteMrkdwn(c) }] },
     ],
     // Same reasoning as buildB2CFullTable above -- plain-value mirror of the
     // blocks array, for an accurate Quantum preview only.
@@ -399,7 +406,7 @@ function buildB2CCashflowTable(ctx) {
       rows: rows.slice(1).map(function (r) { return r.map(cellPlain) }),
       strongRows: rows.slice(1).map(function (r, i) { return r[0].type === 'rich_text' ? i : -1 }).filter(function (i) { return i >= 0 }),
     },
-    context: REV_VS_CASHFLOW_NOTE,
+    context: noteMrkdwn(c),
   }]
 }
 

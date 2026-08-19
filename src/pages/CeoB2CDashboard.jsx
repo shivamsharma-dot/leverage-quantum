@@ -7,7 +7,7 @@ import KPICard from '../components/KPICard'
 import Button from '../components/Button'
 import SlackReportPanel from '../components/SlackReportPanel'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
-import { B2C_REPORT_VERSIONS, B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS } from '../lib/b2cReport'
+import { B2C_REPORT_VERSIONS, B2C_FULL_TABLE_VERSIONS, B2C_CASHFLOW_TABLE_VERSIONS, DEFAULT_REV_VS_CASHFLOW_NOTE } from '../lib/b2cReport'
 import { B2C_LEDGER_VERSIONS } from '../lib/b2cLedger'
 import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
@@ -171,6 +171,20 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [customOpen, setCustomOpen] = useState(false)
+  // Editable "Revenue vs Cash Flow" note (Settings > Data > "B2C Report Note"),
+  // shared with both Slack report versions via ctx.revVsCashflowNote -- one
+  // saved value now drives the on-page note AND both Slack messages, instead
+  // of three copies that could each say something different.
+  const [revVsCashflowNote, setRevVsCashflowNote] = useState('')
+
+  useEffect(function () {
+    let alive = true
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : { prefs: {} } })
+      .then(function (d) { if (alive) setRevVsCashflowNote((d.prefs && d.prefs.b2c_rev_vs_cashflow_note) || '') })
+      .catch(function () { if (alive) setRevVsCashflowNote('') })
+    return function () { alive = false }
+  }, [])
 
   useEffect(function () {
     let alive = true
@@ -467,6 +481,10 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
       days: dayStats.days,
       negDays: dayStats.neg,
       worstDay: dayStats.worst,
+      // Whatever is currently saved (or the shared default) -- read live so an
+      // edit made in Settings takes effect on the very next send/preview
+      // without needing this page reloaded.
+      revVsCashflowNote: revVsCashflowNote || DEFAULT_REV_VS_CASHFLOW_NOTE,
       // Extra keys for the Quantum Brief builder. The existing B2C builders read
       // none of these, so they are additive and change nothing for them.
       partial: !!(dim && rows.length < dim),
@@ -504,7 +522,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         },
       ]
     }
-  }, [month, d1, mtd, margin, day, peopleMonthly, fy, dim, rows.length, hasPrev, prev, prevRows.length, prevLab, prevMargin, mgDelta, hasPlan, shortMonth, dayStats, activeWindow, windowLabel])
+  }, [month, d1, mtd, margin, day, peopleMonthly, fy, dim, rows.length, hasPrev, prev, prevRows.length, prevLab, prevMargin, mgDelta, hasPlan, shortMonth, dayStats, activeWindow, windowLabel, revVsCashflowNote])
   const captureSlackFiles = useCallback(async function () {
     await nextPaint()
     const node = tableRef.current
@@ -612,7 +630,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
         <div className={styles.scroll}>
         <div className={styles.content}>
           <p className={styles.defNote}>
-            <b>* Revenue vs Cash Flow</b> &mdash; In the P&amp;L statement, revenue is recognized on the date an actual sale is recorded &mdash; when a package is sold to the customer. For AC and Leverage One (E2E), 15% is deducted to account for future refunds, based on historical data. For SR, revenue is estimated as Deposits &times; 70% &times; ₹3.5L, based on historical data. In the Cash Flow statement, actual cash inflow or outflow is recorded as it happens, irrespective of when the sale took place &mdash; this data comes directly from the Finance team.
+            <b>* Revenue vs Cash Flow</b> &mdash; {revVsCashflowNote || DEFAULT_REV_VS_CASHFLOW_NOTE}
           </p>
           {loading ? <div className={styles.card}><div className={styles.empty}>Reading the finance sheet&hellip;</div></div> : null}
           {!loading && err ? (

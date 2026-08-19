@@ -12,6 +12,7 @@ import { renderKpiVariant } from '../ui/kpiVariants.jsx'
 import styles from './SettingsPage.module.css'
 import { SLACK_CHANNELS, confirmPhrase, channelHandle } from '../../shared/slackChannels.mjs'
 import { SlackIcon } from '../components/icons/BrandIcons'
+import { DEFAULT_REV_VS_CASHFLOW_NOTE } from '../lib/b2cReport'
 
 // An offline or black-holed request leaves fetch() pending forever, which is how
 // a Settings save could sit on "Saving..." with no error and no way back. Every
@@ -633,6 +634,26 @@ export default function SettingsPage() {
   const [askaiBudgetInput, setAskaiBudgetInput] = useState('')
   const [askaiBudgetSaving, setAskaiBudgetSaving] = useState(false)
   const [askaiBudgetMsg, setAskaiBudgetMsg] = useState(null)
+  // The B2C "Revenue vs Cash Flow" note -- shown on Daily P&L/Daily Cash Flow
+  // and both Slack report versions. One saved value drives all three surfaces
+  // (see src/lib/b2cReport.js's DEFAULT_REV_VS_CASHFLOW_NOTE and
+  // CeoB2CDashboard.jsx's own revVsCashflowNote state).
+  const [revNoteInput, setRevNoteInput] = useState('')
+  const [revNoteSaving, setRevNoteSaving] = useState(false)
+  const [revNoteMsg, setRevNoteMsg] = useState(null)
+  const saveRevNote = async () => {
+    setRevNoteSaving(true); setRevNoteMsg(null)
+    try {
+      const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'b2c_rev_vs_cashflow_note', value: revNoteInput.trim() }) })
+      if (!r.ok) throw new Error('Save failed')
+      setRevNoteMsg({ type: 'ok', text: 'Saved' })
+    } catch (e) {
+      setRevNoteMsg({ type: 'err', text: e.message })
+    } finally {
+      setRevNoteSaving(false)
+      setTimeout(() => setRevNoteMsg(null), 3000)
+    }
+  }
   const saveAskaiBudget = async () => {
     setAskaiBudgetSaving(true); setAskaiBudgetMsg(null)
     try {
@@ -931,6 +952,7 @@ export default function SettingsPage() {
                   if (Array.isArray(pf.custom_data_sources)) setCustomSources(pf.custom_data_sources)
                   if (pf.source_health_schedule) setHealthSchedule(pf.source_health_schedule)
                   if (pf.ask_ai_monthly_budget_usd != null) setAskaiBudgetInput(String(pf.ask_ai_monthly_budget_usd))
+                  if (pf.b2c_rev_vs_cashflow_note != null) setRevNoteInput(pf.b2c_rev_vs_cashflow_note)
                   if (pf.business_context && typeof pf.business_context === 'object') {
                     // Merge onto the defaults rather than replacing wholesale, so a field
                     // added after this admin last saved still shows its sensible default
@@ -1953,6 +1975,23 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <Button size="sm" onClick={saveSrFee}>{srFeeSaved ? 'Saved' : 'Save'}</Button>
                 </div>
                 <p className={styles.note}>Current: ₹{parseInt(srFeeInput || 350000).toLocaleString('en-IN')} per RAU</p>
+              </div>
+
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>B2C Report Note</h3>
+                <p className={styles.cardDesc}>The "Revenue vs Cash Flow" explainer shown on Daily P&amp;L and Daily Cash Flow, and in both Slack report versions when sent. One saved value drives all three -- editing it here updates the live page immediately and the next Slack send, with no deploy.</p>
+                <label className={styles.fieldLabel}>Note text</label>
+                <textarea value={revNoteInput} onChange={e => setRevNoteInput(e.target.value)} rows={4}
+                  placeholder={DEFAULT_REV_VS_CASHFLOW_NOTE}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '0.5px solid var(--border)', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", resize: 'vertical', color: 'var(--text)', background: 'var(--card)' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+                  <Button size="sm" onClick={saveRevNote} disabled={revNoteSaving}>{revNoteSaving ? 'Saving...' : 'Save'}</Button>
+                  {revNoteInput.trim() && (
+                    <Button size="sm" variant="secondary" onClick={() => setRevNoteInput('')}>Reset to default</Button>
+                  )}
+                  {revNoteMsg && <span style={{ fontSize: 12, color: revNoteMsg.type === 'ok' ? 'var(--green-ink)' : 'var(--red-ink)' }}>{revNoteMsg.type === 'ok' ? 'Saved' : revNoteMsg.text}</span>}
+                </div>
+                <p className={styles.note}>{revNoteInput.trim() ? 'Custom note in use.' : 'Using the built-in default shown as placeholder above.'}</p>
               </div>
 
               <div className={styles.card}>

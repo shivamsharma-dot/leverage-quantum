@@ -150,6 +150,11 @@ const PREF_KEYS = Array.from(new Set([
   // was always undefined regardless of what was saved, so the Approve button always
   // fell back to the default test channel (voxpath) even after picking b2c_core.
   'b2c_approve_destination',
+  // The editable "Revenue vs Cash Flow" note -- Settings > Data > "B2C Report
+  // Note". Read here so handleB2CDailyReport can pass it through as
+  // ctx.revVsCashflowNote, matching what CeoB2CDashboard.jsx's own on-demand
+  // Send-to-Slack path already does client-side.
+  'b2c_rev_vs_cashflow_note',
 ]
   .concat(SLACK_CHANNELS.map(function (c) { return c.pref }))
   .concat(SLACK_CHANNELS.map(function (c) { return c.altPref }))
@@ -1998,6 +2003,7 @@ async function handleB2CDailyReport(req, res) {
     const posted = []
     for (const job of jobs) {
       const ctx = buildB2CServerContext(job.days || [], job.statement)
+      if (cfg.b2c_rev_vs_cashflow_note) ctx.revVsCashflowNote = cfg.b2c_rev_vs_cashflow_note
       const messages = job.version.build(ctx) // pristine -- this exact array is what gets stored AND what the real channel receives on approval
       const pendingId = await savePendingB2CReport(job.statement, messages)
       const ts = await slackPostReportMessage(hook.token, hook.channel, withApproveButtons(messages[0], pendingId, approvalLabel))
