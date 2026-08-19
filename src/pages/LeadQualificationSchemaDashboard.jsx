@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
+import Dropdown from '../components/Dropdown'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { C, FONT, Card, PremKPI, KPI_ICONS, fmtN } from '../ui/dashboardKit'
 
@@ -153,9 +154,16 @@ function DropdownOptionsModal({ target, onClose }) {
           {state === 'loaded' && (
             <>
               <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>{options.length} valid value{options.length === 1 ? '' : 's'}</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                {options.map(o => (
-                  <span key={o} style={{ fontSize: 12, fontWeight: 700, color: C.navy, background: C.navyBg, padding: '5px 11px', borderRadius: 999 }}>{o}</span>
+              <div style={{ border: '0.5px solid ' + C.border, borderRadius: 10, overflow: 'hidden' }}>
+                {options.map((o, i) => (
+                  <div key={o} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px',
+                    background: i % 2 === 1 ? 'var(--bg3)' : 'transparent',
+                    borderTop: i > 0 ? '0.5px solid ' + C.border : 'none',
+                  }}>
+                    <span style={{ width: 24, textAlign: 'right', fontSize: 11, fontWeight: 700, color: C.muted, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{i + 1}.</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{o}</span>
+                  </div>
                 ))}
               </div>
             </>
@@ -236,13 +244,13 @@ function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
   )
 }
 
-function ActivityCard({ type, schema, accent, cardRef, onViewOptions, entityType = 'activity' }) {
+function ActivityCard({ type, schema, accent, onViewOptions, entityType = 'activity' }) {
   const [query, setQuery] = useState('')
   const fields = (schema && schema.fields) || []
   const mandatoryCount = fields.filter(f => f.isMandatory).length
 
   return (
-    <div ref={cardRef} style={{ marginBottom: 20, scrollMarginTop: 16 }}>
+    <div>
       <Card
         title={
           <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -274,25 +282,40 @@ function ActivityCard({ type, schema, accent, cardRef, onViewOptions, entityType
 
 export default function LeadQualificationSchemaDashboard() {
   const { types, schemas, oppSchema, loading, error, lastSync, refreshing, refresh } = useSchema()
-  const cardRefs = useRef({})
   const [optionsTarget, setOptionsTarget] = useState(null)
-  const oppType = oppSchema && !oppSchema.error ? { code: oppSchema.code, name: oppSchema.displayName || 'Opportunity Type' } : null
+  const [selectedKey, setSelectedKey] = useState(null)
 
-  const stats = useMemo(() => {
-    const all = Object.values(schemas).filter(s => s && !s.error)
-    const allFields = all.flatMap(s => s.fields || [])
-    return {
-      typeCount: (types || []).length,
-      fieldCount: allFields.length,
-      dropdownCount: allFields.filter(f => isDropdownType(f.dataType)).length,
-      mandatoryCount: allFields.filter(f => f.isMandatory).length,
+  // One flat list of everything selectable in the header dropdown -- each
+  // Futwork activity type plus the Opportunity type, in that order. Only one
+  // is ever shown below at a time, instead of stacking all of them (119 +
+  // 105 fields was a lot of scrolling just to reach Opportunity).
+  const views = useMemo(() => {
+    const out = (types || []).map((t, i) => ({
+      key: 'act-' + t.code, name: t.name, code: t.code, entityType: 'activity',
+      accent: CARD_ACCENTS[i % CARD_ACCENTS.length], schema: schemas[t.code],
+    }))
+    if (oppSchema) {
+      out.push({
+        key: 'opp', name: (oppSchema && oppSchema.displayName) || 'Opportunity Type', code: oppSchema.code,
+        entityType: 'opportunity', accent: C.green, schema: oppSchema,
+      })
     }
-  }, [types, schemas])
+    return out
+  }, [types, schemas, oppSchema])
 
-  const jumpTo = (code) => {
-    const el = cardRefs.current[code]
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  useEffect(() => {
+    if (!selectedKey && views.length) setSelectedKey(views[0].key)
+  }, [views, selectedKey])
+
+  const selected = views.find(v => v.key === selectedKey) || null
+  const selectedFields = (selected && selected.schema && selected.schema.fields) || []
+
+  const stats = useMemo(() => ({
+    typeCount: views.length,
+    fieldCount: selectedFields.length,
+    dropdownCount: selectedFields.filter(f => isDropdownType(f.dataType)).length,
+    mandatoryCount: selectedFields.filter(f => f.isMandatory).length,
+  }), [views, selectedFields])
 
   const openOptions = (code, schemaName, displayName, presetOptions) => setOptionsTarget({ code, schemaName, displayName, presetOptions })
 
@@ -322,6 +345,15 @@ export default function LeadQualificationSchemaDashboard() {
             </h1>
           </div>
           <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {views.length > 0 && (
+              <Dropdown
+                label="Viewing"
+                value={selectedKey}
+                onChange={setSelectedKey}
+                minWidth={220}
+                options={views.map(v => ({ value: v.key, label: v.name }))}
+              />
+            )}
             {lastSync && <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}{refreshing ? '…' : ''}</span>}
             <Button onClick={refresh} disabled={refreshing} size="sm">{refreshing ? 'Refreshing' : 'Refresh'}</Button>
           </div>
@@ -355,54 +387,23 @@ export default function LeadQualificationSchemaDashboard() {
           </div>
 
           <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
-            <PremKPI label="Activity Types" value={fmtN(stats.typeCount)} sub="Futwork-related, on this account" accent={C.navy} icon={KPI_ICONS.total} />
-            <PremKPI label="Total Fields" value={fmtN(stats.fieldCount)} sub="across all activity types" accent={C.blue} icon={KPI_ICONS.ai} />
+            <PremKPI label="Types Available" value={fmtN(stats.typeCount)} sub="switch with the Viewing dropdown above" accent={C.navy} icon={KPI_ICONS.total} />
+            <PremKPI label="Total Fields" value={fmtN(stats.fieldCount)} sub="on the selected type" accent={C.blue} icon={KPI_ICONS.ai} />
             <PremKPI label="Dropdown Fields" value={fmtN(stats.dropdownCount)} sub="where invalid values get rejected" accent={C.cyan} icon={KPI_ICONS.bot} />
             <PremKPI label="Mandatory Fields" value={fmtN(stats.mandatoryCount)} sub="required on every postback" accent={C.green} icon={KPI_ICONS.agent} />
           </div>
-
-          {(types || []).length + (oppType ? 1 : 0) > 1 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-              {(types || []).map((t, i) => (
-                <button key={t.code} type="button" onClick={() => jumpTo(t.code)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, border: '0.5px solid ' + C.border, background: 'var(--card)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.text }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: CARD_ACCENTS[i % CARD_ACCENTS.length], flexShrink: 0 }} />
-                  {t.name}
-                </button>
-              ))}
-              {oppType && (
-                <button type="button" onClick={() => jumpTo(oppType.code)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, border: '0.5px solid ' + C.border, background: 'var(--card)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.text }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.green, flexShrink: 0 }} />
-                  {oppType.name}
-                </button>
-              )}
-            </div>
-          )}
 
           {error && (
             <div style={{ padding: '12px 16px', background: 'var(--bg3)', borderRadius: 10, color: C.muted, fontSize: 13, marginBottom: 16 }}>{error}</div>
           )}
 
-          {(types || []).length === 0 && !error && (
+          {views.length === 0 && !error && (
             <div style={{ padding: '24px 16px', textAlign: 'center', color: C.muted, fontSize: 13 }}>No Futwork-related activity types found on this LeadSquared account.</div>
           )}
 
-          {(types || []).map((t, i) => (
-            <ActivityCard key={t.code} type={t} schema={schemas[t.code]} accent={CARD_ACCENTS[i % CARD_ACCENTS.length]}
-              cardRef={el => { cardRefs.current[t.code] = el }} onViewOptions={openOptions} />
-          ))}
-
-          {(oppType || (oppSchema && oppSchema.error)) && (
-            <>
-              <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '4px 0 12px' }}>Opportunity Fields</div>
-              {oppType ? (
-                <ActivityCard type={oppType} schema={oppSchema} accent={C.green} entityType="opportunity"
-                  cardRef={el => { cardRefs.current[oppType.code] = el }} onViewOptions={openOptions} />
-              ) : (
-                <div style={{ padding: '16px', color: C.muted, fontSize: 12.5 }}>{oppSchema.error}</div>
-              )}
-            </>
+          {selected && (
+            <ActivityCard type={selected} schema={selected.schema} accent={selected.accent}
+              entityType={selected.entityType} onViewOptions={openOptions} />
           )}
         </div>
       </div>
