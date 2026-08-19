@@ -582,6 +582,82 @@ async function fetchLeadSquaredOpportunitySchema(creds, { code, refresh }) {
   return { code: String(resolvedCode), displayName: (data && data.DisplayName) || '', fields }
 }
 
+// LeadSquared serializes dates as the old ASP.NET "/Date(epochMs+tzOffset)/" format --
+// confirmed live, e.g. "/Date(1785350199000+0000)/". Extracts the epoch and returns an
+// ISO string, or null if the value doesn't match (blank/absent dates included).
+function parseDotNetDate(v) {
+  if (!v || typeof v !== 'string') return null
+  const m = v.match(/\/Date\((-?\d+)/)
+  return m ? new Date(Number(m[1])).toISOString() : null
+}
+
+let _lsqLeadMetaCache = null
+// LeadsMetaData.Get -- the Lead-side sibling of GetActivitySetting/GetOpportunityTypeMetadata,
+// and genuinely richer than either: confirmed live that every one of this account's 403 lead
+// fields carries real CreatedOn/CreatedByName/ModifiedOn/ModifiedByName (unlike Activity/
+// Opportunity fields, which have none of this at the schema level -- see the comment on
+// fetchLeadSquaredActivitySchema). Dropdown-family fields (132 of 136 checked) carry their
+// values directly in `Options[]`, no separate lookup call needed. `excludeOptionSets=1` is
+// deliberately NOT passed -- this account's Options payload is small enough that fetching it
+// unconditionally is simpler and avoids a second round-trip for fields that turn out to be
+// dropdowns.
+async function fetchLeadSquaredLeadMeta(creds, bypassCache) {
+  if (!bypassCache && _lsqLeadMetaCache) return _lsqLeadMetaCache
+  const data = await leadsquaredGet('/v2/LeadManagement.svc/LeadsMetaData.Get', creds)
+  _lsqLeadMetaCache = Array.isArray(data) ? data : []
+  return _lsqLeadMetaCache
+}
+
+async function fetchLeadSquaredLeadSchema(creds, { refresh }) {
+  const raw = await fetchLeadSquaredLeadMeta(creds, !!refresh)
+  const fields = raw.map(f => ({
+    schemaName: f.SchemaName, displayName: f.DisplayName || f.SchemaName,
+    dataType: f.RenderTypeTextValue || f.DataType || '', isMandatory: !!f.IsMandatory,
+    inlineOptions: Array.isArray(f.Options) ? f.Options.map(o => o.Value).filter(v => v != null && v !== '') : null,
+    createdOn: parseDotNetDate(f.CreatedOn), createdByName: f.CreatedByName || null,
+    modifiedOn: parseDotNetDate(f.ModifiedOn), modifiedByName: f.ModifiedByName || null,
+  }))
+  return { code: 'leads', displayName: 'Leads', fields }
+}
+
+// GetOpportunityDetails -- the single-record detail view behind the Opportunities tab's
+// drill-down. Returns Fields[] with each field's real current Value (the search/list
+// endpoint only returns whatever Include_CSV columns were asked for), plus the record's own
+// CreatedOn/CreatedByName/ModifiedOn/ModifiedByName -- audit metadata for this ONE opportunity
+// instance, distinct from (and not to be confused with) the schema-level Created/Modified
+// question already answered for Opportunity Types (no such data exists at the schema level).
+async function fetchLeadSquaredOpportunityDetail(creds, { opportunityId }) {
+  if (!opportunityId) throw new Error('opportunityId is required')
+  const data = await leadsquaredGet('/v2/OpportunityManagement.svc/GetOpportunityDetails', creds, { OpportunityId: opportunityId })
+  const fields = Array.isArray(data && data.Fields)
+    ? data.Fields.filter(f => f.Value != null && f.Value !== '').map(f => ({ displayName: f.DisplayName || f.SchemaName, value: f.Value }))
+    : []
+  return {
+    opportunityId, displayName: (data && data.DisplayName) || '', fields,
+    createdOn: data && data.CreatedOn, createdByName: (data && data.CreatedByName) || null,
+    modifiedOn: (data && data.ModifiedOn) || null, modifiedByName: (data && data.ModifiedByName) || null,
+  }
+}
+
+// GetActivitiesOfOpportunity -- confirmed live this needs POST (a plain GET 405s, despite the
+// docs listing it as GET). Powers the same drill-down's activity trail. ActivityEvent is
+// resolved to a real name via the account's own ActivityTypes.Get list (same map already used
+// elsewhere) so the trail reads "Manual Lead Qualification - Futwork", not a bare numeric code.
+async function fetchLeadSquaredOpportunityActivities(creds, { opportunityId }) {
+  if (!opportunityId) throw new Error('opportunityId is required')
+  const [data, types] = await Promise.all([
+    leadsquaredPost('/v2/OpportunityManagement.svc/GetActivitiesOfOpportunity', creds, {}, { OpportunityId: opportunityId }),
+    fetchLeadSquaredActivityTypes(creds).catch(() => ({ rows: [] })),
+  ])
+  const nameByCode = {}
+  ;(types.rows || []).forEach(t => { nameByCode[String(t.code)] = t.name })
+  const rows = Array.isArray(data && data.List) ? data.List.map(r => ({
+    activityType: nameByCode[String(r.ActivityEvent)] || ('Event ' + r.ActivityEvent),
+    note: r.ActivityEvent_Note || null, createdOn: r.CreatedOn || null,
+  })) : []
+  return { opportunityId, count: (data && data.RecordCount) || rows.length, rows }
+}
+
 async function handleLeadSquared(req, res, me) {
   // Gated on 'leadsquared' -- the id the LeadSquared page's own route guard uses
   // (src/App.jsx). This previously checked 'lq_ops' instead, which meant the
@@ -597,7 +673,7 @@ async function handleLeadSquared(req, res, me) {
   // one can be granted/revoked independently of the other, matching how every other
   // sidebar page in this app gets its own PAGE_LIST id.
   const { mode } = req.query || {}
-  const FIELD_SCHEMA_MODES = ['activity_schema', 'activity_dropdown_options', 'opportunity_schema']
+  const FIELD_SCHEMA_MODES = ['activity_schema', 'activity_dropdown_options', 'opportunity_schema', 'lead_schema']
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
@@ -616,21 +692,9 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
     if (mode === 'opportunity_schema') return res.status(200).json(await fetchLeadSquaredOpportunitySchema(creds, { code, refresh: refresh === '1' }))
-    // TEMP debug-only: confirm real response shapes before committing to a mapper.
-    // Remove once Lead Field Schema + Opportunity drill-down are built for real.
-    if (mode === 'debug_leads_metadata') {
-      const q = req.query.full === '1' ? {} : { excludeOptionSets: '1' }
-      const data = await leadsquaredGet('/v2/LeadManagement.svc/LeadsMetaData.Get', creds, q)
-      return res.status(200).json(data)
-    }
-    if (mode === 'debug_opportunity_detail') {
-      const data = await leadsquaredGet('/v2/OpportunityManagement.svc/GetOpportunityDetails', creds, { OpportunityId: req.query.opportunityId })
-      return res.status(200).json(data)
-    }
-    if (mode === 'debug_opportunity_activities') {
-      const data = await leadsquaredPost('/v2/OpportunityManagement.svc/GetActivitiesOfOpportunity', creds, {}, { OpportunityId: req.query.opportunityId })
-      return res.status(200).json(data)
-    }
+    if (mode === 'lead_schema') return res.status(200).json(await fetchLeadSquaredLeadSchema(creds, { refresh: refresh === '1' }))
+    if (mode === 'opportunity_detail') return res.status(200).json(await fetchLeadSquaredOpportunityDetail(creds, { opportunityId: req.query.opportunityId }))
+    if (mode === 'opportunity_activities') return res.status(200).json(await fetchLeadSquaredOpportunityActivities(creds, { opportunityId: req.query.opportunityId }))
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })

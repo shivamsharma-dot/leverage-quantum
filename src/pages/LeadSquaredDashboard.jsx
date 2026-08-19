@@ -721,6 +721,127 @@ function getOpportunityFieldValue(r, field) {
   }
 }
 
+// Drill-down modal for a single Opportunity -- fetches the two new record-level
+// APIs in parallel: GetOpportunityDetails (every field's real current value,
+// not just the Include_CSV columns the list view asked for, plus this ONE
+// record's own audit trail) and GetActivitiesOfOpportunity (every logged
+// activity against it, e.g. every Futwork qualification call). Two independent
+// loading states since either call can fail without the other.
+function OpportunityDetailModal({ opportunity, onClose }) {
+  const [detail, setDetail] = useState(null)
+  const [detailError, setDetailError] = useState(null)
+  const [activities, setActivities] = useState(null)
+  const [activitiesError, setActivitiesError] = useState(null)
+
+  useEffect(() => {
+    if (!opportunity) return
+    setDetail(null); setDetailError(null); setActivities(null); setActivitiesError(null)
+    fetchJson(`${API}&mode=opportunity_detail&opportunityId=${encodeURIComponent(opportunity.id)}`)
+      .then(setDetail).catch(e => setDetailError(e.message))
+    fetchJson(`${API}&mode=opportunity_activities&opportunityId=${encodeURIComponent(opportunity.id)}`)
+      .then(setActivities).catch(e => setActivitiesError(e.message))
+  }, [opportunity && opportunity.id])
+
+  useEffect(() => {
+    if (!opportunity) return
+    const onKey = e => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [opportunity])
+
+  if (!opportunity) return null
+
+  const metaItem = (label, value) => (
+    <div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontSize: 12.5, color: C.text, fontWeight: 600, marginTop: 2 }}>{value || <span style={{ color: C.muted, fontWeight: 400 }}>—</span>}</div>
+    </div>
+  )
+
+  return createPortal(
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 900 }} />
+      <div style={{
+        position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 901,
+        width: 'min(640px, 94vw)', maxHeight: '84vh', overflowY: 'auto', background: 'var(--card)',
+        borderRadius: 16, boxShadow: '0 24px 60px -12px rgba(15,23,42,0.35)', border: '0.5px solid ' + C.border, padding: 24,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+          <div>
+            <div style={{ fontSize: 15.5, fontWeight: 800, color: C.text }}>{opportunity.name || 'Opportunity'}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 3, fontFamily: 'monospace' }}>{opportunity.id}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <a href={LEADSQUARED_OPPORTUNITY_URL + opportunity.id} target="_blank" rel="noreferrer"
+              style={{ fontSize: 11.5, fontWeight: 700, color: C.blue, textDecoration: 'none', whiteSpace: 'nowrap' }}>Open in LeadSquared &rarr;</a>
+            <button onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 20, lineHeight: 1, padding: 4 }}>&times;</button>
+          </div>
+        </div>
+
+        {detailError ? (
+          <div style={{ fontSize: 12.5, color: C.muted, padding: '16px 0' }}>{detailError}</div>
+        ) : !detail ? (
+          <div style={{ fontSize: 12.5, color: C.muted, fontStyle: 'italic', padding: '16px 0' }}>Loading record from LeadSquared…</div>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, padding: '14px 16px', background: 'var(--bg3)', borderRadius: 10, margin: '14px 0 18px' }}>
+              {metaItem('Created On', fmtDate(detail.createdOn))}
+              {metaItem('Created By', detail.createdByName)}
+              {metaItem('Modified On', fmtDate(detail.modifiedOn))}
+              {metaItem('Modified By', detail.modifiedByName)}
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+              Full record &middot; {detail.fields.length} field{detail.fields.length === 1 ? '' : 's'} with a value
+            </div>
+            <div style={{ border: '0.5px solid ' + C.border, borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+              {detail.fields.length === 0 && <div style={{ padding: '12px 14px', fontSize: 12.5, color: C.muted }}>No populated fields.</div>}
+              {detail.fields.map((f, i) => (
+                <div key={f.displayName + i} style={{
+                  display: 'grid', gridTemplateColumns: '38% 1fr', gap: 10, padding: '8px 14px',
+                  background: i % 2 === 1 ? 'var(--bg3)' : 'transparent',
+                  borderTop: i > 0 ? '0.5px solid ' + C.border : 'none',
+                }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted }}>{f.displayName}</span>
+                  <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600, wordBreak: 'break-word' }}>{String(f.value)}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+          Activity trail{activities ? ' · ' + fmtN(activities.count) : ''}
+        </div>
+        {activitiesError ? (
+          <div style={{ fontSize: 12.5, color: C.muted }}>{activitiesError}</div>
+        ) : !activities ? (
+          <div style={{ fontSize: 12.5, color: C.muted, fontStyle: 'italic' }}>Loading activity trail…</div>
+        ) : activities.rows.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: C.muted }}>No activities logged against this opportunity.</div>
+        ) : (
+          <div style={{ border: '0.5px solid ' + C.border, borderRadius: 10, overflow: 'hidden' }}>
+            {activities.rows.map((a, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '9px 14px',
+                background: i % 2 === 1 ? 'var(--bg3)' : 'transparent',
+                borderTop: i > 0 ? '0.5px solid ' + C.border : 'none',
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text }}>{a.activityType}</div>
+                  {a.note && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{a.note}</div>}
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap', flexShrink: 0 }}>{fmtDate(a.createdOn)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>,
+    document.body
+  )
+}
+
 function OpportunitiesTab() {
   const [rows, setRows] = useState([])
   const [fieldColumns, setFieldColumns] = useState([])
@@ -739,6 +860,7 @@ function OpportunitiesTab() {
   const [advSearch, setAdvSearch] = useState(null)
   const [truncated, setTruncated] = useState(false)
   const [allTimeTotal, setAllTimeTotal] = useState(null)
+  const [viewOpp, setViewOpp] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -797,6 +919,7 @@ function OpportunitiesTab() {
           <div style={{ overflowX: 'auto', border: '1px solid ' + C.border, borderRadius: 12 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>
+                <Th width={54}></Th>
                 {!hiddenCols.has('Contact') && <Th>Contact</Th>}
                 {!hiddenCols.has('Status') && <Th>Status</Th>}
                 {!hiddenCols.has('Owner') && <Th>Owner</Th>}
@@ -806,6 +929,12 @@ function OpportunitiesTab() {
               <tbody>
                 {pageRows.map(r => (
                   <tr key={r.OpportunityId}>
+                    <Td>
+                      <button type="button" onClick={() => setViewOpp({ id: r.OpportunityId, name: (r.Fields && r.Fields['Opportunity Name']) || r.ContactName })}
+                        style={{ border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.blue, fontSize: 11, fontWeight: 700, padding: '4px 9px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>
+                        View
+                      </button>
+                    </Td>
                     {!hiddenCols.has('Contact') && <Td><ContactLink id={r.RelatedProspectId} name={r.ContactName} /></Td>}
                     {!hiddenCols.has('Status') && <Td><StatusPill value={r.Status} /></Td>}
                     {!hiddenCols.has('Owner') && <Td>{r.OwnerName || '—'}</Td>}
@@ -825,6 +954,7 @@ function OpportunitiesTab() {
           <Pagination page={page} totalPages={totalPages} onPage={setPage} count={filtered.length} label="opportunities" />
         </>
       )}
+      <OpportunityDetailModal opportunity={viewOpp} onClose={() => setViewOpp(null)} />
     </>
   )
 }

@@ -24,6 +24,7 @@ function useSchema() {
   const [types, setTypes] = useState(null)
   const [schemas, setSchemas] = useState({})
   const [oppSchema, setOppSchema] = useState(null)
+  const [leadSchema, setLeadSchema] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
@@ -34,9 +35,10 @@ function useSchema() {
     if (!bypass) setLoading(true); else setRefreshing(true)
     setError(null)
     try {
-      const [typesData, oppData] = await Promise.all([
+      const [typesData, oppData, leadData] = await Promise.all([
         apiGet('activity_types'),
         apiGet('opportunity_schema', bypass ? { refresh: '1' } : {}).catch(e => ({ error: e.message })),
+        apiGet('lead_schema', bypass ? { refresh: '1' } : {}).catch(e => ({ error: e.message })),
       ])
       const futworkTypes = (typesData.rows || []).filter(t => (t.name || '').toLowerCase().includes('futwork'))
       const schemaResults = await Promise.all(
@@ -47,6 +49,7 @@ function useSchema() {
       setTypes(futworkTypes)
       setSchemas(map)
       setOppSchema(oppData)
+      setLeadSchema(leadData)
       setLastSync(new Date())
     } catch (e) {
       setError(e.message)
@@ -57,7 +60,7 @@ function useSchema() {
   }
 
   useEffect(() => { load() }, [])
-  return { types, schemas, oppSchema, loading, error, lastSync, refreshing, refresh: () => load({ refresh: true }) }
+  return { types, schemas, oppSchema, leadSchema, loading, error, lastSync, refreshing, refresh: () => load({ refresh: true }) }
 }
 
 // Brand-only palette, one tone per DataType family so a long field list reads by
@@ -80,6 +83,17 @@ function typeMeta(dataType) {
 // never fired against a String/User/Object field, which would have nothing to return.
 function isDropdownType(dataType) {
   return (dataType || '').toLowerCase().includes('dropdown')
+}
+
+// Lead fields are the one place LeadSquared's own metadata genuinely carries
+// per-field audit info (CreatedOn/CreatedByName/ModifiedOn/ModifiedByName) --
+// confirmed absent on both Activity and Opportunity field schemas. Format to
+// match the rest of the app's short date convention.
+function fmtDate(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 // Table/grid glyph for the per-card icon chip -- distinct from the KPI_ICONS set,
@@ -179,12 +193,15 @@ const CARD_ACCENTS = [C.navy, C.blue, C.cyan, C.green]
 function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
   const th = { padding: '10px 14px', textAlign: 'left', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1, borderBottom: '0.5px solid ' + C.border }
   const td = { padding: '10px 14px', fontSize: 12.5, color: C.text, verticalAlign: 'top', whiteSpace: 'nowrap' }
+  const isLead = entityType === 'lead'
 
   const filtered = useMemo(() => {
     if (!query.trim()) return fields
     const q = query.trim().toLowerCase()
     return fields.filter(f => f.displayName.toLowerCase().includes(q) || f.schemaName.toLowerCase().includes(q))
   }, [fields, query])
+
+  const colCount = 5 + (isLead ? 4 : 0)
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -195,16 +212,23 @@ function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
           <th style={th}>Type</th>
           <th style={th}>Mandatory</th>
           <th style={th}>Dropdown Options</th>
+          {isLead && <>
+            <th style={th}>Created On</th>
+            <th style={th}>Created By</th>
+            <th style={th}>Modified On</th>
+            <th style={th}>Modified By</th>
+          </>}
         </tr></thead>
         <tbody>
           {filtered.map((f, i) => {
             const tm = typeMeta(f.dataType)
             const isDropdown = isDropdownType(f.dataType)
-            // Activity fields: every dropdown has a live lookup API. Opportunity fields:
-            // no such API exists (confirmed) -- only fields where LeadSquared's own
-            // metadata call happened to embed real values (f.inlineOptions) can show any.
-            const hasLiveOptions = entityType === 'opportunity' ? isDropdown && f.inlineOptions && f.inlineOptions.length > 0 : isDropdown
-            const isUnavailableDropdown = entityType === 'opportunity' && isDropdown && !hasLiveOptions
+            // Activity fields: every dropdown has a live lookup API. Opportunity/Lead
+            // fields: no such API exists (confirmed) -- only fields where LeadSquared's
+            // own metadata call happened to embed real values (f.inlineOptions) can show any.
+            const usesInline = entityType === 'opportunity' || entityType === 'lead'
+            const hasLiveOptions = usesInline ? isDropdown && f.inlineOptions && f.inlineOptions.length > 0 : isDropdown
+            const isUnavailableDropdown = usesInline && isDropdown && !hasLiveOptions
             return (
               <tr key={f.schemaName} style={{ background: i % 2 === 1 ? 'var(--bg3)' : 'transparent' }}>
                 <td style={{ ...td, fontWeight: 700, whiteSpace: 'normal' }}>{f.displayName}</td>
@@ -221,22 +245,28 @@ function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
                 </td>
                 <td style={td}>
                   {hasLiveOptions ? (
-                    <button type="button" onClick={() => onViewOptions(code, f.schemaName, f.displayName, entityType === 'opportunity' ? f.inlineOptions : null)}
+                    <button type="button" onClick={() => onViewOptions(code, f.schemaName, f.displayName, usesInline ? f.inlineOptions : null)}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.blue, fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
                       View options
                     </button>
                   ) : isUnavailableDropdown ? (
-                    <span style={{ fontSize: 11.5, color: C.muted }} title="LeadSquared has no API to read this field's values for Opportunity types">Not available via API</span>
+                    <span style={{ fontSize: 11.5, color: C.muted }} title={'LeadSquared has no API to read this field\'s values for ' + (entityType === 'lead' ? 'Lead' : 'Opportunity') + ' types'}>Not available via API</span>
                   ) : (
                     <span style={{ fontSize: 11.5, color: C.muted }}>Not applicable</span>
                   )}
                 </td>
+                {isLead && <>
+                  <td style={td}>{fmtDate(f.createdOn) || <span style={{ color: C.muted }}>—</span>}</td>
+                  <td style={td}>{f.createdByName || <span style={{ color: C.muted }}>—</span>}</td>
+                  <td style={td}>{fmtDate(f.modifiedOn) || <span style={{ color: C.muted }}>—</span>}</td>
+                  <td style={td}>{f.modifiedByName || <span style={{ color: C.muted }}>—</span>}</td>
+                </>}
               </tr>
             )
           })}
           {filtered.length === 0 && (
-            <tr><td colSpan={5} style={{ ...td, textAlign: 'center', color: C.muted, padding: '24px 12px', whiteSpace: 'normal' }}>No fields match "{query}".</td></tr>
+            <tr><td colSpan={colCount} style={{ ...td, textAlign: 'center', color: C.muted, padding: '24px 12px', whiteSpace: 'normal' }}>No fields match "{query}".</td></tr>
           )}
         </tbody>
       </table>
@@ -281,14 +311,14 @@ function ActivityCard({ type, schema, accent, onViewOptions, entityType = 'activ
 }
 
 export default function LeadQualificationSchemaDashboard() {
-  const { types, schemas, oppSchema, loading, error, lastSync, refreshing, refresh } = useSchema()
+  const { types, schemas, oppSchema, leadSchema, loading, error, lastSync, refreshing, refresh } = useSchema()
   const [optionsTarget, setOptionsTarget] = useState(null)
   const [selectedKey, setSelectedKey] = useState(null)
 
   // One flat list of everything selectable in the header dropdown -- each
-  // Futwork activity type plus the Opportunity type, in that order. Only one
-  // is ever shown below at a time, instead of stacking all of them (119 +
-  // 105 fields was a lot of scrolling just to reach Opportunity).
+  // Futwork activity type, then the Opportunity type, then Leads, in that
+  // order. Only one is ever shown below at a time, instead of stacking all
+  // of them (119 + 105 fields was a lot of scrolling just to reach Opportunity).
   const views = useMemo(() => {
     const out = (types || []).map((t, i) => ({
       key: 'act-' + t.code, name: t.name, code: t.code, entityType: 'activity',
@@ -300,8 +330,14 @@ export default function LeadQualificationSchemaDashboard() {
         entityType: 'opportunity', accent: C.green, schema: oppSchema,
       })
     }
+    if (leadSchema) {
+      out.push({
+        key: 'lead', name: (leadSchema && leadSchema.displayName) || 'Leads', code: leadSchema.code || 'leads',
+        entityType: 'lead', accent: C.blue, schema: leadSchema,
+      })
+    }
     return out
-  }, [types, schemas, oppSchema])
+  }, [types, schemas, oppSchema, leadSchema])
 
   useEffect(() => {
     if (!selectedKey && views.length) setSelectedKey(views[0].key)
@@ -377,12 +413,19 @@ export default function LeadQualificationSchemaDashboard() {
               confirmed directly in Settings &rsaquo; Custom Notable Activity Type, where a
               String field's own edit screen has no options concept at all.
               <br /><br />
-              The <strong>Opportunity Fields</strong> section below is the same schema for
-              Settings &rsaquo; Opportunities' field configuration. LeadSquared has no live
-              lookup API for Opportunity dropdown values (confirmed -- the Activity one
-              rejects an Opportunity code outright), so a dropdown field there only shows
-              options when LeadSquared's own metadata happens to embed them directly;
-              everything else reads "Not available via API" rather than a fake button.
+              The <strong>Opportunity</strong> view is the same schema for Settings &rsaquo;
+              Opportunities' field configuration. LeadSquared has no live lookup API for
+              Opportunity dropdown values (confirmed -- the Activity one rejects an
+              Opportunity code outright), so a dropdown field there only shows options
+              when LeadSquared's own metadata happens to embed them directly; everything
+              else reads "Not available via API" rather than a fake button.
+              <br /><br />
+              The <strong>Leads</strong> view reads LeadSquared's own Lead field metadata
+              (<strong>LeadsMetaData.Get</strong>). This is the one field family where
+              LeadSquared itself tracks who created or last changed a field and when --
+              those 4 extra columns are real LeadSquared data, not something Quantum
+              observed or inferred; a blank cell means LeadSquared has no record for that
+              field, not a gap on our end.
             </p>
           </div>
 
