@@ -239,7 +239,14 @@ export default function FutworkErrorsDashboard() {
     const days = []
     for (let i = 13; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); days.push(localDateKey(d)) }
     const map = {}
-    days.forEach(d => { map[d] = { day: d.slice(5).replace('-', '/'), ai: 0, human: 0 } })
+    days.forEach(d => {
+      // "14 Aug" instead of the raw "08/14" sheet-key slice -- day-then-month
+      // reads unambiguously (matches fmtTime/the rest of this app's date labels),
+      // where MM/DD is easy to misread as DD/MM at a glance.
+      const [y, mo, da] = d.split('-').map(Number)
+      const label = new Date(y, mo - 1, da).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+      map[d] = { day: label, ai: 0, human: 0 }
+    })
     rows.forEach(r => { if (map[r.dateKey]) { if (r.flow === 'Futwork AI') map[r.dateKey].ai++; else map[r.dateKey].human++ } })
     return days.map(d => map[d])
   }, [rows])
@@ -376,7 +383,7 @@ export default function FutworkErrorsDashboard() {
                   <BarChart data={byDay} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
                     <defs><BarGrad id="g-fwk-ai" color={C.navy} /><BarGrad id="g-fwk-human" color={C.cyan} /></defs>
                     <CartesianGrid vertical={false} stroke="#EEF1F5" />
-                    <XAxis dataKey="day" tick={{ fontSize: 10.5, fill: C.muted }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="day" tick={{ fontSize: 11.5, fontWeight: 600, fill: C.sub }} axisLine={false} tickLine={{ stroke: C.border }} tickMargin={8} interval={0} />
                     <YAxis hide />
                     <Tooltip contentStyle={{ fontSize: 11.5, borderRadius: 10, border: '0.5px solid ' + C.border }} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
