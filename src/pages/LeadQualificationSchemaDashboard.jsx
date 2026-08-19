@@ -188,6 +188,57 @@ function DropdownOptionsModal({ target, onClose }) {
   )
 }
 
+// Header "i" popover -- same pattern as LeadSquaredDashboard.jsx's PageInfoButton.
+// Was previously a banner always rendered above the table, which pushed real
+// content down for no reason on every visit; now it's tucked away and opened
+// on demand, same as every other page's metric-explainer button in this app.
+function FieldSchemaInfoButton() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(v => !v)} title="What this page shows, and why some cells read differently"
+        style={{ width: 30, height: 30, borderRadius: 8, border: '0.5px solid ' + (open ? C.blue : C.border), background: open ? C.blueBg : 'var(--card)', color: C.navy, fontSize: 14, fontWeight: 700, fontStyle: 'italic', fontFamily: 'Georgia,serif', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>i</button>
+      {open && <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />}
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 200, width: 460, maxHeight: '76vh', overflowY: 'auto', background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 12, boxShadow: '0 14px 40px rgba(15,23,42,0.16)', padding: '16px 18px', textAlign: 'left', fontFamily: FONT }}>
+          <p style={{ fontSize: 12.5, color: C.text, margin: 0, lineHeight: 1.6 }}>
+            Read live from LeadSquared's own Custom Notable Activity Type API -- the exact
+            schema Settings &rsaquo; Custom Notable Activity Type shows for every activity type
+            Futwork postbacks write to. This is what each raw <strong>mx_Custom_N</strong> code
+            on the Futwork Errors page actually maps to. <strong>Refresh</strong> re-fetches
+            directly from LeadSquared, so a field edited there shows up here without a deploy.
+            Only <strong>Dropdown</strong>-type fields carry a value list in LeadSquared --
+            confirmed directly in Settings &rsaquo; Custom Notable Activity Type, where a
+            String field's own edit screen has no options concept at all.
+            <br /><br />
+            The <strong>Opportunity</strong> view is the same schema for Settings &rsaquo;
+            Opportunities' field configuration. LeadSquared has no live lookup API for
+            Opportunity dropdown values (confirmed -- the Activity one rejects an
+            Opportunity code outright), so a dropdown field there only shows options
+            when LeadSquared's own metadata happens to embed them directly; everything
+            else reads "Not available via API" rather than a fake button. Note:
+            <strong> Created On / Created By / Modified On / Modified By</strong> already
+            appear as their own rows here (real LeadSquared fields, DataType
+            DateTime/ActiveUsers) -- that's the same audit stamp shown on every record
+            in the drill-down modal, just as an ordinary field rather than a per-field
+            schema property. There's no separate column for it here because it isn't
+            schema-level metadata the way Leads' own field history is (below) -- it's a
+            real field on the record, so it's a row, not a column.
+            <br /><br />
+            The <strong>Leads</strong> view reads LeadSquared's own Lead field metadata
+            (<strong>LeadsMetaData.Get</strong>). This is the <em>one</em> field family where
+            LeadSquared tracks <em>schema-level</em> history -- when a field's own
+            definition (not a record) was created or last changed, and by whom. Those 4
+            extra columns are real LeadSquared data, not something Quantum observed or
+            inferred; a blank cell means LeadSquared has no record for that field, not a
+            gap on our end.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const CARD_ACCENTS = [C.navy, C.blue, C.cyan, C.green]
 
 function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
@@ -406,51 +457,11 @@ export default function LeadQualificationSchemaDashboard() {
             )}
             {lastSync && <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}{refreshing ? '…' : ''}</span>}
             <Button onClick={refresh} disabled={refreshing} size="sm">{refreshing ? 'Refreshing' : 'Refresh'}</Button>
+            <FieldSchemaInfoButton />
           </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
-          <div style={{
-            display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px', marginBottom: 20,
-            background: C.navyBg, borderRadius: 12, border: '0.5px solid ' + C.navyBg,
-          }}>
-            <span style={{ color: C.navy, flexShrink: 0, marginTop: 1 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-            </span>
-            <p style={{ fontSize: 12.5, color: C.text, margin: 0, lineHeight: 1.6 }}>
-              Read live from LeadSquared's own Custom Notable Activity Type API -- the exact
-              schema Settings &rsaquo; Custom Notable Activity Type shows for every activity type
-              Futwork postbacks write to. This is what each raw <strong>mx_Custom_N</strong> code
-              on the Futwork Errors page actually maps to. <strong>Refresh</strong> re-fetches
-              directly from LeadSquared, so a field edited there shows up here without a deploy.
-              Only <strong>Dropdown</strong>-type fields carry a value list in LeadSquared --
-              confirmed directly in Settings &rsaquo; Custom Notable Activity Type, where a
-              String field's own edit screen has no options concept at all.
-              <br /><br />
-              The <strong>Opportunity</strong> view is the same schema for Settings &rsaquo;
-              Opportunities' field configuration. LeadSquared has no live lookup API for
-              Opportunity dropdown values (confirmed -- the Activity one rejects an
-              Opportunity code outright), so a dropdown field there only shows options
-              when LeadSquared's own metadata happens to embed them directly; everything
-              else reads "Not available via API" rather than a fake button. Note:
-              <strong> Created On / Created By / Modified On / Modified By</strong> already
-              appear as their own rows here (real LeadSquared fields, DataType
-              DateTime/ActiveUsers) -- that's the same audit stamp shown on every record
-              in the drill-down modal, just as an ordinary field rather than a per-field
-              schema property. There's no separate column for it here because it isn't
-              schema-level metadata the way Leads' own field history is (below) -- it's a
-              real field on the record, so it's a row, not a column.
-              <br /><br />
-              The <strong>Leads</strong> view reads LeadSquared's own Lead field metadata
-              (<strong>LeadsMetaData.Get</strong>). This is the <em>one</em> field family where
-              LeadSquared tracks <em>schema-level</em> history -- when a field's own
-              definition (not a record) was created or last changed, and by whom. Those 4
-              extra columns are real LeadSquared data, not something Quantum observed or
-              inferred; a blank cell means LeadSquared has no record for that field, not a
-              gap on our end.
-            </p>
-          </div>
-
           <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
             <PremKPI label="Types Available" value={fmtN(stats.typeCount)} sub="switch with the Viewing dropdown above" accent={C.navy} icon={KPI_ICONS.total} />
             <PremKPI label="Total Fields" value={fmtN(stats.fieldCount)} sub="on the selected type" accent={C.blue} icon={KPI_ICONS.ai} />
