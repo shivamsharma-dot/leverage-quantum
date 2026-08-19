@@ -700,11 +700,6 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
-    if (mode === 'debug_opp_field_keys') {
-      const data = await fetchLeadSquaredOpportunityMeta(creds, { eventCode: code }, true)
-      const f = (data && data.Fields && data.Fields[0]) || {}
-      return res.status(200).json({ keys: Object.keys(f), sample: f })
-    }
     if (mode === 'opportunity_schema') return res.status(200).json(await fetchLeadSquaredOpportunitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'lead_schema') return res.status(200).json(await fetchLeadSquaredLeadSchema(creds, { refresh: refresh === '1' }))
     if (mode === 'opportunity_detail') return res.status(200).json(await fetchLeadSquaredOpportunityDetail(creds, { opportunityId: req.query.opportunityId }))
