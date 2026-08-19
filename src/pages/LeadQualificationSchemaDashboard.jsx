@@ -66,13 +66,14 @@ function typeMeta(dataType) {
   return { color: C.green, bg: C.greenBg }
 }
 
-function fmtDate(iso) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-function fmtTimeOnly(iso) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+// Only "Dropdown"-family types actually have a value list in LeadSquared -- confirmed
+// directly in Settings > Custom Notable Activity Type: a Dropdown field's gear icon
+// opens "Enter Dropdown Options" with real configured values, while a String field's
+// gear icon opens a bare "Mask Value" checkbox with no options concept at all. So
+// "View options" only renders (and only ever gets called) for dropdown-type fields --
+// never fired against a String/User/Object field, which would have nothing to return.
+function isDropdownType(dataType) {
+  return (dataType || '').toLowerCase().includes('dropdown')
 }
 
 // Table/grid glyph for the per-card icon chip -- distinct from the KPI_ICONS set,
@@ -169,23 +170,15 @@ function SchemaTable({ code, fields, query, onViewOptions }) {
           <th style={th}>Schema Name</th>
           <th style={th}>Type</th>
           <th style={th}>Mandatory</th>
-          <th style={th}>Created Date</th>
-          <th style={th}>Created Time</th>
-          <th style={th}>Modified Date</th>
-          <th style={th}>Modified Time</th>
           <th style={th}>Dropdown Options</th>
         </tr></thead>
         <tbody>
           {filtered.map((f, i) => {
             const tm = typeMeta(f.dataType)
+            const hasOptions = isDropdownType(f.dataType)
             return (
               <tr key={f.schemaName} style={{ background: i % 2 === 1 ? 'var(--bg3)' : 'transparent' }}>
-                <td style={{ ...td, fontWeight: 700, whiteSpace: 'normal' }}>
-                  {f.displayName}
-                  {f.isNew && (
-                    <span style={{ marginLeft: 7, fontSize: 9.5, fontWeight: 800, color: '#fff', background: `linear-gradient(135deg, ${C.green}, ${C.cyan})`, padding: '2px 7px', borderRadius: 999, letterSpacing: '0.03em' }}>NEW</span>
-                  )}
-                </td>
+                <td style={{ ...td, fontWeight: 700, whiteSpace: 'normal' }}>{f.displayName}</td>
                 <td style={td}>
                   <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: C.text, background: 'var(--bg3)', padding: '3px 8px', borderRadius: 6 }}>{f.schemaName}</span>
                 </td>
@@ -197,22 +190,22 @@ function SchemaTable({ code, fields, query, onViewOptions }) {
                     ? <span style={{ fontSize: 10.5, fontWeight: 800, color: C.green, background: C.greenBg, padding: '3px 9px', borderRadius: 999 }}>YES</span>
                     : <span style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, background: 'var(--bg3)', padding: '3px 9px', borderRadius: 999 }}>NO</span>}
                 </td>
-                <td style={{ ...td, color: C.muted }}>{fmtDate(f.firstSeenAt)}</td>
-                <td style={{ ...td, color: C.muted }}>{fmtTimeOnly(f.firstSeenAt)}</td>
-                <td style={{ ...td, color: C.muted }}>{fmtDate(f.lastChangedAt)}</td>
-                <td style={{ ...td, color: C.muted }}>{fmtTimeOnly(f.lastChangedAt)}</td>
                 <td style={td}>
-                  <button type="button" onClick={() => onViewOptions(code, f.schemaName, f.displayName)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.blue, fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
-                    View options
-                  </button>
+                  {hasOptions ? (
+                    <button type="button" onClick={() => onViewOptions(code, f.schemaName, f.displayName)}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.blue, fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
+                      View options
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: 11.5, color: C.muted }}>Not applicable</span>
+                  )}
                 </td>
               </tr>
             )
           })}
           {filtered.length === 0 && (
-            <tr><td colSpan={9} style={{ ...td, textAlign: 'center', color: C.muted, padding: '24px 12px', whiteSpace: 'normal' }}>No fields match "{query}".</td></tr>
+            <tr><td colSpan={5} style={{ ...td, textAlign: 'center', color: C.muted, padding: '24px 12px', whiteSpace: 'normal' }}>No fields match "{query}".</td></tr>
           )}
         </tbody>
       </table>
@@ -267,9 +260,8 @@ export default function LeadQualificationSchemaDashboard() {
     return {
       typeCount: (types || []).length,
       fieldCount: allFields.length,
-      dropdownCount: allFields.filter(f => (f.dataType || '').toLowerCase().includes('dropdown')).length,
+      dropdownCount: allFields.filter(f => isDropdownType(f.dataType)).length,
       mandatoryCount: allFields.filter(f => f.isMandatory).length,
-      newCount: allFields.filter(f => f.isNew).length,
     }
   }, [types, schemas])
 
@@ -325,25 +317,17 @@ export default function LeadQualificationSchemaDashboard() {
               Futwork postbacks write to. This is what each raw <strong>mx_Custom_N</strong> code
               on the Futwork Errors page actually maps to. <strong>Refresh</strong> re-fetches
               directly from LeadSquared, so a field edited there shows up here without a deploy.
-              <br /><br />
-              <strong>On Created/Modified Date &amp; Time:</strong> LeadSquared's own API carries
-              no per-field created/modified timestamp or author at all -- confirmed directly
-              against its live response, and its own Settings screen doesn't show these either.
-              So these columns are Quantum's own observation history, not LeadSquared's: the first
-              moment this page ever saw a field, and the last time its type/mandatory/name changed.
-              That means every field will read as freshly "created" the first time this ships, and
-              a genuine <strong>NEW</strong> badge only means "first seen by Quantum in the last 15
-              days" -- there is no data source anywhere (LeadSquared's API or its UI) that can say
-              who added or changed a field, so no Created By / Modified By column exists.
+              Only <strong>Dropdown</strong>-type fields carry a value list in LeadSquared --
+              confirmed directly in Settings &rsaquo; Custom Notable Activity Type, where a
+              String field's own edit screen has no options concept at all.
             </p>
           </div>
 
-          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
+          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
             <PremKPI label="Activity Types" value={fmtN(stats.typeCount)} sub="Futwork-related, on this account" accent={C.navy} icon={KPI_ICONS.total} />
             <PremKPI label="Total Fields" value={fmtN(stats.fieldCount)} sub="across all activity types" accent={C.blue} icon={KPI_ICONS.ai} />
             <PremKPI label="Dropdown Fields" value={fmtN(stats.dropdownCount)} sub="where invalid values get rejected" accent={C.cyan} icon={KPI_ICONS.bot} />
             <PremKPI label="Mandatory Fields" value={fmtN(stats.mandatoryCount)} sub="required on every postback" accent={C.green} icon={KPI_ICONS.agent} />
-            <PremKPI label="New Fields (15d)" value={fmtN(stats.newCount)} sub="first seen by Quantum recently" accent={C.navy} icon={KPI_ICONS.globe} />
           </div>
 
           {(types || []).length > 1 && (
