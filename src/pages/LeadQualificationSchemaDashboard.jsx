@@ -187,7 +187,7 @@ function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
   }, [fields, query])
 
   return (
-    <div style={{ maxHeight: 440, overflowY: 'auto', overflowX: 'auto' }}>
+    <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead><tr>
           <th style={th}>Display Name</th>
