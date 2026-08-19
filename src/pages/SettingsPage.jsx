@@ -290,6 +290,8 @@ const DATA_SOURCES = [
   { name: 'AI QL Detail Sheet', editKey: 'sheet_url_ai_ql_detail', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=AIDetailedQL' },
   { name: 'Human Unassigned Sheet', editKey: 'sheet_url_human_unassigned', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1FsfBQAAKWwnDCLFRbvamFaJiqs2nq8Wltk5e8LGAhRo/gviz/tq?tqx=out:csv&sheet=human_unassigned' },
   { name: 'AI Unassigned Sheet', editKey: 'sheet_url_ai_unassigned', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1FsfBQAAKWwnDCLFRbvamFaJiqs2nq8Wltk5e8LGAhRo/gviz/tq?tqx=out:csv&sheet=AI_unassigned' },
+  { name: 'Futwork AI Postback Log', editKey: 'sheet_url_futwork_ai_postback', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1hteIK1IQaI83S-HOOau4oPqtzcDOZVxSHxIbEwSwxqk/gviz/tq?tqx=out:csv&gid=1005911839' },
+  { name: 'Futwork Postback Log', editKey: 'sheet_url_futwork_postback', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1hteIK1IQaI83S-HOOau4oPqtzcDOZVxSHxIbEwSwxqk/gviz/tq?tqx=out:csv&gid=0' },
   // Live API, not a sheet -- credentials are Vercel env only (LEADSQUARED_ACCESS_KEY/
   // SECRET_KEY), never app_preferences. No editKey/defaultUrl, so this falls into the same
   // 'api' category as Meta Graph API / Google Ads API (see sourceCategory()) and gets the

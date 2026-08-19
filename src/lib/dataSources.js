@@ -17,6 +17,8 @@ export const SHEET_PREF_KEYS = {
     aiQlDetail: 'sheet_url_ai_ql_detail',
     humanUnassigned: 'sheet_url_human_unassigned',
     aiUnassigned: 'sheet_url_ai_unassigned',
+    futworkAiPostback: 'sheet_url_futwork_ai_postback',
+    futworkPostback: 'sheet_url_futwork_postback',
 }
 
 // Per-key cache (60s TTL) + in-flight dedup, so pages that fire several

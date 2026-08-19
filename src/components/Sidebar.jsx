@@ -119,6 +119,7 @@ export const NAV = [
           { to: '/dashboard/lq-ops-ai-detail', label: 'AI QL Detail', matchType: 'route' },
           { to: '/dashboard/lq-ops-human-unassigned', label: 'Human Unassigned', matchType: 'route' },
           { to: '/dashboard/lq-ops-ai-unassigned', label: 'AI Unassigned', matchType: 'route' },
+          { to: '/dashboard/futwork-errors', label: 'Futwork Errors', matchType: 'route' },
         ]
       },
       { to: '/dashboard/whatsapp',     icon: <WhatsAppIcon />, label: 'WhatsApp',     end: false },
@@ -166,6 +167,7 @@ export const PAGE_LIST = [
   { id:'lq_ops_ai_detail', label:'AI QL Detail', path:'/dashboard/lq-ops-ai-detail', adminOnly:false },
   { id:'lq_ops_human_unassigned', label:'Human Unassigned', path:'/dashboard/lq-ops-human-unassigned', adminOnly:false },
   { id:'lq_ops_ai_unassigned', label:'AI Unassigned', path:'/dashboard/lq-ops-ai-unassigned', adminOnly:false },
+  { id:'futwork_errors', label:'Futwork Errors', path:'/dashboard/futwork-errors', adminOnly:false },
   { id:'whatsapp',     label:'WhatsApp',     path:'/dashboard/whatsapp',    adminOnly:false },
   { id:'referral', label:'Referral', path:'/dashboard/referral', adminOnly:false },
   { id:'leads_assigned', label:'Leads Assigned', path:'/dashboard/leads-assigned', adminOnly:false },
@@ -207,6 +209,9 @@ function PnLIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill=
 // Daily Cash Flow -- money actually moving (two opposing arrows), distinct from
 // the accrual/ledger framing of PnLIcon.
 function CashFlowIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3v6h-6"/><path d="M17 9a8 8 0 00-14 4"/><path d="M7 21v-6h6"/><path d="M7 15a8 8 0 0014-4"/></svg> }
+// Futwork Errors -- a broken-link / integration-fault glyph (chain link with a gap and
+// a bolt), distinct from PeopleIcon/BotIcon used for the QL Ops volume pages.
+function FutworkErrorIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.5 13.5L8 16a3 3 0 01-4.24-4.24l3-3a3 3 0 014.13-.1"/><path d="M13.5 10.5L16 8a3 3 0 014.24 4.24l-3 3a3 3 0 01-4.13.1"/><path d="M11.5 12.5l1-1"/></svg> }
 
 const ICON_MAP = {
   'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'Overall (BigQuery)': <OverallIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
@@ -217,6 +222,7 @@ const ICON_MAP = {
   'AI QL Detail': <BotIcon/>,
   'Human Unassigned': <PeopleIcon/>,
   'AI Unassigned': <BotIcon/>,
+  'Futwork Errors': <FutworkErrorIcon/>,
   'Bing Ads': <BingAdsIcon/>,
   'Referral': <ReferralIcon/>, 'Leads Assigned': <LeadsAssignedIcon/>,
   'WhatsApp': <WhatsAppIcon/>,
