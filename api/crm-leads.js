@@ -549,8 +549,18 @@ async function fetchLeadSquaredOpportunityMeta(creds, { eventCode }, bypassCache
 }
 
 // Field Schema page, Opportunity side. Same Field shape as GetActivitySetting
-// (confirmed live: identical key list), so this mirrors fetchLeadSquaredActivitySchema
-// exactly -- EXCEPT for dropdown values. Confirmed empirically (a real 500, not a
+// (confirmed live: identical key list -- no field object carries a CreatedOn/
+// ModifiedOn/CreatedBy/ModifiedBy PROPERTY the way Leads' own field metadata
+// does), so this mirrors fetchLeadSquaredActivitySchema exactly -- EXCEPT for
+// dropdown values, and one real distinction worth remembering: LeadSquared's
+// Opportunity Type DOES ship real ModifiedOn/ModifiedBy/CreatedOn/CreatedBy
+// FIELDS in this same Fields array (SchemaName/DisplayName exactly those,
+// DataType DateTime/ActiveUsers, IsReadOnly true) -- confirmed live. They're
+// just ordinary per-RECORD audit fields (same concept as any record's own
+// created/modified stamp, already surfaced in the drill-down modal's "Full
+// record" list), not schema-level "when was this field configured" metadata
+// -- so they flow through as normal rows below, not as extra columns. Confirmed
+// empirically (a real 500, not a
 // guess) that Activity's dropdown-values endpoint explicitly rejects an Opportunity
 // code ("Activity field should be of type independent dropdown") -- LeadSquared has
 // no separate API for Opportunity dropdown values at all. The only real values
@@ -700,19 +710,6 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
-    if (mode === 'debug_opp_field_full') {
-      const data = await fetchLeadSquaredOpportunityMeta(creds, { eventCode: code }, true)
-      const fields = (data && data.Fields) || []
-      const auditLikeKeys = new Set()
-      fields.forEach(f => Object.keys(f).forEach(k => { if (/created|modified/i.test(k)) auditLikeKeys.add(k) }))
-      const auditLikeSchemaNames = fields.filter(f => /created|modified/i.test(f.SchemaName || '') || /created|modified/i.test(f.DisplayName || ''))
-      return res.status(200).json({
-        totalFields: fields.length,
-        auditLikePropertyKeysSeenAcrossAllFields: Array.from(auditLikeKeys),
-        fieldsWhoseNameLooksLikeCreatedOrModified: auditLikeSchemaNames,
-        allSchemaNames: fields.map(f => f.SchemaName),
-      })
-    }
     if (mode === 'opportunity_schema') return res.status(200).json(await fetchLeadSquaredOpportunitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'lead_schema') return res.status(200).json(await fetchLeadSquaredLeadSchema(creds, { refresh: refresh === '1' }))
     if (mode === 'opportunity_detail') return res.status(200).json(await fetchLeadSquaredOpportunityDetail(creds, { opportunityId: req.query.opportunityId }))

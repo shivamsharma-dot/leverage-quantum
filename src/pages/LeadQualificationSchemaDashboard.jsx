@@ -193,15 +193,21 @@ const CARD_ACCENTS = [C.navy, C.blue, C.cyan, C.green]
 function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
   const th = { padding: '10px 14px', textAlign: 'left', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1, borderBottom: '0.5px solid ' + C.border }
   const td = { padding: '10px 14px', fontSize: 12.5, color: C.text, verticalAlign: 'top', whiteSpace: 'nowrap' }
+  // Leads-only, and deliberately not extended to Opportunity: LeadSquared's
+  // LeadsMetaData.Get carries real CreatedOn/ModifiedOn/CreatedByName/
+  // ModifiedByName as PROPERTIES on every field definition (i.e. "when was
+  // this field itself added to the schema, and by whom") -- confirmed live,
+  // twice. GetOpportunityTypeMetadata's field objects have no such property
+  // (also confirmed live, twice) -- BUT Opportunity's field LIST already
+  // includes 4 real rows of its own for this: ModifiedOn/ModifiedBy/CreatedOn/
+  // CreatedBy (DataType DateTime/ActiveUsers, IsReadOnly true) -- ordinary
+  // per-RECORD audit fields, the same ones populating the drill-down modal's
+  // "Full record" list, not schema-definition metadata. Adding a 5th/6th/7th/
+  // 8th column reading "Not available via API" next to rows literally named
+  // "Created On"/"Modified On" would be actively misleading, not honest --
+  // so Opportunity's real audit fields surface as ordinary rows below instead
+  // of duplicate columns.
   const isLead = entityType === 'lead'
-  // Opportunity fields get the same 4 audit columns as Leads -- but every cell
-  // in them reads "Not available via API" rather than being hidden, because
-  // GetOpportunityTypeMetadata's Field object has been confirmed (twice, live)
-  // to carry the identical 27-key shape as Activity fields -- no CreatedOn/
-  // ModifiedOn/CreatedBy/ModifiedBy anywhere. Leads (LeadsMetaData.Get) is the
-  // only field family LeadSquared itself actually tracks this for.
-  const isOpportunity = entityType === 'opportunity'
-  const showAuditCols = isLead || isOpportunity
 
   const filtered = useMemo(() => {
     if (!query.trim()) return fields
@@ -209,8 +215,7 @@ function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
     return fields.filter(f => f.displayName.toLowerCase().includes(q) || f.schemaName.toLowerCase().includes(q))
   }, [fields, query])
 
-  const colCount = 5 + (showAuditCols ? 4 : 0)
-  const auditUnavailable = <span style={{ fontSize: 11.5, color: C.muted }} title="LeadSquared has no per-field audit API for Opportunity types -- confirmed empirically, not a gap on Quantum's end">Not available via API</span>
+  const colCount = 5 + (isLead ? 4 : 0)
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -221,7 +226,7 @@ function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
           <th style={th}>Type</th>
           <th style={th}>Mandatory</th>
           <th style={th}>Dropdown Options</th>
-          {showAuditCols && <>
+          {isLead && <>
             <th style={th}>Created On</th>
             <th style={th}>Created By</th>
             <th style={th}>Modified On</th>
@@ -270,12 +275,6 @@ function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
                   <td style={td}>{f.createdByName || <span style={{ color: C.muted }}>—</span>}</td>
                   <td style={td}>{fmtDate(f.modifiedOn) || <span style={{ color: C.muted }}>—</span>}</td>
                   <td style={td}>{f.modifiedByName || <span style={{ color: C.muted }}>—</span>}</td>
-                </>}
-                {isOpportunity && <>
-                  <td style={td}>{auditUnavailable}</td>
-                  <td style={td}>{auditUnavailable}</td>
-                  <td style={td}>{auditUnavailable}</td>
-                  <td style={td}>{auditUnavailable}</td>
                 </>}
               </tr>
             )
@@ -433,20 +432,22 @@ export default function LeadQualificationSchemaDashboard() {
               Opportunity dropdown values (confirmed -- the Activity one rejects an
               Opportunity code outright), so a dropdown field there only shows options
               when LeadSquared's own metadata happens to embed them directly; everything
-              else reads "Not available via API" rather than a fake button. It also carries
-              the same Created/Modified columns as Leads below, for consistency -- but every
-              cell in them reads "Not available via API" too, since LeadSquared's own
-              Opportunity field metadata (confirmed live, checked twice) has the identical
-              27-key shape as Activity fields: no CreatedOn/ModifiedOn/CreatedBy/ModifiedBy
-              anywhere. This isn't Quantum choosing not to show it -- LeadSquared genuinely
-              doesn't track it for this field family.
+              else reads "Not available via API" rather than a fake button. Note:
+              <strong> Created On / Created By / Modified On / Modified By</strong> already
+              appear as their own rows here (real LeadSquared fields, DataType
+              DateTime/ActiveUsers) -- that's the same audit stamp shown on every record
+              in the drill-down modal, just as an ordinary field rather than a per-field
+              schema property. There's no separate column for it here because it isn't
+              schema-level metadata the way Leads' own field history is (below) -- it's a
+              real field on the record, so it's a row, not a column.
               <br /><br />
               The <strong>Leads</strong> view reads LeadSquared's own Lead field metadata
               (<strong>LeadsMetaData.Get</strong>). This is the <em>one</em> field family where
-              LeadSquared itself tracks who created or last changed a field and when --
-              those 4 columns are real LeadSquared data, not something Quantum
-              observed or inferred; a blank cell means LeadSquared has no record for that
-              field, not a gap on our end.
+              LeadSquared tracks <em>schema-level</em> history -- when a field's own
+              definition (not a record) was created or last changed, and by whom. Those 4
+              extra columns are real LeadSquared data, not something Quantum observed or
+              inferred; a blank cell means LeadSquared has no record for that field, not a
+              gap on our end.
             </p>
           </div>
 
