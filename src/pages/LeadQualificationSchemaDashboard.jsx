@@ -241,6 +241,14 @@ function FieldSchemaInfoButton() {
 
 const CARD_ACCENTS = [C.navy, C.blue, C.cyan, C.green]
 
+// Requested "Viewing" dropdown order for the 3 Futwork activity types --
+// Opportunity and Leads are ranked separately in the views useMemo below.
+const ACTIVITY_VIEW_ORDER = [
+  'Manual Lead Qualification - Futwork',
+  'Futwork - AI Call Qualification',
+  'Call Details from Futwork',
+]
+
 function SchemaTable({ code, fields, query, onViewOptions, entityType }) {
   const th = { padding: '10px 14px', textAlign: 'left', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1, borderBottom: '0.5px solid ' + C.border }
   const td = { padding: '10px 14px', fontSize: 12.5, color: C.text, verticalAlign: 'top', whiteSpace: 'nowrap' }
@@ -401,7 +409,22 @@ export default function LeadQualificationSchemaDashboard() {
         entityType: 'lead', accent: C.blue, schema: leadSchema,
       })
     }
-    return out
+    // Explicit display order (requested): Opportunity first, then the 3
+    // Futwork activity types in a fixed order, then Leads last. Opportunity/
+    // Lead rank by entityType (always exactly one of each); the 3 activity
+    // types rank by name against ACTIVITY_VIEW_ORDER so a name match survives
+    // even if LeadSquared ever returns them in a different API order -- any
+    // Futwork activity type not in that list still sorts in, just after the
+    // known three and before Leads, rather than silently disappearing.
+    return out.slice().sort((a, b) => {
+      const rank = v => {
+        if (v.entityType === 'opportunity') return 0
+        if (v.entityType === 'lead') return 100
+        const i = ACTIVITY_VIEW_ORDER.indexOf(v.name)
+        return i === -1 ? 50 : 10 + i
+      }
+      return rank(a) - rank(b)
+    })
   }, [types, schemas, oppSchema, leadSchema])
 
   useEffect(() => {
