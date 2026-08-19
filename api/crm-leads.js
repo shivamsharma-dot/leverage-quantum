@@ -700,6 +700,19 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
+    if (mode === 'debug_opp_field_full') {
+      const data = await fetchLeadSquaredOpportunityMeta(creds, { eventCode: code }, true)
+      const fields = (data && data.Fields) || []
+      const auditLikeKeys = new Set()
+      fields.forEach(f => Object.keys(f).forEach(k => { if (/created|modified/i.test(k)) auditLikeKeys.add(k) }))
+      const auditLikeSchemaNames = fields.filter(f => /created|modified/i.test(f.SchemaName || '') || /created|modified/i.test(f.DisplayName || ''))
+      return res.status(200).json({
+        totalFields: fields.length,
+        auditLikePropertyKeysSeenAcrossAllFields: Array.from(auditLikeKeys),
+        fieldsWhoseNameLooksLikeCreatedOrModified: auditLikeSchemaNames,
+        allSchemaNames: fields.map(f => f.SchemaName),
+      })
+    }
     if (mode === 'opportunity_schema') return res.status(200).json(await fetchLeadSquaredOpportunitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'lead_schema') return res.status(200).json(await fetchLeadSquaredLeadSchema(creds, { refresh: refresh === '1' }))
     if (mode === 'opportunity_detail') return res.status(200).json(await fetchLeadSquaredOpportunityDetail(creds, { opportunityId: req.query.opportunityId }))
