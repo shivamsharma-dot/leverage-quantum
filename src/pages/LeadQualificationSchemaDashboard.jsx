@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
-import { C, FONT, Card } from '../ui/dashboardKit'
+import { C, FONT, Card, PremKPI, KPI_ICONS, fmtN } from '../ui/dashboardKit'
 
 const API_BASE = '/api/crm-leads?source=leadsquared'
 
@@ -54,6 +54,34 @@ function useSchema() {
   return { types, schemas, loading, error, lastSync, refreshing, refresh: () => load({ refresh: true }) }
 }
 
+// Brand-only palette, one tone per DataType family so a long field list reads by
+// shape at a glance instead of as one flat grey column. Falls back to green for
+// any type this account hasn't been seen using yet, rather than guessing.
+function typeMeta(dataType) {
+  const t = (dataType || '').toLowerCase()
+  if (t.includes('dropdown')) return { color: C.blue, bg: C.blueBg }
+  if (t.includes('user')) return { color: C.cyan, bg: C.cyanBg }
+  if (t.includes('object')) return { color: C.navy, bg: C.navyBg }
+  if (t.includes('string')) return { color: C.muted, bg: 'var(--bg3)' }
+  return { color: C.green, bg: C.greenBg }
+}
+
+// Table/grid glyph for the per-card icon chip -- distinct from the KPI_ICONS set,
+// since this reads as a schema/reference table, not a metric.
+function TableGlyph() {
+  return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><line x1="3" y1="10" x2="21" y2="10" /><line x1="9" y1="10" x2="9" y2="20" /></svg>
+}
+
+function IconChip({ accent, children }) {
+  return (
+    <span style={{
+      width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: `linear-gradient(135deg, ${accent}, ${accent}CC)`, color: '#fff', flexShrink: 0,
+      boxShadow: `0 4px 10px -4px ${accent}88`,
+    }}>{children}</span>
+  )
+}
+
 function OptionsCell({ code, schemaName }) {
   const [state, setState] = useState('idle') // idle | loading | loaded | error | empty
   const [options, setOptions] = useState([])
@@ -73,28 +101,132 @@ function OptionsCell({ code, schemaName }) {
 
   if (state === 'idle') {
     return (
-      <button type="button" onClick={fetchOptions} style={{ border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.blue, fontSize: 11, fontWeight: 700, padding: '4px 9px', borderRadius: 7, cursor: 'pointer', fontFamily: FONT }}>
+      <button type="button" onClick={fetchOptions}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.blue, fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
         View options
       </button>
     )
   }
-  if (state === 'loading') return <span style={{ fontSize: 11.5, color: C.muted }}>Loading…</span>
+  if (state === 'loading') return <span style={{ fontSize: 11.5, color: C.muted, fontStyle: 'italic' }}>Loading…</span>
   if (state === 'error') return <span style={{ fontSize: 11.5, color: C.muted }}>Couldn't load</span>
   if (state === 'empty') return <span style={{ fontSize: 11.5, color: C.muted }}>No dropdown options</span>
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 340 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 360 }}>
       {options.map(o => (
-        <span key={o} style={{ fontSize: 10.5, fontWeight: 600, color: C.navy, background: C.navyBg, padding: '2px 7px', borderRadius: 999 }}>{o}</span>
+        <span key={o} style={{ fontSize: 10.5, fontWeight: 700, color: C.navy, background: C.navyBg, padding: '3px 8px', borderRadius: 999 }}>{o}</span>
       ))}
+    </div>
+  )
+}
+
+const CARD_ACCENTS = [C.navy, C.blue, C.cyan, C.green]
+
+function SchemaTable({ code, fields, query }) {
+  const th = { padding: '10px 14px', textAlign: 'left', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1, borderBottom: '0.5px solid ' + C.border }
+  const td = { padding: '10px 14px', fontSize: 12.5, color: C.text, verticalAlign: 'top' }
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return fields
+    const q = query.trim().toLowerCase()
+    return fields.filter(f => f.displayName.toLowerCase().includes(q) || f.schemaName.toLowerCase().includes(q))
+  }, [fields, query])
+
+  return (
+    <div style={{ maxHeight: 440, overflowY: 'auto', overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead><tr>
+          <th style={th}>Display Name</th>
+          <th style={th}>Schema Name</th>
+          <th style={th}>Type</th>
+          <th style={th}>Mandatory</th>
+          <th style={th}>Dropdown Options</th>
+        </tr></thead>
+        <tbody>
+          {filtered.map((f, i) => {
+            const tm = typeMeta(f.dataType)
+            return (
+              <tr key={f.schemaName} style={{ background: i % 2 === 1 ? 'var(--bg3)' : 'transparent' }}>
+                <td style={{ ...td, fontWeight: 700 }}>{f.displayName}</td>
+                <td style={td}>
+                  <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: C.text, background: 'var(--bg3)', padding: '3px 8px', borderRadius: 6 }}>{f.schemaName}</span>
+                </td>
+                <td style={td}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: tm.color, background: tm.bg, padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap' }}>{f.dataType || '—'}</span>
+                </td>
+                <td style={td}>
+                  {f.isMandatory
+                    ? <span style={{ fontSize: 10.5, fontWeight: 800, color: C.green, background: C.greenBg, padding: '3px 9px', borderRadius: 999 }}>YES</span>
+                    : <span style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, background: 'var(--bg3)', padding: '3px 9px', borderRadius: 999 }}>NO</span>}
+                </td>
+                <td style={td}><OptionsCell code={code} schemaName={f.schemaName} /></td>
+              </tr>
+            )
+          })}
+          {filtered.length === 0 && (
+            <tr><td colSpan={5} style={{ ...td, textAlign: 'center', color: C.muted, padding: '24px 12px' }}>No fields match "{query}".</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function ActivityCard({ type, schema, accent, cardRef }) {
+  const [query, setQuery] = useState('')
+  const fields = (schema && schema.fields) || []
+  const mandatoryCount = fields.filter(f => f.isMandatory).length
+
+  return (
+    <div ref={cardRef} style={{ marginBottom: 20, scrollMarginTop: 16 }}>
+      <Card
+        title={
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <IconChip accent={accent}><TableGlyph /></IconChip>
+            <span>
+              <span style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{type.name}</span>
+              <span style={{ marginLeft: 8, fontFamily: 'monospace', fontSize: 10.5, fontWeight: 700, color: accent, background: accent + '18', padding: '2px 8px', borderRadius: 999, verticalAlign: 'middle' }}>CODE {type.code}</span>
+            </span>
+          </span>
+        }
+        sub={schema && !schema.error ? fields.length + ' fields · ' + mandatoryCount + ' mandatory' : ''}
+        noPad
+        action={
+          !schema || schema.error ? null : (
+            <input type="text" placeholder="Filter fields…" value={query} onChange={e => setQuery(e.target.value)}
+              style={{ padding: '6px 11px', border: '0.5px solid ' + C.border, borderRadius: 8, fontSize: 12, fontFamily: FONT, outline: 'none', width: 160, background: 'var(--card)', color: C.text }} />
+          )
+        }
+      >
+        {schema && schema.error ? (
+          <div style={{ padding: '16px', color: C.muted, fontSize: 12.5 }}>{schema.error}</div>
+        ) : (
+          <SchemaTable code={type.code} fields={fields} query={query} />
+        )}
+      </Card>
     </div>
   )
 }
 
 export default function LeadQualificationSchemaDashboard() {
   const { types, schemas, loading, error, lastSync, refreshing, refresh } = useSchema()
+  const cardRefs = useRef({})
 
-  const th = { padding: '10px 12px', textAlign: 'left', fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }
-  const td = { padding: '9px 12px', fontSize: 12.5, color: C.text, borderTop: '0.5px solid #F1F4F9', verticalAlign: 'top' }
+  const stats = useMemo(() => {
+    const all = Object.values(schemas).filter(s => s && !s.error)
+    const allFields = all.flatMap(s => s.fields || [])
+    return {
+      typeCount: (types || []).length,
+      fieldCount: allFields.length,
+      dropdownCount: allFields.filter(f => (f.dataType || '').toLowerCase().includes('dropdown')).length,
+      mandatoryCount: allFields.filter(f => f.isMandatory).length,
+    }
+  }, [types, schemas])
+
+  const jumpTo = (code) => {
+    const el = cardRefs.current[code]
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   if (loading) {
     return (
@@ -107,12 +239,19 @@ export default function LeadQualificationSchemaDashboard() {
 
   return (
     <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
+      <style>{'@keyframes lqsPulse{0%,100%{opacity:1}50%{opacity:.3}}'}</style>
       <Sidebar />
       <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid #EEF1F6', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <div style={{ background: 'var(--card)', borderBottom: '0.5px solid ' + C.border, padding: '10px 28px', minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
           <div>
             <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Lead Qualification / Field Schema</p>
-            <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px' }}>Field Schema</h1>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              Field Schema
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, color: C.green, background: C.greenBg, padding: '3px 9px', borderRadius: 999 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, animation: 'lqsPulse 1.6s ease-in-out infinite' }} />
+                LIVE FROM LEADSQUARED
+              </span>
+            </h1>
           </div>
           <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {lastSync && <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}{refreshing ? '…' : ''}</span>}
@@ -121,13 +260,40 @@ export default function LeadQualificationSchemaDashboard() {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
-          <p style={{ fontSize: 12.5, color: C.muted, margin: '0 0 18px', maxWidth: 760, lineHeight: 1.6 }}>
-            Live from LeadSquared's own Custom Notable Activity Type API -- the same schema
-            Settings &rsaquo; Custom Notable Activity Type shows for each activity type Futwork
-            postbacks write to. Refresh re-fetches from LeadSquared directly, so an edit made
-            there shows up here without a code deploy. This is what "mx_Custom_N" on the
-            Futwork Errors page actually maps to.
-          </p>
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px', marginBottom: 20,
+            background: C.navyBg, borderRadius: 12, border: '0.5px solid ' + C.navyBg,
+          }}>
+            <span style={{ color: C.navy, flexShrink: 0, marginTop: 1 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+            </span>
+            <p style={{ fontSize: 12.5, color: C.text, margin: 0, lineHeight: 1.6 }}>
+              Read live from LeadSquared's own Custom Notable Activity Type API -- the exact
+              schema Settings &rsaquo; Custom Notable Activity Type shows for every activity type
+              Futwork postbacks write to. This is what each raw <strong>mx_Custom_N</strong> code
+              on the Futwork Errors page actually maps to. <strong>Refresh</strong> re-fetches
+              directly from LeadSquared, so a field edited there shows up here without a deploy.
+            </p>
+          </div>
+
+          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
+            <PremKPI label="Activity Types" value={fmtN(stats.typeCount)} sub="Futwork-related, on this account" accent={C.navy} icon={KPI_ICONS.total} />
+            <PremKPI label="Total Fields" value={fmtN(stats.fieldCount)} sub="across all activity types" accent={C.blue} icon={KPI_ICONS.ai} />
+            <PremKPI label="Dropdown Fields" value={fmtN(stats.dropdownCount)} sub="where invalid values get rejected" accent={C.cyan} icon={KPI_ICONS.bot} />
+            <PremKPI label="Mandatory Fields" value={fmtN(stats.mandatoryCount)} sub="required on every postback" accent={C.green} icon={KPI_ICONS.agent} />
+          </div>
+
+          {(types || []).length > 1 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+              {(types || []).map((t, i) => (
+                <button key={t.code} type="button" onClick={() => jumpTo(t.code)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, border: '0.5px solid ' + C.border, background: 'var(--card)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.text }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: CARD_ACCENTS[i % CARD_ACCENTS.length], flexShrink: 0 }} />
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          )}
 
           {error && (
             <div style={{ padding: '12px 16px', background: 'var(--bg3)', borderRadius: 10, color: C.muted, fontSize: 13, marginBottom: 16 }}>{error}</div>
@@ -137,41 +303,10 @@ export default function LeadQualificationSchemaDashboard() {
             <div style={{ padding: '24px 16px', textAlign: 'center', color: C.muted, fontSize: 13 }}>No Futwork-related activity types found on this LeadSquared account.</div>
           )}
 
-          {(types || []).map(t => {
-            const schema = schemas[t.code]
-            return (
-              <div key={t.code} style={{ marginBottom: 20 }}>
-                <Card title={t.name + ' (code ' + t.code + ')'} sub={schema && schema.fields ? schema.fields.length + ' fields' : ''} noPad>
-                  {schema && schema.error ? (
-                    <div style={{ padding: '16px', color: C.muted, fontSize: 12.5 }}>{schema.error}</div>
-                  ) : (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead><tr>
-                          <th style={th}>Display Name</th>
-                          <th style={th}>Schema Name</th>
-                          <th style={th}>Type</th>
-                          <th style={th}>Mandatory</th>
-                          <th style={th}>Dropdown Options</th>
-                        </tr></thead>
-                        <tbody>
-                          {(schema && schema.fields || []).map(f => (
-                            <tr key={f.schemaName}>
-                              <td style={{ ...td, fontWeight: 600 }}>{f.displayName}</td>
-                              <td style={{ ...td, fontFamily: 'monospace', fontSize: 11.5, color: C.muted }}>{f.schemaName}</td>
-                              <td style={td}>{f.dataType || '—'}</td>
-                              <td style={td}>{f.isMandatory ? <span style={{ color: C.navy, fontWeight: 700, fontSize: 11 }}>Yes</span> : <span style={{ color: C.muted, fontSize: 11 }}>No</span>}</td>
-                              <td style={td}><OptionsCell code={t.code} schemaName={f.schemaName} /></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </Card>
-              </div>
-            )
-          })}
+          {(types || []).map((t, i) => (
+            <ActivityCard key={t.code} type={t} schema={schemas[t.code]} accent={CARD_ACCENTS[i % CARD_ACCENTS.length]}
+              cardRef={el => { cardRefs.current[t.code] = el }} />
+          ))}
         </div>
       </div>
     </div>
