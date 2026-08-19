@@ -619,7 +619,8 @@ async function handleLeadSquared(req, res, me) {
     // TEMP debug-only: confirm real response shapes before committing to a mapper.
     // Remove once Lead Field Schema + Opportunity drill-down are built for real.
     if (mode === 'debug_leads_metadata') {
-      const data = await leadsquaredGet('/v2/LeadManagement.svc/LeadsMetaData.Get', creds, { excludeOptionSets: req.query.full === '1' ? undefined : '1' })
+      const q = req.query.full === '1' ? {} : { excludeOptionSets: '1' }
+      const data = await leadsquaredGet('/v2/LeadManagement.svc/LeadsMetaData.Get', creds, q)
       return res.status(200).json(data)
     }
     if (mode === 'debug_opportunity_detail') {
