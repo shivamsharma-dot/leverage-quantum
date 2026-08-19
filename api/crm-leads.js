@@ -580,6 +580,17 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
+    // TEMP debug-only: testing whether ActivityField/Dropdown/Options/Get also works
+    // for an Opportunity Type's numeric EventCode (docs say Activity-only, but that's
+    // worth an empirical check before assuming). Remove once confirmed either way.
+    if (mode === 'opp_dropdown_options_test') {
+      try {
+        const r = await fetchLeadSquaredDropdownOptions(creds, { code, schemaName })
+        return res.status(200).json({ ok: true, result: r })
+      } catch (e) {
+        return res.status(200).json({ ok: false, error: String((e && e.message) || e) })
+      }
+    }
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
