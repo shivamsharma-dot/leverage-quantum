@@ -628,7 +628,7 @@ async function handleLeadSquared(req, res, me) {
       return res.status(200).json(data)
     }
     if (mode === 'debug_opportunity_activities') {
-      const data = await leadsquaredGet('/v2/OpportunityManagement.svc/GetActivitiesOfOpportunity', creds, { OpportunityId: req.query.opportunityId })
+      const data = await leadsquaredPost('/v2/OpportunityManagement.svc/GetActivitiesOfOpportunity', creds, {}, { OpportunityId: req.query.opportunityId })
       return res.status(200).json(data)
     }
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
