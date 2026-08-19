@@ -1004,7 +1004,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
           justifyContent: 'space-between', gap: 12, flexShrink: 0, overflow: 'visible',
         }}>
           <div>
-            <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / QL Ops</p>
+            <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / Lead Qualification</p>
             <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px', fontFamily: FONT }}>
               Lead Qualification
               {' - '}

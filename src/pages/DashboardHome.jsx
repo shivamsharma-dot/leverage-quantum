@@ -228,7 +228,7 @@ function googleAnalystLine(M) {
 }
 
 function qlAnalystLine(M) {
-  if (!M.lastDay) return 'Qualified lead data will appear here once the QL Ops sheet starts reporting for this period.'
+  if (!M.lastDay) return 'Qualified lead data will appear here once the Lead Qualification sheet starts reporting for this period.'
   const q = M.qlDeltaPct
   const qlVerb = (q === null || Math.abs(q) < 3) ? 'held roughly flat' : q > 0 ? ('climbed ' + Math.abs(q).toFixed(0) + '% day-on-day') : ('slipped ' + Math.abs(q).toFixed(0) + '% day-on-day')
   const share = M.futworkSharePct
@@ -382,7 +382,7 @@ export default function DashboardHome() {
           />
 
           <AnalysisSection
-            icon='qlops' color={C.green} title='QL Ops' tagline='Qualified lead volume by Futwork and Superbot -- last day, day-on-day, month-on-month'
+            icon='qlops' color={C.green} title='Lead Qualification' tagline='Qualified lead volume by Futwork and Superbot -- last day, day-on-day, month-on-month'
             insight={qlAnalystLine(M)} loading={loading}
             stats={[
               { label:'Yesterday QLs', value: fmtN(M.lastDay?.ql||0), deltaPct: M.qlDeltaPct, deltaLabel:'vs day before' },

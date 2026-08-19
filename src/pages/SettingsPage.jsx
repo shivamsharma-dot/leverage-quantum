@@ -280,7 +280,7 @@ const DATA_SOURCES = [
   { name: 'Meta Graph API',       src: 'act_641914389215638', rows: 'live', disconnectable: true },
   { name: 'Google Ads API', src: 'Google Ads Account (env-configured)', rows: 'live' },
   { name: 'Referral Sheet',       editKey: 'sheet_url_referral', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Referral' },
-  { name: 'QL Ops Sheet (Daily)', editKey: 'sheet_url_qlops_daily', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Qlops' },
+  { name: 'Lead Qualification Sheet (Daily)', editKey: 'sheet_url_qlops_daily', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Qlops' },
   { name: 'QL Snapshot Sheet (Monthly)', editKey: 'sheet_url_qlops_monthly', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=QLSnapshot' },
   { name: 'WhatsApp Sheet',       editKey: 'sheet_url_whatsapp', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=whatsapp' },
   { name: 'FB Leads / CRM Sheet', editKey: 'sheet_url_fbleads', rows: 'live', defaultUrl: 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=FBleads', apiPath: '/api/crm-leads' },
@@ -680,7 +680,7 @@ export default function SettingsPage() {
       { key: 'whatsComing', label: "What's coming", type: 'textarea', placeholder: 'Upcoming campaigns/changes agents should know about before flagging something as an anomaly.' },
       { key: 'numbersToTrust', label: 'Which numbers to trust', type: 'textarea', default: 'Quantum\'s Overall funnel sheet (Total QL) is authoritative when it disagrees with Meta/Google\'s own in-platform lead/conversion counts -- always prefer Quantum\'s figure and say so if asked.' },
       { key: 'reportingBasis', label: 'Reporting basis', type: 'textarea', default: 'Currency INR (₹). Timezone Asia/Kolkata (IST). Meta attribution: 7-day click. Google attribution: default GAQL conversion window.' },
-      { key: 'dataSources', label: 'Data sources', type: 'textarea', default: 'Connected: Meta Ads, Google Ads, Bing Ads, WhatsApp, QL Ops (Futwork/Superbot), CRM leads (FBleads/googleleads sheets), Overall PM funnel sheet. Referenced but NOT connected: Opportunity-level Won/Lost status -- no sheet or table tracks a real sales-pipeline outcome yet (see the disclosed gap on the Marketing Performance report).' },
+      { key: 'dataSources', label: 'Data sources', type: 'textarea', default: 'Connected: Meta Ads, Google Ads, Bing Ads, WhatsApp, Lead Qualification (Futwork/Superbot), CRM leads (FBleads/googleleads sheets), Overall PM funnel sheet. Referenced but NOT connected: Opportunity-level Won/Lost status -- no sheet or table tracks a real sales-pipeline outcome yet (see the disclosed gap on the Marketing Performance report).' },
       { key: 'glossary', label: 'Glossary', type: 'textarea', default: 'QL=Qualified Lead; CPL/CPQL=Cost per Lead / per Qualified Lead; RAU=Registered At University; SR=Student Recruitment (fee per RAU); CPA=Cost per Applications.' },
       { key: 'voiceGuardrails', label: 'Voice & writing guardrails', type: 'textarea', placeholder: 'e.g. Never invent a number, date, or claim not present in the connected data -- say so explicitly if something isn\'t tracked, rather than estimating.' },
     ]},
@@ -3494,7 +3494,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>Unassigned Leads Alert</h3>
-                <p className={styles.cardDesc}>QL Ops &middot; flags leads still owned by a bot/vendor placeholder (Futwork/Futwork AI/Superbot) instead of a real floor owner. Fixed recipient, separate from the scheduled reports above — not part of the general opt-in recipient list.</p>
+                <p className={styles.cardDesc}>Lead Qualification &middot; flags leads still owned by a bot/vendor placeholder (Futwork/Futwork AI/Superbot) instead of a real floor owner. Fixed recipient, separate from the scheduled reports above — not part of the general opt-in recipient list.</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 24px', margin: '4px 0 14px', fontSize: 13 }}>
                   <div><span style={{ color: 'var(--text-3)' }}>To:</span> <strong>akash.saxena@leverageedu.com</strong></div>
                   <div><span style={{ color: 'var(--text-3)' }}>CC:</span> <strong>shivam.sharma@leverageedu.com</strong></div>

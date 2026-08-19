@@ -110,7 +110,7 @@ export const NAV = [
         to: '/dashboard/lq-ops',
         navKey: 'ql_ops',
         icon: <PeopleIcon />,
-        label: 'QL Ops',
+        label: 'Lead Qualification',
         end: false,
         subItems: [
           { to: '/dashboard/lq-ops',         label: 'Daily QLs',   matchType: 'route' },
@@ -217,7 +217,7 @@ const ICON_MAP = {
   'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'Overall (BigQuery)': <OverallIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
   'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
   'Revenue': <RevenueIcon/>, 'B2C': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>, 'Leverage Careers': <CareersIcon/>,
-  'Google Ads': <GoogleAdsIcon/>, 'QL Ops': <PeopleIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
+  'Google Ads': <GoogleAdsIcon/>, 'Lead Qualification': <PeopleIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
   'Human QL Detail': <FunnelIcon/>,
   'AI QL Detail': <BotIcon/>,
   'Human Unassigned': <PeopleIcon/>,
