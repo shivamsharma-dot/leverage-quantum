@@ -54,7 +54,20 @@ function localDateKey(d) {
 }
 function parseTimestamp(raw) {
   if (!raw) return null
-  const d = new Date(raw.trim().replace(' ', 'T'))
+  // Sheet timestamps are "YYYY-MM-DD H:MM:SS" with NO zero-padding on the hour
+  // (e.g. "2026-08-19 5:25:56"). new Date(isoString) parses that fine when the
+  // hour is 2 digits but silently returns Invalid Date the moment it's a single
+  // digit, since strict ISO 8601 requires a 2-digit hour after the "T" -- and
+  // Invalid Date rows then get dropped entirely downstream. Confirmed against
+  // the real sheet: this was killing ~19% of Futwork AI rows and literally
+  // every Futwork Human row (its handful of sample timestamps all happen to
+  // land in single-digit hours). Parsing the numeric parts by hand and building
+  // the Date via the (y, m, d, h, mi, s) constructor sidesteps ISO parsing
+  // entirely, so single-digit components are never an issue.
+  const m = raw.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2}):(\d{2})/)
+  if (!m) return null
+  const [, y, mo, da, h, mi, s] = m
+  const d = new Date(Number(y), Number(mo) - 1, Number(da), Number(h), Number(mi), Number(s))
   return isNaN(d.getTime()) ? null : d
 }
 function fmtTime(d) {
