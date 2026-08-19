@@ -66,6 +66,15 @@ function typeMeta(dataType) {
   return { color: C.green, bg: C.greenBg }
 }
 
+function fmtDate(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+function fmtTimeOnly(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+}
+
 // Table/grid glyph for the per-card icon chip -- distinct from the KPI_ICONS set,
 // since this reads as a schema/reference table, not a metric.
 function TableGlyph() {
@@ -82,49 +91,69 @@ function IconChip({ accent, children }) {
   )
 }
 
-function OptionsCell({ code, schemaName }) {
-  const [state, setState] = useState('idle') // idle | loading | loaded | error | empty
+// One shared modal, opened by any row's "View options" button -- pops up the
+// real, live list of values LeadSquared will actually accept for that dropdown
+// field (ActivityField/Dropdown/Options/Get), rather than expanding inline.
+function DropdownOptionsModal({ target, onClose }) {
+  const [state, setState] = useState('loading') // loading | loaded | empty | error
   const [options, setOptions] = useState([])
 
-  const fetchOptions = async () => {
-    if (state === 'loading') return
-    setState('loading')
-    try {
-      const data = await apiGet('activity_dropdown_options', { code, schemaName })
-      const opts = data.options || []
-      setOptions(opts)
-      setState(opts.length ? 'loaded' : 'empty')
-    } catch (e) {
-      setState('error')
-    }
-  }
+  useEffect(() => {
+    if (!target) return
+    setState('loading'); setOptions([])
+    apiGet('activity_dropdown_options', { code: target.code, schemaName: target.schemaName })
+      .then(data => {
+        const opts = data.options || []
+        setOptions(opts)
+        setState(opts.length ? 'loaded' : 'empty')
+      })
+      .catch(() => setState('error'))
+  }, [target && target.code, target && target.schemaName])
 
-  if (state === 'idle') {
-    return (
-      <button type="button" onClick={fetchOptions}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.blue, fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
-        View options
-      </button>
-    )
-  }
-  if (state === 'loading') return <span style={{ fontSize: 11.5, color: C.muted, fontStyle: 'italic' }}>Loading…</span>
-  if (state === 'error') return <span style={{ fontSize: 11.5, color: C.muted }}>Couldn't load</span>
-  if (state === 'empty') return <span style={{ fontSize: 11.5, color: C.muted }}>No dropdown options</span>
+  useEffect(() => {
+    if (!target) return
+    const onKey = e => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [target])
+
+  if (!target) return null
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 360 }}>
-      {options.map(o => (
-        <span key={o} style={{ fontSize: 10.5, fontWeight: 700, color: C.navy, background: C.navyBg, padding: '3px 8px', borderRadius: 999 }}>{o}</span>
-      ))}
-    </div>
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', zIndex: 900 }} />
+      <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 901, width: 'min(520px, 92vw)', maxHeight: '76vh', overflowY: 'auto', background: 'var(--card)', borderRadius: 16, boxShadow: '0 24px 60px -12px rgba(15,23,42,0.35)', border: '0.5px solid ' + C.border, padding: 22 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{target.displayName}</div>
+            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2, fontFamily: 'monospace' }}>{target.schemaName} · code {target.code}</div>
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 20, lineHeight: 1, padding: 4 }}>&times;</button>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          {state === 'loading' && <div style={{ fontSize: 13, color: C.muted, fontStyle: 'italic', padding: '12px 0' }}>Loading live options from LeadSquared…</div>}
+          {state === 'error' && <div style={{ fontSize: 13, color: C.muted, padding: '12px 0' }}>Couldn't load options -- try again.</div>}
+          {state === 'empty' && <div style={{ fontSize: 13, color: C.muted, padding: '12px 0' }}>This field has no dropdown options configured.</div>}
+          {state === 'loaded' && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>{options.length} valid value{options.length === 1 ? '' : 's'}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                {options.map(o => (
+                  <span key={o} style={{ fontSize: 12, fontWeight: 700, color: C.navy, background: C.navyBg, padding: '5px 11px', borderRadius: 999 }}>{o}</span>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </>
   )
 }
 
 const CARD_ACCENTS = [C.navy, C.blue, C.cyan, C.green]
 
-function SchemaTable({ code, fields, query }) {
+function SchemaTable({ code, fields, query, onViewOptions }) {
   const th = { padding: '10px 14px', textAlign: 'left', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: 'var(--card)', zIndex: 1, borderBottom: '0.5px solid ' + C.border }
-  const td = { padding: '10px 14px', fontSize: 12.5, color: C.text, verticalAlign: 'top' }
+  const td = { padding: '10px 14px', fontSize: 12.5, color: C.text, verticalAlign: 'top', whiteSpace: 'nowrap' }
 
   const filtered = useMemo(() => {
     if (!query.trim()) return fields
@@ -140,6 +169,10 @@ function SchemaTable({ code, fields, query }) {
           <th style={th}>Schema Name</th>
           <th style={th}>Type</th>
           <th style={th}>Mandatory</th>
+          <th style={th}>Created Date</th>
+          <th style={th}>Created Time</th>
+          <th style={th}>Modified Date</th>
+          <th style={th}>Modified Time</th>
           <th style={th}>Dropdown Options</th>
         </tr></thead>
         <tbody>
@@ -147,7 +180,12 @@ function SchemaTable({ code, fields, query }) {
             const tm = typeMeta(f.dataType)
             return (
               <tr key={f.schemaName} style={{ background: i % 2 === 1 ? 'var(--bg3)' : 'transparent' }}>
-                <td style={{ ...td, fontWeight: 700 }}>{f.displayName}</td>
+                <td style={{ ...td, fontWeight: 700, whiteSpace: 'normal' }}>
+                  {f.displayName}
+                  {f.isNew && (
+                    <span style={{ marginLeft: 7, fontSize: 9.5, fontWeight: 800, color: '#fff', background: `linear-gradient(135deg, ${C.green}, ${C.cyan})`, padding: '2px 7px', borderRadius: 999, letterSpacing: '0.03em' }}>NEW</span>
+                  )}
+                </td>
                 <td style={td}>
                   <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: C.text, background: 'var(--bg3)', padding: '3px 8px', borderRadius: 6 }}>{f.schemaName}</span>
                 </td>
@@ -159,12 +197,22 @@ function SchemaTable({ code, fields, query }) {
                     ? <span style={{ fontSize: 10.5, fontWeight: 800, color: C.green, background: C.greenBg, padding: '3px 9px', borderRadius: 999 }}>YES</span>
                     : <span style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, background: 'var(--bg3)', padding: '3px 9px', borderRadius: 999 }}>NO</span>}
                 </td>
-                <td style={td}><OptionsCell code={code} schemaName={f.schemaName} /></td>
+                <td style={{ ...td, color: C.muted }}>{fmtDate(f.firstSeenAt)}</td>
+                <td style={{ ...td, color: C.muted }}>{fmtTimeOnly(f.firstSeenAt)}</td>
+                <td style={{ ...td, color: C.muted }}>{fmtDate(f.lastChangedAt)}</td>
+                <td style={{ ...td, color: C.muted }}>{fmtTimeOnly(f.lastChangedAt)}</td>
+                <td style={td}>
+                  <button type="button" onClick={() => onViewOptions(code, f.schemaName, f.displayName)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.blue, fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 999, cursor: 'pointer', fontFamily: FONT, whiteSpace: 'nowrap' }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    View options
+                  </button>
+                </td>
               </tr>
             )
           })}
           {filtered.length === 0 && (
-            <tr><td colSpan={5} style={{ ...td, textAlign: 'center', color: C.muted, padding: '24px 12px' }}>No fields match "{query}".</td></tr>
+            <tr><td colSpan={9} style={{ ...td, textAlign: 'center', color: C.muted, padding: '24px 12px', whiteSpace: 'normal' }}>No fields match "{query}".</td></tr>
           )}
         </tbody>
       </table>
@@ -172,7 +220,7 @@ function SchemaTable({ code, fields, query }) {
   )
 }
 
-function ActivityCard({ type, schema, accent, cardRef }) {
+function ActivityCard({ type, schema, accent, cardRef, onViewOptions }) {
   const [query, setQuery] = useState('')
   const fields = (schema && schema.fields) || []
   const mandatoryCount = fields.filter(f => f.isMandatory).length
@@ -201,7 +249,7 @@ function ActivityCard({ type, schema, accent, cardRef }) {
         {schema && schema.error ? (
           <div style={{ padding: '16px', color: C.muted, fontSize: 12.5 }}>{schema.error}</div>
         ) : (
-          <SchemaTable code={type.code} fields={fields} query={query} />
+          <SchemaTable code={type.code} fields={fields} query={query} onViewOptions={onViewOptions} />
         )}
       </Card>
     </div>
@@ -211,6 +259,7 @@ function ActivityCard({ type, schema, accent, cardRef }) {
 export default function LeadQualificationSchemaDashboard() {
   const { types, schemas, loading, error, lastSync, refreshing, refresh } = useSchema()
   const cardRefs = useRef({})
+  const [optionsTarget, setOptionsTarget] = useState(null)
 
   const stats = useMemo(() => {
     const all = Object.values(schemas).filter(s => s && !s.error)
@@ -220,6 +269,7 @@ export default function LeadQualificationSchemaDashboard() {
       fieldCount: allFields.length,
       dropdownCount: allFields.filter(f => (f.dataType || '').toLowerCase().includes('dropdown')).length,
       mandatoryCount: allFields.filter(f => f.isMandatory).length,
+      newCount: allFields.filter(f => f.isNew).length,
     }
   }, [types, schemas])
 
@@ -227,6 +277,8 @@ export default function LeadQualificationSchemaDashboard() {
     const el = cardRefs.current[code]
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+
+  const openOptions = (code, schemaName, displayName) => setOptionsTarget({ code, schemaName, displayName })
 
   if (loading) {
     return (
@@ -273,14 +325,25 @@ export default function LeadQualificationSchemaDashboard() {
               Futwork postbacks write to. This is what each raw <strong>mx_Custom_N</strong> code
               on the Futwork Errors page actually maps to. <strong>Refresh</strong> re-fetches
               directly from LeadSquared, so a field edited there shows up here without a deploy.
+              <br /><br />
+              <strong>On Created/Modified Date &amp; Time:</strong> LeadSquared's own API carries
+              no per-field created/modified timestamp or author at all -- confirmed directly
+              against its live response, and its own Settings screen doesn't show these either.
+              So these columns are Quantum's own observation history, not LeadSquared's: the first
+              moment this page ever saw a field, and the last time its type/mandatory/name changed.
+              That means every field will read as freshly "created" the first time this ships, and
+              a genuine <strong>NEW</strong> badge only means "first seen by Quantum in the last 15
+              days" -- there is no data source anywhere (LeadSquared's API or its UI) that can say
+              who added or changed a field, so no Created By / Modified By column exists.
             </p>
           </div>
 
-          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
+          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
             <PremKPI label="Activity Types" value={fmtN(stats.typeCount)} sub="Futwork-related, on this account" accent={C.navy} icon={KPI_ICONS.total} />
             <PremKPI label="Total Fields" value={fmtN(stats.fieldCount)} sub="across all activity types" accent={C.blue} icon={KPI_ICONS.ai} />
             <PremKPI label="Dropdown Fields" value={fmtN(stats.dropdownCount)} sub="where invalid values get rejected" accent={C.cyan} icon={KPI_ICONS.bot} />
             <PremKPI label="Mandatory Fields" value={fmtN(stats.mandatoryCount)} sub="required on every postback" accent={C.green} icon={KPI_ICONS.agent} />
+            <PremKPI label="New Fields (15d)" value={fmtN(stats.newCount)} sub="first seen by Quantum recently" accent={C.navy} icon={KPI_ICONS.globe} />
           </div>
 
           {(types || []).length > 1 && (
@@ -305,10 +368,11 @@ export default function LeadQualificationSchemaDashboard() {
 
           {(types || []).map((t, i) => (
             <ActivityCard key={t.code} type={t} schema={schemas[t.code]} accent={CARD_ACCENTS[i % CARD_ACCENTS.length]}
-              cardRef={el => { cardRefs.current[t.code] = el }} />
+              cardRef={el => { cardRefs.current[t.code] = el }} onViewOptions={openOptions} />
           ))}
         </div>
       </div>
+      <DropdownOptionsModal target={optionsTarget} onClose={() => setOptionsTarget(null)} />
     </div>
   )
 }

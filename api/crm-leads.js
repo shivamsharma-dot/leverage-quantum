@@ -354,6 +354,63 @@ async function fetchLeadSquaredActivityTypeMeta(creds, eventCode, bypassCache) {
 // Custom Notable Activity Type screen shows. `refresh` bypasses the per-cold-start
 // cache, for right after someone edits a field in LeadSquared and wants to see it
 // reflected immediately rather than waiting for this container to recycle.
+// LeadSquared's real GetActivitySetting response (confirmed live, not just from
+// docs) carries NO per-field CreatedOn/ModifiedOn/CreatedBy/ModifiedBy at all --
+// the field object's full key list is SchemaName/InternalName/DisplayName/Value/
+// DataType/IsMandatory/ShowInForm/Sequence/ParentField/OptionSet/
+// DependentOptionSet/IsDefault/IsReadOnly/RenderType/ExportAsPlainText/
+// IsMultiSelectDropdown/IncludeOthersOption/BehaviorOnMissingDropdownOption/
+// IsOthersValue/InternalSchemaName/MaxFieldLength/StringRenderType/
+// IsViewRestrictedField/IsSortable/IsEncrypted/DisplayValue/IsMasked -- none of
+// which is a timestamp or an author. LeadSquared's own "Get Activity Change
+// History" API (RetrieveActivityChange) tracks value edits on individual
+// ACTIVITY RECORDS, not schema/field definitions, so it can't fill this gap
+// either. This table is therefore Quantum's OWN observation history rather than
+// LeadSquared's: first_seen_at is the first moment Quantum's Field Schema page
+// ever saw a given (activity_code, schema_name), and last_changed_at moves
+// forward whenever that field's dataType/isMandatory/displayName next differs
+// from what was last recorded. There is no way to attribute WHO made a change --
+// LeadSquared exposes no such data at this level and Quantum has no visibility
+// into its Settings UI -- so no "created by"/"modified by" column exists.
+async function trackFieldHistory(code, fields) {
+  const withHistory = fields.map(f => ({ ...f, firstSeenAt: null, lastChangedAt: null, isNew: false }))
+  try {
+    const { supabaseAdmin } = await import('../lib/auth.mjs')
+    const r = await supabaseAdmin(`lsq_field_history?activity_code=eq.${encodeURIComponent(code)}&select=schema_name,fingerprint,first_seen_at,last_changed_at`)
+    if (!r.ok) return withHistory
+    const rows = await r.json()
+    const known = {}
+    rows.forEach(row => { known[row.schema_name] = row })
+    const now = new Date().toISOString()
+    const upserts = []
+    withHistory.forEach(f => {
+      const fingerprint = [f.dataType, f.isMandatory, f.displayName].join('|')
+      const prior = known[f.schemaName]
+      if (!prior) {
+        f.firstSeenAt = now; f.lastChangedAt = now
+        upserts.push({ activity_code: String(code), schema_name: f.schemaName, display_name: f.displayName, fingerprint, first_seen_at: now, last_changed_at: now })
+      } else if (prior.fingerprint !== fingerprint) {
+        f.firstSeenAt = prior.first_seen_at; f.lastChangedAt = now
+        upserts.push({ activity_code: String(code), schema_name: f.schemaName, display_name: f.displayName, fingerprint, first_seen_at: prior.first_seen_at, last_changed_at: now })
+      } else {
+        f.firstSeenAt = prior.first_seen_at; f.lastChangedAt = prior.last_changed_at
+      }
+      f.isNew = f.firstSeenAt && (Date.now() - new Date(f.firstSeenAt).getTime()) < 15 * 24 * 60 * 60 * 1000
+    })
+    if (upserts.length) {
+      await supabaseAdmin('lsq_field_history', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(upserts),
+      }).catch(() => {})
+    }
+  } catch (_) {
+    // lsq_field_history doesn't exist yet, or Supabase is unreachable -- degrade to
+    // no history rather than fail the whole schema fetch.
+  }
+  return withHistory
+}
+
 async function fetchLeadSquaredActivitySchema(creds, { code, refresh }) {
   if (!code) throw new Error('code is required')
   const data = await fetchLeadSquaredActivityTypeMeta(creds, code, !!refresh)
@@ -362,13 +419,14 @@ async function fetchLeadSquaredActivitySchema(creds, { code, refresh }) {
   // the frontend offers a "View options" lookup on every field instead of trying to
   // pre-decide which ones are dropdowns, since the exact DataType value LeadSquared
   // uses for a Dropdown field isn't confirmed from the docs alone.
-  const fields = Array.isArray(data && data.Fields) ? data.Fields
+  const rawFields = Array.isArray(data && data.Fields) ? data.Fields
     .slice()
     .sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0))
     .map(f => ({
       schemaName: f.SchemaName, displayName: f.DisplayName || f.SchemaName,
       dataType: f.DataType || '', isMandatory: !!f.IsMandatory,
     })) : []
+  const fields = await trackFieldHistory(code, rawFields)
   return { code: String(code), displayName: (data && data.DisplayName) || '', score: (data && data.Score) || 0, fields }
 }
 
@@ -562,10 +620,6 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
-    // TEMP debug-only: raw, unmapped GetActivitySetting response, to confirm exactly
-    // which properties LeadSquared's real API returns before committing to a column
-    // design against them. Remove once that's confirmed.
-    if (mode === 'activity_schema_raw') return res.status(200).json(await fetchLeadSquaredActivityTypeMeta(creds, code, true))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
