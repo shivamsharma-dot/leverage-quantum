@@ -562,6 +562,10 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
+    // TEMP debug-only: raw, unmapped GetActivitySetting response, to confirm exactly
+    // which properties LeadSquared's real API returns before committing to a column
+    // design against them. Remove once that's confirmed.
+    if (mode === 'activity_schema_raw') return res.status(200).json(await fetchLeadSquaredActivityTypeMeta(creds, code, true))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
