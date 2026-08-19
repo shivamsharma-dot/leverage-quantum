@@ -632,10 +632,19 @@ async function fetchLeadSquaredOpportunityDetail(creds, { opportunityId }) {
   const fields = Array.isArray(data && data.Fields)
     ? data.Fields.filter(f => f.Value != null && f.Value !== '').map(f => ({ displayName: f.DisplayName || f.SchemaName, value: f.Value }))
     : []
+  // GetOpportunityDetails' own top-level CreatedOn/ModifiedOn come back in the
+  // .NET /Date(epochMs+tz)/ wire format (confirmed live) -- distinct from the
+  // SAME info duplicated inside Fields[] as a plain, already-formatted string,
+  // which is why only the header strip (not the field list) rendered a raw
+  // "/Date(...)" string before this fix. parseDotNetDate() returns null for
+  // anything that isn't that format, so the `||` fallback keeps working even
+  // if a future response shape sends a plain string instead.
   return {
     opportunityId, displayName: (data && data.DisplayName) || '', fields,
-    createdOn: data && data.CreatedOn, createdByName: (data && data.CreatedByName) || null,
-    modifiedOn: (data && data.ModifiedOn) || null, modifiedByName: (data && data.ModifiedByName) || null,
+    createdOn: parseDotNetDate(data && data.CreatedOn) || (data && data.CreatedOn) || null,
+    createdByName: (data && data.CreatedByName) || null,
+    modifiedOn: parseDotNetDate(data && data.ModifiedOn) || (data && data.ModifiedOn) || null,
+    modifiedByName: (data && data.ModifiedByName) || null,
   }
 }
 
