@@ -19,6 +19,7 @@ const AIQLDetailDashboard = lazy(COMPONENT_IMPORTS.AIQLDetailDashboard)
 const HumanUnassignedDashboard = lazy(COMPONENT_IMPORTS.HumanUnassignedDashboard)
 const AIUnassignedDashboard = lazy(COMPONENT_IMPORTS.AIUnassignedDashboard)
 const FutworkErrorsDashboard = lazy(COMPONENT_IMPORTS.FutworkErrorsDashboard)
+const LeadQualificationSchemaDashboard = lazy(COMPONENT_IMPORTS.LeadQualificationSchemaDashboard)
 const WhatsAppDashboard = lazy(COMPONENT_IMPORTS.WhatsAppDashboard)
 const MTDDashboard = lazy(COMPONENT_IMPORTS.MTDDashboard)
 const MetaAdsDashboard = lazy(COMPONENT_IMPORTS.MetaAdsDashboard)
@@ -59,6 +60,7 @@ const PAGE_TITLES = {
   '/dashboard/lq-ops-human-unassigned': 'Human Unassigned',
   '/dashboard/lq-ops-ai-unassigned': 'AI Unassigned',
   '/dashboard/futwork-errors': 'Futwork Errors',
+  '/dashboard/lq-field-schema': 'Field Schema',
   '/dashboard/whatsapp': 'WhatsApp',
   '/dashboard/referral': 'Referral',
   '/dashboard/leads-assigned': 'Leads Assigned',
@@ -253,6 +255,7 @@ export default function App() {
           <Route path="/dashboard/lq-ops-human-unassigned" element={<ProtectedRoute dashboardId="lq_ops_human_unassigned"> <HumanUnassignedDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/lq-ops-ai-unassigned" element={<ProtectedRoute dashboardId="lq_ops_ai_unassigned"> <AIUnassignedDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/futwork-errors" element={<ProtectedRoute dashboardId="futwork_errors"> <FutworkErrorsDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/lq-field-schema" element={<ProtectedRoute dashboardId="lq_field_schema"> <LeadQualificationSchemaDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/referral" element={<ProtectedRoute dashboardId="referral"><ReferralDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/leads-assigned" element={<ProtectedRoute dashboardId="leads_assigned"><LeadsAssignedDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/leadsquared" element={<ProtectedRoute dashboardId="leadsquared"><LeadSquaredDashboard /></ProtectedRoute>} />

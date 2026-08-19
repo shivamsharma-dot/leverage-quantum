@@ -120,6 +120,7 @@ export const NAV = [
           { to: '/dashboard/lq-ops-human-unassigned', label: 'Human Unassigned', matchType: 'route' },
           { to: '/dashboard/lq-ops-ai-unassigned', label: 'AI Unassigned', matchType: 'route' },
           { to: '/dashboard/futwork-errors', label: 'Futwork Errors', matchType: 'route' },
+          { to: '/dashboard/lq-field-schema', label: 'Field Schema', matchType: 'route' },
         ]
       },
       { to: '/dashboard/whatsapp',     icon: <WhatsAppIcon />, label: 'WhatsApp',     end: false },
@@ -168,6 +169,7 @@ export const PAGE_LIST = [
   { id:'lq_ops_human_unassigned', label:'Human Unassigned', path:'/dashboard/lq-ops-human-unassigned', adminOnly:false },
   { id:'lq_ops_ai_unassigned', label:'AI Unassigned', path:'/dashboard/lq-ops-ai-unassigned', adminOnly:false },
   { id:'futwork_errors', label:'Futwork Errors', path:'/dashboard/futwork-errors', adminOnly:false },
+  { id:'lq_field_schema', label:'Field Schema', path:'/dashboard/lq-field-schema', adminOnly:false },
   { id:'whatsapp',     label:'WhatsApp',     path:'/dashboard/whatsapp',    adminOnly:false },
   { id:'referral', label:'Referral', path:'/dashboard/referral', adminOnly:false },
   { id:'leads_assigned', label:'Leads Assigned', path:'/dashboard/leads-assigned', adminOnly:false },
@@ -212,6 +214,9 @@ function CashFlowIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" 
 // Futwork Errors -- a broken-link / integration-fault glyph (chain link with a gap and
 // a bolt), distinct from PeopleIcon/BotIcon used for the QL Ops volume pages.
 function FutworkErrorIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.5 13.5L8 16a3 3 0 01-4.24-4.24l3-3a3 3 0 014.13-.1"/><path d="M13.5 10.5L16 8a3 3 0 014.24 4.24l-3 3a3 3 0 01-4.13.1"/><path d="M11.5 12.5l1-1"/></svg> }
+// Field Schema -- a table/grid glyph, distinct from the funnel/bot icons used by the
+// other QL Ops sub-items, since this page is a reference table, not a metrics view.
+function FieldSchemaIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/></svg> }
 
 const ICON_MAP = {
   'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'Overall (BigQuery)': <OverallIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
@@ -223,6 +228,7 @@ const ICON_MAP = {
   'Human Unassigned': <PeopleIcon/>,
   'AI Unassigned': <BotIcon/>,
   'Futwork Errors': <FutworkErrorIcon/>,
+  'Field Schema': <FieldSchemaIcon/>,
   'Bing Ads': <BingAdsIcon/>,
   'Referral': <ReferralIcon/>, 'Leads Assigned': <LeadsAssignedIcon/>,
   'WhatsApp': <WhatsAppIcon/>,

@@ -340,12 +340,49 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, eventCode, s
 // this schema is effectively static, it only changes if someone edits the activity type
 // in LeadSquared's own Settings).
 const _lsqActivityMetaCache = {}
-async function fetchLeadSquaredActivityTypeMeta(creds, eventCode) {
+async function fetchLeadSquaredActivityTypeMeta(creds, eventCode, bypassCache) {
   const code = String(eventCode)
-  if (_lsqActivityMetaCache[code]) return _lsqActivityMetaCache[code]
+  if (!bypassCache && _lsqActivityMetaCache[code]) return _lsqActivityMetaCache[code]
   const data = await leadsquaredGet('/v2/ProspectActivity.svc/CustomActivity/GetActivitySetting', creds, { code })
   _lsqActivityMetaCache[code] = data
   return data
+}
+
+// Same schema GetActivitySetting already returns (see fetchLeadSquaredActivityTypeMeta
+// above), reshaped for the Field Schema page: DisplayName/SchemaName/DataType/IsMandatory
+// per field, in Sequence order -- the exact table LeadSquared's own Settings >
+// Custom Notable Activity Type screen shows. `refresh` bypasses the per-cold-start
+// cache, for right after someone edits a field in LeadSquared and wants to see it
+// reflected immediately rather than waiting for this container to recycle.
+async function fetchLeadSquaredActivitySchema(creds, { code, refresh }) {
+  if (!code) throw new Error('code is required')
+  const data = await fetchLeadSquaredActivityTypeMeta(creds, code, !!refresh)
+  // dataType is passed through verbatim (whatever string LeadSquared's own API
+  // returns, e.g. "String"/"SelectOne"/"User") rather than guessed/relabeled here --
+  // the frontend offers a "View options" lookup on every field instead of trying to
+  // pre-decide which ones are dropdowns, since the exact DataType value LeadSquared
+  // uses for a Dropdown field isn't confirmed from the docs alone.
+  const fields = Array.isArray(data && data.Fields) ? data.Fields
+    .slice()
+    .sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0))
+    .map(f => ({
+      schemaName: f.SchemaName, displayName: f.DisplayName || f.SchemaName,
+      dataType: f.DataType || '', isMandatory: !!f.IsMandatory,
+    })) : []
+  return { code: String(code), displayName: (data && data.DisplayName) || '', score: (data && data.Score) || 0, fields }
+}
+
+// ActivityField/Dropdown/Options/Get -- the authoritative list of values LeadSquared
+// will actually accept for one Dropdown-type custom field, straight from Settings >
+// Custom Notable Activity Type's own picklist config (not guessed from past postback
+// data). This is what the Futwork Errors page's "invalid dropdown option" failures are
+// being rejected against -- surfacing it lets someone see, side by side, what Futwork
+// sent vs. what LeadSquared will actually accept for that exact field.
+async function fetchLeadSquaredDropdownOptions(creds, { code, schemaName }) {
+  if (!code || !schemaName) throw new Error('code and schemaName are required')
+  const data = await leadsquaredPost('/v2/ProspectActivity.svc/ActivityField/Dropdown/Options/Get', creds,
+    { Parameter: { SchemaName: schemaName, ActivityEventCode: Number(code) } }, {})
+  return { options: (data && data.Options) || [] }
 }
 
 // Leads/Retrieve/ByIds -- resolves RelatedProspectId GUIDs into real contact names. Same
@@ -503,20 +540,29 @@ async function handleLeadSquared(req, res, me) {
   // able to open the page. Matching the route guard makes the grant mean what the
   // UI says it means. (Admins and plain viewers are unaffected -- both ids resolve
   // the same for them.)
-  if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, 'leadsquared')) {
+  // activity_schema/activity_dropdown_options power the Field Schema page under Lead
+  // Qualification, a separate sidebar item from the LeadSquared page -- gated on its
+  // own id ('lq_field_schema') rather than piggybacking on 'leadsquared', so access to
+  // one can be granted/revoked independently of the other, matching how every other
+  // sidebar page in this app gets its own PAGE_LIST id.
+  const { mode } = req.query || {}
+  const gateId = (mode === 'activity_schema' || mode === 'activity_dropdown_options') ? 'lq_field_schema' : 'leadsquared'
+  if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
   const creds = leadsquaredCreds()
   if (!creds.accessKey || !creds.secretKey) {
     return res.status(500).json({ error: 'LeadSquared is not configured -- set LEADSQUARED_ACCESS_KEY and LEADSQUARED_SECRET_KEY in Vercel env.' })
   }
-  const { mode, since, until, leadId, eventCode, pageIndex, pageSize, status } = req.query || {}
+  const { since, until, leadId, eventCode, pageIndex, pageSize, status, code, schemaName, refresh } = req.query || {}
   const p = { since, until, leadId, eventCode, status, pageIndex: Number(pageIndex) || undefined, pageSize: Number(pageSize) || undefined }
   try {
     if (mode === 'opportunities') return res.status(200).json(await fetchLeadSquaredOpportunities(creds, p))
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
+    if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
+    if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
