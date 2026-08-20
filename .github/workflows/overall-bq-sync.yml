@@ -273,7 +273,7 @@ jobs:
                   'Schema drift. BigQuery returned %r but this workflow and '
                   'overall_bq_daily are built for %r. Refusing to write mismatched data.'
                   % (fields, EXPECTED))
-          print('Schema matches the 16 expected columns, in order.')
+          print('Schema matches the %d expected columns, in order.' % len(EXPECTED))
 
           # getQueryResults is paginated. One page is NOT everything.
           raw = []

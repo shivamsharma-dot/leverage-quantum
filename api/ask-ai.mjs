@@ -371,7 +371,15 @@ async function fetchOverallCampaignTotals({ since, until }) {
   if (!sheet) return { error: 'Overall funnel sheet fetch failed (timed out or unreachable)' }
   const { h, rows } = sheet
   const di = h('lead_date'), ci = h('campaign_name'), si = h('source')
-  const li = h('total leads generated'), fq = h('floor_queued'), qf = h('queued on futwork'), qs = h('queued on superbot')
+  // 'Queued on Futwork' was renamed to 'Queued on Futwork Human' and a new
+  // 'Queued on Futwork AI' column was added on 2026-08-19/20 (the underlying leads
+  // didn't move provider, only the label naming which Futwork channel queued them --
+  // see OverallDashboard.jsx's mapRow() and overall-funnel-sync.yml for the same
+  // rename). This live-sheet fallback still looked up the old single column, which
+  // silently returns -1/undefined after the rename, so 'queued' on this path was
+  // undercounting by the entire Futwork volume (~97k/month) -- the exact bug already
+  // fixed on overall-funnel-sync.yml's own copy of this same aggregation.
+  const li = h('total leads generated'), fq = h('floor_queued'), qfh = h('queued on futwork human'), qfa = h('queued on futwork ai'), qs = h('queued on superbot')
   const hql = h('futwork human ql'), faq = h('futwork ai ql'), saq = h('superbot ai ql'), sp = h('total_spends')
   const byCampaign = {}
   for (const row of rows) {
@@ -383,7 +391,7 @@ async function fetchOverallCampaignTotals({ since, until }) {
     if (!campaign) continue
     const e = byCampaign[campaign] || { campaign, channel: mapChannel(row[si]), leads: 0, queued: 0, totalQL: 0, spend: 0 }
     e.leads += numFrom(row[li])
-    e.queued += numFrom(row[fq]) + numFrom(row[qf]) + numFrom(row[qs])
+    e.queued += numFrom(row[fq]) + numFrom(row[qfh]) + numFrom(row[qfa]) + numFrom(row[qs])
     e.totalQL += numFrom(row[hql]) + numFrom(row[faq]) + numFrom(row[saq])
     e.spend += numFrom(row[sp], true)
     byCampaign[campaign] = e

@@ -562,14 +562,19 @@ const SR_FEE_KEY = 'lq_sr_fee'
 const SR_FEE_DEFAULT = 350000
 const RAU_CONVERSION_FACTOR = 0.7
 
-// Full INR formatter — every rupee figure on this page displays in full (no Cr/L
-// shorthand); the abbreviated form is only ever surfaced as a hover tooltip via fmtINRShort.
+// Full INR formatter — the exact figure, no Cr/L shorthand. Primary display value for
+// money in the summary table and the Compare/Trend modals. On the 5 money KPI cards
+// (Est. SR Revenue/Spend/CPL/CPQL/CPA) this is deliberately the OTHER way around: the
+// short Cr/L form is the displayed value and this is only the hover tooltip -- a long
+// value like ₹1,69,48,220 overflowed a 10-across card and got visually painted over by
+// its neighbour, so those 5 cards flip which formatter is primary. See fmtINRShort.
 function fmtINR(n) {
   n = parseFloat(n) || 0
   return '₹' + Math.round(n).toLocaleString('en-IN')
 }
-// Cr/L shorthand — used ONLY for the title="" tooltip on money values, never as the
-// displayed text.
+// Cr/L shorthand. Primary displayed value on the 5 money KPI cards (with the exact
+// fmtINR figure in their hover tooltip); everywhere else on this page it's the reverse
+// -- fmtINR is primary and this is only ever the tooltip.
 function fmtINRShort(n) {
   n = parseFloat(n) || 0
   if (n >= 1e7) return '₹' + (n / 1e7).toFixed(2) + ' Cr'
@@ -881,6 +886,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
+  const [bqSyncUnknown, setBqSyncUnknown] = useState(false)
   // Multi-select Source filter -- ['All'] is the sentinel meaning "no filter, every
   // source". Any other array means "only these specific sources". Never store both
   // 'All' and specific names together -- toggleSource() below enforces that, so this
@@ -1459,7 +1465,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const pushMonth = mk => { if (mk != null) spans.push([monthStartDate(mk), monthEndDate(mk)]) }
     const pushWindow = w => { if (!w) return; if (w.type === 'month') pushMonth(w.mk); else pushRange(w) }
     if (dateWindow) pushRange(dateWindow)
-    else pushMonth(monthKeyByLabel.get(selMonth))
+    else {
+      const mk = monthKeyByLabel.get(selMonth)
+      // 'All months' is a synthetic option (always index 0 in monthOptions) that never
+      // has a real entry in monthKeyByLabel, so this always no-op'd -- the effect below
+      // early-returns on a null bqSince/bqUntil and leaves whatever bqRows the PREVIOUS
+      // single-month selection fetched, so "All months" silently rendered a stale
+      // one-month window as if it were the full history. Fall back to the cache's own
+      // known bounds (already fetched independently, same fields the Month dropdown and
+      // trendAnchorDate use) so a real, full-history fetch actually fires.
+      if (mk != null) pushMonth(mk)
+      else if (bqBounds?.min && bqBounds?.max) pushRange({ from: dateFromIso(bqBounds.min), to: dateFromIso(bqBounds.max) })
+    }
     pushWindow(prevWindow)
     pushWindow(compareWindow)
     if (compareOpen && compareMode === 'custom' && compareCustomFrom && compareCustomTo) {
@@ -1472,7 +1489,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     let lo = spans[0][0], hi = spans[0][1]
     for (const [a, b] of spans) { if (a < lo) lo = a; if (b > hi) hi = b }
     return { since: dayKey(lo), until: dayKey(hi) }
-  }, [bqMode, dateWindow, selMonth, monthKeyByLabel, prevWindow, compareWindow, compareOpen, compareMode, compareCustomFrom, compareCustomTo, trendBqSpan])
+  }, [bqMode, dateWindow, selMonth, monthKeyByLabel, bqBounds, prevWindow, compareWindow, compareOpen, compareMode, compareCustomFrom, compareCustomTo, trendBqSpan])
 
   // The read effect below depends on these two PRIMITIVES, never on the bqRange object
   // itself -- and that is not a style preference. `months` is derived from `rows`, so a
@@ -1491,7 +1508,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     retryFetch(fetchOverallBqBounds)
       .then(b => { if (!dead) setBqBounds(b) })
       .catch(e => { if (!dead) { setBqError('cache unavailable -- ' + e.message); setLoading(false); loadData() } })
-    fetchOverallBqSyncedAt().then(ts => { if (!dead && ts) setLastSync(ts) })
+    // fetchOverallBqSyncedAt() already swallows its own errors and resolves null on
+    // any failure -- track that explicitly (bqSyncUnknown) instead of just leaving
+    // lastSync at whatever it was, which on this page renders as no "Synced" line at
+    // all with nothing telling the reader why. A stale/mirrored figure being mistaken
+    // for a live one is exactly the kind of thing this app has a documented history of
+    // (see the 2026-08-05 CLAUDE.md entry) -- say "unknown" rather than say nothing.
+    setBqSyncUnknown(false)
+    fetchOverallBqSyncedAt().then(ts => { if (dead) return; if (ts) setLastSync(ts); else setBqSyncUnknown(true) })
     return () => { dead = true }
   }, [bqMode, bqNonce, loadData])
 
@@ -1552,8 +1576,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // (see state comment above), so period A switches to its own custom range there.
   const periodARows = compareMode === 'custom' ? (filterRowsByDateStr(compareCustomFromA, compareCustomToA) || []) : filtered
   const periodAKpis = useMemo(() => sumKpis(periodARows), [periodARows])
-  const periodACpl = periodAKpis.leads > 0 ? periodAKpis.spend / periodAKpis.leads : 0
-  const periodACpql = periodAKpis.totalQL > 0 ? periodAKpis.spend / periodAKpis.totalQL : 0
+  // CPL/CPQL/CPA everywhere else on this page divide TOTAL spend by PAID-only
+  // leads/QLs/apps (see the paidKpis note above cpl/cpql/cpa) -- this modal's own
+  // copy used periodAKpis.leads/totalQL (every row, free channels included), which
+  // read a materially cheaper, wrong CPL/CPQL right next to the correct KPI cards
+  // on the same screen. Paid-only denominators, same as the cards.
+  const periodAPaidKpis = useMemo(() => sumKpis(periodARows.filter(r => paidSources.has(r.source))), [periodARows, paidSources])
+  const periodACpl = periodAPaidKpis.leads > 0 ? periodAKpis.spend / periodAPaidKpis.leads : 0
+  const periodACpql = periodAPaidKpis.totalQL > 0 ? periodAKpis.spend / periodAPaidKpis.totalQL : 0
 
   const compareLabel = useMemo(() => {
     if (compareMode === 'prev') return prevWindow ? (prevWindow.type === 'month' ? monthLabel(prevWindow.mk) : 'previous period') : '—'
@@ -1567,9 +1597,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     : (activeFilter === 'month' ? (selMonth || 'this period') : (dateWindow ? dateWindow.label : 'this period'))
 
   const compareKpis = useMemo(() => sumKpis(compareRows), [compareRows])
-  const compareCpl = compareKpis.leads > 0 ? compareKpis.spend / compareKpis.leads : 0
-  const compareCpql = compareKpis.totalQL > 0 ? compareKpis.spend / compareKpis.totalQL : 0
-  const compareCpa = compareKpis.apps > 0 ? compareKpis.spend / compareKpis.apps : 0
+  const comparePaidKpis = useMemo(() => sumKpis(compareRows.filter(r => paidSources.has(r.source))), [compareRows, paidSources])
+  const compareCpl = comparePaidKpis.leads > 0 ? compareKpis.spend / comparePaidKpis.leads : 0
+  const compareCpql = comparePaidKpis.totalQL > 0 ? compareKpis.spend / comparePaidKpis.totalQL : 0
+  const compareCpa = comparePaidKpis.apps > 0 ? compareKpis.spend / comparePaidKpis.apps : 0
 
   const fmtDateInput = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   // Prefill both custom ranges the first time Custom is opened, so the modal
@@ -3182,6 +3213,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               </span>
             )}
             {lastSync && <span style={{ fontSize:12.5, color:C.muted, fontFamily:FONT }}>Synced {syncFmt.format(lastSync)}</span>}
+            {!lastSync && bqMode && bqSyncUnknown && <span style={{ fontSize:12.5, color:C.muted, fontFamily:FONT }}>Sync time unknown</span>}
             <Button
               onClick={() => { if (bqMode) { setBqError(null); setBqNonce(n => n + 1) } else loadData(true) }}
               disabled={loading || bqBusy}
@@ -3217,10 +3249,28 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         {/* SCROLLABLE CONTENT */}
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
 
-          {/* KPI ROW 1 — funnel volume, with vs-previous-period deltas. Fixed 10-across
-              so every card is the same width on both rows (an auto-fit grid sized cards
-              differently between a 12-card row and an 8-card row — "thick vs thin"). */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(10, minmax(120px, 1fr))', gap:12, marginBottom:12 }}>
+          {/* Same honesty banner the Trend modal already shows for the same reason:
+              in BigQuery mode a filter/period change can kick off a real fetch that's
+              still in flight, and every number below reads from whatever the PREVIOUS
+              fetch returned until it lands -- silently showing that as a confident
+              answer for the new selection is exactly what produced a real, live bug
+              (a wide "All months" read silently reusing a stale single-month window). */}
+          {bqMode && bqBusy && (
+            <div style={{ display:'flex', alignItems:'center', gap:8, background:C.navyBg, border:`0.5px solid ${C.border}`, borderRadius:10, padding:'9px 12px', marginBottom:14, fontSize:14, color:C.navy, fontWeight:700 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation:'spin .8s linear infinite', flexShrink:0 }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+              Fetching from BigQuery -- the KPIs, funnel and table below may still show the previous selection until this finishes.
+            </div>
+          )}
+
+          {/* KPI ROW 1 — funnel volume, with vs-previous-period deltas. Both rows carry
+              exactly 10 cards each (rebalanced from an earlier 12/8 split that made an
+              auto-fit grid size cards differently row to row — "thick vs thin"), so an
+              auto-fit grid is safe again: same item count -> same column count on both
+              rows at any width. A fixed repeat(10, minmax(120px,1fr)) was tried instead
+              and reliably overflowed the container by 300-900px at every width between
+              the 768px and ~1310px breakpoints, forcing the whole page to scroll
+              sideways -- auto-fit degrades to fewer, wider columns there instead. */}
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:12, marginBottom:12 }}>
             <PremKPI label="EST. SR REVENUE" value={<span title={fmtINR(estSrRevenue)}>{fmtINRShort(estSrRevenue)}</span>} sub={'Est. RAUs ' + fmtN(estimatedRaus) + ' × SR Fee'} delta={deltaPct(estSrRevenue, prevEstSrRevenue)} prevValue={fmtINR(prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="SPEND" value={<span title={fmtINR(kpis.spend)}>{fmtINRShort(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} prevValue={fmtINR(prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} prevValue={fmtN(prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
@@ -3234,8 +3284,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           </div>
 
           {/* KPI ROW 2 — remaining QL breakdown + cost efficiency + downstream conversion + ROAS.
-              Same fixed 10-across grid as row 1 so card widths match exactly. */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(10, minmax(120px, 1fr))', gap:12, marginBottom:20 }}>
+              Same auto-fit grid as row 1, same 10 items, so columns match at any width. */}
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:12, marginBottom:20 }}>
             <PremKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
             <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
             <PremKPI label="CPL" value={<span title={fmtINR(cpl)}>{fmtINRShort(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} prevValue={fmtINR(prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
@@ -3322,7 +3372,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   onClick={() => setPinCols(v => !v)}
                   size="sm"
                   variant={pinCols ? 'primary' : 'secondary'}
-                  title={pinCols ? 'Source is pinned while scrolling — click to make the table scroll freely' : 'Pin Source so it stays visible while scrolling the table sideways'}
+                  title={pinCols ? `${grpByLabel} is pinned while scrolling — click to make the table scroll freely` : `Pin ${grpByLabel} so it stays visible while scrolling the table sideways`}
                   icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 17v5" /><path d="M9 3h6l1 6 3 2v2H5v-2l3-2z" /></svg>}
                 >
                   {pinCols ? 'Pinned' : 'Pin columns'}
