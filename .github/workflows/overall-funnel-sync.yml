@@ -85,7 +85,14 @@ jobs:
               except ValueError: return -1
 
           di, ci, si = idx('lead_date'), idx('campaign_name'), idx('source')
-          li, fq, qf, qs = idx('total leads generated'), idx('floor_queued'), idx('queued on futwork'), idx('queued on superbot')
+          # 'Queued on Futwork' was renamed to 'Queued on Futwork Human' and a new
+          # 'Queued on Futwork AI' column was added on 2026-08-20 (the underlying
+          # leads didn't move provider, only the label naming which Futwork channel
+          # queued them -- see OverallDashboard.jsx's mapRow() for the same rename).
+          # Before this fix, idx('queued on futwork') silently returned -1 once the
+          # sheet header changed, so 'queued' undercounted by the entire Futwork
+          # Human amount for every day since the sheet was renamed.
+          li, fq, qfh, qfa, qs = idx('total leads generated'), idx('floor_queued'), idx('queued on futwork human'), idx('queued on futwork ai'), idx('queued on superbot')
           hql, faq, saq, sp = idx('futwork human ql'), idx('futwork ai ql'), idx('superbot ai ql'), idx('total_spends')
           ap, of, de, ra = idx('total apps'), idx('total offers'), idx('total deposits'), idx('total raus')
 
@@ -105,7 +112,7 @@ jobs:
                   agg[key] = e
               g = lambda i: cols[i] if 0 <= i < len(cols) else '0'
               e['leads'] += num(g(li))
-              e['queued'] += num(g(fq)) + num(g(qf)) + num(g(qs))
+              e['queued'] += num(g(fq)) + num(g(qfh)) + num(g(qfa)) + num(g(qs))
               e['total_ql'] += num(g(hql)) + num(g(faq)) + num(g(saq))
               e['spend'] += num(g(sp), True)
               e['apps'] += num(g(ap))

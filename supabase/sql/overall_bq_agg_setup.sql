@@ -45,7 +45,11 @@ CREATE TABLE IF NOT EXISTS public.overall_bq_daily_agg (
   -- reads this table already treats a missing number as 0.
   "Total Leads Generated"   BIGINT  NOT NULL DEFAULT 0,
   "floor_queued"            BIGINT  NOT NULL DEFAULT 0,
-  "Queued on Futwork"       BIGINT  NOT NULL DEFAULT 0,
+  -- "Queued on Futwork" renamed to "Queued on Futwork Human" 2026-08-20, and
+  -- "Queued on Futwork AI" added the same day -- see
+  -- supabase/sql/overall_bq_add_futwork_ai_queued.sql for an existing database.
+  "Queued on Futwork Human" BIGINT  NOT NULL DEFAULT 0,
+  "Queued on Futwork AI"    BIGINT  NOT NULL DEFAULT 0,
   "Queued on Superbot"      BIGINT  NOT NULL DEFAULT 0,
   "Futwork Human QL"        BIGINT  NOT NULL DEFAULT 0,
   "Futwork AI QL"           BIGINT  NOT NULL DEFAULT 0,

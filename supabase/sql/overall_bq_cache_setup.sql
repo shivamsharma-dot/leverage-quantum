@@ -43,22 +43,27 @@
 --   5  campaign_name            STRING          nullable (673 NULLs observed)
 --   6  Total Leads Generated    INTEGER
 --   7  floor_queued             INTEGER
---   8  Queued on Futwork        INTEGER
---   9  Queued on Superbot       INTEGER
---  10  Futwork Human QL         INTEGER         nullable
---  11  Futwork AI QL            INTEGER         nullable
---  12  Superbot AI QL           INTEGER         nullable
---  13  Total_Spends             FLOAT
---  14  Total Apps               INTEGER
---  15  Total Offers             INTEGER
---  16  Total Deposits           INTEGER
---  17  Total RAUs               INTEGER
+--   8  Queued on Futwork Human  INTEGER         renamed 2026-08-20 from 'Queued on
+--                                               Futwork' -- same leads, the label now
+--                                               names the Futwork channel explicitly
+--                                               now that a second one exists
+--   9  Queued on Futwork AI     INTEGER         added 2026-08-20, genuinely new column
+--  10  Queued on Superbot       INTEGER
+--  11  Futwork Human QL         INTEGER         nullable
+--  12  Futwork AI QL            INTEGER         nullable
+--  13  Superbot AI QL           INTEGER         nullable
+--  14  Total_Spends             FLOAT
+--  15  Total Apps               INTEGER
+--  16  Total Offers             INTEGER
+--  17  Total Deposits           INTEGER
+--  18  Total RAUs               INTEGER
 --
 -- NOTE (fresh installs only): if you are running this file for the very first time
--- after 2026-08-17, the CREATE TABLE below already includes "Sub_Source". If this
--- table already exists in your database (i.e. you ran this file before 2026-08-17),
--- CREATE TABLE IF NOT EXISTS is a no-op and you need
--- supabase/sql/overall_bq_add_sub_source.sql instead.
+-- after 2026-08-20, the CREATE TABLE below already includes 'Queued on Futwork Human'
+-- and 'Queued on Futwork AI'. If this table already exists in your database (i.e. you
+-- ran this file before 2026-08-20), CREATE TABLE IF NOT EXISTS is a no-op and you need
+-- supabase/sql/overall_bq_add_futwork_ai_queued.sql instead (same rule applies
+-- separately for Sub_Source and supabase/sql/overall_bq_add_sub_source.sql).
 --
 -- The metric columns are deliberately NULLABLE with NO DEFAULT 0. BigQuery
 -- really does return NULL for some of them and NULL is not the same fact as 0.
@@ -112,7 +117,8 @@ CREATE TABLE IF NOT EXISTS public.overall_bq_daily (
   "campaign_name"         TEXT,
   "Total Leads Generated" BIGINT,
   "floor_queued"          BIGINT,
-  "Queued on Futwork"     BIGINT,
+  "Queued on Futwork Human" BIGINT,
+  "Queued on Futwork AI"  BIGINT,
   "Queued on Superbot"    BIGINT,
   "Futwork Human QL"      BIGINT,
   "Futwork AI QL"         BIGINT,

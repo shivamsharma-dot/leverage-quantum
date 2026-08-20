@@ -85,12 +85,18 @@ jobs:
           # (sub_source_updated -- confirmed via INFORMATION_SCHEMA.COLUMNS +
           # a real GROUP BY sample: real values like 'Facebook', 'Collegehai',
           # 'Affiliate Nitro', matching the Overall PM sheet's own Sub_Source
-          # column exactly). Saved queries are console-only objects and are NOT
-          # reachable over the REST API, so the text has to live here -- the
-          # LIVE saved query in the Console was updated to match this same SQL.
-          # If the saved query is ever edited again, edit this too. The schema
-          # guard below fails loudly on a changed column list, but it cannot
-          # see a changed WHERE.
+          # column exactly), then again 2026-08-19: the raw table's own
+          # fut_human_queued column (previously aliased 'Queued on Futwork')
+          # was renamed to feed 'Queued on Futwork Human', and a genuinely new
+          # raw column fut_ai_queued was added, aliased 'Queued on Futwork AI'
+          # -- both confirmed live via INFORMATION_SCHEMA.COLUMNS on
+          # chatbot_marketing.marketing_table_v1, and matching the "Overall PM"
+          # sheet's own real header row exactly. Saved queries are console-only
+          # objects and are NOT reachable over the REST API, so the text has to
+          # live here -- the LIVE saved query in the Console was updated to
+          # match this same SQL. If the saved query is ever edited again, edit
+          # this too. The schema guard below fails loudly on a changed column
+          # list, but it cannot see a changed WHERE.
           SQL = '''
           SELECT
               FORMAT_DATE('%d-%b-%Y', DATE(date_of_transaction)) AS lead_date,
@@ -105,7 +111,8 @@ jobs:
               campaign_name,
               count_opps AS `Total Leads Generated`,
               floor_queued,
-              fut_human_queued AS `Queued on Futwork`,
+              fut_human_queued AS `Queued on Futwork Human`,
+              fut_ai_queued AS `Queued on Futwork AI`,
               superbot_queued AS `Queued on Superbot`,
               count_fut_ql_snapshot AS `Futwork Human QL`,
               count_fut_ai_ql_snapshot AS `Futwork AI QL`,
@@ -122,7 +129,7 @@ jobs:
           EXPECTED = [
               'lead_date', 'month', 'Source', 'Sub_Source', 'campaign_name',
               'Total Leads Generated', 'floor_queued',
-              'Queued on Futwork', 'Queued on Superbot',
+              'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
               'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
               'Total_Spends',
               'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
@@ -340,22 +347,23 @@ jobs:
                       'campaign_name': vals[4],
                       'Total Leads Generated': as_int(vals[5]),
                       'floor_queued': as_int(vals[6]),
-                      'Queued on Futwork': as_int(vals[7]),
-                      'Queued on Superbot': as_int(vals[8]),
-                      'Futwork Human QL': as_int(vals[9]),
-                      'Futwork AI QL': as_int(vals[10]),
-                      'Superbot AI QL': as_int(vals[11]),
+                      'Queued on Futwork Human': as_int(vals[7]),
+                      'Queued on Futwork AI': as_int(vals[8]),
+                      'Queued on Superbot': as_int(vals[9]),
+                      'Futwork Human QL': as_int(vals[10]),
+                      'Futwork AI QL': as_int(vals[11]),
+                      'Superbot AI QL': as_int(vals[12]),
                       # Total_Spends goes into a Postgres NUMERIC as the STRING
                       # BigQuery returned (it arrives like 4.0660831692071205E8).
                       # float() here would be a lossy round-trip; NUMERIC parses
                       # scientific notation exactly.
                       'Total_Spends': (None
-                                       if vals[12] is None or str(vals[12]).strip() == ''
-                                       else str(vals[12]).strip()),
-                      'Total Apps': as_int(vals[13]),
-                      'Total Offers': as_int(vals[14]),
-                      'Total Deposits': as_int(vals[15]),
-                      'Total RAUs': as_int(vals[16]),
+                                       if vals[13] is None or str(vals[13]).strip() == ''
+                                       else str(vals[13]).strip()),
+                      'Total Apps': as_int(vals[14]),
+                      'Total Offers': as_int(vals[15]),
+                      'Total Deposits': as_int(vals[16]),
+                      'Total RAUs': as_int(vals[17]),
                       'lead_date_iso': iso_date(vals[0]),
                       'sync_id': sync_id,
                       'synced_at': now_iso,
@@ -472,7 +480,7 @@ jobs:
           # See supabase/sql/overall_bq_agg_setup.sql for the schema.
           SUM_FIELDS = [
               'Total Leads Generated', 'floor_queued',
-              'Queued on Futwork', 'Queued on Superbot',
+              'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
               'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
               'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
           ]
