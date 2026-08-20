@@ -1657,14 +1657,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
   const funnel = useMemo(() => ([
     { stage:'Leads Generated', count:kpis.leads },
-    { stage:'Total Queued', count:totalQueued },
-    { stage:'Floor Queued', count:kpis.floorQueued },
+    { stage:'Directly Distributed to Floor', count:kpis.floorQueued },
+    { stage:'Total Futwork Queued', count:totalFutworkQ },
+    { stage:'Futwork AI Queued', count:kpis.futworkAiQ },
+    { stage:'Futwork Human Queued', count:kpis.futworkHumanQ },
     { stage:'Total QL', count:kpis.totalQL },
+    { stage:'Futwork AI QL', count:kpis.futworkAiQl },
+    { stage:'Futwork Human QL', count:kpis.humanQL },
     { stage:'Applications', count:kpis.apps },
     { stage:'Offers', count:kpis.offers },
     { stage:'Deposits', count:kpis.deposits },
     { stage:'RAUs', count:kpis.raus },
-  ]), [kpis, totalQueued])
+  ]), [kpis, totalFutworkQ])
 
   // The real conversion PATH (not the parallel Floor/Queued split) — used both for the
   // conversion-chain strip and to find the biggest leak for the insights row.
@@ -3174,8 +3178,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         {/* SCROLLABLE CONTENT */}
         <div style={{ flex:1, overflowY:'auto', padding:'20px 28px' }}>
 
-          {/* KPI ROW 1 — funnel volume, with vs-previous-period deltas */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(175px, 1fr))', gap:12, marginBottom:12 }}>
+          {/* KPI ROW 1 — funnel volume, with vs-previous-period deltas. Fixed 10-across
+              so every card is the same width on both rows (an auto-fit grid sized cards
+              differently between a 12-card row and an 8-card row — "thick vs thin"). */}
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(10, minmax(0, 1fr))', gap:12, marginBottom:12 }}>
             <PremKPI label="EST. SR REVENUE" value={<span title={fmtINRShort(estSrRevenue)}>{fmtINR(estSrRevenue)}</span>} sub={'Est. RAUs ' + fmtN(estimatedRaus) + ' × SR Fee'} delta={deltaPct(estSrRevenue, prevEstSrRevenue)} prevValue={fmtINR(prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="SPEND" value={<span title={fmtINRShort(kpis.spend)}>{fmtINR(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} prevValue={fmtINR(prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} prevValue={fmtN(prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
@@ -3186,12 +3192,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <PremKPI label="QUEUED ON SUPERBOT" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={deltaPct(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
             <PremKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={deltaPct(kpis.totalQL, prevKpis.totalQL)} prevValue={fmtN(prevKpis.totalQL)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai} />
             <PremKPI label="FUTWORK HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="FUTWORK AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
           </div>
 
-          {/* KPI ROW 2 — cost efficiency + downstream conversion + ROAS */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(175px, 1fr))', gap:12, marginBottom:20 }}>
+          {/* KPI ROW 2 — remaining QL breakdown + cost efficiency + downstream conversion + ROAS.
+              Same fixed 10-across grid as row 1 so card widths match exactly. */}
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(10, minmax(0, 1fr))', gap:12, marginBottom:20 }}>
+            <PremKPI label="FUTWORK AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
             <PremKPI label="CPL" value={<span title={fmtINRShort(cpl)}>{fmtINR(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} prevValue={fmtINR(prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
             <PremKPI label="CPQL" value={<span title={fmtINRShort(cpql)}>{fmtINR(cpql)}</span>} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} prevValue={fmtINR(prevCpql)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai} />
             <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.totalQL) + ' of QL'} delta={deltaPct(kpis.apps, prevKpis.apps)} prevValue={fmtN(prevKpis.apps)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
@@ -3205,12 +3212,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           {/* FUNNEL + STAGE CONVERSION */}
           <Card>
             {sectionTitle('Overall funnel', 'lead → revenue path for the selected period and source')}
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={460}>
               <BarChart data={funnel} layout="vertical" margin={{ left:20, right:50, top:4, bottom:4 }}>
                 <defs><BarGrad id="g-ov-funnel" color={C.navy} dir="h"/></defs>
                 <CartesianGrid horizontal={false} stroke={C.border} />
                 <XAxis type="number" tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
-                <YAxis type="category" dataKey="stage" tick={axis} axisLine={false} tickLine={false} width={110} />
+                <YAxis type="category" dataKey="stage" tick={axis} axisLine={false} tickLine={false} width={150} />
                 <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
                 <Bar dataKey="count" name="Count" fill={barFill('g-ov-funnel')} radius={BAR_RADIUS_H} barSize={20}>
                   
