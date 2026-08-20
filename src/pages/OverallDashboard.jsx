@@ -160,9 +160,9 @@ function Dropdown({ options, value, onChange, label, minWidth = 120 }) {
   }, [])
   return (
     <div style={{ display:'flex', alignItems:'center', gap:6 }} ref={ref}>
-      {label && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT, whiteSpace:'nowrap' }}>{label}</span>}
+      {label && <span style={{ fontSize:12.5, color:C.muted, fontFamily:FONT, whiteSpace:'nowrap' }}>{label}</span>}
       <div style={{ position:'relative' }}>
-        <button onClick={() => setOpen(v => !v)} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px 6px 12px', borderRadius:8, border:`0.5px solid ${open ? C.navy : C.border}`, background: open ? C.navyBg : 'var(--card)', color:C.text, cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight:600, minWidth, boxShadow: open ? '0 0 0 3px rgba(31,60,132,0.08)' : 'none', transition:'all .15s', whiteSpace:'nowrap' }}>
+        <button onClick={() => setOpen(v => !v)} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px 6px 12px', borderRadius:8, border:`0.5px solid ${open ? C.navy : C.border}`, background: open ? C.navyBg : 'var(--card)', color:C.text, cursor:'pointer', fontFamily:FONT, fontSize:13.5, fontWeight:600, minWidth, boxShadow: open ? '0 0 0 3px rgba(31,60,132,0.08)' : 'none', transition:'all .15s', whiteSpace:'nowrap' }}>
           <span style={{ flex:1, textAlign:'left' }}>{value}</span>
           <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ flexShrink:0, transition:'transform .2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
             <path d="M1 1l4 4 4-4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -173,7 +173,7 @@ function Dropdown({ options, value, onChange, label, minWidth = 120 }) {
             {options.map(opt => {
               const active = opt === value
               return (
-                <button key={opt} onClick={() => { onChange(opt); setOpen(false) }} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12.5, fontWeight: active ? 700 : 400, background: active ? C.navyBg : 'transparent', color: active ? C.navy : C.text }}>
+                <button key={opt} onClick={() => { onChange(opt); setOpen(false) }} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:14, fontWeight: active ? 700 : 400, background: active ? C.navyBg : 'transparent', color: active ? C.navy : C.text }}>
                   <span style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
                     {opt}
                     {active && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>}
@@ -221,9 +221,9 @@ function SourceMultiSelect({ options, selected, onChange, label, minWidth = 120 
   )
   return (
     <div style={{ display:'flex', alignItems:'center', gap:6 }} ref={ref}>
-      {label && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT, whiteSpace:'nowrap' }}>{label}</span>}
+      {label && <span style={{ fontSize:12.5, color:C.muted, fontFamily:FONT, whiteSpace:'nowrap' }}>{label}</span>}
       <div style={{ position:'relative' }}>
-        <button onClick={() => setOpen(v => !v)} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px 6px 12px', borderRadius:8, border:`0.5px solid ${open ? C.navy : C.border}`, background: open ? C.navyBg : 'var(--card)', color:C.text, cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight:600, minWidth, boxShadow: open ? '0 0 0 3px rgba(31,60,132,0.08)' : 'none', transition:'all .15s', whiteSpace:'nowrap' }}>
+        <button onClick={() => setOpen(v => !v)} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px 6px 12px', borderRadius:8, border:`0.5px solid ${open ? C.navy : C.border}`, background: open ? C.navyBg : 'var(--card)', color:C.text, cursor:'pointer', fontFamily:FONT, fontSize:13.5, fontWeight:600, minWidth, boxShadow: open ? '0 0 0 3px rgba(31,60,132,0.08)' : 'none', transition:'all .15s', whiteSpace:'nowrap' }}>
           <span style={{ flex:1, textAlign:'left' }}>{labelText}</span>
           <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ flexShrink:0, transition:'transform .2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
             <path d="M1 1l4 4 4-4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -231,14 +231,14 @@ function SourceMultiSelect({ options, selected, onChange, label, minWidth = 120 
         </button>
         {open && (
           <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:500, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:6, minWidth:Math.max(minWidth, 170), maxHeight:280, overflowY:'auto' }}>
-            <button onClick={toggleAll} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12.5, fontWeight: isAll ? 700 : 400, background: isAll ? C.navyBg : 'transparent', color: isAll ? C.navy : C.text }}>
+            <button onClick={toggleAll} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:14, fontWeight: isAll ? 700 : 400, background: isAll ? C.navyBg : 'transparent', color: isAll ? C.navy : C.text }}>
               <span style={{ display:'flex', alignItems:'center', gap:8 }}><Checkbox checked={isAll} />All</span>
             </button>
             <div style={{ height:1, background:C.border, margin:'4px 2px' }} />
             {options.map(opt => {
               const checked = !isAll && selected.includes(opt)
               return (
-                <button key={opt} onClick={() => toggleOne(opt)} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12.5, fontWeight: checked ? 700 : 400, background: checked ? C.navyBg : 'transparent', color: checked ? C.navy : C.text }}>
+                <button key={opt} onClick={() => toggleOne(opt)} style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:14, fontWeight: checked ? 700 : 400, background: checked ? C.navyBg : 'transparent', color: checked ? C.navy : C.text }}>
                   <span style={{ display:'flex', alignItems:'center', gap:8 }}><Checkbox checked={checked} />{opt}</span>
                 </button>
               )
@@ -283,7 +283,7 @@ function CampaignSearch({ value, onChange, suggestions, minWidth = 210 }) {
           onChange={e => { onChange(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
           placeholder="Search campaign…"
-          style={{ border:'none', outline:'none', background:'transparent', fontFamily:FONT, fontSize:12, fontWeight:600, color:C.text, width:'100%' }}
+          style={{ border:'none', outline:'none', background:'transparent', fontFamily:FONT, fontSize:13.5, fontWeight:600, color:C.text, width:'100%' }}
         />
         {value && (
           <button onClick={() => { onChange(''); setOpen(false) }} style={{ border:'none', background:'transparent', cursor:'pointer', color:C.muted, display:'flex', padding:0, flexShrink:0 }}>
@@ -293,20 +293,20 @@ function CampaignSearch({ value, onChange, suggestions, minWidth = 210 }) {
       </div>
       {open && suggestions.length > 0 && (
         <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:500, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:6, minWidth:Math.max(minWidth, 280), maxHeight:280, overflowY:'auto' }}>
-          <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', padding:'4px 8px 6px' }}>{value.trim() ? 'Matching campaigns' : 'Top campaigns'}</div>
+          <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', padding:'4px 8px 6px' }}>{value.trim() ? 'Matching campaigns' : 'Top campaigns'}</div>
           {suggestions.map(s => (
             <button key={s.name} onClick={() => { onChange(s.name); setOpen(false) }}
               style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, width:'100%', textAlign:'left', padding:'8px 10px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:FONT, background:'transparent' }}
               onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
-              <span style={{ fontSize:12.5, fontWeight:600, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.name}</span>
-              <span style={{ fontSize:11, fontWeight:700, color:C.navy, flexShrink:0 }}>{fmtN(s.leads)}</span>
+              <span style={{ fontSize:14, fontWeight:600, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.name}</span>
+              <span style={{ fontSize:12.5, fontWeight:700, color:C.navy, flexShrink:0 }}>{fmtN(s.leads)}</span>
             </button>
           ))}
         </div>
       )}
       {open && value.trim() && suggestions.length === 0 && (
-        <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:500, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:'10px 12px', minWidth:Math.max(minWidth, 280), fontSize:12, color:C.muted, fontFamily:FONT }}>
+        <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:500, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:'10px 12px', minWidth:Math.max(minWidth, 280), fontSize:13.5, color:C.muted, fontFamily:FONT }}>
           No campaign names match "{value}"
         </div>
       )}
@@ -326,9 +326,9 @@ function CalMonth({ year, month, from, to, hovered, onSelect, onHover }) {
   for (let d = 1; d <= lastDay; d++) cells.push(new Date(year, month, d))
   return (
     <div style={{ width:220 }}>
-      <div style={{ textAlign:'center', fontWeight:700, fontSize:13, color:C.text, marginBottom:8, fontFamily:FONT }}>{MONTHS_SHORT[month]} {year}</div>
+      <div style={{ textAlign:'center', fontWeight:700, fontSize:14.5, color:C.text, marginBottom:8, fontFamily:FONT }}>{MONTHS_SHORT[month]} {year}</div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2, marginBottom:4 }}>
-        {DAYS.map(d => <div key={d} style={{ textAlign:'center', fontSize:10, fontWeight:700, color:C.muted, padding:'2px 0', fontFamily:FONT }}>{d}</div>)}
+        {DAYS.map(d => <div key={d} style={{ textAlign:'center', fontSize:11.5, fontWeight:700, color:C.muted, padding:'2px 0', fontFamily:FONT }}>{d}</div>)}
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2 }}>
         {cells.map((date, i) => {
@@ -346,7 +346,7 @@ function CalMonth({ year, month, from, to, hovered, onSelect, onHover }) {
           else if (inRange) { bg = C.navyBg; color = C.navy }
           return (
             <button key={ts} onClick={() => onSelect(date)} onMouseEnter={() => onHover(date)} onMouseLeave={() => onHover(null)}
-              style={{ width:'100%', aspectRatio:'1', border:'none', cursor:'pointer', borderRadius:6, background:bg, color, fontSize:11.5, fontWeight: isFrom || isTo ? 700 : isToday ? 600 : 400, fontFamily:FONT, position:'relative', transition:'background .1s' }}>
+              style={{ width:'100%', aspectRatio:'1', border:'none', cursor:'pointer', borderRadius:6, background:bg, color, fontSize:13, fontWeight: isFrom || isTo ? 700 : isToday ? 600 : 400, fontFamily:FONT, position:'relative', transition:'background .1s' }}>
               {date.getDate()}
               {isToday && !isFrom && !isTo && <span style={{ position:'absolute', bottom:2, left:'50%', transform:'translateX(-50%)', width:4, height:4, borderRadius:'50%', background:C.blue, display:'block' }} />}
             </button>
@@ -408,7 +408,7 @@ function DateRangePicker({ from, to, onChange, presets }) {
             return (
               <button key={p.label}
                 onClick={() => { setSelFrom(p.from); setSelTo(p.to); setViewYear(p.from.getFullYear()); setViewMonth(p.from.getMonth()); setStep('from') }}
-                style={{ textAlign:'left', padding:'7px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight: active ? 700 : 500, background: active ? C.navyBg : 'transparent', color: active ? C.navy : C.sub }}>
+                style={{ textAlign:'left', padding:'7px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:13.5, fontWeight: active ? 700 : 500, background: active ? C.navyBg : 'transparent', color: active ? C.navy : C.sub }}>
                 {p.label}
               </button>
             )
@@ -417,9 +417,9 @@ function DateRangePicker({ from, to, onChange, presets }) {
       )}
       <div>
         <div style={{ display:'flex', gap:8, marginBottom:14, alignItems:'center' }}>
-          <div style={{ flex:1, padding:'6px 10px', borderRadius:8, border:`1.5px solid ${step === 'from' ? C.navy : C.border}`, background: step === 'from' ? C.navyBg : '#FAFAFA', fontSize:12, fontWeight:600, color: selFrom ? C.text : C.muted, fontFamily:FONT, cursor:'pointer' }} onClick={() => setStep('from')}>{selFrom ? fmt(selFrom) : 'Start date'}</div>
+          <div style={{ flex:1, padding:'6px 10px', borderRadius:8, border:`1.5px solid ${step === 'from' ? C.navy : C.border}`, background: step === 'from' ? C.navyBg : '#FAFAFA', fontSize:13.5, fontWeight:600, color: selFrom ? C.text : C.muted, fontFamily:FONT, cursor:'pointer' }} onClick={() => setStep('from')}>{selFrom ? fmt(selFrom) : 'Start date'}</div>
           <svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M0 5h14M10 1l4 4-4 4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          <div style={{ flex:1, padding:'6px 10px', borderRadius:8, border:`1.5px solid ${step === 'to' && selFrom ? C.navy : C.border}`, background: step === 'to' && selFrom ? C.navyBg : '#FAFAFA', fontSize:12, fontWeight:600, color: selTo ? C.text : C.muted, fontFamily:FONT, cursor: selFrom ? 'pointer' : 'default' }} onClick={() => selFrom && setStep('to')}>{selTo ? fmt(selTo) : 'End date'}</div>
+          <div style={{ flex:1, padding:'6px 10px', borderRadius:8, border:`1.5px solid ${step === 'to' && selFrom ? C.navy : C.border}`, background: step === 'to' && selFrom ? C.navyBg : '#FAFAFA', fontSize:13.5, fontWeight:600, color: selTo ? C.text : C.muted, fontFamily:FONT, cursor: selFrom ? 'pointer' : 'default' }} onClick={() => selFrom && setStep('to')}>{selTo ? fmt(selTo) : 'End date'}</div>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:12 }}>
           <NavBtn dir="left" onClick={goLeft} /><div style={{ flex:1 }} /><NavBtn dir="right" onClick={goRight} />
@@ -441,9 +441,9 @@ function BrandTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null
   return (
     <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:10, padding:'9px 13px', fontFamily:FONT, boxShadow:'0 8px 24px rgba(15,23,42,0.12)' }}>
-      <div style={{ fontSize:11.5, fontWeight:800, color:'#0F1B33', marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:13, fontWeight:800, color:'#0F1B33', marginBottom:4 }}>{label}</div>
       {payload.map((p, i) => (
-        <div key={i} style={{ fontSize:11.5, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}>
+        <div key={i} style={{ fontSize:13, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}>
           <span style={{ color:p.color || p.fill }}>{p.name}</span>
           <span style={{ fontWeight:700, fontVariantNumeric:'tabular-nums' }}>{fmtN(p.value)}</span>
         </div>
@@ -462,11 +462,11 @@ function EfficiencyMapTooltip({ active, payload }) {
   const d = payload[0].payload
   return (
     <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:10, padding:'10px 14px', fontFamily:FONT, boxShadow:'0 8px 24px rgba(15,23,42,0.12)', maxWidth:240 }}>
-      <div style={{ fontSize:11.5, fontWeight:800, color:'#0F1B33', marginBottom:6, wordBreak:'break-word' }}>{d.campaign}</div>
-      <div style={{ fontSize:11.5, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>CPQL</span><span style={{ fontWeight:700 }}>₹{Math.round(d.cpql).toLocaleString('en-IN')}</span></div>
-      <div style={{ fontSize:11.5, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>Total QLs</span><span style={{ fontWeight:700 }}>{fmtN(d.totalQL)}</span></div>
-      <div style={{ fontSize:11.5, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>Spend</span><span style={{ fontWeight:700 }}>₹{Math.round(d.spend).toLocaleString('en-IN')}</span></div>
-      <div style={{ fontSize:10.5, fontWeight:700, color:QUADRANT_COLOR[d.quadrant], marginTop:6 }}>{QUADRANT_TAG[d.quadrant]}</div>
+      <div style={{ fontSize:13, fontWeight:800, color:'#0F1B33', marginBottom:6, wordBreak:'break-word' }}>{d.campaign}</div>
+      <div style={{ fontSize:13, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>CPQL</span><span style={{ fontWeight:700 }}>₹{Math.round(d.cpql).toLocaleString('en-IN')}</span></div>
+      <div style={{ fontSize:13, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>Total QLs</span><span style={{ fontWeight:700 }}>{fmtN(d.totalQL)}</span></div>
+      <div style={{ fontSize:13, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>Spend</span><span style={{ fontWeight:700 }}>₹{Math.round(d.spend).toLocaleString('en-IN')}</span></div>
+      <div style={{ fontSize:12, fontWeight:700, color:QUADRANT_COLOR[d.quadrant], marginTop:6 }}>{QUADRANT_TAG[d.quadrant]}</div>
     </div>
   )
 }
@@ -474,10 +474,10 @@ function EfficiencyMapTooltip({ active, payload }) {
 const sectionTitle = (t, s) => (
   <div style={{ marginBottom:14 }}>
     <div style={{ fontSize:14, fontWeight:800, color:C.text, letterSpacing:'-0.2px' }}>{t}</div>
-    {s && <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{s}</div>}
+    {s && <div style={{ fontSize:12.5, color:C.muted, marginTop:2 }}>{s}</div>}
   </div>
 )
-const axis = { fontSize:11, fill:C.muted, fontFamily:FONT }
+const axis = { fontSize:12.5, fill:C.muted, fontFamily:FONT }
 const grid2 = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }
 
 // Heat scale for conversion rates — brand colors only (no red/amber on data), matching
@@ -630,6 +630,14 @@ const SUMMARY_BOLD_COLS = ['leads', 'spend', 'raus', 'qlPct', 'appPct', 'deposit
 // Text (not numeric) columns -- left-aligned, muted, no heat/bold treatment. Corridor/
 // Source/Sub Source only ever appear together (campaign view only, see displayCols).
 const TEXT_COL_KEYS = ['corridor', 'source', 'subSource']
+// Summary table: the label column (Source/Campaign/Corridor/Month/Day, whichever the
+// active grouping is) and Spend stay pinned to the left edge while every other column
+// scrolls under them horizontally -- fixed pixel widths so the second sticky column's
+// `left` offset is a known constant rather than something measured at render time.
+const LABEL_COL_W = 170
+const SPEND_COL_W = 130
+const stickyLabelStyle = bg => ({ position:'sticky', left:0, zIndex:2, background:bg, minWidth:LABEL_COL_W, width:LABEL_COL_W, boxShadow:'2px 0 4px -2px rgba(15,23,42,0.10)' })
+const stickySpendStyle = bg => ({ position:'sticky', left:LABEL_COL_W, zIndex:2, background:bg, minWidth:SPEND_COL_W, width:SPEND_COL_W, boxShadow:'2px 0 4px -2px rgba(15,23,42,0.10)' })
 
 // Small expand/collapse indicator for the Source view's tree rows (Source -> Sub Source ->
 // Campaign). Rotates 90deg open, matching the caret convention already used by Dropdown.
@@ -692,7 +700,7 @@ function ColumnsPicker({ order, visible, onToggle, onMove, onClose, onReset }) {
       <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:399 }} />
       <div style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:230, maxHeight:340, overflowY:'auto' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 8px 8px' }}>
-          <span style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>Columns — show, hide, reorder</span>
+          <span style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>Columns — show, hide, reorder</span>
           <Button onClick={onReset} variant="ghost" size="sm" style={{ padding:'2px 8px' }}>Reset</Button>
         </div>
         {order.map((key, i) => {
@@ -703,7 +711,7 @@ function ColumnsPicker({ order, visible, onToggle, onMove, onClose, onReset }) {
             <div key={key} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 8px', borderRadius:8 }}>
               <label style={{ display:'flex', alignItems:'center', gap:8, flex:1, cursor:'pointer', minWidth:0 }}>
                 <input type="checkbox" checked={isVisible} onChange={() => onToggle(key)} style={{ width:14, height:14, cursor:'pointer', accentColor:C.navy, flexShrink:0 }} />
-                <span style={{ fontSize:12.5, fontWeight: isVisible ? 600 : 400, color: isVisible ? C.text : C.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{col.label}</span>
+                <span style={{ fontSize:14, fontWeight: isVisible ? 600 : 400, color: isVisible ? C.text : C.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{col.label}</span>
               </label>
               <div style={{ display:'flex', gap:2, flexShrink:0 }}>
                 <button onClick={() => onMove(key, -1)} disabled={i === 0} title="Move up" style={{ width:22, height:22, borderRadius:6, border:'none', background:'transparent', color: i === 0 ? '#CBD5E1' : C.muted, cursor: i === 0 ? 'default' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
@@ -728,7 +736,7 @@ function ConversionChain({ steps }) {
     <div style={{ display:'grid', gridTemplateColumns:`repeat(${steps.length}, minmax(0,1fr))`, gap:10, marginTop:16 }}>
       {steps.map((s, i) => (
         <div key={i} style={{ padding:'10px 12px', borderRadius:10, background: heatBg(s.rate), border:'0.5px solid #EEF1F6', minWidth:0 }}>
-          <div style={{ fontSize:9.5, fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.05em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{s.from} → {s.to}</div>
+          <div style={{ fontSize:11, fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'0.05em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{s.from} → {s.to}</div>
           <div style={{ fontSize:18, fontWeight:800, color: heatColor(s.rate), marginTop:3 }}>{s.rate == null ? '—' : s.rate.toFixed(1) + '%'}</div>
         </div>
       ))}
@@ -740,7 +748,7 @@ function ConversionChain({ steps }) {
 // visual language as RankedBars (numbered chip + bar + value) but the bar length and
 // color both encode a conversion RATE (0-100%) rather than a raw count.
 function EfficiencyList({ data, labelKey, rateKey, subKey }) {
-  if (!data.length) return <div style={{ textAlign:'center', padding:'24px 0', color:C.muted, fontSize:13, fontFamily:FONT }}>Not enough volume yet</div>
+  if (!data.length) return <div style={{ textAlign:'center', padding:'24px 0', color:C.muted, fontSize:14.5, fontFamily:FONT }}>Not enough volume yet</div>
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:9 }}>
       {data.map((r, i) => {
@@ -748,17 +756,17 @@ function EfficiencyList({ data, labelKey, rateKey, subKey }) {
         const col = heatColor(rate)
         return (
           <div key={r[labelKey] + i} style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ width:20, textAlign:'center', fontSize:10, fontWeight:800, color:'#fff', background:col, borderRadius:6, padding:'2px 0', flexShrink:0 }}>{i + 1}</div>
+            <div style={{ width:20, textAlign:'center', fontSize:11.5, fontWeight:800, color:'#fff', background:col, borderRadius:6, padding:'2px 0', flexShrink:0 }}>{i + 1}</div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4, alignItems:'baseline', gap:8 }}>
-                <span style={{ fontSize:12, fontWeight:600, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r[labelKey]}</span>
-                <span style={{ fontSize:12.5, fontWeight:800, color:col, flexShrink:0, fontVariantNumeric:'tabular-nums' }}>{rate.toFixed(1)}%</span>
+                <span style={{ fontSize:13.5, fontWeight:600, color:C.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r[labelKey]}</span>
+                <span style={{ fontSize:14, fontWeight:800, color:col, flexShrink:0, fontVariantNumeric:'tabular-nums' }}>{rate.toFixed(1)}%</span>
               </div>
               <div style={{ height:7, borderRadius:99, background:'#F1F5F9', overflow:'hidden' }}>
                 <div style={{ height:'100%', width:Math.min(rate, 100) + '%', borderRadius:99, background:`linear-gradient(90deg,${col},${col}cc)` }} />
               </div>
             </div>
-            <div style={{ fontSize:10.5, color:C.muted, width:60, textAlign:'right', flexShrink:0, fontVariantNumeric:'tabular-nums' }}>{fmtN(r[subKey])} q'd</div>
+            <div style={{ fontSize:12, color:C.muted, width:60, textAlign:'right', flexShrink:0, fontVariantNumeric:'tabular-nums' }}>{fmtN(r[subKey])} q'd</div>
           </div>
         )
       })}
@@ -1655,20 +1663,28 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   }, [compareOpen, compareMovers, compareQlDeltaPct, compareDimWord])
 
 
-  const funnel = useMemo(() => ([
-    { stage:'Leads Generated', count:kpis.leads },
-    { stage:'Directly Distributed to Floor', count:kpis.floorQueued },
-    { stage:'Total Futwork Queued', count:totalFutworkQ },
-    { stage:'Futwork AI Queued', count:kpis.futworkAiQ },
-    { stage:'Futwork Human Queued', count:kpis.futworkHumanQ },
-    { stage:'Total QL', count:kpis.totalQL },
-    { stage:'Futwork AI QL', count:kpis.futworkAiQl },
-    { stage:'Futwork Human QL', count:kpis.humanQL },
-    { stage:'Applications', count:kpis.apps },
-    { stage:'Offers', count:kpis.offers },
-    { stage:'Deposits', count:kpis.deposits },
-    { stage:'RAUs', count:kpis.raus },
-  ]), [kpis, totalFutworkQ])
+  const funnel = useMemo(() => {
+    // These 4 bars are ranked by their own value, highest first -- which one leads
+    // changes with the data (e.g. a period where Floor genuinely outpaces Futwork),
+    // so this is a sort every render, never a fixed order.
+    const floorVsFutwork = [
+      { stage:'Directly Distributed to Floor', count:kpis.floorQueued },
+      { stage:'Total Futwork Queued', count:totalFutworkQ },
+      { stage:'Futwork AI Queued', count:kpis.futworkAiQ },
+      { stage:'Futwork Human Queued', count:kpis.futworkHumanQ },
+    ].sort((a, b) => b.count - a.count)
+    return [
+      { stage:'Leads Generated', count:kpis.leads },
+      ...floorVsFutwork,
+      { stage:'Total QL', count:kpis.totalQL },
+      { stage:'Futwork AI QL', count:kpis.futworkAiQl },
+      { stage:'Futwork Human QL', count:kpis.humanQL },
+      { stage:'Applications', count:kpis.apps },
+      { stage:'Offers', count:kpis.offers },
+      { stage:'Deposits', count:kpis.deposits },
+      { stage:'RAUs', count:kpis.raus },
+    ]
+  }, [kpis, totalFutworkQ])
 
   // The real conversion PATH (not the parallel Floor/Queued split) — used both for the
   // conversion-chain strip and to find the biggest leak for the insights row.
@@ -2227,6 +2243,22 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
     return rs
   }, [rows, selectedSources, corridorFilter, campaignQueryDebounced])
+
+  // "Month-on-month trend" chart is meant to always show the last 5 months (including
+  // whatever the current month is) so it reads as a real trend line -- unlike every
+  // other chart/KPI on this page, it deliberately does NOT follow the header's
+  // date-range picker (Source/Corridor/campaign-search filters still apply, via
+  // nonDateRows, so it stays consistent with the rest of the page on those axes).
+  const monthTrend = useMemo(() => {
+    const m = new Map()
+    nonDateRows.forEach(r => {
+      if (r.mk == null) return
+      const e = m.get(r.mk) || { mk:r.mk, label:monthLabel(r.mk), leads:0, queued:0, totalQL:0, deposits:0 }
+      e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.totalQL += r.totalQL; e.deposits += r.deposits
+      m.set(r.mk, e)
+    })
+    return [...m.values()].sort((a, b) => a.mk - b.mk).slice(-5)
+  }, [nonDateRows])
 
   // ── Deep Analysis shared plumbing ─────────────────────────────────────────────
   // One generic aggregator, keyed by dimension, used by BOTH Compare's full table
@@ -2979,6 +3011,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const isTextCol = TEXT_COL_KEYS.includes(col.key)
     const isPct = col.key.endsWith('Pct')
     const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
+    const isSpend = col.key === 'spend'
+    const bg = isPct ? heatBg(v) : (isSpend ? (opts.rowBg || '#fff') : 'transparent')
     return (
       <td key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
         style={{
@@ -2986,8 +3020,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           textAlign: isTextCol ? 'left' : 'right',
           color: opts.colorOverride || (isTextCol ? '#64748B' : (isPct ? heatColor(v) : summaryColor(col.key))),
           fontWeight: opts.fontWeight != null ? opts.fontWeight : (isTextCol ? 500 : (SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400)),
-          background: isPct ? heatBg(v) : 'transparent',
+          background: bg,
           whiteSpace: isTextCol ? 'nowrap' : 'normal',
+          ...(isSpend ? stickySpendStyle(opts.rowBg || '#fff') : null),
         }}>
         {summaryFmt(col.key, v)}
       </td>
@@ -3024,14 +3059,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             Source dropdown, Synced, Refresh, Export, info popover. */}
         <div style={{ background:'var(--card)', borderBottom:`0.5px solid ${C.border}`, padding:'10px 28px', minHeight:56, height:'auto', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexShrink:0, overflow:'visible', flexWrap:'wrap' }}>
           <div>
-            <p style={{ fontSize:10.5, color:C.muted, margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / Overall{bqMode ? ' (BigQuery)' : ''}</p>
+            <p style={{ fontSize:12, color:C.muted, margin:0, letterSpacing:'0.05em', textTransform:'uppercase', fontFamily:FONT }}>Dashboards / Overall{bqMode ? ' (BigQuery)' : ''}</p>
             <h1 style={{ fontSize:18, fontWeight:800, color:C.text, margin:'2px 0 0', letterSpacing:'-0.4px', fontFamily:FONT }}>
               Overall Performance{bqMode ? ' (BigQuery)' : ''}
               {' - '}
               {activeFilter === 'custom' && customFrom
-                ? <span style={{ fontSize:13, fontWeight:600, color:C.blue }}>{customFrom} -&gt; {customTo}</span>
+                ? <span style={{ fontSize:14.5, fontWeight:600, color:C.blue }}>{customFrom} -&gt; {customTo}</span>
                 : activeFilter === 'preset' && dateWindow
-                  ? <span style={{ fontSize:13, fontWeight:600, color:C.blue }}>{dateWindow.label}</span>
+                  ? <span style={{ fontSize:14.5, fontWeight:600, color:C.blue }}>{dateWindow.label}</span>
                   : <span>{selMonth || '-'}</span>}
             </h1>
           </div>
@@ -3056,7 +3091,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           onMouseEnter={() => setHoveredPreset(key)}
                           onMouseLeave={() => setHoveredPreset(null)}
                           style={{
-                            padding:'5px 11px', borderRadius:7, border:'none', cursor:'pointer', fontSize:11.5, fontWeight:700, fontFamily:FONT,
+                            padding:'5px 11px', borderRadius:7, border:'none', cursor:'pointer', fontSize:13, fontWeight:700, fontFamily:FONT,
                             background: activeFilter === 'custom' ? 'transparent' : datePreset === key ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent',
                             color: activeFilter === 'custom' ? '#CBD5E1' : datePreset === key ? '#fff' : '#64748B',
                             boxShadow: activeFilter === 'custom' ? 'none' : datePreset === key ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
@@ -3064,7 +3099,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                             pointerEvents: activeFilter === 'custom' ? 'none' : 'auto',
                             transition:'all .15s',
                           }}>{lbl2}</button>
-                        <div style={{ position:'absolute', top:'calc(100% + 7px)', left:'50%', transform:'translateX(-50%)', background:'#1E293B', color:'var(--card)', fontSize:11, fontWeight:500, fontFamily:FONT, padding:'5px 10px', borderRadius:7, whiteSpace:'nowrap', pointerEvents:'none', boxShadow:'0 4px 14px rgba(15,23,42,0.18)', zIndex:600, opacity: isHov ? 1 : 0, transition:'opacity .15s ease' }}>
+                        <div style={{ position:'absolute', top:'calc(100% + 7px)', left:'50%', transform:'translateX(-50%)', background:'#1E293B', color:'var(--card)', fontSize:12.5, fontWeight:500, fontFamily:FONT, padding:'5px 10px', borderRadius:7, whiteSpace:'nowrap', pointerEvents:'none', boxShadow:'0 4px 14px rgba(15,23,42,0.18)', zIndex:600, opacity: isHov ? 1 : 0, transition:'opacity .15s ease' }}>
                           {tipLabel}
                           <div style={{ position:'absolute', top:-4, left:'50%', transform:'translateX(-50%)', width:8, height:8, background:'#1E293B', borderRadius:2, clipPath:'polygon(50% 0%, 0% 100%, 100% 100%)' }} />
                         </div>
@@ -3093,7 +3128,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     }
                     setShowCustom(v => !v); if (!showCustom) setDatePreset('month')
                   }}
-                  style={{ padding:'6px 11px', borderRadius:8, border:`0.5px solid ${datePreset === 'custom' ? C.navy : C.border}`, background: datePreset === 'custom' ? C.navyBg : 'var(--card)', color: datePreset === 'custom' ? C.navy : C.sub, fontSize:11.5, fontWeight:600, fontFamily:FONT, cursor:'pointer', display:'flex', alignItems:'center', gap:5, boxShadow: showCustom ? '0 0 0 3px rgba(31,60,132,0.08)' : 'none', transition:'all .15s' }}>
+                  style={{ padding:'6px 11px', borderRadius:8, border:`0.5px solid ${datePreset === 'custom' ? C.navy : C.border}`, background: datePreset === 'custom' ? C.navyBg : 'var(--card)', color: datePreset === 'custom' ? C.navy : C.sub, fontSize:13, fontWeight:600, fontFamily:FONT, cursor:'pointer', display:'flex', alignItems:'center', gap:5, boxShadow: showCustom ? '0 0 0 3px rgba(31,60,132,0.08)' : 'none', transition:'all .15s' }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
                   {datePreset === 'custom' && customFrom ? customFrom + ' -> ' + customTo : 'Custom'}
                 </button>
@@ -3137,12 +3172,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             {bqMode && (
               <span
                 title={'Data source: BigQuery (beta) -- public.overall_bq_daily, dedicated page (see /dashboard/overall for the sheet)' + (bqSince ? ', ' + bqSince + ' to ' + bqUntil : '') + (bqRowCount != null ? ', ' + bqRowCount.toLocaleString('en-IN') + ' rows read' : '') + (bqError ? ' -- FAILED (' + bqError + '), showing the sheet instead' : '')}
-                style={{ fontSize:10, fontWeight:800, letterSpacing:.4, textTransform:'uppercase', fontFamily:FONT, whiteSpace:'nowrap', borderRadius:8, padding:'5px 9px', border:'0.5px solid ' + C.border, color: bqError ? C.muted : C.navy, background: bqError ? 'var(--card)' : C.navyBg }}
+                style={{ fontSize:11.5, fontWeight:800, letterSpacing:.4, textTransform:'uppercase', fontFamily:FONT, whiteSpace:'nowrap', borderRadius:8, padding:'5px 9px', border:'0.5px solid ' + C.border, color: bqError ? C.muted : C.navy, background: bqError ? 'var(--card)' : C.navyBg }}
               >
                 {bqError ? 'BigQuery — fell back to sheet' : (bqBusy ? 'BigQuery — loading' : 'BigQuery (beta)')}
               </span>
             )}
-            {lastSync && <span style={{ fontSize:11, color:C.muted, fontFamily:FONT }}>Synced {syncFmt.format(lastSync)}</span>}
+            {lastSync && <span style={{ fontSize:12.5, color:C.muted, fontFamily:FONT }}>Synced {syncFmt.format(lastSync)}</span>}
             <Button
               onClick={() => { if (bqMode) { setBqError(null); setBqNonce(n => n + 1) } else loadData(true) }}
               disabled={loading || bqBusy}
@@ -3157,10 +3192,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               {showInfo && <div onClick={() => setShowInfo(false)} style={{ position:'fixed', inset:0, zIndex:150 }} />}
               {showInfo && (
                 <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', zIndex:200, width:380, maxHeight:'74vh', overflowY:'auto', background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 14px 40px rgba(15,23,42,0.16)', padding:'16px 18px', textAlign:'left', fontFamily:FONT }}>
-                  <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:8 }}>How Overall is calculated</div>
-                  {bqMode && <div style={{ fontSize:11, color: bqError ? C.muted : C.navy, fontWeight:700, marginBottom:6 }}>{bqError ? 'This page\u2019s BigQuery read failed, so these numbers are the sheet\u2019s for now.' : 'This is the BigQuery page: these numbers come from the overall_bq_daily cache of the BigQuery saved query "Overall", read for the selected range only \u2014 same rows and same columns as the /dashboard/overall sheet page, just not downloaded whole.'}</div>}
-                  <div style={{ fontSize:11, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
-                  <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.7 }}>
+                  <div style={{ fontSize:14, fontWeight:800, color:C.text, marginBottom:8 }}>How Overall is calculated</div>
+                  {bqMode && <div style={{ fontSize:12.5, color: bqError ? C.muted : C.navy, fontWeight:700, marginBottom:6 }}>{bqError ? 'This page\u2019s BigQuery read failed, so these numbers are the sheet\u2019s for now.' : 'This is the BigQuery page: these numbers come from the overall_bq_daily cache of the BigQuery saved query "Overall", read for the selected range only \u2014 same rows and same columns as the /dashboard/overall sheet page, just not downloaded whole.'}</div>}
+                  <div style={{ fontSize:12.5, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
+                  <div style={{ fontSize:13, color:C.sub, lineHeight:1.7 }}>
                     <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork Human + Futwork AI + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). Futwork itself splits into <b>Queued on Futwork Human</b> and <b>Queued on Futwork AI</b> (added 2026-08-19, replacing the old single "Queued on Futwork" column) — <b>Total Queued on Futwork</b> is those two combined, excluding Superbot. From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (Registered At University). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
                     <b>Lead to QL %</b> (and its Human/AI variants) is Futwork's own queued-to-QL conversion, distinct from the whole-funnel <b>QL %</b> below: <b>Lead to QL %</b> = (Futwork Human QL + Futwork AI QL) ÷ Total Queued on Futwork, <b>Lead to QL % (Human)</b> = Futwork Human QL ÷ Queued on Futwork Human, <b>Lead to QL % (AI)</b> = Futwork AI QL ÷ Queued on Futwork AI. None of these three include Superbot.<br /><br />
                     <b>Estimated RAU</b> = Deposits × 70% (a projection of how many current Deposits will go on to register). <b>Actual RAUs</b> is the real, already-registered count — no discount applied. <b>Est./Actual SR Revenue</b> = Estimated/Actual RAUs × SR Fee.<br /><br />
@@ -3185,19 +3220,19 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <PremKPI label="EST. SR REVENUE" value={<span title={fmtINRShort(estSrRevenue)}>{fmtINR(estSrRevenue)}</span>} sub={'Est. RAUs ' + fmtN(estimatedRaus) + ' × SR Fee'} delta={deltaPct(estSrRevenue, prevEstSrRevenue)} prevValue={fmtINR(prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="SPEND" value={<span title={fmtINRShort(kpis.spend)}>{fmtINR(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} prevValue={fmtINR(prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} prevValue={fmtN(prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
-            <PremKPI label="DIRECTLY DISTRIBUTED TO FLOOR" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} delta={deltaPct(kpis.floorQueued, prevKpis.floorQueued)} prevValue={fmtN(prevKpis.floorQueued)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-            <PremKPI label="TOTAL QUEUED ON FUTWORK" value={fmtN(totalFutworkQ)} sub={'Human ' + fmtN(kpis.futworkHumanQ) + ' · AI ' + fmtN(kpis.futworkAiQ)} delta={deltaPct(totalFutworkQ, prevTotalFutworkQ)} prevValue={fmtN(prevTotalFutworkQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="QUEUED ON FUTWORK HUMAN" value={fmtN(kpis.futworkHumanQ)} sub={pct(kpis.futworkHumanQ, totalFutworkQ) + ' of Futwork queued'} delta={deltaPct(kpis.futworkHumanQ, prevKpis.futworkHumanQ)} prevValue={fmtN(prevKpis.futworkHumanQ)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="QUEUED ON FUTWORK AI" value={fmtN(kpis.futworkAiQ)} sub={pct(kpis.futworkAiQ, totalFutworkQ) + ' of Futwork queued'} delta={deltaPct(kpis.futworkAiQ, prevKpis.futworkAiQ)} prevValue={fmtN(prevKpis.futworkAiQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="QUEUED ON SUPERBOT" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={deltaPct(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
+            <PremKPI label="FLOOR QUEUED" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} delta={deltaPct(kpis.floorQueued, prevKpis.floorQueued)} prevValue={fmtN(prevKpis.floorQueued)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+            <PremKPI label="FUTWORK QUEUED" value={fmtN(totalFutworkQ)} sub={'Human ' + fmtN(kpis.futworkHumanQ) + ' · AI ' + fmtN(kpis.futworkAiQ)} delta={deltaPct(totalFutworkQ, prevTotalFutworkQ)} prevValue={fmtN(prevTotalFutworkQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="HUMAN QUEUED" value={fmtN(kpis.futworkHumanQ)} sub={pct(kpis.futworkHumanQ, totalFutworkQ) + ' of Futwork queued'} delta={deltaPct(kpis.futworkHumanQ, prevKpis.futworkHumanQ)} prevValue={fmtN(prevKpis.futworkHumanQ)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="AI QUEUED" value={fmtN(kpis.futworkAiQ)} sub={pct(kpis.futworkAiQ, totalFutworkQ) + ' of Futwork queued'} delta={deltaPct(kpis.futworkAiQ, prevKpis.futworkAiQ)} prevValue={fmtN(prevKpis.futworkAiQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="SUPERBOT QUEUED" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={deltaPct(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
             <PremKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={deltaPct(kpis.totalQL, prevKpis.totalQL)} prevValue={fmtN(prevKpis.totalQL)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="FUTWORK HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
           </div>
 
           {/* KPI ROW 2 — remaining QL breakdown + cost efficiency + downstream conversion + ROAS.
               Same fixed 10-across grid as row 1 so card widths match exactly. */}
           <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(10, minmax(0, 1fr))', gap:12, marginBottom:20 }}>
-            <PremKPI label="FUTWORK AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
             <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
             <PremKPI label="CPL" value={<span title={fmtINRShort(cpl)}>{fmtINR(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} prevValue={fmtINR(prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
             <PremKPI label="CPQL" value={<span title={fmtINRShort(cpql)}>{fmtINR(cpql)}</span>} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} prevValue={fmtINR(prevCpql)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai} />
@@ -3221,12 +3256,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
                 <Bar dataKey="count" name="Count" fill={barFill('g-ov-funnel')} radius={BAR_RADIUS_H} barSize={20}>
                   
-                  <LabelList dataKey="count" position="right" formatter={fmtN} style={{ fontSize:12.5, fontWeight:700, fill:C.sub }} />
+                  <LabelList dataKey="count" position="right" formatter={fmtN} style={{ fontSize:14, fontWeight:700, fill:C.sub }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
             <div style={{ borderTop:'1px solid #F1F5F9', marginTop:4, paddingTop:16 }}>
-              <div style={{ fontSize:10.5, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>Stage-to-stage conversion (the real path)</div>
+              <div style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>Stage-to-stage conversion (the real path)</div>
               <ConversionChain steps={conversionChain} />
             </div>
           </Card>
@@ -3238,7 +3273,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               action={
                 <div style={{ display:'flex', gap:6 }}>
                   {[['source', 'Source'], ['campaign', 'Campaign'], ['corridor', 'Corridor'], ['month', 'Month'], ['day', 'Day']].map(([v, l]) => (
-                    <button key={v} onClick={() => setGrpBy(v)} style={{ padding:'7px 14px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : '#E5E7EB'), background: grpBy === v ? C.navy : '#fff', color: grpBy === v ? '#fff' : '#374151', fontSize:12.5, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
+                    <button key={v} onClick={() => setGrpBy(v)} style={{ padding:'7px 14px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : '#E5E7EB'), background: grpBy === v ? C.navy : '#fff', color: grpBy === v ? '#fff' : '#374151', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
                   ))}
                 </div>
               }
@@ -3250,7 +3285,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 <div style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', borderRadius:8, border:`0.5px solid ${C.border}`, background:'var(--card)', flex:'1 1 200px', minWidth:160, maxWidth:280 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
                   <input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder={`Search ${grpByLabel.toLowerCase()}…`}
-                    style={{ border:'none', outline:'none', background:'transparent', fontFamily:FONT, fontSize:12.5, fontWeight:600, color:C.text, width:'100%' }} />
+                    style={{ border:'none', outline:'none', background:'transparent', fontFamily:FONT, fontSize:14, fontWeight:600, color:C.text, width:'100%' }} />
                   {tableSearch && (
                     <button onClick={() => setTableSearch('')} style={{ border:'none', background:'transparent', cursor:'pointer', color:C.muted, display:'flex', padding:0, flexShrink:0 }}>
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -3259,9 +3294,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 </div>
 
                 <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                  <span style={{ fontSize:12, color:C.muted, fontFamily:FONT }}>Show</span>
+                  <span style={{ fontSize:13.5, color:C.muted, fontFamily:FONT }}>Show</span>
                   {[10, 25, 50, 'all'].map(n => (
-                    <button key={n} onClick={() => setRowLimit(n)} style={{ padding:'7px 12px', borderRadius:7, border:'none', cursor:'pointer', fontSize:12.5, fontWeight:700, fontFamily:FONT, background: rowLimit === n ? C.navy : 'transparent', color: rowLimit === n ? '#fff' : '#64748B' }}>{n === 'all' ? 'All' : n}</button>
+                    <button key={n} onClick={() => setRowLimit(n)} style={{ padding:'7px 12px', borderRadius:7, border:'none', cursor:'pointer', fontSize:14, fontWeight:700, fontFamily:FONT, background: rowLimit === n ? C.navy : 'transparent', color: rowLimit === n ? '#fff' : '#64748B' }}>{n === 'all' ? 'All' : n}</button>
                   ))}
                 </div>
 
@@ -3284,7 +3319,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     onClick={() => setShowRatesPicker(v => !v)}
                     size="sm"
                     variant="secondary"
-                    icon={<span style={{ fontSize:13, fontWeight:800, lineHeight:1, fontFamily:FONT }}>₹</span>}
+                    icon={<span style={{ fontSize:14.5, fontWeight:800, lineHeight:1, fontFamily:FONT }}>₹</span>}
                   >
                     SR Fee
                   </Button>
@@ -3292,15 +3327,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     <>
                       <div onClick={() => setShowRatesPicker(false)} style={{ position:'fixed', inset:0, zIndex:399 }} />
                       <div style={{ position:'absolute', left:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:14, minWidth:270 }}>
-                        <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>SR revenue formula</div>
-                        <div style={{ fontSize:20, fontWeight:800, color:C.navy, fontFamily:FONT, marginBottom:8 }}>₹{srFee.toLocaleString('en-IN')} <span style={{ fontSize:11, fontWeight:600, color:C.muted }}>per RAU (SR Fee)</span></div>
-                        <div style={{ fontSize:11, color:C.sub, lineHeight:1.7 }}>
+                        <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>SR revenue formula</div>
+                        <div style={{ fontSize:20, fontWeight:800, color:C.navy, fontFamily:FONT, marginBottom:8 }}>₹{srFee.toLocaleString('en-IN')} <span style={{ fontSize:12.5, fontWeight:600, color:C.muted }}>per RAU (SR Fee)</span></div>
+                        <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.7 }}>
                           <b>Estimated RAU</b> = Deposits × 70%<br />
                           <b>Est. SR Revenue</b> = Estimated RAU × SR Fee<br />
                           <b>Actual SR Revenue</b> = Actual RAUs × SR Fee<br />
                           <b>ROAS</b> = Actual SR Revenue ÷ Spend (Est. ROAS uses Est. SR Revenue)
                         </div>
-                        <div style={{ fontSize:10.5, color:C.muted, marginTop:10, lineHeight:1.5 }}>This rate is shared with Settings &gt; Data &gt; SR Revenue Assumptions — change it there to update it everywhere.</div>
+                        <div style={{ fontSize:12, color:C.muted, marginTop:10, lineHeight:1.5 }}>This rate is shared with Settings &gt; Data &gt; SR Revenue Assumptions — change it there to update it everywhere.</div>
                       </div>
                     </>
                   )}
@@ -3330,7 +3365,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 <table ref={tableRef} style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT }}>
                   <thead>
                     <tr style={{ background:'#F8FAFC', borderBottom:'2px solid #E2E8F0' }}>
-                      <th onClick={() => handleSort('label')} style={{ padding:'11px 12px', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
+                      <th onClick={() => handleSort('label')} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none', ...stickyLabelStyle('#F8FAFC') }}>
                         {grpByLabel}{sortKey === 'label' && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                       </th>
                       {renderCols.map(col => (
@@ -3344,10 +3379,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           onDragEnd={() => { setDragKey(null); setDragOverKey(null) }}
                           title="Click to sort — drag to reorder"
                           style={{
-                            position:'relative', padding:'11px 10px', fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
+                            position: col.key === 'spend' ? 'sticky' : 'relative', padding:'11px 10px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
                             color: sortKey === col.key ? C.navy : '#64748B', textAlign: TEXT_COL_KEYS.includes(col.key) ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
                             opacity: dragKey === col.key ? 0.35 : 1,
-                            boxShadow: dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none',
+                            boxShadow: col.key === 'spend' ? '2px 0 4px -2px rgba(15,23,42,0.10)' : (dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none'),
+                            ...(col.key === 'spend' ? { left:LABEL_COL_W, zIndex:2, background:'#F8FAFC', minWidth:SPEND_COL_W, width:SPEND_COL_W } : null),
                           }}>
                           {col.key === 'contribPct' ? (
                             <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
@@ -3368,7 +3404,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                                   setShowContribPicker(true)
                                 }}
                                 title="Choose the metric this contribution % is based on"
-                                style={{ padding:'2px 6px', borderRadius:6, background: showContribPicker ? C.navy : '#E2E8F0', color: showContribPicker ? '#fff' : '#475569', fontSize:9.5, fontWeight:800, textTransform:'none', letterSpacing:0, cursor:'pointer', whiteSpace:'nowrap' }}>
+                                style={{ padding:'2px 6px', borderRadius:6, background: showContribPicker ? C.navy : '#E2E8F0', color: showContribPicker ? '#fff' : '#475569', fontSize:11, fontWeight:800, textTransform:'none', letterSpacing:0, cursor:'pointer', whiteSpace:'nowrap' }}>
                                 {CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads'} ▾
                               </span>
                               {showContribPicker && contribPickerPos && (
@@ -3376,15 +3412,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                                   <div onClick={e => { e.stopPropagation(); setShowContribPicker(false) }} style={{ position:'fixed', inset:0, zIndex:399 }} />
                                   <div onClick={e => e.stopPropagation()} style={{ position:'fixed', top:contribPickerPos.top, left:contribPickerPos.left, zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:240 }}>
                                     <div style={{ padding:'6px 10px 10px', marginBottom:4, borderBottom:`0.5px solid ${C.border}` }}>
-                                      <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:5 }}>How this is calculated</div>
-                                      <div style={{ fontSize:11.5, color:C.sub, lineHeight:1.55, fontWeight:400 }}>
+                                      <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:5 }}>How this is calculated</div>
+                                      <div style={{ fontSize:13, color:C.sub, lineHeight:1.55, fontWeight:400 }}>
                                         Each row's <b>{(CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads')}</b> divided by the grand total {(CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads')} for the current filters, ×100.
                                       </div>
-                                      <div style={{ fontSize:10.5, color:C.muted, lineHeight:1.5, marginTop:6 }}>TOTAL is always 100%. Paid/Non-Paid bands and Source/Sub Source/Campaign tree rows all read against that same account-wide total — never their parent row's.</div>
+                                      <div style={{ fontSize:12, color:C.muted, lineHeight:1.5, marginTop:6 }}>TOTAL is always 100%. Paid/Non-Paid bands and Source/Sub Source/Campaign tree rows all read against that same account-wide total — never their parent row's.</div>
                                     </div>
                                     {CONTRIB_METRICS.map(m => (
                                       <button key={m.key} onClick={e => { e.stopPropagation(); setContribMetric(m.key); setShowContribPicker(false) }}
-                                        style={{ display:'block', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12, fontWeight: m.key === contribMetric ? 700 : 400, textTransform:'none', letterSpacing:0, background: m.key === contribMetric ? C.navyBg : 'transparent', color: m.key === contribMetric ? C.navy : C.text }}>
+                                        style={{ display:'block', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:13.5, fontWeight: m.key === contribMetric ? 700 : 400, textTransform:'none', letterSpacing:0, background: m.key === contribMetric ? C.navyBg : 'transparent', color: m.key === contribMetric ? C.navy : C.text }}>
                                         {m.label}
                                       </button>
                                     ))}
@@ -3407,16 +3443,17 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       // authoritative summary line while the column headers stay the only
                       // emphasised band.
                       <tr style={{ background:'var(--card)', borderBottom:'2px solid #CBD5E1' }}>
-                        <th style={{ padding:'10px 12px', fontSize:10.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'#64748B', textAlign:'left', whiteSpace:'nowrap' }}>
+                        <th style={{ padding:'10px 12px', fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'#64748B', textAlign:'left', whiteSpace:'nowrap', ...stickyLabelStyle('var(--card)') }}>
                           Total
                         </th>
                         {renderCols.map(col => {
                           const v = valueWithContrib(totalsRow, col.key)
                           const isTextCol = TEXT_COL_KEYS.includes(col.key)
                           const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
+                          const isSpend = col.key === 'spend'
                           return (
                             <th key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
-                              style={{ padding:'10px 10px', fontSize:14, fontWeight:800, textAlign: isTextCol ? 'left' : 'right', color: isTextCol ? '#CBD5E1' : '#0F172A', whiteSpace:'nowrap' }}>
+                              style={{ padding:'10px 10px', fontSize:14, fontWeight:800, textAlign: isTextCol ? 'left' : 'right', color: isTextCol ? '#CBD5E1' : '#0F172A', whiteSpace:'nowrap', ...(isSpend ? stickySpendStyle('var(--card)') : null) }}>
                               {summaryFmt(col.key, v)}
                             </th>
                           )
@@ -3426,48 +3463,48 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   </thead>
                   <tbody>
                     {tableBodyRows.map(item => {
-                      if (item.kind === 'band') return (
-                        <tr key={'band-' + item.label} style={{ background:'#EEF3FA', borderTop:'2px solid #D8E3F0', borderBottom:'1px solid #E2E8F0' }}>
-                          <td style={{ padding:'9px 12px', fontSize:10.5, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.08em', color:C.navy, whiteSpace:'nowrap' }}>{item.label}</td>
-                          {renderSummaryValueCells(item.row, { padding:'9px 10px', fontSize:13, fontWeight:800, colorOverride:C.navy })}
+                      if (item.kind === 'band') { const bg = '#EEF3FA'; return (
+                        <tr key={'band-' + item.label} style={{ background:bg, borderTop:'2px solid #D8E3F0', borderBottom:'1px solid #E2E8F0' }}>
+                          <td style={{ padding:'9px 12px', fontSize:12, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.08em', color:C.navy, whiteSpace:'nowrap', ...stickyLabelStyle(bg) }}>{item.label}</td>
+                          {renderSummaryValueCells(item.row, { padding:'9px 10px', fontSize:14.5, fontWeight:800, colorOverride:C.navy, rowBg:bg })}
                         </tr>
-                      )
-                      if (item.kind === 'source') return (
-                        <tr key={'src-' + item.row.label} style={{ background: item.i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
-                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A', cursor:'pointer', userSelect:'none' }}
+                      ) }
+                      if (item.kind === 'source') { const bg = item.i % 2 === 0 ? '#fff' : '#FAFBFC'; return (
+                        <tr key={'src-' + item.row.label} style={{ background:bg }}>
+                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A', cursor:'pointer', userSelect:'none', ...stickyLabelStyle(bg) }}
                             onClick={() => toggleSourceExpand(item.row.label)}>
                             <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
                               <TreeChevron open={expandedSources.has(item.row.label)} />
                               {item.row.label}
                             </span>
                           </td>
-                          {renderSummaryValueCells(item.row)}
+                          {renderSummaryValueCells(item.row, { rowBg:bg })}
                         </tr>
-                      )
-                      if (item.kind === 'subsource') return (
-                        <tr key={'sub-' + item.parentSource + '-' + item.row.label} style={{ background:'#F8FAFC' }}>
-                          <td style={{ padding:'9px 12px 9px 32px', fontWeight:600, fontSize:13, color:'#334155', cursor: item.hasCampaigns ? 'pointer' : 'default', userSelect:'none' }}
+                      ) }
+                      if (item.kind === 'subsource') { const bg = '#F8FAFC'; return (
+                        <tr key={'sub-' + item.parentSource + '-' + item.row.label} style={{ background:bg }}>
+                          <td style={{ padding:'9px 12px 9px 32px', fontWeight:600, fontSize:14.5, color:'#334155', cursor: item.hasCampaigns ? 'pointer' : 'default', userSelect:'none', ...stickyLabelStyle(bg) }}
                             onClick={() => item.hasCampaigns && toggleSubSourceExpand(item.parentSource, item.row.label)}>
                             <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
                               {item.hasCampaigns && <TreeChevron open={expandedSubSources.has(item.parentSource + '||' + item.row.label)} />}
                               {item.row.label}
                             </span>
                           </td>
-                          {renderSummaryValueCells(item.row, { fontSize:12.5 })}
+                          {renderSummaryValueCells(item.row, { fontSize:14, rowBg:bg })}
                         </tr>
-                      )
-                      if (item.kind === 'campaign') return (
-                        <tr key={'camp-' + item.parentKey + '-' + item.row.label} style={{ background:'#fff' }}>
-                          <td style={{ padding:'8px 12px 8px 56px', fontWeight:400, fontSize:12.5, color:'#64748B' }}>{item.row.label}</td>
-                          {renderSummaryValueCells(item.row, { fontSize:12 })}
+                      ) }
+                      if (item.kind === 'campaign') { const bg = '#fff'; return (
+                        <tr key={'camp-' + item.parentKey + '-' + item.row.label} style={{ background:bg }}>
+                          <td style={{ padding:'8px 12px 8px 56px', fontWeight:400, fontSize:14, color:'#64748B', ...stickyLabelStyle(bg) }}>{item.row.label}</td>
+                          {renderSummaryValueCells(item.row, { fontSize:13.5, rowBg:bg })}
                         </tr>
-                      )
-                      return (
-                        <tr key={item.row.label} style={{ background: item.i % 2 === 0 ? '#fff' : '#FAFBFC' }}>
-                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A' }}>{item.row.label}</td>
-                          {renderSummaryValueCells(item.row)}
+                      ) }
+                      { const bg = item.i % 2 === 0 ? '#fff' : '#FAFBFC'; return (
+                        <tr key={item.row.label} style={{ background:bg }}>
+                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A', ...stickyLabelStyle(bg) }}>{item.row.label}</td>
+                          {renderSummaryValueCells(item.row, { rowBg:bg })}
                         </tr>
-                      )
+                      ) }
                     })}
                     {tableRows.length === 0 && (
                       <tr><td colSpan={renderCols.length + 1} style={{ padding:'20px', textAlign:'center', color:'#94A3B8' }}>No data for this selection.</td></tr>
@@ -3476,7 +3513,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 </table>
               </div>
               {grouped.length > tableRows.length && (
-                <div style={{ fontSize:11, color:C.muted, textAlign:'center', marginTop:10 }}>Showing {tableRows.length} of {grouped.length} — increase "Show" above to see more.</div>
+                <div style={{ fontSize:12.5, color:C.muted, textAlign:'center', marginTop:10 }}>Showing {tableRows.length} of {grouped.length} — increase "Show" above to see more.</div>
               )}
             </Card>
           </div>
@@ -3505,14 +3542,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           {/* MONTH TREND + DAILY TREND */}
           <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
             <Card>
-              {sectionTitle('Month-on-month trend', 'leads, queued and total QL by month')}
+              {sectionTitle('Month-on-month trend', 'last 5 months, including the current month — not affected by the date filter above')}
               <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={byMonth} margin={{ left:0, right:12, top:4, bottom:4 }}>
+                <LineChart data={monthTrend} margin={{ left:0, right:12, top:4, bottom:4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} />
                   <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
                   <Tooltip content={<BrandTooltip />} />
-                  <Legend wrapperStyle={{ fontSize:12.5, fontFamily:FONT }} />
+                  <Legend wrapperStyle={{ fontSize:14, fontFamily:FONT }} />
                   <Line type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }} />
                   <Line type="monotone" dataKey="queued" name="Total Queued" stroke={C.blue} strokeWidth={2.5} dot={{ r:3 }} />
                   <Line type="monotone" dataKey="totalQL" name="Total QL" stroke={C.cyan} strokeWidth={2.5} dot={{ r:3 }} />
@@ -3569,13 +3606,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   {[['best', 'Best — scale'], ['promising', 'Promising'], ['flag', 'High CPQL — flag']].map(([k, l]) => (
                     <div key={k} style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ width:9, height:9, borderRadius:99, background:QUADRANT_COLOR[k], flexShrink:0 }} />
-                      <span style={{ fontSize:10.5, fontWeight:600, color:C.muted, whiteSpace:'nowrap' }}>{l}</span>
+                      <span style={{ fontSize:12, fontWeight:600, color:C.muted, whiteSpace:'nowrap' }}>{l}</span>
                     </div>
                   ))}
                 </div>
               </div>
               {campaignEfficiencyMap.points.length === 0 ? (
-                <div style={{ textAlign:'center', padding:'24px 0', color:C.muted, fontSize:13, fontFamily:FONT }}>Not enough volume yet</div>
+                <div style={{ textAlign:'center', padding:'24px 0', color:C.muted, fontSize:14.5, fontFamily:FONT }}>Not enough volume yet</div>
               ) : (
                 <ResponsiveContainer width="100%" height={340}>
                   <ScatterChart margin={{ top:8, right:24, bottom:8, left:8 }}>
@@ -3583,8 +3620,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     <XAxis type="number" dataKey="totalQL" name="Total QLs" tick={axis} tickFormatter={fmtN} label={{ value:'Total QLs (volume)', position:'insideBottom', offset:-6, style:{ ...axis, fontWeight:700 } }} />
                     <YAxis type="number" dataKey="cpql" name="CPQL" tick={axis} tickFormatter={v => fmtINRShort(v)} width={70} />
                     <ZAxis type="number" dataKey="spend" range={[60, 600]} name="Spend" />
-                    <ReferenceLine x={campaignEfficiencyMap.medQL} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median volume', position:'top', fontSize:12, fill:C.muted }} />
-                    <ReferenceLine y={campaignEfficiencyMap.medCpql} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median CPQL', position:'right', fontSize:12, fill:C.muted }} />
+                    <ReferenceLine x={campaignEfficiencyMap.medQL} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median volume', position:'top', fontSize:13.5, fill:C.muted }} />
+                    <ReferenceLine y={campaignEfficiencyMap.medCpql} stroke={C.muted} strokeDasharray="4 4" label={{ value:'Median CPQL', position:'right', fontSize:13.5, fill:C.muted }} />
                     <Tooltip content={<EfficiencyMapTooltip />} cursor={{ strokeDasharray:'3 3' }} />
                     <Scatter data={campaignEfficiencyMap.points}>
                       {campaignEfficiencyMap.points.map((p, i) => (
@@ -3612,7 +3649,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 <div style={{ padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div>
                     <div style={{ fontSize:18, fontWeight:800, color:C.text }}>Compare periods</div>
-                    <div style={{ fontSize:13.5, color:C.muted, marginTop:2 }}>{currentLabel} vs {compareLabel}</div>
+                    <div style={{ fontSize:15, color:C.muted, marginTop:2 }}>{currentLabel} vs {compareLabel}</div>
                   </div>
                   <button onClick={() => setCompareOpen(false)} style={{ border:'none', background:'transparent', color:C.muted, cursor:'pointer', display:'flex', padding:4 }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -3624,7 +3661,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:compareMode === 'custom' ? 10 : 16, flexWrap:'wrap' }}>
                     {[['prev', 'Previous period'], ['yoy', 'Same period last year'], ['custom', 'Custom range']].map(([m, lbl]) => (
                       <button key={m} onClick={() => { setCompareMode(m); if (m === 'custom') prefillCustomRange() }}
-                        style={{ padding:'7px 13px', borderRadius:8, border:`0.5px solid ${compareMode === m ? C.navy : C.border}`, background: compareMode === m ? C.navyBg : 'var(--card)', color: compareMode === m ? C.navy : C.sub, fontSize:13.5, fontWeight:700, fontFamily:FONT, cursor:'pointer' }}>
+                        style={{ padding:'7px 13px', borderRadius:8, border:`0.5px solid ${compareMode === m ? C.navy : C.border}`, background: compareMode === m ? C.navyBg : 'var(--card)', color: compareMode === m ? C.navy : C.sub, fontSize:15, fontWeight:700, fontFamily:FONT, cursor:'pointer' }}>
                         {lbl}
                       </button>
                     ))}
@@ -3638,10 +3675,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     const mismatch = daysA != null && daysB != null && daysA !== daysB
                     const RangeField = ({ label, fromStr, toStr, open, setOpen, onApply }) => (
                       <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                        <span style={{ fontSize:12.5, fontWeight:700, color:C.muted, width:34, flexShrink:0 }}>{label}</span>
+                        <span style={{ fontSize:14, fontWeight:700, color:C.muted, width:34, flexShrink:0 }}>{label}</span>
                         <div style={{ position:'relative' }}>
                           <button onClick={() => setOpen(v => !v)}
-                            style={{ display:'flex', alignItems:'center', gap:7, padding:'7px 12px', borderRadius:8, border:`0.5px solid ${open ? C.navy : C.border}`, background: open ? C.navyBg : 'var(--card)', color: fromStr ? C.text : C.muted, cursor:'pointer', fontFamily:FONT, fontSize:13.5, fontWeight:600 }}>
+                            style={{ display:'flex', alignItems:'center', gap:7, padding:'7px 12px', borderRadius:8, border:`0.5px solid ${open ? C.navy : C.border}`, background: open ? C.navyBg : 'var(--card)', color: fromStr ? C.text : C.muted, cursor:'pointer', fontFamily:FONT, fontSize:15, fontWeight:600 }}>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
                             {fromStr && toStr ? `${fromStr} -> ${toStr}` : 'Pick a range'}
                           </button>
@@ -3661,7 +3698,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                         <RangeField label="This:" fromStr={compareCustomFromA} toStr={compareCustomToA} open={showComparePickerA} setOpen={setShowComparePickerA} onApply={(f, t) => { setCompareCustomFromA(f); setCompareCustomToA(t) }} />
                         <RangeField label="Vs:" fromStr={compareCustomFrom} toStr={compareCustomTo} open={showComparePickerB} setOpen={setShowComparePickerB} onApply={(f, t) => { setCompareCustomFrom(f); setCompareCustomTo(t) }} />
                         {daysA != null && daysB != null && (
-                          <div style={{ fontSize:12.5, color: mismatch ? C.navy : C.muted, fontWeight: mismatch ? 700 : 400 }}>
+                          <div style={{ fontSize:14, color: mismatch ? C.navy : C.muted, fontWeight: mismatch ? 700 : 400 }}>
                             {daysA} day{daysA === 1 ? '' : 's'} vs {daysB} day{daysB === 1 ? '' : 's'}
                             {mismatch && ' — different lengths, deltas may look larger/smaller than a like-for-like comparison'}
                           </div>
@@ -3701,12 +3738,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           const good = d == null ? null : (m.invert ? d < 0 : d > 0)
                           return (
                             <div key={m.label} style={{ padding:'12px 14px', borderRadius:10, border:`0.5px solid ${C.border}`, background:'var(--bg2)' }}>
-                              <div style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.04em', marginBottom:6 }}>{m.label}</div>
+                              <div style={{ fontSize:13.5, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.04em', marginBottom:6 }}>{m.label}</div>
                               <div style={{ fontSize:18.5, fontWeight:800, color:C.text }}>{m.fmt(m.a)}</div>
                               <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
-                                <span style={{ fontSize:12.5, color:C.muted }}>was {m.fmt(m.b)}</span>
+                                <span style={{ fontSize:14, color:C.muted }}>was {m.fmt(m.b)}</span>
                                 {d != null && (
-                                  <span style={{ fontSize:12.5, fontWeight:700, color: good == null ? C.muted : good ? '#2F7A4B' : C.navy }}>
+                                  <span style={{ fontSize:14, fontWeight:700, color: good == null ? C.muted : good ? '#2F7A4B' : C.navy }}>
                                     {d > 0 ? '+' : ''}{d.toFixed(0)}%
                                   </span>
                                 )}
@@ -3720,11 +3757,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       {compareMovers.length > 0 && (
                         <div style={{ marginBottom:16 }}>
                           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8, flexWrap:'wrap', gap:8 }}>
-                            <div style={{ fontSize:12.5, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em' }}>What's driving it</div>
+                            <div style={{ fontSize:14, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em' }}>What's driving it</div>
                             <div style={{ display:'flex', gap:4 }}>
                               {[['corridor', 'Corridor'], ['source', 'Source'], ['campaign', 'Campaign']].map(([g, lbl]) => (
                                 <button key={g} onClick={() => setCompareGroupBy(g)}
-                                  style={{ padding:'4px 10px', borderRadius:6, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12.5, fontWeight:700, background: compareGroupBy === g ? C.navy : 'var(--bg2)', color: compareGroupBy === g ? '#fff' : C.sub }}>
+                                  style={{ padding:'4px 10px', borderRadius:6, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:14, fontWeight:700, background: compareGroupBy === g ? C.navy : 'var(--bg2)', color: compareGroupBy === g ? '#fff' : C.sub }}>
                                   {lbl}
                                 </button>
                               ))}
@@ -3734,8 +3771,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                             {compareMovers.map(mv => (
                               <div key={mv.corridor} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderRadius:9, background:'var(--bg2)' }}>
                                 <div style={{ flex:1, minWidth:0, fontSize:14, fontWeight:700, color:C.text, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{mv.corridor}</div>
-                                <div style={{ fontSize:12.5, color:C.muted }}>{fmtN(mv.bQL)} → {fmtN(mv.aQL)} QL</div>
-                                <div style={{ fontSize:13.5, fontWeight:800, color: mv.deltaQL > 0 ? '#2F7A4B' : mv.deltaQL < 0 ? C.navy : C.muted, minWidth:60, textAlign:'right' }}>
+                                <div style={{ fontSize:14, color:C.muted }}>{fmtN(mv.bQL)} → {fmtN(mv.aQL)} QL</div>
+                                <div style={{ fontSize:15, fontWeight:800, color: mv.deltaQL > 0 ? '#2F7A4B' : mv.deltaQL < 0 ? C.navy : C.muted, minWidth:60, textAlign:'right' }}>
                                   {mv.deltaQL > 0 ? '+' : ''}{fmtN(mv.deltaQL)}
                                 </div>
                               </div>
@@ -3747,7 +3784,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       {/* Recommended action */}
                       {compareAction && (
                         <div style={{ background:C.greenBg, border:'0.5px solid rgba(76,174,111,0.3)', borderRadius:10, padding:'12px 14px' }}>
-                          <div style={{ fontSize:12, fontWeight:800, letterSpacing:'0.05em', textTransform:'uppercase', color:'#2F7A4B', marginBottom:3 }}>Recommended action</div>
+                          <div style={{ fontSize:13.5, fontWeight:800, letterSpacing:'0.05em', textTransform:'uppercase', color:'#2F7A4B', marginBottom:3 }}>Recommended action</div>
                           <div style={{ fontSize:14.5, fontWeight:600, color:C.text, lineHeight:1.5 }}>{compareAction}</div>
                         </div>
                       )}
@@ -3757,11 +3794,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           "movers" strip above: this is the exhaustive version. */}
                       <div style={{ marginTop:20, paddingTop:18, borderTop:`0.5px solid ${C.border}` }}>
                         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10, flexWrap:'wrap', gap:8 }}>
-                          <div style={{ fontSize:12.5, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em' }}>Full breakdown -- every {DEEP_DIMENSIONS.find(d => d.key === compareTableDim)?.label.toLowerCase()}</div>
+                          <div style={{ fontSize:14, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em' }}>Full breakdown -- every {DEEP_DIMENSIONS.find(d => d.key === compareTableDim)?.label.toLowerCase()}</div>
                           <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
                             {DEEP_DIMENSIONS.map(d => (
                               <button key={d.key} onClick={() => setCompareTableDim(d.key)}
-                                style={{ padding:'4px 10px', borderRadius:6, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:12.5, fontWeight:700, background: compareTableDim === d.key ? C.navy : 'var(--bg2)', color: compareTableDim === d.key ? '#fff' : C.sub }}>
+                                style={{ padding:'4px 10px', borderRadius:6, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:14, fontWeight:700, background: compareTableDim === d.key ? C.navy : 'var(--bg2)', color: compareTableDim === d.key ? '#fff' : C.sub }}>
                                 {d.label}
                               </button>
                             ))}
@@ -3775,26 +3812,26 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           <SourceMultiSelect label="Source" minWidth={110} options={sources.filter(s => s !== 'All')} selected={deepSourceFilter} onChange={setDeepSourceFilter} />
                           <CampaignSearch value={deepCampaignQuery} onChange={setDeepCampaignQuery} suggestions={deepCampaignSuggestions} minWidth={180} />
                           {deepFilterActive && (
-                            <button onClick={clearDeepFilters} style={{ border:'none', background:'transparent', color:C.navy, cursor:'pointer', fontFamily:FONT, fontSize:13.5, fontWeight:700, padding:'6px 4px' }}>Clear filter</button>
+                            <button onClick={clearDeepFilters} style={{ border:'none', background:'transparent', color:C.navy, cursor:'pointer', fontFamily:FONT, fontSize:15, fontWeight:700, padding:'6px 4px' }}>Clear filter</button>
                           )}
                         </div>
 
                         {!compareJoinable && (
-                          <div style={{ fontSize:12.5, color:C.muted, marginBottom:10, lineHeight:1.5 }}>
+                          <div style={{ fontSize:14, color:C.muted, marginBottom:10, lineHeight:1.5 }}>
                             {DEEP_DIMENSIONS.find(d => d.key === compareTableDim)?.label} values don't recur across two different ranges, so {currentLabel} and {compareLabel} are shown as two separate breakdowns rather than joined row-for-row.
                           </div>
                         )}
 
                         {compareJoinable ? (
                           compareTableRows.length === 0 ? (
-                            <div style={{ fontSize:13.5, color:C.muted, padding:'12px 0' }}>No rows for this dimension in either period.</div>
+                            <div style={{ fontSize:15, color:C.muted, padding:'12px 0' }}>No rows for this dimension in either period.</div>
                           ) : (
                             <div style={{ maxHeight:280, overflowY:'auto', border:`0.5px solid ${C.border}`, borderRadius:10 }}>
-                              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13.5 }}>
+                              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:15 }}>
                                 <thead style={{ position:'sticky', top:0, background:'var(--card)', zIndex:1 }}>
                                   <tr>
                                     {[DEEP_DIMENSIONS.find(d => d.key === compareTableDim)?.label, 'Spend ' + currentLabel, 'Spend ' + compareLabel, 'Total QL ' + currentLabel, 'Total QL ' + compareLabel, 'Δ Total QL', 'CPQL ' + currentLabel, 'CPQL ' + compareLabel].map((h, i) => (
-                                      <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:12, textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
+                                      <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:13.5, textTransform:'uppercase', whiteSpace:'nowrap' }}>{h}</th>
                                     ))}
                                   </tr>
                                 </thead>
@@ -3824,19 +3861,19 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0,1fr))', gap:12 }} className="lq-grid2">
                             {[[currentLabel, compareBreakdownA], [compareLabel, compareBreakdownB]].map(([lbl, list]) => (
                               <div key={lbl} style={{ border:`0.5px solid ${C.border}`, borderRadius:10, overflow:'hidden' }}>
-                                <div style={{ padding:'8px 10px', background:'var(--bg2)', fontSize:12.5, fontWeight:700, color:C.text, borderBottom:`0.5px solid ${C.border}` }}>{lbl}</div>
+                                <div style={{ padding:'8px 10px', background:'var(--bg2)', fontSize:14, fontWeight:700, color:C.text, borderBottom:`0.5px solid ${C.border}` }}>{lbl}</div>
                                 <div style={{ maxHeight:240, overflowY:'auto' }}>
-                                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13.5 }}>
+                                  <table style={{ width:'100%', borderCollapse:'collapse', fontSize:15 }}>
                                     <thead style={{ position:'sticky', top:0, background:'var(--card)' }}>
                                       <tr>
                                         {['Period', 'Spend', 'Total QL', 'CPQL'].map((h, i) => (
-                                          <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding:'6px 10px', borderBottom:`0.5px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:12, textTransform:'uppercase' }}>{h}</th>
+                                          <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding:'6px 10px', borderBottom:`0.5px solid ${C.border}`, color:C.muted, fontWeight:700, fontSize:13.5, textTransform:'uppercase' }}>{h}</th>
                                         ))}
                                       </tr>
                                     </thead>
                                     <tbody>
                                       {list.length === 0 ? (
-                                        <tr><td colSpan={4} style={{ padding:'12px 10px', color:C.muted, fontSize:13.5 }}>No data.</td></tr>
+                                        <tr><td colSpan={4} style={{ padding:'12px 10px', color:C.muted, fontSize:15 }}>No data.</td></tr>
                                       ) : list.map((e, i) => (
                                         <tr key={e.key} style={{ background: i % 2 ? 'var(--bg2)' : 'transparent' }}>
                                           <td style={{ padding:'6px 10px', fontWeight:600, color:C.text, whiteSpace:'nowrap' }}>{e.label}</td>
@@ -3877,7 +3914,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 <div style={{ padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div>
                     <div style={{ fontSize:18, fontWeight:800, color:C.text }}>Trend Analysis</div>
-                    <div style={{ fontSize:13.5, color:C.muted, marginTop:2 }}>Trajectory across trailing periods -- not just two points</div>
+                    <div style={{ fontSize:15, color:C.muted, marginTop:2 }}>Trajectory across trailing periods -- not just two points</div>
                   </div>
                   <button onClick={() => setTrendOpen(false)} style={{ border:'none', background:'transparent', color:C.muted, cursor:'pointer', display:'flex', padding:4 }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -3888,11 +3925,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   {/* Controls */}
                   <div style={{ display:'flex', alignItems:'flex-end', gap:12, marginBottom:16, flexWrap:'wrap' }}>
                     <div>
-                      <div style={{ fontSize:12, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:5 }}>Dimension</div>
+                      <div style={{ fontSize:13.5, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:5 }}>Dimension</div>
                       <div style={{ display:'flex', gap:4 }}>
                         {DEEP_DIMENSIONS.map(d => (
                           <button key={d.key} onClick={() => setTrendDim(d.key)}
-                            style={{ padding:'6px 11px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:13.5, fontWeight:700, background: trendDim === d.key ? C.navy : 'var(--bg2)', color: trendDim === d.key ? '#fff' : C.sub }}>
+                            style={{ padding:'6px 11px', borderRadius:7, border:'none', cursor:'pointer', fontFamily:FONT, fontSize:15, fontWeight:700, background: trendDim === d.key ? C.navy : 'var(--bg2)', color: trendDim === d.key ? '#fff' : C.sub }}>
                             {d.label}
                           </button>
                         ))}
@@ -3918,7 +3955,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     <SourceMultiSelect label="Source" minWidth={110} options={sources.filter(s => s !== 'All')} selected={deepSourceFilter} onChange={setDeepSourceFilter} />
                     <CampaignSearch value={deepCampaignQuery} onChange={setDeepCampaignQuery} suggestions={deepCampaignSuggestions} minWidth={180} />
                     {deepFilterActive && (
-                      <button onClick={clearDeepFilters} style={{ border:'none', background:'transparent', color:C.navy, cursor:'pointer', fontFamily:FONT, fontSize:13.5, fontWeight:700, padding:'6px 4px' }}>Clear filter</button>
+                      <button onClick={clearDeepFilters} style={{ border:'none', background:'transparent', color:C.navy, cursor:'pointer', fontFamily:FONT, fontSize:15, fontWeight:700, padding:'6px 4px' }}>Clear filter</button>
                     )}
                   </div>
 
@@ -3930,7 +3967,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       trailing window would show early periods as a real, confident zero
                       when they simply have not been fetched yet. Say so instead. */}
                   {bqMode && bqBusy && (
-                    <div style={{ display:'flex', alignItems:'center', gap:8, background:C.navyBg, border:`0.5px solid ${C.border}`, borderRadius:10, padding:'9px 12px', marginBottom:14, fontSize:12.5, color:C.navy, fontWeight:700 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, background:C.navyBg, border:`0.5px solid ${C.border}`, borderRadius:10, padding:'9px 12px', marginBottom:14, fontSize:14, color:C.navy, fontWeight:700 }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation:'spin .8s linear infinite', flexShrink:0 }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
                       Fetching the full trailing window from BigQuery -- earlier periods below may still read zero until this finishes.
                     </div>
@@ -3940,7 +3977,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     <div style={{ textAlign:'center', padding:'32px 0', color:C.muted, fontSize:14.5 }}>No dated rows to trend.</div>
                   ) : (
                     <>
-                      <div style={{ fontSize:12.5, color:C.muted, marginBottom:10 }}>
+                      <div style={{ fontSize:14, color:C.muted, marginBottom:10 }}>
                         {trendBuckets.length} trailing {trendEffectiveGranularity === 'month' ? 'months' : trendEffectiveGranularity === 'week' ? 'weeks' : 'days'} ending {dayLabel(trendMaxDate)}, {sourceIsAll ? 'all sources' : sourceLabel}{corridorFilter !== 'All' ? ', ' + corridorFilter : ''}
                         {!deepCorridorIsAll && <> · corridor: {deepCorridorFilter.length === 1 ? deepCorridorFilter[0] : deepCorridorFilter.length + ' selected'}</>}
                         {!deepSourceIsAll && <> · source: {deepSourceFilter.length === 1 ? deepSourceFilter[0] : deepSourceFilter.length + ' selected'}</>}
@@ -3955,18 +3992,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           {trendIsSingleSeries ? (
                             <LineChart data={trendResult.chartRows} margin={{ left:0, right:12, top:4, bottom:4 }}>
                               <CartesianGrid vertical={false} stroke={C.border} />
-                              <XAxis dataKey="period" tick={{ fontSize:12.5, fill:C.muted }} axisLine={false} tickLine={false} />
-                              <YAxis tick={{ fontSize:12.5, fill:C.muted }} axisLine={false} tickLine={false} width={54} />
-                              <Tooltip formatter={v => DEEP_METRICS.find(m => m.key === trendMetric)?.fmt(v)} contentStyle={{ fontSize:13.5, borderRadius:8, border:`0.5px solid ${C.border}` }} />
+                              <XAxis dataKey="period" tick={{ fontSize:14, fill:C.muted }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize:14, fill:C.muted }} axisLine={false} tickLine={false} width={54} />
+                              <Tooltip formatter={v => DEEP_METRICS.find(m => m.key === trendMetric)?.fmt(v)} contentStyle={{ fontSize:15, borderRadius:8, border:`0.5px solid ${C.border}` }} />
                               <Line type="monotone" dataKey="value" name={DEEP_METRICS.find(m => m.key === trendMetric)?.label} stroke={C.navy} strokeWidth={2.5} strokeDasharray={trendMaybeLoading ? '5 4' : undefined} dot={{ r:3 }} />
                             </LineChart>
                           ) : (
                             <LineChart data={trendResult.chartRows} margin={{ left:0, right:12, top:4, bottom:4 }}>
                               <CartesianGrid vertical={false} stroke={C.border} />
-                              <XAxis dataKey="period" tick={{ fontSize:12.5, fill:C.muted }} axisLine={false} tickLine={false} />
-                              <YAxis tick={{ fontSize:12.5, fill:C.muted }} axisLine={false} tickLine={false} width={54} />
-                              <Tooltip formatter={v => DEEP_METRICS.find(m => m.key === trendMetric)?.fmt(v)} contentStyle={{ fontSize:13.5, borderRadius:8, border:`0.5px solid ${C.border}` }} />
-                              <Legend wrapperStyle={{ fontSize:12.5 }} />
+                              <XAxis dataKey="period" tick={{ fontSize:14, fill:C.muted }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize:14, fill:C.muted }} axisLine={false} tickLine={false} width={54} />
+                              <Tooltip formatter={v => DEEP_METRICS.find(m => m.key === trendMetric)?.fmt(v)} contentStyle={{ fontSize:15, borderRadius:8, border:`0.5px solid ${C.border}` }} />
+                              <Legend wrapperStyle={{ fontSize:14 }} />
                               {trendResult.seriesKeys.map((k, i) => (
                                 <Line key={k} type="monotone" dataKey={k} name={trendResult.seriesLabels[k]} stroke={brandColor(i)} strokeWidth={2} strokeDasharray={trendMaybeLoading ? '5 4' : undefined} dot={{ r:2.5 }} />
                               ))}
@@ -3982,18 +4019,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           period column sorts by that period's value, and the default
                           is total-across-periods so the biggest movers lead. */}
                       <div style={{ maxHeight:340, overflowY:'auto', border:`0.5px solid ${C.border}`, borderRadius:10, marginBottom:12 }}>
-                        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13.5 }}>
+                        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:15 }}>
                           <thead style={{ position:'sticky', top:0, background:'var(--card)', zIndex:1 }}>
                             <tr>
                               <th onClick={() => handlePivotSort('label')}
-                                style={{ textAlign:'left', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color: trendPivotSortKey === 'label' ? C.navy : C.muted, fontWeight:700, fontSize:12, textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
+                                style={{ textAlign:'left', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color: trendPivotSortKey === 'label' ? C.navy : C.muted, fontWeight:700, fontSize:13.5, textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
                                 {trendPivotDimLabel || trendMetricDef.label}{trendPivotSortKey === 'label' ? (trendPivotSortDir === 'asc' ? ' ▲' : ' ▼') : ''}
                               </th>
                               {trendBuckets.map((b, i) => {
                                 const active = trendPivotSortKey === i
                                 return (
                                   <th key={b.key} onClick={() => handlePivotSort(i)}
-                                    style={{ textAlign:'right', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color: active ? C.navy : C.muted, fontWeight:700, fontSize:12, textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
+                                    style={{ textAlign:'right', padding:'7px 10px', borderBottom:`0.5px solid ${C.border}`, color: active ? C.navy : C.muted, fontWeight:700, fontSize:13.5, textTransform:'uppercase', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }}>
                                     {b.label}{active ? (trendPivotSortDir === 'asc' ? ' ▲' : ' ▼') : ''}
                                   </th>
                                 )
