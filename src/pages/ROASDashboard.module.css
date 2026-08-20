@@ -116,8 +116,12 @@
 .tableCount { font-size:11px; color:#B0B7C3; }
 .tableScroll{ overflow-x:auto; max-height:420px; overflow-y:auto; }
 
-table { width:100%; border-collapse:collapse; font-size:12.5px; }
-thead th {
+/* Scoped under .tableScroll (the module's own table wrapper) -- these were bare
+   element selectors before, which CSS Modules does not localize the way it does
+   class selectors, so they leaked onto every <table> on any other page that
+   happened to have this chunk loaded in the same session. */
+.tableScroll table { width:100%; border-collapse:collapse; font-size:12.5px; }
+.tableScroll thead th {
   padding: 9px 14px;
   text-align: left;
   font-size: 9.5px;
@@ -133,10 +137,10 @@ thead th {
   white-space: nowrap;
   font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
 }
-tbody tr { border-bottom:1px solid #F9FAFB; transition:background .1s; }
-tbody tr:hover { background:#FAFBFF; }
-tbody tr:last-child { border-bottom:none; }
-td { padding:9px 14px; color:#6B7280; vertical-align:middle; white-space:nowrap; font-family:'Plus Jakarta Sans','Inter',sans-serif; }
+.tableScroll tbody tr { border-bottom:1px solid #F9FAFB; transition:background .1s; }
+.tableScroll tbody tr:hover { background:#FAFBFF; }
+.tableScroll tbody tr:last-child { border-bottom:none; }
+.tableScroll td { padding:9px 14px; color:#6B7280; vertical-align:middle; white-space:nowrap; font-family:'Plus Jakarta Sans','Inter',sans-serif; }
 
 /* ─── RESPONSIVE ─────────────────────────────────────────── */
 @media(max-width:1200px) { .kpiGrid { grid-template-columns:repeat(4,1fr); } }

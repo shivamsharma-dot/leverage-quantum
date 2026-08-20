@@ -61,13 +61,17 @@
 .tableTitle { font-size:13px; font-weight:600; color:#111827; }
 .tableCount { font-size:11px; color:#9CA3AF; }
 .tableWrap { overflow-x:auto; max-height:400px; overflow-y:auto; }
-table { width:100%; border-collapse:collapse; font-size:12px; }
-thead th { padding:8px 13px; text-align:left; font-size:9.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#9CA3AF; background:#F9FAFB; position:sticky; top:0; z-index:2; border-bottom:1px solid var(--bg3); white-space:nowrap; font-family:'Plus Jakarta Sans','Inter',sans-serif; }
+/* Scoped under .tableWrap (the module's own table wrapper) -- these were bare
+   element selectors before, which CSS Modules does not localize the way it does
+   class selectors, so they leaked onto every <table> on any other page that
+   happened to have this chunk loaded in the same session. */
+.tableWrap table { width:100%; border-collapse:collapse; font-size:12px; }
+.tableWrap thead th { padding:8px 13px; text-align:left; font-size:9.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#9CA3AF; background:#F9FAFB; position:sticky; top:0; z-index:2; border-bottom:1px solid var(--bg3); white-space:nowrap; font-family:'Plus Jakarta Sans','Inter',sans-serif; }
 .r { text-align:right; }
-tbody tr { border-bottom:1px solid #F9FAFB; transition:background .1s; }
-tbody tr:hover { background:#F0F9FE; }
-tbody tr:last-child { border-bottom:none; }
-td { padding:8px 13px; color:#6B7280; vertical-align:middle; font-family:'Plus Jakarta Sans','Inter',sans-serif; }
+.tableWrap tbody tr { border-bottom:1px solid #F9FAFB; transition:background .1s; }
+.tableWrap tbody tr:hover { background:#F0F9FE; }
+.tableWrap tbody tr:last-child { border-bottom:none; }
+.tableWrap td { padding:8px 13px; color:#6B7280; vertical-align:middle; font-family:'Plus Jakarta Sans','Inter',sans-serif; }
 .chBadge { display:inline-block; font-size:10px; font-weight:600; padding:2px 7px; border-radius:4px; white-space:nowrap; }
 .pillGn { display:inline-block; padding:2px 8px; border-radius:100px; font-size:10.5px; font-weight:600; background:#DCFCE7; color:#166534; }
 .pillAm { display:inline-block; padding:2px 8px; border-radius:100px; font-size:10.5px; font-weight:600; background:#FEF9C3; color:#854D0E; }

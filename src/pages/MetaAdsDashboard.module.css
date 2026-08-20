@@ -169,12 +169,11 @@
 
 /* TABLE */
 .tableWrap { background:#fff; border:1px solid #ECEEF2; border-radius:12px; overflow:hidden; }
-table { width:100%; border-collapse:collapse; font-size:12.5px; }
-thead th { padding:9px 14px; text-align:left; font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#B0B7C3; background:#FAFBFC; border-bottom:1px solid #F3F4F6; white-space:nowrap; font-family:'Plus Jakarta Sans',sans-serif; }
-tbody tr { border-bottom:1px solid #F9FAFB; transition:background .1s; }
-tbody tr:hover { background:#F8FAFF; }
-tbody tr:last-child { border-bottom:none; }
-td { padding:10px 14px; color:#6B7280; vertical-align:middle; white-space:nowrap; font-family:'Plus Jakarta Sans',sans-serif; }
+/* table/thead th/tbody tr/td rules removed here -- dead, unscoped bare-element
+   selectors: this page never renders a real <table> element (its Campaigns/
+   Creatives grids are CSS-grid based, verified via grep), so this block did
+   nothing for its own page but leaked onto every OTHER page's <table> whenever
+   this CSS chunk was loaded in the same session. */
 
 /* DATE SELECT */
 .dateSelect { padding:5px 26px 5px 9px; border:1px solid #E5E7EB; border-radius:6px; background:#F9FAFB; color:#374151; font-size:11.5px; font-weight:500; font-family:'Plus Jakarta Sans',sans-serif; cursor:pointer; outline:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2.5' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 7px center; }
