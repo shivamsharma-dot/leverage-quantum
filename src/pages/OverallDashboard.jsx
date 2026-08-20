@@ -3216,7 +3216,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           {/* KPI ROW 1 — funnel volume, with vs-previous-period deltas. Fixed 10-across
               so every card is the same width on both rows (an auto-fit grid sized cards
               differently between a 12-card row and an 8-card row — "thick vs thin"). */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(10, minmax(0, 1fr))', gap:12, marginBottom:12 }}>
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(10, minmax(120px, 1fr))', gap:12, marginBottom:12 }}>
             <PremKPI label="EST. SR REVENUE" value={<span title={fmtINRShort(estSrRevenue)}>{fmtINR(estSrRevenue)}</span>} sub={'Est. RAUs ' + fmtN(estimatedRaus) + ' × SR Fee'} delta={deltaPct(estSrRevenue, prevEstSrRevenue)} prevValue={fmtINR(prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="SPEND" value={<span title={fmtINRShort(kpis.spend)}>{fmtINR(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} prevValue={fmtINR(prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} prevValue={fmtN(prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
@@ -3231,7 +3231,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
           {/* KPI ROW 2 — remaining QL breakdown + cost efficiency + downstream conversion + ROAS.
               Same fixed 10-across grid as row 1 so card widths match exactly. */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(10, minmax(0, 1fr))', gap:12, marginBottom:20 }}>
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(10, minmax(120px, 1fr))', gap:12, marginBottom:20 }}>
             <PremKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
             <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
             <PremKPI label="CPL" value={<span title={fmtINRShort(cpl)}>{fmtINR(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} prevValue={fmtINR(prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
