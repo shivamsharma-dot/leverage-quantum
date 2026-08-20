@@ -57,7 +57,7 @@ export function writeBqBeta(on) {
   try { window.dispatchEvent(new CustomEvent(BQ_BETA_EVENT, { detail: { on: !!on } })) } catch (_) {}
 }
 
-// The 17 columns of the saved query, named EXACTLY as BigQuery returns them -- spaces
+// The 18 columns of the saved query, named EXACTLY as BigQuery returns them -- spaces
 // and capitals included, because the sync keeps them byte-identical. That is the
 // whole point: OverallDashboard's existing mapRow() reads these same header names off
 // the CSV, so a row from here drops into it unchanged. No mapping layer means no way
@@ -65,9 +65,14 @@ export function writeBqBeta(on) {
 // Sub_Source added 2026-08-17 (sub_source_updated in BigQuery), matching the Overall
 // PM sheet's own Sub_Source column added the same day -- see
 // supabase/sql/overall_bq_add_sub_source.sql.
+// 'Queued on Futwork' renamed to 'Queued on Futwork Human' and 'Queued on Futwork AI'
+// added 2026-08-20 (same underlying leads, the label now names the Futwork channel
+// explicitly now that a second one exists) -- see
+// supabase/sql/overall_bq_add_futwork_ai_queued.sql. Selecting the old column name here
+// would 400 against the renamed table and silently fall the whole page back to the CSV.
 const BQ_COLUMNS = [
   'lead_date', 'month', 'Source', 'Sub_Source', 'campaign_name',
-  'Total Leads Generated', 'floor_queued', 'Queued on Futwork', 'Queued on Superbot',
+  'Total Leads Generated', 'floor_queued', 'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
   'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
   'Total_Spends', 'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
 ]
@@ -178,7 +183,7 @@ export async function fetchOverallBqRows({ since, until, sources }) {
 // treats as ''.
 const AGG_COLUMNS = [
   'lead_date', 'month', 'Source',
-  'Total Leads Generated', 'floor_queued', 'Queued on Futwork', 'Queued on Superbot',
+  'Total Leads Generated', 'floor_queued', 'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
   'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
   'Total_Spends', 'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
 ]
