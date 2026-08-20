@@ -635,9 +635,15 @@ const TEXT_COL_KEYS = ['corridor', 'source', 'subSource']
 // scrolls under them horizontally -- fixed pixel widths so the second sticky column's
 // `left` offset is a known constant rather than something measured at render time.
 const LABEL_COL_W = 170
-const SPEND_COL_W = 130
-const stickyLabelStyle = bg => ({ position:'sticky', left:0, zIndex:2, background:bg, minWidth:LABEL_COL_W, width:LABEL_COL_W, boxShadow:'2px 0 4px -2px rgba(15,23,42,0.10)' })
-const stickySpendStyle = bg => ({ position:'sticky', left:LABEL_COL_W, zIndex:2, background:bg, minWidth:SPEND_COL_W, width:SPEND_COL_W, boxShadow:'2px 0 4px -2px rgba(15,23,42,0.10)' })
+// Wide enough for the largest real spend figure this table has shown (e.g.
+// "₹1,69,48,220", bold 14px + cell padding) -- 130 was too narrow and silently
+// truncated that exact value in production ("SPEN" / "₹1,69,48,22").
+const SPEND_COL_W = 160
+// Both helpers are no-ops (return {}) unless `pin` is true -- pinning is an opt-in
+// toggle (see pinCols state), off by default, so an unpinned table behaves exactly
+// like a normal scrolling table with no sticky positioning at all.
+const stickyLabelStyle = (pin, bg) => (pin ? { position:'sticky', left:0, zIndex:2, background:bg, minWidth:LABEL_COL_W, width:LABEL_COL_W, boxShadow:'2px 0 4px -2px rgba(15,23,42,0.10)' } : {})
+const stickySpendStyle = (pin, bg) => (pin ? { position:'sticky', left:LABEL_COL_W, zIndex:2, background:bg, minWidth:SPEND_COL_W, width:SPEND_COL_W, boxShadow:'2px 0 4px -2px rgba(15,23,42,0.10)' } : {})
 
 // Small expand/collapse indicator for the Source view's tree rows (Source -> Sub Source ->
 // Campaign). Rotates 90deg open, matching the caret convention already used by Dropdown.
@@ -972,6 +978,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [rowLimit, setRowLimit] = useState(25)
   const [showColsPicker, setShowColsPicker] = useState(false)
   const [showRatesPicker, setShowRatesPicker] = useState(false)
+  // Off by default -- Source/Spend only stay fixed while scrolling when the user
+  // explicitly asks for it, since forcing them fixed at every table width risks the
+  // sticky cell's own fixed pixel width being narrower than a genuinely long value
+  // (a real spend figure truncated this way once already). Opt-in avoids that trade-off
+  // entirely for anyone who doesn't need it, and the table is just as usable un-pinned
+  // -- it simply scrolls like a normal wide table.
+  const [pinCols, setPinCols] = useState(false)
   const [showContribPicker, setShowContribPicker] = useState(false)
   // Screen coordinates for the fixed-position Contribution % popover, computed at
   // open time from the pill's own getBoundingClientRect() -- see the click handler.
@@ -3022,7 +3035,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           fontWeight: opts.fontWeight != null ? opts.fontWeight : (isTextCol ? 500 : (SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400)),
           background: bg,
           whiteSpace: isTextCol ? 'nowrap' : 'normal',
-          ...(isSpend ? stickySpendStyle(opts.rowBg || '#fff') : null),
+          ...(isSpend ? stickySpendStyle(pinCols, opts.rowBg || '#fff') : null),
         }}>
         {summaryFmt(col.key, v)}
       </td>
@@ -3314,6 +3327,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   )}
                 </div>
 
+                <Button
+                  onClick={() => setPinCols(v => !v)}
+                  size="sm"
+                  variant={pinCols ? 'primary' : 'secondary'}
+                  title={pinCols ? 'Source and Spend are pinned while scrolling — click to make the table scroll freely' : 'Pin Source and Spend so they stay visible while scrolling the table sideways'}
+                  icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 17v5" /><path d="M9 3h6l1 6 3 2v2H5v-2l3-2z" /></svg>}
+                >
+                  {pinCols ? 'Pinned' : 'Pin columns'}
+                </Button>
+
                 <div style={{ position:'relative' }}>
                   <Button
                     onClick={() => setShowRatesPicker(v => !v)}
@@ -3365,7 +3388,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 <table ref={tableRef} style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT }}>
                   <thead>
                     <tr style={{ background:'#F8FAFC', borderBottom:'2px solid #E2E8F0' }}>
-                      <th onClick={() => handleSort('label')} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none', ...stickyLabelStyle('#F8FAFC') }}>
+                      <th onClick={() => handleSort('label')} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none', ...stickyLabelStyle(pinCols, '#F8FAFC') }}>
                         {grpByLabel}{sortKey === 'label' && (sortDir === 'asc' ? ' ▲' : ' ▼')}
                       </th>
                       {renderCols.map(col => (
@@ -3379,11 +3402,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           onDragEnd={() => { setDragKey(null); setDragOverKey(null) }}
                           title="Click to sort — drag to reorder"
                           style={{
-                            position: col.key === 'spend' ? 'sticky' : 'relative', padding:'11px 10px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
+                            position:'relative', padding:'11px 10px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
                             color: sortKey === col.key ? C.navy : '#64748B', textAlign: TEXT_COL_KEYS.includes(col.key) ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
                             opacity: dragKey === col.key ? 0.35 : 1,
-                            boxShadow: col.key === 'spend' ? '2px 0 4px -2px rgba(15,23,42,0.10)' : (dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none'),
-                            ...(col.key === 'spend' ? { left:LABEL_COL_W, zIndex:2, background:'#F8FAFC', minWidth:SPEND_COL_W, width:SPEND_COL_W } : null),
+                            boxShadow: dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none',
+                            ...(col.key === 'spend' ? stickySpendStyle(pinCols, '#F8FAFC') : null),
                           }}>
                           {col.key === 'contribPct' ? (
                             <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
@@ -3416,7 +3439,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                                       <div style={{ fontSize:13, color:C.sub, lineHeight:1.55, fontWeight:400 }}>
                                         Each row's <b>{(CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads')}</b> divided by the grand total {(CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads')} for the current filters, ×100.
                                       </div>
-                                      <div style={{ fontSize:12, color:C.muted, lineHeight:1.5, marginTop:6 }}>TOTAL is always 100%. Paid/Non-Paid bands and Source/Sub Source/Campaign tree rows all read against that same account-wide total — never their parent row's.</div>
                                     </div>
                                     {CONTRIB_METRICS.map(m => (
                                       <button key={m.key} onClick={e => { e.stopPropagation(); setContribMetric(m.key); setShowContribPicker(false) }}
@@ -3443,7 +3465,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       // authoritative summary line while the column headers stay the only
                       // emphasised band.
                       <tr style={{ background:'var(--card)', borderBottom:'2px solid #CBD5E1' }}>
-                        <th style={{ padding:'10px 12px', fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'#64748B', textAlign:'left', whiteSpace:'nowrap', ...stickyLabelStyle('var(--card)') }}>
+                        <th style={{ padding:'10px 12px', fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'#64748B', textAlign:'left', whiteSpace:'nowrap', ...stickyLabelStyle(pinCols, 'var(--card)') }}>
                           Total
                         </th>
                         {renderCols.map(col => {
@@ -3453,7 +3475,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           const isSpend = col.key === 'spend'
                           return (
                             <th key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
-                              style={{ padding:'10px 10px', fontSize:14, fontWeight:800, textAlign: isTextCol ? 'left' : 'right', color: isTextCol ? '#CBD5E1' : '#0F172A', whiteSpace:'nowrap', ...(isSpend ? stickySpendStyle('var(--card)') : null) }}>
+                              style={{ padding:'10px 10px', fontSize:14, fontWeight:800, textAlign: isTextCol ? 'left' : 'right', color: isTextCol ? '#CBD5E1' : '#0F172A', whiteSpace:'nowrap', ...(isSpend ? stickySpendStyle(pinCols, 'var(--card)') : null) }}>
                               {summaryFmt(col.key, v)}
                             </th>
                           )
@@ -3465,13 +3487,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     {tableBodyRows.map(item => {
                       if (item.kind === 'band') { const bg = '#EEF3FA'; return (
                         <tr key={'band-' + item.label} style={{ background:bg, borderTop:'2px solid #D8E3F0', borderBottom:'1px solid #E2E8F0' }}>
-                          <td style={{ padding:'9px 12px', fontSize:12, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.08em', color:C.navy, whiteSpace:'nowrap', ...stickyLabelStyle(bg) }}>{item.label}</td>
+                          <td style={{ padding:'9px 12px', fontSize:12, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.08em', color:C.navy, whiteSpace:'nowrap', ...stickyLabelStyle(pinCols, bg) }}>{item.label}</td>
                           {renderSummaryValueCells(item.row, { padding:'9px 10px', fontSize:14.5, fontWeight:800, colorOverride:C.navy, rowBg:bg })}
                         </tr>
                       ) }
                       if (item.kind === 'source') { const bg = item.i % 2 === 0 ? '#fff' : '#FAFBFC'; return (
                         <tr key={'src-' + item.row.label} style={{ background:bg }}>
-                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A', cursor:'pointer', userSelect:'none', ...stickyLabelStyle(bg) }}
+                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A', cursor:'pointer', userSelect:'none', ...stickyLabelStyle(pinCols, bg) }}
                             onClick={() => toggleSourceExpand(item.row.label)}>
                             <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
                               <TreeChevron open={expandedSources.has(item.row.label)} />
@@ -3483,7 +3505,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       ) }
                       if (item.kind === 'subsource') { const bg = '#F8FAFC'; return (
                         <tr key={'sub-' + item.parentSource + '-' + item.row.label} style={{ background:bg }}>
-                          <td style={{ padding:'9px 12px 9px 32px', fontWeight:600, fontSize:14.5, color:'#334155', cursor: item.hasCampaigns ? 'pointer' : 'default', userSelect:'none', ...stickyLabelStyle(bg) }}
+                          <td style={{ padding:'9px 12px 9px 32px', fontWeight:600, fontSize:14.5, color:'#334155', cursor: item.hasCampaigns ? 'pointer' : 'default', userSelect:'none', ...stickyLabelStyle(pinCols, bg) }}
                             onClick={() => item.hasCampaigns && toggleSubSourceExpand(item.parentSource, item.row.label)}>
                             <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
                               {item.hasCampaigns && <TreeChevron open={expandedSubSources.has(item.parentSource + '||' + item.row.label)} />}
@@ -3495,13 +3517,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       ) }
                       if (item.kind === 'campaign') { const bg = '#fff'; return (
                         <tr key={'camp-' + item.parentKey + '-' + item.row.label} style={{ background:bg }}>
-                          <td style={{ padding:'8px 12px 8px 56px', fontWeight:400, fontSize:14, color:'#64748B', ...stickyLabelStyle(bg) }}>{item.row.label}</td>
+                          <td style={{ padding:'8px 12px 8px 56px', fontWeight:400, fontSize:14, color:'#64748B', ...stickyLabelStyle(pinCols, bg) }}>{item.row.label}</td>
                           {renderSummaryValueCells(item.row, { fontSize:13.5, rowBg:bg })}
                         </tr>
                       ) }
                       { const bg = item.i % 2 === 0 ? '#fff' : '#FAFBFC'; return (
                         <tr key={item.row.label} style={{ background:bg }}>
-                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A', ...stickyLabelStyle(bg) }}>{item.row.label}</td>
+                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A', ...stickyLabelStyle(pinCols, bg) }}>{item.row.label}</td>
                           {renderSummaryValueCells(item.row, { rowBg:bg })}
                         </tr>
                       ) }
