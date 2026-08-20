@@ -630,20 +630,14 @@ const SUMMARY_BOLD_COLS = ['leads', 'spend', 'raus', 'qlPct', 'appPct', 'deposit
 // Text (not numeric) columns -- left-aligned, muted, no heat/bold treatment. Corridor/
 // Source/Sub Source only ever appear together (campaign view only, see displayCols).
 const TEXT_COL_KEYS = ['corridor', 'source', 'subSource']
-// Summary table: the label column (Source/Campaign/Corridor/Month/Day, whichever the
-// active grouping is) and Spend stay pinned to the left edge while every other column
-// scrolls under them horizontally -- fixed pixel widths so the second sticky column's
-// `left` offset is a known constant rather than something measured at render time.
+// Summary table: only the label column (Source/Campaign/Corridor/Month/Day, whichever
+// the active grouping is) stays pinned to the left edge while every other column
+// (Spend included) scrolls under it horizontally.
 const LABEL_COL_W = 170
-// Wide enough for the largest real spend figure this table has shown (e.g.
-// "₹1,69,48,220", bold 14px + cell padding) -- 130 was too narrow and silently
-// truncated that exact value in production ("SPEN" / "₹1,69,48,22").
-const SPEND_COL_W = 160
-// Both helpers are no-ops (return {}) unless `pin` is true -- pinning is an opt-in
-// toggle (see pinCols state), off by default, so an unpinned table behaves exactly
-// like a normal scrolling table with no sticky positioning at all.
+// No-op (returns {}) unless `pin` is true -- pinning is an opt-in toggle (see pinCols
+// state), off by default, so an unpinned table behaves exactly like a normal scrolling
+// table with no sticky positioning at all.
 const stickyLabelStyle = (pin, bg) => (pin ? { position:'sticky', left:0, zIndex:2, background:bg, minWidth:LABEL_COL_W, width:LABEL_COL_W, boxShadow:'2px 0 4px -2px rgba(15,23,42,0.10)' } : {})
-const stickySpendStyle = (pin, bg) => (pin ? { position:'sticky', left:LABEL_COL_W, zIndex:2, background:bg, minWidth:SPEND_COL_W, width:SPEND_COL_W, boxShadow:'2px 0 4px -2px rgba(15,23,42,0.10)' } : {})
 
 // Small expand/collapse indicator for the Source view's tree rows (Source -> Sub Source ->
 // Campaign). Rotates 90deg open, matching the caret convention already used by Dropdown.
@@ -3024,8 +3018,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const isTextCol = TEXT_COL_KEYS.includes(col.key)
     const isPct = col.key.endsWith('Pct')
     const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
-    const isSpend = col.key === 'spend'
-    const bg = isPct ? heatBg(v) : (isSpend ? (opts.rowBg || '#fff') : 'transparent')
     return (
       <td key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
         style={{
@@ -3033,9 +3025,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           textAlign: isTextCol ? 'left' : 'right',
           color: opts.colorOverride || (isTextCol ? '#64748B' : (isPct ? heatColor(v) : summaryColor(col.key))),
           fontWeight: opts.fontWeight != null ? opts.fontWeight : (isTextCol ? 500 : (SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400)),
-          background: bg,
+          background: isPct ? heatBg(v) : 'transparent',
           whiteSpace: isTextCol ? 'nowrap' : 'normal',
-          ...(isSpend ? stickySpendStyle(pinCols, opts.rowBg || '#fff') : null),
         }}>
         {summaryFmt(col.key, v)}
       </td>
@@ -3331,7 +3322,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   onClick={() => setPinCols(v => !v)}
                   size="sm"
                   variant={pinCols ? 'primary' : 'secondary'}
-                  title={pinCols ? 'Source and Spend are pinned while scrolling — click to make the table scroll freely' : 'Pin Source and Spend so they stay visible while scrolling the table sideways'}
+                  title={pinCols ? 'Source is pinned while scrolling — click to make the table scroll freely' : 'Pin Source so it stays visible while scrolling the table sideways'}
                   icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 17v5" /><path d="M9 3h6l1 6 3 2v2H5v-2l3-2z" /></svg>}
                 >
                   {pinCols ? 'Pinned' : 'Pin columns'}
@@ -3406,7 +3397,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                             color: sortKey === col.key ? C.navy : '#64748B', textAlign: TEXT_COL_KEYS.includes(col.key) ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
                             opacity: dragKey === col.key ? 0.35 : 1,
                             boxShadow: dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none',
-                            ...(col.key === 'spend' ? stickySpendStyle(pinCols, '#F8FAFC') : null),
                           }}>
                           {col.key === 'contribPct' ? (
                             <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
@@ -3472,10 +3462,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           const v = valueWithContrib(totalsRow, col.key)
                           const isTextCol = TEXT_COL_KEYS.includes(col.key)
                           const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
-                          const isSpend = col.key === 'spend'
                           return (
                             <th key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
-                              style={{ padding:'10px 10px', fontSize:14, fontWeight:800, textAlign: isTextCol ? 'left' : 'right', color: isTextCol ? '#CBD5E1' : '#0F172A', whiteSpace:'nowrap', ...(isSpend ? stickySpendStyle(pinCols, 'var(--card)') : null) }}>
+                              style={{ padding:'10px 10px', fontSize:14, fontWeight:800, textAlign: isTextCol ? 'left' : 'right', color: isTextCol ? '#CBD5E1' : '#0F172A', whiteSpace:'nowrap' }}>
                               {summaryFmt(col.key, v)}
                             </th>
                           )
