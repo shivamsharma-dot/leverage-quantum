@@ -752,21 +752,70 @@ async function fetchTeamUsersMerged(creds) {
   return { rows: merged, count: merged.length, staleManualDropped: staleEmails.length }
 }
 
+// User/Retrieve/ByUserId -- found via LeadSquared's own public API docs
+// (apidocs.leadsquared.com/get-user-by-id), NOT discoverable by guessing REST
+// naming conventions off Users.Get the way every other candidate path tried
+// earlier was ("Users/Retrieve/ByIds" -- plural, wrong resource name -- 404s;
+// this is singular "User", singular "ByUserId"). Unlike Users.Get, this DOES
+// return real phone numbers, custom fields, and the reporting-manager
+// relationship -- confirmed live against 4 real accounts here, cross-checked
+// field-for-field against the "Akash - Squad Mapping" sheet's own Phone
+// Number / Airtel Number / LS Manager Name columns, all matching exactly
+// (including a genuinely blank Airtel Number matching a genuinely absent
+// mx_Custom_2). So PhoneMain / mx_Custom_2 / ManagerName are now live data,
+// not manual fields -- see fetchLeadSquaredUserDetails below. Designation/
+// Department/Sales Regions/Skills still didn't appear in any of the 4 test
+// accounts, but those were also blank in LeadSquared's own UI for all 4, so
+// whether this endpoint can return them for an account where they're actually
+// filled in is still unconfirmed -- worth re-checking against a real example.
+// This is a PER-USER call (LeadSquared has no bulk "by many ids" variant, and
+// ReportingHierarchy/RetrieveAllReportingUsers only returns bare ids, not this
+// richer shape) -- see fetchLeadSquaredUserDetails' own comment for how the
+// frontend paces this to avoid the account-wide rate limit this app has hit
+// before on other integrations.
+async function fetchLeadSquaredUserDetail(creds, userId) {
+  const data = await leadsquaredGet('/v2/UserManagement.svc/User/Retrieve/ByUserId', creds, { userId })
+  return (Array.isArray(data) ? data[0] : data) || null
+}
+
+// Fetches detail for a small batch of ids in parallel (capped at 60 -- one
+// Team Mapping table page's worth, never the whole 3,380-user roster in one
+// call) and resolves each ManagerUserId to the manager's own email against
+// `byId`, a map already built from the one bulk Users.Get roster fetch this
+// same request already needed for team_users -- no extra LeadSquared call for
+// that resolution.
+async function fetchLeadSquaredUserDetails(creds, ids, byId) {
+  const capped = (ids || []).slice(0, 60)
+  const results = await Promise.all(capped.map(id =>
+    fetchLeadSquaredUserDetail(creds, id).catch(() => null)
+  ))
+  return capped.map((id, i) => {
+    const d = results[i]
+    if (!d) return { id, phoneMain: null, airtelNumber: null, managerName: null, managerEmail: null }
+    const mgr = d.ManagerUserId && byId[d.ManagerUserId]
+    return {
+      id,
+      phoneMain: d.PhoneMain || null,
+      // mx_Custom_2 has no human label from this endpoint (LeadSquared's admin
+      // UI shows it as "DID Number") -- matched by VALUE against the sheet's
+      // Airtel Number column across 4 real users, not by any documented name,
+      // so this is fragile if this account's custom-field numbering ever
+      // changes. Worth re-verifying if Airtel Numbers ever look wrong here.
+      airtelNumber: d.mx_Custom_2 || null,
+      managerName: d.ManagerName || null,
+      managerEmail: (mgr && mgr.email) || null,
+    }
+  })
+}
+
 // employment_status was dropped -- it duplicated the live LeadSquared Status
-// (Active/Inactive) already shown for every row, per the user's own correction
-// ("should be present if he/she is present in leadsquared") rather than being
-// a genuinely separate manual concept. ls_manager_email is new: LeadSquared's
-// own "Reporting to" field (Settings > Edit user > Details) names the manager,
-// but that field -- like Designation/Department/Phone (Main)/custom fields
-// such as "BD Personal Number"/"DID Number" -- only exists behind LeadSquared's
-// own session-cookie Settings UI (confirmed live: that modal's data comes from
-// GET Settings/EditUser?userId=..., an internal in21.leadsquared.com endpoint,
-// not the public accessKey/secretKey API this integration uses -- Users.Get
-// ignores every extra parameter tried against it and always returns the same
-// fixed 9-field shape). So the manager's email can't be resolved server-side
-// automatically; the frontend instead offers a type-ahead against the live
-// roster so picking a name also fills in that person's real LeadSquared email.
-const TEAM_MANUAL_FIELDS = ['ls_manager_name', 'ls_manager_email', 'asm_sm', 'asm_sm_email', 'ssm', 'ssm_email', 'tier', 'level', 'country', 'centre_name', 'phone_number', 'airtel_number']
+// (Active/Inactive) already shown for every row. ls_manager_name/email and
+// phone_number/airtel_number were ALSO dropped from the manual set for the
+// reason above -- they're live now via fetchLeadSquaredUserDetails. tier was
+// renamed to role: a business-side designation (ASM/Consultant/Manager/...),
+// distinct from LeadSquared's own coarse Role (Sales_User/Administrator/...)
+// which the frontend now labels "LS Role" to avoid the two being confused.
+const TEAM_MANUAL_FIELDS = ['asm_sm', 'asm_sm_email', 'ssm', 'ssm_email', 'role', 'level', 'country', 'centre_name']
 
 async function saveTeamManual(body, me) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
@@ -811,7 +860,7 @@ async function handleLeadSquared(req, res, me) {
   // gated on its own id ('team_mapping') for the same reason.
   const { mode } = req.query || {}
   const FIELD_SCHEMA_MODES = ['activity_schema', 'activity_dropdown_options', 'opportunity_schema', 'lead_schema']
-  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete']
+  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_user_detail']
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
@@ -833,6 +882,12 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_groups') return res.status(200).json({ groups: aggregateTeamGroups(await fetchLeadSquaredTeamUsers(creds)) })
     if (mode === 'team_manual_save') return res.status(200).json(await saveTeamManual(req.body || req.query, me))
     if (mode === 'team_manual_delete') return res.status(200).json(await deleteTeamManual((req.body && req.body.ls_email) || req.query.ls_email))
+    if (mode === 'team_user_detail') {
+      const ids = String(req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean)
+      const byId = {}
+      ;(await fetchLeadSquaredTeamUsers(creds)).forEach(u => { byId[u.id] = u })
+      return res.status(200).json({ details: await fetchLeadSquaredUserDetails(creds, ids, byId) })
+    }
     if (mode === 'opportunities') return res.status(200).json(await fetchLeadSquaredOpportunities(creds, p))
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))

@@ -12,44 +12,49 @@ import { useAuth } from '../hooks/useAuth'
 // group membership (reconstructed from that same roster -- LeadSquared has no
 // dedicated Sales-Groups API resource on this account, see api/crm-leads.js's own
 // comment on this) merged with the manual, human-entered fields kept in Supabase
-// (team_mapping_manual). The manual fields are the ones LeadSquared's API doesn't
-// expose at all -- ASM/SM, SSM, tier, level, country, centre -- the same columns the
-// "Akash - Squad Mapping" Google Sheet used to track by hand. That sheet is a
-// one-time seed for this page (via "Bulk import" below), not an ongoing source.
+// (team_mapping_manual). Phone Number, Airtel Number and Reporting Manager are ALSO
+// live -- User/Retrieve/ByUserId, a real per-user detail endpoint found in
+// LeadSquared's own API docs, fetched lazily per roster page (see RosterTab's
+// detailCache) since it's a per-user call, not bulk. What's left genuinely manual
+// is ASM/SM, SSM, Role (a business designation distinct from LeadSquared's own
+// coarse "LS Role"), Level, Country and Centre Name -- the columns the "Akash -
+// Squad Mapping" Google Sheet used to track by hand. That sheet is a one-time seed
+// for this page (via "Bulk import" below), not an ongoing source.
 const API = '/api/crm-leads?source=leadsquared'
 const PAGE_ROWS = 50
 
-// employment_status was dropped from this list -- it duplicated the live
-// LeadSquared Status (Active/Inactive) every row already shows, so it never
-// carried information the page didn't already have. ls_manager_email is new,
-// paired with ls_manager_name -- see the EditManualModal's manager type-ahead
-// below for why it isn't sourced live.
+// Phone Number, Airtel Number and LS Manager Name/Email are NOT in this list
+// any more -- a deeper look at LeadSquared's own public API docs (not just
+// guessing REST paths off Users.Get) turned up User/Retrieve/ByUserId, which
+// genuinely returns PhoneMain, the mx_Custom_2 custom field, and the real
+// ManagerName/ManagerUserId. Cross-checked live against 4 real accounts,
+// value-for-value against the sheet's own Phone Number/Airtel Number/LS
+// Manager Name columns -- exact matches, including a blank Airtel Number
+// matching a genuinely absent mx_Custom_2. So those three are now LIVE data
+// (see the roster table's "LS Manager"/"Phone"/"Airtel" cells and the detail
+// fetch in RosterTab), not manual fields. See fetchLeadSquaredUserDetails'
+// own comment in api/crm-leads.js for the full trail.
+//
+// employment_status was dropped earlier for the same reason it's absent here
+// too -- it duplicated the live LeadSquared Active/Inactive status every row
+// already shows. tier is renamed to role: a business-side designation
+// (see ROLE_SUGGESTIONS below), distinct from LeadSquared's own coarse Role
+// (Sales_User/Administrator/...), which this page now labels "LS Role" so the
+// two are never confused with each other.
 const MANUAL_FIELDS = [
-  { key: 'ls_manager_name', label: 'LS Manager Name' },
-  { key: 'ls_manager_email', label: 'LS Manager Email' },
+  { key: 'role', label: 'Role' },
   { key: 'asm_sm', label: 'ASM/SM' },
   { key: 'asm_sm_email', label: 'ASM/SM Email' },
   { key: 'ssm', label: 'SSM' },
   { key: 'ssm_email', label: 'SSM Email' },
-  { key: 'tier', label: 'Tier' },
   { key: 'level', label: 'Level' },
   { key: 'country', label: 'Country' },
   { key: 'centre_name', label: 'Centre Name' },
-  { key: 'phone_number', label: 'Phone Number' },
-  { key: 'airtel_number', label: 'Airtel Number' },
 ]
 
-// Fields that stay manual even though the equivalent live LeadSquared UI
-// screen (Settings > Edit user) DOES show real values for them (Phone Number
-// == its "BD Personal Number" custom field, Airtel Number == its "DID
-// Number"). Confirmed live: that screen's data comes from a session-cookie
-// endpoint on in21.leadsquared.com, not the public accessKey/secretKey API
-// this app's server integration uses -- Users.Get (the only Users/Groups
-// endpoint this account's API key can reach at all) ignores every extra
-// parameter tried against it and always returns the same fixed, small field
-// set. So there's no way for Quantum's backend to read these live; they stay
-// manually entered here, same as before.
-const LIVE_IN_LEADSQUARED_BUT_NOT_VIA_API = ['phone_number', 'airtel_number']
+// Suggested values for the manual Role field -- shown as a type-ahead when
+// editing, not a hard-restricted list, since org designations do change.
+const ROLE_SUGGESTIONS = ['ASM', 'Consultant', 'Manager', 'Intern', 'AD', 'CBO', 'Performance Marketing User', 'Tech User', 'Leadsquared Super Admin', 'Leadsquared Admin']
 
 // Header aliases accepted by the bulk-import (case/space/slash-insensitive) --
 // covers the exact header text on the "Akash - Squad Mapping" sheet's Complete
@@ -57,20 +62,17 @@ const LIVE_IN_LEADSQUARED_BUT_NOT_VIA_API = ['phone_number', 'airtel_number']
 // to be re-typed to match this table's own column names exactly.
 const IMPORT_ALIASES = {
   'associate mail id': 'ls_email', 'email': 'ls_email', 'associate email': 'ls_email', 'ls email': 'ls_email',
-  'ls manager name': 'ls_manager_name', 'manager name': 'ls_manager_name',
-  'ls manager email': 'ls_manager_email', 'manager email': 'ls_manager_email',
   'asm/sm': 'asm_sm', 'asm sm': 'asm_sm',
   'asm/sm email': 'asm_sm_email', 'asm sm email': 'asm_sm_email',
   'ssm': 'ssm', 'ssm email': 'ssm_email',
-  'status': 'tier', 'tier': 'tier',
+  'status': 'role', 'tier': 'role', 'role': 'role',
   'level': 'level', 'country': 'country', 'centre name': 'centre_name', 'center name': 'centre_name',
-  'phone number': 'phone_number', 'airtel number': 'airtel_number',
 }
 // The exact columns + one worked example the "Download template" button ships --
 // deliberately the same alias vocabulary as IMPORT_ALIASES above, so a template
 // round-tripped straight back through "Upload" needs no edits to import cleanly.
-const TEMPLATE_HEADERS = ['Associate Mail ID', 'LS Manager Name', 'LS Manager Email', 'ASM/SM', 'ASM/SM Email', 'SSM', 'SSM Email', 'Tier', 'Level', 'Country', 'Centre Name', 'Phone Number', 'Airtel Number']
-const TEMPLATE_EXAMPLE = ['jane.doe@leverageedu.com', 'Srishti Prasad', 'srishti.prasad@leverageedu.com', 'Kartikey Kedia', 'kartikey.kedia@leverageedu.com', 'Manish Singh', 'manish@leverageedu.com', 'Consultant', 'Level 1', 'AC + SR', 'Delhi', '9650028465', '9821550658']
+const TEMPLATE_HEADERS = ['Associate Mail ID', 'ASM/SM', 'ASM/SM Email', 'SSM', 'SSM Email', 'Role', 'Level', 'Country', 'Centre Name']
+const TEMPLATE_EXAMPLE = ['jane.doe@leverageedu.com', 'Kartikey Kedia', 'kartikey.kedia@leverageedu.com', 'Manish Singh', 'manish@leverageedu.com', 'Consultant', 'Level 1', 'AC + SR', 'Delhi']
 
 async function fetchJson(url, opts) {
   const r = await fetch(url, { credentials: 'include', ...opts })
@@ -156,42 +158,65 @@ function Modal({ onClose, title, width = 560, children }) {
 
 // ---------------------------------------------------------------- Edit modal
 
-// LS Manager Name/Email get their own control: LeadSquared's live "Reporting to"
-// relationship isn't reachable via the public API (see the note above
-// LIVE_IN_LEADSQUARED_BUT_NOT_VIA_API), so the name still has to be typed by
-// hand -- but since the manager is almost always ALSO a LeadSquared user, typing
-// against a type-ahead of the live roster and picking a match fills in their
-// real email for free, rather than needing that typed by hand too.
-function ManagerLookup({ nameValue, emailValue, onPick, onNameChange, roster }) {
+// Generic text input with a fixed suggestion list shown while typing/focused --
+// unlike a Dropdown, the value isn't restricted to the list (org designations
+// change), picking a suggestion just fills the field the same as typing it.
+function SuggestInput({ value, onChange, suggestions, placeholder }) {
   const [open, setOpen] = useState(false)
-  const suggestions = useMemo(() => {
-    const q = nameValue.trim().toLowerCase()
-    if (!q) return []
-    return roster.filter(u => (u.name || '').toLowerCase().includes(q)).slice(0, 6)
-  }, [nameValue, roster])
+  const filtered = useMemo(() => {
+    const q = value.trim().toLowerCase()
+    return suggestions.filter(s => !q || s.toLowerCase().includes(q))
+  }, [value, suggestions])
   return (
     <div style={{ position: 'relative' }}>
       <input
-        style={inputStyle} value={nameValue} placeholder="Start typing a name…"
+        style={inputStyle} value={value} placeholder={placeholder}
         onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 120)}
-        onChange={e => onNameChange(e.target.value)}
+        onChange={e => onChange(e.target.value)}
       />
-      {open && suggestions.length > 0 && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 10, background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 8, boxShadow: '0 8px 20px -6px rgba(15,23,42,0.25)', maxHeight: 180, overflowY: 'auto' }}>
-          {suggestions.map(u => (
-            <div key={u.id} onClick={() => { onPick(u); setOpen(false) }} style={{ padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', color: C.text }}>
-              <div style={{ fontWeight: 700 }}>{u.name}</div>
-              <div style={{ fontSize: 11, color: C.muted }}>{u.email}</div>
-            </div>
+      {open && filtered.length > 0 && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 10, background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 8, boxShadow: '0 8px 20px -6px rgba(15,23,42,0.25)', maxHeight: 200, overflowY: 'auto' }}>
+          {filtered.map(s => (
+            <div key={s} onClick={() => { onChange(s); setOpen(false) }} style={{ padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', color: C.text, fontWeight: 600 }}>{s}</div>
           ))}
         </div>
       )}
-      {emailValue && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{emailValue}</div>}
     </div>
   )
 }
 
-function EditManualModal({ user, roster, onClose, onSaved }) {
+// Read-only strip showing what LeadSquared itself reports for this person --
+// Phone/Airtel/Reporting Manager, all live via User/Retrieve/ByUserId, fetched
+// fresh every time the modal opens rather than reused from the roster table's
+// own (page-scoped, possibly stale-by-a-few-minutes) detail cache.
+function LiveDetailStrip({ userId }) {
+  const [detail, setDetail] = useState(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    setLoading(true)
+    fetchJson(API + '&mode=team_user_detail&ids=' + encodeURIComponent(userId))
+      .then(d => setDetail((d.details && d.details[0]) || null))
+      .catch(() => setDetail(null))
+      .finally(() => setLoading(false))
+  }, [userId])
+  return (
+    <div style={{ background: 'var(--bg3)', borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+      {['Phone', 'Airtel', 'Reporting Manager'].map((label, i) => {
+        const val = loading ? '…' : (i === 0 ? detail?.phoneMain : i === 1 ? detail?.airtelNumber : detail?.managerName) || '—'
+        const sub = i === 2 && !loading ? detail?.managerEmail : null
+        return (
+          <div key={label}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label} · live</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{val}</div>
+            {sub && <div style={{ fontSize: 10.5, color: C.muted }}>{sub}</div>}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function EditManualModal({ user, onClose, onSaved }) {
   const [form, setForm] = useState(() => {
     const base = {}
     MANUAL_FIELDS.forEach(f => { base[f.key] = (user.manual && user.manual[f.key]) || '' })
@@ -225,23 +250,17 @@ function EditManualModal({ user, roster, onClose, onSaved }) {
 
   return (
     <Modal onClose={onClose} title={'Manual mapping — ' + user.name}>
-      <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14 }}>{user.email} · {user.role} · <StatusBadge status={user.status} /></div>
+      <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14 }}>{user.email} · {(user.role || '').replace(/_/g, ' ')} (LS Role) · <StatusBadge status={user.status} /></div>
+      <LiveDetailStrip userId={user.id} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>LS Manager Name — picking a match below fills in their email</span>
-          <ManagerLookup
-            nameValue={form.ls_manager_name} emailValue={form.ls_manager_email} roster={roster || []}
-            onNameChange={v => setForm(p => ({ ...p, ls_manager_name: v }))}
-            onPick={u => setForm(p => ({ ...p, ls_manager_name: u.name, ls_manager_email: u.email || '' }))}
-          />
-        </label>
-        {MANUAL_FIELDS.filter(f => f.key !== 'ls_manager_name' && f.key !== 'ls_manager_email').map(f => (
+        {MANUAL_FIELDS.map(f => (
           <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {f.label}
-              {LIVE_IN_LEADSQUARED_BUT_NOT_VIA_API.includes(f.key) && <span title="Real value exists in LeadSquared's own Settings > Edit user screen, but that field isn't reachable by this app's API integration -- has to stay manual." style={{ marginLeft: 5, cursor: 'help', color: C.blue }}>ⓘ</span>}
-            </span>
-            <input style={inputStyle} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{f.label}</span>
+            {f.key === 'role' ? (
+              <SuggestInput value={form.role} onChange={v => setForm(p => ({ ...p, role: v }))} suggestions={ROLE_SUGGESTIONS} placeholder="Start typing or pick a suggestion…" />
+            ) : (
+              <input style={inputStyle} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
+            )}
           </label>
         ))}
       </div>
@@ -393,6 +412,12 @@ function RosterTab({ isAdmin }) {
   const [page, setPage] = useState(1)
   const [editUser, setEditUser] = useState(null)
   const [showImport, setShowImport] = useState(false)
+  // Phone/Airtel/Reporting-Manager are live but per-user calls (LeadSquared has
+  // no bulk "by many ids" variant) -- fetched only for whichever ~50 rows are
+  // actually on screen, cached by id so paging back to an already-seen page is
+  // instant, mirroring the same page-scoped lazy-load pattern this app already
+  // uses for Meta Ads creative thumbnails (same rate-limit-avoidance reasoning).
+  const [detailCache, setDetailCache] = useState({})
 
   const load = useCallback(() => {
     setLoading(true); setError('')
@@ -430,6 +455,19 @@ function RosterTab({ isAdmin }) {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_ROWS))
   const pageRows = filtered.slice((page - 1) * PAGE_ROWS, page * PAGE_ROWS)
 
+  useEffect(() => {
+    const missing = pageRows.filter(r => !detailCache[r.id]).map(r => r.id)
+    if (!missing.length) return
+    fetchJson(API + '&mode=team_user_detail&ids=' + missing.map(encodeURIComponent).join(','))
+      .then(d => {
+        const next = {}
+        ;(d.details || []).forEach(det => { next[det.id] = det })
+        setDetailCache(p => ({ ...p, ...next }))
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageRows])
+
   const kpis = useMemo(() => {
     const active = rows.filter(r => r.status === 'Active').length
     const mapped = rows.filter(r => r.manual).length
@@ -451,7 +489,7 @@ function RosterTab({ isAdmin }) {
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or email…" style={{ ...inputStyle, width: 220 }} />
-        <Dropdown label="Role" options={roleOptions} value={roleFilter} onChange={setRoleFilter} minWidth={130} />
+        <Dropdown label="LS Role" options={roleOptions} value={roleFilter} onChange={setRoleFilter} minWidth={130} />
         <Dropdown label="Status" options={['All', 'Active', 'Inactive']} value={statusFilter} onChange={setStatusFilter} minWidth={110} />
         <Dropdown label="Group" options={groupOptions} value={groupFilter} onChange={setGroupFilter} minWidth={160} />
         <Dropdown label="Mapping" options={['All', 'Mapped', 'Unmapped']} value={mappedFilter} onChange={setMappedFilter} minWidth={120} />
@@ -460,24 +498,28 @@ function RosterTab({ isAdmin }) {
         <ExportButton
           hideSlack
           filename="team-mapping-roster"
-          data={filtered.map(r => ({
-            Name: r.name, Email: r.email, Role: (r.role || '').replace(/_/g, ' '), Status: r.status,
-            Groups: (r.groups || []).join('; '),
-            'LS Manager Name': r.manual?.ls_manager_name || '', 'LS Manager Email': r.manual?.ls_manager_email || '',
-            'ASM/SM': r.manual?.asm_sm || '', 'ASM/SM Email': r.manual?.asm_sm_email || '',
-            SSM: r.manual?.ssm || '', 'SSM Email': r.manual?.ssm_email || '',
-            Tier: r.manual?.tier || '', Level: r.manual?.level || '', Country: r.manual?.country || '',
-            'Centre Name': r.manual?.centre_name || '', 'Phone Number': r.manual?.phone_number || '', 'Airtel Number': r.manual?.airtel_number || '',
-          }))}
+          data={filtered.map(r => {
+            const d = detailCache[r.id]
+            return {
+              Name: r.name, Email: r.email, 'LS Role': (r.role || '').replace(/_/g, ' '), Status: r.status,
+              Groups: (r.groups || []).join('; '),
+              Phone: d?.phoneMain || '', Airtel: d?.airtelNumber || '',
+              'Reporting Manager': d?.managerName || '', 'Reporting Manager Email': d?.managerEmail || '',
+              'ASM/SM': r.manual?.asm_sm || '', 'ASM/SM Email': r.manual?.asm_sm_email || '',
+              SSM: r.manual?.ssm || '', 'SSM Email': r.manual?.ssm_email || '',
+              Role: r.manual?.role || '', Level: r.manual?.level || '', Country: r.manual?.country || '',
+              'Centre Name': r.manual?.centre_name || '',
+            }
+          })}
         />
         {isAdmin && <Button size="sm" onClick={() => setShowImport(true)}>Bulk import</Button>}
       </div>
 
       <p style={{ fontSize: 11.5, color: C.muted, marginTop: -4, marginBottom: 12 }}>
-        Name/Email/Role/Status/Groups are live from LeadSquared. Everything else is manually
-        entered here — including Phone Number and Airtel Number, which do exist in LeadSquared's
-        own Settings screen but aren't reachable by this app's API integration (see the ⓘ on those
-        fields when editing a person).
+        Name / Email / LS Role / Status / Groups / Phone / Airtel / Reporting Manager are all live
+        from LeadSquared, real-time. Phone, Airtel and Reporting Manager load per page (LeadSquared
+        has no bulk endpoint for them), so they show "…" for a moment on a page you haven't opened
+        yet. ASM/SM, SSM, Role, Level, Country and Centre Name are the only manually entered fields.
       </p>
 
       <Card title={`${fmtN(filtered.length)} people`} sub={`Page ${page} of ${totalPages}`} noPad>
@@ -485,29 +527,35 @@ function RosterTab({ isAdmin }) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 900 }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid ' + C.border }}>
-                {['Name', 'Email', 'Role', 'Status', 'Groups', 'LS Manager', 'ASM/SM', 'SSM', 'Tier', 'Country', ''].map(h => (
+                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Phone', 'Airtel', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', ''].map(h => (
                   <th key={h} style={{ padding: '9px 12px', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {pageRows.map((r, i) => (
-                <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 ? 'transparent' : 'var(--bg3)' }}>
-                  <td style={{ padding: '9px 12px', fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{r.name}</td>
-                  <td style={{ padding: '9px 12px', color: C.muted }}>{r.email || '—'}</td>
-                  <td style={{ padding: '9px 12px', color: C.text }}>{(r.role || '').replace(/_/g, ' ')}</td>
-                  <td style={{ padding: '9px 12px' }}><StatusBadge status={r.status} /></td>
-                  <td style={{ padding: '9px 12px', minWidth: 160 }}><GroupChips groups={r.groups} /></td>
-                  <td style={{ padding: '9px 12px', color: C.text }} title={r.manual?.ls_manager_email || ''}>{r.manual?.ls_manager_name || '—'}</td>
-                  <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.asm_sm || '—'}</td>
-                  <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.ssm || '—'}</td>
-                  <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.tier || '—'}</td>
-                  <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.country || '—'}</td>
-                  <td style={{ padding: '9px 12px' }}>
-                    <span onClick={() => setEditUser(r)} style={{ cursor: 'pointer', fontWeight: 700, color: C.blue, fontSize: 12 }}>{r.manual ? 'Edit' : 'Map'}</span>
-                  </td>
-                </tr>
-              ))}
+              {pageRows.map((r, i) => {
+                const d = detailCache[r.id]
+                const pending = !d
+                return (
+                  <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 ? 'transparent' : 'var(--bg3)' }}>
+                    <td style={{ padding: '9px 12px', fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{r.name}</td>
+                    <td style={{ padding: '9px 12px', color: C.muted }}>{r.email || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text }}>{(r.role || '').replace(/_/g, ' ')}</td>
+                    <td style={{ padding: '9px 12px' }}><StatusBadge status={r.status} /></td>
+                    <td style={{ padding: '9px 12px', minWidth: 160 }}><GroupChips groups={r.groups} /></td>
+                    <td style={{ padding: '9px 12px', color: C.text }}>{pending ? '…' : (d.phoneMain || '—')}</td>
+                    <td style={{ padding: '9px 12px', color: C.text }}>{pending ? '…' : (d.airtelNumber || '—')}</td>
+                    <td style={{ padding: '9px 12px', color: C.text }} title={pending ? '' : (d.managerEmail || '')}>{pending ? '…' : (d.managerName || '—')}</td>
+                    <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.asm_sm || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.ssm || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.role || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.country || '—'}</td>
+                    <td style={{ padding: '9px 12px' }}>
+                      <span onClick={() => setEditUser(r)} style={{ cursor: 'pointer', fontWeight: 700, color: C.blue, fontSize: 12 }}>{r.manual ? 'Edit' : 'Map'}</span>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -523,7 +571,6 @@ function RosterTab({ isAdmin }) {
       {editUser && (
         <EditManualModal
           user={editUser}
-          roster={rows}
           onClose={() => setEditUser(null)}
           onSaved={saved => {
             setData(d => ({ ...d, rows: d.rows.map(r => r.email === editUser.email ? { ...r, manual: saved } : r) }))
