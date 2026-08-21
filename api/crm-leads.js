@@ -852,7 +852,7 @@ function diffTeamManualFields(existing, incoming) {
   return changes
 }
 
-async function saveTeamManual(body, me) {
+async function saveTeamManual(body, me, creds) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
   const email = String((body && body.ls_email) || '').trim().toLowerCase()
   if (!email) throw new Error('ls_email is required')
@@ -871,27 +871,33 @@ async function saveTeamManual(body, me) {
   // Bulk-import rows save through this exact same function, one call per
   // person -- skipActivityLog keeps a 285-row import from writing 285 extra
   // per-person 'edit' entries on top of the ONE aggregate 'import' progress
-  // row runImportInBackground already logs; a manual Save from the Edit
-  // modal (or a restore) always logs, since there each save IS the whole
-  // action a person should be able to see and undo.
+  // row runImportInBackground already logs (and firing 285 individual
+  // connector notifications would be worse -- see notifyTeamMappingConnectors
+  // being called from updateTeamActivity instead, once, when that aggregate
+  // row finishes). A manual Save from the Edit modal, a bulk-edit row, or a
+  // restore always logs+notifies, since there each save IS the whole action a
+  // person should be able to see, be notified about, and undo.
   if (!(body && body.skipActivityLog)) {
     const changes = diffTeamManualFields(existing, payload)
     if (Object.keys(changes).length) {
+      const kind = (body && body.activityType) || 'edit'
+      const label = (body && body.ls_name) || email
       // label prefers a human name if the caller passed one (the roster
       // already has it client-side); falls back to the email.
       await logTeamActivity({
-        type: (body && body.activityType) || 'edit',
-        label: (body && body.ls_name) || email,
+        type: kind,
+        label,
         target_email: email,
         detail: JSON.stringify({ changes, isNew: !existing }),
         status: 'done', total: 1, done: 1,
       }, me).catch(() => {})
+      await notifyTeamMappingConnectors({ kind, label, target_email: email, by: me.email, changes }, creds).catch(() => {})
     }
   }
   return row
 }
 
-async function deleteTeamManual(email, me) {
+async function deleteTeamManual(email, me, creds) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
   const e = String(email || '').trim().toLowerCase()
   if (!e) throw new Error('ls_email is required')
@@ -907,6 +913,7 @@ async function deleteTeamManual(email, me) {
       detail: JSON.stringify({ snapshot: existing }),
       status: 'done', total: 1, done: 1,
     }, me).catch(() => {})
+    await notifyTeamMappingConnectors({ kind: 'delete', label: e, target_email: e, by: me.email, snapshot: existing }, creds).catch(() => {})
   }
   return { deleted: e }
 }
@@ -917,7 +924,7 @@ async function deleteTeamManual(email, me) {
 // ALSO logged (as its own 'restore'-typed entry, diffed against whatever is
 // current right now) -- a restore is a real change too, and should show up
 // in the trail rather than silently rewriting history.
-async function restoreTeamManual(activityId, me) {
+async function restoreTeamManual(activityId, me, creds) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
   const r = await supabaseAdmin('team_mapping_activity?id=eq.' + encodeURIComponent(activityId) + '&select=*')
   if (!r.ok) throw new Error('Could not load that history entry')
@@ -936,7 +943,231 @@ async function restoreTeamManual(activityId, me) {
   } else {
     throw new Error('Nothing to restore from this history entry')
   }
-  return saveTeamManual({ ls_email: email, ...restoreValues, activityType: 'restore' }, me)
+  return saveTeamManual({ ls_email: email, ...restoreValues, activityType: 'restore' }, me, creds)
+}
+
+// ---------------------------------------------------------------------------
+// Outbound connectors (supabase/sql/team_mapping_connectors_setup.sql) -- what
+// makes this page usable as a real "source of team mapping" for other tools
+// instead of a dead end. Four independent, individually-toggleable pushes fire
+// on every real change (save/delete/restore/finished import): a webhook, a
+// Slack notification, a live Google Sheet mirror, and (pull-based rather than
+// push) an api_key-gated read-only export any external script can hit on its
+// own schedule. Single fixed config row (id='default') -- this is page-level
+// config, not per-person -- read/written admin-only via the service-role
+// client, same as team_mapping_manual/team_mapping_activity.
+async function getTeamConnectorsConfig() {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const r = await supabaseAdmin('team_mapping_connectors?id=eq.default&select=*')
+  if (!r.ok) return null
+  const rows = await r.json()
+  return rows[0] || null
+}
+
+// Admin-only save -- only ever writes the fields the caller actually sent, so
+// e.g. saving the webhook URL from the Webhook card can't accidentally wipe
+// the Slack channel typed into a different card.
+async function saveTeamConnectorsConfig(body, me) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const ALLOWED = ['webhook_enabled', 'webhook_url', 'slack_enabled', 'slack_channel', 'sheet_enabled', 'sheet_id', 'api_enabled']
+  const patch = { id: 'default', updated_by: me.email || null, updated_at: new Date().toISOString() }
+  ALLOWED.forEach(k => { if (body && Object.prototype.hasOwnProperty.call(body, k)) patch[k] = body[k] })
+  const r = await supabaseAdmin('team_mapping_connectors', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(patch),
+  })
+  if (!r.ok) throw new Error('Save failed: ' + (await r.text()).slice(0, 300))
+  const saved = await r.json()
+  return Array.isArray(saved) ? saved[0] : saved
+}
+
+// A fresh random key, shown once in full to the admin who generated it (same
+// as this app's Slack bot token or the BigQuery refresh token -- an internal
+// automation credential meant to be copied into another tool, not a login
+// password), stored in plaintext -- there's no user ever "logging in" with it
+// to hash against, just a string an external request has to present verbatim.
+async function regenerateTeamApiKey(me) {
+  const crypto = await import('crypto')
+  const key = crypto.randomBytes(24).toString('hex')
+  return saveTeamConnectorsConfig({ api_key: key, api_enabled: true }, me)
+}
+
+// Plain, short, professional text -- this is a routine ops notification
+// channel, not the CEO Slack report machinery in api/send-report.mjs (which
+// this deliberately does NOT reuse: that system's guarded-channel/PIN
+// ceremony exists because IT posts to a channel the CEO reads, and would be
+// pure friction here). One line per event type, no emoji -- matches this
+// app's own "no emoji in Quantum's UI" convention extended to its routine
+// (non-report) Slack traffic too.
+function teamMappingSlackText(event) {
+  const who = event.by ? ` (by ${event.by})` : ''
+  if (event.kind === 'delete') return `Team Mapping: removed mapping for ${event.label || event.target_email}${who}`
+  if (event.kind === 'restore') return `Team Mapping: restored mapping for ${event.label || event.target_email}${who}`
+  if (event.kind === 'import') {
+    const s = event.summary || {}
+    return `Team Mapping: bulk import "${event.label || 'import'}" finished -- ${s.done || 0} done, ${s.failed || 0} failed, ${s.skipped || 0} skipped${who}`
+  }
+  const fields = Object.keys(event.changes || {})
+  const changeText = fields.length
+    ? fields.map(f => `${f}: ${(event.changes[f].from) || '(empty)'} -> ${(event.changes[f].to) || '(empty)'}`).join(', ')
+    : 'no field changes'
+  return `Team Mapping: edited mapping for ${event.label || event.target_email}${who} -- ${changeText}`
+}
+
+// Same request shape as api/send-report.mjs's postToSlackBot, kept as its own
+// small copy rather than a cross-file import -- this file already avoids
+// every static import (including of its own siblings) to stay clear of the
+// ERR_REQUIRE_ESM risk documented at the top of this file.
+async function postTeamMappingSlack(channel, text) {
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token) throw new Error('SLACK_BOT_TOKEN is not set')
+  const res = await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ channel, text }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!data.ok) throw new Error('Slack: ' + (data.error || 'unknown error'))
+}
+
+async function postTeamMappingWebhook(url, event) {
+  const res = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source: 'quantum_team_mapping', at: new Date().toISOString(), ...event }),
+  })
+  if (!res.ok) throw new Error('Webhook responded ' + res.status)
+}
+
+// Overwrites the FIRST tab of an existing spreadsheet with the full current
+// roster+manual snapshot -- a live mirror, not a fresh export-to-sheets.mjs
+// file-per-click. Deliberately excludes Phone/Airtel/Reporting Manager: those
+// need one LeadSquared call PER PERSON (fetchLeadSquaredUserDetails), fine for
+// the ~50 rows a table page shows but far too expensive to redo for the whole
+// ~3,380-person roster on every single manual edit.
+async function syncTeamMappingSheet(sheetId, creds) {
+  const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL
+  const privateKey = (process.env.GOOGLE_SHEETS_PRIVATE_KEY || '').replace(/\\n/g, '\n')
+  if (!clientEmail || !privateKey) throw new Error('GOOGLE_SHEETS_CLIENT_EMAIL/GOOGLE_SHEETS_PRIVATE_KEY are not set')
+  const { JWT } = await import('google-auth-library')
+  const auth = new JWT({ email: clientEmail, key: privateKey, scopes: ['https://www.googleapis.com/auth/spreadsheets'] })
+  const { access_token } = await auth.authorize()
+
+  const { rows } = await fetchTeamUsersMerged(creds)
+  const header = ['Name', 'Email', 'LS Role', 'Status', 'Groups', 'ASM/SM', 'ASM/SM Email', 'SSM', 'SSM Email', 'Role', 'Level', 'Country', 'Centre Name']
+  const grid = [header, ...rows.map(r => [
+    r.name, r.email || '', (r.role || '').replace(/_/g, ' '), r.status, (r.groups || []).join('; '),
+    r.manual?.asm_sm || '', r.manual?.asm_sm_email || '', r.manual?.ssm || '', r.manual?.ssm_email || '',
+    r.manual?.role || '', r.manual?.level || '', r.manual?.country || '', r.manual?.centre_name || '',
+  ])]
+
+  const clearRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:M20000:clear`, {
+    method: 'POST', headers: { Authorization: `Bearer ${access_token}` },
+  })
+  if (!clearRes.ok) throw new Error('Could not clear the target sheet -- check the Sheet ID and that it is shared with ' + clientEmail)
+  const writeRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:M${grid.length}?valueInputOption=RAW`, {
+    method: 'PUT', headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: grid }),
+  })
+  if (!writeRes.ok) {
+    const e = await writeRes.json().catch(() => ({}))
+    throw new Error(e.error?.message || 'Could not write to the target sheet')
+  }
+  return { rows: rows.length }
+}
+
+// The one function every save/delete/restore/finished-import routes through.
+// Best-effort and independent per connector -- one connector failing (a dead
+// webhook URL, the bot not yet invited to the Slack channel) never blocks or
+// masks the other two, and never fails the actual save that triggered it
+// (this is always called from inside a try/catch at the call site). Each
+// connector's own last-run outcome is written back to the config row so the
+// Connectors tab can show real status instead of "did it work? who knows."
+async function notifyTeamMappingConnectors(event, creds) {
+  const cfg = await getTeamConnectorsConfig()
+  if (!cfg) return
+  const now = new Date().toISOString()
+  const patch = {}
+
+  if (cfg.webhook_enabled && cfg.webhook_url) {
+    try { await postTeamMappingWebhook(cfg.webhook_url, event); patch.webhook_last_status = 'ok'; patch.webhook_last_at = now }
+    catch (e) { patch.webhook_last_status = 'error: ' + String((e && e.message) || e).slice(0, 200); patch.webhook_last_at = now }
+  }
+  if (cfg.slack_enabled && cfg.slack_channel) {
+    try { await postTeamMappingSlack(cfg.slack_channel, teamMappingSlackText(event)); patch.slack_last_status = 'ok'; patch.slack_last_at = now }
+    catch (e) { patch.slack_last_status = 'error: ' + String((e && e.message) || e).slice(0, 200); patch.slack_last_at = now }
+  }
+  if (cfg.sheet_enabled && cfg.sheet_id && creds) {
+    try { const r = await syncTeamMappingSheet(cfg.sheet_id, creds); patch.sheet_last_status = `ok (${r.rows} rows)`; patch.sheet_last_at = now }
+    catch (e) { patch.sheet_last_status = 'error: ' + String((e && e.message) || e).slice(0, 200); patch.sheet_last_at = now }
+  }
+  if (Object.keys(patch).length) {
+    const { supabaseAdmin } = await import('../lib/auth.mjs')
+    await supabaseAdmin('team_mapping_connectors?id=eq.default', { method: 'PATCH', body: JSON.stringify(patch) }).catch(() => {})
+  }
+}
+
+// "Test connection" for one connector at a time, regardless of that
+// connector's own enabled flag -- lets an admin check a webhook URL or Slack
+// channel actually works BEFORE flipping it on, same self-service pattern as
+// every other "Test connection" button in Settings > Data Sources.
+async function testTeamConnector(which, me, creds) {
+  const cfg = await getTeamConnectorsConfig()
+  if (!cfg) throw new Error('Save the connector settings first, then test them')
+  const testEvent = { kind: 'edit', label: 'Test person', target_email: 'test@leverageedu.com', by: me.email, changes: { role: { from: null, to: 'Test' } } }
+  const now = new Date().toISOString()
+  const patch = {}
+  if (which === 'webhook') {
+    if (!cfg.webhook_url) throw new Error('Enter a webhook URL first')
+    try { await postTeamMappingWebhook(cfg.webhook_url, { ...testEvent, test: true }); patch.webhook_last_status = 'ok (test)' }
+    catch (e) { patch.webhook_last_status = 'error: ' + String((e && e.message) || e).slice(0, 200) }
+    patch.webhook_last_at = now
+  } else if (which === 'slack') {
+    if (!cfg.slack_channel) throw new Error('Enter a Slack channel first')
+    try { await postTeamMappingSlack(cfg.slack_channel, 'Team Mapping: this is a test notification -- connectors are wired up correctly.'); patch.slack_last_status = 'ok (test)' }
+    catch (e) { patch.slack_last_status = 'error: ' + String((e && e.message) || e).slice(0, 200) }
+    patch.slack_last_at = now
+  } else if (which === 'sheet') {
+    if (!cfg.sheet_id) throw new Error('Enter a Sheet ID first')
+    try { const r = await syncTeamMappingSheet(cfg.sheet_id, creds); patch.sheet_last_status = `ok (${r.rows} rows)` }
+    catch (e) { patch.sheet_last_status = 'error: ' + String((e && e.message) || e).slice(0, 200) }
+    patch.sheet_last_at = now
+  } else {
+    throw new Error('Unknown connector')
+  }
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const r = await supabaseAdmin('team_mapping_connectors?id=eq.default', { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch) })
+  const saved = r.ok ? await r.json() : null
+  return Array.isArray(saved) ? saved[0] : saved
+}
+
+// The pull-based connector -- an external script/tool hits this with its own
+// api_key on its own schedule, no Quantum session cookie at all. Handled
+// separately, before this file's normal getSessionUser gate (see the bottom
+// of this file), specifically so an automation with no human logged in can
+// still reach it. Same field scope as the Sheet mirror, for the same reason
+// (no per-user LeadSquared calls on a pull that could happen at any time).
+async function handleTeamExportPull(req, res) {
+  const apiKey = (req.query && req.query.api_key) || ''
+  const cfg = await getTeamConnectorsConfig()
+  if (!cfg || !cfg.api_enabled || !cfg.api_key || apiKey !== cfg.api_key) {
+    return res.status(401).json({ error: 'Invalid or missing api_key' })
+  }
+  const creds = leadsquaredCreds()
+  if (!creds.accessKey || !creds.secretKey) {
+    return res.status(500).json({ error: 'LeadSquared is not configured' })
+  }
+  try {
+    const { rows } = await fetchTeamUsersMerged(creds)
+    const flat = rows.map(r => ({
+      name: r.name, email: r.email, ls_role: (r.role || '').replace(/_/g, ' '), status: r.status, groups: r.groups || [],
+      asm_sm: r.manual?.asm_sm || null, asm_sm_email: r.manual?.asm_sm_email || null,
+      ssm: r.manual?.ssm || null, ssm_email: r.manual?.ssm_email || null,
+      role: r.manual?.role || null, level: r.manual?.level || null, country: r.manual?.country || null,
+      centre_name: r.manual?.centre_name || null, mapping_updated_at: r.manual?.updated_at || null,
+    }))
+    return res.status(200).json({ generated_at: new Date().toISOString(), count: flat.length, rows: flat })
+  } catch (e) {
+    return res.status(502).json({ error: String((e && e.message) || e) })
+  }
 }
 
 // Import/export/edit/delete/restore activity log
@@ -978,7 +1209,7 @@ async function logTeamActivity(fields, me) {
 // one of the helpers above.
 const createTeamActivity = logTeamActivity
 
-async function updateTeamActivity(body) {
+async function updateTeamActivity(body, creds) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
   const id = body && body.id
   if (!id) throw new Error('id is required')
@@ -989,7 +1220,17 @@ async function updateTeamActivity(body) {
   })
   if (!r.ok) throw new Error('Could not update activity row: ' + (await r.text()).slice(0, 300))
   const saved = await r.json()
-  return Array.isArray(saved) ? saved[0] : saved
+  const row = Array.isArray(saved) ? saved[0] : saved
+  // One aggregate notification per finished import, not per row -- fired here
+  // (the ONLY place that sees the transition into a terminal status) rather
+  // than from the frontend's own per-row save loop, which never sees "done".
+  if (row && row.type === 'import' && (patch.status === 'done' || patch.status === 'failed')) {
+    await notifyTeamMappingConnectors({
+      kind: 'import', label: row.label, by: row.created_by,
+      summary: { done: row.done, failed: row.failed, skipped: row.skipped, total: row.total },
+    }, creds).catch(() => {})
+  }
+  return row
 }
 
 async function listTeamActivity() {
@@ -1018,7 +1259,8 @@ async function handleLeadSquared(req, res, me) {
   const { mode } = req.query || {}
   const FIELD_SCHEMA_MODES = ['activity_schema', 'activity_dropdown_options', 'opportunity_schema', 'lead_schema']
   const TEAM_ACTIVITY_MODES = ['team_activity_create', 'team_activity_update', 'team_activity_list']
-  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES]
+  const TEAM_CONNECTOR_MODES = ['team_connectors_get', 'team_connectors_save', 'team_connectors_regenerate_key', 'team_connectors_test']
+  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
@@ -1027,21 +1269,31 @@ async function handleLeadSquared(req, res, me) {
   // of who else has been granted read access to the page -- matches every other
   // "view is grantable, edit is admin-only" surface in this app (e.g. Settings'
   // own per-tab admin gates). team_activity_list stays readable by anyone with
-  // page access, same as team_users/team_groups.
-  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update'].includes(mode) && me.role !== 'admin') {
+  // page access, same as team_users/team_groups. Connector config -- including
+  // a webhook URL and an API key -- is admin-only end to end, both read and
+  // write; the Connectors tab simply doesn't render for anyone else.
+  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', ...TEAM_CONNECTOR_MODES].includes(mode) && me.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only' })
   }
-  // The three activity modes are pure Supabase reads/writes -- they don't touch
-  // LeadSquared at all, so they're dispatched here, before the LeadSquared
-  // credential check below, rather than needlessly depending on it.
+  // Cheap (env-var only, no network call) -- computed up front so the finished-
+  // import notification below can fire a Sheet-sync connector without a second
+  // "is LeadSquared configured" branch of its own.
+  const creds = leadsquaredCreds()
+  // The four activity/connector mode groups are pure Supabase reads/writes --
+  // they don't touch LeadSquared at all, so they're dispatched here, before the
+  // "LeadSquared must be configured" check below, rather than needlessly
+  // depending on it.
   try {
     if (mode === 'team_activity_create') return res.status(200).json(await createTeamActivity(req.body || req.query, me))
-    if (mode === 'team_activity_update') return res.status(200).json(await updateTeamActivity(req.body || req.query))
+    if (mode === 'team_activity_update') return res.status(200).json(await updateTeamActivity(req.body || req.query, creds))
     if (mode === 'team_activity_list') return res.status(200).json({ rows: await listTeamActivity() })
+    if (mode === 'team_connectors_get') return res.status(200).json((await getTeamConnectorsConfig()) || {})
+    if (mode === 'team_connectors_save') return res.status(200).json(await saveTeamConnectorsConfig(req.body || req.query, me))
+    if (mode === 'team_connectors_regenerate_key') return res.status(200).json(await regenerateTeamApiKey(me))
+    if (mode === 'team_connectors_test') return res.status(200).json(await testTeamConnector((req.body && req.body.which) || req.query.which, me, creds))
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
   }
-  const creds = leadsquaredCreds()
   if (!creds.accessKey || !creds.secretKey) {
     return res.status(500).json({ error: 'LeadSquared is not configured -- set LEADSQUARED_ACCESS_KEY and LEADSQUARED_SECRET_KEY in Vercel env.' })
   }
@@ -1050,9 +1302,9 @@ async function handleLeadSquared(req, res, me) {
   try {
     if (mode === 'team_users') return res.status(200).json(await fetchTeamUsersMerged(creds))
     if (mode === 'team_groups') return res.status(200).json({ groups: aggregateTeamGroups(await fetchLeadSquaredTeamUsers(creds)) })
-    if (mode === 'team_manual_save') return res.status(200).json(await saveTeamManual(req.body || req.query, me))
-    if (mode === 'team_manual_delete') return res.status(200).json(await deleteTeamManual((req.body && req.body.ls_email) || req.query.ls_email, me))
-    if (mode === 'team_manual_restore') return res.status(200).json(await restoreTeamManual((req.body && req.body.activity_id) || req.query.activity_id, me))
+    if (mode === 'team_manual_save') return res.status(200).json(await saveTeamManual(req.body || req.query, me, creds))
+    if (mode === 'team_manual_delete') return res.status(200).json(await deleteTeamManual((req.body && req.body.ls_email) || req.query.ls_email, me, creds))
+    if (mode === 'team_manual_restore') return res.status(200).json(await restoreTeamManual((req.body && req.body.activity_id) || req.query.activity_id, me, creds))
     if (mode === 'team_user_detail') {
       const ids = String(req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean)
       const byId = {}
@@ -1474,6 +1726,13 @@ async function handleB2C(req, res, me) {
 }
 
 export default async function handler(req, res) {
+  // The one endpoint on this route an external, unauthenticated-to-Quantum
+  // script is meant to reach -- the Team Mapping "read-only API" connector.
+  // Deliberately checked BEFORE getSessionUser: an automation with no human
+  // logged in has no session cookie to send, and never will.
+  if ((req.query && req.query.source) === 'leadsquared' && (req.query && req.query.mode) === 'team_export_pull') {
+    return handleTeamExportPull(req, res)
+  }
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
   if (!me) return res.status(401).json({ error: 'Not signed in' })

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { InlineLoader } from '../components/SkeletonLoader'
-import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'
+import { C, FONT, fmtN, Card, brandColor } from '../ui/dashboardKit'
 import Dropdown from '../components/Dropdown'
 import Button from '../components/Button'
 import ExportButton from '../components/ExportButton'
@@ -30,11 +30,18 @@ const PAGE_ROWS = 50
 // employment_status was dropped for duplicating the live Active/Inactive status.
 // tier was renamed to role: a business-side designation (see ROLE_SUGGESTIONS),
 // distinct from LeadSquared's own coarse Role, labeled "LS Role" on this page.
+// `suggest: 'roster'` on asm_sm/ssm feeds a type-ahead of live roster names
+// (not just past-typed strings, the way Role's suggestions work) -- a real
+// data-quality guard: this field is free text, and "Kartikey Kedia" typed once
+// and "kartikey kedia" typed a second time are two different strings to a
+// grouping/org-chart view even though they mean the same live person. Picking
+// from the live roster instead of retyping a name doesn't force correctness,
+// but makes the correct answer the easiest one.
 const MANUAL_FIELDS = [
-  { key: 'role', label: 'Role' },
-  { key: 'asm_sm', label: 'ASM/SM' },
+  { key: 'role', label: 'Role', suggest: 'role' },
+  { key: 'asm_sm', label: 'ASM/SM', suggest: 'roster' },
   { key: 'asm_sm_email', label: 'ASM/SM Email' },
-  { key: 'ssm', label: 'SSM' },
+  { key: 'ssm', label: 'SSM', suggest: 'roster' },
   { key: 'ssm_email', label: 'SSM Email' },
   { key: 'level', label: 'Level' },
   { key: 'country', label: 'Country' },
@@ -97,6 +104,76 @@ const pillStyle = (active) => ({
   color: active ? '#fff' : C.muted, border: active ? 'none' : '0.5px solid ' + C.border,
   whiteSpace: 'nowrap', boxShadow: active ? '0 3px 10px rgba(31,60,132,.20)' : 'none',
 })
+
+// --------------------------------------------------------- Directory visuals
+//
+// This page is a people directory/ops tool, not an analytics dashboard -- it
+// deliberately does NOT use the shared PremKPI/gradient-icon KPI card the rest
+// of the app's chart-heavy pages standardize on. A roster of people reads
+// better as a calm reference list (names, avatars, plain counts) than as a
+// row of metric tiles, so this file keeps its own small, quieter set of
+// primitives instead: Avatar (a stable-per-person initials circle, colored
+// the same way sourceColor() colors a channel -- hash the name into
+// BRAND_RAMP so the same person always gets the same tone, never a random
+// one), and StatStrip (a single bordered strip of plain label/value pairs,
+// no icons, no gradients, no per-card shadow) in place of a KPI grid.
+
+function hashIndex(s, mod) {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  return h % mod
+}
+function initials(name) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return '?'
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
+}
+function Avatar({ name, size = 30 }) {
+  const bg = brandColor(hashIndex(name || '?', 12))
+  return (
+    <span style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0, background: bg, color: '#fff',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.38, fontWeight: 800, fontFamily: FONT, letterSpacing: '-0.02em',
+    }}>
+      {initials(name)}
+    </span>
+  )
+}
+
+function StatStrip({ items }) {
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', border: '0.5px solid ' + C.border, borderRadius: 12,
+      background: 'var(--card)', marginBottom: 18, overflow: 'hidden',
+    }}>
+      {items.map((it, i) => (
+        <div key={it.label} style={{
+          flex: '1 1 160px', padding: '13px 18px', borderLeft: i === 0 ? 'none' : '0.5px solid ' + C.border,
+        }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{it.label}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.text, fontFamily: FONT }}>{it.value}</div>
+          {it.sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{it.sub}</div>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// A mapping is "stale" once its own last-touched timestamp is old enough that
+// nobody has confirmed the org structure it encodes is still correct -- an
+// ASM/SM assignment nobody has revisited in 90+ days is exactly the kind of
+// thing worth a second look (a promotion, a team reshuffle, someone who left).
+const STALE_DAYS = 90
+function staleDays(manual) {
+  if (!manual || !manual.updated_at) return null
+  const ms = Date.now() - new Date(manual.updated_at).getTime()
+  return Math.floor(ms / 86400000)
+}
+function isStaleMapping(manual) {
+  const d = staleDays(manual)
+  return d != null && d >= STALE_DAYS
+}
 
 function StatusBadge({ status }) {
   const on = status === 'Active'
@@ -261,7 +338,7 @@ function LiveDetailStrip({ userId }) {
   )
 }
 
-function EditManualModal({ user, onClose, onSaved }) {
+function EditManualModal({ user, rosterNames, onClose, onSaved }) {
   const [form, setForm] = useState(() => {
     const base = {}
     MANUAL_FIELDS.forEach(f => { base[f.key] = (user.manual && user.manual[f.key]) || '' })
@@ -269,6 +346,7 @@ function EditManualModal({ user, onClose, onSaved }) {
   })
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const staleD = staleDays(user.manual)
 
   const save = async () => {
     setSaving(true); setErr('')
@@ -295,14 +373,22 @@ function EditManualModal({ user, onClose, onSaved }) {
 
   return (
     <Modal onClose={onClose} title={'Manual mapping — ' + user.name}>
-      <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14 }}>{user.email} · {(user.role || '').replace(/_/g, ' ')} (LS Role) · <StatusBadge status={user.status} /></div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <Avatar name={user.name} size={34} />
+        <div>
+          <div style={{ fontSize: 12.5, color: C.muted }}>{user.email} · {(user.role || '').replace(/_/g, ' ')} (LS Role) · <StatusBadge status={user.status} /></div>
+          {staleD != null && staleD >= STALE_DAYS && <div style={{ fontSize: 11, color: C.navy, fontWeight: 700, marginTop: 2 }}>Last touched {staleD} days ago — worth confirming this is still right</div>}
+        </div>
+      </div>
       <LiveDetailStrip userId={user.id} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {MANUAL_FIELDS.map(f => (
           <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{f.label}</span>
-            {f.key === 'role' ? (
+            {f.suggest === 'role' ? (
               <SuggestInput value={form.role} onChange={v => setForm(p => ({ ...p, role: v }))} suggestions={ROLE_SUGGESTIONS} placeholder="Start typing or pick a suggestion…" />
+            ) : f.suggest === 'roster' ? (
+              <SuggestInput value={form[f.key]} onChange={v => setForm(p => ({ ...p, [f.key]: v }))} suggestions={rosterNames || []} placeholder="Start typing a name…" />
             ) : (
               <input style={inputStyle} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
             )}
@@ -316,6 +402,96 @@ function EditManualModal({ user, onClose, onSaved }) {
           <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button size="sm" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
         </div>
+      </div>
+    </Modal>
+  )
+}
+
+// ---------------------------------------------------------------- Bulk edit modal
+
+// Applies ONE value to a chosen field across every selected person in one go
+// (e.g. "these 12 reps all move under Priyansh Solanki now") -- deliberately
+// per-field opt-in (a checkbox per row) rather than one shared form, since the
+// whole point is that most fields on a bulk edit should stay untouched: only
+// the checked fields overwrite anything, everything else keeps each person's
+// own existing value. Runs sequentially through the same team_manual_save
+// endpoint a single edit uses, so every person's change is still individually
+// logged (with its own real before/after diff) and individually restorable
+// from History -- a bulk edit is N real edits, not one big opaque action.
+function BulkEditModal({ users, rosterNames, onClose, onDone }) {
+  const [fields, setFields] = useState(() => {
+    const base = {}
+    MANUAL_FIELDS.forEach(f => { base[f.key] = { apply: false, value: '' } })
+    return base
+  })
+  const [saving, setSaving] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [err, setErr] = useState('')
+
+  const applyCount = Object.values(fields).filter(f => f.apply).length
+
+  const run = async () => {
+    setSaving(true); setErr(''); setProgress(0)
+    const toApply = MANUAL_FIELDS.filter(f => fields[f.key].apply)
+    let failed = 0
+    for (const u of users) {
+      const body = { ls_email: u.email, ls_name: u.name }
+      MANUAL_FIELDS.forEach(f => { body[f.key] = (u.manual && u.manual[f.key]) || '' })
+      toApply.forEach(f => { body[f.key] = fields[f.key].value })
+      try {
+        await fetchJson(API + '&mode=team_manual_save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      } catch { failed++ }
+      setProgress(p => p + 1)
+    }
+    setSaving(false)
+    if (failed) setErr(`${failed} of ${users.length} failed to save -- the rest went through. Check History for details.`)
+    else onDone()
+  }
+
+  return (
+    <Modal onClose={onClose} title={`Bulk edit — ${users.length} selected`} width={640}>
+      <p style={{ fontSize: 12.5, color: C.muted, marginTop: 0 }}>
+        Tick a field to apply ONE value to all {users.length} people. Anything left unticked keeps each
+        person's own existing value. Keep this tab open until it finishes -- each save is logged and
+        restorable individually in History, just like a single edit.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {MANUAL_FIELDS.map(f => {
+          const on = fields[f.key].apply
+          const setVal = v => setFields(p => ({ ...p, [f.key]: { ...p[f.key], value: v } }))
+          return (
+            <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input
+                type="checkbox" checked={on}
+                onChange={e => setFields(p => ({ ...p, [f.key]: { ...p[f.key], apply: e.target.checked } }))}
+                style={{ width: 16, height: 16, flexShrink: 0, cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? C.text : C.muted, width: 112, flexShrink: 0 }}>{f.label}</span>
+              <div style={{ flex: 1, opacity: on ? 1 : 0.5, pointerEvents: on ? 'auto' : 'none' }}>
+                {f.suggest === 'role' ? (
+                  <SuggestInput value={fields[f.key].value} onChange={setVal} suggestions={ROLE_SUGGESTIONS} placeholder="Value to apply to everyone selected…" />
+                ) : f.suggest === 'roster' ? (
+                  <SuggestInput value={fields[f.key].value} onChange={setVal} suggestions={rosterNames || []} placeholder="Value to apply to everyone selected…" />
+                ) : (
+                  <input style={inputStyle} value={fields[f.key].value} onChange={e => setVal(e.target.value)} placeholder="Value to apply to everyone selected…" />
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {saving && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ height: 6, borderRadius: 99, background: 'var(--bg3)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: (progress / users.length * 100) + '%', background: 'linear-gradient(90deg,#1F3C84,#1C9FD4)', borderRadius: 99, transition: 'width .2s ease' }} />
+          </div>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>{progress} of {users.length} saved…</div>
+        </div>
+      )}
+      {err && <div style={{ color: '#B91C1C', fontSize: 12.5, marginTop: 12 }}>{err}</div>}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+        <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button size="sm" onClick={run} disabled={saving || applyCount === 0}>{saving ? 'Applying…' : `Apply to ${users.length} people`}</Button>
       </div>
     </Modal>
   )
@@ -782,12 +958,12 @@ function HistoryTab({ onBack }) {
           </div>
         </div>
       ) : (
-        <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
-          <PremKPI label="Total Imports" value={fmtN(stats.totalImports)} sub="all-time runs" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-          <PremKPI label="Rows Mapped" value={fmtN(stats.rowsMapped)} sub="across every import" accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
-          <PremKPI label="Edits & Deletes" value={fmtN(stats.totalEdits)} sub="manual changes, all-time" accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.bot} />
-          <PremKPI label="Last Activity" value={stats.lastActivity ? new Date(stats.lastActivity).toLocaleDateString() : '—'} sub={stats.lastActivity ? new Date(stats.lastActivity).toLocaleTimeString() : 'nothing yet'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
-        </div>
+        <StatStrip items={[
+          { label: 'Total Imports', value: fmtN(stats.totalImports), sub: 'all-time runs' },
+          { label: 'Rows Mapped', value: fmtN(stats.rowsMapped), sub: 'across every import' },
+          { label: 'Edits & Deletes', value: fmtN(stats.totalEdits), sub: 'manual changes, all-time' },
+          { label: 'Last Activity', value: stats.lastActivity ? new Date(stats.lastActivity).toLocaleDateString() : '—', sub: stats.lastActivity ? new Date(stats.lastActivity).toLocaleTimeString() : 'nothing yet' },
+        ]} />
       )}
 
       {running && progress && <LiveImportCard progress={progress} />}
@@ -862,6 +1038,11 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   const [page, setPage] = useState(1)
   const [editUser, setEditUser] = useState(null)
   const [showImport, setShowImport] = useState(false)
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
+  // Selection is by email (a stable, human-meaningful key) rather than the
+  // LeadSquared numeric id -- so it reads sensibly if this ever needs to
+  // survive a refresh, and matches what team_manual_save keys on anyway.
+  const [selected, setSelected] = useState(() => new Set())
   const { running: importRunning, progress: importProgress } = useImportProgress()
   // Phone/Airtel/Reporting-Manager are live but per-user calls (LeadSquared has
   // no bulk "by many ids" variant) -- fetched only for whichever ~50 rows are
@@ -901,6 +1082,9 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
     rows.forEach(r => (r.groups || []).forEach(g => s.add(g)))
     return ['All', ...Array.from(s).sort()]
   }, [rows])
+  // Live names, for the ASM/SM and SSM type-ahead in the edit/bulk-edit
+  // modals -- see MANUAL_FIELDS' suggest:'roster' comment.
+  const rosterNames = useMemo(() => Array.from(new Set(rows.map(r => r.name).filter(Boolean))).sort(), [rows])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -910,12 +1094,23 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
       if (groupFilter !== 'All' && !(r.groups || []).includes(groupFilter)) return false
       if (mappedFilter === 'Mapped' && !r.manual) return false
       if (mappedFilter === 'Unmapped' && r.manual) return false
+      if (mappedFilter === 'Stale (90+ days)' && !isStaleMapping(r.manual)) return false
       if (q && !((r.name || '').toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q))) return false
       return true
     })
   }, [rows, search, roleFilter, statusFilter, groupFilter, mappedFilter])
 
   useEffect(() => { setPage(1) }, [search, roleFilter, statusFilter, groupFilter, mappedFilter])
+  // Selection follows filtering: a person filtered out of view (a status
+  // change, a search edit) drops out of the selection too, so "apply to N
+  // selected" never silently includes someone no longer on screen.
+  useEffect(() => {
+    const visible = new Set(filtered.map(r => r.email))
+    setSelected(prev => {
+      const next = new Set([...prev].filter(e => visible.has(e)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [filtered])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_ROWS))
   const pageRows = filtered.slice((page - 1) * PAGE_ROWS, page * PAGE_ROWS)
@@ -936,21 +1131,37 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   const kpis = useMemo(() => {
     const active = rows.filter(r => r.status === 'Active').length
     const mapped = rows.filter(r => r.manual).length
+    const stale = rows.filter(r => isStaleMapping(r.manual)).length
     const groupCount = groupOptions.length - 1
-    return { total: rows.length, active, mapped, groupCount }
+    return { total: rows.length, active, mapped, stale, groupCount }
   }, [rows, groupOptions])
+
+  const selectedRows = useMemo(() => filtered.filter(r => selected.has(r.email)), [filtered, selected])
+  const toggleOne = email => setSelected(prev => {
+    const next = new Set(prev)
+    if (next.has(email)) next.delete(email); else next.add(email)
+    return next
+  })
+  const pageAllSelected = pageRows.length > 0 && pageRows.every(r => selected.has(r.email))
+  const togglePage = () => setSelected(prev => {
+    const next = new Set(prev)
+    if (pageAllSelected) pageRows.forEach(r => next.delete(r.email))
+    else pageRows.forEach(r => next.add(r.email))
+    return next
+  })
 
   if (loading) return <InlineLoader label="Loading LeadSquared roster" />
   if (error) return <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5 }}>✕ {error}</div>
 
   return (
     <div>
-      <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12, marginBottom: 16 }}>
-        <PremKPI label="Total Users" value={fmtN(kpis.total)} sub="LeadSquared, real-time" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-        <PremKPI label="Active" value={fmtN(kpis.active)} sub={fmtN(kpis.total - kpis.active) + ' inactive'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
-        <PremKPI label="Sales Groups" value={fmtN(kpis.groupCount)} sub="reconstructed from membership" accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.bot} />
-        <PremKPI label="Manually Mapped" value={fmtN(kpis.mapped)} sub={fmtN(kpis.total - kpis.mapped) + ' not yet mapped'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
-      </div>
+      <StatStrip items={[
+        { label: 'Total People', value: fmtN(kpis.total), sub: 'LeadSquared, real-time' },
+        { label: 'Active', value: fmtN(kpis.active), sub: fmtN(kpis.total - kpis.active) + ' inactive' },
+        { label: 'Sales Groups', value: fmtN(kpis.groupCount), sub: 'reconstructed from membership' },
+        { label: 'Manually Mapped', value: fmtN(kpis.mapped), sub: fmtN(kpis.total - kpis.mapped) + ' not yet mapped' },
+        { label: 'Stale (90+ days)', value: fmtN(kpis.stale), sub: 'not confirmed recently' },
+      ]} />
 
       {importRunning && importProgress && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: C.blueBg, marginBottom: 12, fontSize: 12.5, color: C.navy, fontWeight: 700 }}>
@@ -961,11 +1172,19 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
       )}
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or email…" style={{ ...inputStyle, width: 220 }} />
+        <div style={{ position: 'relative', flex: '1 1 260px', minWidth: 220, maxWidth: 380 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.2" strokeLinecap="round" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+            <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            value={search} onChange={e => setSearch(e.target.value)} placeholder="Find someone by name or email…"
+            style={{ ...inputStyle, width: '100%', padding: '9px 12px 9px 32px', fontSize: 13.5 }}
+          />
+        </div>
         <Dropdown label="LS Role" options={roleOptions} value={roleFilter} onChange={setRoleFilter} minWidth={130} />
         <Dropdown label="Status" options={['All', 'Active', 'Inactive']} value={statusFilter} onChange={setStatusFilter} minWidth={110} />
         <Dropdown label="Group" options={groupOptions} value={groupFilter} onChange={setGroupFilter} minWidth={160} />
-        <Dropdown label="Mapping" options={['All', 'Mapped', 'Unmapped']} value={mappedFilter} onChange={setMappedFilter} minWidth={120} />
+        <Dropdown label="Mapping" options={['All', 'Mapped', 'Unmapped', 'Stale (90+ days)']} value={mappedFilter} onChange={setMappedFilter} minWidth={140} />
         <div style={{ flex: 1 }} />
         {isAdmin && <Button size="sm" icon={<UploadIcon />} onClick={() => setShowImport(true)}>Bulk import</Button>}
         <ExportButton
@@ -996,11 +1215,27 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         yet. ASM/SM, SSM, Role, Level, Country and Centre Name are the only manually entered fields.
       </p>
 
+      {isAdmin && selected.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, padding: '9px 16px', borderRadius: 10,
+          background: C.navyBg, marginBottom: 12, fontSize: 12.5, fontWeight: 700, color: C.navy,
+        }}>
+          <span>{selected.size} selected</span>
+          <Button size="sm" onClick={() => setShowBulkEdit(true)}>Bulk edit</Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Clear selection</Button>
+        </div>
+      )}
+
       <Card title={`${fmtN(filtered.length)} people`} sub={`Page ${page} of ${totalPages}`} noPad>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 960 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1000 }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid ' + C.border }}>
+                {isAdmin && (
+                  <th style={{ padding: '9px 8px 9px 14px', width: 30 }}>
+                    <input type="checkbox" checked={pageAllSelected} onChange={togglePage} style={{ width: 15, height: 15, cursor: 'pointer' }} title="Select everyone on this page" />
+                  </th>
+                )}
                 {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Phone', 'Airtel', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Mapping'].map(h => (
                   <th key={h} style={{ padding: '9px 12px', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
@@ -1010,9 +1245,20 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
               {pageRows.map((r, i) => {
                 const d = detailCache[r.id]
                 const pending = !d
+                const stale = isStaleMapping(r.manual)
                 return (
                   <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 ? 'transparent' : 'var(--bg3)' }}>
-                    <td style={{ padding: '9px 12px', fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{r.name}</td>
+                    {isAdmin && (
+                      <td style={{ padding: '10px 8px 10px 14px' }}>
+                        <input type="checkbox" checked={selected.has(r.email)} onChange={() => r.email && toggleOne(r.email)} disabled={!r.email} style={{ width: 15, height: 15, cursor: r.email ? 'pointer' : 'default' }} />
+                      </td>
+                    )}
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        <Avatar name={r.name} />
+                        <span style={{ fontWeight: 700, color: C.text }}>{r.name}</span>
+                      </div>
+                    </td>
                     <td style={{ padding: '9px 12px', color: C.muted }}>{r.email || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text }}>{(r.role || '').replace(/_/g, ' ')}</td>
                     <td style={{ padding: '9px 12px' }}><StatusBadge status={r.status} /></td>
@@ -1025,7 +1271,10 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                     <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.role || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.country || '—'}</td>
                     <td style={{ padding: '9px 12px' }}>
-                      <Button size="sm" variant={r.manual ? 'secondary' : 'primary'} onClick={() => setEditUser(r)}>{r.manual ? 'Edit' : 'Map'}</Button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Button size="sm" variant={r.manual ? 'secondary' : 'primary'} onClick={() => setEditUser(r)}>{r.manual ? 'Edit' : 'Map'}</Button>
+                        {stale && <span style={{ fontSize: 10, fontWeight: 800, color: C.navy, background: C.navyBg, padding: '2px 7px', borderRadius: 999, whiteSpace: 'nowrap' }} title="Not confirmed in 90+ days">Stale</span>}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -1045,6 +1294,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
       {editUser && (
         <EditManualModal
           user={editUser}
+          rosterNames={rosterNames}
           onClose={() => setEditUser(null)}
           onSaved={saved => {
             setData(d => ({ ...d, rows: d.rows.map(r => r.email === editUser.email ? { ...r, manual: saved } : r) }))
@@ -1056,6 +1306,14 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         <BulkImportModal
           onClose={() => setShowImport(false)}
           onStarted={() => { setShowImport(false); onOpenHistory() }}
+        />
+      )}
+      {showBulkEdit && (
+        <BulkEditModal
+          users={selectedRows}
+          rosterNames={rosterNames}
+          onClose={() => setShowBulkEdit(false)}
+          onDone={() => { setShowBulkEdit(false); setSelected(new Set()); load() }}
         />
       )}
     </div>
@@ -1136,6 +1394,292 @@ function GroupsTab({ registerRefresh }) {
   )
 }
 
+// ---------------------------------------------------------------- Connectors tab
+
+function ConnectorField({ label, hint, children }) {
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
+      <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
+      {children}
+      {hint && <span style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{hint}</span>}
+    </label>
+  )
+}
+function ConnectorStatus({ status, at }) {
+  if (!status) return <span style={{ fontSize: 11.5, color: C.muted }}>Never run</span>
+  const ok = status.indexOf('ok') === 0
+  return (
+    <span style={{ fontSize: 11.5, fontWeight: 700, color: ok ? C.green : C.navy }}>
+      {status}{at && <span style={{ color: C.muted, fontWeight: 500 }}> · {new Date(at).toLocaleString()}</span>}
+    </span>
+  )
+}
+const enableRowStyle = { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontSize: 12.5, fontWeight: 700, color: C.text, cursor: 'pointer' }
+
+// Turns this page from a dead end into a real source of team mapping (the
+// user's own framing) -- four independent, individually-toggleable pushes
+// fire on every save/delete/restore/finished import: a webhook, a Slack
+// notification, a live Google Sheet mirror, and a pull-based read-only API
+// for a script to hit on its own schedule. Admin-only, same as Bulk import --
+// see api/crm-leads.js's notifyTeamMappingConnectors for the actual firing.
+function ConnectorsTab() {
+  const [form, setForm] = useState(null)
+  const [saving, setSaving] = useState('')
+  const [testing, setTesting] = useState('')
+  const [msg, setMsg] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  const load = useCallback(() => {
+    fetchJson(API + '&mode=team_connectors_get').then(setForm).catch(() => setForm({}))
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const save = async (which, patch) => {
+    setSaving(which); setMsg('')
+    try {
+      const saved = await fetchJson(API + '&mode=team_connectors_save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+      setForm(saved)
+    } catch (e) { setMsg('Could not save: ' + (e.message || e)) } finally { setSaving('') }
+  }
+  const test = async which => {
+    setTesting(which); setMsg('')
+    try {
+      const saved = await fetchJson(API + '&mode=team_connectors_test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ which }) })
+      setForm(saved)
+    } catch (e) { setMsg('Test failed: ' + (e.message || e)) } finally { setTesting('') }
+  }
+  const regenerateKey = async () => {
+    if (form.api_key && !window.confirm('Generate a new key? Any integration still using the old one will stop working immediately.')) return
+    setSaving('api')
+    try { setForm(await fetchJson(API + '&mode=team_connectors_regenerate_key', { method: 'POST' })) }
+    catch (e) { setMsg('Could not generate a key: ' + (e.message || e)) } finally { setSaving('') }
+  }
+  const copy = text => { if (navigator.clipboard) navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) }
+
+  if (!form) return <InlineLoader label="Loading connector settings" />
+  const pullUrl = form.api_key ? `${window.location.origin}${API}&mode=team_export_pull&api_key=${form.api_key}` : ''
+
+  return (
+    <div>
+      <p style={{ fontSize: 12.5, color: C.muted, marginTop: 0, marginBottom: 18, maxWidth: 760 }}>
+        Makes this page a real source of team mapping instead of a dead end -- every save, delete,
+        restore or finished bulk import can push out to any of these four, independently. All four
+        deliberately exclude Phone/Airtel/Reporting Manager -- those need one LeadSquared call PER
+        PERSON, fine for a table page's worth of rows, too expensive on every single edit.
+      </p>
+      {msg && <div style={{ padding: '9px 14px', borderRadius: 8, background: C.navyBg, color: C.navy, fontSize: 12.5, fontWeight: 700, marginBottom: 16 }}>{msg}</div>}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 16 }}>
+        <Card title="Webhook" sub="POST a JSON payload to your own URL">
+          <label style={enableRowStyle}>
+            <input type="checkbox" checked={!!form.webhook_enabled} onChange={e => setForm(p => ({ ...p, webhook_enabled: e.target.checked }))} style={{ width: 15, height: 15 }} />
+            Enabled
+          </label>
+          <ConnectorField label="Webhook URL">
+            <input style={inputStyle} value={form.webhook_url || ''} onChange={e => setForm(p => ({ ...p, webhook_url: e.target.value }))} placeholder="https://…" />
+          </ConnectorField>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+            <ConnectorStatus status={form.webhook_last_status} at={form.webhook_last_at} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button variant="ghost" size="sm" onClick={() => test('webhook')} disabled={testing === 'webhook' || !form.webhook_url}>{testing === 'webhook' ? 'Testing…' : 'Send test'}</Button>
+              <Button size="sm" onClick={() => save('webhook', { webhook_enabled: form.webhook_enabled, webhook_url: form.webhook_url })} disabled={saving === 'webhook'}>{saving === 'webhook' ? 'Saving…' : 'Save'}</Button>
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Slack" sub="Post a short notification to a channel">
+          <label style={enableRowStyle}>
+            <input type="checkbox" checked={!!form.slack_enabled} onChange={e => setForm(p => ({ ...p, slack_enabled: e.target.checked }))} style={{ width: 15, height: 15 }} />
+            Enabled
+          </label>
+          <ConnectorField label="Slack channel" hint="A #channel-name the bot is already in, or a channel ID.">
+            <input style={inputStyle} value={form.slack_channel || ''} onChange={e => setForm(p => ({ ...p, slack_channel: e.target.value }))} placeholder="#team-performance-marketing" />
+          </ConnectorField>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+            <ConnectorStatus status={form.slack_last_status} at={form.slack_last_at} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button variant="ghost" size="sm" onClick={() => test('slack')} disabled={testing === 'slack' || !form.slack_channel}>{testing === 'slack' ? 'Testing…' : 'Send test'}</Button>
+              <Button size="sm" onClick={() => save('slack', { slack_enabled: form.slack_enabled, slack_channel: form.slack_channel })} disabled={saving === 'slack'}>{saving === 'slack' ? 'Saving…' : 'Save'}</Button>
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Google Sheet mirror" sub="Overwrite an existing sheet's first tab">
+          <label style={enableRowStyle}>
+            <input type="checkbox" checked={!!form.sheet_enabled} onChange={e => setForm(p => ({ ...p, sheet_enabled: e.target.checked }))} style={{ width: 15, height: 15 }} />
+            Enabled
+          </label>
+          <ConnectorField label="Sheet ID" hint="The id from the sheet's own URL (the part between /d/ and /edit) -- share the sheet as an Editor with the same Google service account this app already uses for 'Export to Google Sheets' elsewhere.">
+            <input style={inputStyle} value={form.sheet_id || ''} onChange={e => setForm(p => ({ ...p, sheet_id: e.target.value }))} placeholder="1AbCdefGhIJKlmnOPQrstuVWXyz…" />
+          </ConnectorField>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+            <ConnectorStatus status={form.sheet_last_status} at={form.sheet_last_at} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button variant="ghost" size="sm" onClick={() => test('sheet')} disabled={testing === 'sheet' || !form.sheet_id}>{testing === 'sheet' ? 'Syncing…' : 'Sync now'}</Button>
+              <Button size="sm" onClick={() => save('sheet', { sheet_enabled: form.sheet_enabled, sheet_id: form.sheet_id })} disabled={saving === 'sheet'}>{saving === 'sheet' ? 'Saving…' : 'Save'}</Button>
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Read-only API" sub="An external script pulls this on its own schedule">
+          <label style={enableRowStyle}>
+            <input type="checkbox" checked={!!form.api_enabled} onChange={e => save('api', { api_enabled: e.target.checked })} style={{ width: 15, height: 15 }} disabled={!form.api_key} />
+            Enabled{!form.api_key && <span style={{ fontWeight: 500, color: C.muted, textTransform: 'none' }}> — generate a key first</span>}
+          </label>
+          {form.api_key ? (
+            <>
+              <ConnectorField label="Pull URL" hint="Anyone with this URL can read the roster + mapping (not Phone/Airtel/Reporting Manager) -- keep it private, same as a password.">
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input readOnly style={{ ...inputStyle, fontSize: 11 }} value={pullUrl} onClick={e => e.target.select()} />
+                  <Button variant="ghost" size="sm" onClick={() => copy(pullUrl)}>{copied ? 'Copied' : 'Copy'}</Button>
+                </div>
+              </ConnectorField>
+              <Button variant="ghost" danger size="sm" onClick={regenerateKey} disabled={saving === 'api'}>Regenerate key</Button>
+            </>
+          ) : (
+            <Button size="sm" onClick={regenerateKey} disabled={saving === 'api'}>{saving === 'api' ? 'Generating…' : 'Generate a key'}</Button>
+          )}
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------- Org chart tab
+
+// Renders the org tree from the ASM/SM + SSM manual fields (this page's own
+// tracked structure, deliberately NOT the live LeadSquared Reporting Manager
+// chain, which is a different, already-visible-in-the-table hierarchy). ASM/SM
+// and SSM are free text, so two rows meaning the same real person can only
+// disagree by whitespace/case -- normalizeName groups those together instead
+// of drawing two separate nodes for one person; anything left over after that
+// (a real typo, or a manager who's since left) surfaces in its own "Unmatched"
+// bucket rather than silently vanishing or crashing the tree.
+function normalizeName(s) { return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase() }
+
+function OrgNode({ name, count, children, depth }) {
+  const [open, setOpen] = useState(depth < 1)
+  const has = children && children.length > 0
+  return (
+    <div style={{ marginLeft: depth ? 22 : 0 }}>
+      <div
+        onClick={() => has && setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 9, cursor: has ? 'pointer' : 'default', background: depth === 0 ? 'var(--bg3)' : 'transparent' }}
+      >
+        {has ? (
+          <span style={{ width: 14, color: C.muted, fontSize: 10, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .12s', flexShrink: 0 }}>▶</span>
+        ) : <span style={{ width: 14, flexShrink: 0 }} />}
+        <Avatar name={name} size={26} />
+        <span style={{ fontSize: 13, fontWeight: depth === 0 ? 800 : 700, color: C.text }}>{name}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: C.muted }}>{count} {count === 1 ? 'person' : 'people'}</span>
+      </div>
+      {has && open && (
+        <div style={{ borderLeft: depth < 2 ? '1.5px solid ' + C.border : 'none', marginLeft: 13 }}>
+          {children.map(c => <OrgNode key={c.key} name={c.name} count={c.count} children={c.children} depth={depth + 1} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OrgChartTab({ registerRefresh }) {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+
+  const load = useCallback(() => {
+    fetchJson(API + '&mode=team_users').then(setData).catch(e => setError(String(e.message || e)))
+  }, [])
+  useEffect(() => { load() }, [load])
+  useEffect(() => { registerRefresh(load) }, [registerRefresh, load])
+
+  const { tree, unmatched, unmappedCount } = useMemo(() => {
+    const rows = (data && data.rows) || []
+    const active = rows.filter(r => r.status === 'Active' && r.email)
+    const nameByNorm = {}
+    active.forEach(r => { nameByNorm[normalizeName(r.name)] = r.name })
+
+    const ssmGroups = {} // normSsm -> { name, asms: { normAsm -> { name, reps: [] } } }
+    const looseAsm = {} // ASM/SM set with no SSM -> { name, reps: [] }
+    const unmapped = []
+
+    active.forEach(r => {
+      const asm = r.manual && r.manual.asm_sm && r.manual.asm_sm.trim()
+      const ssm = r.manual && r.manual.ssm && r.manual.ssm.trim()
+      if (!asm && !ssm) { unmapped.push(r); return }
+      const asmKey = asm ? normalizeName(asm) : null
+      const asmName = asmKey ? (nameByNorm[asmKey] || asm) : null
+      if (ssm) {
+        const ssmKey = normalizeName(ssm)
+        const ssmName = nameByNorm[ssmKey] || ssm
+        if (!ssmGroups[ssmKey]) ssmGroups[ssmKey] = { name: ssmName, asms: {} }
+        const bucket = asmKey || '(direct)'
+        if (!ssmGroups[ssmKey].asms[bucket]) ssmGroups[ssmKey].asms[bucket] = { name: asmName || 'Direct reports', reps: [] }
+        ssmGroups[ssmKey].asms[bucket].reps.push(r)
+      } else if (asmKey) {
+        if (!looseAsm[asmKey]) looseAsm[asmKey] = { name: asmName, reps: [] }
+        looseAsm[asmKey].reps.push(r)
+      }
+    })
+
+    const tree = [
+      ...Object.entries(ssmGroups).map(([ssmKey, g]) => {
+        const asmNodes = Object.entries(g.asms).map(([asmKey, a]) => ({
+          key: ssmKey + '/' + asmKey, name: a.name, count: a.reps.length,
+          children: a.reps.map(r => ({ key: r.id, name: r.name, count: 1, children: null })),
+        }))
+        const count = asmNodes.reduce((s, n) => s + n.count, 0)
+        return { key: ssmKey, name: g.name, count, children: asmNodes }
+      }),
+      ...Object.entries(looseAsm).map(([asmKey, a]) => ({
+        key: 'loose/' + asmKey, name: a.name, count: a.reps.length,
+        children: a.reps.map(r => ({ key: r.id, name: r.name, count: 1, children: null })),
+      })),
+    ].sort((a, b) => b.count - a.count)
+
+    return { tree, unmatched: unmapped, unmappedCount: unmapped.length }
+  }, [data])
+
+  if (error) return <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5 }}>✕ {error}</div>
+  if (!data) return <InlineLoader label="Building the org chart" />
+
+  return (
+    <div>
+      <p style={{ fontSize: 12.5, color: C.muted, marginTop: 0, marginBottom: 16, maxWidth: 760 }}>
+        Built from the ASM/SM and SSM fields tracked on this page -- SSM at the top, ASM/SM
+        underneath, individual reps at the bottom. This is a different hierarchy from the live
+        "LS Manager" column in Roster (LeadSquared's own reporting line); this one is the informal
+        sales structure this page exists to track. Names typed slightly differently for the same
+        real person (spacing, capitalization) are grouped together automatically.
+      </p>
+      <StatStrip items={[
+        { label: 'SSM Groups', value: fmtN(tree.filter(t => t.children.length > 1 || (t.children[0] && t.children[0].children)).length), sub: 'top-level' },
+        { label: 'People Mapped', value: fmtN(tree.reduce((s, t) => s + t.count, 0)), sub: 'appear in the tree' },
+        { label: 'Not Yet Mapped', value: fmtN(unmappedCount), sub: 'no ASM/SM or SSM set' },
+      ]} />
+      <Card title="Structure" sub="Click a name to expand" noPad>
+        <div style={{ padding: '14px 16px' }}>
+          {tree.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>Nobody has an ASM/SM or SSM set yet.</div>
+          ) : tree.map(n => <OrgNode key={n.key} name={n.name} count={n.count} children={n.children} depth={0} />)}
+        </div>
+      </Card>
+      {unmatched.length > 0 && (
+        <Card title="Not yet mapped" sub={`${fmtN(unmatched.length)} active people with no ASM/SM or SSM set`} noPad>
+          <div style={{ padding: '4px 16px 14px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {unmatched.slice(0, 60).map(r => (
+              <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '5px 10px 5px 6px', borderRadius: 8, background: 'var(--bg3)' }}>
+                <Avatar name={r.name} size={20} />
+                <span style={{ color: C.text, fontWeight: 600 }}>{r.name}</span>
+              </div>
+            ))}
+            {unmatched.length > 60 && <div style={{ fontSize: 11.5, color: C.muted, alignSelf: 'center' }}>+ {unmatched.length - 60} more</div>}
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------- Page shell
 
 export default function TeamMappingDashboard() {
@@ -1162,13 +1706,16 @@ export default function TeamMappingDashboard() {
       <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid #EEF1F6', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <div style={{ background: 'var(--card)', borderBottom: '0.5px solid ' + C.border, padding: '10px 28px', flexShrink: 0 }}>
           <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>
-            Dashboards / Team Mapping{activeTab === 'history' && ' / History'}
+            Dashboards / Team Mapping
+            {activeTab === 'history' && ' / History'}
+            {activeTab === 'orgchart' && ' / Org Chart'}
+            {activeTab === 'connectors' && ' / Connectors'}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '2px 0 10px' }}>
             <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: 0, letterSpacing: '-0.4px', fontFamily: FONT }}>
               {activeTab === 'history' ? 'Import & Export History' : 'Team Mapping'}
             </h1>
-            {activeTab !== 'history' && (
+            {activeTab !== 'history' && activeTab !== 'connectors' && (
               <Button variant="ghost" size="sm" icon={<span style={{ display: 'inline-flex', animation: refreshing ? 'teamMapSpin .6s linear infinite' : 'none' }}><RefreshIcon /></span>} onClick={doRefresh}>Refresh</Button>
             )}
           </div>
@@ -1176,6 +1723,8 @@ export default function TeamMappingDashboard() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} className="lq-header-controls">
               <div style={pillStyle(activeTab === 'roster')} onClick={() => setTab('roster')}>Roster</div>
               <div style={pillStyle(activeTab === 'groups')} onClick={() => setTab('groups')}>Sales Groups</div>
+              <div style={pillStyle(activeTab === 'orgchart')} onClick={() => setTab('orgchart')}>Org Chart</div>
+              {isAdmin && <div style={pillStyle(activeTab === 'connectors')} onClick={() => setTab('connectors')}>Connectors</div>}
             </div>
           )}
         </div>
@@ -1183,6 +1732,8 @@ export default function TeamMappingDashboard() {
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
           {activeTab === 'roster' && <RosterTab isAdmin={isAdmin} onOpenHistory={() => setTab('history')} registerRefresh={registerRefresh} />}
           {activeTab === 'groups' && <GroupsTab registerRefresh={registerRefresh} />}
+          {activeTab === 'orgchart' && <OrgChartTab registerRefresh={registerRefresh} />}
+          {activeTab === 'connectors' && (isAdmin ? <ConnectorsTab /> : <div style={{ color: C.muted, fontSize: 13 }}>Admin only.</div>)}
           {activeTab === 'history' && <HistoryTab onBack={() => setTab('roster')} />}
         </div>
       </div>
