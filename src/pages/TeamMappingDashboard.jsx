@@ -385,13 +385,19 @@ async function runImportInBackground(rows, label, skippedCount, onSettled) {
 
   let done = 0, failed = 0
   for (const row of rows) {
+    let rowOk = true
     try {
       await fetchJson(API + '&mode=team_manual_save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(row),
       })
       done++
-    } catch { failed++ }
-    importStore.set({ progress: { done: done + failed, total: rows.length, failed, skipped: skippedCount, label } })
+    } catch { failed++; rowOk = false }
+    // Set on every single row, not batched -- this is what makes the History
+    // page's "live" card genuinely update one row at a time while the tab that
+    // started the import stays open, rather than jumping in chunks. currentRow
+    // is who was JUST processed (not who's next), so the UI reads as "here's
+    // what just happened" rather than a name that hasn't actually saved yet.
+    importStore.set({ progress: { done: done + failed, total: rows.length, failed, skipped: skippedCount, label, currentRow: row.ls_email, currentRowOk: rowOk } })
     if (activity && (done + failed) % 5 === 0) {
       fetchJson(API + '&mode=team_activity_update', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -564,74 +570,170 @@ function BulkImportModal({ onClose, onStarted }) {
   )
 }
 
-// ---------------------------------------------------------------- History panel
+// ---------------------------------------------------------------- History page
 
 function statusColor(status) {
   if (status === 'done') return C.green
-  if (status === 'failed') return '#B91C1C'
+  if (status === 'failed') return C.navy // brand rule: never red/amber on a data element -- navy reads as "needs attention" everywhere else in this app (delta pills, etc.)
   return C.blue
 }
+function statusBg(status) {
+  if (status === 'done') return C.greenBg
+  if (status === 'failed') return C.navyBg
+  return C.blueBg
+}
+const TYPE_ICON = {
+  import: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>,
+  export: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>,
+}
 
-function HistoryModal({ onClose }) {
+// The one card on this page that updates live, one row at a time, while an
+// import driven by THIS browser tab is running -- reads importStore directly
+// (via useImportProgress), not the polled Supabase list below, so there is no
+// network round-trip between a row saving and this card reflecting it.
+function LiveImportCard({ progress }) {
+  const pct = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0
+  return (
+    <div style={{
+      borderRadius: 16, padding: '20px 24px', marginBottom: 20, position: 'relative', overflow: 'hidden',
+      background: 'linear-gradient(135deg, rgba(31,60,132,0.06), rgba(28,159,212,0.06))',
+      border: '1px solid rgba(28,159,212,0.25)', boxShadow: '0 8px 24px -12px rgba(31,60,132,0.25)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <span style={{ position: 'relative', width: 9, height: 9, flexShrink: 0 }}>
+          <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: C.blue, animation: 'teamMapPulse 1.4s ease-out infinite' }} />
+          <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: C.blue }} />
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 800, color: C.blue, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Importing now</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{progress.label}</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: C.navy, fontVariantNumeric: 'tabular-nums' }}>
+          {fmtN(progress.done)} <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>/ {fmtN(progress.total)}</span>
+        </div>
+      </div>
+      <div style={{ height: 10, borderRadius: 99, background: 'rgba(31,60,132,0.10)', overflow: 'hidden', marginBottom: 10 }}>
+        <div style={{ height: '100%', width: pct + '%', borderRadius: 99, background: 'linear-gradient(90deg,#1F3C84,#1C9FD4)', transition: 'width .25s ease', boxShadow: '0 0 8px rgba(28,159,212,0.5)' }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ fontSize: 12, color: C.muted }}>
+          {progress.currentRow && (
+            <>Just saved <b style={{ color: progress.currentRowOk ? C.text : C.navy }}>{progress.currentRow}</b>{!progress.currentRowOk && ' (failed)'}</>
+          )}
+        </div>
+        <div style={{ fontSize: 11.5, color: C.muted, fontWeight: 700 }}>{pct}% complete · {progress.failed} failed · {progress.skipped} skipped</div>
+      </div>
+    </div>
+  )
+}
+
+function HistoryTab({ onBack }) {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
-  const { running } = useImportProgress()
+  const { running, progress } = useImportProgress()
+  const wasRunning = useRef(false)
 
   const load = useCallback(() => {
     fetchJson(API + '&mode=team_activity_list').then(d => setRows(d.rows || [])).catch(e => setError(String(e.message || e)))
   }, [])
 
+  useEffect(() => { load() }, [load])
+
   useEffect(() => {
-    load()
-    // Polls while an import is running (this modal doesn't need to be the one that
-    // started it -- reopening History after closing an in-progress import still
-    // shows live progress, since the row lives in Supabase, not component state).
+    // Polls the persisted log while an import is running elsewhere (e.g. this
+    // tab reloaded mid-import, or a teammate's own import in a different tab
+    // shares this same Supabase row) -- the live card above already covers
+    // real-time detail for an import THIS tab started.
     if (!running) return
     const t = setInterval(load, 2500)
     return () => clearInterval(t)
   }, [load, running])
 
+  useEffect(() => {
+    // A fire-and-forget final PATCH can still be in flight the instant
+    // `running` flips to false, so one more load (with a short delay) after
+    // the transition makes sure the just-finished run's "done" status and
+    // final counts actually land here instead of showing stale "running".
+    if (wasRunning.current && !running) { load(); setTimeout(load, 900) }
+    wasRunning.current = running
+  }, [running, load])
+
+  const stats = useMemo(() => {
+    const list = rows || []
+    const imports = list.filter(r => r.type === 'import')
+    const exports = list.filter(r => r.type === 'export')
+    const rowsMapped = imports.reduce((s, r) => s + (r.done || 0), 0)
+    return { totalImports: imports.length, totalExports: exports.length, rowsMapped, lastActivity: list[0]?.created_at || null }
+  }, [rows])
+
   return (
-    <Modal onClose={onClose} title="Import & export history" width={640}>
-      {error && <div style={{ color: '#B91C1C', fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
-      {!rows ? <InlineLoader label="Loading history" height={160} /> : rows.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>Nothing yet — imports and exports will show up here.</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 440, overflowY: 'auto' }}>
-          {rows.map(r => {
-            const pct = r.total > 0 ? Math.round(((r.done || 0) + (r.failed || 0)) / r.total * 100) : 100
-            return (
-              <div key={r.id} style={{ border: '0.5px solid ' + C.border, borderRadius: 10, padding: '10px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text }}>
-                    <span style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 800, color: C.muted, marginRight: 8 }}>{r.type}</span>
-                    {r.label || '—'}
+    <div>
+      <style>{`@keyframes teamMapPulse { 0% { transform: scale(1); opacity: 0.7 } 100% { transform: scale(2.6); opacity: 0 } }`}</style>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+        <Button variant="ghost" size="sm" onClick={onBack} icon={
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+        }>Back to Roster</Button>
+      </div>
+
+      <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
+        <PremKPI label="Total Imports" value={fmtN(stats.totalImports)} sub="all-time runs" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+        <PremKPI label="Rows Mapped" value={fmtN(stats.rowsMapped)} sub="across every import" accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
+        <PremKPI label="Total Exports" value={fmtN(stats.totalExports)} sub="CSV downloads" accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.bot} />
+        <PremKPI label="Last Activity" value={stats.lastActivity ? new Date(stats.lastActivity).toLocaleDateString() : '—'} sub={stats.lastActivity ? new Date(stats.lastActivity).toLocaleTimeString() : 'nothing yet'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+      </div>
+
+      {running && progress && <LiveImportCard progress={progress} />}
+
+      {error && <div style={{ padding: '10px 14px', borderRadius: 10, background: C.navyBg, color: C.navy, fontSize: 12.5, marginBottom: 14, fontWeight: 700 }}>{error}</div>}
+
+      <Card title="All activity" sub="Every import and export, most recent first" noPad>
+        {!rows ? <div style={{ padding: 32 }}><InlineLoader label="Loading history" height={140} /></div> : rows.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: C.muted, fontSize: 13.5 }}>Nothing yet — imports and exports will show up here.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {rows.map((r, i) => {
+              const isLiveRow = running && progress && r.type === 'import' && r.status === 'running'
+              const d = isLiveRow ? progress.done : (r.done || 0)
+              const failed = isLiveRow ? progress.failed : (r.failed || 0)
+              const total = isLiveRow ? progress.total : (r.total || 0)
+              const status = isLiveRow ? 'running' : r.status
+              const pct = total > 0 ? Math.round(((d + failed) / total) * 100) : 100
+              return (
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 22px', borderTop: i === 0 ? 'none' : '0.5px solid ' + C.border }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: r.type === 'import' ? C.navyBg : C.cyanBg, color: r.type === 'import' ? C.navy : C.cyan, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {TYPE_ICON[r.type] || TYPE_ICON.import}
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(r.status) }}>{r.status}</span>
-                </div>
-                {r.type === 'import' && (
-                  <div style={{ height: 5, borderRadius: 99, background: 'var(--bg3)', overflow: 'hidden', marginBottom: 4 }}>
-                    <div style={{ height: '100%', width: pct + '%', background: statusColor(r.status), transition: 'width .3s' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label || '—'}</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: statusColor(status), background: statusBg(status), padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>{status}</span>
+                    </div>
+                    {r.type === 'import' && (
+                      <div style={{ height: 6, borderRadius: 99, background: 'var(--bg3)', overflow: 'hidden', marginBottom: 5, maxWidth: 360 }}>
+                        <div style={{ height: '100%', width: pct + '%', borderRadius: 99, background: statusColor(status), transition: 'width .25s ease' }} />
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11.5, color: C.muted }}>
+                      {r.type === 'import' ? `${fmtN(d)} done, ${fmtN(failed)} failed, ${fmtN(r.skipped || 0)} skipped of ${fmtN(total)}` : `${fmtN(r.total || 0)} row(s) exported`}
+                    </div>
                   </div>
-                )}
-                <div style={{ fontSize: 11, color: C.muted }}>
-                  {r.type === 'import'
-                    ? `${r.done || 0} done, ${r.failed || 0} failed, ${r.skipped || 0} skipped of ${r.total || 0}`
-                    : `${r.total || 0} row(s) exported`}
-                  {' · '}{r.created_by || 'unknown'} · {r.created_at ? new Date(r.created_at).toLocaleString() : ''}
+                  <div style={{ textAlign: 'right', fontSize: 11.5, color: C.muted, flexShrink: 0 }}>
+                    <div style={{ fontWeight: 700, color: C.text }}>{r.created_by || 'unknown'}</div>
+                    <div>{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</div>
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </Modal>
+              )
+            })}
+          </div>
+        )}
+      </Card>
+    </div>
   )
 }
 
 // ---------------------------------------------------------------- Roster tab
 
-function RosterTab({ isAdmin }) {
+function RosterTab({ isAdmin, onOpenHistory }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -643,7 +745,6 @@ function RosterTab({ isAdmin }) {
   const [page, setPage] = useState(1)
   const [editUser, setEditUser] = useState(null)
   const [showImport, setShowImport] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
   const { running: importRunning, progress: importProgress } = useImportProgress()
   // Phone/Airtel/Reporting-Manager are live but per-user calls (LeadSquared has
   // no bulk "by many ids" variant) -- fetched only for whichever ~50 rows are
@@ -735,7 +836,7 @@ function RosterTab({ isAdmin }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: C.blueBg, marginBottom: 12, fontSize: 12.5, color: C.navy, fontWeight: 700 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.blue, flexShrink: 0 }} />
           Importing "{importProgress.label}" in background — {importProgress.done} of {importProgress.total}
-          <span onClick={() => setShowHistory(true)} style={{ marginLeft: 'auto', cursor: 'pointer', color: C.blue, textDecoration: 'underline' }}>View progress</span>
+          <span onClick={onOpenHistory} style={{ marginLeft: 'auto', cursor: 'pointer', color: C.blue, textDecoration: 'underline' }}>View progress</span>
         </div>
       )}
 
@@ -747,7 +848,7 @@ function RosterTab({ isAdmin }) {
         <Dropdown label="Mapping" options={['All', 'Mapped', 'Unmapped']} value={mappedFilter} onChange={setMappedFilter} minWidth={120} />
         <div style={{ flex: 1 }} />
         <Button variant="ghost" size="sm" onClick={load}>Refresh</Button>
-        <Button variant="ghost" size="sm" onClick={() => setShowHistory(true)}>History</Button>
+        <Button variant="ghost" size="sm" onClick={onOpenHistory}>History</Button>
         <ExportButton
           hideSlack hideJson hideSheets
           filename="team-mapping-roster"
@@ -835,10 +936,9 @@ function RosterTab({ isAdmin }) {
       {showImport && (
         <BulkImportModal
           onClose={() => setShowImport(false)}
-          onStarted={() => { setShowImport(false); setShowHistory(true) }}
+          onStarted={() => { setShowImport(false); onOpenHistory() }}
         />
       )}
-      {showHistory && <HistoryModal onClose={() => setShowHistory(false)} />}
     </div>
   )
 }
@@ -931,16 +1031,23 @@ export default function TeamMappingDashboard() {
       <Sidebar />
       <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid #EEF1F6', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <div style={{ background: 'var(--card)', borderBottom: '0.5px solid ' + C.border, padding: '10px 28px', flexShrink: 0 }}>
-          <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / Team Mapping</p>
-          <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 10px', letterSpacing: '-0.4px', fontFamily: FONT }}>Team Mapping</h1>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} className="lq-header-controls">
-            <div style={pillStyle(activeTab === 'roster')} onClick={() => setTab('roster')}>Roster</div>
-            <div style={pillStyle(activeTab === 'groups')} onClick={() => setTab('groups')}>Sales Groups</div>
-          </div>
+          <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>
+            Dashboards / Team Mapping{activeTab === 'history' && ' / History'}
+          </p>
+          <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 10px', letterSpacing: '-0.4px', fontFamily: FONT }}>
+            {activeTab === 'history' ? 'Import & Export History' : 'Team Mapping'}
+          </h1>
+          {activeTab !== 'history' && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} className="lq-header-controls">
+              <div style={pillStyle(activeTab === 'roster')} onClick={() => setTab('roster')}>Roster</div>
+              <div style={pillStyle(activeTab === 'groups')} onClick={() => setTab('groups')}>Sales Groups</div>
+            </div>
+          )}
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
-          {activeTab === 'roster' && <RosterTab isAdmin={isAdmin} />}
+          {activeTab === 'roster' && <RosterTab isAdmin={isAdmin} onOpenHistory={() => setTab('history')} />}
           {activeTab === 'groups' && <GroupsTab />}
+          {activeTab === 'history' && <HistoryTab onBack={() => setTab('roster')} />}
         </div>
       </div>
     </div>
