@@ -620,8 +620,33 @@ function summaryValue(g, key) {
     const q = (g.futworkHumanQ || 0) + (g.futworkAiQ || 0)
     return q > 0 ? ((g.humanQL + g.futworkAiQl) / q) * 100 : 0
   }
-  if (key === 'futworkHumanQlPct') return g.futworkHumanQ > 0 ? (g.humanQL / g.futworkHumanQ) * 100 : 0
-  if (key === 'futworkAiQlPct') return g.futworkAiQ > 0 ? (g.futworkAiQl / g.futworkAiQ) * 100 : 0
+  // C4 fix: 'Queued on Futwork Human/AI' (the denominator here) was split out of a single
+  // 'Queued on Futwork' column on 2026-08-19/20 and was never backfilled for anything
+  // before that -- while 'Futwork Human/AI QL' (the numerator, the actual qualification
+  // OUTCOME) has been correctly split since well before then. So a pre-split period
+  // divides a real, non-trivial QL count by a near-zero/unbacked-filled queued figure and
+  // produces a four-digit artefact (measured live: Jul'26 read 2931.5%/4487.5%, a later
+  // stage rendered wider than the stage that feeds it on the funnel chart). Rather than
+  // hardcode the exact cutover date -- which would need updating if the sheet's own
+  // backfill history changes, and would still need per-row date logic to handle a group
+  // that spans both eras (Source/Campaign/Corridor views aggregate across the whole
+  // filtered window, they don't carry one single date) -- detect the SYMPTOM directly:
+  // above this ceiling the ratio cannot be a real conversion rate no matter how small the
+  // sample, only a missing-denominator artefact, so it renders '--' instead. Comfortably
+  // above the '>100% is expected on a small/lagging row' case the info tooltip already
+  // documents (a real small-sample outlier has no reason to clear 5x), comfortably below
+  // the actual observed garbage values.
+  const IMPLAUSIBLE_RATE_CEILING = 500
+  if (key === 'futworkHumanQlPct') {
+    if (!(g.futworkHumanQ > 0)) return 0
+    const pct = (g.humanQL / g.futworkHumanQ) * 100
+    return pct > IMPLAUSIBLE_RATE_CEILING ? null : pct
+  }
+  if (key === 'futworkAiQlPct') {
+    if (!(g.futworkAiQ > 0)) return 0
+    const pct = (g.futworkAiQl / g.futworkAiQ) * 100
+    return pct > IMPLAUSIBLE_RATE_CEILING ? null : pct
+  }
   // Cost metrics divide by PAID denominators only (leads/QLs/apps from rows that carried
   // spend). null -- rendered as "—" -- when a row had no paid activity, since a flat ₹0
   // reads like "free and excellent" when it actually means "no spend here at all".
@@ -924,6 +949,19 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [bqBusy, setBqBusy] = useState(false)
   const [bqError, setBqError] = useState(null)
   const [bqNonce, setBqNonce] = useState(0)            // bumped by Refresh
+  // B6 fix: opening Trend widens bqRange (via trendBqSpan) and fetches the wide window;
+  // closing it shrinks bqRange straight back to whatever narrower window was active a
+  // moment ago -- which had ALREADY been fetched, seconds earlier, before Trend was ever
+  // opened. Without this cache that immediately re-fetches it from scratch, on a page
+  // where a single wide fetch already runs 70-100s -- minutes of sequential cursor-paged
+  // requests for one modal open/close, and the exact same round-trip repeats every time
+  // Trend is reopened+closed again. Keyed on the same (since, until, sources) triple the
+  // fetch effect below already computes; capped so a long-lived tab can't grow this
+  // unbounded. Cleared on Refresh (bqNonce change) -- a manual refresh means "don't trust
+  // what's cached," so every window it touches should hit the network again.
+  const bqRowsCacheRef = useRef(new Map())
+  const BQ_ROWS_CACHE_MAX = 12
+  useEffect(() => { bqRowsCacheRef.current.clear() }, [bqNonce])
   // Two-phase fetch for the "Month-on-month trend" card only (B2 fix). This is
   // DELIBERATELY a separate read from bqRows/bqRange: folding its trailing-5-month span
   // into the main bqRange union (the way trendBqSpan does for the Trend modal, which only
@@ -1671,6 +1709,22 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // is left unused here for now rather than partially applied and unsafe.
   useEffect(() => {
     if (!bqMode || !bqSince || !bqUntil) return
+    const cacheKey = bqSince + '|' + bqUntil + '|' + (sourceIsAll ? 'ALL' : [...selectedSources].sort().join(','))
+    const cached = bqRowsCacheRef.current.get(cacheKey)
+    if (cached) {
+      // Re-insert to the end so this key counts as most-recently-used for the eviction
+      // below, then serve it -- same branches the network path takes on success, just
+      // synchronous.
+      bqRowsCacheRef.current.delete(cacheKey)
+      bqRowsCacheRef.current.set(cacheKey, cached)
+      setBqRows(cached.raw.map(mapRow))
+      setBqRowCount(cached.raw.length)
+      if (sourceIsAll) setBqSourceOpts(cached.sourceOpts)
+      setBqError(null)
+      setBqBusy(false)
+      setLoading(false)
+      return
+    }
     let dead = false
     setBqBusy(true)
     const fetcher = fetchOverallBqRows
@@ -1681,8 +1735,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         setBqRowCount(raw.length)
         // Only ever refresh the Source options from a read that had NO Source filter on
         // it, or the dropdown would shrink to whatever is currently selected.
-        if (sourceIsAll) setBqSourceOpts(['All', ...[...new Set(raw.map(r => (r.Source || '').trim() || 'Unknown'))].sort()])
+        const sourceOpts = sourceIsAll ? ['All', ...[...new Set(raw.map(r => (r.Source || '').trim() || 'Unknown'))].sort()] : null
+        if (sourceOpts) setBqSourceOpts(sourceOpts)
         setBqError(null)
+        const cache = bqRowsCacheRef.current
+        // sourceOpts is only ever non-null when this fetch was itself sourceIsAll (a
+        // filtered fetch never recomputes the dropdown, per the comment above) -- and a
+        // filtered cache entry is never read back into setBqSourceOpts on a hit (guarded
+        // by `if (sourceIsAll)` there too), so null here is simply "not applicable."
+        cache.set(cacheKey, { raw, sourceOpts })
+        while (cache.size > BQ_ROWS_CACHE_MAX) cache.delete(cache.keys().next().value)
       })
       .catch(e => {
         if (dead) return
@@ -3401,7 +3463,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   <div style={{ fontSize:12.5, color:C.muted, marginBottom:10 }}>Source: the "Overall PM" sheet (Settings &gt; Data &gt; Google Sheets) — one row per lead/day/source/campaign, spanning the full acquisition-to-revenue funnel.</div>
                   <div style={{ fontSize:13, color:C.sub, lineHeight:1.7 }}>
                     <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork Human + Futwork AI + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). Futwork itself splits into <b>Queued on Futwork Human</b> and <b>Queued on Futwork AI</b> (added 2026-08-19, replacing the old single "Queued on Futwork" column) — <b>Total Queued on Futwork</b> is those two combined, excluding Superbot. From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (Registered At University). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
-                    <b>Lead to QL %</b> (and its Human/AI variants) is Futwork's own queued-to-QL conversion, distinct from the whole-funnel <b>QL %</b> below: <b>Lead to QL %</b> = (Futwork Human QL + Futwork AI QL) ÷ Total Queued on Futwork, <b>Lead to QL % (Human)</b> = Futwork Human QL ÷ Queued on Futwork Human, <b>Lead to QL % (AI)</b> = Futwork AI QL ÷ Queued on Futwork AI. None of these three include Superbot.<br /><br />
+                    <b>Lead to QL %</b> (and its Human/AI variants) is Futwork's own queued-to-QL conversion, distinct from the whole-funnel <b>QL %</b> below: <b>Lead to QL %</b> = (Futwork Human QL + Futwork AI QL) ÷ Total Queued on Futwork, <b>Lead to QL % (Human)</b> = Futwork Human QL ÷ Queued on Futwork Human, <b>Lead to QL % (AI)</b> = Futwork AI QL ÷ Queued on Futwork AI. None of these three include Superbot. The Human/AI split on the <i>queued</i> side didn't exist before 2026-08-19 and was never backfilled, while the QL <i>outcome</i> side has always been split correctly — so a period predating that split divides a real QL count by a near-zero queued figure. <b>Lead to QL % (Human/AI)</b> shows "—" rather than a four-digit artefact when that happens; the underlying Queued/QL counts themselves are shown as-is either way.<br /><br />
                     <b>Estimated RAU</b> = Deposits × 70% (a projection of how many current Deposits will go on to register). <b>Actual RAUs</b> is the real, already-registered count — no discount applied. <b>Est./Actual SR Revenue</b> = Estimated/Actual RAUs × SR Fee.<br /><br />
                     <b>CPL, CPQL and CPA count paid channels only.</b> A row shows a cost figure only if it carried spend, divided by its own leads / QLs / applications. The <b>TOTAL</b> divides all spend by the leads from <i>sources that spent</i> — so unpaid channels (Referral, Content+Brand, Offline, organic) don't dilute the blended figure, which otherwise made paid acquisition look materially cheaper than it is. "Paid" is judged per source rather than per row, because spend and leads frequently sit on different rows: manual affiliate spend arrives on rows carrying no leads, while Affiliate's actual leads sit on rows with no spend. That keeps the blended figure identical on every grouping tab. A row with no spend of its own shows "—" rather than ₹0.<br /><br />
                     In the summary table, the three whole-funnel conversion rates are each a single funnel step, not a share of all leads: <b>QL %</b> = Total QLs ÷ Total Queued, <b>App %</b> = Applications ÷ Total QLs, <b>Deposit %</b> = Deposits ÷ Offers. Because each stage is reported independently and a lead can reach a later stage in a different period from the one it was queued in, these can read above 100% on small or lagging rows. The <b>TOTAL</b> row re-derives every rate, cost and ROAS from the summed totals rather than averaging the rows, so it is weighted by volume.<br /><br />
