@@ -739,17 +739,28 @@ async function fetchTeamUsersMerged(creds) {
   const manualRes = await supabaseAdmin('team_mapping_manual?select=*')
   const manualRows = manualRes.ok ? await manualRes.json() : []
 
-  const staleEmails = manualRows.map(r => r.ls_email).filter(e => e && !liveEmails.has(String(e).toLowerCase()))
-  if (staleEmails.length) {
-    const filter = 'ls_email=in.(' + staleEmails.map(e => `"${String(e).replace(/"/g, '')}"`).join(',') + ')'
+  const staleRows = manualRows.filter(r => r.ls_email && !liveEmails.has(String(r.ls_email).toLowerCase()))
+  if (staleRows.length) {
+    const filter = 'ls_email=in.(' + staleRows.map(r => `"${String(r.ls_email).replace(/"/g, '')}"`).join(',') + ')'
     await supabaseAdmin('team_mapping_manual?' + filter, { method: 'DELETE' }).catch(() => {})
+    // Logged as 'system' -- nobody clicked anything, this is the automatic
+    // lifecycle rule (a LeadSquared user disappeared, their manual notes go
+    // with them) firing as a side effect of this same page load. Each row's
+    // full prior values are snapshotted exactly like a manual delete, so it
+    // can be restored the same way if the removal turns out to be wrong (e.g.
+    // a name change in LeadSquared that looked like a departure).
+    await Promise.all(staleRows.map(row => logTeamActivity({
+      type: 'delete', label: row.ls_email, target_email: row.ls_email,
+      detail: JSON.stringify({ snapshot: row, reason: 'left_leadsquared' }),
+      status: 'done', total: 1, done: 1,
+    }, { email: 'system (left LeadSquared)' }).catch(() => {})))
   }
 
   const manualByEmail = {}
   manualRows.forEach(r => { if (r.ls_email && liveEmails.has(String(r.ls_email).toLowerCase())) manualByEmail[String(r.ls_email).toLowerCase()] = r })
 
   const merged = users.map(u => ({ ...u, manual: (u.email && manualByEmail[u.email.toLowerCase()]) || null }))
-  return { rows: merged, count: merged.length, staleManualDropped: staleEmails.length }
+  return { rows: merged, count: merged.length, staleManualDropped: staleRows.length }
 }
 
 // User/Retrieve/ByUserId -- found via LeadSquared's own public API docs
@@ -817,10 +828,35 @@ async function fetchLeadSquaredUserDetails(creds, ids, byId) {
 // which the frontend now labels "LS Role" to avoid the two being confused.
 const TEAM_MANUAL_FIELDS = ['asm_sm', 'asm_sm_email', 'ssm', 'ssm_email', 'role', 'level', 'country', 'centre_name']
 
+// Fetches the current row (if any) for one email -- used before every save/
+// delete to compute a before/after diff, and before a restore to know what
+// "current" looks like (not strictly needed there, but keeps the code path
+// uniform).
+async function fetchOneTeamManual(supabaseAdmin, email) {
+  const r = await supabaseAdmin('team_mapping_manual?ls_email=eq.' + encodeURIComponent(email) + '&select=*')
+  if (!r.ok) return null
+  const rows = await r.json()
+  return rows[0] || null
+}
+
+// { field: { from, to } } for every field that actually changed -- fields with
+// no change are omitted so the History page's diff view only ever shows what
+// really moved, not a wall of identical before/after pairs.
+function diffTeamManualFields(existing, incoming) {
+  const changes = {}
+  TEAM_MANUAL_FIELDS.forEach(f => {
+    const from = (existing && existing[f]) || null
+    const to = (incoming && incoming[f]) || null
+    if (from !== to) changes[f] = { from, to }
+  })
+  return changes
+}
+
 async function saveTeamManual(body, me) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
   const email = String((body && body.ls_email) || '').trim().toLowerCase()
   if (!email) throw new Error('ls_email is required')
+  const existing = await fetchOneTeamManual(supabaseAdmin, email)
   const payload = { ls_email: email, updated_by: me.email || null, updated_at: new Date().toISOString() }
   TEAM_MANUAL_FIELDS.forEach(f => { payload[f] = (body && body[f]) || null })
   const r = await supabaseAdmin('team_mapping_manual', {
@@ -830,38 +866,104 @@ async function saveTeamManual(body, me) {
   })
   if (!r.ok) throw new Error('Save failed: ' + (await r.text()).slice(0, 300))
   const saved = await r.json()
-  return Array.isArray(saved) ? saved[0] : saved
+  const row = Array.isArray(saved) ? saved[0] : saved
+
+  // Bulk-import rows save through this exact same function, one call per
+  // person -- skipActivityLog keeps a 285-row import from writing 285 extra
+  // per-person 'edit' entries on top of the ONE aggregate 'import' progress
+  // row runImportInBackground already logs; a manual Save from the Edit
+  // modal (or a restore) always logs, since there each save IS the whole
+  // action a person should be able to see and undo.
+  if (!(body && body.skipActivityLog)) {
+    const changes = diffTeamManualFields(existing, payload)
+    if (Object.keys(changes).length) {
+      // label prefers a human name if the caller passed one (the roster
+      // already has it client-side); falls back to the email.
+      await logTeamActivity({
+        type: (body && body.activityType) || 'edit',
+        label: (body && body.ls_name) || email,
+        target_email: email,
+        detail: JSON.stringify({ changes, isNew: !existing }),
+        status: 'done', total: 1, done: 1,
+      }, me).catch(() => {})
+    }
+  }
+  return row
 }
 
-async function deleteTeamManual(email) {
+async function deleteTeamManual(email, me) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
   const e = String(email || '').trim().toLowerCase()
   if (!e) throw new Error('ls_email is required')
+  const existing = await fetchOneTeamManual(supabaseAdmin, e)
   const r = await supabaseAdmin('team_mapping_manual?ls_email=eq.' + encodeURIComponent(e), { method: 'DELETE' })
   if (!r.ok) throw new Error('Delete failed: ' + (await r.text()).slice(0, 300))
+  if (existing) {
+    // Snapshotting the FULL row (not just a diff, since everything is being
+    // removed) is what makes "restore" possible later -- team_manual_restore
+    // reads this exact snapshot back.
+    await logTeamActivity({
+      type: 'delete', label: e, target_email: e,
+      detail: JSON.stringify({ snapshot: existing }),
+      status: 'done', total: 1, done: 1,
+    }, me).catch(() => {})
+  }
   return { deleted: e }
 }
 
-// Import/export activity log (supabase/sql/team_mapping_activity_setup.sql) --
-// what makes a bulk import genuinely survive the frontend modal closing: the
-// frontend's own module-level store drives the actual row-by-row save loop
-// (there's no real background worker on Vercel serverless), but every few
-// rows it PATCHes the same row here, so the live progress is visible from
-// this table regardless of whether the browser tab that started the import
-// still has the modal open. Export events log a single already-finished row
-// (client-side CSV generation is synchronous, so there's no progress to
-// track) purely for the same history list to show both together.
-async function createTeamActivity(body, me) {
+// Re-applies an earlier state from the activity log -- an 'edit' entry
+// restores each changed field to its "from" value, a 'delete' entry restores
+// the full snapshot. Goes through saveTeamManual so the restore itself is
+// ALSO logged (as its own 'restore'-typed entry, diffed against whatever is
+// current right now) -- a restore is a real change too, and should show up
+// in the trail rather than silently rewriting history.
+async function restoreTeamManual(activityId, me) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const r = await supabaseAdmin('team_mapping_activity?id=eq.' + encodeURIComponent(activityId) + '&select=*')
+  if (!r.ok) throw new Error('Could not load that history entry')
+  const rows = await r.json()
+  const activity = rows[0]
+  if (!activity) throw new Error('History entry not found')
+  const email = activity.target_email
+  if (!email) throw new Error('This history entry has no person to restore')
+  let detail
+  try { detail = JSON.parse(activity.detail || '{}') } catch { detail = {} }
+  const restoreValues = {}
+  if (activity.type === 'delete' && detail.snapshot) {
+    TEAM_MANUAL_FIELDS.forEach(f => { restoreValues[f] = detail.snapshot[f] || null })
+  } else if (detail.changes) {
+    TEAM_MANUAL_FIELDS.forEach(f => { restoreValues[f] = (detail.changes[f] && detail.changes[f].from) || null })
+  } else {
+    throw new Error('Nothing to restore from this history entry')
+  }
+  return saveTeamManual({ ls_email: email, ...restoreValues, activityType: 'restore' }, me)
+}
+
+// Import/export/edit/delete/restore activity log
+// (supabase/sql/team_mapping_activity_setup.sql) -- what makes a bulk import
+// genuinely survive the frontend modal closing: the frontend's own
+// module-level store drives the actual row-by-row save loop (there's no real
+// background worker on Vercel serverless), but every few rows it PATCHes the
+// same row here, so the live progress is visible from this table regardless
+// of whether the browser tab that started the import still has the modal
+// open. Export events log a single already-finished row (client-side CSV
+// generation is synchronous, so there's no progress to track). edit/delete/
+// restore log a single already-finished row too, one per person, with the
+// full before/after in `detail` -- see diffTeamManualFields/deleteTeamManual/
+// restoreTeamManual above.
+async function logTeamActivity(fields, me) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
   const payload = {
-    type: (body && body.type) || 'import',
-    label: (body && body.label) || null,
-    status: (body && body.status) || 'running',
-    total: Number(body && body.total) || 0,
-    done: Number(body && body.done) || 0,
-    failed: Number(body && body.failed) || 0,
-    skipped: Number(body && body.skipped) || 0,
-    created_by: me.email || null,
+    type: fields.type || 'import',
+    label: fields.label || null,
+    target_email: fields.target_email || null,
+    detail: fields.detail || null,
+    status: fields.status || 'running',
+    total: Number(fields.total) || 0,
+    done: Number(fields.done) || 0,
+    failed: Number(fields.failed) || 0,
+    skipped: Number(fields.skipped) || 0,
+    created_by: (me && me.email) || null,
     updated_at: new Date().toISOString(),
   }
   const r = await supabaseAdmin('team_mapping_activity', {
@@ -871,6 +973,10 @@ async function createTeamActivity(body, me) {
   const saved = await r.json()
   return Array.isArray(saved) ? saved[0] : saved
 }
+// Kept under its original name for the two request modes that create a row
+// directly from the frontend (bulk-import progress rows) rather than through
+// one of the helpers above.
+const createTeamActivity = logTeamActivity
 
 async function updateTeamActivity(body) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
@@ -888,8 +994,8 @@ async function updateTeamActivity(body) {
 
 async function listTeamActivity() {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
-  const r = await supabaseAdmin('team_mapping_activity?select=*&order=created_at.desc&limit=30')
-  if (!r.ok) return []
+  const r = await supabaseAdmin('team_mapping_activity?select=*&order=created_at.desc&limit=60')
+  if (!r.ok) throw new Error('team_mapping_activity may not exist yet -- run supabase/sql/team_mapping_activity_setup.sql')
   return await r.json()
 }
 
@@ -912,7 +1018,7 @@ async function handleLeadSquared(req, res, me) {
   const { mode } = req.query || {}
   const FIELD_SCHEMA_MODES = ['activity_schema', 'activity_dropdown_options', 'opportunity_schema', 'lead_schema']
   const TEAM_ACTIVITY_MODES = ['team_activity_create', 'team_activity_update', 'team_activity_list']
-  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_user_detail', ...TEAM_ACTIVITY_MODES]
+  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
@@ -922,7 +1028,7 @@ async function handleLeadSquared(req, res, me) {
   // "view is grantable, edit is admin-only" surface in this app (e.g. Settings'
   // own per-tab admin gates). team_activity_list stays readable by anyone with
   // page access, same as team_users/team_groups.
-  if (['team_manual_save', 'team_manual_delete', 'team_activity_create', 'team_activity_update'].includes(mode) && me.role !== 'admin') {
+  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update'].includes(mode) && me.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only' })
   }
   // The three activity modes are pure Supabase reads/writes -- they don't touch
@@ -945,7 +1051,8 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_users') return res.status(200).json(await fetchTeamUsersMerged(creds))
     if (mode === 'team_groups') return res.status(200).json({ groups: aggregateTeamGroups(await fetchLeadSquaredTeamUsers(creds)) })
     if (mode === 'team_manual_save') return res.status(200).json(await saveTeamManual(req.body || req.query, me))
-    if (mode === 'team_manual_delete') return res.status(200).json(await deleteTeamManual((req.body && req.body.ls_email) || req.query.ls_email))
+    if (mode === 'team_manual_delete') return res.status(200).json(await deleteTeamManual((req.body && req.body.ls_email) || req.query.ls_email, me))
+    if (mode === 'team_manual_restore') return res.status(200).json(await restoreTeamManual((req.body && req.body.activity_id) || req.query.activity_id, me))
     if (mode === 'team_user_detail') {
       const ids = String(req.query.ids || '').split(',').map(s => s.trim()).filter(Boolean)
       const byId = {}

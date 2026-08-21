@@ -135,6 +135,35 @@ function ChevronDown({ size = 10 }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
 }
 
+// Matches ExportButton's own icon sizing (13px, strokeWidth 2) so Refresh /
+// Bulk import / History read as one family of self-explanatory button icons,
+// not three different visual languages bolted together.
+function RefreshIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+    </svg>
+  )
+}
+// Same up-arrow-into-tray glyph as TYPE_ICON.import below -- deliberately, so
+// "Bulk import" here and the "import" rows it produces in History read as the
+// same action.
+function UploadIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  )
+}
+function ClockIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+    </svg>
+  )
+}
+
 // Groups column: a compact "View" button + count instead of inline chips, so the
 // column stays a fixed width regardless of how many groups someone's in -- opens
 // the full, un-truncated list rather than "+2 more" with no way to see the rest.
@@ -246,7 +275,7 @@ function EditManualModal({ user, onClose, onSaved }) {
     try {
       const saved = await fetchJson(API + '&mode=team_manual_save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ls_email: user.email, ...form }),
+        body: JSON.stringify({ ls_email: user.email, ls_name: user.name, ...form }),
       })
       onSaved(saved)
     } catch (e) { setErr(String(e.message || e)) } finally { setSaving(false) }
@@ -387,8 +416,13 @@ async function runImportInBackground(rows, label, skippedCount, onSettled) {
   for (const row of rows) {
     let rowOk = true
     try {
+      // skipActivityLog: a 285-row import would otherwise write 285 individual
+      // per-person "edit" entries on top of this loop's own aggregate "import"
+      // progress row -- the overall import is what's worth showing per-row in
+      // History; each row's own before/after is still saved to
+      // team_mapping_manual exactly as normal, just not separately logged.
       await fetchJson(API + '&mode=team_manual_save', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(row),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...row, skipActivityLog: true }),
       })
       done++
     } catch { failed++; rowOk = false }
@@ -585,7 +619,51 @@ function statusBg(status) {
 const TYPE_ICON = {
   import: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>,
   export: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>,
+  edit: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z" /></svg>,
+  delete: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>,
+  restore: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 102.13-9.36L1 10" /></svg>,
 }
+const TYPE_ICON_COLOR = { import: [C.navy, C.navyBg], export: [C.cyan, C.cyanBg], edit: [C.blue, C.blueBg], delete: [C.navy, C.navyBg], restore: [C.green, C.greenBg] }
+const FIELD_LABELS = { asm_sm: 'ASM/SM', asm_sm_email: 'ASM/SM Email', ssm: 'SSM', ssm_email: 'SSM Email', role: 'Role', level: 'Level', country: 'Country', centre_name: 'Centre Name' }
+
+// Renders the "what actually changed" body of one history row -- a field-by-
+// field before/after list for an edit/restore, or the set of fields a delete
+// removed. Parsed from `detail`, a JSON string (see diffTeamManualFields /
+// deleteTeamManual / restoreTeamManual in api/crm-leads.js for what's inside).
+function ActivityDetail({ row }) {
+  let detail
+  try { detail = JSON.parse(row.detail || '{}') } catch { detail = {} }
+  if ((row.type === 'edit' || row.type === 'restore') && detail.changes) {
+    const fields = Object.keys(detail.changes)
+    if (!fields.length) return null
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 4 }}>
+        {fields.map(f => {
+          const { from, to } = detail.changes[f]
+          return (
+            <div key={f} style={{ fontSize: 11.5 }}>
+              <span style={{ color: C.muted, fontWeight: 700 }}>{FIELD_LABELS[f] || f}:</span>{' '}
+              <span style={{ color: from ? C.muted : C.muted, textDecoration: from ? 'line-through' : 'none' }}>{from || '(empty)'}</span>
+              {' → '}
+              <span style={{ color: C.text, fontWeight: 700 }}>{to || '(empty)'}</span>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+  if (row.type === 'delete' && detail.snapshot) {
+    const fields = TEAM_MANUAL_FIELDS_DISPLAY.filter(f => detail.snapshot[f])
+    if (!fields.length) return null
+    return (
+      <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>
+        Removed: {fields.map(f => `${FIELD_LABELS[f] || f} = ${detail.snapshot[f]}`).join(' · ')}
+      </div>
+    )
+  }
+  return null
+}
+const TEAM_MANUAL_FIELDS_DISPLAY = ['role', 'asm_sm', 'asm_sm_email', 'ssm', 'ssm_email', 'level', 'country', 'centre_name']
 
 // The one card on this page that updates live, one row at a time, while an
 // import driven by THIS browser tab is running -- reads importStore directly
@@ -630,12 +708,24 @@ function LiveImportCard({ progress }) {
 function HistoryTab({ onBack }) {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
+  const [restoringId, setRestoringId] = useState(null)
   const { running, progress } = useImportProgress()
   const wasRunning = useRef(false)
 
   const load = useCallback(() => {
-    fetchJson(API + '&mode=team_activity_list').then(d => setRows(d.rows || [])).catch(e => setError(String(e.message || e)))
+    fetchJson(API + '&mode=team_activity_list').then(d => { setRows(d.rows || []); setError('') }).catch(e => setError(String(e.message || e)))
   }, [])
+
+  const restore = async row => {
+    if (!window.confirm(`Restore ${row.target_email} to its state before this ${row.type}?`)) return
+    setRestoringId(row.id)
+    try {
+      await fetchJson(API + '&mode=team_manual_restore', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ activity_id: row.id }),
+      })
+      load()
+    } catch (e) { window.alert('Could not restore: ' + (e.message || e)) } finally { setRestoringId(null) }
+  }
 
   useEffect(() => { load() }, [load])
 
@@ -662,9 +752,17 @@ function HistoryTab({ onBack }) {
     const list = rows || []
     const imports = list.filter(r => r.type === 'import')
     const exports = list.filter(r => r.type === 'export')
+    const edits = list.filter(r => r.type === 'edit' || r.type === 'restore')
+    const deletes = list.filter(r => r.type === 'delete')
     const rowsMapped = imports.reduce((s, r) => s + (r.done || 0), 0)
-    return { totalImports: imports.length, totalExports: exports.length, rowsMapped, lastActivity: list[0]?.created_at || null }
+    return { totalImports: imports.length, totalExports: exports.length, totalEdits: edits.length + deletes.length, rowsMapped, lastActivity: list[0]?.created_at || null }
   }, [rows])
+
+  // A genuine fetch failure (almost always: the table doesn't exist yet)
+  // reads completely differently from "the table exists and is just empty" --
+  // conflating the two ("Nothing yet") is exactly what made two real imports
+  // look like they'd vanished. `error` only ever holds the former.
+  const notSetUp = !!error
 
   return (
     <div>
@@ -675,20 +773,28 @@ function HistoryTab({ onBack }) {
         }>Back to Roster</Button>
       </div>
 
-      <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
-        <PremKPI label="Total Imports" value={fmtN(stats.totalImports)} sub="all-time runs" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-        <PremKPI label="Rows Mapped" value={fmtN(stats.rowsMapped)} sub="across every import" accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
-        <PremKPI label="Total Exports" value={fmtN(stats.totalExports)} sub="CSV downloads" accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.bot} />
-        <PremKPI label="Last Activity" value={stats.lastActivity ? new Date(stats.lastActivity).toLocaleDateString() : '—'} sub={stats.lastActivity ? new Date(stats.lastActivity).toLocaleTimeString() : 'nothing yet'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
-      </div>
+      {notSetUp ? (
+        <div style={{ padding: '16px 20px', borderRadius: 12, background: C.navyBg, border: '1px solid rgba(31,60,132,0.2)', marginBottom: 20 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: C.navy, marginBottom: 4 }}>History isn't set up yet</div>
+          <div style={{ fontSize: 12.5, color: C.text }}>
+            Run <code style={{ background: 'var(--bg3)', padding: '1px 6px', borderRadius: 5 }}>supabase/sql/team_mapping_activity_setup.sql</code> once
+            in the Supabase SQL editor. Imports, exports and edits already happen normally either way — this only affects whether they're logged here.
+          </div>
+        </div>
+      ) : (
+        <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12, marginBottom: 20 }}>
+          <PremKPI label="Total Imports" value={fmtN(stats.totalImports)} sub="all-time runs" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+          <PremKPI label="Rows Mapped" value={fmtN(stats.rowsMapped)} sub="across every import" accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
+          <PremKPI label="Edits & Deletes" value={fmtN(stats.totalEdits)} sub="manual changes, all-time" accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.bot} />
+          <PremKPI label="Last Activity" value={stats.lastActivity ? new Date(stats.lastActivity).toLocaleDateString() : '—'} sub={stats.lastActivity ? new Date(stats.lastActivity).toLocaleTimeString() : 'nothing yet'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+        </div>
+      )}
 
       {running && progress && <LiveImportCard progress={progress} />}
 
-      {error && <div style={{ padding: '10px 14px', borderRadius: 10, background: C.navyBg, color: C.navy, fontSize: 12.5, marginBottom: 14, fontWeight: 700 }}>{error}</div>}
-
-      <Card title="All activity" sub="Every import and export, most recent first" noPad>
-        {!rows ? <div style={{ padding: 32 }}><InlineLoader label="Loading history" height={140} /></div> : rows.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px 0', color: C.muted, fontSize: 13.5 }}>Nothing yet — imports and exports will show up here.</div>
+      <Card title="All activity" sub="Imports, exports, edits, deletes and restores — most recent first" noPad>
+        {!rows && !notSetUp ? <div style={{ padding: 32 }}><InlineLoader label="Loading history" height={140} /></div> : notSetUp ? null : rows.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: C.muted, fontSize: 13.5 }}>Nothing yet — imports, exports and edits will show up here.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {rows.map((r, i) => {
@@ -698,13 +804,16 @@ function HistoryTab({ onBack }) {
               const total = isLiveRow ? progress.total : (r.total || 0)
               const status = isLiveRow ? 'running' : r.status
               const pct = total > 0 ? Math.round(((d + failed) / total) * 100) : 100
+              const [iconColor, iconBg] = TYPE_ICON_COLOR[r.type] || TYPE_ICON_COLOR.import
+              const canRestore = (r.type === 'edit' || r.type === 'delete' || r.type === 'restore') && r.target_email
               return (
-                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 22px', borderTop: i === 0 ? 'none' : '0.5px solid ' + C.border }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 9, background: r.type === 'import' ? C.navyBg : C.cyanBg, color: r.type === 'import' ? C.navy : C.cyan, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 16, padding: '16px 22px', borderTop: i === 0 ? 'none' : '0.5px solid ' + C.border }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 9, background: iconBg, color: iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
                     {TYPE_ICON[r.type] || TYPE_ICON.import}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{r.type}</span>
                       <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label || '—'}</span>
                       <span style={{ fontSize: 10, fontWeight: 800, color: statusColor(status), background: statusBg(status), padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>{status}</span>
                     </div>
@@ -714,12 +823,20 @@ function HistoryTab({ onBack }) {
                       </div>
                     )}
                     <div style={{ fontSize: 11.5, color: C.muted }}>
-                      {r.type === 'import' ? `${fmtN(d)} done, ${fmtN(failed)} failed, ${fmtN(r.skipped || 0)} skipped of ${fmtN(total)}` : `${fmtN(r.total || 0)} row(s) exported`}
+                      {r.type === 'import' ? `${fmtN(d)} done, ${fmtN(failed)} failed, ${fmtN(r.skipped || 0)} skipped of ${fmtN(total)}`
+                        : r.type === 'export' ? `${fmtN(r.total || 0)} row(s) exported`
+                        : null}
                     </div>
+                    <ActivityDetail row={r} />
                   </div>
                   <div style={{ textAlign: 'right', fontSize: 11.5, color: C.muted, flexShrink: 0 }}>
                     <div style={{ fontWeight: 700, color: C.text }}>{r.created_by || 'unknown'}</div>
-                    <div>{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</div>
+                    <div style={{ marginBottom: canRestore ? 6 : 0 }}>{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</div>
+                    {canRestore && (
+                      <Button variant="ghost" size="sm" onClick={() => restore(r)} disabled={restoringId === r.id}>
+                        {restoringId === r.id ? 'Restoring…' : 'Restore'}
+                      </Button>
+                    )}
                   </div>
                 </div>
               )
@@ -733,7 +850,7 @@ function HistoryTab({ onBack }) {
 
 // ---------------------------------------------------------------- Roster tab
 
-function RosterTab({ isAdmin, onOpenHistory }) {
+function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -762,6 +879,9 @@ function RosterTab({ isAdmin, onOpenHistory }) {
   }, [])
 
   useEffect(() => { load() }, [load])
+  // Refresh now lives in the page header (not this tab's own filter toolbar),
+  // so the header's one button needs a way to reach whichever tab is active.
+  useEffect(() => { registerRefresh(load) }, [registerRefresh, load])
   // A background import finishing (possibly after this tab's modal was already
   // closed) should refresh the "Manually Mapped" count and table without the
   // admin having to remember to hit Refresh themselves. Guarded on a true->false
@@ -847,8 +967,7 @@ function RosterTab({ isAdmin, onOpenHistory }) {
         <Dropdown label="Group" options={groupOptions} value={groupFilter} onChange={setGroupFilter} minWidth={160} />
         <Dropdown label="Mapping" options={['All', 'Mapped', 'Unmapped']} value={mappedFilter} onChange={setMappedFilter} minWidth={120} />
         <div style={{ flex: 1 }} />
-        <Button variant="ghost" size="sm" onClick={load}>Refresh</Button>
-        <Button variant="ghost" size="sm" onClick={onOpenHistory}>History</Button>
+        {isAdmin && <Button size="sm" icon={<UploadIcon />} onClick={() => setShowImport(true)}>Bulk import</Button>}
         <ExportButton
           hideSlack hideJson hideSheets
           filename="team-mapping-roster"
@@ -867,7 +986,7 @@ function RosterTab({ isAdmin, onOpenHistory }) {
             }
           })}
         />
-        {isAdmin && <Button size="sm" onClick={() => setShowImport(true)}>Bulk import</Button>}
+        <Button variant="ghost" size="sm" icon={<ClockIcon />} onClick={onOpenHistory}>History</Button>
       </div>
 
       <p style={{ fontSize: 11.5, color: C.muted, marginTop: -4, marginBottom: 12 }}>
@@ -945,7 +1064,7 @@ function RosterTab({ isAdmin, onOpenHistory }) {
 
 // ---------------------------------------------------------------- Groups tab
 
-function GroupsTab() {
+function GroupsTab({ registerRefresh }) {
   const [groups, setGroups] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -960,6 +1079,7 @@ function GroupsTab() {
       .finally(() => setLoading(false))
   }, [])
   useEffect(() => { load() }, [load])
+  useEffect(() => { registerRefresh(load) }, [registerRefresh, load])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -980,7 +1100,6 @@ function GroupsTab() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search groups…" style={{ ...inputStyle, width: 240 }} />
         <div style={{ flex: 1 }} />
-        <Button variant="ghost" size="sm" onClick={load}>Refresh</Button>
         <ExportButton
           hideSlack hideJson hideSheets
           filename="team-mapping-groups"
@@ -1026,6 +1145,17 @@ export default function TeamMappingDashboard() {
   const activeTab = searchParams.get('tab') || 'roster'
   const setTab = t => setSearchParams(prev => { const n = new URLSearchParams(prev); n.set('tab', t); return n })
 
+  // One header Refresh button has to reach whichever tab is actually mounted --
+  // Roster and Groups each register their own `load` here as they mount, rather
+  // than the header owning two copies of fetch logic that live in the tabs.
+  const refreshFnRef = useRef(() => {})
+  const registerRefresh = useCallback(fn => { refreshFnRef.current = fn }, [])
+  const [refreshing, setRefreshing] = useState(false)
+  const doRefresh = () => {
+    setRefreshing(true)
+    Promise.resolve(refreshFnRef.current()).finally(() => setTimeout(() => setRefreshing(false), 400))
+  }
+
   return (
     <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
       <Sidebar />
@@ -1034,9 +1164,14 @@ export default function TeamMappingDashboard() {
           <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>
             Dashboards / Team Mapping{activeTab === 'history' && ' / History'}
           </p>
-          <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 10px', letterSpacing: '-0.4px', fontFamily: FONT }}>
-            {activeTab === 'history' ? 'Import & Export History' : 'Team Mapping'}
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '2px 0 10px' }}>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: 0, letterSpacing: '-0.4px', fontFamily: FONT }}>
+              {activeTab === 'history' ? 'Import & Export History' : 'Team Mapping'}
+            </h1>
+            {activeTab !== 'history' && (
+              <Button variant="ghost" size="sm" icon={<span style={{ display: 'inline-flex', animation: refreshing ? 'teamMapSpin .6s linear infinite' : 'none' }}><RefreshIcon /></span>} onClick={doRefresh}>Refresh</Button>
+            )}
+          </div>
           {activeTab !== 'history' && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} className="lq-header-controls">
               <div style={pillStyle(activeTab === 'roster')} onClick={() => setTab('roster')}>Roster</div>
@@ -1044,9 +1179,10 @@ export default function TeamMappingDashboard() {
             </div>
           )}
         </div>
+        <style>{`@keyframes teamMapSpin { to { transform: rotate(360deg) } }`}</style>
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
-          {activeTab === 'roster' && <RosterTab isAdmin={isAdmin} onOpenHistory={() => setTab('history')} />}
-          {activeTab === 'groups' && <GroupsTab />}
+          {activeTab === 'roster' && <RosterTab isAdmin={isAdmin} onOpenHistory={() => setTab('history')} registerRefresh={registerRefresh} />}
+          {activeTab === 'groups' && <GroupsTab registerRefresh={registerRefresh} />}
           {activeTab === 'history' && <HistoryTab onBack={() => setTab('roster')} />}
         </div>
       </div>
