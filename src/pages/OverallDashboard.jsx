@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef, useTransition } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
   CartesianGrid, LineChart, Line, Legend, AreaChart, Area,
@@ -1025,6 +1025,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const campaignQueryDebounced = useDebouncedValue(campaignQuery, 250)
   const [showInfo, setShowInfo] = useState(false)
   const [grpBy, setGrpBy] = useState('source')
+  // A3 fix: selecting "All months" (Sheet mode, where `filtered` holds full history in
+  // memory -- up to ~2 lakh rows) locks the main thread for 45s+ while byCampaign/
+  // byCorridor/the summary table recompute -- confirmed live via a Runtime.evaluate
+  // timeout. A real fix (streaming/worker-based parsing) is a much bigger change than
+  // this pass should risk; useTransition doesn't make the synchronous recompute any
+  // faster, but it DOES let a "still on it" indicator paint and the previous screen stay
+  // up *before* the freeze starts, instead of the page jumping into a frozen half-updated
+  // state with zero signal anything is happening (which is what actually reads as "did
+  // this crash?" -- the wall-clock cost is the same either way).
+  const [monthChangePending, startMonthChangeTransition] = useTransition()
 
   // Compare — decision-focused period comparison. 'prev' reuses the exact same
   // previous-equivalent-period logic already computed for the KPI delta arrows
@@ -3380,8 +3390,22 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     options={monthOptions}
                     value={selMonth}
                     minWidth={110}
-                    onChange={v => { setSelMonth(v); setDatePreset('month'); setCustomFrom(''); setCustomTo(''); setShowCustom(false) }}
+                    onChange={v => {
+                      setDatePreset('month'); setCustomFrom(''); setCustomTo(''); setShowCustom(false)
+                      // See the monthChangePending comment above its declaration -- this is
+                      // the one case (picking "All months" in Sheet mode) that can genuinely
+                      // freeze the tab for tens of seconds; wrapping just this setter lets a
+                      // "still working" indicator paint first instead of the page silently
+                      // locking up with the old screen frozen mid-interaction.
+                      startMonthChangeTransition(() => setSelMonth(v))
+                    }}
                   />
+                  {monthChangePending && (
+                    <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:501, whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:6, padding:'5px 10px', borderRadius:8, background:C.navyBg, color:C.navy, fontSize:12, fontWeight:700 }}>
+                      <span className="skeleton" style={{ display:'inline-block', width:10, height:10, borderRadius:'50%' }} />
+                      Recalculating across the full date range — this can take a moment
+                    </div>
+                  )}
                 </div>
               )}
 
