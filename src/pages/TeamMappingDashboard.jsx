@@ -177,7 +177,16 @@ function SuggestInput({ value, onChange, suggestions, placeholder }) {
       {open && filtered.length > 0 && (
         <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 10, background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 8, boxShadow: '0 8px 20px -6px rgba(15,23,42,0.25)', maxHeight: 200, overflowY: 'auto' }}>
           {filtered.map(s => (
-            <div key={s} onClick={() => { onChange(s); setOpen(false) }} style={{ padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', color: C.text, fontWeight: 600 }}>{s}</div>
+            // mousedown, not click, with preventDefault: mousedown fires BEFORE
+            // the input's own onBlur, and preventDefault stops the browser's
+            // default focus-shift that would trigger that blur at all. A plain
+            // onClick here raced the 120ms blur-close timeout above -- caught
+            // live: the blur handler could unmount this div before its click
+            // event ever fired, so the "pick" silently never landed and the
+            // click fell through to the modal's backdrop and closed the whole
+            // modal instead. mousedown+preventDefault makes the pick land
+            // regardless of that timing.
+            <div key={s} onMouseDown={e => { e.preventDefault(); onChange(s); setOpen(false) }} style={{ padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', color: C.text, fontWeight: 600 }}>{s}</div>
           ))}
         </div>
       )}
