@@ -752,7 +752,21 @@ async function fetchTeamUsersMerged(creds) {
   return { rows: merged, count: merged.length, staleManualDropped: staleEmails.length }
 }
 
-const TEAM_MANUAL_FIELDS = ['ls_manager_name', 'asm_sm', 'asm_sm_email', 'ssm', 'ssm_email', 'tier', 'employment_status', 'level', 'country', 'centre_name', 'phone_number', 'airtel_number']
+// employment_status was dropped -- it duplicated the live LeadSquared Status
+// (Active/Inactive) already shown for every row, per the user's own correction
+// ("should be present if he/she is present in leadsquared") rather than being
+// a genuinely separate manual concept. ls_manager_email is new: LeadSquared's
+// own "Reporting to" field (Settings > Edit user > Details) names the manager,
+// but that field -- like Designation/Department/Phone (Main)/custom fields
+// such as "BD Personal Number"/"DID Number" -- only exists behind LeadSquared's
+// own session-cookie Settings UI (confirmed live: that modal's data comes from
+// GET Settings/EditUser?userId=..., an internal in21.leadsquared.com endpoint,
+// not the public accessKey/secretKey API this integration uses -- Users.Get
+// ignores every extra parameter tried against it and always returns the same
+// fixed 9-field shape). So the manager's email can't be resolved server-side
+// automatically; the frontend instead offers a type-ahead against the live
+// roster so picking a name also fills in that person's real LeadSquared email.
+const TEAM_MANUAL_FIELDS = ['ls_manager_name', 'ls_manager_email', 'asm_sm', 'asm_sm_email', 'ssm', 'ssm_email', 'tier', 'level', 'country', 'centre_name', 'phone_number', 'airtel_number']
 
 async function saveTeamManual(body, me) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')

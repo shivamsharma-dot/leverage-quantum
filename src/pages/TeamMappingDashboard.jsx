@@ -5,6 +5,7 @@ import { InlineLoader } from '../components/SkeletonLoader'
 import { C, FONT, fmtN, Card, PremKPI, KPI_ICONS } from '../ui/dashboardKit'
 import Dropdown from '../components/Dropdown'
 import Button from '../components/Button'
+import ExportButton from '../components/ExportButton'
 import { useAuth } from '../hooks/useAuth'
 
 // Real-time roster (LeadSquared UserManagement.svc/Users.Get, one call, no cache) +
@@ -18,14 +19,19 @@ import { useAuth } from '../hooks/useAuth'
 const API = '/api/crm-leads?source=leadsquared'
 const PAGE_ROWS = 50
 
+// employment_status was dropped from this list -- it duplicated the live
+// LeadSquared Status (Active/Inactive) every row already shows, so it never
+// carried information the page didn't already have. ls_manager_email is new,
+// paired with ls_manager_name -- see the EditManualModal's manager type-ahead
+// below for why it isn't sourced live.
 const MANUAL_FIELDS = [
   { key: 'ls_manager_name', label: 'LS Manager Name' },
+  { key: 'ls_manager_email', label: 'LS Manager Email' },
   { key: 'asm_sm', label: 'ASM/SM' },
   { key: 'asm_sm_email', label: 'ASM/SM Email' },
   { key: 'ssm', label: 'SSM' },
   { key: 'ssm_email', label: 'SSM Email' },
   { key: 'tier', label: 'Tier' },
-  { key: 'employment_status', label: 'Employment status' },
   { key: 'level', label: 'Level' },
   { key: 'country', label: 'Country' },
   { key: 'centre_name', label: 'Centre Name' },
@@ -33,27 +39,64 @@ const MANUAL_FIELDS = [
   { key: 'airtel_number', label: 'Airtel Number' },
 ]
 
-// Header aliases accepted by the paste-import (case/space/slash-insensitive) --
+// Fields that stay manual even though the equivalent live LeadSquared UI
+// screen (Settings > Edit user) DOES show real values for them (Phone Number
+// == its "BD Personal Number" custom field, Airtel Number == its "DID
+// Number"). Confirmed live: that screen's data comes from a session-cookie
+// endpoint on in21.leadsquared.com, not the public accessKey/secretKey API
+// this app's server integration uses -- Users.Get (the only Users/Groups
+// endpoint this account's API key can reach at all) ignores every extra
+// parameter tried against it and always returns the same fixed, small field
+// set. So there's no way for Quantum's backend to read these live; they stay
+// manually entered here, same as before.
+const LIVE_IN_LEADSQUARED_BUT_NOT_VIA_API = ['phone_number', 'airtel_number']
+
+// Header aliases accepted by the bulk-import (case/space/slash-insensitive) --
 // covers the exact header text on the "Akash - Squad Mapping" sheet's Complete
-// Mapping tab, plus a couple of obvious synonyms, so a pasted block doesn't need
+// Mapping tab, plus a couple of obvious synonyms, so an import file doesn't need
 // to be re-typed to match this table's own column names exactly.
 const IMPORT_ALIASES = {
   'associate mail id': 'ls_email', 'email': 'ls_email', 'associate email': 'ls_email', 'ls email': 'ls_email',
   'ls manager name': 'ls_manager_name', 'manager name': 'ls_manager_name',
+  'ls manager email': 'ls_manager_email', 'manager email': 'ls_manager_email',
   'asm/sm': 'asm_sm', 'asm sm': 'asm_sm',
   'asm/sm email': 'asm_sm_email', 'asm sm email': 'asm_sm_email',
   'ssm': 'ssm', 'ssm email': 'ssm_email',
   'status': 'tier', 'tier': 'tier',
-  'employment status': 'employment_status',
   'level': 'level', 'country': 'country', 'centre name': 'centre_name', 'center name': 'centre_name',
   'phone number': 'phone_number', 'airtel number': 'airtel_number',
 }
+// The exact columns + one worked example the "Download template" button ships --
+// deliberately the same alias vocabulary as IMPORT_ALIASES above, so a template
+// round-tripped straight back through "Upload" needs no edits to import cleanly.
+const TEMPLATE_HEADERS = ['Associate Mail ID', 'LS Manager Name', 'LS Manager Email', 'ASM/SM', 'ASM/SM Email', 'SSM', 'SSM Email', 'Tier', 'Level', 'Country', 'Centre Name', 'Phone Number', 'Airtel Number']
+const TEMPLATE_EXAMPLE = ['jane.doe@leverageedu.com', 'Srishti Prasad', 'srishti.prasad@leverageedu.com', 'Kartikey Kedia', 'kartikey.kedia@leverageedu.com', 'Manish Singh', 'manish@leverageedu.com', 'Consultant', 'Level 1', 'AC + SR', 'Delhi', '9650028465', '9821550658']
 
 async function fetchJson(url, opts) {
   const r = await fetch(url, { credentials: 'include', ...opts })
   const d = await r.json()
   if (!r.ok) throw new Error(d.error || 'Request failed')
   return d
+}
+
+// A cell that itself contains the delimiter or a quote has to be quoted, RFC4180-
+// style -- otherwise a pasted/uploaded "Delhi, NCR" in a Centre Name column would
+// silently split into two columns on import, or corrupt a downloaded template.
+function csvCell(v) {
+  const s = v == null ? '' : String(v)
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+}
+function triggerDownload(filename, content, mime) {
+  const blob = new Blob([content], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+function downloadTemplate() {
+  const csv = [TEMPLATE_HEADERS, TEMPLATE_EXAMPLE].map(row => row.map(csvCell).join(',')).join('\r\n')
+  triggerDownload('team-mapping-import-template.csv', csv, 'text/csv;charset=utf-8')
 }
 
 const inputStyle = { fontFamily: FONT, fontSize: 12.5, color: C.text, border: '0.5px solid ' + C.border, borderRadius: 8, padding: '7px 10px', background: 'var(--card)', outline: 'none', width: '100%' }
@@ -113,7 +156,42 @@ function Modal({ onClose, title, width = 560, children }) {
 
 // ---------------------------------------------------------------- Edit modal
 
-function EditManualModal({ user, onClose, onSaved }) {
+// LS Manager Name/Email get their own control: LeadSquared's live "Reporting to"
+// relationship isn't reachable via the public API (see the note above
+// LIVE_IN_LEADSQUARED_BUT_NOT_VIA_API), so the name still has to be typed by
+// hand -- but since the manager is almost always ALSO a LeadSquared user, typing
+// against a type-ahead of the live roster and picking a match fills in their
+// real email for free, rather than needing that typed by hand too.
+function ManagerLookup({ nameValue, emailValue, onPick, onNameChange, roster }) {
+  const [open, setOpen] = useState(false)
+  const suggestions = useMemo(() => {
+    const q = nameValue.trim().toLowerCase()
+    if (!q) return []
+    return roster.filter(u => (u.name || '').toLowerCase().includes(q)).slice(0, 6)
+  }, [nameValue, roster])
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        style={inputStyle} value={nameValue} placeholder="Start typing a name…"
+        onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onChange={e => onNameChange(e.target.value)}
+      />
+      {open && suggestions.length > 0 && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 10, background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 8, boxShadow: '0 8px 20px -6px rgba(15,23,42,0.25)', maxHeight: 180, overflowY: 'auto' }}>
+          {suggestions.map(u => (
+            <div key={u.id} onClick={() => { onPick(u); setOpen(false) }} style={{ padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', color: C.text }}>
+              <div style={{ fontWeight: 700 }}>{u.name}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>{u.email}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {emailValue && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{emailValue}</div>}
+    </div>
+  )
+}
+
+function EditManualModal({ user, roster, onClose, onSaved }) {
   const [form, setForm] = useState(() => {
     const base = {}
     MANUAL_FIELDS.forEach(f => { base[f.key] = (user.manual && user.manual[f.key]) || '' })
@@ -149,9 +227,20 @@ function EditManualModal({ user, onClose, onSaved }) {
     <Modal onClose={onClose} title={'Manual mapping — ' + user.name}>
       <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14 }}>{user.email} · {user.role} · <StatusBadge status={user.status} /></div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {MANUAL_FIELDS.map(f => (
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>LS Manager Name — picking a match below fills in their email</span>
+          <ManagerLookup
+            nameValue={form.ls_manager_name} emailValue={form.ls_manager_email} roster={roster || []}
+            onNameChange={v => setForm(p => ({ ...p, ls_manager_name: v }))}
+            onPick={u => setForm(p => ({ ...p, ls_manager_name: u.name, ls_manager_email: u.email || '' }))}
+          />
+        </label>
+        {MANUAL_FIELDS.filter(f => f.key !== 'ls_manager_name' && f.key !== 'ls_manager_email').map(f => (
           <label key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{f.label}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {f.label}
+              {LIVE_IN_LEADSQUARED_BUT_NOT_VIA_API.includes(f.key) && <span title="Real value exists in LeadSquared's own Settings > Edit user screen, but that field isn't reachable by this app's API integration -- has to stay manual." style={{ marginLeft: 5, cursor: 'help', color: C.blue }}>ⓘ</span>}
+            </span>
             <input style={inputStyle} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
           </label>
         ))}
@@ -170,20 +259,42 @@ function EditManualModal({ user, onClose, onSaved }) {
 
 // ---------------------------------------------------------------- Bulk import
 
-// Parses a header row + data rows pasted straight from the sheet (TSV, the shape
-// a Ctrl+A/Ctrl+C out of Google Sheets and a paste into a textarea produces).
-// Rows with no recognizable email are skipped and counted, not silently dropped --
-// the summary after import states exactly what happened.
+// RFC4180-ish single-line splitter (handles a quoted field containing the
+// delimiter itself, e.g. a Centre Name of "Delhi, NCR" in a comma-delimited
+// file) -- deliberately simple since this only ever runs on our own template's
+// round-trip or a straight sheet paste, not arbitrary third-party CSV.
+function splitDelimited(line, delim) {
+  const out = []; let cur = ''; let q = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (q) {
+      if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++ } else q = false }
+      else cur += c
+    } else if (c === '"') q = true
+    else if (c === delim) { out.push(cur); cur = '' }
+    else cur += c
+  }
+  out.push(cur)
+  return out
+}
+
+// Accepts either a Ctrl+A/Ctrl+C paste straight out of the sheet (tab-delimited)
+// or a comma-delimited CSV (the shape "Download template" produces and a real
+// file upload carries) -- delimiter is auto-detected off the header line, then
+// used consistently for every row. Rows with no recognizable email are skipped
+// and counted, not silently dropped -- the summary after import states exactly
+// what happened.
 function parsePasted(text) {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length)
   if (lines.length < 2) return { rows: [], skipped: 0, unmapped: [] }
-  const headerCells = lines[0].split('\t').map(h => h.trim().toLowerCase())
+  const delim = lines[0].includes('\t') ? '\t' : ','
+  const headerCells = splitDelimited(lines[0], delim).map(h => h.trim().toLowerCase())
   const fieldForCol = headerCells.map(h => IMPORT_ALIASES[h] || null)
   const unmapped = headerCells.filter((h, i) => !fieldForCol[i]).filter(Boolean)
   const rows = []
   let skipped = 0
   for (let i = 1; i < lines.length; i++) {
-    const cells = lines[i].split('\t')
+    const cells = splitDelimited(lines[i], delim)
     const row = {}
     cells.forEach((val, ci) => { const f = fieldForCol[ci]; if (f) row[f] = val.trim() })
     if (!row.ls_email) { skipped++; continue }
@@ -194,10 +305,21 @@ function parsePasted(text) {
 
 function BulkImportModal({ onClose, onDone }) {
   const [text, setText] = useState('')
+  const [fileName, setFileName] = useState('')
   const parsed = useMemo(() => parsePasted(text), [text])
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState(null)
   const [result, setResult] = useState(null)
+  const fileRef = React.useRef(null)
+
+  const onFile = e => {
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    setFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = ev => setText(String(ev.target.result || ''))
+    reader.readAsText(file)
+  }
 
   const run = async () => {
     setRunning(true); setProgress({ done: 0, total: parsed.rows.length }); setResult(null)
@@ -217,16 +339,25 @@ function BulkImportModal({ onClose, onDone }) {
   }
 
   return (
-    <Modal onClose={onClose} title="Bulk import from the squad-mapping sheet" width={640}>
+    <Modal onClose={onClose} title="Bulk import" width={660}>
       <p style={{ fontSize: 12.5, color: C.muted, marginTop: 0 }}>
-        One-time seed. In the sheet, select the header row plus every data row on the tab you want
-        (e.g. "Complete Mapping"), Ctrl+C, then paste below. The first row must be the real column
-        headers — matching is by header name, so hidden/reordered columns are fine, and a row with
-        no recognizable email column is skipped rather than guessed.
+        One-time seed, meant for the private "Akash - Squad Mapping" sheet's existing data. Start
+        with the template below, or upload/paste any CSV whose first row is real column headers —
+        matching is by header name (see the accepted names in the template), so hidden/reordered
+        columns are fine, and a row with no recognizable email column is skipped rather than guessed.
       </p>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+        <Button variant="ghost" size="sm" onClick={downloadTemplate}>Download template (CSV)</Button>
+        <Button variant="ghost" size="sm" onClick={() => fileRef.current && fileRef.current.click()}>Upload file…</Button>
+        <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" onChange={onFile} style={{ display: 'none' }} />
+        {fileName && <span style={{ fontSize: 12, color: C.muted }}>{fileName}</span>}
+      </div>
+
+      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Or paste rows directly</div>
       <textarea
-        value={text} onChange={e => setText(e.target.value)} placeholder="Paste tab-separated rows here…"
-        style={{ ...inputStyle, height: 160, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical' }}
+        value={text} onChange={e => { setFileName(''); setText(e.target.value) }} placeholder="Paste tab- or comma-separated rows here…"
+        style={{ ...inputStyle, height: 140, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical' }}
       />
       {text.trim().length > 0 && (
         <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
@@ -326,15 +457,35 @@ function RosterTab({ isAdmin }) {
         <Dropdown label="Mapping" options={['All', 'Mapped', 'Unmapped']} value={mappedFilter} onChange={setMappedFilter} minWidth={120} />
         <div style={{ flex: 1 }} />
         <Button variant="ghost" size="sm" onClick={load}>Refresh</Button>
+        <ExportButton
+          hideSlack
+          filename="team-mapping-roster"
+          data={filtered.map(r => ({
+            Name: r.name, Email: r.email, Role: (r.role || '').replace(/_/g, ' '), Status: r.status,
+            Groups: (r.groups || []).join('; '),
+            'LS Manager Name': r.manual?.ls_manager_name || '', 'LS Manager Email': r.manual?.ls_manager_email || '',
+            'ASM/SM': r.manual?.asm_sm || '', 'ASM/SM Email': r.manual?.asm_sm_email || '',
+            SSM: r.manual?.ssm || '', 'SSM Email': r.manual?.ssm_email || '',
+            Tier: r.manual?.tier || '', Level: r.manual?.level || '', Country: r.manual?.country || '',
+            'Centre Name': r.manual?.centre_name || '', 'Phone Number': r.manual?.phone_number || '', 'Airtel Number': r.manual?.airtel_number || '',
+          }))}
+        />
         {isAdmin && <Button size="sm" onClick={() => setShowImport(true)}>Bulk import</Button>}
       </div>
+
+      <p style={{ fontSize: 11.5, color: C.muted, marginTop: -4, marginBottom: 12 }}>
+        Name/Email/Role/Status/Groups are live from LeadSquared. Everything else is manually
+        entered here — including Phone Number and Airtel Number, which do exist in LeadSquared's
+        own Settings screen but aren't reachable by this app's API integration (see the ⓘ on those
+        fields when editing a person).
+      </p>
 
       <Card title={`${fmtN(filtered.length)} people`} sub={`Page ${page} of ${totalPages}`} noPad>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 900 }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid ' + C.border }}>
-                {['Name', 'Email', 'Role', 'Status', 'Groups', 'ASM/SM', 'SSM', 'Tier', 'Country', ''].map(h => (
+                {['Name', 'Email', 'Role', 'Status', 'Groups', 'LS Manager', 'ASM/SM', 'SSM', 'Tier', 'Country', ''].map(h => (
                   <th key={h} style={{ padding: '9px 12px', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -347,6 +498,7 @@ function RosterTab({ isAdmin }) {
                   <td style={{ padding: '9px 12px', color: C.text }}>{(r.role || '').replace(/_/g, ' ')}</td>
                   <td style={{ padding: '9px 12px' }}><StatusBadge status={r.status} /></td>
                   <td style={{ padding: '9px 12px', minWidth: 160 }}><GroupChips groups={r.groups} /></td>
+                  <td style={{ padding: '9px 12px', color: C.text }} title={r.manual?.ls_manager_email || ''}>{r.manual?.ls_manager_name || '—'}</td>
                   <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.asm_sm || '—'}</td>
                   <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.ssm || '—'}</td>
                   <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.tier || '—'}</td>
@@ -371,6 +523,7 @@ function RosterTab({ isAdmin }) {
       {editUser && (
         <EditManualModal
           user={editUser}
+          roster={rows}
           onClose={() => setEditUser(null)}
           onSaved={saved => {
             setData(d => ({ ...d, rows: d.rows.map(r => r.email === editUser.email ? { ...r, manual: saved } : r) }))
@@ -421,6 +574,7 @@ function GroupsTab() {
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search groups…" style={{ ...inputStyle, width: 240 }} />
         <div style={{ flex: 1 }} />
         <Button variant="ghost" size="sm" onClick={load}>Refresh</Button>
+        <ExportButton hideSlack filename="team-mapping-groups" data={filtered.map(g => ({ Group: g.name, Members: g.memberCount }))} />
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {filtered.map(g => {

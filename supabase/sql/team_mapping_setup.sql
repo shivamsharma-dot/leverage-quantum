@@ -22,6 +22,7 @@
 CREATE TABLE IF NOT EXISTS public.team_mapping_manual (
   ls_email TEXT PRIMARY KEY,
   ls_manager_name TEXT,
+  ls_manager_email TEXT,
   asm_sm TEXT,
   asm_sm_email TEXT,
   ssm TEXT,
@@ -29,7 +30,6 @@ CREATE TABLE IF NOT EXISTS public.team_mapping_manual (
   tier TEXT,               -- ASM / Consultant / Coach / Manager / Intern -- the sheet's
                            -- own "Status" column, renamed here to avoid colliding with
                            -- LeadSquared's own Active/Inactive user status.
-  employment_status TEXT,
   level TEXT,
   country TEXT,
   centre_name TEXT,
@@ -40,3 +40,10 @@ CREATE TABLE IF NOT EXISTS public.team_mapping_manual (
 );
 
 ALTER TABLE public.team_mapping_manual DISABLE ROW LEVEL SECURITY;
+
+-- Safe to re-run even if the table above already existed from an earlier version
+-- of this file: adds the new manager-email column, drops the retired
+-- employment_status column (it duplicated LeadSquared's own live Active/Inactive
+-- status, so it never carried information the page didn't already show live).
+ALTER TABLE public.team_mapping_manual ADD COLUMN IF NOT EXISTS ls_manager_email TEXT;
+ALTER TABLE public.team_mapping_manual DROP COLUMN IF EXISTS employment_status;
