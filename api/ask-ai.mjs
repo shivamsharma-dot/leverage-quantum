@@ -379,7 +379,13 @@ async function fetchOverallCampaignTotals({ since, until }) {
   // silently returns -1/undefined after the rename, so 'queued' on this path was
   // undercounting by the entire Futwork volume (~97k/month) -- the exact bug already
   // fixed on overall-funnel-sync.yml's own copy of this same aggregation.
-  const li = h('total leads generated'), fq = h('floor_queued'), qfh = h('queued on futwork human'), qfa = h('queued on futwork ai'), qs = h('queued on superbot')
+  //
+  // C3 fix (2026-08-21): 'queued' used to also sum floor_queued, which the Overall
+  // dashboard's own 'Total Queued' KPI deliberately excludes (Floor-distributed leads
+  // never went through Futwork/Superbot qualification, so they never had a chance to
+  // become a QL). Excluding it here matches the dashboard, which is the primary surface
+  // -- same decision, same fix, applied to overall-funnel-sync.yml's copy of this logic.
+  const li = h('total leads generated'), qfh = h('queued on futwork human'), qfa = h('queued on futwork ai'), qs = h('queued on superbot')
   const hql = h('futwork human ql'), faq = h('futwork ai ql'), saq = h('superbot ai ql'), sp = h('total_spends')
   const byCampaign = {}
   for (const row of rows) {
@@ -391,7 +397,7 @@ async function fetchOverallCampaignTotals({ since, until }) {
     if (!campaign) continue
     const e = byCampaign[campaign] || { campaign, channel: mapChannel(row[si]), leads: 0, queued: 0, totalQL: 0, spend: 0 }
     e.leads += numFrom(row[li])
-    e.queued += numFrom(row[fq]) + numFrom(row[qfh]) + numFrom(row[qfa]) + numFrom(row[qs])
+    e.queued += numFrom(row[qfh]) + numFrom(row[qfa]) + numFrom(row[qs])  // excludes floor_queued -- see C3 note above
     e.totalQL += numFrom(row[hql]) + numFrom(row[faq]) + numFrom(row[saq])
     e.spend += numFrom(row[sp], true)
     byCampaign[campaign] = e

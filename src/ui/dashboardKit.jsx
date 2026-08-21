@@ -113,11 +113,16 @@ export const KPI_ICONS = {
 // clickable and swaps its text between the percentage and "was <prevValue>"
 // on tap, in place, with no extra icon added to the card. Purely additive:
 // omitting it (every existing caller) leaves the pill exactly as it was.
+// delta also accepts the sentinel string 'new' (any caller may pass it, e.g. when a
+// percentage would be computed off a near-zero/absent prior-period baseline and would
+// read as noise rather than signal, such as a five-digit percentage). Purely additive,
+// same convention as prevValue above -- every existing numeric/null caller is unaffected.
 export const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon, invert, prevValue }) => {
   const variantId = useDesignStyle('kpi')
-  const up = delta != null && delta >= 0
-  const deltaText = delta != null ? `${up ? '\u25B2' : '\u25BC'} ${Math.abs(delta).toFixed(1)}%` : null
-  const isGood = delta == null ? null : (invert ? !up : up)
+  const isNew = delta === 'new'
+  const up = !isNew && delta != null && delta >= 0
+  const deltaText = isNew ? 'New' : (delta != null ? `${up ? '\u25B2' : '\u25BC'} ${Math.abs(delta).toFixed(1)}%` : null)
+  const isGood = isNew ? null : (delta == null ? null : (invert ? !up : up))
   return renderKpiVariant(variantId, { label, value, sub, deltaText, isGood, icon, accent, prevValue })
 }
 

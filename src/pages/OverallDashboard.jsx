@@ -882,6 +882,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [bqBusy, setBqBusy] = useState(false)
   const [bqError, setBqError] = useState(null)
   const [bqNonce, setBqNonce] = useState(0)            // bumped by Refresh
+  // Two-phase fetch for the "Month-on-month trend" card only (B2 fix). This is
+  // DELIBERATELY a separate read from bqRows/bqRange: folding its trailing-5-month span
+  // into the main bqRange union (the way trendBqSpan does for the Trend modal, which only
+  // opens on demand) would make every single load of this page pay a ~5-month cursor
+  // fetch even when nobody looks at this one card -- a real, permanent regression to
+  // normal page-load time. Instead the main page paints on its own (narrow) selection
+  // immediately, and this card's own wider window fetches in the background and fills in
+  // once it lands, mirroring how the Trend modal itself behaves on open.
+  const [monthTrendBqRows, setMonthTrendBqRows] = useState([])
+  const [monthTrendBqBusy, setMonthTrendBqBusy] = useState(false)
   // A failed cache read must never leave this page dead, so it falls back to the sheet
   // rather than replacing it: every derivation below reverts to rawRows while bqError
   // is set. bqLive is the single test for "BQ data is what we are showing".
@@ -1408,6 +1418,17 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const prevActSrRevenue = prevKpis.raus * srFee
   const prevActualRoas = prevKpis.spend > 0 ? prevActSrRevenue / prevKpis.spend : 0
   const deltaPct = (cur, prev) => (!prev ? null : ((cur - prev) / prev) * 100)
+  // C12 fix: a percentage computed off a near-zero baseline is noise, not signal -- e.g.
+  // "AI QUEUED ▲ 118128.0%" when the prior period's value was ~25 (exactly the shape of
+  // the still-backfilling Futwork AI split, see C4). Below this floor the KPI cards show
+  // a plain "New" pill instead of a percentage. Deliberately scoped to the KPI-card
+  // render sites only (below) -- deltaPct itself feeds sorting/verdict logic elsewhere on
+  // this page (Compare's movers list, the month-comparison table) where a string sentinel
+  // in place of a number would silently break `Math.abs()`/numeric comparisons.
+  const DELTA_NEW_FLOOR = 50
+  const kpiDelta = (cur, prev) => (
+    Math.abs(prev || 0) < DELTA_NEW_FLOOR ? (cur > 0 ? 'new' : null) : deltaPct(cur, prev)
+  )
 
   // ── Compare — decision-focused period comparison ─────────────────────────
   // Deliberately NOT an AI call: every number here is a direct sum/delta over
@@ -1471,6 +1492,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const trendAnchorDate = useMemo(() => (
     bqActive && bqBounds?.max ? dateFromIso(bqBounds.max) : null
   ), [bqActive, bqBounds])
+  // Trailing 5 months ending at the cache's own latest date -- same anchor as
+  // trendAnchorDate, same anti-circular-dependency reasoning (must not read
+  // nonDateRows/bqRows, since those are downstream of this). Deliberately NOT pushed
+  // into bqRange below -- see the state comment above monthTrendBqRows for why.
+  const monthTrendBqSpan = useMemo(() => {
+    if (!bqActive || !trendAnchorDate) return null
+    const endMk = monthKey(trendAnchorDate)
+    return { from: monthStartDate(endMk - 4), to: monthEndDate(endMk) }
+  }, [bqActive, trendAnchorDate])
   const trendBqSpan = useMemo(() => {
     if (!trendOpen || !bqActive || !trendAnchorDate) return null
     const end = trendAnchorDate
@@ -1595,6 +1625,32 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       .finally(() => { if (!dead) { setBqBusy(false); setLoading(false) } })
     return () => { dead = true }
   }, [bqMode, bqSince, bqUntil, sourceIsAll, selectedSources, bqNonce, loadData])
+
+  // Same "read on primitives, not the span object" rule as bqSince/bqUntil above --
+  // monthTrendBqSpan gets a new identity every time bqRange recomputes even when its
+  // actual from/to dates haven't moved, which would otherwise refetch this card forever.
+  const monthTrendBqSince = monthTrendBqSpan ? dayKey(monthTrendBqSpan.from) : null
+  const monthTrendBqUntil = monthTrendBqSpan ? dayKey(monthTrendBqSpan.to) : null
+
+  // Fetches ALL sources, unfiltered -- nonDateRows' own Source/Corridor/campaign-search
+  // filters are applied client-side when monthTrend below builds its chart data. This is
+  // deliberate: filtering server-side would mean every Source-dropdown change re-issues
+  // a multi-month BigQuery read, defeating the entire point of keeping this off the main
+  // page's critical path. One fetch per 5-month window; the page's own filters recompute
+  // on the client for free from there.
+  useEffect(() => {
+    if (!bqActive || !monthTrendBqSince || !monthTrendBqUntil) return
+    let dead = false
+    setMonthTrendBqBusy(true)
+    retryFetch(() => fetchOverallBqRows({ since: monthTrendBqSince, until: monthTrendBqUntil, sources: [] }))
+      .then(raw => { if (!dead) setMonthTrendBqRows(raw.map(mapRow)) })
+      .catch(() => { /* leave the card on whatever it last had; the page itself already
+                        falls back to the sheet on a real BQ outage via the main effect
+                        above -- this card just quietly stays stale rather than erroring
+                        twice for the same underlying failure. */ })
+      .finally(() => { if (!dead) setMonthTrendBqBusy(false) })
+    return () => { dead = true }
+  }, [bqActive, monthTrendBqSince, monthTrendBqUntil, bqNonce])
 
   // Period A (the "current" side) is normally whatever the main page filter is --
   // correct for 'prev'/'yoy' modes, since those are explicitly "vs the period I'm
@@ -2311,18 +2367,35 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // "Month-on-month trend" chart is meant to always show the last 5 months (including
   // whatever the current month is) so it reads as a real trend line -- unlike every
   // other chart/KPI on this page, it deliberately does NOT follow the header's
-  // date-range picker (Source/Corridor/campaign-search filters still apply, via
-  // nonDateRows, so it stays consistent with the rest of the page on those axes).
+  // date-range picker (Source/Corridor/campaign-search filters still apply, so it stays
+  // consistent with the rest of the page on those axes).
+  //
+  // B2 fix: in BQ mode, nonDateRows only ever holds whatever narrow window the main
+  // page's own selection fetched -- reading it here silently drew fabricated zeros for
+  // any of the trailing 5 months that fell outside that window (the fetch that WOULD
+  // cover them is monthTrendBqRows, above, on its own independent schedule). Apply the
+  // exact same three filters nonDateRows applies, just against that separately-fetched
+  // dataset, so this card and the rest of the page can never disagree about what
+  // "Source: X" or a campaign search means -- only which rows they're drawn from.
+  const monthTrendRows = useMemo(() => {
+    if (!bqActive) return nonDateRows
+    let rs = monthTrendBqRows
+    if (!sourceIsAll) rs = rs.filter(matchesSource)
+    if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
+    const q = campaignQueryDebounced.trim().toLowerCase()
+    if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
+    return rs
+  }, [bqActive, monthTrendBqRows, nonDateRows, sourceIsAll, selectedSources, corridorFilter, campaignQueryDebounced])
   const monthTrend = useMemo(() => {
     const m = new Map()
-    nonDateRows.forEach(r => {
+    monthTrendRows.forEach(r => {
       if (r.mk == null) return
       const e = m.get(r.mk) || { mk:r.mk, label:monthLabel(r.mk), leads:0, queued:0, totalQL:0, deposits:0 }
       e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.totalQL += r.totalQL; e.deposits += r.deposits
       m.set(r.mk, e)
     })
     return [...m.values()].sort((a, b) => a.mk - b.mk).slice(-5)
-  }, [nonDateRows])
+  }, [monthTrendRows])
 
   // ── Deep Analysis shared plumbing ─────────────────────────────────────────────
   // One generic aggregator, keyed by dimension, used by BOTH Compare's full table
@@ -3299,28 +3372,28 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:12, marginBottom:12 }}>
             <PremKPI label="EST. SR REVENUE" value={<span title={fmtINR(estSrRevenue)}>{fmtINRShort(estSrRevenue)}</span>} sub={'Est. RAUs ' + fmtN(estimatedRaus) + ' × SR Fee'} delta={deltaPct(estSrRevenue, prevEstSrRevenue)} prevValue={fmtINR(prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="SPEND" value={<span title={fmtINR(kpis.spend)}>{fmtINRShort(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} prevValue={fmtINR(prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
-            <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={deltaPct(kpis.leads, prevKpis.leads)} prevValue={fmtN(prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
-            <PremKPI label="FLOOR QUEUED" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} delta={deltaPct(kpis.floorQueued, prevKpis.floorQueued)} prevValue={fmtN(prevKpis.floorQueued)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
-            <PremKPI label="FUTWORK QUEUED" value={fmtN(totalFutworkQ)} sub={'Human ' + fmtN(kpis.futworkHumanQ) + ' · AI ' + fmtN(kpis.futworkAiQ)} delta={deltaPct(totalFutworkQ, prevTotalFutworkQ)} prevValue={fmtN(prevTotalFutworkQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="HUMAN QUEUED" value={fmtN(kpis.futworkHumanQ)} sub={pct(kpis.futworkHumanQ, totalFutworkQ) + ' of Futwork queued'} delta={deltaPct(kpis.futworkHumanQ, prevKpis.futworkHumanQ)} prevValue={fmtN(prevKpis.futworkHumanQ)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="AI QUEUED" value={fmtN(kpis.futworkAiQ)} sub={pct(kpis.futworkAiQ, totalFutworkQ) + ' of Futwork queued'} delta={deltaPct(kpis.futworkAiQ, prevKpis.futworkAiQ)} prevValue={fmtN(prevKpis.futworkAiQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="SUPERBOT QUEUED" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={deltaPct(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
-            <PremKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={deltaPct(kpis.totalQL, prevKpis.totalQL)} prevValue={fmtN(prevKpis.totalQL)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={kpiDelta(kpis.leads, prevKpis.leads)} prevValue={fmtN(prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
+            <PremKPI label="FLOOR QUEUED" value={fmtN(kpis.floorQueued)} sub={pct(kpis.floorQueued, kpis.leads) + ' of leads'} delta={kpiDelta(kpis.floorQueued, prevKpis.floorQueued)} prevValue={fmtN(prevKpis.floorQueued)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
+            <PremKPI label="FUTWORK QUEUED" value={fmtN(totalFutworkQ)} sub={'Human ' + fmtN(kpis.futworkHumanQ) + ' · AI ' + fmtN(kpis.futworkAiQ)} delta={kpiDelta(totalFutworkQ, prevTotalFutworkQ)} prevValue={fmtN(prevTotalFutworkQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="HUMAN QUEUED" value={fmtN(kpis.futworkHumanQ)} sub={pct(kpis.futworkHumanQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkHumanQ, prevKpis.futworkHumanQ)} prevValue={fmtN(prevKpis.futworkHumanQ)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="AI QUEUED" value={fmtN(kpis.futworkAiQ)} sub={pct(kpis.futworkAiQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkAiQ, prevKpis.futworkAiQ)} prevValue={fmtN(prevKpis.futworkAiQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="SUPERBOT QUEUED" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={kpiDelta(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
+            <PremKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={kpiDelta(kpis.totalQL, prevKpis.totalQL)} prevValue={fmtN(prevKpis.totalQL)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
           </div>
 
           {/* KPI ROW 2 — remaining QL breakdown + cost efficiency + downstream conversion + ROAS.
               Same auto-fit grid as row 1, same 10 items, so columns match at any width. */}
           <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:12, marginBottom:20 }}>
-            <PremKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={deltaPct(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
+            <PremKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+            <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
             <PremKPI label="CPL" value={<span title={fmtINR(cpl)}>{fmtINRShort(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} prevValue={fmtINR(prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
             <PremKPI label="CPQL" value={<span title={fmtINR(cpql)}>{fmtINRShort(cpql)}</span>} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} prevValue={fmtINR(prevCpql)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.totalQL) + ' of QL'} delta={deltaPct(kpis.apps, prevKpis.apps)} prevValue={fmtN(prevKpis.apps)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
+            <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.totalQL) + ' of QL'} delta={kpiDelta(kpis.apps, prevKpis.apps)} prevValue={fmtN(prevKpis.apps)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
             <PremKPI label="CPA" value={<span title={fmtINR(cpa)}>{fmtINRShort(cpa)}</span>} sub="cost per application" delta={deltaPct(cpa, prevCpa)} prevValue={fmtINR(prevCpa)} invert accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.globe} />
-            <PremKPI label="OFFERS" value={fmtN(kpis.offers)} sub={pct(kpis.offers, kpis.apps) + ' of apps'} delta={deltaPct(kpis.offers, prevKpis.offers)} prevValue={fmtN(prevKpis.offers)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
-            <PremKPI label="DEPOSITS" value={fmtN(kpis.deposits)} sub={pct(kpis.deposits, kpis.offers) + ' of offers'} delta={deltaPct(kpis.deposits, prevKpis.deposits)} prevValue={fmtN(prevKpis.deposits)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe} />
-            <PremKPI label="TOTAL RAUs" value={fmtN(kpis.raus)} sub={'Est. RAUs ' + fmtN(estimatedRaus)} delta={deltaPct(kpis.raus, prevKpis.raus)} prevValue={fmtN(prevKpis.raus)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
+            <PremKPI label="OFFERS" value={fmtN(kpis.offers)} sub={pct(kpis.offers, kpis.apps) + ' of apps'} delta={kpiDelta(kpis.offers, prevKpis.offers)} prevValue={fmtN(prevKpis.offers)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
+            <PremKPI label="DEPOSITS" value={fmtN(kpis.deposits)} sub={pct(kpis.deposits, kpis.offers) + ' of offers'} delta={kpiDelta(kpis.deposits, prevKpis.deposits)} prevValue={fmtN(prevKpis.deposits)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe} />
+            <PremKPI label="TOTAL RAUs" value={fmtN(kpis.raus)} sub={'Est. RAUs ' + fmtN(estimatedRaus)} delta={kpiDelta(kpis.raus, prevKpis.raus)} prevValue={fmtN(prevKpis.raus)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
             <PremKPI label="ROAS" value={actualRoas.toFixed(2) + 'x'} sub={'Est. ROAS ' + estimatedRoas.toFixed(2) + 'x'} delta={deltaPct(actualRoas, prevActualRoas)} prevValue={prevActualRoas.toFixed(2) + 'x'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.total} />
           </div>
 
@@ -3629,7 +3702,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           {/* MONTH TREND + DAILY TREND */}
           <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
             <Card>
-              {sectionTitle('Month-on-month trend', 'last 5 months, including the current month — not affected by the date filter above')}
+              {sectionTitle('Month-on-month trend', bqActive && monthTrendBqBusy
+                ? 'last 5 months, including the current month — fetching the trailing months from BigQuery in the background, chart fills in as it lands'
+                : 'last 5 months, including the current month — not affected by the date filter above')}
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={monthTrend} margin={{ left:0, right:12, top:4, bottom:4 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
@@ -3637,10 +3712,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
                   <Tooltip content={<BrandTooltip />} />
                   <Legend wrapperStyle={{ fontSize:14, fontFamily:FONT }} />
-                  <Line type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} dot={{ r:3 }} />
-                  <Line type="monotone" dataKey="queued" name="Total Queued" stroke={C.blue} strokeWidth={2.5} dot={{ r:3 }} />
-                  <Line type="monotone" dataKey="totalQL" name="Total QL" stroke={C.cyan} strokeWidth={2.5} dot={{ r:3 }} />
-                  <Line type="monotone" dataKey="deposits" name="Deposits" stroke={C.green} strokeWidth={2.5} dot={{ r:3 }} />
+                  <Line type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} strokeDasharray={bqActive && monthTrendBqBusy ? '5 4' : undefined} dot={{ r:3 }} />
+                  <Line type="monotone" dataKey="queued" name="Total Queued" stroke={C.blue} strokeWidth={2.5} strokeDasharray={bqActive && monthTrendBqBusy ? '5 4' : undefined} dot={{ r:3 }} />
+                  <Line type="monotone" dataKey="totalQL" name="Total QL" stroke={C.cyan} strokeWidth={2.5} strokeDasharray={bqActive && monthTrendBqBusy ? '5 4' : undefined} dot={{ r:3 }} />
+                  <Line type="monotone" dataKey="deposits" name="Deposits" stroke={C.green} strokeWidth={2.5} strokeDasharray={bqActive && monthTrendBqBusy ? '5 4' : undefined} dot={{ r:3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </Card>

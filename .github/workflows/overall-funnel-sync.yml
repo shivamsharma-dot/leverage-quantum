@@ -92,6 +92,17 @@ jobs:
           # Before this fix, idx('queued on futwork') silently returned -1 once the
           # sheet header changed, so 'queued' undercounted by the entire Futwork
           # Human amount for every day since the sheet was renamed.
+          #
+          # C3 fix (2026-08-21): 'queued' here used to include floor_queued, while the
+          # Overall dashboard's own 'Total Queued' KPI deliberately excludes it (Floor-
+          # distributed leads never went through Futwork/Superbot qualification, so they
+          # never had a chance to become a QL). That made this table -- and anything
+          # reading it (Ask AI's analyze_campaign_contribution tool, the Marketing
+          # Performance Report, scheduled agents) -- quote a QL% roughly half the
+          # dashboard's for the same period (Jul'26: ~7.1% here vs ~15.5% on the
+          # dashboard). Decision: match the dashboard, exclude floor_queued everywhere.
+          # fq/idx('floor_queued') is kept below (still selected, just not summed into
+          # 'queued') in case a future report wants to show Floor as its own figure.
           li, fq, qfh, qfa, qs = idx('total leads generated'), idx('floor_queued'), idx('queued on futwork human'), idx('queued on futwork ai'), idx('queued on superbot')
           hql, faq, saq, sp = idx('futwork human ql'), idx('futwork ai ql'), idx('superbot ai ql'), idx('total_spends')
           ap, of, de, ra = idx('total apps'), idx('total offers'), idx('total deposits'), idx('total raus')
@@ -112,7 +123,7 @@ jobs:
                   agg[key] = e
               g = lambda i: cols[i] if 0 <= i < len(cols) else '0'
               e['leads'] += num(g(li))
-              e['queued'] += num(g(fq)) + num(g(qfh)) + num(g(qfa)) + num(g(qs))
+              e['queued'] += num(g(qfh)) + num(g(qfa)) + num(g(qs))  # excludes floor_queued -- see C3 note above
               e['total_ql'] += num(g(hql)) + num(g(faq)) + num(g(saq))
               e['spend'] += num(g(sp), True)
               e['apps'] += num(g(ap))
