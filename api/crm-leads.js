@@ -677,6 +677,108 @@ async function fetchLeadSquaredOpportunityActivities(creds, { opportunityId }) {
   return { opportunityId, count: (data && data.RecordCount) || rows.length, rows }
 }
 
+// UserManagement.svc/Users.Get -- the ONLY LeadSquared endpoint this account's API
+// credentials can actually reach for user/group data (every "Sales Groups" path
+// LeadSquared's own naming conventions suggest -- SalesGroup/Get, Groups.Get,
+// UserGroups.Get, Team.Get, etc -- 404s live against this account; confirmed by
+// probing all of them directly before writing this). It returns the FULL roster in
+// one call, no pagination -- confirmed live at 3,380 rows, well under any
+// page-size concern. StatusCode 0/1 = Active/Inactive, cross-checked against this
+// account's own Manage Users screen (its default "Status: Active" filter's
+// headcount matches the StatusCode===0 count here, not the StatusCode===1 one).
+async function fetchLeadSquaredTeamUsers(creds) {
+  const data = await leadsquaredGet('/v2/UserManagement.svc/Users.Get', creds)
+  const rows = Array.isArray(data) ? data : []
+  return rows.map(u => ({
+    id: u.ID,
+    name: [u.FirstName, u.LastName].filter(Boolean).join(' ').trim() || u.EmailAddress || u.ID,
+    email: u.EmailAddress || null,
+    role: u.Role || null,
+    status: u.StatusCode === 0 ? 'Active' : 'Inactive',
+    groups: Array.isArray(u.MemberOfGroups) ? u.MemberOfGroups : [],
+    isPhoneCallAgent: !!u.IsPhoneCallAgent,
+    tag: u.Tag || null,
+  }))
+}
+
+// Sales Groups have no dedicated API resource on this account (see the comment
+// above) -- the only place group membership appears at all is each user's own
+// MemberOfGroups array, so the group list/roster is reconstructed by aggregating
+// that across every user instead of fetched directly. Confirmed live this
+// reproduces the exact group COUNT LeadSquared's own Manage > Sales Groups screen
+// shows ("60 of 80 available sales groups" == 60 distinct group names found this
+// way), so it's a faithful reconstruction of membership, not an approximation --
+// though per-group metadata that screen also shows (Managers, Modified On) has no
+// live-API source at all and isn't reproduced here.
+function aggregateTeamGroups(users) {
+  const byGroup = {}
+  users.forEach(u => {
+    ;(u.groups || []).forEach(g => {
+      if (!byGroup[g]) byGroup[g] = { name: g, memberCount: 0, members: [] }
+      byGroup[g].memberCount++
+      byGroup[g].members.push({ id: u.id, name: u.name, email: u.email, status: u.status })
+    })
+  })
+  return Object.values(byGroup).sort((a, b) => b.memberCount - a.memberCount)
+}
+
+// The manual, human-entered fields laid over the live roster above -- see
+// supabase/sql/team_mapping_setup.sql for the full field list and the lifecycle
+// rule this enforces: a manual row whose ls_email is no longer in the live
+// LeadSquared roster is deleted right here, as a side effect of the normal
+// real-time page load, rather than a separate cron job. The manual table is
+// small (bounded by how many people someone has actually annotated) while the
+// live roster is large (3,380+), so this fetches the whole manual table once and
+// only issues a DELETE for the (typically empty) stale subset -- never a query
+// sized to the full roster.
+async function fetchTeamUsersMerged(creds) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const users = await fetchLeadSquaredTeamUsers(creds)
+  const liveEmails = new Set(users.map(u => (u.email || '').toLowerCase()).filter(Boolean))
+
+  const manualRes = await supabaseAdmin('team_mapping_manual?select=*')
+  const manualRows = manualRes.ok ? await manualRes.json() : []
+
+  const staleEmails = manualRows.map(r => r.ls_email).filter(e => e && !liveEmails.has(String(e).toLowerCase()))
+  if (staleEmails.length) {
+    const filter = 'ls_email=in.(' + staleEmails.map(e => `"${String(e).replace(/"/g, '')}"`).join(',') + ')'
+    await supabaseAdmin('team_mapping_manual?' + filter, { method: 'DELETE' }).catch(() => {})
+  }
+
+  const manualByEmail = {}
+  manualRows.forEach(r => { if (r.ls_email && liveEmails.has(String(r.ls_email).toLowerCase())) manualByEmail[String(r.ls_email).toLowerCase()] = r })
+
+  const merged = users.map(u => ({ ...u, manual: (u.email && manualByEmail[u.email.toLowerCase()]) || null }))
+  return { rows: merged, count: merged.length, staleManualDropped: staleEmails.length }
+}
+
+const TEAM_MANUAL_FIELDS = ['ls_manager_name', 'asm_sm', 'asm_sm_email', 'ssm', 'ssm_email', 'tier', 'employment_status', 'level', 'country', 'centre_name', 'phone_number', 'airtel_number']
+
+async function saveTeamManual(body, me) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const email = String((body && body.ls_email) || '').trim().toLowerCase()
+  if (!email) throw new Error('ls_email is required')
+  const payload = { ls_email: email, updated_by: me.email || null, updated_at: new Date().toISOString() }
+  TEAM_MANUAL_FIELDS.forEach(f => { payload[f] = (body && body[f]) || null })
+  const r = await supabaseAdmin('team_mapping_manual', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+    body: JSON.stringify(payload),
+  })
+  if (!r.ok) throw new Error('Save failed: ' + (await r.text()).slice(0, 300))
+  const saved = await r.json()
+  return Array.isArray(saved) ? saved[0] : saved
+}
+
+async function deleteTeamManual(email) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const e = String(email || '').trim().toLowerCase()
+  if (!e) throw new Error('ls_email is required')
+  const r = await supabaseAdmin('team_mapping_manual?ls_email=eq.' + encodeURIComponent(e), { method: 'DELETE' })
+  if (!r.ok) throw new Error('Delete failed: ' + (await r.text()).slice(0, 300))
+  return { deleted: e }
+}
+
 async function handleLeadSquared(req, res, me) {
   // Gated on 'leadsquared' -- the id the LeadSquared page's own route guard uses
   // (src/App.jsx). This previously checked 'lq_ops' instead, which meant the
@@ -691,11 +793,20 @@ async function handleLeadSquared(req, res, me) {
   // own id ('lq_field_schema') rather than piggybacking on 'leadsquared', so access to
   // one can be granted/revoked independently of the other, matching how every other
   // sidebar page in this app gets its own PAGE_LIST id.
+  // team_users/team_groups/team_manual_* power the separate Team Mapping page --
+  // gated on its own id ('team_mapping') for the same reason.
   const { mode } = req.query || {}
   const FIELD_SCHEMA_MODES = ['activity_schema', 'activity_dropdown_options', 'opportunity_schema', 'lead_schema']
-  const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : 'leadsquared'
+  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete']
+  const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
+  }
+  // Writing a manual note is admin-only regardless of who else has been granted
+  // read access to the page -- matches every other "view is grantable, edit is
+  // admin-only" surface in this app (e.g. Settings' own per-tab admin gates).
+  if ((mode === 'team_manual_save' || mode === 'team_manual_delete') && me.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin only' })
   }
   const creds = leadsquaredCreds()
   if (!creds.accessKey || !creds.secretKey) {
@@ -704,6 +815,10 @@ async function handleLeadSquared(req, res, me) {
   const { since, until, leadId, eventCode, pageIndex, pageSize, status, code, schemaName, refresh } = req.query || {}
   const p = { since, until, leadId, eventCode, status, pageIndex: Number(pageIndex) || undefined, pageSize: Number(pageSize) || undefined }
   try {
+    if (mode === 'team_users') return res.status(200).json(await fetchTeamUsersMerged(creds))
+    if (mode === 'team_groups') return res.status(200).json({ groups: aggregateTeamGroups(await fetchLeadSquaredTeamUsers(creds)) })
+    if (mode === 'team_manual_save') return res.status(200).json(await saveTeamManual(req.body || req.query, me))
+    if (mode === 'team_manual_delete') return res.status(200).json(await deleteTeamManual((req.body && req.body.ls_email) || req.query.ls_email))
     if (mode === 'opportunities') return res.status(200).json(await fetchLeadSquaredOpportunities(creds, p))
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))

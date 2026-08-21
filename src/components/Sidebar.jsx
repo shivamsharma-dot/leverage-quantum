@@ -139,6 +139,7 @@ export const NAV = [
           { to: '/dashboard/leadsquared?tab=opportunities', label: 'Opportunities', matchType: 'query', tabKey: 'opportunities' },
         ]
       },
+      { to: '/dashboard/team-mapping', icon: <TeamMappingIcon />, label: 'Team Mapping', end: false },
     ]
   },
 ]
@@ -174,6 +175,7 @@ export const PAGE_LIST = [
   { id:'referral', label:'Referral', path:'/dashboard/referral', adminOnly:false },
   { id:'leads_assigned', label:'Leads Assigned', path:'/dashboard/leads-assigned', adminOnly:false },
   { id:'leadsquared', label:'LeadSquared', path:'/dashboard/leadsquared', adminOnly:false },
+  { id:'team_mapping', label:'Team Mapping', path:'/dashboard/team-mapping', adminOnly:true },
   { id:'ask_ai',         label:'Ask AI',      path:'/ask-ai',                  adminOnly:true  },
   { id:'agents',         label:'Agent Runs',  path:'/dashboard/agents',        adminOnly:true  },
   { id:'marketing_performance', label:'Marketing Performance', path:'/dashboard/marketing-performance', adminOnly:true },
@@ -204,6 +206,10 @@ function AgentsIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" f
 // Real LeadSquared brand mark (two-tone step shape, from the user's own downloaded SVG) --
 // used as the sidebar nav icon for the new LeadSquared page.
 function LeadSquaredIcon() { return <svg width="14" height="14" viewBox="0 0 136.6 137.9"><polygon fill="#0C9AFC" points="0,0 0,68.5 68.6,68.5 68.6,137.9 136.6,137.9 136.6,0"/><polygon fill="#0C293D" points="68.6,137.9 0,137.9 0,68.5"/></svg> }
+// Org-chart glyph (three people, one linked above the other two) -- distinct
+// from LeadSquaredIcon's brand mark since this page is Quantum's own manual
+// mapping layer, not another LeadSquared-native view.
+function TeamMappingIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="2.4"/><path d="M12 7.4V12"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M12 12 6 15.8M12 12l6 3.8"/></svg> }
 function OpportunityIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg> }
 // Daily P&L -- a statement (document with ruled lines), distinct from the plain
 // document-agnostic RevenueIcon used for the parent nav row.
@@ -240,7 +246,7 @@ const ICON_MAP = {
   'Conversions': <CheckCircleIcon/>, 'Devices': <DeviceIcon/>, 'Locations': <PinIcon/>,
   'Audiences': <PeopleIcon/>, 'Schedule': <ClockIcon/>, 'Assets': <FolderIcon/>,
   'Month on Month': <ChartIcon/>, 'Day on Day': <DayIcon/>,
-  'LeadSquared': <LeadSquaredIcon/>,
+  'LeadSquared': <LeadSquaredIcon/>, 'Team Mapping': <TeamMappingIcon/>,
   'Leads': <PeopleIcon/>, 'Activities': <ClockIcon/>, 'Opportunities': <OpportunityIcon/>,
   'Daily P&L': <PnLIcon/>, 'Daily Cash Flow': <CashFlowIcon/>,
 }

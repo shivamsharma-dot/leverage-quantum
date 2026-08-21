@@ -29,6 +29,7 @@ const BingAdsDashboard = lazy(COMPONENT_IMPORTS.BingAdsDashboard)
 const ReferralDashboard = lazy(COMPONENT_IMPORTS.ReferralDashboard)
 const LeadsAssignedDashboard = lazy(COMPONENT_IMPORTS.LeadsAssignedDashboard)
 const LeadSquaredDashboard = lazy(COMPONENT_IMPORTS.LeadSquaredDashboard)
+const TeamMappingDashboard = lazy(COMPONENT_IMPORTS.TeamMappingDashboard)
 const AskAI = lazy(COMPONENT_IMPORTS.AskAI)
 const AgentsDashboard = lazy(COMPONENT_IMPORTS.AgentsDashboard)
 const MarketingPerformanceReport = lazy(COMPONENT_IMPORTS.MarketingPerformanceReport)
@@ -65,6 +66,7 @@ const PAGE_TITLES = {
   '/dashboard/referral': 'Referral',
   '/dashboard/leads-assigned': 'Leads Assigned',
   '/dashboard/leadsquared': 'LeadSquared',
+  '/dashboard/team-mapping': 'Team Mapping',
   '/ask-ai': 'Ask AI',
   '/dashboard/agents': 'Agents',
   '/dashboard/marketing-performance': 'Marketing Performance',
@@ -272,6 +274,7 @@ export default function App() {
           <Route path="/dashboard/referral" element={<ProtectedRoute dashboardId="referral"><ReferralDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/leads-assigned" element={<ProtectedRoute dashboardId="leads_assigned"><LeadsAssignedDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/leadsquared" element={<ProtectedRoute dashboardId="leadsquared"><LeadSquaredDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/team-mapping" element={<ProtectedRoute dashboardId="team_mapping"><TeamMappingDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/whatsapp" element={<ProtectedRoute dashboardId="whatsapp"> <WhatsAppDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/meta-ads" element={<ProtectedRoute dashboardId="meta_ads"> <MetaAdsDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/leverage-careers" element={<ProtectedRoute dashboardId="leverage_careers"> <LeverageCareersDashboard /></ProtectedRoute>} />

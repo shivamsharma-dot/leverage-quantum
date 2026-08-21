@@ -24,6 +24,7 @@ export const VIEWER_MUST_BE_GRANTED = [
   'marketing_performance',
   'ceo_b2c_pnl',
   'ceo_b2c_cashflow',
+  'team_mapping',
 ]
 
 // "viewer:home,meta_ads" / "custom:roas". Tolerates whitespace around the commas:
