@@ -986,9 +986,23 @@ async function saveTeamConnectorsConfig(body, me) {
 // password), stored in plaintext -- there's no user ever "logging in" with it
 // to hash against, just a string an external request has to present verbatim.
 async function regenerateTeamApiKey(me) {
+  // Deliberately NOT routed through saveTeamConnectorsConfig -- api_key is
+  // excluded from that function's ALLOWED whitelist on purpose (an admin's
+  // own browser making a raw request to team_connectors_save should never be
+  // able to plant an arbitrary attacker-chosen key; only this dedicated,
+  // server-generated path may set it). Writing directly here means that
+  // whitelist can stay strict without this function's own key silently
+  // getting dropped by it.
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
   const crypto = await import('crypto')
   const key = crypto.randomBytes(24).toString('hex')
-  return saveTeamConnectorsConfig({ api_key: key, api_enabled: true }, me)
+  const patch = { id: 'default', api_key: key, api_enabled: true, updated_by: me.email || null, updated_at: new Date().toISOString() }
+  const r = await supabaseAdmin('team_mapping_connectors', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(patch),
+  })
+  if (!r.ok) throw new Error('Could not save the new key: ' + (await r.text()).slice(0, 300))
+  const saved = await r.json()
+  return Array.isArray(saved) ? saved[0] : saved
 }
 
 // Plain, short, professional text -- this is a routine ops notification
