@@ -1181,6 +1181,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       const u = bust ? base + (base.includes('?') ? '&' : '?') + '_=' + Date.now() : base
       const res = await fetch(u)
       const txt = await res.text()
+      // A2 fix: an auth/sign-in redirect or a sheet that's stopped being publicly
+      // shared responds 200 with an HTML page, not the CSV -- fetch() doesn't throw on
+      // that, and parseCSV() on HTML yields rows whose dates never parse, so every row
+      // silently drops and the page renders all-zero with no indication anything went
+      // wrong (this exact failure has bitten the client-side "Got an HTML page instead
+      // of CSV" case documented in CLAUDE.md; overall-funnel-sync.yml already guards
+      // for it server-side, this path didn't). Throwing here routes both cases through
+      // the existing catch block below, which already has a real error-banner path.
+      if (!res.ok) throw new Error('Sheet fetch failed (HTTP ' + res.status + ')')
+      if (txt.trim().startsWith('<')) throw new Error('Got a webpage instead of the sheet CSV -- it may no longer be shared publicly, or the link needs re-authenticating')
       applyCsv(txt)
       setSession(CACHE_KEY, txt)
       setLastSync(new Date())
