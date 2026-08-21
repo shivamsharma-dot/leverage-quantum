@@ -466,10 +466,10 @@ function DateRangePicker({ from, to, onChange, presets }) {
 function BrandTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null
   return (
-    <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:10, padding:'9px 13px', fontFamily:FONT, boxShadow:'0 8px 24px rgba(15,23,42,0.12)' }}>
-      <div style={{ fontSize:13, fontWeight:800, color:'#0F1B33', marginBottom:4 }}>{label}</div>
+    <div style={{ background:'var(--card,#fff)', border:'0.5px solid var(--card-border,#E5E7EB)', borderRadius:10, padding:'9px 13px', fontFamily:FONT, boxShadow:'0 8px 24px rgba(15,23,42,0.12)' }}>
+      <div style={{ fontSize:13, fontWeight:800, color:'var(--text,#0F1B33)', marginBottom:4 }}>{label}</div>
       {payload.map((p, i) => (
-        <div key={i} style={{ fontSize:13, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}>
+        <div key={i} style={{ fontSize:13, color:'var(--text2,#475569)', display:'flex', justifyContent:'space-between', gap:18 }}>
           <span style={{ color:p.color || p.fill }}>{p.name}</span>
           <span style={{ fontWeight:700, fontVariantNumeric:'tabular-nums' }}>{fmtN(p.value)}</span>
         </div>
@@ -487,11 +487,11 @@ function EfficiencyMapTooltip({ active, payload }) {
   if (!active || !payload || !payload.length) return null
   const d = payload[0].payload
   return (
-    <div style={{ background:'#fff', border:'0.5px solid #E5E7EB', borderRadius:10, padding:'10px 14px', fontFamily:FONT, boxShadow:'0 8px 24px rgba(15,23,42,0.12)', maxWidth:240 }}>
-      <div style={{ fontSize:13, fontWeight:800, color:'#0F1B33', marginBottom:6, wordBreak:'break-word' }}>{d.campaign}</div>
-      <div style={{ fontSize:13, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>CPQL</span><span style={{ fontWeight:700 }}>₹{Math.round(d.cpql).toLocaleString('en-IN')}</span></div>
-      <div style={{ fontSize:13, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>Total QLs</span><span style={{ fontWeight:700 }}>{fmtN(d.totalQL)}</span></div>
-      <div style={{ fontSize:13, color:'#475569', display:'flex', justifyContent:'space-between', gap:18 }}><span>Spend</span><span style={{ fontWeight:700 }}>₹{Math.round(d.spend).toLocaleString('en-IN')}</span></div>
+    <div style={{ background:'var(--card,#fff)', border:'0.5px solid var(--card-border,#E5E7EB)', borderRadius:10, padding:'10px 14px', fontFamily:FONT, boxShadow:'0 8px 24px rgba(15,23,42,0.12)', maxWidth:240 }}>
+      <div style={{ fontSize:13, fontWeight:800, color:'var(--text,#0F1B33)', marginBottom:6, wordBreak:'break-word' }}>{d.campaign}</div>
+      <div style={{ fontSize:13, color:'var(--text2,#475569)', display:'flex', justifyContent:'space-between', gap:18 }}><span>CPQL</span><span style={{ fontWeight:700 }}>₹{Math.round(d.cpql).toLocaleString('en-IN')}</span></div>
+      <div style={{ fontSize:13, color:'var(--text2,#475569)', display:'flex', justifyContent:'space-between', gap:18 }}><span>Total QLs</span><span style={{ fontWeight:700 }}>{fmtN(d.totalQL)}</span></div>
+      <div style={{ fontSize:13, color:'var(--text2,#475569)', display:'flex', justifyContent:'space-between', gap:18 }}><span>Spend</span><span style={{ fontWeight:700 }}>₹{Math.round(d.spend).toLocaleString('en-IN')}</span></div>
       <div style={{ fontSize:12, fontWeight:700, color:QUADRANT_COLOR[d.quadrant], marginTop:6 }}>{QUADRANT_TAG[d.quadrant]}</div>
     </div>
   )
@@ -3337,7 +3337,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           </div>
           <div className="lq-header-controls" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflow:'visible', flexShrink:1, minWidth:0 }}>
 
-            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', background:'#F8FAFC', padding:'6px 10px', borderRadius:12, border:'0.5px solid #E5E7EB' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', background:'var(--bg3,#F8FAFC)', padding:'6px 10px', borderRadius:12, border:'0.5px solid var(--card-border,#E5E7EB)' }}>
               {isCurrentMonth && (
                 <div style={{ display:'flex', alignItems:'center', gap:4, background:'var(--bg3)', borderRadius:9, padding:3 }}>
                   {[['LD', 'Last Day'], ['L7D', 'Last 7D'], ['MTD', 'MTD']].map(([key, lbl2]) => {
@@ -3557,7 +3557,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               action={
                 <div style={{ display:'flex', gap:6 }}>
                   {[['source', 'Source'], ['campaign', 'Campaign'], ['corridor', 'Corridor'], ['month', 'Month'], ['day', 'Day']].map(([v, l]) => (
-                    <button key={v} onClick={() => setGrpBy(v)} style={{ padding:'7px 14px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : '#E5E7EB'), background: grpBy === v ? C.navy : '#fff', color: grpBy === v ? '#fff' : '#374151', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
+                    <button key={v} onClick={() => setGrpBy(v)} style={{ padding:'7px 14px', borderRadius:8, border:'0.5px solid ' + (grpBy === v ? C.navy : 'var(--card-border,#E5E7EB)'), background: grpBy === v ? C.navy : 'var(--card,#fff)', color: grpBy === v ? '#fff' : 'var(--text2,#374151)', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:FONT }}>{l}</button>
                   ))}
                 </div>
               }
@@ -3659,8 +3659,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               <div style={{ overflowX:'auto' }}>
                 <table ref={tableRef} style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT }}>
                   <thead>
-                    <tr style={{ background:'#F8FAFC', borderBottom:'2px solid #E2E8F0' }}>
-                      <th aria-sort={sortKey === 'label' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', userSelect:'none', ...stickyLabelStyle(pinCols, '#F8FAFC') }}>
+                    <tr style={{ background:'var(--bg3,#F8FAFC)', borderBottom:'2px solid var(--card-border,#E2E8F0)' }}>
+                      <th aria-sort={sortKey === 'label' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : 'var(--text2,#64748B)', textAlign:'left', whiteSpace:'nowrap', userSelect:'none', ...stickyLabelStyle(pinCols, 'var(--bg3,#F8FAFC)') }}>
                         {/* C10 fix: was a bare onClick on the <th> itself -- no tabIndex, no role,
                             no keyboard equivalent. A real <button> is focusable and Enter/Space-
                             activatable for free; sized/styled to fill the cell so the click target

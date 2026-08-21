@@ -74,19 +74,29 @@ export function fmtN(n) {
 export function pct(a, b) { return b > 0 ? ((a / b) * 100).toFixed(1) + '%' : '—' }
 
 /* ===== Section card wrapper ===== */
+// C11 fix: every one of these five colors was a hardcoded light-mode hex, even though
+// the C token object 8 lines up this very file already defines the theme-aware
+// equivalent (var(--card-border)/var(--text)/var(--text3)) for exactly this purpose --
+// this component just never used them. In dark mode that meant the card's own
+// background stayed a hardcoded white while text rendered inside it (via sectionTitle,
+// or this component's own `title`/`sub` props) correctly resolved to a light color
+// meant for a DARK background -- e.g. "Overall funnel"'s title measured #E9EEF8 on a
+// hardcoded #FFFFFF card, ~1.1:1 contrast, functionally invisible. Every fallback below
+// is the exact previous hardcoded value, so light mode (where the real CSS variable
+// happens to resolve to an almost-identical shade already) is visually unchanged.
 export const Card = ({ title, sub, children, action, noPad }) => (
   <div style={{
-    background: '#fff', border: '1px solid #EEF1F6', borderRadius: 16, overflow: 'hidden',
+    background: 'var(--card,#fff)', border: '1px solid var(--card-border,#EEF1F6)', borderRadius: 16, overflow: 'hidden',
     boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 12px 28px -16px rgba(16,24,40,0.16)',
     display: 'flex', flexDirection: 'column',
   }}>
     <div style={{
-      padding: '15px 20px 13px', borderBottom: '1px solid #F1F4F9',
+      padding: '15px 20px 13px', borderBottom: '1px solid var(--card-border,#F1F4F9)',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
     }}>
       <div>
-        <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.2px', color: '#0F1B33', fontFamily: FONT }}>{title}</div>
-        {sub && <div style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 3, fontFamily: FONT }}>{sub}</div>}
+        <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.2px', color: 'var(--text,#0F1B33)', fontFamily: FONT }}>{title}</div>
+        {sub && <div style={{ fontSize: 12.5, color: 'var(--text3,#94A3B8)', marginTop: 3, fontFamily: FONT }}>{sub}</div>}
       </div>
       {action && <div style={{ flexShrink: 0 }}>{action}</div>}
     </div>
