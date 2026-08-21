@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import { InlineLoader } from '../components/SkeletonLoader'
@@ -23,24 +23,13 @@ import { useAuth } from '../hooks/useAuth'
 const API = '/api/crm-leads?source=leadsquared'
 const PAGE_ROWS = 50
 
-// Phone Number, Airtel Number and LS Manager Name/Email are NOT in this list
-// any more -- a deeper look at LeadSquared's own public API docs (not just
-// guessing REST paths off Users.Get) turned up User/Retrieve/ByUserId, which
-// genuinely returns PhoneMain, the mx_Custom_2 custom field, and the real
-// ManagerName/ManagerUserId. Cross-checked live against 4 real accounts,
-// value-for-value against the sheet's own Phone Number/Airtel Number/LS
-// Manager Name columns -- exact matches, including a blank Airtel Number
-// matching a genuinely absent mx_Custom_2. So those three are now LIVE data
-// (see the roster table's "LS Manager"/"Phone"/"Airtel" cells and the detail
-// fetch in RosterTab), not manual fields. See fetchLeadSquaredUserDetails'
-// own comment in api/crm-leads.js for the full trail.
-//
-// employment_status was dropped earlier for the same reason it's absent here
-// too -- it duplicated the live LeadSquared Active/Inactive status every row
-// already shows. tier is renamed to role: a business-side designation
-// (see ROLE_SUGGESTIONS below), distinct from LeadSquared's own coarse Role
-// (Sales_User/Administrator/...), which this page now labels "LS Role" so the
-// two are never confused with each other.
+// Phone Number, Airtel Number and LS Manager Name/Email are NOT in this list --
+// LeadSquared's own API docs (User/Retrieve/ByUserId) genuinely return PhoneMain,
+// the mx_Custom_2 custom field, and the real ManagerName/ManagerUserId, so those
+// three are live data now (see the roster table's Phone/Airtel/LS Manager cells).
+// employment_status was dropped for duplicating the live Active/Inactive status.
+// tier was renamed to role: a business-side designation (see ROLE_SUGGESTIONS),
+// distinct from LeadSquared's own coarse Role, labeled "LS Role" on this page.
 const MANUAL_FIELDS = [
   { key: 'role', label: 'Role' },
   { key: 'asm_sm', label: 'ASM/SM' },
@@ -123,20 +112,6 @@ function StatusBadge({ status }) {
   )
 }
 
-function GroupChips({ groups, max = 2 }) {
-  if (!groups || !groups.length) return <span style={{ color: C.muted, fontSize: 12 }}>—</span>
-  const shown = groups.slice(0, max)
-  const rest = groups.length - shown.length
-  return (
-    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-      {shown.map(g => (
-        <span key={g} title={g} style={{ fontSize: 10.5, fontWeight: 700, color: C.navy, background: C.navyBg, padding: '2px 7px', borderRadius: 999, fontFamily: FONT, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g}</span>
-      ))}
-      {rest > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, fontFamily: FONT }}>+{rest}</span>}
-    </div>
-  )
-}
-
 function Modal({ onClose, title, width = 560, children }) {
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose() }
@@ -153,6 +128,42 @@ function Modal({ onClose, title, width = 560, children }) {
         <div style={{ padding: 20 }}>{children}</div>
       </div>
     </div>
+  )
+}
+
+function ChevronDown({ size = 10 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
+}
+
+// Groups column: a compact "View" button + count instead of inline chips, so the
+// column stays a fixed width regardless of how many groups someone's in -- opens
+// the full, un-truncated list rather than "+2 more" with no way to see the rest.
+function GroupsButton({ groups }) {
+  const [open, setOpen] = useState(false)
+  const n = (groups || []).length
+  return (
+    <>
+      <button
+        onClick={() => n && setOpen(true)} disabled={!n}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7,
+          border: '0.5px solid ' + C.border, background: 'var(--card)', cursor: n ? 'pointer' : 'default',
+          fontSize: 11.5, fontWeight: 700, color: n ? C.navy : C.muted, fontFamily: FONT,
+        }}
+      >
+        View{n > 0 ? ` (${n})` : ''}
+        {n > 0 && <ChevronDown />}
+      </button>
+      {open && (
+        <Modal onClose={() => setOpen(false)} title={`Groups (${n})`} width={440}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {groups.map(g => (
+              <div key={g} style={{ fontSize: 13, fontWeight: 600, color: C.text, padding: '8px 12px', borderRadius: 8, background: 'var(--bg3)' }}>{g}</div>
+            ))}
+          </div>
+        </Modal>
+      )}
+    </>
   )
 }
 
@@ -177,15 +188,11 @@ function SuggestInput({ value, onChange, suggestions, placeholder }) {
       {open && filtered.length > 0 && (
         <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 10, background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 8, boxShadow: '0 8px 20px -6px rgba(15,23,42,0.25)', maxHeight: 200, overflowY: 'auto' }}>
           {filtered.map(s => (
-            // mousedown, not click, with preventDefault: mousedown fires BEFORE
-            // the input's own onBlur, and preventDefault stops the browser's
-            // default focus-shift that would trigger that blur at all. A plain
-            // onClick here raced the 120ms blur-close timeout above -- caught
-            // live: the blur handler could unmount this div before its click
-            // event ever fired, so the "pick" silently never landed and the
-            // click fell through to the modal's backdrop and closed the whole
-            // modal instead. mousedown+preventDefault makes the pick land
-            // regardless of that timing.
+            // mousedown, not click, with preventDefault: mousedown fires before the
+            // input's own onBlur, and preventDefault stops the focus-shift that would
+            // trigger it -- a plain onClick raced the blur-close timeout and could
+            // unmount this div before its click ever fired (caught live: the click
+            // then fell through to the modal's backdrop and closed the whole modal).
             <div key={s} onMouseDown={e => { e.preventDefault(); onChange(s); setOpen(false) }} style={{ padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', color: C.text, fontWeight: 600 }}>{s}</div>
           ))}
         </div>
@@ -285,12 +292,12 @@ function EditManualModal({ user, onClose, onSaved }) {
   )
 }
 
-// ---------------------------------------------------------------- Bulk import
+// ---------------------------------------------------------------- Import parsing
 
 // RFC4180-ish single-line splitter (handles a quoted field containing the
 // delimiter itself, e.g. a Centre Name of "Delhi, NCR" in a comma-delimited
 // file) -- deliberately simple since this only ever runs on our own template's
-// round-trip or a straight sheet paste, not arbitrary third-party CSV.
+// round-trip, a straight sheet paste, or a real CSV upload.
 function splitDelimited(line, delim) {
   const out = []; let cur = ''; let q = false
   for (let i = 0; i < line.length; i++) {
@@ -306,15 +313,30 @@ function splitDelimited(line, delim) {
   return out
 }
 
+// A .xlsx/.xls file is a binary zip archive -- FileReader.readAsText() on one
+// produces garbage (mostly control characters, no real line structure), which
+// used to silently parse to "0 rows, 0 skipped" with no indication anything
+// was wrong. Checked for up front so the real cause ("this isn't a text file")
+// surfaces as an actual message instead of a mysteriously empty import.
+function looksBinary(text) {
+  if (text.includes(' ')) return true
+  if (/^PK\x03\x04/.test(text)) return true // .xlsx/.xls (zip) signature
+  if (/^%PDF/.test(text)) return true
+  const head = text.slice(0, 2000)
+  const control = (head.match(/[\x00-\x08\x0E-\x1F]/g) || []).length
+  return head.length > 0 && control / head.length > 0.05
+}
+
 // Accepts either a Ctrl+A/Ctrl+C paste straight out of the sheet (tab-delimited)
 // or a comma-delimited CSV (the shape "Download template" produces and a real
 // file upload carries) -- delimiter is auto-detected off the header line, then
 // used consistently for every row. Rows with no recognizable email are skipped
 // and counted, not silently dropped -- the summary after import states exactly
 // what happened.
-function parsePasted(text) {
+function parseImportText(text) {
+  if (looksBinary(text)) return { rows: [], skipped: 0, unmapped: [], binary: true }
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length)
-  if (lines.length < 2) return { rows: [], skipped: 0, unmapped: [] }
+  if (lines.length < 2) return { rows: [], skipped: 0, unmapped: [], binary: false }
   const delim = lines[0].includes('\t') ? '\t' : ','
   const headerCells = splitDelimited(lines[0], delim).map(h => h.trim().toLowerCase())
   const fieldForCol = headerCells.map(h => IMPORT_ALIASES[h] || null)
@@ -328,81 +350,281 @@ function parsePasted(text) {
     if (!row.ls_email) { skipped++; continue }
     rows.push(row)
   }
-  return { rows, skipped, unmapped }
+  return { rows, skipped, unmapped, binary: false, matchedHeaders: headerCells.length - unmapped.length, totalHeaders: headerCells.length }
 }
 
-function BulkImportModal({ onClose, onDone }) {
-  const [text, setText] = useState('')
-  const [fileName, setFileName] = useState('')
-  const parsed = useMemo(() => parsePasted(text), [text])
-  const [running, setRunning] = useState(false)
-  const [progress, setProgress] = useState(null)
-  const [result, setResult] = useState(null)
-  const fileRef = React.useRef(null)
+// ---------------------------------------------------------------- Background import store
 
-  const onFile = e => {
-    const file = e.target.files && e.target.files[0]
+// There's no real background-job runner on Vercel serverless, so "runs in the
+// background" means: a plain module-level object (same pattern SnapshotTool.jsx
+// already uses for its own batch-capture progress) drives the row-by-row save
+// loop, independent of any React component's mount state -- closing the Bulk
+// Import modal (or navigating to the Sales Groups tab) does NOT stop it, since
+// nothing about this object is tied to a component instance. It also PATCHes a
+// row in team_mapping_activity every few saves, so progress is visible from the
+// History panel even if this exact browser tab is later closed and reopened.
+const importStore = {
+  running: false,
+  progress: null, // { done, total, failed, skipped, label }
+  listeners: new Set(),
+  set(patch) { Object.assign(this, patch); this.listeners.forEach(l => l()) },
+  subscribe(l) { this.listeners.add(l); return () => this.listeners.delete(l) },
+}
+
+async function runImportInBackground(rows, label, skippedCount, onSettled) {
+  if (importStore.running) return
+  importStore.set({ running: true, progress: { done: 0, total: rows.length, failed: 0, skipped: skippedCount, label } })
+
+  let activity = null
+  try {
+    activity = await fetchJson(API + '&mode=team_activity_create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'import', label, total: rows.length, status: 'running' }),
+    })
+  } catch { /* logging failing shouldn't block the actual import */ }
+
+  let done = 0, failed = 0
+  for (const row of rows) {
+    try {
+      await fetchJson(API + '&mode=team_manual_save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(row),
+      })
+      done++
+    } catch { failed++ }
+    importStore.set({ progress: { done: done + failed, total: rows.length, failed, skipped: skippedCount, label } })
+    if (activity && (done + failed) % 5 === 0) {
+      fetchJson(API + '&mode=team_activity_update', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: activity.id, done, failed, skipped: skippedCount }),
+      }).catch(() => {})
+    }
+  }
+  if (activity) {
+    fetchJson(API + '&mode=team_activity_update', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: activity.id, done, failed, skipped: skippedCount, status: failed && !done ? 'failed' : 'done' }),
+    }).catch(() => {})
+  }
+  importStore.set({ running: false, progress: null })
+  if (onSettled) onSettled({ done, failed, skipped: skippedCount })
+}
+
+function useImportProgress() {
+  const [state, setState] = useState({ running: importStore.running, progress: importStore.progress })
+  useEffect(() => {
+    const sync = () => setState({ running: importStore.running, progress: importStore.progress })
+    sync()
+    return importStore.subscribe(sync)
+  }, [])
+  return state
+}
+
+async function logExportActivity(kind, rows) {
+  try {
+    await fetchJson(API + '&mode=team_activity_create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'export', label: kind, total: rows, done: rows, status: 'done' }),
+    })
+  } catch { /* export already happened client-side either way -- logging is best-effort */ }
+}
+
+// ---------------------------------------------------------------- Bulk import modal
+
+function BulkImportModal({ onClose, onStarted }) {
+  const [parsed, setParsed] = useState(null) // result of parseImportText, once a file/paste is loaded
+  const [label, setLabel] = useState('')
+  const [dragOver, setDragOver] = useState(false)
+  const [showPaste, setShowPaste] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const fileRef = useRef(null)
+
+  const loadFile = file => {
     if (!file) return
-    setFileName(file.name)
+    setLabel(file.name)
     const reader = new FileReader()
-    reader.onload = ev => setText(String(ev.target.result || ''))
+    reader.onload = ev => setParsed(parseImportText(String(ev.target.result || '')))
     reader.readAsText(file)
   }
 
-  const run = async () => {
-    setRunning(true); setProgress({ done: 0, total: parsed.rows.length }); setResult(null)
-    let ok = 0, failed = 0
-    for (const row of parsed.rows) {
-      try {
-        await fetchJson(API + '&mode=team_manual_save', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(row),
-        })
-        ok++
-      } catch { failed++ }
-      setProgress(p => ({ done: p.done + 1, total: p.total }))
-    }
-    setResult({ ok, failed, skipped: parsed.skipped })
-    setRunning(false)
-    onDone()
+  const onDrop = e => {
+    e.preventDefault(); setDragOver(false)
+    const file = e.dataTransfer.files && e.dataTransfer.files[0]
+    loadFile(file)
+  }
+
+  const startImport = () => {
+    if (!parsed || !parsed.rows.length) return
+    runImportInBackground(parsed.rows, label || 'pasted rows', parsed.skipped)
+    onStarted()
   }
 
   return (
-    <Modal onClose={onClose} title="Bulk import" width={660}>
+    <Modal onClose={onClose} title="Bulk import" width={640}>
       <p style={{ fontSize: 12.5, color: C.muted, marginTop: 0 }}>
-        One-time seed, meant for the private "Akash - Squad Mapping" sheet's existing data. Start
-        with the template below, or upload/paste any CSV whose first row is real column headers —
-        matching is by header name (see the accepted names in the template), so hidden/reordered
-        columns are fine, and a row with no recognizable email column is skipped rather than guessed.
+        One-time seed, meant for the private "Akash - Squad Mapping" sheet's existing data. Matching
+        is by header name (see the template), so hidden/reordered columns are fine.
       </p>
 
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
         <Button variant="ghost" size="sm" onClick={downloadTemplate}>Download template (CSV)</Button>
-        <Button variant="ghost" size="sm" onClick={() => fileRef.current && fileRef.current.click()}>Upload file…</Button>
-        <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" onChange={onFile} style={{ display: 'none' }} />
-        {fileName && <span style={{ fontSize: 12, color: C.muted }}>{fileName}</span>}
       </div>
 
-      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>Or paste rows directly</div>
-      <textarea
-        value={text} onChange={e => { setFileName(''); setText(e.target.value) }} placeholder="Paste tab- or comma-separated rows here…"
-        style={{ ...inputStyle, height: 140, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical' }}
-      />
-      {text.trim().length > 0 && (
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
-          {parsed.rows.length} row(s) ready to import, {parsed.skipped} skipped (no email column matched).
-          {parsed.unmapped.length > 0 && <> Unrecognized column(s), ignored: {parsed.unmapped.join(', ')}.</>}
+      {!parsed && (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          onClick={() => fileRef.current && fileRef.current.click()}
+          style={{
+            border: '1.5px dashed ' + (dragOver ? C.blue : C.border), borderRadius: 12, padding: '30px 20px',
+            textAlign: 'center', cursor: 'pointer', background: dragOver ? C.blueBg : 'var(--bg3)', transition: 'background .15s, border-color .15s',
+          }}
+        >
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 4 }}>Drop a CSV file here, or click to browse</div>
+          <div style={{ fontSize: 11.5, color: C.muted }}>.csv, .tsv or .txt — first row must be real column headers</div>
+          <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" onChange={e => loadFile(e.target.files && e.target.files[0])} style={{ display: 'none' }} />
         </div>
       )}
-      {progress && <div style={{ fontSize: 12.5, color: C.text, marginTop: 10 }}>Saving {progress.done} of {progress.total}…</div>}
-      {result && (
-        <div style={{ fontSize: 12.5, marginTop: 10, color: result.failed ? '#B91C1C' : C.green }}>
-          Imported {result.ok}, failed {result.failed}, skipped {result.skipped}.
+
+      {parsed && parsed.binary && (
+        <div style={{ padding: '12px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5 }}>
+          "{label}" doesn't look like a text CSV — if this is an Excel file, use File → Save As → CSV (Comma delimited) first, then upload that.
+          <div style={{ marginTop: 8 }}><Button variant="ghost" size="sm" onClick={() => { setParsed(null); setLabel('') }}>Try another file</Button></div>
         </div>
       )}
+
+      {parsed && !parsed.binary && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{label}</div>
+            <Button variant="ghost" size="sm" onClick={() => { setParsed(null); setLabel('') }}>Choose a different file</Button>
+          </div>
+          {parsed.rows.length === 0 ? (
+            <div style={{ padding: '12px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5 }}>
+              No rows had a recognizable email column. Check the header row matches one of the names in the downloaded template (e.g. "Associate Mail ID").
+              {parsed.unmapped.length > 0 && <div style={{ marginTop: 6 }}>Unrecognized headers found: {parsed.unmapped.join(', ')}</div>}
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12.5, color: C.text, marginBottom: 10 }}>
+                <b>{parsed.rows.length}</b> row(s) ready to import{parsed.skipped > 0 && <>, <b>{parsed.skipped}</b> skipped (no email matched)</>}.
+                {parsed.unmapped.length > 0 && <> Ignored column(s): {parsed.unmapped.join(', ')}.</>}
+              </div>
+              <div style={{ overflowX: 'auto', border: '0.5px solid ' + C.border, borderRadius: 10, marginBottom: 14 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg3)' }}>
+                      {Object.keys(parsed.rows[0]).map(k => (
+                        <th key={k} style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 800, color: C.muted, textTransform: 'uppercase', fontSize: 10, whiteSpace: 'nowrap' }}>{k}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parsed.rows.slice(0, 3).map((row, i) => (
+                      <tr key={i} style={{ borderTop: '0.5px solid ' + C.border }}>
+                        {Object.keys(parsed.rows[0]).map(k => (
+                          <td key={k} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{row[k] || '—'}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {parsed.rows.length > 3 && <div style={{ padding: '6px 10px', fontSize: 11, color: C.muted }}>+ {parsed.rows.length - 3} more row(s)</div>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {!parsed && (
+        <div style={{ marginTop: 12 }}>
+          {!showPaste ? (
+            <span onClick={() => setShowPaste(true)} style={{ fontSize: 12, color: C.blue, fontWeight: 700, cursor: 'pointer' }}>Or paste rows instead</span>
+          ) : (
+            <>
+              <textarea
+                value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Paste tab- or comma-separated rows here…"
+                style={{ ...inputStyle, height: 100, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                <Button variant="ghost" size="sm" onClick={() => { setLabel('pasted rows'); setParsed(parseImportText(pasteText)) }} disabled={!pasteText.trim()}>Parse pasted rows</Button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
-        <Button variant="ghost" size="sm" onClick={onClose} disabled={running}>Close</Button>
-        <Button size="sm" onClick={run} disabled={running || !parsed.rows.length}>{running ? 'Importing…' : `Import ${parsed.rows.length} row(s)`}</Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
+        <Button size="sm" onClick={startImport} disabled={!parsed || parsed.binary || !parsed.rows.length}>
+          {parsed && parsed.rows.length ? `Import ${parsed.rows.length} row(s) in background` : 'Import'}
+        </Button>
       </div>
+    </Modal>
+  )
+}
+
+// ---------------------------------------------------------------- History panel
+
+function statusColor(status) {
+  if (status === 'done') return C.green
+  if (status === 'failed') return '#B91C1C'
+  return C.blue
+}
+
+function HistoryModal({ onClose }) {
+  const [rows, setRows] = useState(null)
+  const [error, setError] = useState('')
+  const { running } = useImportProgress()
+
+  const load = useCallback(() => {
+    fetchJson(API + '&mode=team_activity_list').then(d => setRows(d.rows || [])).catch(e => setError(String(e.message || e)))
+  }, [])
+
+  useEffect(() => {
+    load()
+    // Polls while an import is running (this modal doesn't need to be the one that
+    // started it -- reopening History after closing an in-progress import still
+    // shows live progress, since the row lives in Supabase, not component state).
+    if (!running) return
+    const t = setInterval(load, 2500)
+    return () => clearInterval(t)
+  }, [load, running])
+
+  return (
+    <Modal onClose={onClose} title="Import & export history" width={640}>
+      {error && <div style={{ color: '#B91C1C', fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
+      {!rows ? <InlineLoader label="Loading history" height={160} /> : rows.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>Nothing yet — imports and exports will show up here.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 440, overflowY: 'auto' }}>
+          {rows.map(r => {
+            const pct = r.total > 0 ? Math.round(((r.done || 0) + (r.failed || 0)) / r.total * 100) : 100
+            return (
+              <div key={r.id} style={{ border: '0.5px solid ' + C.border, borderRadius: 10, padding: '10px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text }}>
+                    <span style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 800, color: C.muted, marginRight: 8 }}>{r.type}</span>
+                    {r.label || '—'}
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(r.status) }}>{r.status}</span>
+                </div>
+                {r.type === 'import' && (
+                  <div style={{ height: 5, borderRadius: 99, background: 'var(--bg3)', overflow: 'hidden', marginBottom: 4 }}>
+                    <div style={{ height: '100%', width: pct + '%', background: statusColor(r.status), transition: 'width .3s' }} />
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: C.muted }}>
+                  {r.type === 'import'
+                    ? `${r.done || 0} done, ${r.failed || 0} failed, ${r.skipped || 0} skipped of ${r.total || 0}`
+                    : `${r.total || 0} row(s) exported`}
+                  {' · '}{r.created_by || 'unknown'} · {r.created_at ? new Date(r.created_at).toLocaleString() : ''}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </Modal>
   )
 }
@@ -421,6 +643,8 @@ function RosterTab({ isAdmin }) {
   const [page, setPage] = useState(1)
   const [editUser, setEditUser] = useState(null)
   const [showImport, setShowImport] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  const { running: importRunning, progress: importProgress } = useImportProgress()
   // Phone/Airtel/Reporting-Manager are live but per-user calls (LeadSquared has
   // no bulk "by many ids" variant) -- fetched only for whichever ~50 rows are
   // actually on screen, cached by id so paging back to an already-seen page is
@@ -437,6 +661,17 @@ function RosterTab({ isAdmin }) {
   }, [])
 
   useEffect(() => { load() }, [load])
+  // A background import finishing (possibly after this tab's modal was already
+  // closed) should refresh the "Manually Mapped" count and table without the
+  // admin having to remember to hit Refresh themselves. Guarded on a true->false
+  // transition specifically (not just "whenever not running"), which would
+  // otherwise also match the very first render -- before any import has ever
+  // started -- and double up the initial load above for no reason.
+  const wasImporting = useRef(false)
+  useEffect(() => {
+    if (wasImporting.current && !importRunning) load()
+    wasImporting.current = importRunning
+  }, [importRunning, load])
 
   const rows = data?.rows || []
   const roleOptions = useMemo(() => ['All', ...Array.from(new Set(rows.map(r => r.role).filter(Boolean))).sort()], [rows])
@@ -496,6 +731,14 @@ function RosterTab({ isAdmin }) {
         <PremKPI label="Manually Mapped" value={fmtN(kpis.mapped)} sub={fmtN(kpis.total - kpis.mapped) + ' not yet mapped'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
       </div>
 
+      {importRunning && importProgress && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: C.blueBg, marginBottom: 12, fontSize: 12.5, color: C.navy, fontWeight: 700 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.blue, flexShrink: 0 }} />
+          Importing "{importProgress.label}" in background — {importProgress.done} of {importProgress.total}
+          <span onClick={() => setShowHistory(true)} style={{ marginLeft: 'auto', cursor: 'pointer', color: C.blue, textDecoration: 'underline' }}>View progress</span>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name or email…" style={{ ...inputStyle, width: 220 }} />
         <Dropdown label="LS Role" options={roleOptions} value={roleFilter} onChange={setRoleFilter} minWidth={130} />
@@ -504,9 +747,11 @@ function RosterTab({ isAdmin }) {
         <Dropdown label="Mapping" options={['All', 'Mapped', 'Unmapped']} value={mappedFilter} onChange={setMappedFilter} minWidth={120} />
         <div style={{ flex: 1 }} />
         <Button variant="ghost" size="sm" onClick={load}>Refresh</Button>
+        <Button variant="ghost" size="sm" onClick={() => setShowHistory(true)}>History</Button>
         <ExportButton
-          hideSlack
+          hideSlack hideJson hideSheets
           filename="team-mapping-roster"
+          onExported={({ rows: n }) => logExportActivity('Roster CSV', n)}
           data={filtered.map(r => {
             const d = detailCache[r.id]
             return {
@@ -533,10 +778,10 @@ function RosterTab({ isAdmin }) {
 
       <Card title={`${fmtN(filtered.length)} people`} sub={`Page ${page} of ${totalPages}`} noPad>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 900 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 960 }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid ' + C.border }}>
-                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Phone', 'Airtel', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', ''].map(h => (
+                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Phone', 'Airtel', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Mapping'].map(h => (
                   <th key={h} style={{ padding: '9px 12px', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -551,7 +796,7 @@ function RosterTab({ isAdmin }) {
                     <td style={{ padding: '9px 12px', color: C.muted }}>{r.email || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text }}>{(r.role || '').replace(/_/g, ' ')}</td>
                     <td style={{ padding: '9px 12px' }}><StatusBadge status={r.status} /></td>
-                    <td style={{ padding: '9px 12px', minWidth: 160 }}><GroupChips groups={r.groups} /></td>
+                    <td style={{ padding: '9px 12px' }}><GroupsButton groups={r.groups} /></td>
                     <td style={{ padding: '9px 12px', color: C.text }}>{pending ? '…' : (d.phoneMain || '—')}</td>
                     <td style={{ padding: '9px 12px', color: C.text }}>{pending ? '…' : (d.airtelNumber || '—')}</td>
                     <td style={{ padding: '9px 12px', color: C.text }} title={pending ? '' : (d.managerEmail || '')}>{pending ? '…' : (d.managerName || '—')}</td>
@@ -560,7 +805,7 @@ function RosterTab({ isAdmin }) {
                     <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.role || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.country || '—'}</td>
                     <td style={{ padding: '9px 12px' }}>
-                      <span onClick={() => setEditUser(r)} style={{ cursor: 'pointer', fontWeight: 700, color: C.blue, fontSize: 12 }}>{r.manual ? 'Edit' : 'Map'}</span>
+                      <Button size="sm" variant={r.manual ? 'secondary' : 'primary'} onClick={() => setEditUser(r)}>{r.manual ? 'Edit' : 'Map'}</Button>
                     </td>
                   </tr>
                 )
@@ -587,7 +832,13 @@ function RosterTab({ isAdmin }) {
           }}
         />
       )}
-      {showImport && <BulkImportModal onClose={() => setShowImport(false)} onDone={load} />}
+      {showImport && (
+        <BulkImportModal
+          onClose={() => setShowImport(false)}
+          onStarted={() => { setShowImport(false); setShowHistory(true) }}
+        />
+      )}
+      {showHistory && <HistoryModal onClose={() => setShowHistory(false)} />}
     </div>
   )
 }
@@ -630,7 +881,12 @@ function GroupsTab() {
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search groups…" style={{ ...inputStyle, width: 240 }} />
         <div style={{ flex: 1 }} />
         <Button variant="ghost" size="sm" onClick={load}>Refresh</Button>
-        <ExportButton hideSlack filename="team-mapping-groups" data={filtered.map(g => ({ Group: g.name, Members: g.memberCount }))} />
+        <ExportButton
+          hideSlack hideJson hideSheets
+          filename="team-mapping-groups"
+          onExported={({ rows: n }) => logExportActivity('Groups CSV', n)}
+          data={filtered.map(g => ({ Group: g.name, Members: g.memberCount }))}
+        />
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {filtered.map(g => {

@@ -842,6 +842,57 @@ async function deleteTeamManual(email) {
   return { deleted: e }
 }
 
+// Import/export activity log (supabase/sql/team_mapping_activity_setup.sql) --
+// what makes a bulk import genuinely survive the frontend modal closing: the
+// frontend's own module-level store drives the actual row-by-row save loop
+// (there's no real background worker on Vercel serverless), but every few
+// rows it PATCHes the same row here, so the live progress is visible from
+// this table regardless of whether the browser tab that started the import
+// still has the modal open. Export events log a single already-finished row
+// (client-side CSV generation is synchronous, so there's no progress to
+// track) purely for the same history list to show both together.
+async function createTeamActivity(body, me) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const payload = {
+    type: (body && body.type) || 'import',
+    label: (body && body.label) || null,
+    status: (body && body.status) || 'running',
+    total: Number(body && body.total) || 0,
+    done: Number(body && body.done) || 0,
+    failed: Number(body && body.failed) || 0,
+    skipped: Number(body && body.skipped) || 0,
+    created_by: me.email || null,
+    updated_at: new Date().toISOString(),
+  }
+  const r = await supabaseAdmin('team_mapping_activity', {
+    method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload),
+  })
+  if (!r.ok) throw new Error('Could not create activity row: ' + (await r.text()).slice(0, 300))
+  const saved = await r.json()
+  return Array.isArray(saved) ? saved[0] : saved
+}
+
+async function updateTeamActivity(body) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const id = body && body.id
+  if (!id) throw new Error('id is required')
+  const patch = { updated_at: new Date().toISOString() }
+  ;['status', 'done', 'failed', 'skipped', 'total'].forEach(k => { if (body[k] !== undefined) patch[k] = body[k] })
+  const r = await supabaseAdmin('team_mapping_activity?id=eq.' + encodeURIComponent(id), {
+    method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify(patch),
+  })
+  if (!r.ok) throw new Error('Could not update activity row: ' + (await r.text()).slice(0, 300))
+  const saved = await r.json()
+  return Array.isArray(saved) ? saved[0] : saved
+}
+
+async function listTeamActivity() {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const r = await supabaseAdmin('team_mapping_activity?select=*&order=created_at.desc&limit=30')
+  if (!r.ok) return []
+  return await r.json()
+}
+
 async function handleLeadSquared(req, res, me) {
   // Gated on 'leadsquared' -- the id the LeadSquared page's own route guard uses
   // (src/App.jsx). This previously checked 'lq_ops' instead, which meant the
@@ -860,16 +911,29 @@ async function handleLeadSquared(req, res, me) {
   // gated on its own id ('team_mapping') for the same reason.
   const { mode } = req.query || {}
   const FIELD_SCHEMA_MODES = ['activity_schema', 'activity_dropdown_options', 'opportunity_schema', 'lead_schema']
-  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_user_detail']
+  const TEAM_ACTIVITY_MODES = ['team_activity_create', 'team_activity_update', 'team_activity_list']
+  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_user_detail', ...TEAM_ACTIVITY_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
-  // Writing a manual note is admin-only regardless of who else has been granted
-  // read access to the page -- matches every other "view is grantable, edit is
-  // admin-only" surface in this app (e.g. Settings' own per-tab admin gates).
-  if ((mode === 'team_manual_save' || mode === 'team_manual_delete') && me.role !== 'admin') {
+  // Writing a manual note (or logging an import/export) is admin-only regardless
+  // of who else has been granted read access to the page -- matches every other
+  // "view is grantable, edit is admin-only" surface in this app (e.g. Settings'
+  // own per-tab admin gates). team_activity_list stays readable by anyone with
+  // page access, same as team_users/team_groups.
+  if (['team_manual_save', 'team_manual_delete', 'team_activity_create', 'team_activity_update'].includes(mode) && me.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only' })
+  }
+  // The three activity modes are pure Supabase reads/writes -- they don't touch
+  // LeadSquared at all, so they're dispatched here, before the LeadSquared
+  // credential check below, rather than needlessly depending on it.
+  try {
+    if (mode === 'team_activity_create') return res.status(200).json(await createTeamActivity(req.body || req.query, me))
+    if (mode === 'team_activity_update') return res.status(200).json(await updateTeamActivity(req.body || req.query))
+    if (mode === 'team_activity_list') return res.status(200).json({ rows: await listTeamActivity() })
+  } catch (e) {
+    return res.status(502).json({ error: String((e && e.message) || e) })
   }
   const creds = leadsquaredCreds()
   if (!creds.accessKey || !creds.secretKey) {

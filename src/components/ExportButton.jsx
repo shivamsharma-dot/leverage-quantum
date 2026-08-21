@@ -3,7 +3,7 @@ import { toast } from './ToastHost'
 import Button from './Button'
 import { ExcelIcon, SlackIcon } from './icons/BrandIcons'
 
-export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow, slackRich, hideSlack }) {
+export default function ExportButton({ data, filename, columns, dashboardId, extraOption, totalRow, rawData, rawTotalRow, slackRich, hideSlack, hideJson, hideSheets, onExported }) {
   const [open, setOpen] = useState(false)
   // When this button sits near the bottom of a scrollable modal (Compare/Trend
   // Analysis, for instance), a menu that always drops DOWN renders past the
@@ -118,11 +118,13 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
   const exportCSV = () => {
     if (!allRows.length) return
     writeCsv(colsOf(), allRows, filename)
+    if (onExported) onExported({ kind: 'csv', rows: allRows.length })
   }
 
   const exportCSVRaw = () => {
     if (!rawAllRows || !rawAllRows.length) return
     writeCsv(Object.keys(rawAllRows[0]), rawAllRows, (filename || 'export') + '-raw')
+    if (onExported) onExported({ kind: 'csv-raw', rows: rawAllRows.length })
   }
 
   const writeCsv = (cols, list, name) => {
@@ -212,6 +214,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
                 Export as CSV (raw numbers)
               </button>
             )}
+            {!hideJson && (
             <button onClick={exportJSON} style={{
               display:'flex', alignItems:'center', gap:9, width:'100%',
               padding:'9px 14px', border:'none', background:'none',
@@ -230,6 +233,8 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
               </svg>
               Export as JSON
             </button>
+            )}
+            {!hideSheets && (
             <button onClick={exportSheets} disabled={sheetsBusy} style={{
               display:'flex', alignItems:'center', gap:9, width:'100%',
               padding:'9px 14px', border:'none', background:'none',
@@ -247,6 +252,7 @@ export default function ExportButton({ data, filename, columns, dashboardId, ext
               </svg>
               {sheetsBusy ? 'Creating sheet…' : 'Export to Google Sheets'}
             </button>
+            )}
         {!hideSlack && (<>
             <button onClick={() => sendSlack('test')} disabled={slackBusy} style={{
               display:'flex', alignItems:'center', gap:9, width:'100%',
