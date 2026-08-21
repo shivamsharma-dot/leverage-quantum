@@ -133,11 +133,20 @@ export function renderKpiVariant(variantId, props) {
           {sub && <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>{sub}</div>}
         </div>
       )
-    case 4: // white + colored glow shadow
+    case 4: // white + colored glow shadow -- this org's actual live Settings > Appearance
+      // pick (confirmed live: lq_kpi_style='4'), not variant 2 (the code's own fallback
+      // default) -- so this is the one real users see. C8 fix: the outer card had no
+      // overflow:hidden at all (unlike variants 2/5), and the value line had no overflow
+      // guard either -- a wide figure would render OUTSIDE the card's own box with
+      // nothing to contain it, the exact bug class the 2026-08-05 "KPI money values no
+      // longer bleed into the next card" fix was about. Confirmed live via a synthetic
+      // narrow-container test before patching: valueScrollWidth 71 vs clientWidth 32,
+      // overflow:visible, textOverflow:clip -- none of the containment variant 2 already
+      // had. Both added here, matching the pattern variants 2/5 already use.
       return (
-        <div style={{ ...wrap, background: 'var(--card,#fff)', border: '1px solid var(--card-border,#E7EAF1)', borderRadius: 14, padding: '16px 18px', boxShadow: `0 1px 2px rgba(15,27,51,0.05), 0 16px 30px -18px ${A}59` }}>
-          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text3,#94A3B8)', marginBottom: 8 }}>{label}</div>
-          <div style={{ fontSize: 25, fontWeight: 800, color: 'var(--text,#0F172A)', marginBottom: 4 }}>{value}</div>
+        <div style={{ ...wrap, overflow: 'hidden', background: 'var(--card,#fff)', border: '1px solid var(--card-border,#E7EAF1)', borderRadius: 14, padding: '16px 18px', boxShadow: `0 1px 2px rgba(15,27,51,0.05), 0 16px 30px -18px ${A}59` }}>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text3,#94A3B8)', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
+          <div style={{ fontSize: 25, fontWeight: 800, color: 'var(--text,#0F172A)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {sub && <span style={{ fontSize: 12.5, color: 'var(--text3,#94A3B8)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
             <DeltaPill deltaText={deltaText} isGood={isGood} prevValue={prevValue} />
