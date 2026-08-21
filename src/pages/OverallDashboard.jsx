@@ -571,6 +571,7 @@ const PAID_SOURCE_KEYS = ['facebook', 'google', 'affiliate', 'linkedin', 'bing',
 const isPaidSource = label => PAID_SOURCE_KEYS.includes(String(label || '').trim().toLowerCase())
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
 const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
+const PIN_COLS_STORAGE_KEY = 'lq_overall_summary_pin_cols'
 // Bump this whenever SUMMARY_COLUMNS' declared order changes meaningfully (not just when a
 // column is added). A saved colOrder only ever gets NEW keys appended at the end, so a real
 // re-sequencing (e.g. moving Corridor next to the campaign name) would otherwise sit invisible
@@ -1070,7 +1071,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // (a real spend figure truncated this way once already). Opt-in avoids that trade-off
   // entirely for anyone who doesn't need it, and the table is just as usable un-pinned
   // -- it simply scrolls like a normal wide table.
-  const [pinCols, setPinCols] = useState(false)
+  // C13 fix: this used to reset to false on every reload while its three sibling table
+  // preferences (visible cols, col order, contribution metric) all survived -- same
+  // localStorage read/write pattern as CONTRIB_METRIC_STORAGE_KEY just below.
+  const [pinCols, setPinCols] = useState(() => {
+    try { return localStorage.getItem(PIN_COLS_STORAGE_KEY) === '1' } catch { return false }
+  })
+  useEffect(() => { try { localStorage.setItem(PIN_COLS_STORAGE_KEY, pinCols ? '1' : '0') } catch {} }, [pinCols])
   const [showContribPicker, setShowContribPicker] = useState(false)
   // Screen coordinates for the fixed-position Contribution % popover, computed at
   // open time from the pill's own getBoundingClientRect() -- see the click handler.

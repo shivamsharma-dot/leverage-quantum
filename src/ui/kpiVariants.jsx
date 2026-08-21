@@ -102,11 +102,27 @@ export function renderKpiVariant(variantId, props) {
             <div style={{ width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', background: `linear-gradient(135deg, ${A}, ${A}D9)`, boxShadow: `0 4px 10px -2px ${A}66`, flexShrink: 0 }}>{icon}</div>
             <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--text2,#64748B)', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
           </div>
-          <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.6px', color: 'var(--text,#0F1B33)', lineHeight: 1.05, position: 'relative' }}>{value}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, minHeight: 18, position: 'relative' }}>
+          {/* C8 fix: the outer card wrapper already has overflow:hidden (that's what stops
+              a too-wide value from bleeding into the NEXT card, the original documented
+              bug), but this line itself had no overflow handling of its own -- so a wider
+              figure than usual (measured live: EST. SR REVENUE at 89px in an 83px box)
+              would hard-clip mid-character at the card's edge instead of degrading
+              gracefully. Ellipsis truncation here is a strictly-better fallback for that
+              edge case and changes nothing for the normal case where the value fits. */}
+          <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.6px', color: 'var(--text,#0F1B33)', lineHeight: 1.05, position: 'relative', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+          {/* C6/C7 fix: the delta pill and the sub-line used to share one flex row. The
+              pill has flexShrink:0 (never shrinks), so every pixel of shrinking landed on
+              the sub-line -- and because it also has overflow:hidden, its CSS auto-minimum
+              width resolves to 0 rather than to its content size, so a tight card crushed
+              it to a sliver (measured live: "Est. RAUs 28 x SR Fee" rendered as "E...", 7px
+              wide). Splitting the sub-line onto its own full-width row removes the
+              competition entirely, and fixes the knock-on effect where different cards in
+              the same grid row ended up different heights depending on how much of their
+              sub-line survived. */}
+          <div style={{ marginTop: 7, minHeight: 18, position: 'relative' }}>
             <DeltaPill deltaText={deltaText} isGood={isGood} prevValue={prevValue} />
-            {sub && <span style={{ fontSize: 12.5, color: 'var(--text3,#8A94A6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
           </div>
+          <div style={{ fontSize: 12.5, color: 'var(--text3,#8A94A6)', marginTop: 4, minHeight: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub || ' '}</div>
         </div>
       )
     case 3: // full gradient fill
