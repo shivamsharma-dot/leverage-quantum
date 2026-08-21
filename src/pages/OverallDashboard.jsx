@@ -724,12 +724,53 @@ const DEEP_DIMENSIONS = [
 // separate breakdowns instead (see the Compare modal's compareJoinable branch).
 const DEEP_JOINABLE_DIMS = new Set(['source', 'campaign', 'corridor'])
 
+// C9 fix: Compare, Trend, this Columns picker, and the SR Fee popover were all plain
+// fixed/absolute divs with no role, no aria-modal, no initial focus, no focus trap, and
+// Escape did not close any of them -- confirmed live (opening one and pressing Tab moved
+// focus into the page behind the overlay, not into the dialog). One hook, used by all
+// four: moves focus into the dialog the moment it opens, traps Tab within it so it can
+// never escape into the page behind, closes on Escape, and restores focus to whatever
+// was focused before opening once it closes/unmounts.
+//
+// `open` may be a fixed `true` for a component that only ever exists in the tree while
+// open (ColumnsPicker, below) -- the hook's own cleanup on unmount handles that case the
+// same as a real open->false transition.
+function useModalA11y(open, onClose, ref) {
+  const prevFocusRef = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    prevFocusRef.current = document.activeElement
+    const focusables = () => (ref.current
+      ? [...ref.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(el => !el.disabled && el.offsetParent !== null)
+      : [])
+    const first = focusables()[0]
+    ;(first || ref.current)?.focus?.()
+    const onKeyDown = e => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose() }
+      else if (e.key === 'Tab') {
+        const els = focusables()
+        if (!els.length) { e.preventDefault(); return }
+        const firstEl = els[0], lastEl = els[els.length - 1]
+        if (e.shiftKey && document.activeElement === firstEl) { e.preventDefault(); lastEl.focus() }
+        else if (!e.shiftKey && document.activeElement === lastEl) { e.preventDefault(); firstEl.focus() }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true)
+      if (prevFocusRef.current && document.contains(prevFocusRef.current)) prevFocusRef.current.focus()
+    }
+  }, [open, onClose, ref])
+}
+
 // Show/hide + reorder popover for the summary table's columns.
 function ColumnsPicker({ order, visible, onToggle, onMove, onClose, onReset }) {
+  const panelRef = useRef(null)
+  useModalA11y(true, onClose, panelRef)
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:399 }} />
-      <div style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:230, maxHeight:340, overflowY:'auto' }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Columns — show, hide, reorder" tabIndex={-1} style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:230, maxHeight:340, overflowY:'auto' }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 8px 8px' }}>
           <span style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>Columns — show, hide, reorder</span>
           <Button onClick={onReset} variant="ghost" size="sm" style={{ padding:'2px 8px' }}>Reset</Button>
@@ -1014,6 +1055,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [rowLimit, setRowLimit] = useState(25)
   const [showColsPicker, setShowColsPicker] = useState(false)
   const [showRatesPicker, setShowRatesPicker] = useState(false)
+  // C9 fix -- see useModalA11y's own comment above ColumnsPicker for what this does and
+  // why. compareOpen/trendOpen are declared above; the refs get attached to each dialog's
+  // actual panel div (never the backdrop) further down in the render.
+  const compareModalRef = useRef(null)
+  const trendModalRef = useRef(null)
+  const ratesPickerRef = useRef(null)
+  useModalA11y(compareOpen, useCallback(() => setCompareOpen(false), []), compareModalRef)
+  useModalA11y(trendOpen, useCallback(() => setTrendOpen(false), []), trendModalRef)
+  useModalA11y(showRatesPicker, useCallback(() => setShowRatesPicker(false), []), ratesPickerRef)
   // Off by default -- Source/Spend only stay fixed while scrolling when the user
   // explicitly asks for it, since forcing them fixed at every table width risks the
   // sticky cell's own fixed pixel width being narrower than a genuinely long value
@@ -1025,6 +1075,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // Screen coordinates for the fixed-position Contribution % popover, computed at
   // open time from the pill's own getBoundingClientRect() -- see the click handler.
   const [contribPickerPos, setContribPickerPos] = useState(null)
+  const contribPickerRef = useRef(null)
+  useModalA11y(showContribPicker, useCallback(() => setShowContribPicker(false), []), contribPickerRef)
   const [contribMetric, setContribMetric] = useState(() => {
     try { return localStorage.getItem(CONTRIB_METRIC_STORAGE_KEY) || 'leads' } catch { return 'leads' }
   })
@@ -3481,6 +3533,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   onClick={() => setPinCols(v => !v)}
                   size="sm"
                   variant={pinCols ? 'primary' : 'secondary'}
+                  aria-pressed={pinCols}
                   title={pinCols ? `${grpByLabel} is pinned while scrolling — click to make the table scroll freely` : `Pin ${grpByLabel} so it stays visible while scrolling the table sideways`}
                   icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 17v5" /><path d="M9 3h6l1 6 3 2v2H5v-2l3-2z" /></svg>}
                 >
@@ -3499,8 +3552,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   {showRatesPicker && (
                     <>
                       <div onClick={() => setShowRatesPicker(false)} style={{ position:'fixed', inset:0, zIndex:399 }} />
-                      <div style={{ position:'absolute', left:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:14, minWidth:270 }}>
-                        <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>SR revenue formula</div>
+                      <div ref={ratesPickerRef} role="dialog" aria-modal="true" aria-labelledby="sr-fee-popover-title" tabIndex={-1} style={{ position:'absolute', left:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:14, minWidth:270 }}>
+                        <div id="sr-fee-popover-title" style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>SR revenue formula</div>
                         <div style={{ fontSize:20, fontWeight:800, color:C.navy, fontFamily:FONT, marginBottom:8 }}>₹{srFee.toLocaleString('en-IN')} <span style={{ fontSize:12.5, fontWeight:600, color:C.muted }}>per RAU (SR Fee)</span></div>
                         <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.7 }}>
                           <b>Estimated RAU</b> = Deposits × 70%<br />
@@ -3538,12 +3591,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 <table ref={tableRef} style={{ width:'100%', borderCollapse:'collapse', fontSize:14, fontFamily:FONT }}>
                   <thead>
                     <tr style={{ background:'#F8FAFC', borderBottom:'2px solid #E2E8F0' }}>
-                      <th onClick={() => handleSort('label')} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', cursor:'pointer', userSelect:'none', ...stickyLabelStyle(pinCols, '#F8FAFC') }}>
-                        {grpByLabel}{sortKey === 'label' && (sortDir === 'asc' ? ' ▲' : ' ▼')}
+                      <th aria-sort={sortKey === 'label' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'} style={{ padding:'11px 12px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color: sortKey === 'label' ? C.navy : '#64748B', textAlign:'left', whiteSpace:'nowrap', userSelect:'none', ...stickyLabelStyle(pinCols, '#F8FAFC') }}>
+                        {/* C10 fix: was a bare onClick on the <th> itself -- no tabIndex, no role,
+                            no keyboard equivalent. A real <button> is focusable and Enter/Space-
+                            activatable for free; sized/styled to fill the cell so the click target
+                            and appearance are unchanged for a mouse user. */}
+                        <button type="button" onClick={() => handleSort('label')} style={{ display:'block', width:'100%', textAlign:'inherit', background:'none', border:'none', padding:0, margin:0, font:'inherit', color:'inherit', cursor:'pointer' }}>
+                          {grpByLabel}{sortKey === 'label' && (sortDir === 'asc' ? ' ▲' : ' ▼')}
+                        </button>
                       </th>
                       {renderCols.map(col => (
                         <th key={col.key}
-                          onClick={() => handleSort(col.key)}
+                          aria-sort={sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
                           draggable
                           onDragStart={e => { setDragKey(col.key); e.dataTransfer.effectAllowed = 'move' }}
                           onDragOver={e => { e.preventDefault(); if (dragOverKey !== col.key) setDragOverKey(col.key) }}
@@ -3558,9 +3617,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                             boxShadow: dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none',
                           }}>
                           {col.key === 'contribPct' ? (
-                            <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
-                              <span>{col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}</span>
-                              <span
+                            <span style={{ display:'inline-flex', alignItems:'center', gap:5, justifyContent: TEXT_COL_KEYS.includes(col.key) ? 'flex-start' : 'flex-end' }}>
+                              {/* C10 fix: this used to be a bare <th onClick> with no keyboard path at
+                                  all -- clicking the metric-picker pill relied on stopPropagation to
+                                  avoid also triggering a sort, which only worked for a mouse. Both
+                                  triggers are now real buttons; aria-sort moved to the <th> itself. */}
+                              <button type="button" onClick={() => handleSort(col.key)} style={{ background:'none', border:'none', padding:0, margin:0, font:'inherit', color:'inherit', textTransform:'inherit', letterSpacing:'inherit', cursor:'pointer' }}>
+                                {col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
+                              </button>
+                              <button
+                                type="button"
                                 onClick={e => {
                                   e.stopPropagation()
                                   // position:fixed, anchored to the pill's own screen coordinates at click
@@ -3576,15 +3642,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                                   setShowContribPicker(true)
                                 }}
                                 title="Choose the metric this contribution % is based on"
-                                style={{ padding:'2px 6px', borderRadius:6, background: showContribPicker ? C.navy : '#E2E8F0', color: showContribPicker ? '#fff' : '#475569', fontSize:11, fontWeight:800, textTransform:'none', letterSpacing:0, cursor:'pointer', whiteSpace:'nowrap' }}>
+                                style={{ border:'none', padding:'2px 6px', borderRadius:6, background: showContribPicker ? C.navy : '#E2E8F0', color: showContribPicker ? '#fff' : '#475569', fontSize:11, fontWeight:800, textTransform:'none', letterSpacing:0, cursor:'pointer', whiteSpace:'nowrap', fontFamily:'inherit' }}>
                                 {CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads'} ▾
-                              </span>
+                              </button>
                               {showContribPicker && contribPickerPos && (
                                 <>
                                   <div onClick={e => { e.stopPropagation(); setShowContribPicker(false) }} style={{ position:'fixed', inset:0, zIndex:399 }} />
-                                  <div onClick={e => e.stopPropagation()} style={{ position:'fixed', top:contribPickerPos.top, left:contribPickerPos.left, zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:240 }}>
+                                  <div ref={contribPickerRef} role="dialog" aria-modal="true" aria-labelledby="contrib-picker-title" tabIndex={-1} onClick={e => e.stopPropagation()} style={{ position:'fixed', top:contribPickerPos.top, left:contribPickerPos.left, zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 16px 40px rgba(15,23,42,0.14)', padding:6, minWidth:240 }}>
                                     <div style={{ padding:'6px 10px 10px', marginBottom:4, borderBottom:`0.5px solid ${C.border}` }}>
-                                      <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:5 }}>How this is calculated</div>
+                                      <div id="contrib-picker-title" style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:5 }}>How this is calculated</div>
                                       <div style={{ fontSize:13, color:C.sub, lineHeight:1.55, fontWeight:400 }}>
                                         Each row's <b>{(CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads')}</b> divided by the grand total {(CONTRIB_METRICS.find(m => m.key === contribMetric)?.label || 'Leads')} for the current filters, ×100.
                                       </div>
@@ -3600,7 +3666,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                               )}
                             </span>
                           ) : (
-                            <>{col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}</>
+                            <button type="button" onClick={() => handleSort(col.key)} style={{ display:'block', width:'100%', textAlign:'inherit', background:'none', border:'none', padding:0, margin:0, font:'inherit', color:'inherit', textTransform:'inherit', letterSpacing:'inherit', cursor:'pointer' }}>
+                              {col.label}{sortKey === col.key && (sortDir === 'asc' ? ' ▲' : ' ▼')}
+                            </button>
                           )}
                         </th>
                       ))}
@@ -3817,10 +3885,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           {compareOpen && (
             <div onClick={e => { if (e.target === e.currentTarget) setCompareOpen(false) }}
               style={{ position:'fixed', inset:0, zIndex:600, background:'rgba(15,23,42,0.45)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
-              <div style={{ background:'var(--card)', borderRadius:18, width:'min(1120px, 96vw)', maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
+              <div ref={compareModalRef} role="dialog" aria-modal="true" aria-labelledby="compare-modal-title" tabIndex={-1} style={{ background:'var(--card)', borderRadius:18, width:'min(1120px, 96vw)', maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
                 <div style={{ padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div>
-                    <div style={{ fontSize:18, fontWeight:800, color:C.text }}>Compare periods</div>
+                    <div id="compare-modal-title" style={{ fontSize:18, fontWeight:800, color:C.text }}>Compare periods</div>
                     <div style={{ fontSize:15, color:C.muted, marginTop:2 }}>{currentLabel} vs {compareLabel}</div>
                   </div>
                   <button onClick={() => setCompareOpen(false)} style={{ border:'none', background:'transparent', color:C.muted, cursor:'pointer', display:'flex', padding:4 }}>
@@ -4082,10 +4150,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           {trendOpen && (
             <div onClick={e => { if (e.target === e.currentTarget) setTrendOpen(false) }}
               style={{ position:'fixed', inset:0, zIndex:600, background:'rgba(15,23,42,0.45)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
-              <div style={{ background:'var(--card)', borderRadius:18, width:'min(1320px, 96vw)', maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
+              <div ref={trendModalRef} role="dialog" aria-modal="true" aria-labelledby="trend-modal-title" tabIndex={-1} style={{ background:'var(--card)', borderRadius:18, width:'min(1320px, 96vw)', maxHeight:'88vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
                 <div style={{ padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div>
-                    <div style={{ fontSize:18, fontWeight:800, color:C.text }}>Trend Analysis</div>
+                    <div id="trend-modal-title" style={{ fontSize:18, fontWeight:800, color:C.text }}>Trend Analysis</div>
                     <div style={{ fontSize:15, color:C.muted, marginTop:2 }}>Trajectory across trailing periods -- not just two points</div>
                   </div>
                   <button onClick={() => setTrendOpen(false)} style={{ border:'none', background:'transparent', color:C.muted, cursor:'pointer', display:'flex', padding:4 }}>
