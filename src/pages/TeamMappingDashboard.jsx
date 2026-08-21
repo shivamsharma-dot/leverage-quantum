@@ -348,7 +348,7 @@ function splitDelimited(line, delim) {
 // was wrong. Checked for up front so the real cause ("this isn't a text file")
 // surfaces as an actual message instead of a mysteriously empty import.
 function looksBinary(text) {
-  if (text.includes(' ')) return true
+  if (text.includes('\x00')) return true
   if (/^PK\x03\x04/.test(text)) return true // .xlsx/.xls (zip) signature
   if (/^%PDF/.test(text)) return true
   const head = text.slice(0, 2000)
