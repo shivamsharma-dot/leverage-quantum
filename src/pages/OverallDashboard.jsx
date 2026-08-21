@@ -47,6 +47,32 @@ async function resolveOverallUrl() {
   return DEFAULT_URL
 }
 
+const OVERALL_URL_CACHE_KEY = 'lq_overall_sheet_url'
+let _overallUrlPromise = null
+// A1: the CSV load used to await this preference round-trip before it even knew
+// the sheet URL, putting a full serial network hop on the critical path ahead of
+// the ~2-lakh-row parse. Now the lookup is memoised per module load, kicked off
+// at module-eval time (the moment this route chunk lands) so it overlaps mount
+// instead of blocking it, and an already-resolved URL is cached in sessionStorage
+// so repeat loads in the same tab resolve with no round-trip at all.
+function rememberOverallUrl(u) {
+  try { if (u && u !== DEFAULT_URL) sessionStorage.setItem(OVERALL_URL_CACHE_KEY, u) } catch (_) {}
+  return u
+}
+function resolveOverallUrlFast() {
+  if (_overallUrlPromise) return _overallUrlPromise
+  let cached = null
+  try { cached = sessionStorage.getItem(OVERALL_URL_CACHE_KEY) } catch (_) {}
+  if (cached) {
+    resolveOverallUrl().then(rememberOverallUrl).catch(() => {})
+    _overallUrlPromise = Promise.resolve(cached)
+  } else {
+    _overallUrlPromise = resolveOverallUrl().then(rememberOverallUrl)
+  }
+  return _overallUrlPromise
+}
+resolveOverallUrlFast()
+
 function parseCSV(t) {
   const rows = []; let i = 0, field = '', row = [], inq = false
   while (i < t.length) {
@@ -1141,7 +1167,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     }
     if (!paintedFromCache) setLoading(true)
     try {
-      const base = await resolveOverallUrl()
+      const base = await resolveOverallUrlFast()
       const u = bust ? base + (base.includes('?') ? '&' : '?') + '_=' + Date.now() : base
       const res = await fetch(u)
       const txt = await res.text()

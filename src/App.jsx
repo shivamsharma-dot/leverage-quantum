@@ -117,7 +117,20 @@ const DASHBOARD_FALLBACK_ORDER = [
 
 function ProtectedRoute({ children, dashboardId }) {
   const { user, loading, hiddenPages, prefsReady, refreshUser } = useAuth()
-  const location = useLocation(); /* warm the Summary page cache once per session, as soon as we know who is logged in */ useEffect(() => { if (user && user.email) prefetchSummaryAnalysis() }, [user && user.email])
+  const location = useLocation(); /* A1: warm the Summary page cache -- but ONLY while actually on Summary.
+     This used to fire on EVERY route, so three sheet CSV downloads
+     (googleleads / Qlops / QLSnapshot) plus three Meta Graph /insights calls
+     raced ahead of the current page's own data fetch; on /dashboard/overall
+     that pushed first meaningful paint out to 76-86s on a cold load. Also
+     deferred to idle so it never contends with the page's own first render. */
+  const onSummaryRoute = location.pathname === '/'
+  useEffect(() => {
+    if (!user || !user.email || !onSummaryRoute) return
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 300))
+    const cancelWarm = window.cancelIdleCallback || clearTimeout
+    const h = idle(() => { prefetchSummaryAnalysis() })
+    return () => cancelWarm(h)
+  }, [user && user.email, onSummaryRoute])
 
   // Re-check access on every navigation so a permission grant/revoke made while
   // this tab is open takes effect on the user's very next click, instead of
