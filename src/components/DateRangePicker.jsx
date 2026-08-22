@@ -5,7 +5,7 @@ import Button from './Button'
 // LeadQualificationDashboard so every dashboard gets the same picker
 // instead of a native <input type="date">.
 const C = {
-  navy: '#1F3C84', navyBg: '#E8EFF9',
+  navy: '#1F3C84', navyBg: 'var(--navy-tint)', blue: '#1C9FD4',
   border: 'var(--card-border)', text: 'var(--text)',
   muted: 'var(--text3)', sub: 'var(--text2)'
 }
@@ -45,7 +45,7 @@ function CalMonth({ year, month, from, to, hovered, onSelect, onHover }) {
           const isToday  = ts === today.getTime()
           let bg = 'transparent', color = C.text, radius = 6
           if (isFrom || isTo) { bg = C.navy; color = 'var(--card)' }
-          else if (inRange)   { bg = C.navyBg; color = C.navy }
+          else if (inRange)    { bg = C.navyBg; color = 'var(--text)' }
           return (
             <button key={ts}
               onClick={() => onSelect(date)}
@@ -119,7 +119,7 @@ function DateRangePicker({ from, to, onChange, onClose }) {
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
         <div style={{
           flex: 1, padding: '6px 10px', borderRadius: 8, border: `1.5px solid ${step==='from'?C.navy:C.border}`,
-          background: step==='from'?C.navyBg:'#FAFAFA', fontSize: 12, fontWeight: 600, color: selFrom?C.text:C.muted,
+          background: step==='from'?C.navyBg:'var(--bg2)', fontSize: 12, fontWeight: 600, color: selFrom?C.text:C.muted,
           fontFamily: FONT, cursor: 'pointer',
         }} onClick={() => setStep('from')}>
           {selFrom ? fmt(selFrom) : 'Start date'}
@@ -127,7 +127,7 @@ function DateRangePicker({ from, to, onChange, onClose }) {
         <svg width="16" height="10" viewBox="0 0 16 10" fill="none"><path d="M0 5h14M10 1l4 4-4 4" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
         <div style={{
           flex: 1, padding: '6px 10px', borderRadius: 8, border: `1.5px solid ${step==='to'&&selFrom?C.navy:C.border}`,
-          background: step==='to'&&selFrom?C.navyBg:'#FAFAFA', fontSize: 12, fontWeight: 600, color: selTo?C.text:C.muted,
+          background: step==='to'&&selFrom?C.navyBg:'var(--bg2)', fontSize: 12, fontWeight: 600, color: selTo?C.text:C.muted,
           fontFamily: FONT, cursor: selFrom?'pointer':'default',
         }} onClick={() => selFrom && setStep('to')}>
           {selTo ? fmt(selTo) : 'End date'}
@@ -146,7 +146,7 @@ function DateRangePicker({ from, to, onChange, onClose }) {
       </div>
 
       {/* Footer */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `0.5px solid #F1F5F9` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: `0.5px solid var(--card-border)` }}>
         <Button size="sm" variant="secondary" onClick={() => { setSelFrom(null); setSelTo(null); setStep('from') }}>
           Clear
         </Button>
