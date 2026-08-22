@@ -543,6 +543,10 @@ const SUMMARY_COLUMNS = [
   { key:'futworkHumanQlPct', label:'Lead to QL % (Human)' },
   { key:'futworkAiQlPct', label:'Lead to QL % (AI)' },
   { key:'totalQL', label:'Total QLs' },
+  // Total QLs / days in the active date scope -- see daysInRange below. The same single
+  // day-count applies to every row and to TOTAL, regardless of grouping, per explicit
+  // request: it answers "at this pace, how many QLs a day", not "this row's own span".
+  { key:'avgQlPerDay', label:'Average QLs/day' },
   { key:'apps', label:'Applications' },
   { key:'offers', label:'Offers' },
   { key:'deposits', label:'Deposits' },
@@ -659,6 +663,7 @@ function summaryFmt(key, v) {
   if (v == null) return '—'
   if (key === 'corridor' || key === 'source' || key === 'subSource') return v
   if (key === 'roas' || key === 'estimatedRoas') return v.toFixed(2) + 'x'
+  if (key === 'avgQlPerDay') return v.toFixed(1)
   if (key.endsWith('Pct')) return v.toFixed(1) + '%'
   if (key.endsWith('SrRevenue') || key === 'spend' || key === 'cpl' || key === 'cpql' || key === 'cpa') return fmtINR(v)
   return fmtN(v)
@@ -2232,6 +2237,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         const av = summaryValue(a, contribMetric) || 0, bv = summaryValue(b, contribMetric) || 0
         return sortDir === 'asc' ? av - bv : bv - av
       }
+      // avgQlPerDay divides every row's totalQL by the SAME positive constant (daysInRange),
+      // so sorting by it is exactly sorting by totalQL -- same shortcut as contribPct above.
+      if (sortKey === 'avgQlPerDay') {
+        const av = summaryValue(a, 'totalQL') || 0, bv = summaryValue(b, 'totalQL') || 0
+        return sortDir === 'asc' ? av - bv : bv - av
+      }
       const av = summaryValue(a, sortKey), bv = summaryValue(b, sortKey)
       const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv
       return sortDir === 'asc' ? an - bn : bn - an
@@ -2267,6 +2278,29 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   }, [])
   const totalsRow = useMemo(() => aggregateRows(sortedFilteredRows, 'TOTAL'), [aggregateRows, sortedFilteredRows])
 
+  // Number of calendar days spanned by whatever date scope is currently active, so
+  // "Average QLs/day" always divides by ONE consistent denominator -- the same for every
+  // row and for TOTAL, regardless of grouping -- rather than each row's own span. LD/L7D/
+  // MTD/custom already carry an exact {from,to} window (dateWindow); a specific month
+  // picked from the Month dropdown uses that month's real day count, except the current
+  // month, which is still in progress and only counts elapsed days (mirroring how MTD
+  // itself already stops at today rather than running to month-end); "All time" (no
+  // window, no month -- selMonth empty/unmatched) spans the earliest to latest dated row.
+  const daysInRange = useMemo(() => {
+    const oneDay = 86400000
+    if (dateWindow) return Math.max(1, Math.round((dateWindow.to - dateWindow.from) / oneDay) + 1)
+    const mk = monthKeyByLabel.get(selMonth)
+    if (mk != null) {
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      if (mk === monthKey(today)) return today.getDate()
+      return Math.round((monthEndDate(mk) - monthStartDate(mk)) / oneDay) + 1
+    }
+    const dates = rows.map(r => r.date).filter(Boolean)
+    if (!dates.length) return 1
+    const min = Math.min(...dates.map(d => +d)), max = Math.max(...dates.map(d => +d))
+    return Math.max(1, Math.round((max - min) / oneDay) + 1)
+  }, [dateWindow, selMonth, monthKeyByLabel, rows])
+
   // Contribution %'s grand total for whichever metric is currently picked (default Leads).
   // A row's contribution is its own metric value divided by this fixed constant -- computed
   // once here so every render site (table cells, band row, TOTAL row, Sub Source/Campaign
@@ -2280,8 +2314,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       if (num == null || !contribTotal) return null
       return (num / contribTotal) * 100
     }
+    // Same reasoning as contribPct above: not a per-row field, so it's derived here rather
+    // than stuffed onto every row/band/TOTAL object that summaryValue might see.
+    if (key === 'avgQlPerDay') {
+      const totalQL = summaryValue(g, 'totalQL')
+      return daysInRange > 0 ? (totalQL || 0) / daysInRange : null
+    }
     return summaryValue(g, key)
-  }, [contribMetric, contribTotal])
+  }, [contribMetric, contribTotal, daysInRange])
 
   // Paid / Non-Paid banding, source view only. Band subtotals are computed over
   // the whole filtered set -- like TOTAL, and unlike the "Show N" slice -- so a

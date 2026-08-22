@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
+import DateRangePicker from '../components/DateRangePicker'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { resolveSheetUrl } from '../lib/dataSources'
 import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN, BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
@@ -429,11 +430,12 @@ export default function HumanQLDetailDashboard() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [monthDay, setMonthDay] = useState('all')
-  const [datePreset, setDatePreset] = useState('all')
+  const [datePreset, setDatePreset] = useState('MTD')
   const [selMonth, setSelMonth] = useState('')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
-  const [showCustom, setShowCustom] = useState(false)
+  const [customOpen, setCustomOpen] = useState(false)
+  const prevPresetRef = useRef({ datePreset: 'MTD', selMonth: '', monthDay: 'all' })
   const [lastSync, setLastSync] = useState(null)
   const [showInfo, setShowInfo] = useState(false)
   const [search, setSearch] = useState('')
@@ -727,7 +729,7 @@ export default function HumanQLDetailDashboard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: '#F8FAFC', padding: '6px 10px', borderRadius: 12, border: '0.5px solid #E5E7EB' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: 3 }}>
               {[['LD', 'Last Day'], ['L7D', 'Last 7D'], ['MTD', 'MTD']].map(([key, lbl]) => (
-                <button key={key} onClick={() => { setMonthDay('all'); setDatePreset(key); setSelMonth(''); setCustomFrom(''); setCustomTo(''); setShowCustom(false) }}
+                <button key={key} onClick={() => { setMonthDay('all'); setDatePreset(key); setSelMonth(''); setCustomFrom(''); setCustomTo(''); setCustomOpen(false) }}
                   style={{
                     padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT,
                     background: monthDay === 'all' && datePreset === key ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'transparent',
@@ -742,21 +744,39 @@ export default function HumanQLDetailDashboard() {
                 setMonthDay('all')
                 if (v === 'all') { setSelMonth(''); setDatePreset('all') }
                 else { const idx = monthOptions.map(fmtMonthLabel).indexOf(v); setSelMonth(monthOptions[idx]); setDatePreset('month') }
-                setCustomFrom(''); setCustomTo(''); setShowCustom(false); setOpenFilterKey(null)
+                setCustomFrom(''); setCustomTo(''); setCustomOpen(false); setOpenFilterKey(null)
               }} />
-            <button onClick={() => { setMonthDay('all'); setShowCustom(v => !v); setDatePreset('custom'); setSelMonth('') }}
-              style={{
-                padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT,
-                background: monthDay === 'all' && datePreset === 'custom' ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'transparent',
-                color: monthDay === 'all' && datePreset === 'custom' ? '#fff' : '#64748B',
-              }}>Custom</button>
-            {showCustom && (
-              <>
-                <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6, border: '0.5px solid ' + C.border, fontFamily: FONT, color: C.text, background: 'var(--card)' }} />
-                <span style={{ fontSize: 11, color: C.muted }}>to</span>
-                <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6, border: '0.5px solid ' + C.border, fontFamily: FONT, color: C.text, background: 'var(--card)' }} />
-              </>
-            )}
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => {
+                  if (datePreset !== 'custom' || monthDay !== 'all') {
+                    prevPresetRef.current = { datePreset, selMonth, monthDay }
+                    setMonthDay('all'); setDatePreset('custom'); setSelMonth('')
+                  }
+                  setCustomOpen(v => !v)
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT,
+                  background: monthDay === 'all' && datePreset === 'custom' ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'transparent',
+                  color: monthDay === 'all' && datePreset === 'custom' ? '#fff' : '#64748B',
+                }}>{customFrom && customTo ? customFrom + ' -> ' + customTo : 'Custom range'}</button>
+              {customOpen && (
+                <>
+                  <div onClick={() => { setCustomOpen(false); if (!(customFrom && customTo)) { setDatePreset(prevPresetRef.current.datePreset); setSelMonth(prevPresetRef.current.selMonth); setMonthDay(prevPresetRef.current.monthDay) } }}
+                    style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
+                  <div style={{ position: 'absolute', left: 0, top: 'calc(100% + 8px)', zIndex: 400, background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 14, boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', overflow: 'hidden' }}>
+                    <DateRangePicker
+                      from={customFrom ? (() => { const [y, m, d] = customFrom.split('-').map(Number); return new Date(y, m - 1, d) })() : null}
+                      to={customTo ? (() => { const [y, m, d] = customTo.split('-').map(Number); return new Date(y, m - 1, d) })() : null}
+                      onChange={(f, t) => {
+                        setCustomFrom(f || ''); setCustomTo(t || ''); setCustomOpen(false)
+                        if (!(f && t)) { setDatePreset(prevPresetRef.current.datePreset); setSelMonth(prevPresetRef.current.selMonth); setMonthDay(prevPresetRef.current.monthDay) }
+                      }}
+                      onClose={() => setCustomOpen(false)}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
             {lastSync && <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>}
             <Button onClick={reload} disabled={loading} title="Refresh data" size="sm">
               {loading ? 'Refreshing' : 'Refresh'}
