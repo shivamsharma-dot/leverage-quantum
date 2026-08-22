@@ -2295,9 +2295,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       if (mk === monthKey(today)) return today.getDate()
       return Math.round((monthEndDate(mk) - monthStartDate(mk)) / oneDay) + 1
     }
-    const dates = rows.map(r => r.date).filter(Boolean)
-    if (!dates.length) return 1
-    const min = Math.min(...dates.map(d => +d)), max = Math.max(...dates.map(d => +d))
+    // Plain reduce, not Math.min/max(...array) -- this sheet has 180k+ raw rows, and
+    // spreading an array that large into a function call overflows the call stack
+    // (confirmed live: crashed the page with exactly that error the first time this
+    // shipped, on selecting "All months").
+    let min = null, max = null
+    for (const r of rows) {
+      if (!r.date) continue
+      const t = +r.date
+      if (min == null || t < min) min = t
+      if (max == null || t > max) max = t
+    }
+    if (min == null) return 1
     return Math.max(1, Math.round((max - min) / oneDay) + 1)
   }, [dateWindow, selMonth, monthKeyByLabel, rows])
 
