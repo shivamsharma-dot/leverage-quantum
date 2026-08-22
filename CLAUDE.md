@@ -4955,3 +4955,78 @@ queries key off) rather than visually. Someone should eyeball it on a real phone
 Dark / navy / stone themes were likewise not switched into and looked at -- the
 hardcoded hexes are gone and replaced with the same tokens the rest of the page
 already used, but that is a source-level argument, not an observed one.
+
+---
+
+## 2026-08-22 (later) - Leverage Careers: post-verification follow-ups (theme + real mobile)
+
+Follow-on to the same-day "CRM source/channel dimensions + page-level advanced filters" entry.
+All four commits below were built green, pushed straight to main, and then checked on the live
+site before being written up here.
+
+### What changed
+
+- **2843ff6** - Compare-modal verdict banner. It was `background: C.navyBg, color: C.navy`, i.e.
+  the literals #E8EFF9 and #1F3C84, so in dark/navy/stone it was a light blue slab. Now
+  `var(--navy-tint)` background, a `var(--card-border)` hairline, `var(--text)` text. Confirmed
+  visually in all four themes.
+
+- **8dfa0f3** - `LeverageCareersDashboard.module.css` first-column rule. It used
+  `overflow-wrap: anywhere`, which sets the cell's min-content width to a single character; with
+  `table-layout: auto` the auto algorithm then squeezed the ad-name column down to ~42px on any
+  viewport under roughly 1300px and the AD NAME header rendered one letter per line. Swapped to
+  `overflow-wrap: break-word` (does not shrink min-content) and added `min-width: 200px`. Measured
+  live afterwards: 200px, header on one line.
+
+- **3b95f51** - `src/components/DateRangePicker.jsx`. **Shared component, affects every dashboard.**
+  Three hardcoded light values that never adapted to a theme: `navyBg` was the literal #E8EFF9
+  (in-range day cells), the from/to pills used #FAFAFA, the footer border used #F1F5F9. Now
+  `var(--navy-tint)`, `var(--bg2)`, `var(--card-border)`, and in-range text is `var(--text)`.
+  Separately, `C.blue` was referenced by the small "today" dot but was never defined on the local
+  `C` object, so the dot rendered with no background at all; added `blue: '#1C9FD4'`. Computed
+  styles in dark now read rgba(110,143,232,0.16) with #E9EEF8 text for in-range cells.
+
+- **753ac7b** - Mobile date range. The shared picker is a fixed two-month panel and both careers
+  popovers anchor it with `position: absolute` (`left: 0` in the Compare modal RangeField,
+  `right: 0` in the page header Custom pill). At a 352px viewport the entire left month **and** the
+  Start-date field sat off-screen, so a custom range simply could not be picked on a phone. Added
+  `.lq-drp` / `.lq-drp-months` classes inside the picker and `.lq-popover-clamp` on both careers
+  popovers, plus one new `@media (max-width: 768px)` block at the end of `src/index.css` that hides
+  the second month and pins the popover with `position: fixed; top: calc(64px + safe-area);
+  left: 50%; transform: translateX(-50%); max-width: calc(100vw - 16px)`. Desktop was re-checked
+  afterwards and is unchanged: still two months, still anchored to the button.
+
+### Verified live (zero console errors throughout)
+
+- **Themes.** Drove `document.documentElement[data-theme]` through light / dark / navy / stone on
+  the live page. KPI strip, filter bar and all five dropdown panels, funnel, grouping tabs, table,
+  Compare modal, verdict banner and the calendar all read tokens in all four.
+- **Mobile, for real this time.** Earlier in the session `resize_window` would not shrink the
+  viewport below ~1372px; it eventually started working, and the page was checked at a genuine
+  352px `window.innerWidth` with `(max-width: 768px)` matching. `lq-mobile-topbar` appears with the
+  hamburger, header controls wrap to three rows, the filter bar stacks one control per row,
+  `lq-kpi-grid` collapses to a single column, the table scrolls horizontally inside its own wrapper,
+  and `document.body.scrollWidth === window.innerWidth` (no page-level horizontal overflow). Picked
+  2026-08-05 -> 2026-08-12 in the new single-month picker and applied it: spend 5,53,796,
+  Meta leads 3,014, CRM leads 3,720, header and KPI subtitles all relabelled correctly.
+- **Component inventory.** This page imports `Dropdown` (theme-aware) and the shared
+  `DateRangePicker`. `FilterDropdown.jsx` (which is *not* theme-aware) is not used here, so that
+  standing open issue does not affect the careers page.
+
+### Still open, deliberately not fixed
+
+- dashboardKit's `C.navyBg` / `C.blueBg` / `C.cyanBg` / `C.greenBg` are hardcoded light literals and
+  get passed as `accentBg` to `PremKPI` on many pages. This is invisible today only because KPI
+  icons are off by default (`lq_kpi_icons`). Turn icons on in a dark theme and you get light chips.
+  App-wide change, left alone.
+- The custom-range preset pill ("2026-08-05 -> 2026-08-12") overflows the preset group at 352px.
+  Cosmetic only.
+- `DateRangePicker` mutates `e.currentTarget.style.background` imperatively on mouseover/mouseout,
+  so a stale inline background can outlive a re-render. Looked fine in testing, but it is the wrong
+  pattern and it is why a computed-style probe briefly showed a mismatched text colour.
+- Unchanged from the earlier entry: `graphGetAll` truncates silently at `maxPages` 40, and the Trend
+  6-month option is unreliable because Meta rate-limits day-level (`time_increment=1`) pulls over
+  wide windows. Both pre-existing.
+- Codespace stash `stale-overall-edit-2026-08-22` (an uncommitted `src/pages/OverallDashboard.jsx`
+  edit that was 23 commits behind origin/main) is still on the shelf. Nobody has claimed it - do not
+  drop it without asking first.
