@@ -109,14 +109,24 @@ const PRESETS = [
   { id: 'mtd', label: 'MTD' },
 ]
 
-// Granular fetch: one row per (date, campaign-name), for any window -- shared by
-// the main page, Trend Analysis, and Compare, so all three can never disagree
-// about what a number means. Meta's own day-level insights (time_increment=1)
-// give the (date, ad) side; BigQuery's careers_leads mode (now grouped by
-// day+campaign, see api/crm-leads.js) gives the (date, campaign) side. Joined
-// by exact normalized name, same convention as every other name-based join in
-// this app -- a row is "matched" only where BOTH sides have real data for that
-// exact day, never a whole-window match bleeding across days.
+// Granular fetch: one row per (date, ad-name, CRM source, CRM contact channel),
+// for any window -- shared by the main page, Trend Analysis and Compare, so all
+// three can never disagree about what a number means. Meta's own day-level
+// insights (time_increment=1) give the (date, ad) side; BigQuery's careers_leads
+// mode (grouped by day+campaign+source+channel, see api/crm-leads.js) gives the
+// CRM side. Joined by exact normalized name, same convention as every other
+// name-based join in this app -- matched only where BOTH sides have real data for
+// that exact day, never a whole-window match bleeding across days.
+//
+// Meta cannot report spend per CRM source, so an ad-day's spend / impressions /
+// clicks / Meta-leads are ALLOCATED PRO-RATA across that same ad-day's CRM
+// sources by their share of its CRM leads. With no source filter applied the
+// splits sum back to exactly the unallocated figure, so page totals are
+// unchanged; with one applied, cost metrics stay coherent instead of counting
+// one ad's whole spend into every source it touched. Ad-days with spend but no
+// CRM lead at all cannot be attributed and are bucketed as UNATTRIBUTED rather
+// than silently dropped from the totals.
+const UNATTRIBUTED = '(no CRM match)'
 async function fetchGranular(token, since, until) {
   const timeRange = JSON.stringify({ since, until })
   const [metaDaily, bq] = await Promise.all([
@@ -127,31 +137,67 @@ async function fetchGranular(token, since, until) {
     fetch(`/api/crm-leads?source=bigquery&mode=careers_leads&since=${since}&until=${until}`, { credentials: 'include' }).then(r => r.json()),
   ])
   if (bq && bq.error) throw new Error(bq.error)
-  const map = new Map()
-  const cell = (date, key, name) => {
-    const k = date + '|' + key
-    let row = map.get(k)
-    if (!row) { row = { date, name: name || key, spend: 0, impressions: 0, clicks: 0, metaLeads: 0, crmLeads: 0, interested: 0, won: 0, hasMeta: false, hasCrm: false }; map.set(k, row) }
-    return row
-  }
+
+  // (date|name) -> that ad-day's Meta metrics
+  const meta = new Map()
   ;(metaDaily || []).forEach(a => {
     if (!a.date_start) return
-    const row = cell(a.date_start, normName(a.ad_name), a.ad_name)
-    row.spend += Number(a.spend) || 0
-    row.impressions += Number(a.impressions) || 0
-    row.clicks += Number(a.clicks) || 0
-    row.metaLeads += metaLeadsFromActions(a.actions)
-    row.hasMeta = true
+    const k = a.date_start + '|' + normName(a.ad_name)
+    let m = meta.get(k)
+    if (!m) { m = { date: a.date_start, name: a.ad_name, spend: 0, impressions: 0, clicks: 0, metaLeads: 0 }; meta.set(k, m) }
+    m.spend += Number(a.spend) || 0
+    m.impressions += Number(a.impressions) || 0
+    m.clicks += Number(a.clicks) || 0
+    m.metaLeads += metaLeadsFromActions(a.actions)
   })
+
+  // (date|name) -> per (source, channel) CRM counts + that ad-day's lead total
+  const crm = new Map()
   ;((bq && bq.rows) || []).forEach(r => {
     if (!r.lead_date) return
-    const row = cell(r.lead_date, normName(r.campaign), r.campaign)
-    row.crmLeads += Number(r.total_leads) || 0
-    row.interested += Number(r.total_interested) || 0
-    row.won += Number(r.won) || 0
-    row.hasCrm = true
+    const k = r.lead_date + '|' + normName(r.campaign)
+    let c = crm.get(k)
+    if (!c) { c = { date: r.lead_date, name: r.campaign, total: 0, parts: new Map() }; crm.set(k, c) }
+    const source = r.source || 'Unknown'
+    const channel = r.channel || 'Unknown'
+    const pk = source + '|' + channel
+    let p = c.parts.get(pk)
+    if (!p) { p = { source, channel, crmLeads: 0, interested: 0, won: 0 }; c.parts.set(pk, p) }
+    const n = Number(r.total_leads) || 0
+    p.crmLeads += n
+    p.interested += Number(r.total_interested) || 0
+    p.won += Number(r.won) || 0
+    c.total += n
   })
-  return Array.from(map.values())
+
+  const out = []
+  crm.forEach((c, k) => {
+    const m = meta.get(k)
+    const parts = Array.from(c.parts.values())
+    parts.forEach(p => {
+      // Share by CRM leads; if an ad-day somehow reports zero leads across all of
+      // its rows, split evenly rather than dropping that ad's spend on the floor.
+      const share = c.total > 0 ? p.crmLeads / c.total : 1 / parts.length
+      out.push({
+        date: c.date, name: (m && m.name) || c.name, source: p.source, channel: p.channel,
+        spend: m ? m.spend * share : 0,
+        impressions: m ? m.impressions * share : 0,
+        clicks: m ? m.clicks * share : 0,
+        metaLeads: m ? m.metaLeads * share : 0,
+        crmLeads: p.crmLeads, interested: p.interested, won: p.won,
+        hasMeta: !!m, hasCrm: true,
+      })
+    })
+  })
+  meta.forEach((m, k) => {
+    if (crm.has(k)) return
+    out.push({
+      date: m.date, name: m.name, source: UNATTRIBUTED, channel: UNATTRIBUTED,
+      spend: m.spend, impressions: m.impressions, clicks: m.clicks, metaLeads: m.metaLeads,
+      crmLeads: 0, interested: 0, won: 0, hasMeta: true, hasCrm: false,
+    })
+  })
+  return out
 }
 
 // Aggregate granular rows into one of three shapes -- Campaign (one row per ad
@@ -160,11 +206,20 @@ async function fetchGranular(token, since, until) {
 // grouping-tab pattern. Every derived ratio is re-computed from the summed
 // totals here, never averaged across rows, so a TOTAL line built the same way
 // always reconciles exactly.
+// Which field a grouping tab keys on. Campaign is the ad name; Source/Channel are
+// the two CRM-side dimensions added to the query on 2026-08-22.
+function keyForDim(r, dim) {
+  if (dim === 'campaign') return r.name
+  if (dim === 'source') return r.source
+  if (dim === 'channel') return r.channel
+  if (dim === 'day') return r.date
+  return monthKeyOf(r.date)
+}
 function groupRows(rows, dim) {
   const map = new Map()
   ;(rows || []).forEach(r => {
-    const key = dim === 'campaign' ? r.name : dim === 'day' ? r.date : monthKeyOf(r.date)
-    const label = dim === 'campaign' ? r.name : dim === 'day' ? r.date : monthKeyOf(r.date)
+    const key = keyForDim(r, dim)
+    const label = key
     let g = map.get(key)
     if (!g) { g = { key, label, spend: 0, impressions: 0, clicks: 0, metaLeads: 0, crmLeads: 0, interested: 0, won: 0, hasMeta: false, hasCrm: false }; map.set(key, g) }
     g.spend += r.spend; g.impressions += r.impressions; g.clicks += r.clicks
@@ -206,10 +261,10 @@ const deltaPct = (cur, prev) => (prev == null || prev === 0) ? (cur > 0 ? 100 : 
 function BrandTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null
   return (
-    <div style={{ background: '#fff', border: '0.5px solid #E5E7EB', borderRadius: 10, padding: '9px 13px', fontFamily: FONT, boxShadow: '0 8px 24px rgba(15,23,42,0.12)' }}>
-      <div style={{ fontSize: 11.5, fontWeight: 800, color: '#0F1B33', marginBottom: 4 }}>{label}</div>
+    <div style={{ background: 'var(--card)', border: '0.5px solid var(--card-border)', borderRadius: 10, padding: '9px 13px', fontFamily: FONT, boxShadow: '0 8px 24px rgba(15,23,42,0.12)' }}>
+      <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>{label}</div>
       {payload.map((p, i) => (
-        <div key={i} style={{ fontSize: 11.5, color: '#475569', display: 'flex', justifyContent: 'space-between', gap: 18 }}>
+        <div key={i} style={{ fontSize: 11.5, color: 'var(--text2)', display: 'flex', justifyContent: 'space-between', gap: 18 }}>
           <span style={{ color: p.color || p.fill }}>{p.name}</span>
           <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtN(p.value)}</span>
         </div>
@@ -225,7 +280,11 @@ const sectionTitle = (t, s) => (
 )
 const axis = { fontSize: 11, fill: C.muted, fontFamily: FONT }
 
-const TABLE_TABS = [['campaign', 'Campaign'], ['month', 'Month'], ['day', 'Day']]
+const TABLE_TABS = [['campaign', 'Campaign'], ['source', 'Source'], ['channel', 'Channel'], ['month', 'Month'], ['day', 'Day']]
+// First-column header per grouping tab, reused by the table AND the exports so a
+// downloaded CSV always names its group column the same way the screen does.
+const GROUP_LABEL = { campaign: 'Ad Name', source: 'Source', channel: 'Channel', month: 'Month', day: 'Date' }
+const EXPORT_KEY = { campaign: 'Campaign', source: 'Source', channel: 'Channel', month: 'Month', day: 'Date' }
 const METRICS = [
   { key: 'spend', label: 'Spend', fmt: fmtINR },
   { key: 'metaLeads', label: 'Meta Leads', fmt: fmtN },
@@ -243,6 +302,120 @@ function labelForDim(dim, key) {
   return key
 }
 
+// Delays adopting a fast-changing value (a search keystroke) until it has been
+// stable for `delay`ms. The input stays bound to the raw value so typing itself is
+// instant; only the row-filtering that reacts to it is deferred. Same helper and
+// same rationale as OverallDashboard.jsx's own copy.
+function useDebouncedValue(value, delay) {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return debounced
+}
+
+const MATCH_OPTIONS = [
+  { value: 'All', label: 'All rows' },
+  { value: 'matched', label: 'Matched to a Meta ad' },
+  { value: 'crmOnly', label: 'CRM only (no Meta spend)' },
+  { value: 'metaOnly', label: 'Meta only (no CRM lead)' },
+]
+const CONV_OPTIONS = [
+  { value: 'All', label: 'All' },
+  { value: 'high', label: 'At/above median' },
+  { value: 'low', label: 'Below median' },
+  { value: 'none', label: 'No Won yet' },
+]
+const COST_OPTIONS = [
+  { value: 'All', label: 'All' },
+  { value: 'efficient', label: 'At/below median' },
+  { value: 'expensive', label: 'Above median' },
+  { value: 'nospend', label: 'No spend' },
+]
+
+function medianOf(arr) {
+  if (!arr.length) return null
+  const a = [...arr].sort((x, y) => x - y)
+  const m = a.length >> 1
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2
+}
+
+// Option list for a row dimension, ordered by CRM-lead volume so the sources
+// people actually look at sit at the top of the menu instead of alphabetically.
+// Always built from the UNFILTERED rows, so picking one value never removes the
+// others from the menu and strands you with no way back.
+function optionsFor(rows, field) {
+  const m = new Map()
+  ;(rows || []).forEach(r => { const k = r[field]; if (!k) return; m.set(k, (m.get(k) || 0) + r.crmLeads) })
+  return ['All', ...Array.from(m.entries()).sort((a, b) => b[1] - a[1]).map(e => e[0])]
+}
+
+// THE one predicate every row-filtering site uses -- main page, Trend and Compare
+// all call this with the same `filters` object, so the three can never disagree
+// about what a filtered number means (the construction Overall already uses for
+// its Source/Corridor/campaign filters).
+//
+// Row-level filters (source / channel / ad name / Meta-match) run first. The two
+// performance BANDS are campaign-level and deliberately re-derive their median
+// from whatever survived the row-level pass, so 'above median CPL' always means
+// 'above median within what you are currently looking at' rather than against a
+// fixed global number that stops meaning anything once a source is picked. Median
+// (not mean) for the same reason the Overall efficiency map uses it: spend and
+// lead volume here are skewed by a handful of large campaigns.
+function applyFilters(rows, f) {
+  const q = (f.query || '').trim().toLowerCase()
+  const out = (rows || []).filter(r => {
+    if (f.source !== 'All' && r.source !== f.source) return false
+    if (f.channel !== 'All' && r.channel !== f.channel) return false
+    if (q && !String(r.name || '').toLowerCase().includes(q)) return false
+    if (f.match === 'matched' && !(r.hasMeta && r.hasCrm)) return false
+    if (f.match === 'crmOnly' && !(!r.hasMeta && r.hasCrm)) return false
+    if (f.match === 'metaOnly' && !(r.hasMeta && !r.hasCrm)) return false
+    return true
+  })
+  if (f.conv === 'All' && f.cost === 'All') return out
+  const camps = groupRows(out, 'campaign')
+  const medConv = medianOf(camps.filter(c => c.interested > 0).map(c => c.won / c.interested))
+  const medCost = medianOf(camps.filter(c => c.cplCrm != null).map(c => c.cplCrm))
+  const keep = new Set()
+  camps.forEach(c => {
+    const rate = c.interested > 0 ? c.won / c.interested : null
+    let ok = true
+    if (f.conv === 'high') ok = ok && rate != null && medConv != null && rate >= medConv && c.won > 0
+    if (f.conv === 'low') ok = ok && rate != null && medConv != null && rate < medConv
+    if (f.conv === 'none') ok = ok && c.won === 0
+    if (f.cost === 'efficient') ok = ok && c.cplCrm != null && medCost != null && c.cplCrm <= medCost
+    if (f.cost === 'expensive') ok = ok && c.cplCrm != null && medCost != null && c.cplCrm > medCost
+    if (f.cost === 'nospend') ok = ok && !(c.spend > 0)
+    if (ok) keep.add(c.label)
+  })
+  return out.filter(r => keep.has(r.name))
+}
+
+// Custom-range field for the Compare modal. Replaces the two pairs of native
+// <input type="date"> that used to live there -- this app does not use native date
+// inputs anywhere; this is the same shared two-month DateRangePicker the page
+// header already opens, just in a popover anchored to a pill.
+function RangeField({ label, from, to, open, onOpen, onClose, onChange }) {
+  return (
+    <div style={{ position: 'relative' }}>
+      <button type="button" onClick={onOpen} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderRadius: 11, border: '0.5px solid ' + (open ? C.navy : 'var(--card-border)'), background: open ? C.navyBg : 'var(--card)', color: open ? C.navy : 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: 700, fontFamily: FONT, whiteSpace: 'nowrap' }}>
+        <span style={{ color: C.muted, fontWeight: 600 }}>{label}:</span>
+        {from && to ? from + ' → ' + to : 'Pick a range'}
+      </button>
+      {open ? (
+        <>
+          <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 949 }} />
+          <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 950, background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 14, boxShadow: '0 20px 60px rgba(15,23,42,0.16)', overflow: 'hidden' }}>
+            <DateRangePicker from={isoToDate(from)} to={isoToDate(to)} onChange={onChange} onClose={onClose} />
+          </div>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
 export default function LeverageCareersDashboard() {
   const [preset, setPreset] = useState('mtd')
   const [customFrom, setCustomFrom] = useState('')
@@ -257,7 +430,19 @@ export default function LeverageCareersDashboard() {
   const [synced, setSynced] = useState(null)
 
   const [tableDim, setTableDim] = useState('campaign')
-  const [tableSearch, setTableSearch] = useState('')
+  // Advanced filters. These are page-level, not table-level: every KPI, the funnel,
+  // the table, the exports, Trend and Compare all read the SAME filters object via
+  // applyFilters(), so a filtered CPI on a card can never disagree with a filtered
+  // CPI in the table. The old table-only search box was removed in favour of the
+  // debounced ad-name search here, which previously filtered the visible rows while
+  // leaving the TOTAL row and every KPI on the unfiltered set.
+  const [fSource, setFSource] = useState('All')
+  const [fChannel, setFChannel] = useState('All')
+  const [fMatch, setFMatch] = useState('All')
+  const [fConv, setFConv] = useState('All')
+  const [fCost, setFCost] = useState('All')
+  const [nameQuery, setNameQuery] = useState('')
+  const nameQueryDebounced = useDebouncedValue(nameQuery, 250)
   const [tableSort, setTableSort] = useState({ key: 'spend', dir: 'desc' })
 
   const [trendOpen, setTrendOpen] = useState(false)
@@ -279,6 +464,7 @@ export default function LeverageCareersDashboard() {
   const [compareRowsB, setCompareRowsB] = useState(null)
   const [compareLoading, setCompareLoading] = useState(false)
   const [compareError, setCompareError] = useState('')
+  const [cPick, setCPick] = useState(null) // which custom range popover is open: 'a' | 'b' | null
 
   const [slackOpen, setSlackOpen] = useState(false)
   const tableRef = useRef(null)
@@ -321,8 +507,18 @@ export default function LeverageCareersDashboard() {
   useEffect(() => { if (token) load() }, [token, activeWindow.from, activeWindow.to]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- main-page aggregates ----
-  const campaignRows = useMemo(() => sortGroup('campaign', groupRows(dayRows || [], 'campaign')), [dayRows])
-  const totals = useMemo(() => sumTotals(dayRows || []), [dayRows])
+  const filters = useMemo(
+    () => ({ source: fSource, channel: fChannel, match: fMatch, conv: fConv, cost: fCost, query: nameQueryDebounced }),
+    [fSource, fChannel, fMatch, fConv, fCost, nameQueryDebounced]
+  )
+  const filterCount = (fSource !== 'All' ? 1 : 0) + (fChannel !== 'All' ? 1 : 0) + (fMatch !== 'All' ? 1 : 0) + (fConv !== 'All' ? 1 : 0) + (fCost !== 'All' ? 1 : 0) + (nameQueryDebounced.trim() ? 1 : 0)
+  const resetFilters = useCallback(() => { setFSource('All'); setFChannel('All'); setFMatch('All'); setFConv('All'); setFCost('All'); setNameQuery('') }, [])
+  // Menus are built from the UNFILTERED rows on purpose -- see optionsFor().
+  const sourceOptions = useMemo(() => optionsFor(dayRows, 'source'), [dayRows])
+  const channelOptions = useMemo(() => optionsFor(dayRows, 'channel'), [dayRows])
+  const rows = useMemo(() => applyFilters(dayRows || [], filters), [dayRows, filters])
+  const campaignRows = useMemo(() => sortGroup('campaign', groupRows(rows, 'campaign')), [rows])
+  const totals = useMemo(() => sumTotals(rows), [rows])
   const matchedCount = useMemo(() => campaignRows.filter(r => r.matched).length, [campaignRows])
   const unmatchedCrmLeads = useMemo(() => campaignRows.filter(r => !r.hasMeta && r.crmLeads > 0).reduce((s, r) => s + r.crmLeads, 0), [campaignRows])
 
@@ -332,34 +528,29 @@ export default function LeverageCareersDashboard() {
     { stage: 'Won', count: totals.won },
   ]), [totals])
 
-  const tableRowsRaw = useMemo(() => groupRows(dayRows || [], tableDim), [dayRows, tableDim])
+  const tableRowsRaw = useMemo(() => groupRows(rows, tableDim), [rows, tableDim])
   const tableRows = useMemo(() => {
-    let list = tableRowsRaw
-    if (tableSearch.trim()) {
-      const q = tableSearch.trim().toLowerCase()
-      list = list.filter(r => String(r.label).toLowerCase().includes(q))
-    }
     const dir = tableSort.dir === 'asc' ? 1 : -1
-    return [...list].sort((a, b) => {
+    return [...tableRowsRaw].sort((a, b) => {
       const av = a[tableSort.key], bv = b[tableSort.key]
       if (av == null && bv == null) return 0
       if (av == null) return 1
       if (bv == null) return -1
       return av < bv ? -dir : av > bv ? dir : 0
     })
-  }, [tableRowsRaw, tableSearch, tableSort])
-  const tableTotals = useMemo(() => sumTotals(dayRows || []), [dayRows])
+  }, [tableRowsRaw, tableSort])
+  const tableTotals = useMemo(() => sumTotals(tableRows), [tableRows])
   const toggleSort = key => setTableSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' })
 
   const exportRows = useMemo(() => tableRows.map(r => ({
-    [tableDim === 'campaign' ? 'Campaign' : tableDim === 'month' ? 'Month' : 'Date']: labelForDim(tableDim, r.label),
+    [EXPORT_KEY[tableDim]]: labelForDim(tableDim, r.label),
     Spend: fmtINR(r.spend), Impressions: fmtN(r.impressions), Clicks: fmtN(r.clicks),
     'Meta Leads': fmtN(r.metaLeads), 'CRM Leads': fmtN(r.crmLeads), Interested: fmtN(r.interested), Won: fmtN(r.won),
     'CPL (Meta)': fmtINR(r.cpl), 'CPL (CRM)': fmtINR(r.cplCrm), CPI: fmtINR(r.cpi), CPS: fmtINR(r.cps),
     ...(tableDim === 'campaign' ? { Matched: r.matched ? 'Yes' : 'No' } : {}),
   })), [tableRows, tableDim])
   const exportRawRows = useMemo(() => tableRows.map(r => ({
-    [tableDim === 'campaign' ? 'Campaign' : tableDim === 'month' ? 'Month' : 'Date']: labelForDim(tableDim, r.label),
+    [EXPORT_KEY[tableDim]]: labelForDim(tableDim, r.label),
     Spend: Math.round(r.spend), Impressions: r.impressions, Clicks: r.clicks,
     'Meta Leads': r.metaLeads, 'CRM Leads': r.crmLeads, Interested: r.interested, Won: r.won,
     'CPL (Meta)': r.cpl != null ? Math.round(r.cpl) : '', 'CPL (CRM)': r.cplCrm != null ? Math.round(r.cplCrm) : '',
@@ -407,7 +598,7 @@ export default function LeverageCareersDashboard() {
   }, [trendOpen, token, trendWindow.from, trendWindow.to])
 
   const trendResult = useMemo(() => {
-    const rows = trendRows || []
+    const rows = applyFilters(trendRows || [], filters)
     const metric = METRICS.find(m => m.label === trendMetric) || METRICS[0]
     if (trendDim === 'Day' || trendDim === 'Month') {
       const dim = trendDim === 'Day' ? 'day' : 'month'
@@ -463,7 +654,7 @@ export default function LeverageCareersDashboard() {
       }
     }))
     return { single: false, chart, lines: top, exportRows: exportRows2, metric, coveredOf: byCampaign.length }
-  }, [trendRows, trendDim, trendGranularity, trendMetric])
+  }, [trendRows, trendDim, trendGranularity, trendMetric, filters])
 
   // ---- Compare ----
   const compareSpanA = useMemo(() => {
@@ -491,10 +682,12 @@ export default function LeverageCareersDashboard() {
   }, [compareOpen, token, compareSpanA.from, compareSpanA.to, compareSpanB.from, compareSpanB.to])
 
   const compareResult = useMemo(() => {
-    const a = sumTotals(compareRowsA || [])
-    const b = sumTotals(compareRowsB || [])
-    const groupA = new Map(groupRows(compareRowsA || [], 'campaign').map(r => [r.label, r]))
-    const groupB = new Map(groupRows(compareRowsB || [], 'campaign').map(r => [r.label, r]))
+    const fa = applyFilters(compareRowsA || [], filters)
+    const fb = applyFilters(compareRowsB || [], filters)
+    const a = sumTotals(fa)
+    const b = sumTotals(fb)
+    const groupA = new Map(groupRows(fa, 'campaign').map(r => [r.label, r]))
+    const groupB = new Map(groupRows(fb, 'campaign').map(r => [r.label, r]))
     const names = new Set([...groupA.keys(), ...groupB.keys()])
     const rows = Array.from(names).map(name => {
       const ra = groupA.get(name) || { spend: 0, metaLeads: 0, crmLeads: 0, interested: 0, won: 0, cpl: null, cplCrm: null, cpi: null, cps: null }
@@ -502,12 +695,12 @@ export default function LeverageCareersDashboard() {
       return { name, a: ra, b: rb, dWon: ra.won - rb.won, dCrmLeads: ra.crmLeads - rb.crmLeads }
     }).sort((x, y) => Math.abs(y.dWon) - Math.abs(x.dWon) || Math.abs(y.dCrmLeads) - Math.abs(x.dCrmLeads))
     const wonDelta = deltaPct(a.won, b.won)
-    const cpsDelta = deltaPct(a.cps || 0, b.cps || 0)
+    const cpsDelta = (a.cps != null && b.cps != null) ? deltaPct(a.cps, b.cps) : null
     const verdict = a.won === 0 && b.won === 0
       ? `No Won leads in either period — comparing on CRM Leads instead: ${deltaPct(a.crmLeads, b.crmLeads) == null ? '—' : (deltaPct(a.crmLeads, b.crmLeads) >= 0 ? 'up' : 'down') + ' ' + Math.abs(deltaPct(a.crmLeads, b.crmLeads)).toFixed(1) + '%'}.`
       : `Won is ${wonDelta == null ? 'flat' : (wonDelta >= 0 ? 'up' : 'down') + ' ' + Math.abs(wonDelta).toFixed(1) + '%'}${cpsDelta == null ? '' : `, and cost per Won is ${cpsDelta >= 0 ? 'up' : 'down'} ${Math.abs(cpsDelta).toFixed(1)}%`}.`
     return { a, b, rows, verdict }
-  }, [compareRowsA, compareRowsB])
+  }, [compareRowsA, compareRowsB, filters])
   const compareExportRows = useMemo(() => compareResult.rows.map(r => ({
     Campaign: r.name,
     [`Spend (${windowLabel})`]: Math.round(r.a.spend), 'Spend (compare)': Math.round(r.b.spend),
@@ -521,7 +714,7 @@ export default function LeverageCareersDashboard() {
   return (
     <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
       <Sidebar />
-      <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid #EEF1F6', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+      <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid var(--card-border)', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
         {/* HEADER — same structure/behavior as Overall's own header (floating card, pill
             date group, Trend/Compare buttons, Synced/Refreshing tag, spin-on-refresh). */}
@@ -534,12 +727,12 @@ export default function LeverageCareersDashboard() {
           </div>
           <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', overflow: 'visible', flexShrink: 1, minWidth: 0 }}>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#F8FAFC', padding: '6px 10px', borderRadius: 12, border: '0.5px solid #E5E7EB' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg2)', padding: '6px 10px', borderRadius: 12, border: '0.5px solid var(--card-border)' }}>
               {PRESETS.map(p => (
-                <button key={p.id} type="button" onClick={() => setPreset(p.id)} style={{ padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT, background: preset === p.id ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent', color: preset === p.id ? '#fff' : '#64748B', boxShadow: preset === p.id ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none', transition: 'all .15s' }}>{p.label}</button>
+                <button key={p.id} type="button" onClick={() => setPreset(p.id)} style={{ padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT, background: preset === p.id ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent', color: preset === p.id ? '#fff' : 'var(--text3)', boxShadow: preset === p.id ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none', transition: 'all .15s' }}>{p.label}</button>
               ))}
               <div style={{ position: 'relative' }}>
-                <button type="button" onClick={() => { setPreset('custom'); setCustomOpen(v => !v) }} style={{ padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT, background: preset === 'custom' ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent', color: preset === 'custom' ? '#fff' : '#64748B', boxShadow: preset === 'custom' ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none', transition: 'all .15s', whiteSpace: 'nowrap' }}>
+                <button type="button" onClick={() => { setPreset('custom'); setCustomOpen(v => !v) }} style={{ padding: '5px 11px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT, background: preset === 'custom' ? 'linear-gradient(135deg, #1F3C84, #1C9FD4)' : 'transparent', color: preset === 'custom' ? '#fff' : 'var(--text3)', boxShadow: preset === 'custom' ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none', transition: 'all .15s', whiteSpace: 'nowrap' }}>
                   {preset === 'custom' && customFrom && customTo ? customFrom + ' → ' + customTo : 'Custom'}
                 </button>
                 {customOpen ? (
@@ -600,14 +793,37 @@ export default function LeverageCareersDashboard() {
             </div>
           ) : (
             <div style={{ opacity: showRefreshing ? 0.55 : 1, pointerEvents: showRefreshing ? 'none' : 'auto', transition: 'opacity .2s' }}>
-              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: 12, marginBottom: 12 }}>
+              {/* ADVANCED FILTERS -- page level, not table level. Everything below (KPIs,
+                  funnel, table, exports) and both modals read the same applyFilters()
+                  predicate off this one filters object. */}
+              <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 11, border: '0.5px solid var(--card-border)', background: 'var(--card)', flex: '1 1 190px', minWidth: 170, maxWidth: 300 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+                  <input value={nameQuery} onChange={e => setNameQuery(e.target.value)} placeholder="Search ad name..."
+                    style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: C.text, width: '100%' }} />
+                </div>
+                <Dropdown label="Source" options={sourceOptions} value={fSource} onChange={setFSource} minWidth={130} />
+                <Dropdown label="Channel" options={channelOptions} value={fChannel} onChange={setFChannel} minWidth={130} />
+                <Dropdown label="Match" options={MATCH_OPTIONS} value={fMatch} onChange={setFMatch} minWidth={160} />
+                <Dropdown label="Won rate" options={CONV_OPTIONS} value={fConv} onChange={setFConv} minWidth={135} />
+                <Dropdown label="CPL (CRM)" options={COST_OPTIONS} value={fCost} onChange={setFCost} minWidth={135} />
+                {filterCount > 0 && <Button size="sm" variant="secondary" onClick={resetFilters}>Reset filters</Button>}
+              </div>
+              {filterCount > 0 && (
+                <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12, lineHeight: 1.6 }}>
+                  Filtered view: {fmtN(rows.length)} of {fmtN((dayRows || []).length)} ad-day rows. Meta cannot report spend per CRM
+                  source, so an ad-day's spend is split across its sources in proportion to that day's leads from each; ad-days
+                  with spend but no CRM lead at all sit under "{UNATTRIBUTED}" and drop out as soon as a source is picked.
+                </div>
+              )}
+              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12, marginBottom: 12 }}>
                 <PremKPI label="SPEND" value={fmtINR(totals.spend)} sub={windowLabel} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
                 <PremKPI label="META LEADS" value={fmtN(totals.metaLeads)} sub="onsite_conversion.lead_grouped" accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
                 <PremKPI label="CRM LEADS" value={fmtN(totals.crmLeads)} sub={matchedCount + ' of ' + campaignRows.length + ' names matched'} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
                 <PremKPI label="INTERESTED" value={fmtN(totals.interested)} sub={pct(totals.interested, totals.crmLeads) + ' of CRM leads'} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />
                 <PremKPI label="WON" value={fmtN(totals.won)} sub={pct(totals.won, totals.interested) + ' of interested'} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
               </div>
-              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))', gap: 12, marginBottom: 20 }}>
+              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12, marginBottom: 20 }}>
                 <PremKPI label="CPL (META)" value={fmtINR(totals.cpl)} sub="spend / Meta leads" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.globe} invert />
                 <PremKPI label="CPL (CRM)" value={fmtINR(totals.cplCrm)} sub="spend / CRM leads" accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe} invert />
                 <PremKPI label="CPI" value={fmtINR(totals.cpi)} sub="spend / interested" accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.globe} invert />
@@ -637,18 +853,13 @@ export default function LeverageCareersDashboard() {
                 action={
                   <div style={{ display: 'flex', gap: 6 }}>
                     {TABLE_TABS.map(([v, l]) => (
-                      <button key={v} onClick={() => setTableDim(v)} style={{ padding: '7px 14px', borderRadius: 8, border: '0.5px solid ' + (tableDim === v ? C.navy : '#E5E7EB'), background: tableDim === v ? C.navy : '#fff', color: tableDim === v ? '#fff' : '#374151', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>{l}</button>
+                      <button key={v} onClick={() => setTableDim(v)} style={{ padding: '7px 14px', borderRadius: 8, border: '0.5px solid ' + (tableDim === v ? C.navy : 'var(--card-border)'), background: tableDim === v ? C.navy : 'var(--card)', color: tableDim === v ? '#fff' : 'var(--text)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>{l}</button>
                     ))}
                   </div>
                 }
               >
-                {sectionTitle('Ads ↔ LeadSquared, by ' + (tableDim === 'campaign' ? 'campaign' : tableDim), windowLabel + ' — joined by exact name = career_campaign_name')}
+                {sectionTitle('Ads ↔ LeadSquared, by ' + GROUP_LABEL[tableDim].toLowerCase(), windowLabel + ' — joined by exact name = career_campaign_name')}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`, background: 'var(--card)', flex: '1 1 200px', minWidth: 160, maxWidth: 280 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-                    <input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder={`Search ${tableDim === 'campaign' ? 'campaign' : tableDim}…`}
-                      style={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, color: C.text, width: '100%' }} />
-                  </div>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                     <Button
                       size="sm" variant="secondary" onClick={() => setSlackOpen(true)}
@@ -662,7 +873,7 @@ export default function LeverageCareersDashboard() {
                     <thead>
                       <tr>
                         {[
-                          ['label', tableDim === 'campaign' ? 'Ad Name' : tableDim === 'month' ? 'Month' : 'Date'],
+                          ['label', GROUP_LABEL[tableDim]],
                           ['spend', 'Spend'], ['impressions', 'Impr.'], ['clicks', 'Clicks'],
                           ['metaLeads', 'Meta Leads'], ['crmLeads', 'CRM Leads'], ['interested', 'Interested'], ['won', 'Won'],
                           ['cpl', 'CPL (Meta)'], ['cplCrm', 'CPL (CRM)'], ['cpi', 'CPI'], ['cps', 'CPS'],
@@ -683,7 +894,7 @@ export default function LeverageCareersDashboard() {
                         {tableDim === 'campaign' && <td>—</td>}
                       </tr>
                       {tableRows.length === 0 ? (
-                        <tr><td colSpan={13} className={styles.empty}>No data in this window.</td></tr>
+                        <tr><td colSpan={tableDim === 'campaign' ? 13 : 12} className={styles.empty}>No data in this window.</td></tr>
                       ) : tableRows.map(r => (
                         <tr key={r.key}>
                           <td>{labelForDim(tableDim, r.label)}</td>
@@ -785,9 +996,9 @@ export default function LeverageCareersDashboard() {
               <Dropdown label="Compare to" options={['Previous period', 'Same period last year', 'Custom']} value={compareMode === 'prev' ? 'Previous period' : compareMode === 'yoy' ? 'Same period last year' : 'Custom'} onChange={v => setCompareMode(v === 'Previous period' ? 'prev' : v === 'Same period last year' ? 'yoy' : 'custom')} minWidth={190} />
             </div>
             {compareMode === 'custom' && (
-              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 14, fontSize: 12.5, color: C.sub }}>
-                <div>This: <input type="date" value={cFromA} onChange={e => setCFromA(e.target.value)} /> → <input type="date" value={cToA} onChange={e => setCToA(e.target.value)} /></div>
-                <div>Vs: <input type="date" value={cFromB} onChange={e => setCFromB(e.target.value)} /> → <input type="date" value={cToB} onChange={e => setCToB(e.target.value)} /></div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
+                <RangeField label="This" from={cFromA} to={cToA} open={cPick === 'a'} onOpen={() => setCPick(cPick === 'a' ? null : 'a')} onClose={() => setCPick(null)} onChange={(f, t) => { setCFromA(f); setCToA(t); if (f && t) setCPick(null) }} />
+                <RangeField label="Vs" from={cFromB} to={cToB} open={cPick === 'b'} onOpen={() => setCPick(cPick === 'b' ? null : 'b')} onClose={() => setCPick(null)} onChange={(f, t) => { setCFromB(f); setCToB(t); if (f && t) setCPick(null) }} />
               </div>
             )}
             <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 14 }}>
@@ -801,7 +1012,7 @@ export default function LeverageCareersDashboard() {
             ) : (
               <>
                 <div style={{ background: C.navyBg, borderRadius: 12, padding: '14px 16px', marginBottom: 16, fontSize: 13.5, fontWeight: 700, color: C.navy }}>{compareResult.verdict}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
+                <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>
                   <PremKPI label="SPEND" value={fmtINR(compareResult.a.spend)} sub={'vs ' + fmtINR(compareResult.b.spend)} delta={deltaPct(compareResult.a.spend, compareResult.b.spend)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
                   <PremKPI label="CRM LEADS" value={fmtN(compareResult.a.crmLeads)} sub={'vs ' + fmtN(compareResult.b.crmLeads)} delta={deltaPct(compareResult.a.crmLeads, compareResult.b.crmLeads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
                   <PremKPI label="INTERESTED" value={fmtN(compareResult.a.interested)} sub={'vs ' + fmtN(compareResult.b.interested)} delta={deltaPct(compareResult.a.interested, compareResult.b.interested)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.ai} />

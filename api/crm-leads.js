@@ -1493,12 +1493,14 @@ function careersLeadsSql(since, until) {
   return `SELECT
   career_campaign_name AS campaign,
   DATE(opp_created_on) AS lead_date,
+  IFNULL(NULLIF(TRIM(career_channel_source), ''), 'Unknown') AS source,
+  IFNULL(NULLIF(TRIM(career_contacts_channel), ''), 'Unknown') AS channel,
   COUNT(prospectid) AS total_leads,
   COUNT(CASE WHEN LOWER(ever_got_interested) = 'yes' THEN prospectid END) AS total_interested,
   COUNT(CASE WHEN LOWER(opp_status) LIKE '%won%' THEN prospectid END) AS won
 FROM \`leverage_direct.lsq_careers_opprtunities\`
 WHERE ${clauses.join(' AND ')}
-GROUP BY 1, 2
+GROUP BY 1, 2, 3, 4
 ORDER BY lead_date, campaign`
 }
 
