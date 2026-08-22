@@ -4766,3 +4766,130 @@ User feedback in three rounds on the Team Mapping page (`/dashboard/team-mapping
 **Live-verified end-to-end, not just built**: ran the table-creation SQL directly in the Supabase SQL editor (typing the multi-line SQL via the browser `type` action left a stray auto-closed `)` at the end -- Monaco's bracket auto-close, not CodeMirror as an earlier gotcha in this file assumed for this editor; recovered via `window.monaco.editor.getEditors()[0].setValue(sql)` instead of retyping, confirmed `ed.getValue() === sql` before running); confirmed History flipped from the "not set up" banner to a genuine "Nothing yet" once the table existed. Then used the now-working delete-audit path to clean up the 4 fabricated test rows flagged in an earlier session (Aadrash Kumar Sah, Aakash Barnwal, Abdul Rab Khan, Abhishek Karn -- all carrying the same made-up ASM/SM="Kartikey Kedia"/SSM="Manish Singh"/Role="ASM" values from an earlier live-test) via the roster's own "Remove mapping" button: Manually Mapped dropped 295->291 exactly as expected, and History's "Edits & Deletes" KPI correctly reads 4, with each row showing the real remover (`shivam.sharma@leverageedu.com`), timestamp, and the exact field values that were removed, each with a working Restore button. Also confirmed the header Refresh button correctly drives whichever tab is active (tested on Sales Groups after removing its own inline Refresh).
 
 **Not yet built** (proposed to the user as a short plan, not yet chosen): a connector layer so removing someone from this page also removes them from whatever external system feeds it (webhook / read-only API / Google Sheet sync / Slack notification were the options put forward) -- deferred pending the user's choice of connector type(s).
+
+## 2026-08-22 -- Leverage Careers: full audit, then CRM source/channel as a real filter dimension (commit `597407b`)
+
+Full deep-dive audit of the Leverage Careers page (backend, frontend, UI, filtering), then the fix pass.
+
+**Backend, cross-checked live rather than assumed.** Read `careersLeadsSql` +
+`handleBigQuery`'s `careers_leads` branch fresh, then read the real
+`leverage_careers` entry in `app_preferences.bq_saved_queries` and diffed them.
+They agree verbatim on the field definitions -- `total_interested` is
+`LOWER(ever_got_interested) = 'yes'`, `won` is `LOWER(opp_status) LIKE '%won%'`,
+`total_leads` is `COUNT(prospectid)`, dated on `DATE(opp_created_on)`. The only
+divergence is the one already documented: the saved query has a fixed
+`> 2025-12-31` floor, the endpoint takes `since`/`until` from the page. Both
+endpoint bounds are inclusive (`>=` / `<=`) and match what the page's own picker
+sends, so the date scoping is correct. Also checked the endpoint's extra
+`career_campaign_name IS NOT NULL AND != ''` clause, which is a real silent-drop
+risk in principle -- in the current window it drops exactly 0 rows (12,610 =
+12,610), so nothing is being lost today. Vercel function count re-counted from
+the repo: 12 files in `api/`, still 12/12, and this change adds none.
+
+**The finding that drove the work.** 6,175 of 12,610 MTD CRM leads carry a
+campaign name that matches no Meta ad. Profiling the table's own source columns
+explains why: `career_channel_source` splits the window into Whatsapp Bot 5,119,
+Instagram 4,070, Facebook 2,146, Affiliate 1,185, then a long tail. Only
+Instagram/Facebook are Meta-paid. So CPL (CRM), CPI and CPS were dividing Meta
+spend by a population that is roughly half not-Meta -- CPL (CRM) read Rs93 when
+the Meta-attributable figure is about double that. This is a correctness problem,
+not a missing nicety, and it is why the headline feature here is a Source filter.
+
+**Which fields got a filter, and which deliberately did not.** Profiled every
+candidate on `lsq_careers_opprtunities` before designing anything:
+`career_channel_source` 100% populated / 16 distinct and
+`career_contacts_channel` 99.98% / 8 distinct -> both used.
+`career_source_medium` and `opp_source` are entirely empty (0 rows),
+`last_call_status` is populated on 4,813 rows but has exactly ONE distinct value,
+`destination_country` only 13% populated, `student_preferred_program_name` 226 of
+12,610 -> none of these got a filter, because a filter with no signal behind it is
+worse than no filter.
+
+**Backend change** (`api/crm-leads.js`, existing `careers_leads` mode on the
+existing dispatcher -- no new file): grain goes from (campaign, day) to
+(campaign, day, source, channel). Verified the new SQL against live BigQuery
+before shipping: 621 rows, totals reconcile exactly to the old grain
+(12,610 leads / 619 interested / 66 won), so the added dimensions change no
+existing number.
+
+**Spend allocation -- the one real judgement call.** Meta cannot report spend per
+CRM source, so `fetchGranular` now allocates an ad-day's spend / impressions /
+clicks / Meta-leads PRO-RATA across that ad-day's CRM sources by their share of
+its CRM leads. With no source filter the splits sum back to exactly the
+unallocated figure, so unfiltered totals are unchanged; with one applied, cost
+metrics stay coherent instead of counting one ad's whole spend into every source
+it touched. Ad-days with spend but no CRM lead at all cannot be attributed and go
+to a `(no CRM match)` bucket -- included under All, dropped once a source is
+picked. The page states this in-line whenever a filter is active rather than
+leaving it implicit.
+
+**Filters shipped**, all through ONE `applyFilters()` predicate shared by the main
+page, Trend Analysis and Compare, so the three cannot drift: Source, Channel,
+Meta-match (All / matched / CRM-only / Meta-only), Won-rate band, CPL (CRM) band,
+and a debounced ad-name search. The two bands are median-relative and re-derive
+their median from whatever survived the row-level pass, so "above median CPL"
+always means "within what you are currently looking at". Median not mean, same
+reasoning as the Overall efficiency map. Source and Channel also added as table
+grouping tabs.
+
+**Other fixes found during the audit:**
+- Compare's custom mode used FOUR native `<input type="date">`, against the
+  standing no-native-date-input rule. Replaced with a module-level `RangeField`
+  wrapping the shared `DateRangePicker` in a popover. Zero native date inputs and
+  zero native selects on the page now.
+- The TOTAL row re-summed the RAW rows, so it ignored the table search entirely
+  and contradicted the rows printed beneath it. It now sums what is on screen.
+- `deltaPct(a.cps || 0, b.cps || 0)` reported a flat 100% rise in cost-per-Won
+  whenever one side simply had no Won. Now null on either side means no delta.
+- Theme tokens: `BrandTooltip` (card/border/title/value), the page shell border,
+  the date-preset pill group, and the grouping-tab buttons all hardcoded
+  light-mode hexes (`#fff`, `#F8FAFC`, `#E5E7EB`, `#0F1B33`, `#475569`,
+  `#374151`, `#EEF1F6`) and broke under dark/navy/stone. All now read
+  `var(--card)` / `var(--card-border)` / `var(--text)` / `var(--text2)` /
+  `var(--text3)` / `var(--bg2)`.
+- KPI rows were `auto-fit minmax(175px)` with 5 cards each, so they wrapped 4 + 1
+  on a normal screen. Now `repeat(5, minmax(0,1fr))`; `lq-kpi-grid` still forces
+  2-up under 768px and 1-up under 480px. Compare's KPI row was a hard
+  `repeat(4, 1fr)` with no mobile handling -- now auto-fit + `lq-kpi-grid`.
+- Table `colSpan` was hardcoded to 13, which is only right on the Campaign tab.
+- CSS: ad names are one long underscore-joined token with no wrap opportunity, and
+  `max-width` is ignored on a cell in an auto table layout, so the name overflowed
+  and painted straight over the Spend column (clearly visible on the live page
+  before this). Added `min-width` on the table and
+  `overflow-wrap:anywhere; word-break:break-word` on the first column.
+
+**TDZ pass** (this file's own standing warning -- `npm run build` does not catch
+it): ran an automated declaration-line-vs-first-use check over all 36 new and
+existing bindings. Two hits, both false positives on the word match (`bq.rows` as
+a property, and `activeWindow` inside a trailing comment). No real TDZ.
+`applyFilters` calls `groupRows`, both function declarations, so hoisting is safe.
+
+**Build:** green, 9.37s. Rebased onto `03fcbb6` (someone pushed a Settings fix
+mid-session) and rebuilt before pushing.
+
+**NOT YET LIVE-VERIFIED -- deploy is stalled.** Pushed `597407b` at 06:54Z. As of
+07:18Z, 24 minutes later, the GitHub Deployments API still has no record for this
+SHA (latest is `03fcbb6`) and the live bundle is still `index-BaEu3tmq.js` while
+the local build emits `index-DRUKz33v.js`. Nothing is failing -- there is simply
+no deployment. Flagging rather than silently waiting, per this file's own
+workflow note; the July 23 entry documents a comparable 8-10 minute stall that
+resolved on its own, this one is longer. **The next session must load
+`/dashboard/leverage-careers` and actually click through the filter bar, both
+grouping tabs, Trend and Compare before treating any of the frontend work above
+as confirmed.** What IS independently verified is the backend SQL, which was run
+directly against live BigQuery through the admin console and reconciles exactly.
+
+**Noted, not fixed (out of scope, flagged for whoever picks it up):**
+- `src/components/FilterDropdown.jsx` hardcodes `#fff` / `#E5E7EB` / `#374151`
+  throughout and is NOT theme-aware, unlike the shared `Dropdown`. Any page using
+  it renders a light control in dark/navy/stone. This page uses `Dropdown`, so it
+  is unaffected, but the shared component is wrong.
+- `src/components/DateRangePicker.jsx` references `C.blue` for the today-dot, but
+  its local `C` object has no `blue` key, so that dot renders with
+  `background: undefined`.
+- `graphGetAll` caps at `maxPages: 40` x 500 and breaks out silently on overflow,
+  with no signal to the user that a wide window was truncated. Not hit at current
+  volumes; would matter if Trend's trailing options widen.
+- A local `src/pages/OverallDashboard.jsx` edit was sitting uncommitted in the
+  Codespace from a previous session; stashed as `stale-overall-edit-2026-08-22`
+  rather than discarded. Someone should decide whether it is wanted.
