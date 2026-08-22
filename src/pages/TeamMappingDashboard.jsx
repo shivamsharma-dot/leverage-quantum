@@ -1557,40 +1557,127 @@ function ConnectorsTab() {
 // bucket rather than silently vanishing or crashing the tree.
 function normalizeName(s) { return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase() }
 
-function OrgNode({ name, count, children, depth }) {
+function BellIcon({ filled }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 01-3.46 0" />
+    </svg>
+  )
+}
+
+function OrgNode({ name, count, children, depth, isAdmin, watchedKeys, onWatch }) {
   const [open, setOpen] = useState(depth < 1)
   const has = children && children.length > 0
+  const isWatched = has && watchedKeys && watchedKeys.has(normalizeName(name))
   return (
     <div style={{ marginLeft: depth ? 22 : 0 }}>
-      <div
-        onClick={() => has && setOpen(o => !o)}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 9, cursor: has ? 'pointer' : 'default', background: depth === 0 ? 'var(--bg3)' : 'transparent' }}
-      >
-        {has ? (
-          <span style={{ width: 14, color: C.muted, fontSize: 10, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .12s', flexShrink: 0 }}>▶</span>
-        ) : <span style={{ width: 14, flexShrink: 0 }} />}
-        <Avatar name={name} size={26} />
-        <span style={{ fontSize: 13, fontWeight: depth === 0 ? 800 : 700, color: C.text }}>{name}</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: C.muted }}>{count} {count === 1 ? 'person' : 'people'}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 9, background: depth === 0 ? 'var(--bg3)' : 'transparent' }}>
+        <div onClick={() => has && setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, cursor: has ? 'pointer' : 'default' }}>
+          {has ? (
+            <span style={{ width: 14, color: C.muted, fontSize: 10, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .12s', flexShrink: 0 }}>▶</span>
+          ) : <span style={{ width: 14, flexShrink: 0 }} />}
+          <Avatar name={name} size={26} />
+          <span style={{ fontSize: 13, fontWeight: depth === 0 ? 800 : 700, color: C.text }}>{name}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: C.muted }}>{count} {count === 1 ? 'person' : 'people'}</span>
+        </div>
+        {has && isAdmin && (
+          <button
+            onClick={() => onWatch({ key: normalizeName(name), label: name })}
+            title={isWatched ? 'Someone is watching this team -- click to manage' : 'Get a Slack DM when this team changes'}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, display: 'flex', color: isWatched ? C.navy : C.muted, flexShrink: 0 }}
+          >
+            <BellIcon filled={isWatched} />
+          </button>
+        )}
       </div>
       {has && open && (
         <div style={{ borderLeft: depth < 2 ? '1.5px solid ' + C.border : 'none', marginLeft: 13 }}>
-          {children.map(c => <OrgNode key={c.key} name={c.name} count={c.count} children={c.children} depth={depth + 1} />)}
+          {children.map(c => <OrgNode key={c.key} name={c.name} count={c.count} children={c.children} depth={depth + 1} isAdmin={isAdmin} watchedKeys={watchedKeys} onWatch={onWatch} />)}
         </div>
       )}
     </div>
   )
 }
 
-function OrgChartTab({ registerRefresh }) {
+// Subscribes a real person (by email -- not necessarily a Quantum login, most
+// of the LeadSquared roster has none) to a Slack DM whenever the team under
+// one Org Chart node changes. Admin-only, since this is set up on someone's
+// behalf, not day-to-day self-serve -- see api/crm-leads.js's
+// notifyTeamWatchers for the actual sending.
+function WatcherModal({ node, watchers, onClose, onChanged }) {
+  const [email, setEmail] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+  const current = watchers.filter(w => w.node_key === node.key)
+
+  const add = async () => {
+    const e = email.trim().toLowerCase()
+    if (!e) return
+    setSaving(true); setErr('')
+    try {
+      await fetchJson(API + '&mode=team_watchers_add', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ node_key: node.key, node_label: node.label, subscriber_email: e }),
+      })
+      setEmail('')
+      onChanged()
+    } catch (err) { setErr(String(err.message || err)) } finally { setSaving(false) }
+  }
+  const remove = async id => {
+    setSaving(true); setErr('')
+    try {
+      await fetchJson(API + '&mode=team_watchers_remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      onChanged()
+    } catch (err) { setErr(String(err.message || err)) } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal onClose={onClose} title={'Watchers — ' + node.label} width={480}>
+      <p style={{ fontSize: 12.5, color: C.muted, marginTop: 0 }}>
+        Anyone added here gets a Slack DM whenever someone joins, leaves, or moves out of this team.
+        Needs a real @leverageedu.com Slack account -- not a Quantum login.
+      </p>
+      {current.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: C.muted, padding: '4px 0 14px' }}>Nobody is watching this team yet.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+          {current.map(w => (
+            <div key={w.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', borderRadius: 8, background: 'var(--bg3)' }}>
+              <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>{w.subscriber_email}</span>
+              <Button variant="ghost" size="sm" onClick={() => remove(w.id)} disabled={saving}>Remove</Button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input style={inputStyle} value={email} onChange={e => setEmail(e.target.value)} placeholder="name@leverageedu.com" onKeyDown={e => e.key === 'Enter' && add()} />
+        <Button size="sm" onClick={add} disabled={saving || !email.trim()}>Add</Button>
+      </div>
+      {err && <div style={{ color: '#B91C1C', fontSize: 12.5, marginTop: 10 }}>{err}</div>}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
+        <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
+      </div>
+    </Modal>
+  )
+}
+
+function OrgChartTab({ registerRefresh, isAdmin }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  const [watchers, setWatchers] = useState([])
+  const [watchModalNode, setWatchModalNode] = useState(null)
 
   const load = useCallback(() => {
     fetchJson(API + '&mode=team_users').then(setData).catch(e => setError(String(e.message || e)))
   }, [])
+  const loadWatchers = useCallback(() => {
+    if (!isAdmin) return
+    fetchJson(API + '&mode=team_watchers_list').then(d => setWatchers(d.rows || [])).catch(() => {})
+  }, [isAdmin])
   useEffect(() => { load() }, [load])
+  useEffect(() => { loadWatchers() }, [loadWatchers])
   useEffect(() => { registerRefresh(load) }, [registerRefresh, load])
+  const watchedKeys = useMemo(() => new Set(watchers.map(w => w.node_key)), [watchers])
 
   const { tree, unmatched, unmappedCount } = useMemo(() => {
     const rows = (data && data.rows) || []
@@ -1660,7 +1747,9 @@ function OrgChartTab({ registerRefresh }) {
         <div style={{ padding: '14px 16px' }}>
           {tree.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>Nobody has an ASM/SM or SSM set yet.</div>
-          ) : tree.map(n => <OrgNode key={n.key} name={n.name} count={n.count} children={n.children} depth={0} />)}
+          ) : tree.map(n => (
+            <OrgNode key={n.key} name={n.name} count={n.count} children={n.children} depth={0} isAdmin={isAdmin} watchedKeys={watchedKeys} onWatch={setWatchModalNode} />
+          ))}
         </div>
       </Card>
       {unmatched.length > 0 && (
@@ -1675,6 +1764,14 @@ function OrgChartTab({ registerRefresh }) {
             {unmatched.length > 60 && <div style={{ fontSize: 11.5, color: C.muted, alignSelf: 'center' }}>+ {unmatched.length - 60} more</div>}
           </div>
         </Card>
+      )}
+      {watchModalNode && (
+        <WatcherModal
+          node={watchModalNode}
+          watchers={watchers}
+          onClose={() => setWatchModalNode(null)}
+          onChanged={loadWatchers}
+        />
       )}
     </div>
   )
@@ -1732,7 +1829,7 @@ export default function TeamMappingDashboard() {
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
           {activeTab === 'roster' && <RosterTab isAdmin={isAdmin} onOpenHistory={() => setTab('history')} registerRefresh={registerRefresh} />}
           {activeTab === 'groups' && <GroupsTab registerRefresh={registerRefresh} />}
-          {activeTab === 'orgchart' && <OrgChartTab registerRefresh={registerRefresh} />}
+          {activeTab === 'orgchart' && <OrgChartTab registerRefresh={registerRefresh} isAdmin={isAdmin} />}
           {activeTab === 'connectors' && (isAdmin ? <ConnectorsTab /> : <div style={{ color: C.muted, fontSize: 13 }}>Admin only.</div>)}
           {activeTab === 'history' && <HistoryTab onBack={() => setTab('roster')} />}
         </div>

@@ -1051,6 +1051,109 @@ async function postTeamMappingWebhook(url, event) {
   if (!res.ok) throw new Error('Webhook responded ' + res.status)
 }
 
+// ---------------------------------------------------------------------------
+// "Watch my team" (supabase/sql/team_mapping_watchers_setup.sql) -- an admin
+// subscribes a real person (by email, not a Quantum login -- most of the
+// LeadSquared roster has none) to a node in the Org Chart (an ASM/SM or SSM's
+// name), and that person gets a Slack DM whenever the team under that node
+// changes. node_key is normalized the same way the org chart itself groups
+// near-duplicate spellings, so watching "Kartikey Kedia" keeps working even
+// if a future edit types it slightly differently.
+function normalizeWatchKey(s) { return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase() }
+
+async function listTeamWatchers() {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const r = await supabaseAdmin('team_mapping_watchers?select=*&order=created_at.desc')
+  if (!r.ok) throw new Error('team_mapping_watchers may not exist yet -- run supabase/sql/team_mapping_watchers_setup.sql')
+  return await r.json()
+}
+async function addTeamWatcher(body, me) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const nodeKey = normalizeWatchKey(body && body.node_key)
+  const email = String((body && body.subscriber_email) || '').trim().toLowerCase()
+  if (!nodeKey) throw new Error('node_key is required')
+  if (!email) throw new Error('subscriber_email is required')
+  const payload = { node_key: nodeKey, node_label: (body && body.node_label) || nodeKey, subscriber_email: email, created_by: me.email || null }
+  const r = await supabaseAdmin('team_mapping_watchers?on_conflict=node_key,subscriber_email', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(payload),
+  })
+  if (!r.ok) throw new Error('Could not add watcher: ' + (await r.text()).slice(0, 300))
+  const saved = await r.json()
+  return Array.isArray(saved) ? saved[0] : saved
+}
+async function removeTeamWatcher(id) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  if (!id) throw new Error('id is required')
+  const r = await supabaseAdmin('team_mapping_watchers?id=eq.' + encodeURIComponent(id), { method: 'DELETE' })
+  if (!r.ok) throw new Error('Could not remove watcher: ' + (await r.text()).slice(0, 300))
+  return { deleted: id }
+}
+
+// Same lookup-then-DM pattern Slack itself recommends for bot DMs: resolve
+// the person's Slack user id from their email, then chat.postMessage straight
+// at that user id (Slack opens/reuses the DM channel implicitly). Requires
+// the bot to have the users:read.email scope -- NOT currently granted to this
+// workspace's bot per this app's own Slack setup notes (chat:write,
+// channels:read, files:write only) -- so this will throw "missing_scope"
+// until an admin adds that scope and reinstalls the app, same caveat this
+// codebase already documents for every other "needs a new Slack scope" case.
+async function postTeamMappingSlackDM(email, text) {
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token) throw new Error('SLACK_BOT_TOKEN is not set')
+  const lookupRes = await fetch('https://slack.com/api/users.lookupByEmail?email=' + encodeURIComponent(email), {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const lookup = await lookupRes.json().catch(() => ({}))
+  if (!lookup.ok) throw new Error('Slack: no Slack account found for ' + email + (lookup.error ? ' (' + lookup.error + ')' : ''))
+  const res = await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST', headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ channel: lookup.user.id, text }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!data.ok) throw new Error('Slack: ' + (data.error || 'unknown error'))
+}
+
+// Which watched nodes a given event actually touches -- an edit/restore's
+// `changes.asm_sm`/`changes.ssm` moved someone FROM one node's team and TO
+// another's (both affected); a delete's `snapshot` only had one team to leave.
+function affectedWatchNodeKeys(event) {
+  const keys = new Set()
+  if (event.changes) {
+    ;['asm_sm', 'ssm'].forEach(f => {
+      const c = event.changes[f]
+      if (c) {
+        if (c.from) keys.add(normalizeWatchKey(c.from))
+        if (c.to) keys.add(normalizeWatchKey(c.to))
+      }
+    })
+  }
+  if (event.snapshot) {
+    ;['asm_sm', 'ssm'].forEach(f => { if (event.snapshot[f]) keys.add(normalizeWatchKey(event.snapshot[f])) })
+  }
+  keys.delete('')
+  return Array.from(keys)
+}
+
+// Best-effort, never throws -- a missing table, a missing Slack scope, or one
+// bad email should never be able to break the save that triggered this.
+async function notifyTeamWatchers(event) {
+  try {
+    const keys = affectedWatchNodeKeys(event)
+    if (!keys.length) return
+    const { supabaseAdmin } = await import('../lib/auth.mjs')
+    const filter = 'node_key=in.(' + keys.map(k => `"${k.replace(/"/g, '')}"`).join(',') + ')'
+    const r = await supabaseAdmin('team_mapping_watchers?' + filter + '&select=*')
+    if (!r.ok) return
+    const watchers = await r.json()
+    const seen = new Set()
+    for (const w of watchers) {
+      if (seen.has(w.subscriber_email)) continue
+      seen.add(w.subscriber_email)
+      await postTeamMappingSlackDM(w.subscriber_email, `You're watching ${w.node_label || w.node_key}'s team on Team Mapping.\n${teamMappingSlackText(event)}`).catch(() => {})
+    }
+  } catch { /* watchers are a best-effort layer on top of the real save */ }
+}
+
 // Overwrites the FIRST tab of an existing spreadsheet with the full current
 // roster+manual snapshot -- a live mirror, not a fresh export-to-sheets.mjs
 // file-per-click. Deliberately excludes Phone/Airtel/Reporting Manager: those
@@ -1113,6 +1216,10 @@ async function notifyTeamMappingConnectors(event, creds) {
     try { const r = await syncTeamMappingSheet(cfg.sheet_id, creds); patch.sheet_last_status = `ok (${r.rows} rows)`; patch.sheet_last_at = now }
     catch (e) { patch.sheet_last_status = 'error: ' + String((e && e.message) || e).slice(0, 200); patch.sheet_last_at = now }
   }
+  // Independent of the three connector toggles above -- a subscribed manager
+  // gets DM'd regardless of whether the org has webhook/Slack-channel/Sheet
+  // connectors turned on at all.
+  await notifyTeamWatchers(event)
   if (Object.keys(patch).length) {
     const { supabaseAdmin } = await import('../lib/auth.mjs')
     await supabaseAdmin('team_mapping_connectors?id=eq.default', { method: 'PATCH', body: JSON.stringify(patch) }).catch(() => {})
@@ -1274,7 +1381,8 @@ async function handleLeadSquared(req, res, me) {
   const FIELD_SCHEMA_MODES = ['activity_schema', 'activity_dropdown_options', 'opportunity_schema', 'lead_schema']
   const TEAM_ACTIVITY_MODES = ['team_activity_create', 'team_activity_update', 'team_activity_list']
   const TEAM_CONNECTOR_MODES = ['team_connectors_get', 'team_connectors_save', 'team_connectors_regenerate_key', 'team_connectors_test']
-  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES]
+  const TEAM_WATCHER_MODES = ['team_watchers_list', 'team_watchers_add', 'team_watchers_remove']
+  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
@@ -1286,7 +1394,10 @@ async function handleLeadSquared(req, res, me) {
   // page access, same as team_users/team_groups. Connector config -- including
   // a webhook URL and an API key -- is admin-only end to end, both read and
   // write; the Connectors tab simply doesn't render for anyone else.
-  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', ...TEAM_CONNECTOR_MODES].includes(mode) && me.role !== 'admin') {
+  // team_watchers_list is readable by anyone with page access (same as
+  // team_activity_list) -- only adding/removing a subscription is admin-only,
+  // since this is set up on someone's behalf, not day-to-day self-serve.
+  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', 'team_watchers_add', 'team_watchers_remove', ...TEAM_CONNECTOR_MODES].includes(mode) && me.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only' })
   }
   // Cheap (env-var only, no network call) -- computed up front so the finished-
@@ -1305,6 +1416,9 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_connectors_save') return res.status(200).json(await saveTeamConnectorsConfig(req.body || req.query, me))
     if (mode === 'team_connectors_regenerate_key') return res.status(200).json(await regenerateTeamApiKey(me))
     if (mode === 'team_connectors_test') return res.status(200).json(await testTeamConnector((req.body && req.body.which) || req.query.which, me, creds))
+    if (mode === 'team_watchers_list') return res.status(200).json({ rows: await listTeamWatchers() })
+    if (mode === 'team_watchers_add') return res.status(200).json(await addTeamWatcher(req.body || req.query, me))
+    if (mode === 'team_watchers_remove') return res.status(200).json(await removeTeamWatcher((req.body && req.body.id) || req.query.id))
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
   }
