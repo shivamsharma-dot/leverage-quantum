@@ -1348,6 +1348,8 @@ export default function SettingsPage() {
   const [gazetteSubject, setGazetteSubject] = useState('The Quantum Gazette, August 2026')
   const [gazetteSending, setGazetteSending] = useState(false)
   const [gazetteMsg, setGazetteMsg] = useState('')
+  const [gazettePreviewOpen, setGazettePreviewOpen] = useState(false)
+  const [gazettePreviewView, setGazettePreviewView] = useState('desktop')
   // Manual test-fire of the daily B2C P&L / Cash Flow Slack approval flow --
   // same endpoint the 3 PM IST Vercel cron hits, which always previews into
   // the #dashboard-testing sandbox channel regardless of the approval
@@ -3609,10 +3611,75 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </label>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <Button size="sm" variant="secondary" onClick={() => setGazettePreviewOpen(true)} disabled={!gazetteHtml}>Preview</Button>
                   <Button size="sm" onClick={sendGazetteNow} disabled={gazetteSending || gazetteLoading || !gazetteHtml}>{gazetteSending ? 'Sending…' : 'Send now'}</Button>
                   <Button size="sm" variant="secondary" onClick={loadGazette} disabled={gazetteLoading}>{gazetteLoading ? 'Loading…' : '↻ Refresh'}</Button>
                   {gazetteMsg && <span className={styles.rcFeedback + ' ' + (gazetteMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{gazetteMsg}</span>}
                 </div>
+
+                {gazettePreviewOpen && gazetteHtml && (
+                  <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setGazettePreviewOpen(false) }}>
+                    <div className={styles.rpModalCard}>
+                      <div className={styles.dsModalHead}>
+                        <div className={styles.dsModalTitle}>Gazette preview</div>
+                        <button type="button" className={styles.dsModalClose} onClick={() => setGazettePreviewOpen(false)}>
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                        </button>
+                      </div>
+                      <p className={styles.dsModalSub}>
+                        The exact HTML currently saved as the Gazette snapshot — this is byte-for-byte what "Send now" above will send.
+                      </p>
+                      <p className={styles.rpNote}>The real email has no mobile-responsive styling, so phone Gmail shrinks the whole desktop layout to fit rather than reflowing it — the Mobile view here reproduces that shrink, not a redesigned layout.</p>
+                      <div className={styles.rpControls}>
+                        <div className={styles.rpTabs}>
+                          <span style={{ fontSize: 12.5, color: 'var(--text-3)', padding: '6px 4px' }}>{gazetteSubject}</span>
+                        </div>
+                        <div className={styles.rpViewToggle}>
+                          <button type="button" className={styles.rpViewBtn + (gazettePreviewView === 'desktop' ? ' ' + styles.rpViewBtnActive : '')} onClick={() => setGazettePreviewView('desktop')}>Desktop</button>
+                          <button type="button" className={styles.rpViewBtn + (gazettePreviewView === 'mobile' ? ' ' + styles.rpViewBtnActive : '')} onClick={() => setGazettePreviewView('mobile')}>Mobile</button>
+                        </div>
+                      </div>
+                      {(() => {
+                        const scale = gazettePreviewView === 'mobile' ? 0.4 : 1
+                        const naturalWidth = 1000
+                        return (
+                          <div className={styles.rpFrame + (gazettePreviewView === 'mobile' ? ' ' + styles.rpFrameMobile : '')}>
+                            <div className={styles.rpTop}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.3-4.3" /></svg>
+                              <span>Search mail</span>
+                            </div>
+                            <div className={styles.rpMsgHead}>
+                              <div className={styles.rpSubject}>{gazetteSubject}</div>
+                              <div className={styles.rpFromRow}>
+                                <div className={styles.rpAvatar}>LQ</div>
+                                <div className={styles.rpFromMeta}>
+                                  <div className={styles.rpFromName}>Leverage Quantum <span className={styles.rpFromEmail}>&lt;quantum@platform.leverageedu.com&gt;</span></div>
+                                  <div className={styles.rpToLine}>to {gazetteTo.split(',').map(s => s.trim()).filter(Boolean)[0] || 'me'}</div>
+                                </div>
+                                <div className={styles.rpTime}>9:30 AM</div>
+                              </div>
+                            </div>
+                            <div className={styles.rpBodyWrap} style={{ height: (gazettePreviewView === 'mobile' ? 620 : 1120) }}>
+                              <iframe
+                                title="gazette-email-preview"
+                                srcDoc={gazetteHtml}
+                                style={{ width: naturalWidth, transform: `scale(${scale})`, transformOrigin: 'top left', height: naturalWidth * 1.8 }}
+                                scrolling="no"
+                                onLoad={e => {
+                                  try {
+                                    const h = e.target.contentDocument.body.scrollHeight
+                                    e.target.style.height = h + 'px'
+                                    e.target.parentElement.style.height = (h * scale) + 'px'
+                                  } catch (err) { /* cross-doc measurement can fail silently, fixed heights above cover it */ }
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className={styles.card}>
