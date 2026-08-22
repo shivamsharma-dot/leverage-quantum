@@ -255,9 +255,21 @@ function FilterChip({ field, values, options, open, onToggle, onToggleValue, onR
   )
 }
 
-function AddFilterButton({ fields, open, onToggle, onPickField }) {
+// Two-step wizard in ONE popover: pick a column, then check off its values -- avoids the
+// dead end of handing off to a chip that doesn't exist yet for a field with no values
+// checked. Re-editing an ALREADY-active filter still goes through FilterChip above; this
+// component only ever handles adding a brand-new one.
+function AddFilterButton({ allFields, activeFilters, filterOptions, open, onToggle, onToggleValue }) {
+  const [step, setStep] = useState('pick')
   const [q, setQ] = useState('')
-  const shown = q.trim() ? fields.filter(f => f.label.toLowerCase().includes(q.trim().toLowerCase())) : fields
+  useEffect(() => { if (open) { setStep('pick'); setQ('') } }, [open])
+
+  const pickable = allFields.filter(f => !activeFilters[f.key])
+  const shownFields = q.trim() ? pickable.filter(f => f.label.toLowerCase().includes(q.trim().toLowerCase())) : pickable
+  const activeField = step !== 'pick' ? allFields.find(f => f.key === step) : null
+  const options = activeField ? (filterOptions[activeField.key] || []) : []
+  const shownOptions = activeField && q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options
+
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
       <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.muted, whiteSpace: 'nowrap' }}>
@@ -267,20 +279,47 @@ function AddFilterButton({ fields, open, onToggle, onPickField }) {
       {open && (
         <>
           <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
-          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 210, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
-            <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Find a column…"
-              style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
-            <div style={{ maxHeight: 240, overflowY: 'auto' }}>
-              {shown.map(f => (
-                <button key={f.key} type="button" onClick={() => onPickField(f.key)}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 9px', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, fontFamily: FONT, color: '#374151', background: 'transparent' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = '#F3F4F6' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
-                  {f.label}
-                </button>
-              ))}
-              {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No columns match</div>}
-            </div>
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 230, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+            {step === 'pick' ? (
+              <>
+                <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Find a column…"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+                <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                  {shownFields.map(f => (
+                    <button key={f.key} type="button" onClick={() => { setStep(f.key); setQ('') }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 9px', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, fontFamily: FONT, color: '#374151', background: 'transparent' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#F3F4F6' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                      {f.label}
+                    </button>
+                  ))}
+                  {shownFields.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No columns match</div>}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <button type="button" onClick={() => { setStep('pick'); setQ('') }} title="Back" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                  </button>
+                  <span style={{ fontSize: 11.5, fontWeight: 800, color: C.text }}>{activeField.label}</span>
+                </div>
+                <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder={'Search ' + activeField.label.toLowerCase() + '…'}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+                <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                  {shownOptions.map(o => {
+                    const checked = (activeFilters[activeField.key] || []).includes(o)
+                    return (
+                      <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: checked ? 700 : 500, color: checked ? C.navy : '#374151', background: checked ? C.navyBg : 'transparent' }}>
+                        <input type="checkbox" checked={checked} onChange={() => onToggleValue(activeField.key, o)} style={{ accentColor: C.navy, cursor: 'pointer', flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
+                      </label>
+                    )
+                  })}
+                  {shownOptions.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No matches</div>}
+                </div>
+              </>
+            )}
           </div>
         </>
       )}
@@ -750,9 +789,9 @@ export default function AIQLDetailDashboard() {
                 onToggleValue={v => toggleFilterValue(key, v)} onRemove={() => removeFilter(key)} />
             )
           })}
-          <AddFilterButton fields={FILTERABLE_FIELDS.filter(f => !activeFilters[f.key])}
+          <AddFilterButton allFields={FILTERABLE_FIELDS} activeFilters={activeFilters} filterOptions={filterOptions}
             open={openFilterKey === '__add'} onToggle={() => setOpenFilterKey(v => v === '__add' ? null : '__add')}
-            onPickField={key => setOpenFilterKey(key)} />
+            onToggleValue={toggleFilterValue} />
           {activeFilterKeys.length > 0 && (
             <button type="button" onClick={clearAllFilters} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 11.5, fontWeight: 600, textDecoration: 'underline', flexShrink: 0 }}>Clear all</button>
           )}
