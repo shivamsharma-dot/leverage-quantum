@@ -114,7 +114,7 @@ function DateRangePicker({ from, to, onChange, onClose }) {
   const goRight = () => viewMonth===11? (setViewYear(y=>y+1), setViewMonth(0))  : setViewMonth(m=>m+1)
 
   return (
-    <div style={{ padding: '16px 20px', fontFamily: FONT }}>
+    <div className="lq-drp" style={{ padding: '16px 20px', fontFamily: FONT }}>
       {/* Status bar */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center' }}>
         <div style={{
@@ -140,7 +140,7 @@ function DateRangePicker({ from, to, onChange, onClose }) {
         <div style={{ flex: 1 }}/>
         <NavBtn dir="right" onClick={goRight}/>
       </div>
-      <div style={{ display: 'flex', gap: 24 }}>
+      <div className="lq-drp-months" style={{ display: 'flex', gap: 24 }}>
         <CalMonth year={viewYear} month={viewMonth} from={selFrom} to={selTo} hovered={step==='to'?hovered:null} onSelect={handleSelect} onHover={step==='to'?setHovered:()=>{}}/>
         <CalMonth year={right.y} month={right.m} from={selFrom} to={selTo} hovered={step==='to'?hovered:null} onSelect={handleSelect} onHover={step==='to'?setHovered:()=>{}}/>
       </div>

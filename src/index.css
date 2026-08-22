@@ -469,3 +469,20 @@ input:focus, textarea:focus {
 /* KPI card hover lift — applies to all PremKPI across dashboards */
 .kpiCard { transition: transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s cubic-bezier(.4,0,.2,1), border-color .18s ease; will-change: transform; }
 .kpiCard:hover { transform: translateY(-3px); box-shadow: 0 2px 4px rgba(16,24,40,0.05), 0 18px 36px -16px rgba(31,60,132,0.32); border-color: rgba(31,60,132,0.22); }
+
+/* Mobile: the shared two-month DateRangePicker cannot fit a phone viewport.
+   Drop to a single month and pin the popover inside the viewport instead of
+   letting it hang off the left edge of an absolutely positioned anchor. */
+@media (max-width: 768px) {
+  .lq-drp { padding: 12px 12px !important; }
+  .lq-drp-months { gap: 0 !important; }
+  .lq-drp-months > *:nth-child(2) { display: none !important; }
+  .lq-popover-clamp {
+    position: fixed !important;
+    top: calc(64px + env(safe-area-inset-top)) !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    max-width: calc(100vw - 16px) !important;
+  }
+}

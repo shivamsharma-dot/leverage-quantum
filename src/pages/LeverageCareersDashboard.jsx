@@ -407,7 +407,7 @@ function RangeField({ label, from, to, open, onOpen, onClose, onChange }) {
       {open ? (
         <>
           <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 949 }} />
-          <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 950, background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 14, boxShadow: '0 20px 60px rgba(15,23,42,0.16)', overflow: 'hidden' }}>
+          <div className="lq-popover-clamp" style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 950, background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 14, boxShadow: '0 20px 60px rgba(15,23,42,0.16)', overflow: 'hidden' }}>
             <DateRangePicker from={isoToDate(from)} to={isoToDate(to)} onChange={onChange} onClose={onClose} />
           </div>
         </>
@@ -738,7 +738,7 @@ export default function LeverageCareersDashboard() {
                 {customOpen ? (
                   <>
                     <div onClick={() => { setCustomOpen(false); if (!(customFrom && customTo)) setPreset('mtd') }} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
-                    <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400, background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 14, boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', overflow: 'hidden' }}>
+                    <div className="lq-popover-clamp" style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400, background: 'var(--card)', border: `0.5px solid ${C.border}`, borderRadius: 14, boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', overflow: 'hidden' }}>
                       <DateRangePicker
                         from={isoToDate(customFrom)} to={isoToDate(customTo)}
                         onChange={(f, t) => { setCustomFrom(f); setCustomTo(t); if (f && t) setCustomOpen(false) }}
