@@ -590,12 +590,15 @@ async function handleCustomHtmlEmail(req, res) {
 
   const { html, subject, label } = req.body || {}
   const asked = Array.isArray(req.body?.recipients) ? req.body.recipients : []
+  const askedCc = Array.isArray(req.body?.cc) ? req.body.cc : []
   if (!html || typeof html !== 'string') return res.status(400).json({ error: 'No HTML content to send' })
   if (html.length > 1_800_000) return res.status(400).json({ error: 'HTML too large to send' })
   if (!asked.length) return res.status(400).json({ error: 'No recipients specified' })
   const vetted = await vetRecipients(asked)
   if (!vetted.allowed.length) return res.status(400).json({ error: rejectedRecipientError(vetted), rejected: vetted.rejected })
   const recipients = vetted.allowed
+  const vettedCc = askedCc.length ? await vetRecipients(askedCc) : { allowed: [], rejected: [] }
+  const cc = vettedCc.allowed
   const reportType = label || 'custom html'
 
   try {
@@ -603,15 +606,17 @@ async function handleCustomHtmlEmail(req, res) {
     const fromAddr = cfg.report_from_email
       ? `${cfg.report_from_name || 'Leverage Quantum'} <${cfg.report_from_email}>`
       : (process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <quantum@platform.leverageedu.com>')
+    const payload = { from: fromAddr, to: recipients, subject: subject || 'Leverage Quantum', html }
+    if (cc.length) payload.cc = cc
     const sendRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_KEY}` },
-      body: JSON.stringify({ from: fromAddr, to: recipients, subject: subject || 'Leverage Quantum', html }),
+      body: JSON.stringify(payload),
     })
     const sendData = await sendRes.json()
     if (!sendRes.ok) throw new Error(sendData.message || JSON.stringify(sendData))
-    await logReport({ report_type: reportType, recipients, status: 'sent', triggered_by: me.email })
-    return res.status(200).json({ ok: true, success: true, recipients, id: sendData.id })
+    await logReport({ report_type: reportType, recipients: [...recipients, ...cc], status: 'sent', triggered_by: me.email })
+    return res.status(200).json({ ok: true, success: true, recipients, cc, id: sendData.id })
   } catch (e) {
     await logReport({ report_type: reportType, recipients, status: 'failed', error: e.message, triggered_by: me.email })
     return res.status(500).json({ error: e.message })
