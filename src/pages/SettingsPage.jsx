@@ -13,6 +13,7 @@ import styles from './SettingsPage.module.css'
 import { SLACK_CHANNELS, confirmPhrase, channelHandle } from '../../shared/slackChannels.mjs'
 import { SlackIcon } from '../components/icons/BrandIcons'
 import { DEFAULT_REV_VS_CASHFLOW_NOTE } from '../lib/b2cReport'
+import { canAccessDashboard } from '../../shared/access.mjs'
 
 // An offline or black-holed request leaves fetch() pending forever, which is how
 // a Settings save could sit on "Saving..." with no error and no way back. Every
@@ -1625,23 +1626,31 @@ export default function SettingsPage() {
     members: accessList.filter(u => u.role !== 'admin').length,
     reports: accessList.filter(u => u.receive_reports).length,
   }
+  // A bare 'viewer' role is NOT "everything except Ask AI" -- shared/access.mjs's
+  // canAccessDashboard also excludes agents/marketing_performance/team_mapping/
+  // ceo_b2c_pnl/ceo_b2c_cashflow (VIEWER_MUST_BE_GRANTED) unless explicitly
+  // granted. This used to be hardcoded here as just "!== 'ask_ai'", written before
+  // that list grew -- so a bare-viewer row's Edit-permissions modal showed those
+  // five pages ticked (and "N of 30 pages" over-counted by five) even though the
+  // real server-side gate denies them. Caught live: Team Mapping showed granted
+  // for a bare-viewer account that genuinely couldn't see the page. Deriving
+  // straight from canAccessDashboard means this can't drift out of sync again.
+  const DEFAULT_VIEWER_IDS = DASHBOARDS.filter(d => canAccessDashboard('viewer', d.id)).map(d => d.id)
   const parsePermissions = (role) => {
     if (role === 'admin') return DASHBOARDS.map(d => d.id)
-    // plain viewer = all dashboards except ask-ai
-    if (!role || role === 'viewer') return DASHBOARDS.filter(d => d.id !== 'ask_ai').map(d => d.id)
-    if (role.startsWith('viewer:')) return role.replace('viewer:', '').split(',').filter(Boolean)
-    if (role.startsWith('custom:')) return role.replace('custom:', '').split(',').filter(Boolean)
-    return DASHBOARDS.filter(d => d.id !== 'ask_ai').map(d => d.id)
+    if (!role || role === 'viewer') return DEFAULT_VIEWER_IDS
+    if (role.startsWith('viewer:')) return role.replace('viewer:', '').split(',').map(s => s.trim()).filter(Boolean)
+    if (role.startsWith('custom:')) return role.replace('custom:', '').split(',').map(s => s.trim()).filter(Boolean)
+    return DEFAULT_VIEWER_IDS
   }
   const buildRoleString = (ids, isAdmin) => {
     if (isAdmin) return 'admin'
-    // A bare 'viewer' means "everything except Ask AI", resolved at read time, so
-    // such a person picks up newly added pages automatically. Freezing that into an
-    // explicit id list -- which this did on EVERY save, including a save where the
-    // admin changed nothing -- quietly opted them out of anything added later.
-    // Only write an explicit list when the selection really differs from the default.
-    const dflt = DASHBOARDS.filter(d => d.id !== 'ask_ai').map(d => d.id)
-    const isDefault = ids.length === dflt.length && dflt.every(id => ids.includes(id))
+    // A bare 'viewer' means "the current default set", resolved at read time, so
+    // such a person picks up newly added default-visible pages automatically.
+    // Freezing that into an explicit id list on every save -- including a save
+    // where the admin changed nothing -- would quietly opt them out of anything
+    // added later. Only write an explicit list when the selection really differs.
+    const isDefault = ids.length === DEFAULT_VIEWER_IDS.length && DEFAULT_VIEWER_IDS.every(id => ids.includes(id))
     if (isDefault) return 'viewer'
     return 'viewer:' + ids.join(',')
   }
