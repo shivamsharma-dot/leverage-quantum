@@ -1113,6 +1113,16 @@ async function postTeamMappingSlackDM(email, text) {
   if (!data.ok) throw new Error('Slack: ' + (data.error || 'unknown error'))
 }
 
+// Standalone test path -- sends a real DM without touching the watchers
+// table or any real roster data, so verifying the Slack setup never requires
+// a throwaway subscription or a real edit just to trigger one.
+async function testWatcherDM(email, me) {
+  const e = String(email || '').trim().toLowerCase()
+  if (!e) throw new Error('email is required')
+  await postTeamMappingSlackDM(e, `Team Mapping: test DM from ${me.email} -- if you can read this, "watch my team" DMs are wired up correctly.`)
+  return { sent: e }
+}
+
 // Which watched nodes a given event actually touches -- an edit/restore's
 // `changes.asm_sm`/`changes.ssm` moved someone FROM one node's team and TO
 // another's (both affected); a delete's `snapshot` only had one team to leave.
@@ -1381,7 +1391,7 @@ async function handleLeadSquared(req, res, me) {
   const FIELD_SCHEMA_MODES = ['activity_schema', 'activity_dropdown_options', 'opportunity_schema', 'lead_schema']
   const TEAM_ACTIVITY_MODES = ['team_activity_create', 'team_activity_update', 'team_activity_list']
   const TEAM_CONNECTOR_MODES = ['team_connectors_get', 'team_connectors_save', 'team_connectors_regenerate_key', 'team_connectors_test']
-  const TEAM_WATCHER_MODES = ['team_watchers_list', 'team_watchers_add', 'team_watchers_remove']
+  const TEAM_WATCHER_MODES = ['team_watchers_list', 'team_watchers_add', 'team_watchers_remove', 'team_watchers_test_dm']
   const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
@@ -1397,7 +1407,7 @@ async function handleLeadSquared(req, res, me) {
   // team_watchers_list is readable by anyone with page access (same as
   // team_activity_list) -- only adding/removing a subscription is admin-only,
   // since this is set up on someone's behalf, not day-to-day self-serve.
-  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', 'team_watchers_add', 'team_watchers_remove', ...TEAM_CONNECTOR_MODES].includes(mode) && me.role !== 'admin') {
+  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', 'team_watchers_add', 'team_watchers_remove', 'team_watchers_test_dm', ...TEAM_CONNECTOR_MODES].includes(mode) && me.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only' })
   }
   // Cheap (env-var only, no network call) -- computed up front so the finished-
@@ -1419,6 +1429,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_watchers_list') return res.status(200).json({ rows: await listTeamWatchers() })
     if (mode === 'team_watchers_add') return res.status(200).json(await addTeamWatcher(req.body || req.query, me))
     if (mode === 'team_watchers_remove') return res.status(200).json(await removeTeamWatcher((req.body && req.body.id) || req.query.id))
+    if (mode === 'team_watchers_test_dm') return res.status(200).json(await testWatcherDM((req.body && req.body.email) || req.query.email, me))
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
   }

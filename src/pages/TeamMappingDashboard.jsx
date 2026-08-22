@@ -1630,6 +1630,17 @@ function WatcherModal({ node, watchers, onClose, onChanged }) {
       onChanged()
     } catch (err) { setErr(String(err.message || err)) } finally { setSaving(false) }
   }
+  const [testMsg, setTestMsg] = useState('')
+  const [testing, setTesting] = useState(false)
+  const sendTestDm = async () => {
+    const e = email.trim().toLowerCase()
+    if (!e) return
+    setTesting(true); setTestMsg('')
+    try {
+      await fetchJson(API + '&mode=team_watchers_test_dm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: e }) })
+      setTestMsg('Sent -- check Slack.')
+    } catch (err) { setTestMsg('Could not send: ' + (err.message || err)) } finally { setTesting(false) }
+  }
 
   return (
     <Modal onClose={onClose} title={'Watchers — ' + node.label} width={480}>
@@ -1651,8 +1662,10 @@ function WatcherModal({ node, watchers, onClose, onChanged }) {
       )}
       <div style={{ display: 'flex', gap: 8 }}>
         <input style={inputStyle} value={email} onChange={e => setEmail(e.target.value)} placeholder="name@leverageedu.com" onKeyDown={e => e.key === 'Enter' && add()} />
+        <Button variant="ghost" size="sm" onClick={sendTestDm} disabled={testing || !email.trim()}>{testing ? 'Sending…' : 'Test DM'}</Button>
         <Button size="sm" onClick={add} disabled={saving || !email.trim()}>Add</Button>
       </div>
+      {testMsg && <div style={{ fontSize: 11.5, color: testMsg.indexOf('Sent') === 0 ? C.green : C.navy, marginTop: 8 }}>{testMsg}</div>}
       {err && <div style={{ color: '#B91C1C', fontSize: 12.5, marginTop: 10 }}>{err}</div>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 18 }}>
         <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
