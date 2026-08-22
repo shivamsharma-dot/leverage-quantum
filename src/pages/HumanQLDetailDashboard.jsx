@@ -13,7 +13,7 @@ import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN, BarGrad, barFill, 
 // (same doc, same gid) returns clean, current data. gid=133089509 is HumanDetailedQL's gid.
 const DEFAULT_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/export?format=csv&gid=133089509'
 const PAGE = 25
-const COL_ORDER_KEY = 'lq_human_ql_col_order_v3'
+const COL_ORDER_KEY = 'lq_human_ql_col_order_v4'
 const COL_PINNED_KEY = 'lq_human_ql_col_pinned'
 const COL_HIDDEN_KEY = 'lq_human_ql_col_hidden'
 const VIEWS_KEY = 'lq_human_ql_views'
@@ -32,8 +32,8 @@ const LEADSQUARED_OPPORTUNITY_EVENT = '12003'
 
 const HUMAN_QL_COLS = [
   { key: 'date', label: 'Date', width: 90 },
-  { key: 'prospectId', label: 'Prospect ID', width: 150, mono: true },
-  { key: 'opportunityId', label: 'Opportunity ID', width: 150, mono: true },
+  { key: 'prospectId', label: 'Prospect ID', width: 300, mono: true },
+  { key: 'opportunityId', label: 'Opportunity ID', width: 300, mono: true },
   { key: 'country', label: 'Country', width: 130 },
   { key: 'degree', label: 'Degree', width: 110 },
   { key: 'course', label: 'Course', width: 170, ellipsis: true },
@@ -41,12 +41,22 @@ const HUMAN_QL_COLS = [
   { key: 'disposition', label: 'Disposition', width: 170 },
   { key: 'budget', label: 'Budget', width: 90 },
   { key: 'campaign', label: 'Campaign', width: 190, ellipsis: true },
+  { key: 'futworkProject', label: 'Futwork Project', width: 150 },
   { key: 'passport', label: 'Passport', width: 90 },
   { key: 'degreeStatus', label: 'Degree Status', width: 110 },
   { key: 'questionsForCounselor', label: 'Questions', width: 220, ellipsis: true },
   { key: 'callDuration', label: 'Duration', width: 80, numeric: true },
   { key: 'recordingUrl', label: 'Recording', width: 80, sortable: false },
 ]
+
+// Columns that don't make sense as a checkbox multi-select filter: dates already have
+// their own dedicated range control above, IDs are effectively unique per row, duration
+// is numeric (sortable, not a categorical filter), the recording link has no values to
+// filter by, and free-text questions are too varied to enumerate as checkboxes. Every
+// other column becomes filterable automatically -- add a column above and it appears
+// here too, per the standing request that every column be filterable.
+const FILTER_EXCLUDE_KEYS = ['date', 'prospectId', 'opportunityId', 'callDuration', 'recordingUrl', 'questionsForCounselor']
+const FILTERABLE_FIELDS = HUMAN_QL_COLS.filter(c => !FILTER_EXCLUDE_KEYS.includes(c.key))
 
 const DISPOSITION_COLOR = {
   'Call Transferred To Counsellor': C.green,
@@ -199,45 +209,85 @@ function FilterDropdown({ label, value, options, open, onToggle, onSelect }) {
   )
 }
 
-function AdvancedFilterPanel({ sections, open, onToggle, onClear, activeCount }) {
+// ---- Per-column filter bar --------------------------------------------------
+// A chip per active filter (field + selected values) plus a "+ Filter" control that
+// first picks a column, then opens a searchable multi-select for that column's values.
+// Replaces a single dumped-together "Filters" panel -- this is the pattern most
+// analytics/table tools (Notion, Linear, Airtable, Amplitude) use: one small, removable,
+// re-editable chip per condition, rather than one dense wall of checkboxes.
+function FilterValuePopover({ field, options, selected, onToggleValue, onClose }) {
+  const [q, setQ] = useState('')
+  const shown = q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
+      <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 240, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+        <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder={'Search ' + field.label.toLowerCase() + '…'}
+          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+        <div style={{ maxHeight: 230, overflowY: 'auto' }}>
+          {shown.map(o => {
+            const checked = selected.includes(o)
+            return (
+              <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: checked ? 700 : 500, color: checked ? C.navy : '#374151', background: checked ? C.navyBg : 'transparent' }}>
+                <input type="checkbox" checked={checked} onChange={() => onToggleValue(o)} style={{ accentColor: C.navy, cursor: 'pointer', flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
+              </label>
+            )
+          })}
+          {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No matches</div>}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function FilterChip({ field, values, options, open, onToggle, onToggleValue, onRemove }) {
+  const summary = values.length === 1 ? values[0] : values.length + ' selected'
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
-      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '0.5px solid ' + (open || activeCount > 0 ? C.blue : C.border), background: 'var(--card)', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT, color: C.text, whiteSpace: 'nowrap' }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
-        Filters
-        {activeCount > 0 && <span style={{ background: C.navy, color: '#fff', borderRadius: 99, fontSize: 10, fontWeight: 800, padding: '1px 6px', minWidth: 15, textAlign: 'center', lineHeight: '14px' }}>{activeCount}</span>}
-        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
+      <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 8, border: '0.5px solid rgba(31,60,132,0.35)', background: C.navyBg, overflow: 'hidden' }}>
+        <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 9px 6px 11px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }}>
+          <span style={{ color: C.navy, fontWeight: 700 }}>{field.label}</span>
+          <span style={{ color: C.text, fontWeight: 600, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{summary}</span>
+          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="3" strokeLinecap="round" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
+        </button>
+        <button type="button" onClick={onRemove} title="Remove filter" style={{ border: 'none', borderLeft: '0.5px solid rgba(31,60,132,0.2)', background: 'transparent', cursor: 'pointer', color: C.navy, padding: '6px 9px', display: 'flex', alignItems: 'center' }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      {open && <FilterValuePopover field={field} options={options} selected={values} onToggleValue={onToggleValue} onClose={onToggle} />}
+    </div>
+  )
+}
+
+function AddFilterButton({ fields, open, onToggle, onPickField }) {
+  const [q, setQ] = useState('')
+  const shown = q.trim() ? fields.filter(f => f.label.toLowerCase().includes(q.trim().toLowerCase())) : fields
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.muted, whiteSpace: 'nowrap' }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+        Filter
       </button>
-      {open && <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />}
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 200, width: 'min(640px, 90vw)', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text }}>Advanced filter</div>
-            {activeCount > 0 && <button type="button" onClick={onClear} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.blue, fontSize: 11.5, fontWeight: 700 }}>Clear all</button>}
+        <>
+          <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 210, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+            <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Find a column…"
+              style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+            <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+              {shown.map(f => (
+                <button key={f.key} type="button" onClick={() => onPickField(f.key)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 9px', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, fontFamily: FONT, color: '#374151', background: 'transparent' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#F3F4F6' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                  {f.label}
+                </button>
+              ))}
+              {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No columns match</div>}
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-            {sections.map(sec => (
-              <div key={sec.key} style={{ flex: '1 1 170px', minWidth: 170 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{sec.label}</span>
-                  {sec.selected.length > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: C.navy }}>{sec.selected.length} selected</span>}
-                </div>
-                <div style={{ maxHeight: 220, overflowY: 'auto', border: '0.5px solid #F1F4F9', borderRadius: 8, padding: 4 }}>
-                  {sec.options.map(o => {
-                    const checked = sec.selected.includes(o)
-                    return (
-                      <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: checked ? 700 : 500, color: checked ? C.navy : '#374151', background: checked ? C.navyBg : 'transparent' }}>
-                        <input type="checkbox" checked={checked} onChange={() => sec.onToggle(o)} style={{ accentColor: C.navy, cursor: 'pointer', flexShrink: 0 }} />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
-                      </label>
-                    )
-                  })}
-                  {sec.options.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No options</div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        </>
       )}
     </div>
   )
@@ -348,14 +398,23 @@ export default function HumanQLDetailDashboard() {
   const [lastSync, setLastSync] = useState(null)
   const [showInfo, setShowInfo] = useState(false)
   const [search, setSearch] = useState('')
-  const [countryFilters, setCountryFilters] = useState([])
-  const [dispositionFilters, setDispositionFilters] = useState([])
-  const [openMenu, setOpenMenu] = useState(null)
+  const [activeFilters, setActiveFilters] = useState({}) // { fieldKey: string[] }
+  const [openFilterKey, setOpenFilterKey] = useState(null) // fieldKey whose popover is open, or '__add', or 'month'
   const [page, setPage] = useState(1)
   const [playingRow, setPlayingRow] = useState(null)
   const [sortKey, setSortKey] = useState('date')
   const [sortDir, setSortDir] = useState('desc')
   const [downloadingIds, setDownloadingIds] = useState(() => new Set())
+
+  const toggleFilterValue = (field, val) => setActiveFilters(prev => {
+    const cur = prev[field] || []
+    const next = cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val]
+    const copy = { ...prev }
+    if (next.length) copy[field] = next; else delete copy[field]
+    return copy
+  })
+  const removeFilter = field => setActiveFilters(prev => { const c = { ...prev }; delete c[field]; return c })
+  const clearAllFilters = () => setActiveFilters({})
 
   const handleRowDownload = async r => {
     const id = r.prospectId
@@ -392,13 +451,22 @@ export default function HumanQLDetailDashboard() {
   const saveView = () => {
     const name = window.prompt('Name this view:')
     if (!name || !name.trim()) return
-    setViews(prev => ({ ...prev, [name.trim()]: { countryFilters, dispositionFilters, search, monthDay } }))
+    setViews(prev => ({ ...prev, [name.trim()]: { activeFilters, search, monthDay } }))
   }
   const loadView = name => {
     const v = views[name]
     if (!v) return
-    setCountryFilters(Array.isArray(v.countryFilters) ? v.countryFilters : (v.countryFilter && v.countryFilter !== 'all' ? [v.countryFilter] : []))
-    setDispositionFilters(Array.isArray(v.dispositionFilters) ? v.dispositionFilters : (v.dispositionFilter && v.dispositionFilter !== 'all' ? [v.dispositionFilter] : []))
+    if (v.activeFilters && typeof v.activeFilters === 'object' && !Array.isArray(v.activeFilters)) {
+      setActiveFilters(v.activeFilters)
+    } else {
+      // Backward-compat with views saved before the per-column filter bar existed.
+      const legacy = {}
+      if (v.countryFilter && v.countryFilter !== 'all') legacy.country = [v.countryFilter]
+      if (Array.isArray(v.countryFilters) && v.countryFilters.length) legacy.country = v.countryFilters
+      if (v.dispositionFilter && v.dispositionFilter !== 'all') legacy.disposition = [v.dispositionFilter]
+      if (Array.isArray(v.dispositionFilters) && v.dispositionFilters.length) legacy.disposition = v.dispositionFilters
+      setActiveFilters(legacy)
+    }
     setSearch(v.search || '')
     setMonthDay(v.monthDay || 'all')
   }
@@ -437,16 +505,25 @@ export default function HumanQLDetailDashboard() {
     return rows.filter(r => { if (!r.date) return false; const d = new Date(r.date + 'T00:00:00'); return d >= win.from && d <= win.to })
   }, [rows, monthDay, datePreset, selMonth, customFrom, customTo])
 
+  // One distinct-value list per filterable column, derived from the date-scoped rows --
+  // recomputes whenever the date window changes, independent of which filters are active.
+  const filterOptions = useMemo(() => {
+    const map = {}
+    FILTERABLE_FIELDS.forEach(f => { map[f.key] = [...new Set(scoped.map(r => r[f.key]).filter(Boolean))].sort() })
+    return map
+  }, [scoped])
+
   const filtered = useMemo(() => {
     let out = scoped
-    if (countryFilters.length) out = out.filter(r => countryFilters.includes(r.country))
-    if (dispositionFilters.length) out = out.filter(r => dispositionFilters.includes(r.disposition))
+    Object.entries(activeFilters).forEach(([field, values]) => {
+      if (values && values.length) out = out.filter(r => values.includes(r[field]))
+    })
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       out = out.filter(r => r.course.toLowerCase().includes(q) || r.country.toLowerCase().includes(q) || r.campaign.toLowerCase().includes(q) || r.prospectId.toLowerCase().includes(q) || r.opportunityId.toLowerCase().includes(q))
     }
     return out
-  }, [scoped, countryFilters, dispositionFilters, search])
+  }, [scoped, activeFilters, search])
 
   const sorted = useMemo(() => {
     const col = HUMAN_QL_COLS.find(c => c.key === sortKey)
@@ -462,11 +539,9 @@ export default function HumanQLDetailDashboard() {
     return arr
   }, [filtered, sortKey, sortDir])
 
-  useEffect(() => { setPage(1) }, [countryFilters, dispositionFilters, search, monthDay, datePreset, selMonth, customFrom, customTo])
+  useEffect(() => { setPage(1) }, [activeFilters, search, monthDay, datePreset, selMonth, customFrom, customTo])
 
   const availableDays = useMemo(() => [...new Set(rows.map(r => r.date))].filter(Boolean).sort(), [rows])
-  const countryOptions = useMemo(() => [...new Set(scoped.map(r => r.country))].filter(Boolean).sort(), [scoped])
-  const dispositionOptions = useMemo(() => [...new Set(scoped.map(r => r.disposition))].filter(Boolean).sort(), [scoped])
 
   const kpi = useMemo(() => {
     const total = filtered.length
@@ -501,10 +576,10 @@ export default function HumanQLDetailDashboard() {
     return Object.entries(counts).map(([disposition, count]) => ({ disposition, count })).sort((a, b) => b.count - a.count)
   }, [filtered])
 
-  // Always the current calendar month, regardless of the date-preset/country/disposition/
-  // search filters active elsewhere on the page -- reads from the raw `rows`, not `scoped`/
-  // `filtered`, per explicit request that this one chart never collapse to whatever narrower
-  // window is selected.
+  // Always the current calendar month, regardless of the date-preset/filter/search
+  // controls active elsewhere on the page -- reads from the raw `rows`, not `scoped`/
+  // `filtered`, per explicit request that this one chart never collapse to whatever
+  // narrower window is selected.
   const dailyTrendMonth = useMemo(() => {
     const now = new Date()
     const y = now.getFullYear(), m = now.getMonth() + 1
@@ -519,8 +594,8 @@ export default function HumanQLDetailDashboard() {
 
   const exportRows = useMemo(() => sorted.map(r => ({
     Date: fmtDateLabel(r.date), Country: r.country, Degree: r.degree, Course: r.course, Intake: r.intake,
-    Disposition: r.disposition, Budget: r.budget, Campaign: r.campaign, Passport: r.passport,
-    'Degree Status': r.degreeStatus, Questions: r.questionsForCounselor,
+    Disposition: r.disposition, Budget: r.budget, Campaign: r.campaign, 'Futwork Project': r.futworkProject,
+    Passport: r.passport, 'Degree Status': r.degreeStatus, Questions: r.questionsForCounselor,
     'Duration (sec)': r.callDuration, 'Recording URL': r.recordingUrl,
     'Prospect ID': r.prospectId, 'Opportunity ID': r.opportunityId,
   })), [sorted])
@@ -548,6 +623,7 @@ export default function HumanQLDetailDashboard() {
       case 'disposition': return <span style={{ color: DISPOSITION_COLOR[r.disposition] || C.text, fontWeight: 600 }}>{r.disposition}</span>
       case 'budget': return r.budget || '—'
       case 'campaign': return <span title={r.campaign}>{r.campaign || '—'}</span>
+      case 'futworkProject': return r.futworkProject || '—'
       case 'passport': return r.passport || '—'
       case 'degreeStatus': return r.degreeStatus || '—'
       case 'questionsForCounselor': return <span title={r.questionsForCounselor}>{r.questionsForCounselor || '—'}</span>
@@ -567,17 +643,17 @@ export default function HumanQLDetailDashboard() {
         </span>
       ) : '—'
       case 'prospectId': return r.prospectId ? (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'monospace', fontSize: 11 }} title={'Open Contact in LeadSquared: ' + r.prospectId}>
-          <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: C.blue, textDecoration: 'none' }}>{r.prospectId.slice(0, 8)}…</a>
-          <button type="button" onClick={e => copy(e, r.prospectId)} title="Copy" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'inline-flex' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'monospace', fontSize: 11 }} title={'Open Contact in LeadSquared: ' + r.prospectId}>
+          <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: C.blue, textDecoration: 'none' }}>{r.prospectId}</a>
+          <button type="button" onClick={e => copy(e, r.prospectId)} title="Copy" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'inline-flex', flexShrink: 0 }}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
           </button>
         </span>
       ) : '—'
       case 'opportunityId': return r.opportunityId ? (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: 'monospace', fontSize: 11 }} title={'Open Opportunity in LeadSquared: ' + r.opportunityId}>
-          <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: C.blue, textDecoration: 'none' }}>{r.opportunityId.slice(0, 8)}…</a>
-          <button type="button" onClick={e => copy(e, r.opportunityId)} title="Copy" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'inline-flex' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: 'monospace', fontSize: 11 }} title={'Open Opportunity in LeadSquared: ' + r.opportunityId}>
+          <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
+          <button type="button" onClick={e => copy(e, r.opportunityId)} title="Copy" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'inline-flex', flexShrink: 0 }}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
           </button>
         </span>
@@ -597,6 +673,8 @@ export default function HumanQLDetailDashboard() {
       </div>
     )
   }
+
+  const activeFilterKeys = Object.keys(activeFilters)
 
   return (
     <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
@@ -620,12 +698,12 @@ export default function HumanQLDetailDashboard() {
               ))}
             </div>
             <FilterDropdown label="Month" value={selMonth ? fmtMonthLabel(selMonth) : 'all'} options={['all', ...monthOptions.map(fmtMonthLabel)]}
-              open={openMenu === 'month'} onToggle={() => setOpenMenu(v => v === 'month' ? null : 'month')}
+              open={openFilterKey === 'month'} onToggle={() => setOpenFilterKey(v => v === 'month' ? null : 'month')}
               onSelect={v => {
                 setMonthDay('all')
                 if (v === 'all') { setSelMonth(''); setDatePreset('all') }
                 else { const idx = monthOptions.map(fmtMonthLabel).indexOf(v); setSelMonth(monthOptions[idx]); setDatePreset('month') }
-                setCustomFrom(''); setCustomTo(''); setShowCustom(false); setOpenMenu(null)
+                setCustomFrom(''); setCustomTo(''); setShowCustom(false); setOpenFilterKey(null)
               }} />
             <button onClick={() => { setMonthDay('all'); setShowCustom(v => !v); setDatePreset('custom'); setSelMonth('') }}
               style={{
@@ -640,14 +718,6 @@ export default function HumanQLDetailDashboard() {
                 <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6, border: '0.5px solid ' + C.border, fontFamily: FONT, color: C.text, background: 'var(--card)' }} />
               </>
             )}
-            <AdvancedFilterPanel
-              open={openMenu === 'advanced'} onToggle={() => setOpenMenu(v => v === 'advanced' ? null : 'advanced')}
-              activeCount={countryFilters.length + dispositionFilters.length}
-              onClear={() => { setCountryFilters([]); setDispositionFilters([]) }}
-              sections={[
-                { key: 'country', label: 'Country', options: countryOptions, selected: countryFilters, onToggle: v => setCountryFilters(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]) },
-                { key: 'disposition', label: 'Disposition', options: dispositionOptions, selected: dispositionFilters, onToggle: v => setDispositionFilters(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]) },
-              ]} />
             {lastSync && <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>}
             <Button onClick={reload} disabled={loading} title="Refresh data" size="sm">
               {loading ? 'Refreshing' : 'Refresh'}
@@ -661,12 +731,36 @@ export default function HumanQLDetailDashboard() {
                   <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400, width: 280, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14, fontSize: 11.5, color: '#374151', lineHeight: 1.6 }}>
                     <div style={{ fontWeight: 800, color: C.navy, marginBottom: 6 }}>How these metrics are calculated</div>
                     <div><strong>Total QLs</strong> — Human (Futwork agent) qualified leads in the selected window.</div>
-                    <div style={{ marginTop: 6 }}>Date filters scope the KPIs, charts and table by activity date.</div>
+                    <div style={{ marginTop: 6 }}>Date filters scope the KPIs, charts and table by activity date. Column filters below narrow the table (and everything derived from it) by any field shown in it.</div>
                   </div>
                 </>
               )}
             </div>
           </div>
+        </div>
+
+        <div style={{ background: 'var(--bg3)', borderBottom: '0.5px solid ' + C.border, padding: '10px 28px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 0 }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+            <input type="text" placeholder="Search leads…" value={search} onChange={e => setSearch(e.target.value)}
+              style={{ padding: '6px 11px 6px 27px', border: '0.5px solid ' + C.border, borderRadius: 8, fontSize: 12.5, fontFamily: FONT, outline: 'none', width: 180, background: 'var(--card)', color: C.text }} />
+          </div>
+          <div style={{ width: 1, alignSelf: 'stretch', background: C.border, margin: '0 2px' }} />
+          {activeFilterKeys.map(key => {
+            const field = FILTERABLE_FIELDS.find(f => f.key === key)
+            if (!field) return null
+            return (
+              <FilterChip key={key} field={field} values={activeFilters[key]} options={filterOptions[key] || []}
+                open={openFilterKey === key} onToggle={() => setOpenFilterKey(v => v === key ? null : key)}
+                onToggleValue={v => toggleFilterValue(key, v)} onRemove={() => removeFilter(key)} />
+            )
+          })}
+          <AddFilterButton fields={FILTERABLE_FIELDS.filter(f => !activeFilters[f.key])}
+            open={openFilterKey === '__add'} onToggle={() => setOpenFilterKey(v => v === '__add' ? null : '__add')}
+            onPickField={key => setOpenFilterKey(key)} />
+          {activeFilterKeys.length > 0 && (
+            <button type="button" onClick={clearAllFilters} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 11.5, fontWeight: 600, textDecoration: 'underline', flexShrink: 0 }}>Clear all</button>
+          )}
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
@@ -685,7 +779,7 @@ export default function HumanQLDetailDashboard() {
               <RankedBars data={byDisposition} labelKey="disposition" max={byDisposition[0]?.count || 0} total={kpi.total} colorFn={i => DISPOSITION_COLOR[byDisposition[i]?.disposition] || C.navy} />
             </Card>
             <Card title="Daily Trend" sub="QLs per day, current month -- not affected by any filter above" noPad>
-              <div style={{ height: 220, padding: '12px 12px 4px' }}>
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '12px 12px 4px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={dailyTrendMonth} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
                 <defs><BarGrad id="g-b0-1" color={C.navy}/></defs>
@@ -700,11 +794,9 @@ export default function HumanQLDetailDashboard() {
             </Card>
           </div>
 
-          <Card title={'Lead detail — ' + fmtN(sorted.length) + ' records'} sub="Search by course, country, campaign or ID · drag column headers to reorder" noPad
+          <Card title={'Lead detail — ' + fmtN(sorted.length) + (sorted.length !== rows.length ? ' of ' + fmtN(rows.length) : '') + ' records'} sub="Drag column headers to reorder" noPad
             action={
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }}>
-                <input type="text" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
-                  style={{ padding: '5px 10px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', width: 140, background: 'var(--card)', color: C.text }} />
                 <button type="button" onClick={() => setColsOpen(v => !v)} title="Views &amp; Columns"
                   style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, border: '0.5px solid ' + C.border, cursor: 'pointer', flexShrink: 0, background: colsOpen ? C.navy : '#fff', color: colsOpen ? '#fff' : '#6B7280' }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h18M3 6h18M3 18h18" /></svg>
