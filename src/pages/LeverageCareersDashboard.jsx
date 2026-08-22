@@ -1011,7 +1011,7 @@ export default function LeverageCareersDashboard() {
               <div className={styles.empty}>{compareError}</div>
             ) : (
               <>
-                <div style={{ background: C.navyBg, borderRadius: 12, padding: '14px 16px', marginBottom: 16, fontSize: 13.5, fontWeight: 700, color: C.navy }}>{compareResult.verdict}</div>
+                <div style={{ background: 'var(--navy-tint)', border: '0.5px solid var(--card-border)', borderRadius: 12, padding: '14px 16px', marginBottom: 16, fontSize: 13.5, fontWeight: 700, color: 'var(--text)' }}>{compareResult.verdict}</div>
                 <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 16 }}>
                   <PremKPI label="SPEND" value={fmtINR(compareResult.a.spend)} sub={'vs ' + fmtINR(compareResult.b.spend)} delta={deltaPct(compareResult.a.spend, compareResult.b.spend)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
                   <PremKPI label="CRM LEADS" value={fmtN(compareResult.a.crmLeads)} sub={'vs ' + fmtN(compareResult.b.crmLeads)} delta={deltaPct(compareResult.a.crmLeads, compareResult.b.crmLeads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.bot} />
