@@ -21,7 +21,10 @@ const LEADSQUARED_CONTACT_URL = 'https://in21.leadsquared.com/LeadManagement/Lea
 const LEADSQUARED_OPPORTUNITY_URL = 'https://in21.leadsquared.com/OpportunityManagement/OpportunityDetails?opportunityId='
 const LEADSQUARED_OPPORTUNITY_EVENT = '12003'
 
-const HOT_DISPOSITION = 'Call Transferred To Counsellor'
+// NOTE: unlike AI QL Detail, this sheet's HumanDetailedQL tab has no disposition_status
+// column, so there is no "In Progress" state to highlight in red here -- see the dated
+// 2026-08-22 CLAUDE.md entry. The old green "hot disposition" row highlight has been
+// removed per explicit request; nothing replaces it on this page until that data exists.
 
 const HUMAN_QL_COLS = [
   { key: 'date', label: 'Date', width: 90 },
@@ -192,6 +195,50 @@ function FilterDropdown({ label, value, options, open, onToggle, onSelect }) {
   )
 }
 
+function AdvancedFilterPanel({ sections, open, onToggle, onClear, activeCount }) {
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '0.5px solid ' + (open || activeCount > 0 ? C.blue : C.border), background: 'var(--card)', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT, color: C.text, whiteSpace: 'nowrap' }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
+        Filters
+        {activeCount > 0 && <span style={{ background: C.navy, color: '#fff', borderRadius: 99, fontSize: 10, fontWeight: 800, padding: '1px 6px', minWidth: 15, textAlign: 'center', lineHeight: '14px' }}>{activeCount}</span>}
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
+      </button>
+      {open && <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />}
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 'min(640px, 90vw)', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text }}>Advanced filter</div>
+            {activeCount > 0 && <button type="button" onClick={onClear} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.blue, fontSize: 11.5, fontWeight: 700 }}>Clear all</button>}
+          </div>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            {sections.map(sec => (
+              <div key={sec.key} style={{ flex: '1 1 170px', minWidth: 170 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{sec.label}</span>
+                  {sec.selected.length > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: C.navy }}>{sec.selected.length} selected</span>}
+                </div>
+                <div style={{ maxHeight: 220, overflowY: 'auto', border: '0.5px solid #F1F4F9', borderRadius: 8, padding: 4 }}>
+                  {sec.options.map(o => {
+                    const checked = sec.selected.includes(o)
+                    return (
+                      <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: checked ? 700 : 500, color: checked ? C.navy : '#374151', background: checked ? C.navyBg : 'transparent' }}>
+                        <input type="checkbox" checked={checked} onChange={() => sec.onToggle(o)} style={{ accentColor: C.navy, cursor: 'pointer', flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
+                      </label>
+                    )
+                  })}
+                  {sec.options.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No options</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function fmtClock(sec) {
   if (!isFinite(sec) || sec < 0) return '0:00'
   const m = Math.floor(sec / 60), s = Math.floor(sec % 60)
@@ -297,8 +344,8 @@ export default function HumanQLDetailDashboard() {
   const [lastSync, setLastSync] = useState(null)
   const [showInfo, setShowInfo] = useState(false)
   const [search, setSearch] = useState('')
-  const [countryFilter, setCountryFilter] = useState('all')
-  const [dispositionFilter, setDispositionFilter] = useState('all')
+  const [countryFilters, setCountryFilters] = useState([])
+  const [dispositionFilters, setDispositionFilters] = useState([])
   const [openMenu, setOpenMenu] = useState(null)
   const [page, setPage] = useState(1)
   const [playingRow, setPlayingRow] = useState(null)
@@ -341,13 +388,13 @@ export default function HumanQLDetailDashboard() {
   const saveView = () => {
     const name = window.prompt('Name this view:')
     if (!name || !name.trim()) return
-    setViews(prev => ({ ...prev, [name.trim()]: { countryFilter, dispositionFilter, search, monthDay } }))
+    setViews(prev => ({ ...prev, [name.trim()]: { countryFilters, dispositionFilters, search, monthDay } }))
   }
   const loadView = name => {
     const v = views[name]
     if (!v) return
-    setCountryFilter(v.countryFilter || 'all')
-    setDispositionFilter(v.dispositionFilter || 'all')
+    setCountryFilters(Array.isArray(v.countryFilters) ? v.countryFilters : (v.countryFilter && v.countryFilter !== 'all' ? [v.countryFilter] : []))
+    setDispositionFilters(Array.isArray(v.dispositionFilters) ? v.dispositionFilters : (v.dispositionFilter && v.dispositionFilter !== 'all' ? [v.dispositionFilter] : []))
     setSearch(v.search || '')
     setMonthDay(v.monthDay || 'all')
   }
@@ -388,14 +435,14 @@ export default function HumanQLDetailDashboard() {
 
   const filtered = useMemo(() => {
     let out = scoped
-    if (countryFilter !== 'all') out = out.filter(r => r.country === countryFilter)
-    if (dispositionFilter !== 'all') out = out.filter(r => r.disposition === dispositionFilter)
+    if (countryFilters.length) out = out.filter(r => countryFilters.includes(r.country))
+    if (dispositionFilters.length) out = out.filter(r => dispositionFilters.includes(r.disposition))
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       out = out.filter(r => r.course.toLowerCase().includes(q) || r.country.toLowerCase().includes(q) || r.campaign.toLowerCase().includes(q) || r.prospectId.toLowerCase().includes(q) || r.opportunityId.toLowerCase().includes(q))
     }
     return out
-  }, [scoped, countryFilter, dispositionFilter, search])
+  }, [scoped, countryFilters, dispositionFilters, search])
 
   const sorted = useMemo(() => {
     const col = HUMAN_QL_COLS.find(c => c.key === sortKey)
@@ -411,11 +458,11 @@ export default function HumanQLDetailDashboard() {
     return arr
   }, [filtered, sortKey, sortDir])
 
-  useEffect(() => { setPage(1) }, [countryFilter, dispositionFilter, search, monthDay, datePreset, selMonth, customFrom, customTo])
+  useEffect(() => { setPage(1) }, [countryFilters, dispositionFilters, search, monthDay, datePreset, selMonth, customFrom, customTo])
 
   const availableDays = useMemo(() => [...new Set(rows.map(r => r.date))].filter(Boolean).sort(), [rows])
-  const countryOptions = useMemo(() => ['all', ...[...new Set(scoped.map(r => r.country))].sort()], [scoped])
-  const dispositionOptions = useMemo(() => ['all', ...[...new Set(scoped.map(r => r.disposition))].sort()], [scoped])
+  const countryOptions = useMemo(() => [...new Set(scoped.map(r => r.country))].filter(Boolean).sort(), [scoped])
+  const dispositionOptions = useMemo(() => [...new Set(scoped.map(r => r.disposition))].filter(Boolean).sort(), [scoped])
 
   const kpi = useMemo(() => {
     const total = filtered.length
@@ -450,11 +497,21 @@ export default function HumanQLDetailDashboard() {
     return Object.entries(counts).map(([disposition, count]) => ({ disposition, count })).sort((a, b) => b.count - a.count)
   }, [filtered])
 
-  const dailyTrend = useMemo(() => {
+  // Always the current calendar month, regardless of the date-preset/country/disposition/
+  // search filters active elsewhere on the page -- reads from the raw `rows`, not `scoped`/
+  // `filtered`, per explicit request that this one chart never collapse to whatever narrower
+  // window is selected.
+  const dailyTrendMonth = useMemo(() => {
+    const now = new Date()
+    const y = now.getFullYear(), m = now.getMonth() + 1
     const counts = {}
-    scoped.forEach(r => { counts[r.date] = (counts[r.date] || 0) + 1 })
+    rows.forEach(r => {
+      if (!r.date) return
+      const [ry, rm] = r.date.split('-').map(Number)
+      if (ry === y && rm === m) counts[r.date] = (counts[r.date] || 0) + 1
+    })
     return Object.keys(counts).sort().map(d => ({ date: d, label: fmtDateLabel(d), count: counts[d] }))
-  }, [scoped])
+  }, [rows])
 
   const exportRows = useMemo(() => sorted.map(r => ({
     Date: fmtDateLabel(r.date), Country: r.country, Degree: r.degree, Course: r.course, Intake: r.intake,
@@ -579,12 +636,14 @@ export default function HumanQLDetailDashboard() {
                 <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={{ fontSize: 11, padding: '4px 6px', borderRadius: 6, border: '0.5px solid ' + C.border, fontFamily: FONT, color: C.text, background: 'var(--card)' }} />
               </>
             )}
-            <FilterDropdown label="Country" value={countryFilter} options={countryOptions}
-              open={openMenu === 'country'} onToggle={() => setOpenMenu(v => v === 'country' ? null : 'country')}
-              onSelect={v => { setCountryFilter(v); setOpenMenu(null) }} />
-            <FilterDropdown label="Disposition" value={dispositionFilter} options={dispositionOptions}
-              open={openMenu === 'disposition'} onToggle={() => setOpenMenu(v => v === 'disposition' ? null : 'disposition')}
-              onSelect={v => { setDispositionFilter(v); setOpenMenu(null) }} />
+            <AdvancedFilterPanel
+              open={openMenu === 'advanced'} onToggle={() => setOpenMenu(v => v === 'advanced' ? null : 'advanced')}
+              activeCount={countryFilters.length + dispositionFilters.length}
+              onClear={() => { setCountryFilters([]); setDispositionFilters([]) }}
+              sections={[
+                { key: 'country', label: 'Country', options: countryOptions, selected: countryFilters, onToggle: v => setCountryFilters(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]) },
+                { key: 'disposition', label: 'Disposition', options: dispositionOptions, selected: dispositionFilters, onToggle: v => setDispositionFilters(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]) },
+              ]} />
             {lastSync && <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>}
             <Button onClick={reload} disabled={loading} title="Refresh data" size="sm">
               {loading ? 'Refreshing' : 'Refresh'}
@@ -621,13 +680,13 @@ export default function HumanQLDetailDashboard() {
             <Card title="By Disposition" sub="Call outcome breakdown">
               <RankedBars data={byDisposition} labelKey="disposition" max={byDisposition[0]?.count || 0} total={kpi.total} colorFn={i => DISPOSITION_COLOR[byDisposition[i]?.disposition] || C.navy} />
             </Card>
-            <Card title="Daily Trend" sub="QLs per day this month" noPad>
+            <Card title="Daily Trend" sub="QLs per day, current month -- not affected by any filter above" noPad>
               <div style={{ height: 220, padding: '12px 12px 4px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dailyTrend} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                  <BarChart data={dailyTrendMonth} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
                 <defs><BarGrad id="g-b0-1" color={C.navy}/></defs>
                     <CartesianGrid vertical={false} stroke="#EEF1F5" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} interval={dailyTrend.length > 10 ? 1 : 0} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} interval={dailyTrendMonth.length > 10 ? 1 : 0} />
                     <YAxis hide />
                     <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: '0.5px solid ' + C.border }} />
                     <Bar dataKey="count" fill={barFill('g-b0-1')} radius={BAR_RADIUS} maxBarSize={22} />
@@ -721,15 +780,13 @@ export default function HumanQLDetailDashboard() {
                 </tr></thead>
                 <tbody>
                   {pageItems.map((r, i) => {
-                    const isHot = r.disposition === HOT_DISPOSITION
                     return (
-                      <tr key={r.prospectId || i} style={{ background: isHot ? C.greenBg : 'transparent' }} title={isHot ? 'Call transferred to counsellor -- hot lead' : undefined}>
+                      <tr key={r.prospectId || i}>
                         {displayOrder.map((key, colIdx) => {
                           const isPinned = pinnedCols.includes(key)
                           const tdStyle = {
                             ...td,
-                            background: isPinned ? (isHot ? C.greenBg : '#fff') : 'transparent',
-                            borderLeft: colIdx === 0 && isHot ? '3px solid ' + C.green : 'none',
+                            background: isPinned ? '#fff' : 'transparent',
                             ...(isPinned ? { position: 'sticky', left: pinnedLeftMap[key], zIndex: 1, borderRight: pinnedCols[pinnedCols.length - 1] === key ? '1px solid #F3F4F6' : 'none' } : {}),
                           }
                           return <td key={key} style={tdStyle}>{cell(r, key)}</td>
