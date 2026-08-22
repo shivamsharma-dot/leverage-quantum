@@ -4893,3 +4893,65 @@ directly against live BigQuery through the admin console and reconciles exactly.
 - A local `src/pages/OverallDashboard.jsx` edit was sitting uncommitted in the
   Codespace from a previous session; stashed as `stale-overall-edit-2026-08-22`
   rather than discarded. Someone should decide whether it is wanted.
+
+### 2026-08-22 (same session, follow-up) -- the deploy landed; LIVE-VERIFIED
+
+Supersedes the "NOT YET LIVE-VERIFIED" paragraph in the entry above. Vercel
+never produced a deployment for `597407b` on its own -- 24 minutes with no
+record. Pushing the CLAUDE.md commit `c9e365f` on top of it triggered a build
+immediately (deployment created 07:10:27Z), and that build carries both commits.
+So the work IS live, but the trigger for `597407b` alone genuinely never fired.
+**If a future push here sits un-deployed for more than ~10 minutes, pushing a
+trivial follow-up commit appears to unstick it.** Live bundle went
+`index-BaEu3tmq.js` -> `index-4KCb6a1l.js`, confirming the new build is serving.
+
+**What was actually clicked through on `/dashboard/leverage-careers`, admin
+session, zero console errors at any point:**
+
+- **Unfiltered totals unchanged, as the pro-rata allocation promised.** Spend
+  Rs11,74,950, Meta Leads 6,880, CRM Leads 12,610, Interested 619, Won 66,
+  CPL (Meta) Rs171, CPL (CRM) Rs93, CPI Rs1,898, CPS Rs17,802 -- same figures the
+  page showed before the change (spend drifts by a few hundred rupees only
+  because Meta keeps updating the current day).
+- **Source = Instagram.** CRM Leads 4,070 / Interested 300 / Won 21 -- matches
+  the independent BigQuery query run earlier to the unit (Instagram 4,070 / 300 /
+  21). CPL (CRM) moves Rs93 -> **Rs186**, which is the whole point of this work:
+  the unfiltered figure was diluted by ~6,175 non-Meta leads. CPI Rs2,521,
+  CPS Rs36,017. The table's TOTAL row agreed with the KPI cards exactly.
+- **Source grouping tab.** TOTAL reconciles to 12,610 / 619 / 66. Instagram
+  Rs7,56,361 / 4,070 / 300 / 21; Facebook Rs4,00,566 / 2,146 / 141 / 5; Whatsapp
+  Bot 5,119 / 103 / 2; Affiliate 1,185 / 44 / **17 Won at Rs0 spend**; Student
+  Referral 30 / 24 / 15. The `(no CRM match)` bucket shows Rs12,971 of spend with
+  0 CRM leads, exactly as designed -- visible, not silently dropped. Every one of
+  these lead counts matches the direct BigQuery profile. Channel tab renders the
+  same way.
+- **Won rate = At/above median.** 269 of 704 ad-day rows, 8 of 23 names matched,
+  keeps 64 of the 66 Won while spend falls to Rs7,87,707, so CPS improves
+  Rs17,802 -> Rs12,308. Behaves like a real "best converting" band.
+- **Compare.** Previous-period mode: Won up 13.8%, cost per Won down 20.5%, on a
+  correctly computed equal-length prior window. Switched to Custom: the two
+  `RangeField` pills open the shared two-month DateRangePicker inside the modal,
+  picked 2026-08-01 -> 2026-08-10, Apply range refetched and returned real
+  figures (Rs7,16,777 / 4,022 / 293 / 28) with the Vs side defaulting to the
+  matching 10-day prior window.
+- **Trend Analysis.** Month dimension / Spend renders a real 3-point line
+  (Jun'26 ~Rs9.2L, Jul'26 ~Rs16L, Aug'26 ~Rs11.7L MTD). NOTE: the 6-month default
+  did not return within ~2 minutes and I dropped to 3 months to finish
+  verifying -- consistent with the Meta account rate-limit already documented in
+  the 2026-08-13 entry for exactly this fetch, and made worse here by how many
+  day-level fetches this verification pass fired in a row. Pre-existing, not
+  introduced by this change, but the 6-month option remains unreliable.
+- **DOM assertions on the live page:** 0 native `<select>`, 0 native
+  `<input type="date">`, and `lq-page-shell` / `lq-kpi-grid` x2 /
+  `lq-header-controls` x2 all present (the second of each being Compare's KPI row
+  and the new filter bar).
+- **Table overlap fixed** -- long `PMX_FB_LevCareers_...` names now wrap inside
+  the first column instead of painting over Spend.
+
+**Honestly not verified:** I could not get the browser viewport to actually
+resize below the 768px breakpoint in this session, so the mobile layout was
+checked structurally (correct utility classes present, which is what the media
+queries key off) rather than visually. Someone should eyeball it on a real phone.
+Dark / navy / stone themes were likewise not switched into and looked at -- the
+hardcoded hexes are gone and replaced with the same tokens the rest of the page
+already used, but that is a source-level argument, not an observed one.
