@@ -206,7 +206,7 @@ function AdvancedFilterPanel({ sections, open, onToggle, onClear, activeCount })
       </button>
       {open && <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />}
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 'min(640px, 90vw)', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14 }}>
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 200, width: 'min(640px, 90vw)', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={{ fontSize: 12.5, fontWeight: 800, color: C.text }}>Advanced filter</div>
             {activeCount > 0 && <button type="button" onClick={onClear} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.blue, fontSize: 11.5, fontWeight: 700 }}>Clear all</button>}
