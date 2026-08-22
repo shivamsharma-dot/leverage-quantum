@@ -38,6 +38,18 @@ export default async function handler(req, res) {
     return res.status(200).json({ url: entry.defaultUrl || null })
   }
 
+  // GET (authenticated, admin only) ?resolveGazetteHtml=1 — the Quantum Gazette's
+  // stored HTML snapshot for the Settings > Reports "Send now" card. Kept out of
+  // the general bulk GET below (LARGE_KEYS) so an ordinary Settings load doesn't
+  // drag a ~180KB blob along with every other preference on every page view; this
+  // dedicated branch is only ever called when the Reports tab actually needs it.
+  if (req.method === 'GET' && req.query.resolveGazetteHtml === '1') {
+    if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+    const r = await supabaseAdmin('app_preferences?select=value,updated_at&key=eq.gazette_html')
+    const rows = r.ok ? await r.json() : []
+    return res.status(200).json({ html: rows[0]?.value || null, updatedAt: rows[0]?.updated_at || null })
+  }
+
   // GET (authenticated) ?resolveSheetKey=<sheet_url_...> — any signed-in user
   // can resolve a specific sheet-source override by key (see SHEET_PREF_KEYS in
   // src/lib/dataSources.js). Returns ONLY that one resolved URL string, never the
@@ -66,13 +78,16 @@ export default async function handler(req, res) {
   // is still never handed to a browser, and it can never be written through this
   // generic key/value upsert -- it only moves through its own guarded endpoint.
   const SECRET_KEYS = new Set(['slack_ceo_pin'])
+  // Large values that have their own dedicated GET branch above and would
+  // otherwise ride along with every ordinary Settings preferences load.
+  const LARGE_KEYS = new Set(['gazette_html'])
 
   if (req.method === 'GET') {
     const r = await supabaseAdmin(
       'app_preferences?select=key,value,updated_at&limit=200',
     )
     if (!r.ok) return res.status(500).json({ error: 'Failed to read preferences' })
-    const rows = ((await r.json()) || []).filter(row => !SECRET_KEYS.has(row.key))
+    const rows = ((await r.json()) || []).filter(row => !SECRET_KEYS.has(row.key) && !LARGE_KEYS.has(row.key))
     // affiliate_spend_manual must be readable by every signed-in user (not just
     // admins) -- the Overall dashboard is viewable by non-admins too, and it
     // needs this value to compute Affiliate's totals correctly for everyone.

@@ -603,6 +603,12 @@ export default function SettingsPage() {
   useEffect(() => {
     if (activeTab === 'reports' && userIsAdmin && !_rlRef.current) { _rlRef.current=true; loadReportLogs() }
   }, [activeTab, userIsAdmin])
+  // The Quantum Gazette's stored HTML snapshot — fetched once when Reports opens,
+  // not part of the general preferences bulk load (see LARGE_KEYS in api/preferences.mjs).
+  const _gzRef = useRef(false)
+  useEffect(() => {
+    if (activeTab === 'reports' && userIsAdmin && !_gzRef.current) { _gzRef.current=true; loadGazette() }
+  }, [activeTab, userIsAdmin])
   const [reportLogsList, setReportLogsList] = useState([])
   const [reportLogsLoading, setReportLogsLoading] = useState(false)
   const loadReportLogs = async () => {
@@ -1333,6 +1339,15 @@ export default function SettingsPage() {
   // --- Unassigned Leads alert (fixed recipient, not the general opt-in list) ---
   const [unassignedSending, setUnassignedSending] = useState(false)
   const [unassignedMsg, setUnassignedMsg] = useState('')
+  // --- The Quantum Gazette (custom_html send, ad-hoc To/CC entered here) ---
+  const [gazetteHtml, setGazetteHtml] = useState(null)
+  const [gazetteUpdatedAt, setGazetteUpdatedAt] = useState(null)
+  const [gazetteLoading, setGazetteLoading] = useState(false)
+  const [gazetteTo, setGazetteTo] = useState('akshay@leverageedu.com')
+  const [gazetteCc, setGazetteCc] = useState('manish@leverageedu.com, shubham.bansal@leverageedu.com, chilukoti.sriteja@leverageedu.com, shashwat.goswami@leverageedu.com, shivam.sharma@leverageedu.com')
+  const [gazetteSubject, setGazetteSubject] = useState('The Quantum Gazette, August 2026')
+  const [gazetteSending, setGazetteSending] = useState(false)
+  const [gazetteMsg, setGazetteMsg] = useState('')
   // Manual test-fire of the daily B2C P&L / Cash Flow Slack approval flow --
   // same endpoint the 3 PM IST Vercel cron hits, which always previews into
   // the #dashboard-testing sandbox channel regardless of the approval
@@ -1921,6 +1936,37 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
       setB2cReportMsg('Posted to #dashboard-testing \u2014 check Slack to Approve/Disapprove')
     } catch (e) { setB2cReportMsg('\u2715 ' + e.message) }
     finally { setB2cReportSending(false); setTimeout(() => setB2cReportMsg(''), 12000) }
+  }
+
+  const loadGazette = async () => {
+    setGazetteLoading(true)
+    try {
+      const r = await fetchT('/api/preferences?resolveGazetteHtml=1', { credentials: 'include' })
+      const d = await r.json()
+      if (r.ok) { setGazetteHtml(d.html || null); setGazetteUpdatedAt(d.updatedAt || null) }
+    } catch {}
+    finally { setGazetteLoading(false) }
+  }
+
+  const sendGazetteNow = async () => {
+    if (!gazetteHtml) { setGazetteMsg('✕ No Gazette snapshot saved yet'); return }
+    const toList = gazetteTo.split(',').map(s => s.trim()).filter(Boolean)
+    const ccList = gazetteCc.split(',').map(s => s.trim()).filter(Boolean)
+    if (!toList.length) { setGazetteMsg('✕ Enter at least one To recipient'); return }
+    const confirmMsg = 'Send "' + gazetteSubject + '" to ' + toList.join(', ') + (ccList.length ? ' (cc: ' + ccList.join(', ') + ')' : '') + '?'
+    if (!window.confirm(confirmMsg)) return
+    setGazetteSending(true); setGazetteMsg('')
+    try {
+      const r = await fetchT('/api/send-report', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'custom_html', subject: gazetteSubject, label: 'gazette', recipients: toList, cc: ccList, html: gazetteHtml })
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Failed')
+      setGazetteMsg('Sent — to ' + (d.recipients || []).join(', ') + ((d.cc || []).length ? ', cc ' + d.cc.join(', ') : ''))
+    } catch (e) { setGazetteMsg('✕ ' + e.message) }
+    finally { setGazetteSending(false); setTimeout(() => setGazetteMsg(''), 10000) }
   }
 
   const sendUnassignedNow = async () => {
@@ -3537,6 +3583,35 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <Button size="sm" variant="secondary" onClick={sendSlackTest} disabled={slackTesting || (!slackTestChannels.length && !slackWebhookTest.trim())}>{slackTesting ? 'Sending…' : 'Send test message'}</Button>
                   </div>
                   {slackCfgMsg && <span className={styles.rcFeedback + ' ' + (slackCfgMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{slackCfgMsg}</span>}
+                </div>
+              </div>
+
+              <div className={styles.card}>
+                <h3 className={styles.cardTitle}>The Quantum Gazette</h3>
+                <p className={styles.cardDesc}>
+                  Monthly performance report — Marketing, Corporate Finance, Talent Mobility. Sends the snapshot saved here{gazetteUpdatedAt ? (' (captured ' + new Date(gazetteUpdatedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ')') : ''} — this is a static snapshot, not live-regenerated, so ask for a refresh first if the numbers need to be current.
+                </p>
+                {!gazetteLoading && !gazetteHtml && (
+                  <p className={styles.note}>No Gazette snapshot saved yet.</p>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '4px 0 14px', maxWidth: 560 }}>
+                  <label style={{ fontSize: 12.5 }}>
+                    <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>To</div>
+                    <input type="text" className={styles.input} style={{ width: '100%' }} value={gazetteTo} onChange={e => setGazetteTo(e.target.value)} />
+                  </label>
+                  <label style={{ fontSize: 12.5 }}>
+                    <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>CC (comma-separated)</div>
+                    <input type="text" className={styles.input} style={{ width: '100%' }} value={gazetteCc} onChange={e => setGazetteCc(e.target.value)} />
+                  </label>
+                  <label style={{ fontSize: 12.5 }}>
+                    <div style={{ color: 'var(--text-3)', marginBottom: 4 }}>Subject</div>
+                    <input type="text" className={styles.input} style={{ width: '100%' }} value={gazetteSubject} onChange={e => setGazetteSubject(e.target.value)} />
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <Button size="sm" onClick={sendGazetteNow} disabled={gazetteSending || gazetteLoading || !gazetteHtml}>{gazetteSending ? 'Sending…' : 'Send now'}</Button>
+                  <Button size="sm" variant="secondary" onClick={loadGazette} disabled={gazetteLoading}>{gazetteLoading ? 'Loading…' : '↻ Refresh'}</Button>
+                  {gazetteMsg && <span className={styles.rcFeedback + ' ' + (gazetteMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{gazetteMsg}</span>}
                 </div>
               </div>
 
