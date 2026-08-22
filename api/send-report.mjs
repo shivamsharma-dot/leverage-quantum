@@ -575,6 +575,49 @@ async function handleChatAnswerEmail(req, res) {
   }
 }
 
+// Admin-only, ad-hoc raw-HTML send -- for a fully self-designed document (its
+// own masthead/footer, no shared report chrome) that doesn't fit any existing
+// report template. Unlike handleChatAnswerEmail this never wraps the HTML in
+// buildChatAnswerEmail's own template; the caller's HTML goes to Resend as-is.
+async function handleCustomHtmlEmail(req, res) {
+  const { getSessionUser } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+
+  const RESEND_KEY = process.env.RESEND_API_KEY
+  if (!RESEND_KEY) return res.status(500).json({ error: 'RESEND_API_KEY not configured' })
+
+  const { html, subject, label } = req.body || {}
+  const asked = Array.isArray(req.body?.recipients) ? req.body.recipients : []
+  if (!html || typeof html !== 'string') return res.status(400).json({ error: 'No HTML content to send' })
+  if (html.length > 1_800_000) return res.status(400).json({ error: 'HTML too large to send' })
+  if (!asked.length) return res.status(400).json({ error: 'No recipients specified' })
+  const vetted = await vetRecipients(asked)
+  if (!vetted.allowed.length) return res.status(400).json({ error: rejectedRecipientError(vetted), rejected: vetted.rejected })
+  const recipients = vetted.allowed
+  const reportType = label || 'custom html'
+
+  try {
+    const cfg = await getReportConfig()
+    const fromAddr = cfg.report_from_email
+      ? `${cfg.report_from_name || 'Leverage Quantum'} <${cfg.report_from_email}>`
+      : (process.env.REPORT_FROM_EMAIL || 'Leverage Quantum <quantum@platform.leverageedu.com>')
+    const sendRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_KEY}` },
+      body: JSON.stringify({ from: fromAddr, to: recipients, subject: subject || 'Leverage Quantum', html }),
+    })
+    const sendData = await sendRes.json()
+    if (!sendRes.ok) throw new Error(sendData.message || JSON.stringify(sendData))
+    await logReport({ report_type: reportType, recipients, status: 'sent', triggered_by: me.email })
+    return res.status(200).json({ ok: true, success: true, recipients, id: sendData.id })
+  } catch (e) {
+    await logReport({ report_type: reportType, recipients, status: 'failed', error: e.message, triggered_by: me.email })
+    return res.status(500).json({ error: e.message })
+  }
+}
+
 async function logReport({ report_type, recipients, status, error = null, triggered_by = 'cron' }) {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/report_logs`, {
@@ -2458,6 +2501,9 @@ export default async function handler(req, res) {
 
   if ((req.body?.type || req.query?.type) === 'chat_answer') {
     return handleChatAnswerEmail(req, res)
+  }
+  if ((req.body?.type || req.query?.type) === 'custom_html') {
+    return handleCustomHtmlEmail(req, res)
   }
   if ((req.body?.type || req.query?.type) === 'slack_answer') {
     return handleSlackAnswer(req, res)
