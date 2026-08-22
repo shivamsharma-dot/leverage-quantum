@@ -7,7 +7,11 @@ import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { resolveSheetUrl } from '../lib/dataSources'
 import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN, BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
 
-const DEFAULT_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=HumanDetailedQL'
+// NOT gviz/tq -- confirmed 2026-08-22 that Google's older gviz/tq visualization-API export
+// serves a stale, corrupted snapshot of this specific tab (row 1 glued to sample data from
+// the first two rows) while the sheet itself is correct. The newer /export?format=csv path
+// (same doc, same gid) returns clean, current data. gid=133089509 is HumanDetailedQL's gid.
+const DEFAULT_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/export?format=csv&gid=133089509'
 const PAGE = 25
 const COL_ORDER_KEY = 'lq_human_ql_col_order_v3'
 const COL_PINNED_KEY = 'lq_human_ql_col_pinned'
