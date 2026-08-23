@@ -1552,7 +1552,11 @@ async function handleBigQuery(req, res, me) {
       // changes would just re-scan the same ~11.5GB for nothing new.
       const { supabaseAdmin } = await import('../lib/auth.mjs')
       const crypto = await import('crypto')
-      const out = await bq.bigQuerySelect(careersLeadsSql(null, null), {
+      // bigQuerySelect caps at 20,000 rows in ONE call with no error on a
+      // short read -- the real result here is already 19,677 rows (measured
+      // 2026-08-23) and only grows, so bigQuerySelectAll (follows BigQuery's
+      // pageToken, refuses a truncated read) is required here, not optional.
+      const out = await bq.bigQuerySelectAll(careersLeadsSql(null, null), {
         maxBytes: 20_000_000_000, mode: 'careers_sync', dashboardId: 'leverage_careers', userEmail: me.email,
       })
       const rows = out.rows || []
