@@ -14,6 +14,7 @@ import { InlineLoader } from '../components/SkeletonLoader'
 import { toast } from '../components/ToastHost'
 import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS_H } from '../ui/dashboardKit'
 import { CAREERS_REPORT_VERSIONS } from '../lib/careersReport'
+import { fetchCareersCacheRows, fetchCareersCacheSyncedAt } from '../lib/leverageCareersCache'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import styles from './LeverageCareersDashboard.module.css'
 
@@ -129,14 +130,22 @@ const PRESETS = [
 const UNATTRIBUTED = '(no CRM match)'
 async function fetchGranular(token, since, until) {
   const timeRange = JSON.stringify({ since, until })
-  const [metaDaily, bq] = await Promise.all([
+  const [metaDaily, crmRows] = await Promise.all([
     graphGetAll(`${AD_ACCOUNT_ID}/insights`, token, {
       level: 'ad', time_increment: 1, time_range: timeRange,
       fields: 'ad_id,ad_name,date_start,spend,impressions,clicks,actions',
     }),
-    fetch(`/api/crm-leads?source=bigquery&mode=careers_leads&since=${since}&until=${until}`, { credentials: 'include' }).then(r => r.json()),
+    // Was a live BigQuery call (?source=bigquery&mode=careers_leads) -- every
+    // call scanned the whole ~11.5GB table regardless of since/until (see the
+    // comment on careersLeadsSql in api/crm-leads.js), and this function is
+    // called independently by the main page, Trend Analysis AND Compare, each
+    // with their own date window, so ordinary interactive use multiplied that
+    // scan cost by however many windows got touched -- the documented cause
+    // of the Aug 2026 BigQuery cost spikes. Now reads the same rows out of a
+    // Supabase cache synced 3x/day (leverage-careers-sync.yml), so exploring
+    // this page costs nothing extra in BigQuery.
+    fetchCareersCacheRows({ since, until }),
   ])
-  if (bq && bq.error) throw new Error(bq.error)
 
   // (date|name) -> that ad-day's Meta metrics
   const meta = new Map()
@@ -153,7 +162,7 @@ async function fetchGranular(token, since, until) {
 
   // (date|name) -> per (source, channel) CRM counts + that ad-day's lead total
   const crm = new Map()
-  ;((bq && bq.rows) || []).forEach(r => {
+  ;(crmRows || []).forEach(r => {
     if (!r.lead_date) return
     const k = r.lead_date + '|' + normName(r.campaign)
     let c = crm.get(k)
@@ -495,7 +504,13 @@ export default function LeverageCareersDashboard() {
     try {
       const rows = await fetchGranular(token, activeWindow.from, activeWindow.to)
       setDayRows(rows)
-      setSynced(new Date())
+      // The CRM half of this data now comes from a cache synced 3x/day (see
+      // fetchGranular's comment) rather than a live BigQuery call on every
+      // load, so "Synced" should reflect when that sync last actually ran --
+      // not just when this tab happened to fetch it -- or the tag would
+      // understate how stale the CRM figures can briefly get right before the
+      // next scheduled sync. Falls back to the fetch time if that read fails.
+      setSynced((await fetchCareersCacheSyncedAt()) || new Date())
     } catch (e) {
       setError(e.message || 'Failed to load')
       toast('Leverage Careers: ' + (e.message || 'load failed'), { type: 'muted' })

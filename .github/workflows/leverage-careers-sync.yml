@@ -1,0 +1,49 @@
+name: Leverage Careers BigQuery Cache Sync
+
+# Refreshes public.leverage_careers_daily (see
+# supabase/sql/leverage_careers_daily_setup.sql) by calling the existing
+# careers_sync mode on api/crm-leads.js -- that endpoint already owns the
+# BigQuery query (careersLeadsSql), the Supabase upsert, and the prune step,
+# so this workflow is just the scheduled trigger. It also means every run
+# lands in bigquery_jobs automatically (lib/bigquery.mjs's bigQuerySelect
+# logs every call it makes), so Settings > Data > BigQuery Usage reflects
+# this sync the same way it reflects any other BigQuery call.
+#
+# Why 3x/day, not hourly: the underlying LeadSquared export into BigQuery
+# only actually refreshes 3x/day (~9:30am, 2pm, 9pm IST). Syncing more often
+# than the source data changes would just re-run the same ~11.5GB full-table
+# scan (this table isn't partitioned in a way the query can prune -- see the
+# comment on careersLeadsSql in api/crm-leads.js) for identical results --
+# exactly the pattern that produced the Aug 2026 BigQuery cost spikes this
+# cache exists to fix. Times below are picked ~15-30min after each real
+# refresh so the sync isn't racing a still-updating export.
+#
+# Requires the CRON_SECRET repository Actions secret (already used by the
+# daily/weekly/monthly report workflows) and the BIGQUERY_*/SUPABASE_* env
+# vars already set in Vercel -- nothing new to configure there.
+
+on:
+  schedule:
+    - cron: '15 4 * * *'   # 9:45 AM IST
+    - cron: '45 8 * * *'   # 2:15 PM IST
+    - cron: '0 16 * * *'   # 9:30 PM IST
+  workflow_dispatch:
+
+concurrency:
+  group: leverage-careers-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger the Leverage Careers cache sync
+        run: |
+          BODY=$(curl -s -w "\n%{http_code}" -X GET "https://quantum.leverageedu.com/api/crm-leads?source=bigquery&mode=careers_sync" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}")
+          STATUS=$(echo "$BODY" | tail -n1)
+          JSON=$(echo "$BODY" | sed '$d')
+          echo "HTTP Status: $STATUS"
+          echo "Response: $JSON"
+          if [ "$STATUS" != "200" ]; then echo "Failed with status $STATUS"; exit 1; fi
+          echo "Leverage Careers cache synced."

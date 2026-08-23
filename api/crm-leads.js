@@ -1540,6 +1540,56 @@ async function handleBigQuery(req, res, me) {
       })
       return res.status(200).json({ configured: true, rows: out.rows || [], totalBytesProcessed: out.totalBytesProcessed })
     }
+    if (mode === 'careers_sync') {
+      // Mirrors the careers_leads query above but with NO since/until -- the
+      // WHERE clause can't prune this table anyway (see the comment on
+      // careers_leads), so a full-history pull costs the exact same scan as any
+      // narrower one and captures everything the page/Trend/Compare could ever
+      // ask for in one shot. Runs 3x/day (see .github/workflows/
+      // leverage-careers-sync.yml) rather than hourly, matching how often the
+      // underlying LeadSquared export into BigQuery actually refreshes
+      // (~9:30am/2pm/9pm IST) -- syncing more often than the source data
+      // changes would just re-scan the same ~11.5GB for nothing new.
+      const { supabaseAdmin } = await import('../lib/auth.mjs')
+      const crypto = await import('crypto')
+      const out = await bq.bigQuerySelect(careersLeadsSql(null, null), {
+        maxBytes: 20_000_000_000, mode: 'careers_sync', dashboardId: 'leverage_careers', userEmail: me.email,
+      })
+      const rows = out.rows || []
+      const syncId = crypto.randomUUID()
+      const syncedAt = new Date().toISOString()
+      const payload = rows.map(r => {
+        const key = [r.campaign || '', r.lead_date || '', r.source || '', r.channel || ''].join('|')
+        return {
+          row_key: crypto.createHash('md5').update(key).digest('hex'),
+          campaign: r.campaign || null,
+          lead_date: r.lead_date || null,
+          source: r.source || null,
+          channel: r.channel || null,
+          total_leads: Number(r.total_leads) || 0,
+          total_interested: Number(r.total_interested) || 0,
+          won: Number(r.won) || 0,
+          sync_id: syncId,
+          synced_at: syncedAt,
+        }
+      })
+      for (let i = 0; i < payload.length; i += 500) {
+        const batch = payload.slice(i, i + 500)
+        const r = await supabaseAdmin('leverage_careers_daily', {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify(batch),
+        })
+        if (!r.ok) {
+          const detail = await r.text()
+          return res.status(502).json({ configured: true, ok: false, error: 'Supabase upsert failed: ' + detail, batchIndex: i / 500, rowCount: rows.length })
+        }
+      }
+      // Prune rows this run didn't touch (e.g. a campaign/day/source/channel
+      // combination that no longer appears in BigQuery at all).
+      await supabaseAdmin(`leverage_careers_daily?sync_id=neq.${syncId}`, { method: 'DELETE' })
+      return res.status(200).json({ configured: true, ok: true, rowCount: rows.length, syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed })
+    }
     if (mode === 'datasets') {
       const d = await bq.bigQueryDatasets()
       return res.status(200).json({ configured: true, ...d, count: d.datasets.length })
@@ -1873,6 +1923,18 @@ export default async function handler(req, res) {
   // logged in has no session cookie to send, and never will.
   if ((req.query && req.query.source) === 'leadsquared' && (req.query && req.query.mode) === 'team_export_pull') {
     return handleTeamExportPull(req, res)
+  }
+  // Same reasoning as team_export_pull above: the GitHub Actions cron that
+  // refreshes the Leverage Careers BigQuery cache has no human session to send
+  // a cookie for, so it authenticates with x-cron-secret instead and has to be
+  // let through before the getSessionUser gate below would otherwise 401 it.
+  if (
+    (req.query && req.query.source) === 'bigquery' &&
+    (req.query && req.query.mode) === 'careers_sync' &&
+    process.env.CRON_SECRET &&
+    req.headers['x-cron-secret'] === process.env.CRON_SECRET
+  ) {
+    return handleBigQuery(req, res, { role: 'admin', email: 'cron' })
   }
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)
