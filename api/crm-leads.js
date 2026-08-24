@@ -592,6 +592,23 @@ async function fetchLeadSquaredOpportunitySchema(creds, { code, refresh }) {
   return { code: String(resolvedCode), displayName: (data && data.DisplayName) || '', fields }
 }
 
+// Powers the "Centre Name" field in Team Mapping's manual-mapping modal --
+// was a free-text input (real risk: "Delhi", "delhi", "Delhi Centre" all mean
+// the same real place to a human but are 3 different strings to any grouping
+// later). LeadSquared already HAS a real list of centres -- the Field Schema
+// page (Lead Qualification tab) already shows it as "Offline Centre Name"
+// (mx_Custom_25) on the University Admission Opportunity type, a
+// SearchableDropdown whose real option list is already fetched by
+// fetchLeadSquaredOpportunitySchema (reused here, not re-fetched -- same
+// cached call). Matched by schemaName first (the stable identifier), falling
+// back to displayName in case a future account renumbers custom fields.
+async function fetchTeamCentreOptions(creds) {
+  const schema = await fetchLeadSquaredOpportunitySchema(creds, { code: 12003 })
+  const field = schema.fields.find(f => f.schemaName === 'mx_Custom_25')
+    || schema.fields.find(f => (f.displayName || '').trim().toLowerCase() === 'offline centre name')
+  return { options: (field && field.inlineOptions) || [] }
+}
+
 // LeadSquared serializes dates as the old ASP.NET "/Date(epochMs+tzOffset)/" format --
 // confirmed live, e.g. "/Date(1785350199000+0000)/". Extracts the epoch and returns an
 // ISO string, or null if the value doesn't match (blank/absent dates included).
@@ -1133,7 +1150,11 @@ async function getDetailCacheEmails() {
 // so an abnormally large gap (cache wiped, first run before any sync existed)
 // degrades to the old "N uncached, run a full sync" behavior instead of
 // risking this request's own time budget.
-const FRAPP_TEAM_NAME = 'university admission opportunity'
+// FRAPP_TEAM_NAME + classifyDidRegion live in shared/didRegion.mjs (not here)
+// so the "Indian vs International" call is made in exactly one place -- the
+// roster table's own "Virtual DID" column (TeamMappingDashboard.jsx) reads
+// the identical function, so what a human sees on screen can never disagree
+// with what this API actually enforces.
 const FRAPP_COACHES_URL = 'https://asia-south1-frapp-prod.cloudfunctions.net/gcf-connector-leverage/update-coaches'
 const FRAPP_AUTO_FETCH_MAX = 240   // healed inline per preview/push call, at most
 const FRAPP_AUTO_FETCH_CHUNK = 60  // fetchLeadSquaredUserDetails' own per-call cap
@@ -1161,6 +1182,7 @@ async function autoHealMissingCoaches(creds, users, missing) {
 
 async function buildFrappCoachList(creds) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const { FRAPP_TEAM_NAME, classifyDidRegion } = await import('../shared/didRegion.mjs')
   // fetchAllDetailCacheRows pages past PostgREST's 1000-row cap -- a plain,
   // unpaginated select here silently saw only the first ~1000 of 3,389 cached
   // people (whichever order Postgres happened to return), so most of the
@@ -1197,6 +1219,13 @@ async function buildFrappCoachList(creds) {
   let uncached = 0
   const skippedNoMobile = []
   const skippedNoCountry = []
+  // Enforced here, not just shown as a column: Frapp told us themselves their
+  // API does "no validations on fields such as name, email, or other data
+  // fields" -- so this app is the ONLY thing standing between a non-Indian
+  // number and their live call-routing system. classifyDidRegion is the exact
+  // same function the roster table's "Virtual DID" column uses, so a person
+  // marked "International" on screen is guaranteed to also be excluded here.
+  const skippedInternational = []
   const coaches = []
   activeUsers.forEach(u => {
     const key = u.email.toLowerCase()
@@ -1207,6 +1236,7 @@ async function buildFrappCoachList(creds) {
     const country = (countryByEmail[key] || '').trim()
     if (!mobile) { skippedNoMobile.push(u.email); return }
     if (!country) { skippedNoCountry.push(u.email); return }
+    if (classifyDidRegion(cached.team_name, mobile) !== 'Indian') { skippedInternational.push(u.email); return }
     coaches.push({ name: u.name, mobile, email: u.email, country })
   })
   return {
@@ -1215,14 +1245,65 @@ async function buildFrappCoachList(creds) {
     autoHealed,
     skippedNoMobile,
     skippedNoCountry,
+    skippedInternational,
     totalActive: activeUsers.length,
   }
 }
 
-async function frappPush(creds) {
+// Diffs the coaches about to be pushed against the emails in the last
+// SUCCESSFUL frapp_push activity row -- this is "log failures/success of
+// every push to remove or add", the actual audit trail an admin can read in
+// History, not just a single overwritten "last status" line. Returns
+// {added:null, removed:null} (not empty arrays) when there's no prior
+// successful push to compare against, so the UI can say "first push" rather
+// than falsely claiming everyone was "added".
+async function diffAgainstLastFrappPush(currentEmails) {
+  try {
+    const { supabaseAdmin } = await import('../lib/auth.mjs')
+    const r = await supabaseAdmin('team_mapping_activity?select=detail&type=eq.frapp_push&status=eq.done&order=created_at.desc&limit=1')
+    if (!r.ok) return { added: null, removed: null }
+    const rows = await r.json()
+    const raw = rows[0] && rows[0].detail
+    if (!raw) return { added: null, removed: null }
+    let prevDetail
+    try { prevDetail = JSON.parse(raw) } catch { return { added: null, removed: null } }
+    const prevEmails = new Set(prevDetail.emails || [])
+    const currentSet = new Set(currentEmails)
+    return {
+      added: currentEmails.filter(e => !prevEmails.has(e)),
+      removed: Array.from(prevEmails).filter(e => !currentSet.has(e)),
+    }
+  } catch { return { added: null, removed: null } }
+}
+
+async function logFrappPushActivity({ status, built, added, removed, error }, me) {
+  try {
+    await logTeamActivity({
+      type: 'frapp_push',
+      label: status === 'done' ? `Pushed ${built.coaches.length} coach(es) to Frapp` : 'Push to Frapp failed',
+      status,
+      total: built.coaches.length,
+      done: status === 'done' ? built.coaches.length : 0,
+      failed: status === 'done' ? 0 : 1,
+      skipped: (built.skippedNoMobile || []).length + (built.skippedNoCountry || []).length + (built.skippedInternational || []).length,
+      detail: JSON.stringify({
+        emails: built.coaches.map(c => c.email),
+        added: added || [], removed: removed || [],
+        skippedNoMobile: built.skippedNoMobile || [],
+        skippedNoCountry: built.skippedNoCountry || [],
+        skippedInternational: built.skippedInternational || [],
+        error: error || null,
+      }),
+    }, me)
+  } catch (_) { /* the push itself already succeeded/failed independently of whether we could log it */ }
+}
+
+async function frappPush(creds, me) {
   const built = await buildFrappCoachList(creds)
   const apiKey = process.env.FRAPP_COACHES_API_KEY
   if (!apiKey) throw new Error('FRAPP_COACHES_API_KEY is not set in Vercel env')
+  const currentEmails = built.coaches.map(c => c.email)
+  const { added, removed } = await diffAgainstLastFrappPush(currentEmails)
   let r, text
   try {
     r = await fetch(FRAPP_COACHES_URL, {
@@ -1232,15 +1313,18 @@ async function frappPush(creds) {
     })
     text = await r.text()
   } catch (e) {
-    await patchFrappStatus('error: ' + String((e && e.message) || e).slice(0, 200), null)
+    const msg = 'error: ' + String((e && e.message) || e).slice(0, 200)
+    await patchFrappStatus(msg, null)
+    await logFrappPushActivity({ status: 'failed', built, added, removed, error: msg }, me)
     throw e
   }
   let data
   try { data = JSON.parse(text) } catch { data = text }
   const status = r.ok ? `ok (${built.coaches.length} pushed)` : `error: HTTP ${r.status} -- ${String(typeof data === 'string' ? data : JSON.stringify(data)).slice(0, 150)}`
   await patchFrappStatus(status, r.ok ? built.coaches.length : null)
+  await logFrappPushActivity({ status: r.ok ? 'done' : 'failed', built, added, removed, error: r.ok ? null : status }, me)
   if (!r.ok) throw new Error('Frapp update-coaches failed: HTTP ' + r.status + ' -- ' + (typeof data === 'string' ? data.slice(0, 300) : JSON.stringify(data).slice(0, 300)))
-  return { ...built, frappResponse: data }
+  return { ...built, frappResponse: data, added, removed }
 }
 
 async function patchFrappStatus(status, count) {
@@ -1641,7 +1725,7 @@ async function handleLeadSquared(req, res, me) {
   // back the Frapp coaches push -- both admin-only end to end (see below),
   // same treatment as the connector config modes, since both involve either
   // writing to an external system or reading data scoped for that push.
-  const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_list', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push']
+  const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_list', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push', 'team_centre_options']
   const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES, ...TEAM_FRAPP_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
@@ -1704,7 +1788,8 @@ async function handleLeadSquared(req, res, me) {
       return res.status(200).json({ details: await fetchLeadSquaredUserDetails(creds, ids, byId) })
     }
     if (mode === 'team_frapp_preview') return res.status(200).json(await buildFrappCoachList(creds))
-    if (mode === 'team_frapp_push') return res.status(200).json(await frappPush(creds))
+    if (mode === 'team_frapp_push') return res.status(200).json(await frappPush(creds, me))
+    if (mode === 'team_centre_options') return res.status(200).json(await fetchTeamCentreOptions(creds))
     if (mode === 'opportunities') return res.status(200).json(await fetchLeadSquaredOpportunities(creds, p))
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))

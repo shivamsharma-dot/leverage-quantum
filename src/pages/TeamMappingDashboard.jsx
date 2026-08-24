@@ -7,6 +7,7 @@ import Dropdown from '../components/Dropdown'
 import Button from '../components/Button'
 import ExportButton from '../components/ExportButton'
 import { useAuth } from '../hooks/useAuth'
+import { classifyDidRegion } from '../../shared/didRegion.mjs'
 
 // Real-time roster (LeadSquared UserManagement.svc/Users.Get, one call, no cache) +
 // group membership (reconstructed from that same roster -- LeadSquared has no
@@ -37,15 +38,22 @@ const PAGE_ROWS = 50
 // grouping/org-chart view even though they mean the same live person. Picking
 // from the live roster instead of retyping a name doesn't force correctness,
 // but makes the correct answer the easiest one.
+// `suggest: 'roster_email'` on the two Email fields is the same idea as
+// `suggest: 'roster'` above, just against email instead of name -- previously
+// these were plain free-text inputs (a real risk: a typo'd manager email is
+// invisible until something downstream that keys off it silently fails).
+// `suggest: 'centre'` feeds a real, LeadSquared-sourced centre list (see
+// fetchTeamCentreOptions in api/crm-leads.js) instead of letting Centre Name
+// drift into "Delhi"/"delhi"/"Delhi Centre" meaning the same place.
 const MANUAL_FIELDS = [
   { key: 'role', label: 'Role', suggest: 'role' },
   { key: 'asm_sm', label: 'ASM/SM', suggest: 'roster' },
-  { key: 'asm_sm_email', label: 'ASM/SM Email' },
+  { key: 'asm_sm_email', label: 'ASM/SM Email', suggest: 'roster_email' },
   { key: 'ssm', label: 'SSM', suggest: 'roster' },
-  { key: 'ssm_email', label: 'SSM Email' },
+  { key: 'ssm_email', label: 'SSM Email', suggest: 'roster_email' },
   { key: 'level', label: 'Level' },
   { key: 'country', label: 'Country' },
-  { key: 'centre_name', label: 'Centre Name' },
+  { key: 'centre_name', label: 'Centre Name', suggest: 'centre' },
 ]
 
 // Suggested values for the manual Role field -- shown as a type-ahead when
@@ -343,7 +351,7 @@ function LiveDetailStrip({ userId }) {
   )
 }
 
-function EditManualModal({ user, rosterNames, onClose, onSaved }) {
+function EditManualModal({ user, rosterNames, rosterEmails, centreOptions, onClose, onSaved }) {
   const [form, setForm] = useState(() => {
     const base = {}
     MANUAL_FIELDS.forEach(f => { base[f.key] = (user.manual && user.manual[f.key]) || '' })
@@ -394,6 +402,10 @@ function EditManualModal({ user, rosterNames, onClose, onSaved }) {
               <SuggestInput value={form.role} onChange={v => setForm(p => ({ ...p, role: v }))} suggestions={ROLE_SUGGESTIONS} placeholder="Start typing or pick a suggestion…" />
             ) : f.suggest === 'roster' ? (
               <SuggestInput value={form[f.key]} onChange={v => setForm(p => ({ ...p, [f.key]: v }))} suggestions={rosterNames || []} placeholder="Start typing a name…" />
+            ) : f.suggest === 'roster_email' ? (
+              <SuggestInput value={form[f.key]} onChange={v => setForm(p => ({ ...p, [f.key]: v }))} suggestions={rosterEmails || []} placeholder="Start typing an email…" />
+            ) : f.suggest === 'centre' ? (
+              <SuggestInput value={form[f.key]} onChange={v => setForm(p => ({ ...p, [f.key]: v }))} suggestions={centreOptions || []} placeholder="Start typing a centre…" />
             ) : (
               <input style={inputStyle} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
             )}
@@ -423,7 +435,7 @@ function EditManualModal({ user, rosterNames, onClose, onSaved }) {
 // endpoint a single edit uses, so every person's change is still individually
 // logged (with its own real before/after diff) and individually restorable
 // from History -- a bulk edit is N real edits, not one big opaque action.
-function BulkEditModal({ users, rosterNames, onClose, onDone }) {
+function BulkEditModal({ users, rosterNames, rosterEmails, centreOptions, onClose, onDone }) {
   const [fields, setFields] = useState(() => {
     const base = {}
     MANUAL_FIELDS.forEach(f => { base[f.key] = { apply: false, value: '' } })
@@ -477,6 +489,10 @@ function BulkEditModal({ users, rosterNames, onClose, onDone }) {
                   <SuggestInput value={fields[f.key].value} onChange={setVal} suggestions={ROLE_SUGGESTIONS} placeholder="Value to apply to everyone selected…" />
                 ) : f.suggest === 'roster' ? (
                   <SuggestInput value={fields[f.key].value} onChange={setVal} suggestions={rosterNames || []} placeholder="Value to apply to everyone selected…" />
+                ) : f.suggest === 'roster_email' ? (
+                  <SuggestInput value={fields[f.key].value} onChange={setVal} suggestions={rosterEmails || []} placeholder="Value to apply to everyone selected…" />
+                ) : f.suggest === 'centre' ? (
+                  <SuggestInput value={fields[f.key].value} onChange={setVal} suggestions={centreOptions || []} placeholder="Value to apply to everyone selected…" />
                 ) : (
                   <input style={inputStyle} value={fields[f.key].value} onChange={e => setVal(e.target.value)} placeholder="Value to apply to everyone selected…" />
                 )}
@@ -803,8 +819,12 @@ const TYPE_ICON = {
   edit: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z" /></svg>,
   delete: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>,
   restore: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 102.13-9.36L1 10" /></svg>,
+  // A phone/call-transfer glyph -- distinct from import's plain up-arrow, since
+  // a Frapp push is a real external write (a live call-routing system), not
+  // just a local bulk-import row.
+  frapp_push: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z" /></svg>,
 }
-const TYPE_ICON_COLOR = { import: [C.navy, C.navyBg], export: [C.cyan, C.cyanBg], edit: [C.blue, C.blueBg], delete: [C.navy, C.navyBg], restore: [C.green, C.greenBg] }
+const TYPE_ICON_COLOR = { import: [C.navy, C.navyBg], export: [C.cyan, C.cyanBg], edit: [C.blue, C.blueBg], delete: [C.navy, C.navyBg], restore: [C.green, C.greenBg], frapp_push: [C.blue, C.blueBg] }
 const FIELD_LABELS = { asm_sm: 'ASM/SM', asm_sm_email: 'ASM/SM Email', ssm: 'SSM', ssm_email: 'SSM Email', role: 'Role', level: 'Level', country: 'Country', centre_name: 'Centre Name' }
 
 // Renders the "what actually changed" body of one history row -- a field-by-
@@ -839,6 +859,33 @@ function ActivityDetail({ row }) {
     return (
       <div style={{ fontSize: 11.5, color: C.muted, marginTop: 4 }}>
         Removed: {fields.map(f => `${FIELD_LABELS[f] || f} = ${detail.snapshot[f]}`).join(' · ')}
+      </div>
+    )
+  }
+  // A Frapp push's real audit trail: who got added/removed from Futwork's
+  // call-routing list SINCE the last successful push (not just "N pushed" --
+  // that number alone can't tell you whether a departure actually took
+  // effect). added/removed are null (not empty arrays) on the very first
+  // push ever logged, since there's nothing to diff against yet.
+  if (row.type === 'frapp_push') {
+    const skipped = [
+      detail.skippedNoMobile?.length ? `${detail.skippedNoMobile.length} no Airtel` : null,
+      detail.skippedNoCountry?.length ? `${detail.skippedNoCountry.length} no Country` : null,
+      detail.skippedInternational?.length ? `${detail.skippedInternational.length} International (blocked)` : null,
+    ].filter(Boolean)
+    return (
+      <div style={{ fontSize: 11.5, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {detail.added == null ? (
+          <div style={{ color: C.muted }}>First push logged — nothing to compare against yet.</div>
+        ) : (
+          <>
+            {detail.added.length > 0 && <div><span style={{ color: C.green, fontWeight: 700 }}>+{detail.added.length} added:</span> <span style={{ color: C.muted }}>{detail.added.slice(0, 6).join(', ')}{detail.added.length > 6 ? '…' : ''}</span></div>}
+            {detail.removed.length > 0 && <div><span style={{ color: C.navy, fontWeight: 700 }}>−{detail.removed.length} removed:</span> <span style={{ color: C.muted }}>{detail.removed.slice(0, 6).join(', ')}{detail.removed.length > 6 ? '…' : ''}</span></div>}
+            {detail.added.length === 0 && detail.removed.length === 0 && <div style={{ color: C.muted }}>No change since the last push.</div>}
+          </>
+        )}
+        {skipped.length > 0 && <div style={{ color: C.muted }}>Excluded: {skipped.join(' · ')}</div>}
+        {detail.error && <div style={{ color: C.navy, fontWeight: 700 }}>{detail.error}</div>}
       </div>
     )
   }
@@ -1006,6 +1053,7 @@ function HistoryTab({ onBack }) {
                     <div style={{ fontSize: 11.5, color: C.muted }}>
                       {r.type === 'import' ? `${fmtN(d)} done, ${fmtN(failed)} failed, ${fmtN(r.skipped || 0)} skipped of ${fmtN(total)}`
                         : r.type === 'export' ? `${fmtN(r.total || 0)} row(s) exported`
+                        : r.type === 'frapp_push' ? `${fmtN(r.total || 0)} coach(es) in this push`
                         : null}
                     </div>
                     <ActivityDetail row={r} />
@@ -1090,6 +1138,16 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   // Live names, for the ASM/SM and SSM type-ahead in the edit/bulk-edit
   // modals -- see MANUAL_FIELDS' suggest:'roster' comment.
   const rosterNames = useMemo(() => Array.from(new Set(rows.map(r => r.name).filter(Boolean))).sort(), [rows])
+  const rosterEmails = useMemo(() => Array.from(new Set(rows.map(r => r.email).filter(Boolean))).sort(), [rows])
+
+  // The real Centre list, fetched once (LeadSquared's own "Offline Centre
+  // Name" dropdown on the University Admission Opportunity type -- see
+  // fetchTeamCentreOptions in api/crm-leads.js) rather than on every modal
+  // open; it's the same list for the whole page, not per-person.
+  const [centreOptions, setCentreOptions] = useState([])
+  useEffect(() => {
+    fetchJson(API + '&mode=team_centre_options').then(d => setCentreOptions(d.options || [])).catch(() => {})
+  }, [])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -1203,6 +1261,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
               Groups: (r.groups || []).join('; '),
               Team: d?.teamName || '',
               Phone: d?.phoneMain || '', Airtel: d?.airtelNumber || '',
+              'Virtual DID': classifyDidRegion(d?.teamName, d?.airtelNumber) || '',
               'Reporting Manager': d?.managerName || '', 'Reporting Manager Email': d?.managerEmail || '',
               'ASM/SM': r.manual?.asm_sm || '', 'ASM/SM Email': r.manual?.asm_sm_email || '',
               SSM: r.manual?.ssm || '', 'SSM Email': r.manual?.ssm_email || '',
@@ -1219,6 +1278,9 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         from LeadSquared, real-time. Phone, Airtel and Reporting Manager load per page (LeadSquared
         has no bulk endpoint for them), so they show "…" for a moment on a page you haven't opened
         yet. ASM/SM, SSM, Role, Level, Country and Centre Name are the only manually entered fields.
+        Virtual DID is computed, not stored: on "University Admission Opportunity" it reads "Indian"
+        or "International" off the Airtel number; everyone else shows "—". Only "Indian" is ever
+        pushed to Futwork — International is blocked on the API side too, not just hidden here.
       </p>
 
       {isAdmin && selected.size > 0 && (
@@ -1242,7 +1304,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                     <input type="checkbox" checked={pageAllSelected} onChange={togglePage} style={{ width: 15, height: 15, cursor: 'pointer' }} title="Select everyone on this page" />
                   </th>
                 )}
-                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Airtel', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
+                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Airtel', 'Virtual DID', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
                   <th key={h} style={{ padding: '9px 12px', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -1272,6 +1334,13 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pending ? '…' : (d.teamName || '—')}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pending ? '…' : (d.phoneMain || '—')}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pending ? '…' : (d.airtelNumber || '—')}</td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                      {pending ? '…' : (() => {
+                        const region = classifyDidRegion(d.teamName, d.airtelNumber)
+                        if (!region) return <span style={{ color: C.muted }}>—</span>
+                        return <span style={{ fontWeight: 700, color: region === 'Indian' ? C.green : C.navy }}>{region}</span>
+                      })()}
+                    </td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }} title={pending ? '' : (d.managerEmail || '')}>{pending ? '…' : (d.managerName || '—')}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.asm_sm || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.ssm || '—'}</td>
@@ -1303,6 +1372,8 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         <EditManualModal
           user={editUser}
           rosterNames={rosterNames}
+          rosterEmails={rosterEmails}
+          centreOptions={centreOptions}
           onClose={() => setEditUser(null)}
           onSaved={saved => {
             setData(d => ({ ...d, rows: d.rows.map(r => r.email === editUser.email ? { ...r, manual: saved } : r) }))
@@ -1320,6 +1391,8 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         <BulkEditModal
           users={selectedRows}
           rosterNames={rosterNames}
+          rosterEmails={rosterEmails}
+          centreOptions={centreOptions}
           onClose={() => setShowBulkEdit(false)}
           onDone={() => { setShowBulkEdit(false); setSelected(new Set()); load() }}
         />
@@ -1681,7 +1754,7 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
   return (
     <Card
       title="Frapp coaches push"
-      sub={`Only Active people on the "University Admission Opportunity" LeadSquared team -- name/email from LeadSquared, mobile from Airtel Number, country from the manual mapping`}
+      sub={`Only Active people on the "University Admission Opportunity" LeadSquared team, with an Indian Airtel Number (see the "Virtual DID" column on Roster) -- name/email from LeadSquared, mobile from Airtel Number, country from the manual mapping`}
       noPad
     >
       <div style={{ padding: '14px 18px' }}>
@@ -1726,11 +1799,12 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
             {preview.autoHealed > 0 && (
               <div style={{ fontSize: 11.5, color: C.text, marginBottom: 8 }}>{fmtN(preview.autoHealed)} newly-active {preview.autoHealed === 1 ? 'person wasn\'t' : 'people weren\'t'} cached yet -- looked {preview.autoHealed === 1 ? 'them' : 'them all'} up just now automatically.</div>
             )}
-            {(preview.uncached > 0 || preview.skippedNoMobile?.length > 0 || preview.skippedNoCountry?.length > 0) && (
+            {(preview.uncached > 0 || preview.skippedNoMobile?.length > 0 || preview.skippedNoCountry?.length > 0 || preview.skippedInternational?.length > 0) && (
               <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
                 {preview.uncached > 0 && <div>{fmtN(preview.uncached)} active people still couldn't be looked up (more than 240 new at once -- run "Sync coach directory" to catch the rest).</div>}
                 {preview.skippedNoMobile?.length > 0 && <div>{preview.skippedNoMobile.length} on the team but missing an Airtel number -- excluded: {preview.skippedNoMobile.slice(0, 5).join(', ')}{preview.skippedNoMobile.length > 5 ? '…' : ''}</div>}
                 {preview.skippedNoCountry?.length > 0 && <div>{preview.skippedNoCountry.length} on the team but missing a Country mapping -- excluded: {preview.skippedNoCountry.slice(0, 5).join(', ')}{preview.skippedNoCountry.length > 5 ? '…' : ''}</div>}
+                {preview.skippedInternational?.length > 0 && <div>{preview.skippedInternational.length} on the team with a non-Indian number -- blocked from Futwork: {preview.skippedInternational.slice(0, 5).join(', ')}{preview.skippedInternational.length > 5 ? '…' : ''}</div>}
               </div>
             )}
             {preview.coaches.length > 0 && (
