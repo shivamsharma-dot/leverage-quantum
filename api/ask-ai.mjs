@@ -1266,7 +1266,17 @@ async function runAgentToolLoop({ system, userText, tools, agentId }) {
     const r = await fetch(ANTHROPIC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 1024, stream: false, tools, tool_choice: { type: 'auto' }, system, messages: currentMessages }),
+      // 4096, not 1024 (found live 2026-08-24 running the Gazette agent for the
+      // first time): unlike the interactive chat's own tool loop, THIS loop's
+      // "no more tool calls" branch a few lines below returns its text
+      // straight to the caller as the FINAL answer -- there's no guaranteed
+      // follow-up call with a bigger budget the way interactive chat always
+      // has one. A short report (the original 2 agents' 3-4 sentences + one
+      // table) fit in 1024 by luck; the Gazette's 3 full sections did not,
+      // and got silently cut off mid-Section-B with Section C never written
+      // at all -- no error, just a quietly truncated report. Any future
+      // longer-form agent output would hit the same ceiling.
+      body: JSON.stringify({ model: MODEL, max_tokens: 4096, stream: false, tools, tool_choice: { type: 'auto' }, system, messages: currentMessages }),
     })
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e?.error?.message || `Anthropic API error ${r.status}`) }
     const response = await r.json()
