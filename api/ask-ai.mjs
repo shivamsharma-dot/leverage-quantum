@@ -683,6 +683,25 @@ Two independent ways to scope it, usable together:
   }
 }
 
+// Both snapshot tools take no parameters -- they're fixed "yesterday / MTD /
+// prior-month" windows, not a flexible date-range query, matching exactly
+// what the Quantum Gazette's Corporate Finance / Talent Mobility sections
+// need and nothing more. The actual aggregation lives in api/crm-leads.js
+// (fetchB2CSnapshotForGazette / fetchCareersSnapshotForGazette) -- dynamically
+// imported in runOne below, same "avoid ERR_REQUIRE_ESM on a cross-file
+// import" pattern this app already uses everywhere (see api/send-report.mjs's
+// fetchB2CDataSafe).
+const B2C_SNAPSHOT_TOOL = {
+  name: 'get_b2c_snapshot',
+  description: `Returns Leverage Edu's B2C business unit's Daily P&L and Daily Cash Flow, summarized into: last complete day, month-to-date, and the same number of days in the prior month (for a fair MTD-vs-MTD comparison). Each period carries totalRev, totalCost, net (EBITDA after Corp. Overheads for P&L / Net Cash Inflow for Cash Flow), and ebitdaBeforeCorp (P&L only, null on Cash Flow). Real money in rupees, sourced from the same finance-maintained sheet the Daily P&L / Daily Cash Flow dashboard pages read. Takes no parameters.`,
+  input_schema: { type: 'object', properties: {} },
+}
+const CAREERS_SNAPSHOT_TOOL = {
+  name: 'get_careers_snapshot',
+  description: `Returns Leverage Careers' (the "Talent Mobility" desk) CRM funnel -- leads, interested, won -- summarized into: last complete day, month-to-date, and the full prior calendar month. Sourced from the same BigQuery-backed data the Leverage Careers dashboard page reads. Takes no parameters.`,
+  input_schema: { type: 'object', properties: {} },
+}
+
 const GOOGLE_ADS_TOOL = {
   name: 'query_google_ads',
   description: `Query Google Ads for live campaign, ad group, keyword, search term, or trend data. Use this when the initial 30-day summary does not answer the question: specific date ranges, ad group/keyword/search-term detail, or day-by-day/month-by-month trends. NOTE: This returns Google in-platform conversions. For CRM-attributed Google leads, use query_google_crm_leads. Call multiple times if needed. Always prefer live data over estimates.`,
@@ -1160,6 +1179,47 @@ const AGENTS = {
       }
     },
   },
+  quantum_gazette: {
+    label: 'The Quantum Gazette',
+    // Wider tool set than the other two agents -- it covers three business
+    // desks (Marketing, Corporate Finance, Talent Mobility), not just Meta/
+    // Google marketing data, so it needs the two new snapshot tools on top
+    // of the usual set.
+    tools: [META_TOOL, META_CRM_TOOL, GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL, B2C_SNAPSHOT_TOOL, CAREERS_SNAPSHOT_TOOL],
+    // Marks this agent's markdown output for HTML-shell wrapping + a write
+    // into app_preferences.gazette_html (see buildGazetteHtml / the
+    // isGazette branch in handleAgentRun) -- every other agent's output is
+    // markdown shown only on the Agents page; this one is ALSO an emailable
+    // report, which the other two never needed.
+    isGazette: true,
+    buildPrompt() {
+      const iso = d => d.toISOString().slice(0, 10)
+      const today = new Date()
+      const until = new Date(today); until.setDate(until.getDate() - 1) // yesterday -- today's data is still incomplete
+      const since = new Date(until); since.setDate(since.getDate() - 6)
+      const prevUntil = new Date(since); prevUntil.setDate(prevUntil.getDate() - 1)
+      const prevSince = new Date(prevUntil); prevSince.setDate(prevSince.getDate() - 6)
+      return {
+        since: iso(since), until: iso(until),
+        text: `Write today's edition of "The Quantum Gazette" -- a nightly, editorial-style digest across three desks: Marketing and Growth, Corporate Finance, and Talent Mobility. Voice: a dry, literary, old-fashioned newspaper -- confident, a little wry, never breathless -- but every claim must be backed by a real number from a tool call. No hedging, no vague language, no bullet-point-only sections -- write in real paragraphs.
+
+For Marketing and Growth: call analyze_campaign_contribution (compare ${iso(since)} to ${iso(until)} against the prior 7 days ${iso(prevSince)} to ${iso(prevUntil)}, no channel filter) and get_overall_totals as needed. For Corporate Finance: call get_b2c_snapshot. For Talent Mobility: call get_careers_snapshot.
+
+Produce exactly this markdown structure, nothing before or after it:
+
+## Section A: Marketing and Growth
+(a headline sentence, then 2-4 paragraphs -- the CPQL/QL story, what moved and why, naming real campaigns/channels from analyze_campaign_contribution)
+
+## Section B: Corporate Finance
+(2-3 paragraphs -- P&L and Cash Flow, MTD vs the same number of days last month, margin direction, one number worth a call to finance)
+
+## Section C: Talent Mobility
+(2-3 paragraphs -- Leverage Careers' funnel, MTD vs last month, leads/interested/won and what the conversion trend says)
+
+Be quantitative and specific in every paragraph -- name real figures, real percentage changes, real campaign/channel names. Never write a paragraph that could apply to any month.`,
+      }
+    },
+  },
   weekly_executive_digest: {
     label: 'Weekly Executive Digest Agent',
     buildPrompt() {
@@ -1195,6 +1255,8 @@ async function runAgentToolLoop({ system, userText, tools, agentId }) {
     else if (toolUse.name === 'query_google_crm_leads') result = await fetchCrmLeads((await getSheetOverride('sheet_url_googleleads')) || GOOGLE_LEADS_SHEET, toolUse.input || {})
     else if (toolUse.name === 'analyze_campaign_contribution') result = await analyzeCampaignContribution(toolUse.input || {})
     else if (toolUse.name === 'get_overall_totals') result = await fetchOverallTotals(toolUse.input || {})
+    else if (toolUse.name === 'get_b2c_snapshot') result = await (await import('./crm-leads.js')).fetchB2CSnapshotForGazette()
+    else if (toolUse.name === 'get_careers_snapshot') result = await (await import('./crm-leads.js')).fetchCareersSnapshotForGazette()
     else result = { error: 'Unknown tool: ' + toolUse.name }
     await logToolCall({ convId: null, userId: 'agent:' + agentId, toolName: toolUse.name, params: toolUse.input, rowCount: resultRowCount(result), latencyMs: Date.now() - _t0, hadError: !!(result && result.error) })
     toolLog.push({ name: toolUse.name, input: toolUse.input || {}, result })
@@ -1228,6 +1290,102 @@ async function runAgentToolLoop({ system, userText, tools, agentId }) {
   if (response.usage) { totalInputTokens += response.usage.input_tokens || 0; totalOutputTokens += response.usage.output_tokens || 0 }
   const text = (response.content || []).filter(b => b.type === 'text').map(b => b.text).join('')
   return { text, totalInputTokens, totalOutputTokens, toolCallsCount, toolLog }
+}
+
+// A small, self-contained markdown -> HTML converter -- deliberately not a
+// full markdown library. The Gazette agent's prompt constrains its own output
+// to a narrow set of constructs (## headings, **bold**, plain paragraphs, and
+// a stray "|"-piped table row here or there), so this only needs to handle
+// exactly those, not arbitrary markdown. Kept separate from AskAI.jsx's own
+// `ih()`/Markdown() (a React-JSX renderer) since this runs server-side and
+// must produce a plain HTML string to store in app_preferences.gazette_html.
+function gzEscape(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
+function gzInline(s) {
+  return gzEscape(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>')
+}
+function mdBodyToHtml(md) {
+  const lines = (md || '').split('\n')
+  const blocks = []
+  let para = []
+  let table = null
+  const flushPara = () => { if (para.length) { blocks.push('<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#2A2A2A">' + gzInline(para.join(' ')) + '</p>'); para = [] } }
+  const flushTable = () => {
+    if (!table || !table.length) { table = null; return }
+    const [head, ...body] = table
+    const th = head.map(c => `<th style="text-align:left;padding:6px 12px;border-bottom:2px solid #1F3C84;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:#1F3C84">${gzInline(c)}</th>`).join('')
+    const rows = body.map(r => '<tr>' + r.map(c => `<td style="padding:6px 12px;border-bottom:1px solid #E5E1D8;font-size:13.5px;color:#2A2A2A">${gzInline(c)}</td>`).join('') + '</tr>').join('')
+    blocks.push(`<table style="width:100%;border-collapse:collapse;margin:0 0 16px"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table>`)
+    table = null
+  }
+  lines.forEach(raw => {
+    const line = raw.trim()
+    if (!line) { flushPara(); flushTable(); return }
+    if (line.startsWith('|')) {
+      flushPara()
+      if (/^\|[\s:-]+\|$/.test(line.replace(/\|/g, '|'))) return // a "|---|---|" separator row
+      const cells = line.split('|').map(c => c.trim()).filter((c, i, a) => !(i === 0 && c === '') && !(i === a.length - 1 && c === ''))
+      table = table || []
+      table.push(cells)
+      return
+    }
+    flushTable()
+    para.push(line)
+  })
+  flushPara(); flushTable()
+  return blocks.join('\n')
+}
+
+// Splits the agent's raw markdown on its own "## Section X: ..." headings
+// (exactly what the quantum_gazette prompt asks it to produce) and wraps the
+// three bodies in a fixed, brand-safe newspaper shell. The shell itself is
+// deterministic code, not LLM output -- so the Gazette's visual layout stays
+// IDENTICAL every single day even though the prose and numbers inside it are
+// freshly written each time. (The pre-2026-08-25 Gazette was the opposite:
+// a one-off HTML document an LLM wrote by hand with inline styles throughout
+// -- real, but frozen forever after that single save, since nothing in the
+// app could ever regenerate it. See CLAUDE.md's dated entry on this fix.)
+function buildGazetteHtml(markdown, { since, until } = {}) {
+  const sectionRe = /## Section ([ABC]): ([^\n]*)\n([\s\S]*?)(?=\n## Section [ABC]:|$)/g
+  const sections = {}
+  let m
+  while ((m = sectionRe.exec(markdown || '')) !== null) sections[m[1]] = { title: m[2].trim(), body: m[3].trim() }
+  const dateLabel = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
+  const edition = Math.max(1, Math.ceil((Date.now() - new Date('2026-01-01').getTime()) / 86400000))
+  const section = (label, key, fallbackTitle) => {
+    const s = sections[key] || { title: fallbackTitle, body: '_No filing from this desk tonight._' }
+    return `
+      <tr><td style="padding:28px 36px 4px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#8A8272;margin-bottom:4px">Section ${key}</div>
+        <h2 style="margin:0 0 14px;font-size:22px;line-height:1.25;color:#14110D;border-bottom:1px solid #D8D2C4;padding-bottom:10px">${gzEscape(s.title)}</h2>
+        ${mdBodyToHtml(s.body)}
+      </td></tr>`
+  }
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>The Quantum Gazette</title></head>
+  <body style="margin:0;padding:24px 12px;background:#EFEAE0;font-family:Georgia,'Times New Roman',serif">
+    <table role="presentation" style="max-width:640px;margin:0 auto;background:#FBF9F4;border:1px solid #D8D2C4">
+      <tr><td style="padding:32px 36px 20px;text-align:center;border-bottom:3px double #14110D">
+        <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8A8272;margin-bottom:10px">Vol. I &middot; No. ${edition} &middot; Marketing, Finance &amp; Talent Edition</div>
+        <div style="font-size:34px;font-weight:400;letter-spacing:0.02em;color:#14110D">THE QUANTUM GAZETTE</div>
+        <div style="font-size:12.5px;color:#5B5344;margin-top:8px;font-style:italic">A Nightly Reckoning of Growth, Cash and Craft &middot; ${gzEscape(dateLabel)}</div>
+      </td></tr>
+      ${section('Marketing and Growth', 'A', 'Marketing and Growth')}
+      ${section('Corporate Finance', 'B', 'Corporate Finance')}
+      ${section('Talent Mobility', 'C', 'Talent Mobility')}
+      <tr><td style="padding:20px 36px 32px;text-align:center;border-top:1px solid #D8D2C4">
+        <div style="font-size:11px;color:#8A8272">Compiled nightly by the Quantum Gazette agent &middot; regenerated fresh every edition, never a re-run of a stale one &middot; ${since && until ? gzEscape(since + ' to ' + until) : ''}</div>
+      </td></tr>
+    </table>
+  </body></html>`
+}
+
+async function saveGazetteHtml(html) {
+  const r = await fetch(`${SB_URL}/rest/v1/app_preferences`, {
+    method: 'POST',
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ key: 'gazette_html', value: html, updated_by: 'agent:quantum_gazette', updated_at: new Date().toISOString() }),
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!r.ok) throw new Error('Could not save gazette_html: ' + (await r.text()).slice(0, 300))
 }
 
 async function logAgentRun({ agentId, title, summary, content, status, error, toolCallsCount, startedAt, finishedAt, triggeredBy }) {
@@ -1276,16 +1434,33 @@ async function handleAgentRun(req, res, me) {
   try {
     const systemText = await buildSystemPrompt((await getTokenFromSupabase()) || '', [])
     const { text: userText, since, until } = agent.buildPrompt()
-    const tools = [META_TOOL, META_CRM_TOOL, GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL, CONTRIBUTION_TOOL]
+    // Per-agent tool list when the agent declares one (quantum_gazette needs
+    // the B2C/Careers snapshot tools on top of the marketing set) -- falls
+    // back to the original hardcoded set for the two agents that predate this
+    // and never declared their own `tools`, so they're unaffected.
+    const tools = agent.tools || [META_TOOL, META_CRM_TOOL, GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL, CONTRIBUTION_TOOL]
     const { text, totalInputTokens, totalOutputTokens, toolCallsCount } = await runAgentToolLoop({
       system: [{ type: 'text', text: systemText }], userText, tools, agentId,
     })
     const finishedAt = new Date().toISOString()
     const title = `${agent.label} — ${since} to ${until}`
     const summaryLine = (text.split('\n').find(l => l.trim() && !l.trim().startsWith('#')) || '').replace(/[*_`]/g, '').slice(0, 200)
+    // The Gazette is ALSO a sendable report, unlike the other two agents --
+    // wrap its raw markdown in the fixed newspaper shell and persist it as the
+    // new gazette_html snapshot, so the very next thing an admin does in
+    // Settings > Reports > "The Quantum Gazette" > Preview/Send now reflects
+    // tonight's edition, not the frozen one from 2026-08-22. A failure here
+    // is logged but does NOT fail the whole run -- the agent_run itself (and
+    // its markdown, visible on the Agents page) already succeeded independent
+    // of whether the HTML snapshot save also worked.
+    let gazetteSaveError = null
+    if (agent.isGazette) {
+      try { await saveGazetteHtml(buildGazetteHtml(text, { since, until })) }
+      catch (e) { gazetteSaveError = e.message }
+    }
     const runId = await logAgentRun({ agentId, title, summary: summaryLine, content: text, status: 'ok', toolCallsCount, startedAt, finishedAt, triggeredBy })
     await logUsage({ convId: null, userId: 'agent:' + agentId, model: MODEL, inputTokens: totalInputTokens, outputTokens: totalOutputTokens })
-    return res.status(200).json({ ok: true, runId, title })
+    return res.status(200).json({ ok: true, runId, title, gazetteSaveError })
   } catch (e) {
     await logAgentRun({ agentId, title: `${agent.label} — failed`, summary: e.message, content: '', status: 'error', error: e.message, toolCallsCount: 0, startedAt, finishedAt: new Date().toISOString(), triggeredBy })
     return res.status(500).json({ error: e.message })

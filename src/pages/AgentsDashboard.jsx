@@ -15,6 +15,7 @@ async function sbGet(t, q = '') { try { const r = await fetch(`${SB_URL}/rest/v1
 const AGENTS = [
   { id: 'marketing_performance', label: 'Marketing Performance Agent', description: 'Compares the last 7 days of Total QL against the prior 7 days, ranks the campaigns driving the change, and recommends one prioritized action.', schedule: 'Daily at 8:00 AM IST' },
   { id: 'weekly_executive_digest', label: 'Weekly Executive Digest Agent', description: 'A broader 30-day-vs-prior-30-day synthesis across every channel -- trajectory, per-channel performance, biggest wins/risks, and one forward-looking strategic recommendation for the coming month.', schedule: 'Weekly, Monday 8:00 AM IST' },
+  { id: 'quantum_gazette', label: 'The Quantum Gazette', description: 'A nightly editorial digest across three desks -- Marketing and Growth, Corporate Finance, Talent Mobility -- written fresh every run, not a static snapshot. Also saves the result as the sendable Gazette snapshot in Settings > Reports.', schedule: 'Daily at 9:00 PM IST' },
 ]
 
 // Minimal, standalone sibling of AskAI.jsx's Markdown() -- kept local rather than

@@ -1812,6 +1812,61 @@ async function handleLeadSquared(req, res, me) {
 // safe, since anything that doesn't match this shape is rejected outright.
 function isIsoDate(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) }
 
+// Pure server-side aggregation over leverage_careers_daily -- for the
+// Quantum Gazette's "Talent Mobility" section (see fetchB2CSnapshotForGazette
+// above for the sibling function this mirrors). Reuses the exact keyset
+// pagination the careers_leads mode already relies on (PostgREST's 1000-row
+// response cap + the "order by the primary key or paging silently
+// misbehaves" lesson this file has learned before), but sums totals inline
+// instead of returning raw rows -- the Gazette needs three numbers per
+// window, not a client-side chartable dataset.
+async function fetchLeverageCareersRowsForGazette(since, until) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const cols = 'lead_date,total_leads,total_interested,won'
+  const rows = []
+  let cursor = null
+  for (let guard = 0; guard < 2000; guard++) {
+    let path = 'leverage_careers_daily?select=' + encodeURIComponent(cols + ',row_key')
+      + '&lead_date=gte.' + since + '&lead_date=lte.' + until
+      + '&order=row_key.asc&limit=1000'
+    if (cursor) path += '&row_key=gt.' + encodeURIComponent(cursor)
+    const r = await supabaseAdmin(path)
+    if (!r.ok) throw new Error('leverage_careers_daily read failed: ' + (await r.text()).slice(0, 200))
+    const page = await r.json()
+    if (!Array.isArray(page) || page.length === 0) break
+    rows.push(...page)
+    if (page.length < 1000) break
+    cursor = page[page.length - 1].row_key
+  }
+  return rows
+}
+
+function careersSumRows(rows) {
+  const leads = rows.reduce((s, r) => s + (Number(r.total_leads) || 0), 0)
+  const interested = rows.reduce((s, r) => s + (Number(r.total_interested) || 0), 0)
+  const won = rows.reduce((s, r) => s + (Number(r.won) || 0), 0)
+  return { leads, interested, won }
+}
+
+export async function fetchCareersSnapshotForGazette() {
+  const today = new Date()
+  const iso = d => d.toISOString().slice(0, 10)
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1)
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+  const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+  const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0)
+  const [mtdRows, prevMonthRows] = await Promise.all([
+    fetchLeverageCareersRowsForGazette(iso(monthStart), iso(yesterday)),
+    fetchLeverageCareersRowsForGazette(iso(prevMonthStart), iso(prevMonthEnd)),
+  ])
+  const lastDayRows = mtdRows.filter(r => r.lead_date === iso(yesterday))
+  return {
+    lastDay: { ...careersSumRows(lastDayRows), date: iso(yesterday) },
+    mtd: { ...careersSumRows(mtdRows), from: iso(monthStart), to: iso(yesterday) },
+    priorMonth: { ...careersSumRows(prevMonthRows), from: iso(prevMonthStart), to: iso(prevMonthEnd) },
+  }
+}
+
 // Fixed, non-editable query behind the Leverage Careers cache. As of
 // 2026-08-24 its ONLY caller is the careers_sync cron further down -- it runs
 // 3x/day and writes its result into leverage_careers_daily. Nothing a user does
@@ -2276,6 +2331,41 @@ export async function fetchB2CData() {
     }).filter(function (m) { return m.month });
   });
   return { configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, ts: Date.now() };
+}
+
+// Sums a statement's own days over [since,until] inclusive -- both P&L and
+// Cash Flow rows normalize down to the same sr/ac/vas/offRev/totalRev/
+// totalCost/net/ebitdaBeforeCorp key set (see b2cParseDays above), so one
+// summing function covers both statements.
+function b2cSumRange(days, since, until) {
+  const inRange = (days || []).filter(d => d.date >= since && d.date <= until);
+  const sum = { totalRev: 0, totalCost: 0, net: 0, ebitdaBeforeCorp: 0, sr: 0, ac: 0, vas: 0, offRev: 0 };
+  inRange.forEach(d => { Object.keys(sum).forEach(k => { sum[k] += Number(d[k]) || 0 }) });
+  return { ...sum, days: inRange.length, from: inRange[0]?.date || null, to: inRange[inRange.length - 1]?.date || null };
+}
+
+// Condensed MTD-vs-prior-month-same-days snapshot for the Quantum Gazette's
+// "Corporate Finance" section -- reuses fetchB2CData() (the same pure
+// function api/send-report.mjs's b2c_daily_report cron already calls), just
+// summed into a few headline numbers instead of the full per-day grid the
+// dashboard renders. "Last complete day" is always yesterday, since a day in
+// progress reads as a partial, misleadingly-low number.
+export async function fetchB2CSnapshotForGazette() {
+  const data = await fetchB2CData();
+  if (!data.configured) return { configured: false };
+  const today = new Date();
+  const iso = d => d.toISOString().slice(0, 10);
+  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const prevMonthSameDay = new Date(prevMonthStart);
+  prevMonthSameDay.setDate(Math.min(yesterday.getDate(), new Date(today.getFullYear(), today.getMonth(), 0).getDate()))
+  const build = statementDays => ({
+    lastDay: b2cSumRange(statementDays, iso(yesterday), iso(yesterday)),
+    mtd: b2cSumRange(statementDays, iso(monthStart), iso(yesterday)),
+    priorMonthSameDays: b2cSumRange(statementDays, iso(prevMonthStart), iso(prevMonthSameDay)),
+  })
+  return { configured: true, pnl: build(data.pnl.days), cashFlow: build(data.cashFlow.days) };
 }
 
 async function handleB2C(req, res, me) {
