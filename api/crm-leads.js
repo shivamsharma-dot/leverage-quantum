@@ -1118,8 +1118,44 @@ async function getDetailCacheEmails() {
 // side to notice they stopped appearing -- worth confirming with Frapp/Futwork
 // directly, since it isn't something this app can infer from the API docs
 // alone. Flagged here rather than guessed at.
+//
+// How a NEW joiner is handled: fetchLeadSquaredTeamUsers (below) is the cheap
+// bulk call -- it's re-run fresh on every single preview/push, so a brand new
+// Active user shows up here immediately, at zero extra cost. What it does NOT
+// return is Team/Airtel Number (LeadSquared only exposes those per-user), so
+// a genuinely new person has no cache row yet. Rather than make "someone
+// joined" a manual "click Sync coach directory" step, autoHealMissingCoaches
+// fetches detail for just the handful of newly-missing people, inline, right
+// here -- so "comes in -> gets pushed" needs no separate action, same as
+// "goes inactive -> drops out" already didn't. Bounded (FRAPP_AUTO_FETCH_MAX)
+// so an abnormally large gap (cache wiped, first run before any sync existed)
+// degrades to the old "N uncached, run a full sync" behavior instead of
+// risking this request's own time budget.
 const FRAPP_TEAM_NAME = 'university admission opportunity'
 const FRAPP_COACHES_URL = 'https://asia-south1-frapp-prod.cloudfunctions.net/gcf-connector-leverage/update-coaches'
+const FRAPP_AUTO_FETCH_MAX = 240   // healed inline per preview/push call, at most
+const FRAPP_AUTO_FETCH_CHUNK = 60  // fetchLeadSquaredUserDetails' own per-call cap
+const sleepMs = ms => new Promise(res => setTimeout(res, ms))
+
+async function autoHealMissingCoaches(creds, users, missing) {
+  const toFetch = missing.slice(0, FRAPP_AUTO_FETCH_MAX)
+  const byId = {}
+  users.forEach(u => { byId[u.id] = u })
+  const emailById = {}
+  toFetch.forEach(u => { emailById[u.id] = u.email })
+  const healed = []
+  for (let i = 0; i < toFetch.length; i += FRAPP_AUTO_FETCH_CHUNK) {
+    const chunk = toFetch.slice(i, i + FRAPP_AUTO_FETCH_CHUNK)
+    const fresh = await fetchLeadSquaredUserDetails(creds, chunk.map(u => u.id), byId)
+    const withEmail = fresh.map(d => ({ ...d, email: emailById[d.id] || null }))
+    await saveDetailCacheBatch(withEmail).catch(() => {})
+    healed.push(...withEmail)
+    // A single chunk (<=60 parallel calls) stays under LeadSquared's 72-per-5s
+    // limit on its own; only pause between chunks, when there's a second one.
+    if (i + FRAPP_AUTO_FETCH_CHUNK < toFetch.length) await sleepMs(1200)
+  }
+  return { healed, remaining: missing.length - toFetch.length }
+}
 
 async function buildFrappCoachList(creds) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
@@ -1142,6 +1178,20 @@ async function buildFrappCoachList(creds) {
   manualRows.forEach(r => { if (r.ls_email) countryByEmail[r.ls_email.toLowerCase()] = r.country })
 
   const activeUsers = users.filter(u => u.status === 'Active' && u.email)
+
+  // Self-heal: anyone Active right now but never swept for Team/Airtel gets
+  // fetched live, right here -- this is what makes a new joiner need zero
+  // manual steps. Only runs at all when there's a real gap.
+  let autoHealed = 0
+  const missing = activeUsers.filter(u => !cacheByEmail[u.email.toLowerCase()])
+  if (missing.length) {
+    const { healed } = await autoHealMissingCoaches(creds, users, missing)
+    autoHealed = healed.length
+    healed.forEach(d => {
+      if (d.email) cacheByEmail[d.email.toLowerCase()] = { email: d.email, airtel_number: d.airtelNumber, team_name: d.teamName }
+    })
+  }
+
   let uncached = 0
   const skippedNoMobile = []
   const skippedNoCountry = []
@@ -1160,6 +1210,7 @@ async function buildFrappCoachList(creds) {
   return {
     coaches,
     uncached,
+    autoHealed,
     skippedNoMobile,
     skippedNoCountry,
     totalActive: activeUsers.length,

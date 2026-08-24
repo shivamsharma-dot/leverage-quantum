@@ -1703,7 +1703,7 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
               <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Syncing… {fmtN(syncProgress.done)} of {fmtN(syncProgress.total)}</div>
             )}
             <Button size="sm" onClick={syncCoachDirectory} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync coach directory'}</Button>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Takes 6-8 minutes for the full roster, paced to stay under LeadSquared's rate limit -- there's no bulk "who's on which team" lookup, so this sweeps everyone once. Safe to leave the tab open and come back; a rate-limit hit mid-sweep retries automatically.</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Only needed once, or if a team change stops showing up. A new joiner or someone going inactive is picked up automatically on the next Preview/Push -- no manual sync needed for that. This button re-sweeps everyone (6-8 minutes) to catch anyone who switched teams while staying Active, which the automatic check can't see. Safe to leave the tab open and come back; a rate-limit hit mid-sweep retries automatically.</div>
           </div>
 
           <div style={{ border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px' }}>
@@ -1723,9 +1723,12 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
             <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 8 }}>
               {fmtN(preview.coaches.length)} coach(es) ready to send
             </div>
+            {preview.autoHealed > 0 && (
+              <div style={{ fontSize: 11.5, color: C.text, marginBottom: 8 }}>{fmtN(preview.autoHealed)} newly-active {preview.autoHealed === 1 ? 'person wasn\'t' : 'people weren\'t'} cached yet -- looked {preview.autoHealed === 1 ? 'them' : 'them all'} up just now automatically.</div>
+            )}
             {(preview.uncached > 0 || preview.skippedNoMobile?.length > 0 || preview.skippedNoCountry?.length > 0) && (
               <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
-                {preview.uncached > 0 && <div>{fmtN(preview.uncached)} active people haven't been cached yet (sync the directory to include them if they might be on the team).</div>}
+                {preview.uncached > 0 && <div>{fmtN(preview.uncached)} active people still couldn't be looked up (more than 240 new at once -- run "Sync coach directory" to catch the rest).</div>}
                 {preview.skippedNoMobile?.length > 0 && <div>{preview.skippedNoMobile.length} on the team but missing an Airtel number -- excluded: {preview.skippedNoMobile.slice(0, 5).join(', ')}{preview.skippedNoMobile.length > 5 ? '…' : ''}</div>}
                 {preview.skippedNoCountry?.length > 0 && <div>{preview.skippedNoCountry.length} on the team but missing a Country mapping -- excluded: {preview.skippedNoCountry.slice(0, 5).join(', ')}{preview.skippedNoCountry.length > 5 ? '…' : ''}</div>}
               </div>
