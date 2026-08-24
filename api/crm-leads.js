@@ -1727,9 +1727,10 @@ async function handleLeadSquared(req, res, me) {
 // safe, since anything that doesn't match this shape is rejected outright.
 function isIsoDate(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) }
 
-// Fixed, non-editable query behind the Leverage Careers page -- unlike
-// mode=query (arbitrary SQL, admin-only) this is reachable by anyone with
-// leverage_careers page access, so it must never take raw SQL from the request.
+// Fixed, non-editable query behind the Leverage Careers cache. As of
+// 2026-08-24 its ONLY caller is the careers_sync cron further down -- it runs
+// 3x/day and writes its result into leverage_careers_daily. Nothing a user does
+// in the browser reaches this SQL, or BigQuery, any more.
 // Grain is (day, campaign): career_campaign_name is the LeadSquared/BigQuery
 // field carrying the literal Meta ad name (confirmed 1:1 with Campaign_Name /
 // lead_First_Campaign_name on this table), joined to the frontend's day-level
@@ -1761,12 +1762,12 @@ ORDER BY lead_date, campaign`
 
 // BigQuery lives behind this handler rather than its own file because the
 // Vercel Hobby plan is pinned at 12/12 serverless functions. Reached via
-// ?source=bigquery&mode=ping|datasets|query|careers_leads.
+// ?source=bigquery&mode=ping|datasets|query|careers_leads|careers_sync.
 // ping/datasets/query run arbitrary read-only SQL and stay admin-only
-// (configured from the Settings page). careers_leads is the one exception --
-// it runs the FIXED query above only, so it's safe to gate on the
-// leverage_careers page grant instead, letting a non-admin viewer of that
-// page load its own data without needing Settings/admin access.
+// (configured from the Settings page). careers_leads is a special case -- as of
+// 2026-08-24 it runs no SQL at all and reads only the Supabase cache, so it
+// stays gated on the leverage_careers page grant rather than on Settings/admin,
+// letting an ordinary viewer of that page load its own data at zero BigQuery cost.
 async function handleBigQuery(req, res, me) {
   const auth = await import('../lib/auth.mjs')
   const mode = (req.query && req.query.mode) || 'ping'
@@ -1774,6 +1775,59 @@ async function handleBigQuery(req, res, me) {
   if (!auth.canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
+
+  // Leverage Careers is Supabase-only in real time (2026-08-24). This mode used
+  // to run the full-table BigQuery scan live -- once on page load, again for
+  // Trend, twice more for Compare, ~15.8GB scanned every single time -- which is
+  // how one stale browser tab left open on an older bundle quietly burned ~47GB
+  // in a single morning. The dashboard itself already reads the Supabase cache
+  // directly (src/lib/leverageCareersCache.js), so this endpoint now answers the
+  // identical row shape out of that same leverage_careers_daily table and never
+  // touches BigQuery at all. It is deliberately answered BEFORE the bigquery.mjs
+  // import below: there is no code path left from this mode to a BigQuery job, so
+  // nothing here can be billed and nothing here lands in bigquery_jobs. Kept
+  // rather than deleted only so any tab still running an older bundle keeps
+  // working, at zero cost. careers_sync below is now the ONLY BigQuery reader for
+  // this dashboard: 3x/day, on a schedule, never on a user action.
+  if (mode === 'careers_leads') {
+    const { since, until } = req.query || {}
+    if (!isIsoDate(since) || !isIsoDate(until)) {
+      return res.status(400).json({ error: 'since and until are required as YYYY-MM-DD' })
+    }
+    try {
+      const { supabaseAdmin } = await import('../lib/auth.mjs')
+      // PostgREST caps every response at 1000 rows regardless of limit, and paging
+      // without an explicit ORDER BY is a second, independent bug -- so this
+      // keyset-pages on row_key, the table's primary key, exactly the way
+      // src/lib/leverageCareersCache.js already does on the client.
+      const PAGE = 1000
+      const cols = 'campaign,lead_date,source,channel,total_leads,total_interested,won'
+      const rows = []
+      let cursor = null
+      for (let guard = 0; guard < 2000; guard++) { // 20,00,000-row safety valve
+        let path = 'leverage_careers_daily?select=' + encodeURIComponent(cols + ',row_key')
+          + '&lead_date=gte.' + since + '&lead_date=lte.' + until
+          + '&order=row_key.asc&limit=' + PAGE
+        if (cursor) path += '&row_key=gt.' + encodeURIComponent(cursor)
+        const r = await supabaseAdmin(path)
+        if (!r.ok) {
+          const detail = await r.text().catch(() => '')
+          return res.status(502).json({ error: 'Careers cache read failed (' + r.status + '): ' + detail.slice(0, 300) })
+        }
+        const page = await r.json()
+        if (!Array.isArray(page) || page.length === 0) break
+        for (const row of page) { const { row_key, ...rest } = row; rows.push(rest) }
+        if (page.length < PAGE) break
+        cursor = page[page.length - 1].row_key
+      }
+      // totalBytesProcessed stays in the payload for shape compatibility with the
+      // bundles that used to read it. It is genuinely 0 now.
+      return res.status(200).json({ configured: true, cached: true, source: 'supabase_cache', rows, totalBytesProcessed: 0 })
+    } catch (err) {
+      return res.status(500).json({ error: String((err && err.message) || err) })
+    }
+  }
+
   const bq = await import('../lib/bigquery.mjs')
   const creds = bq.bigQueryCreds()
   if (!bq.bigQueryConfigured(creds)) {
@@ -1783,18 +1837,6 @@ async function handleBigQuery(req, res, me) {
     })
   }
   try {
-    if (mode === 'careers_leads') {
-      // lsq_careers_opprtunities isn't partitioned in a way this filter can prune,
-      // so every call scans the whole table (~11.5GB as of Aug 2026, well under
-      // $0.10 at BigQuery's per-TiB rate) regardless of the since/until window --
-      // same cost profile the pre-existing 'leverage_careers' saved query already
-      // had. 20GB cap leaves headroom as the table grows before this needs revisiting.
-      const { since, until } = req.query || {}
-      const out = await bq.bigQuerySelect(careersLeadsSql(since, until), {
-        maxBytes: 20_000_000_000, mode: 'careers_leads', dashboardId: 'leverage_careers', userEmail: me.email,
-      })
-      return res.status(200).json({ configured: true, rows: out.rows || [], totalBytesProcessed: out.totalBytesProcessed })
-    }
     if (mode === 'careers_sync') {
       // Mirrors the careers_leads query above but with NO since/until -- the
       // WHERE clause can't prune this table anyway (see the comment on
