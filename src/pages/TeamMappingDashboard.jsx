@@ -1595,39 +1595,56 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
   const BATCH_DELAY_MS = 1500
   const sleep = ms => new Promise(res => setTimeout(res, ms))
 
+  // Live-verified 2026-08-24: TWO separate runs both died with "Failed to
+  // fetch" partway through (not a 429 -- a plain network-layer failure),
+  // most likely the browser tab losing foreground/going idle for the several
+  // minutes this sweep takes. Real risk for an actual admin too, not just
+  // this session's own testing -- someone starts the sync then tabs away to
+  // do something else. Two fixes: (1) retry ANY error here, not only a rate
+  // limit -- a network blip deserves the same "try again, don't abort a
+  // multi-minute sweep" treatment; (2) skip whoever the cache already has, so
+  // a second run after a partial failure picks up where the first left off
+  // in seconds instead of re-walking the whole roster from the start.
   const syncCoachDirectory = async () => {
     setSyncing(true); setMsg('')
     try {
-      const { rows } = await fetchJson(API + '&mode=team_users')
-      const people = (rows || []).filter(r => r.id && r.email)
-      setSyncProgress({ done: 0, total: people.length })
+      const [{ rows }, cacheRows] = await Promise.all([
+        fetchJson(API + '&mode=team_users'),
+        fetchJson(API + '&mode=team_detail_cache_list').catch(() => ({ emails: [] })),
+      ])
+      const already = new Set((cacheRows.emails || []).map(e => (e || '').toLowerCase()))
+      const people = (rows || []).filter(r => r.id && r.email && !already.has(r.email.toLowerCase()))
+      const totalForBar = people.length + already.size
+      setSyncProgress({ done: already.size, total: totalForBar })
+      if (already.size) setMsg(`Resuming -- ${fmtN(already.size)} already cached from an earlier run, ${fmtN(people.length)} left.`)
+
       for (let i = 0; i < people.length; i += DETAIL_BATCH) {
         const batch = people.slice(i, i + DETAIL_BATCH)
         const ids = batch.map(p => p.id).join(',')
         const emailById = {}
         batch.forEach(p => { emailById[p.id] = p.email })
 
-        // A 429 here is expected occasionally, not a failure -- back off hard
-        // and retry the SAME batch rather than aborting a multi-minute sweep
-        // over one transient rate-limit hit (a concurrent admin browsing the
-        // live roster table eats into the same per-account budget).
-        let details = null
-        for (let attempt = 0; attempt < 5; attempt++) {
+        // Retry the whole batch (fetch + save) on ANY error, not just a rate
+        // limit -- a network blip from a backgrounded tab deserves the same
+        // "try again" treatment a 429 does. Backs off harder specifically for
+        // a rate limit (it needs the account's own window to clear); a plain
+        // network failure gets a shorter retry, since it's usually transient.
+        let ok = false
+        for (let attempt = 0; attempt < 6 && !ok; attempt++) {
           try {
             const r = await fetchJson(API + '&mode=team_user_detail&ids=' + encodeURIComponent(ids))
-            details = r.details
-            break
+            const withEmail = (r.details || []).map(d => ({ ...d, email: emailById[d.id] || null }))
+            await fetchJson(API + '&mode=team_detail_cache_save', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ details: withEmail }),
+            })
+            ok = true
           } catch (e) {
-            if (!/429/.test(e.message || '') || attempt === 4) throw e
-            await sleep(5000 * (attempt + 1))
+            if (attempt === 5) throw e
+            const isRateLimit = /429/.test(e.message || '')
+            await sleep(isRateLimit ? 5000 * (attempt + 1) : 2000 * (attempt + 1))
           }
         }
-
-        const withEmail = (details || []).map(d => ({ ...d, email: emailById[d.id] || null }))
-        await fetchJson(API + '&mode=team_detail_cache_save', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ details: withEmail }),
-        })
-        setSyncProgress({ done: Math.min(i + DETAIL_BATCH, people.length), total: people.length })
+        setSyncProgress({ done: Math.min(already.size + i + DETAIL_BATCH, totalForBar), total: totalForBar })
         await sleep(BATCH_DELAY_MS)
       }
     } catch (e) {

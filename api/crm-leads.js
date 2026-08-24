@@ -1061,6 +1061,27 @@ async function getDetailCacheStatus() {
   return { count, lastSyncedAt: (rows2[0] && rows2[0].synced_at) || null }
 }
 
+// Every already-cached email, so the client-driven sweep (syncCoachDirectory
+// in TeamMappingDashboard.jsx) can skip whoever a previous run already
+// finished and resume instead of re-walking the whole roster from the start.
+// PostgREST caps a single response at 1000 rows regardless of what's asked
+// for, hence the Range-header paging -- same lesson this codebase already
+// learned the hard way for overall_bq_daily/leverage_careers_daily.
+async function getDetailCacheEmails() {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const emails = []
+  for (let offset = 0; ; offset += 1000) {
+    const r = await supabaseAdmin('team_mapping_ls_detail_cache?select=email', {
+      headers: { Range: `${offset}-${offset + 999}` },
+    })
+    if (!r.ok) break
+    const rows = await r.json()
+    rows.forEach(row => { if (row.email) emails.push(row.email) })
+    if (rows.length < 1000) break
+  }
+  return { emails }
+}
+
 // ---------------------------------------------------------------------
 // Frapp "coaches" push -- see supabase/sql/team_mapping_connectors_add_frapp.sql.
 // Only ACTIVE people on the "University Admission Opportunity" LeadSquared
@@ -1548,7 +1569,7 @@ async function handleLeadSquared(req, res, me) {
   // back the Frapp coaches push -- both admin-only end to end (see below),
   // same treatment as the connector config modes, since both involve either
   // writing to an external system or reading data scoped for that push.
-  const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push']
+  const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_list', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push']
   const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES, ...TEAM_FRAPP_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
@@ -1588,6 +1609,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_watchers_remove') return res.status(200).json(await removeTeamWatcher((req.body && req.body.id) || req.query.id))
     if (mode === 'team_watchers_test_dm') return res.status(200).json(await testWatcherDM((req.body && req.body.email) || req.query.email, me))
     if (mode === 'team_detail_cache_status') return res.status(200).json(await getDetailCacheStatus())
+    if (mode === 'team_detail_cache_list') return res.status(200).json(await getDetailCacheEmails())
     if (mode === 'team_detail_cache_save') return res.status(200).json(await saveDetailCacheBatch((req.body && req.body.details) || []))
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
