@@ -1261,7 +1261,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
               Groups: (r.groups || []).join('; '),
               Team: d?.teamName || '',
               Phone: d?.phoneMain || '', 'Virtual DID': d?.airtelNumber || '',
-              'DID Region': classifyDidRegion(d?.teamName, d?.airtelNumber) || '',
+              'Region': classifyDidRegion(d?.teamName, d?.airtelNumber) || '',
               'Reporting Manager': d?.managerName || '', 'Reporting Manager Email': d?.managerEmail || '',
               'ASM/SM': r.manual?.asm_sm || '', 'ASM/SM Email': r.manual?.asm_sm_email || '',
               SSM: r.manual?.ssm || '', 'SSM Email': r.manual?.ssm_email || '',
@@ -1278,7 +1278,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         live from LeadSquared, real-time. Phone, Virtual DID and Reporting Manager load per page
         (LeadSquared has no bulk endpoint for them), so they show "…" for a moment on a page you
         haven't opened yet. ASM/SM, SSM, Role, Level, Country and Centre Name are the only manually
-        entered fields. DID Region is computed, not stored: on "University Admission Opportunity" it
+        entered fields. Region is computed, not stored: on "University Admission Opportunity" it
         reads "Indian" or "International" off the Virtual DID; everyone else shows "—". Only "Indian"
         is ever pushed to Futwork — International is blocked on the API side too, not just hidden here.
       </p>
@@ -1304,7 +1304,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                     <input type="checkbox" checked={pageAllSelected} onChange={togglePage} style={{ width: 15, height: 15, cursor: 'pointer' }} title="Select everyone on this page" />
                   </th>
                 )}
-                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Virtual DID', 'DID Region', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
+                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Virtual DID', 'Region', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
                   <th key={h} style={{ padding: '9px 12px', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -1754,7 +1754,7 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
   return (
     <Card
       title="Frapp coaches push"
-      sub={`Only Active people on the "University Admission Opportunity" LeadSquared team, with an Indian Virtual DID (see the "DID Region" column on Roster) -- name/email from LeadSquared, mobile from Virtual DID, country from the manual mapping`}
+      sub={`Only Active people on the "University Admission Opportunity" LeadSquared team, with an Indian Virtual DID (see the "Region" column on Roster) -- name/email from LeadSquared, mobile from Virtual DID, country from the manual mapping`}
       noPad
     >
       <div style={{ padding: '14px 18px' }}>
