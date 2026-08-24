@@ -272,6 +272,35 @@
 
 .collapsedAvatar { margin-top: auto; padding: 8px 0; }
 
+/* Whole-rail hover-to-expand panel -- replaces the removed manual collapse/
+   expand toggle. Same top-left origin and card chrome as .sidebar itself, so
+   it reads as the rail "growing into" the full sidebar rather than a separate
+   floating menu. Reuses flyoutIn (opacity/transform only -- no width/layout
+   animation, no per-frame repaint) for the same reason .collapsedFlyout does:
+   this rail unmounts/remounts on every route change, so anything animating a
+   paint- or layout-triggering property here would re-jolt on every click,
+   exactly the aurora bug already found and fixed once in this file. */
+.railExpandPanel {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  width: 244px;
+  height: calc(100vh - 24px);
+  z-index: 550;
+  border-radius: 18px;
+  border: 0.5px solid var(--card-border);
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 22px 50px -18px rgba(31,60,132,0.32), 0 4px 16px rgba(15,23,42,0.08);
+  background:
+    radial-gradient(circle at 20% 12%, rgba(28,159,212,0.09), transparent 50%),
+    radial-gradient(circle at 85% 92%, rgba(76,174,111,0.08), transparent 50%),
+    var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: flyoutIn .11s cubic-bezier(0.2,0.6,0.3,1) both;
+  transform-origin: left center;
+}
+
 .collapsedFlyout {
   position: fixed;
   /* Rail is 78px wide + 12px page margin = right edge at 90px; this was still

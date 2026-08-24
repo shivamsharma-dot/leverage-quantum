@@ -450,6 +450,39 @@ export default function Sidebar() {
     return () => window.removeEventListener('keydown', onKey)
   }, [flyout])
 
+  // Whole-rail hover-to-expand (replaces the removed manual collapse/expand
+  // toggle button): hovering anywhere on the collapsed rail opens a floating
+  // panel -- the exact same renderNavBody() used by the real expanded sidebar
+  // -- positioned to fully cover the narrow rail, same top-left origin. Same
+  // 150ms-close-on-leave debounce the per-group flyout already uses, so
+  // moving the mouse from the rail into the panel doesn't flicker-close it.
+  // Deliberately a separate floating overlay rather than animating the rail's
+  // own width: a width transition on a 100vh flex container forces a full
+  // layout reflow every frame, and the rail also unmounts/remounts on every
+  // route change in this app -- both are exactly the class of jank already
+  // found and fixed once on this file's aurora background. This overlay only
+  // animates opacity/transform (compositor-only, no reflow, no repaint) and
+  // never needs to survive a route change since it opens fresh each hover.
+  const [railExpanded, setRailExpanded] = React.useState(false)
+  const railCloseTimer = React.useRef(null)
+  const openRailExpand = () => {
+    if (railCloseTimer.current) { clearTimeout(railCloseTimer.current); railCloseTimer.current = null }
+    setRailExpanded(true)
+  }
+  const scheduleCloseRailExpand = () => {
+    if (railCloseTimer.current) clearTimeout(railCloseTimer.current)
+    railCloseTimer.current = setTimeout(() => setRailExpanded(false), 150)
+  }
+  const cancelCloseRailExpand = () => {
+    if (railCloseTimer.current) { clearTimeout(railCloseTimer.current); railCloseTimer.current = null }
+  }
+  React.useEffect(() => {
+    if (!railExpanded) return
+    const onKey = (e) => { if (e.key === 'Escape') setRailExpanded(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [railExpanded])
+
   // Right-click "hide from sidebar" -- admin only, writes to the EXACT SAME
   // app_preferences.hidden_pages key Settings > User Access > Global Page
   // Visibility already uses (same POST /api/preferences call, same localStorage
@@ -715,7 +748,7 @@ export default function Sidebar() {
           <div style={{flex:1,background:'rgba(0,0,0,0.3)'}}/>
         </div>
       )}
-      <aside className={styles.sidebarCollapsed}>
+      <aside className={styles.sidebarCollapsed} onMouseEnter={openRailExpand} onMouseLeave={scheduleCloseRailExpand}>
         {/* Quantum logo mark — visible when collapsed. Centred 44px tile, matching
             the 40px nav tiles below it. */}
         <div style={{
@@ -765,7 +798,7 @@ export default function Sidebar() {
             )
           )))}
         </div>
-        {flyout && (() => {
+        {flyout && !railExpanded && (() => {
           const panelTop = Math.min(flyout.top, window.innerHeight - 16 - flyout.subItems.length * 44 - 48)
           return (
           <div className={styles.collapsedFlyout} style={{ top: panelTop }}
@@ -799,6 +832,14 @@ export default function Sidebar() {
         <SnapshotTool/>
         <CalculatorTool/>
       </aside>
+      {railExpanded && (
+        <div className={styles.railExpandPanel} role="navigation" aria-label="Expanded sidebar"
+          onMouseEnter={cancelCloseRailExpand} onMouseLeave={scheduleCloseRailExpand}>
+          {renderNavBody()}
+          <SnapshotTool/>
+          <CalculatorTool/>
+        </div>
+      )}
       {hideMenuPopup}
       </>
     )
