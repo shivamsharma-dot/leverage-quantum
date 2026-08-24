@@ -1760,7 +1760,7 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
         )}
 
         <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>
-          A person who leaves the team or goes inactive is simply left out of the next push, not sent with a "removed" flag -- Frapp's own update-coaches API has no such field. This is correct if that endpoint replaces the whole coach list each time; if it only adds/updates and never removes, a departed coach staying in Frapp's own directory would need to be confirmed and handled on their side.
+          A person who leaves the team or goes inactive is simply left out of the next push, not sent with a "removed" flag -- Frapp confirmed this API fully replaces their whole coach/call-routing list on every request, so leaving them out is the correct way to remove them.
         </div>
       </div>
     </Card>

@@ -1112,12 +1112,14 @@ async function getDetailCacheEmails() {
 // "inactive" field in Frapp's own update-coaches spec, only a full array of
 // current coaches. So every push sends the CURRENT complete filtered list --
 // whoever no longer qualifies (went inactive, left the team) is simply absent
-// from this run's payload, rather than sent with some deactivated flag. This
-// is correct if update-coaches replaces Frapp's whole list on each call; if it
-// only upserts and never removes, a departed coach would need Frapp's own
-// side to notice they stopped appearing -- worth confirming with Frapp/Futwork
-// directly, since it isn't something this app can infer from the API docs
-// alone. Flagged here rather than guessed at.
+// from this run's payload, rather than sent with some deactivated flag.
+// CONFIRMED correct by Futwork directly (2026-08-24): "It is a bulk override
+// API. With every request, the updated payload will replace the existing DID
+// list in our database." So a departed coach is genuinely gone from Frapp's
+// side the moment they're absent from a push -- no separate removal signal
+// needed. (Also: this is literally a call-routing list -- Futwork calls it
+// the "Call Transfer DIDs list" -- mobile is the number a call for that
+// country/corridor gets transferred to, not just a directory field.)
 //
 // How a NEW joiner is handled: fetchLeadSquaredTeamUsers (below) is the cheap
 // bulk call -- it's re-run fresh on every single preview/push, so a brand new
