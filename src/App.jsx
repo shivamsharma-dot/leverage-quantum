@@ -74,14 +74,20 @@ const PAGE_TITLES = {
 }
 
 // ── Route fade transition ──────────────────────────────────────────────────────
+// .q-page-enter wraps EVERY page's whole render tree in ProtectedRoute below --
+// and every page renders its own <Sidebar/> as part of that same tree (Sidebar
+// is not lifted to a persistent app-shell level; each of the ~28 page
+// components mounts its own instance). qFadeIn used to animate this wrapper's
+// opacity AND transform (translateY 12px -> 0) on every single cross-page
+// navigation -- which meant the sidebar itself visibly slid up and faded in on
+// every click, since it's a plain child of the same animated div. Reported
+// live as "whole page jumping on every other page click" and diagnosed
+// correctly by the user: "sidebar shouldn't react to what is getting loaded."
+// Confirmed via getAnimations() polling that qFadeIn genuinely fires on cross-
+// page navigation, not just same-page tab switches. No animation now -- the
+// content swap is instant, so nothing (sidebar included) visibly moves.
 const FADE_STYLE = `
-@keyframes qFadeIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 .q-page-enter {
-  animation: qFadeIn 0.42s cubic-bezier(0.22,0.61,0.36,1) both;
-  will-change: opacity, transform;
 }
 @keyframes qSpin { to { transform: rotate(360deg); } }
 .q-loader-wrap {

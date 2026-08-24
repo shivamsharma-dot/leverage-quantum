@@ -468,16 +468,19 @@ export default function SnapshotTool() {
         </div>
       )}
 
-      {/* Floating control */}
-      <div data-snapshot-ignore="true" style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 9999, fontFamily: FONT }}>
+      {/* Floating control -- collapsed into a small edge tab flush against the
+          right edge of the viewport (was a fully-visible 52px round button
+          sitting in the corner at all times). Peeks out a few px on hover for
+          affordance; click opens the exact same capture menu as before. */}
+      <div data-snapshot-ignore="true" style={{ position: 'fixed', right: 0, bottom: 140, zIndex: 9999, fontFamily: FONT }}>
         {toast && (
-          <div style={{ position: 'absolute', bottom: 64, right: 0, whiteSpace: 'nowrap', background: '#fff', border: '1px solid #E6EAF2', borderLeft: `3px solid ${toast.ok ? GREEN : NAVY}`, borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 600, color: INK, boxShadow: '0 10px 30px rgba(15,31,75,0.16)' }}>
+          <div style={{ position: 'absolute', bottom: 30, right: 30, whiteSpace: 'nowrap', background: '#fff', border: '1px solid #E6EAF2', borderLeft: `3px solid ${toast.ok ? GREEN : NAVY}`, borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 600, color: INK, boxShadow: '0 10px 30px rgba(15,31,75,0.16)' }}>
             {toast.msg}
           </div>
         )}
 
         {open && !busy && (
-          <div style={{ position: 'absolute', bottom: 64, right: 0, width: 248, background: '#fff', border: '1px solid #E6EAF2', borderRadius: 14, boxShadow: '0 16px 40px rgba(15,31,75,0.20)', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', bottom: 0, right: 30, width: 248, background: '#fff', border: '1px solid #E6EAF2', borderRadius: 14, boxShadow: '0 16px 40px rgba(15,31,75,0.20)', overflow: 'hidden' }}>
             <div style={{ padding: '12px 14px 8px', fontSize: 11, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: '#94A3B8' }}>Capture</div>
             <button onClick={runFull} style={menuItem}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
@@ -499,16 +502,16 @@ export default function SnapshotTool() {
         )}
 
         <button onClick={() => (busy ? null : setOpen((o) => !o))} title="Capture panel snapshot" aria-label="Capture panel snapshot"
-          style={{ width: 52, height: 52, borderRadius: 16, border: '0.5px solid var(--card-border)', cursor: busy ? 'wait' : 'pointer', background: 'var(--card)', boxShadow: '0 10px 26px -8px rgba(15,23,42,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .15s ease' }}
-          onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-          onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}>
+          style={{ width: 24, height: 52, borderRadius: '14px 0 0 14px', border: '0.5px solid var(--card-border)', borderRight: 'none', cursor: busy ? 'wait' : 'pointer', background: 'var(--card)', boxShadow: '-6px 4px 18px -8px rgba(15,23,42,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .16s ease' }}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateX(-5px)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateX(0)')}>
           {busy ? (
-            <svg width="22" height="22" viewBox="0 0 24 24" style={{ animation: 'qspin 0.8s linear infinite' }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" style={{ animation: 'qspin 0.8s linear infinite' }}>
               <circle cx="12" cy="12" r="9" fill="none" stroke="#E0E5EE" strokeWidth="2.5"/>
               <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke={NAVY} strokeWidth="2.5" strokeLinecap="round"/>
             </svg>
           ) : (
-            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
           )}
         </button>
         <style>{`@keyframes qspin{to{transform:rotate(360deg)}}`}</style>
