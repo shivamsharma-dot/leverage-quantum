@@ -302,6 +302,22 @@ export default function Sidebar() {
     try { return localStorage.getItem('lq_sidebar_collapsed') === 'true' } catch { return false }
   })
   const [mobileOpen, setMobileOpen] = React.useState(false)
+  // The logo mark's "grow in" flourish (barGrow keyframe below) was meant to play
+  // once, on first load -- but Sidebar remounts fresh on every route change (a
+  // fresh <aside> instance per navigation, confirmed live), so it was replaying
+  // on every single click, and its own easing (cubic-bezier with a >1 value) is
+  // a deliberate spring/overshoot -- a bounce repeating on every click reads as
+  // exactly the "vibration"/jolt reported. Gated to once per browser tab via
+  // sessionStorage: the first Sidebar mount in a session plays it, every mount
+  // after that (including this same tab's other navigations) renders the bars
+  // already at full height, no animation.
+  const [playLogoIntro] = React.useState(() => {
+    try {
+      if (sessionStorage.getItem('lq_logo_grown')) return false
+      sessionStorage.setItem('lq_logo_grown', '1')
+      return true
+    } catch { return false }
+  })
   // hiddenPages/prefsReady now live in AuthProvider (useAuth.jsx) so the /api/preferences
   // fetch runs in parallel with the auth check from the true app root, instead of only
   // starting once Sidebar itself mounts (which is gated behind ProtectedRoute's auth
@@ -551,7 +567,8 @@ export default function Sidebar() {
         <div className={styles.quantumLabel}>
           <svg width="19" height="19" viewBox={BRAND_LOGO_VIEWBOX} fill="none" style={{overflow:'visible'}}>
             {BRAND_LOGO_BARS.map((b,i)=>(
-              <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} rx="1.5" fill={b.color} style={{transformOrigin:`${b.x}px ${BRAND_LOGO_BASELINE}px`,animation:`barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) ${0.1*(i+1)}s both`}}/>
+              <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} rx="1.5" fill={b.color}
+                style={playLogoIntro ? {transformOrigin:`${b.x}px ${BRAND_LOGO_BASELINE}px`,animation:`barGrow 0.6s cubic-bezier(0.34,1.56,0.64,1) ${0.1*(i+1)}s both`} : undefined}/>
             ))}
           </svg>
           <span>QUANTUM</span>
