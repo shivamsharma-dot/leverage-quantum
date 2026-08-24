@@ -306,13 +306,14 @@ function tint(hex, a) {
 }
 
 // ---- Funnel view ----------------------------------------------------------
-// One column of the funnel. Bar width is proportional to the TOP STAGE OF ITS OWN
+// One column of the funnel. Widths are log-scaled against the TOP STAGE OF ITS OWN
 // COLUMN, never across columns: impressions and Won differ by ~5 orders of
-// magnitude on this account, so a single shared scale renders every stage after
-// the first as an invisible sliver. Splitting the journey at the one place the
-// unit genuinely changes -- what Meta delivered vs. what the CRM did with it --
-// keeps every bar readable without distorting a single ratio, and the step chip
-// between two bars states the exact conversion and drop-off in numbers.
+// magnitude on this account, so a single shared linear scale renders every stage
+// after the first as an identical invisible sliver. Splitting the journey at the
+// one place the unit genuinely changes -- what Meta delivered vs. what the CRM did
+// with it -- plus a log width keeps every bar readable and every stage
+// distinguishable, and the step chip between two bars states the exact linear
+// conversion and drop-off in numbers.
 function FunnelColumn({ title, note, stages, accent }) {
   const top = stages.length ? stages[0].value : 0
   return (
@@ -322,7 +323,13 @@ function FunnelColumn({ title, note, stages, accent }) {
         <span style={{ fontSize: 10.5, color: C.muted }}>{note}</span>
       </div>
       {stages.map((s, i) => {
-        const w = top > 0 ? Math.max((s.value / top) * 100, 4) : 4
+        // Log scale WITHIN the column. On a linear scale with a minimum width, two
+        // genuinely different stages get drawn at the same width once both fall under
+        // the floor -- Clicks and Meta leads differ 21x here and both rendered as the
+        // same sliver, which is not merely unreadable, it is wrong. Log keeps the taper
+        // monotonic and every stage distinguishable; the step chips and the tiles carry
+        // the exact LINEAR rates, which are the numbers anyone actually acts on.
+        const w = top > 1 ? Math.max((Math.log(s.value + 1) / Math.log(top + 1)) * 100, 6) : 6
         const nxt = stages[i + 1]
         const step = nxt ? (s.value > 0 ? (nxt.value / s.value) * 100 : null) : null
         return (
@@ -516,7 +523,7 @@ export default function LeverageCareersDashboard() {
   const [tableSort, setTableSort] = useState({ key: 'spend', dir: 'desc' })
 
   // Cohort view bucket -- Month or Week. Shared Dropdown, never a native select.
-  const [cohortBy, setCohortBy] = useState('Month')
+  const [cohortBy, setCohortBy] = useState('Week')
 
   const [compareOpen, setCompareOpen] = useState(false)
   const [compareMode, setCompareMode] = useState('prev')
@@ -914,11 +921,12 @@ export default function LeverageCareersDashboard() {
                   {stepTiles.map(s => <StepTile key={s.label} {...s} />)}
                 </div>
                 <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.7, margin: '12px 0 0' }}>
-                  Each funnel is scaled to its own first stage. Impressions and Won are about five orders of
-                  magnitude apart on this account, so a single shared scale would flatten every stage after the
-                  first into an invisible sliver \u2014 the step chips and the tiles above carry the exact conversion
-                  instead. Meta&nbsp;\u2192&nbsp;CRM can read above 100%: LeadSquared keeps leads whose ad name Meta
-                  no longer reports spend against on the same day.
+                  Each column is scaled to its own first stage, and bar widths are log-scaled. Impressions and
+                  Won are about five orders of magnitude apart on this account, so on a linear scale every stage
+                  after the first collapses to the same sliver &mdash; which reads as &ldquo;Clicks and Meta leads
+                  are equal&rdquo; when they differ 21&times;. The step chips and the six tiles above are always
+                  exact and always linear. Meta&nbsp;&rarr;&nbsp;CRM can read above 100% because LeadSquared keeps
+                  leads whose ad name Meta no longer reports spend against on the same day.
                 </p>
               </Card>
 
@@ -926,7 +934,7 @@ export default function LeverageCareersDashboard() {
 
               {/* CHARTS -- Marketing Performance agent chart treatment: one hue per series,
                   gradient bar fill, hairline horizontal-only grid, circle legend, no flat fills. */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: 14 }}>
                 <Card title="Spend and CRM leads" sub={windowLabel + ' \u2014 by day'} noPad>
                   <div style={{ padding: '12px 16px 6px' }}>
                     <ResponsiveContainer width="100%" height={230}>
@@ -1039,9 +1047,9 @@ export default function LeverageCareersDashboard() {
                               <td style={{ fontWeight: 800 }}>{r.label}</td>
                               <td>{fmtINR(r.spend)}</td><td>{fmtN(r.crmLeads)}</td>
                               <td>{fmtN(r.interested)}</td><td>{fmtN(r.won)}</td>
-                              <td style={{ fontWeight: 700, background: tint(C.cyan, 0.08 + 0.5 * Math.min(1, (r.intRate || 0) / cohortMax.intRate)) }}>{fmtPct1(r.intRate)}</td>
-                              <td style={{ fontWeight: 700, background: tint(C.green, 0.08 + 0.5 * Math.min(1, (r.wonRate || 0) / cohortMax.wonRate)) }}>{fmtPct1(r.wonRate)}</td>
-                              <td style={{ fontWeight: 700, background: tint(C.navy, 0.08 + 0.5 * Math.min(1, (r.endRate || 0) / cohortMax.endRate)) }}>{fmtPct1(r.endRate)}</td>
+                              <td style={{ fontWeight: 700, background: tint(C.cyan, 0.06 + 0.34 * Math.min(1, (r.intRate || 0) / cohortMax.intRate)) }}>{fmtPct1(r.intRate)}</td>
+                              <td style={{ fontWeight: 700, background: tint(C.green, 0.06 + 0.34 * Math.min(1, (r.wonRate || 0) / cohortMax.wonRate)) }}>{fmtPct1(r.wonRate)}</td>
+                              <td style={{ fontWeight: 700, background: tint(C.navy, 0.06 + 0.34 * Math.min(1, (r.endRate || 0) / cohortMax.endRate)) }}>{fmtPct1(r.endRate)}</td>
                               <td>{fmtINR(r.cplCrm)}</td><td>{fmtINR(r.cps)}</td>
                             </tr>
                           ))}
