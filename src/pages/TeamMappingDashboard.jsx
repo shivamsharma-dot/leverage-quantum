@@ -1236,7 +1236,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                     <input type="checkbox" checked={pageAllSelected} onChange={togglePage} style={{ width: 15, height: 15, cursor: 'pointer' }} title="Select everyone on this page" />
                   </th>
                 )}
-                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Phone', 'Airtel', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Mapping'].map(h => (
+                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Phone', 'Airtel', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
                   <th key={h} style={{ padding: '9px 12px', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -1259,18 +1259,19 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                         <span style={{ fontWeight: 700, color: C.text }}>{r.name}</span>
                       </div>
                     </td>
-                    <td style={{ padding: '9px 12px', color: C.muted }}>{r.email || '—'}</td>
-                    <td style={{ padding: '9px 12px', color: C.text }}>{(r.role || '').replace(/_/g, ' ')}</td>
-                    <td style={{ padding: '9px 12px' }}><StatusBadge status={r.status} /></td>
-                    <td style={{ padding: '9px 12px' }}><GroupsButton groups={r.groups} /></td>
-                    <td style={{ padding: '9px 12px', color: C.text }}>{pending ? '…' : (d.phoneMain || '—')}</td>
-                    <td style={{ padding: '9px 12px', color: C.text }}>{pending ? '…' : (d.airtelNumber || '—')}</td>
-                    <td style={{ padding: '9px 12px', color: C.text }} title={pending ? '' : (d.managerEmail || '')}>{pending ? '…' : (d.managerName || '—')}</td>
-                    <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.asm_sm || '—'}</td>
-                    <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.ssm || '—'}</td>
-                    <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.role || '—'}</td>
-                    <td style={{ padding: '9px 12px', color: C.text }}>{r.manual?.country || '—'}</td>
-                    <td style={{ padding: '9px 12px' }}>
+                    <td style={{ padding: '9px 12px', color: C.muted, whiteSpace: 'nowrap' }}>{r.email || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{(r.role || '').replace(/_/g, ' ')}</td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}><StatusBadge status={r.status} /></td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}><GroupsButton groups={r.groups} /></td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pending ? '…' : (d.phoneMain || '—')}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pending ? '…' : (d.airtelNumber || '—')}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }} title={pending ? '' : (d.managerEmail || '')}>{pending ? '…' : (d.managerName || '—')}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.asm_sm || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.ssm || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.role || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.country || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.centre_name || '—'}</td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Button size="sm" variant={r.manual ? 'secondary' : 'primary'} onClick={() => setEditUser(r)}>{r.manual ? 'Edit' : 'Map'}</Button>
                         {stale && <span style={{ fontSize: 10, fontWeight: 800, color: C.navy, background: C.navyBg, padding: '2px 7px', borderRadius: 999, whiteSpace: 'nowrap' }} title="Not confirmed in 90+ days">Stale</span>}
