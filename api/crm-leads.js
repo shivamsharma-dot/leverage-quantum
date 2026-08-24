@@ -2174,35 +2174,6 @@ async function handleBigQuery(req, res, me) {
   // rather than deleted only so any tab still running an older bundle keeps
   // working, at zero cost. careers_sync below is now the ONLY BigQuery reader for
   // this dashboard: 3x/day, on a schedule, never on a user action.
-  // Temporary verification hook for the Gazette rebuild (2026-08-25) -- admin
-  // only (gateId already resolved to 'settings' for any mode but
-  // careers_leads). Not wired into any UI; exists purely so the new data
-  // functions can be checked against live production data from a browser
-  // console before the agent pipeline that calls them is finished. Safe to
-  // remove once the rebuild is confirmed working end to end.
-  if (mode === 'gazette_test') {
-    const today = new Date()
-    const iso = d => d.toISOString().slice(0, 10)
-    const until = iso(new Date(today.getTime() - 86400000))
-    const since = iso(new Date(today.getFullYear(), today.getMonth(), 1))
-    const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-    const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0)
-    const untilDay = new Date(until).getDate()
-    const prevUntilDate = new Date(prevMonthStart.getFullYear(), prevMonthStart.getMonth(), Math.min(untilDay, prevMonthEnd.getDate()))
-    const prevSince = iso(prevMonthStart), prevUntil = iso(prevUntilDate)
-    const range = { since, until, prevSince, prevUntil }
-    try {
-      const [marketing, b2c, careers] = await Promise.all([
-        fetchMarketingGazetteData(range).catch(e => ({ error: e.message })),
-        fetchB2CGazetteData(range).catch(e => ({ error: e.message })),
-        fetchCareersGazetteData(range).catch(e => ({ error: e.message })),
-      ])
-      return res.status(200).json({ range, marketing, b2c, careers })
-    } catch (e) {
-      return res.status(500).json({ error: e.message })
-    }
-  }
-
   if (mode === 'careers_leads') {
     const { since, until } = req.query || {}
     if (!isIsoDate(since) || !isIsoDate(until)) {
