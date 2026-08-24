@@ -1326,6 +1326,16 @@ export default function SettingsPage() {
   const [newEmail, setNewEmail] = useState('')
   const [accessMsg, setAccessMsg] = useState('')
   const [addMemberOpen, setAddMemberOpen] = useState(false)
+  // The add-member modal now carries the whole grant -- role, page selection,
+  // profile fields -- so its draft state lives next to the open flag instead of
+  // forcing a second trip through Edit permissions after the row appears.
+  const [addRole, setAddRole] = useState('viewer')
+  const [addIds, setAddIds] = useState([])
+  const [addTemplate, setAddTemplate] = useState('')
+  const [addJobTitle, setAddJobTitle] = useState('')
+  const [addDepartment, setAddDepartment] = useState('')
+  const [addReports, setAddReports] = useState(false)
+  const [addFailed, setAddFailed] = useState([])
   // --- Report config (sender, subjects, auto switch) ---
   const [rcName, setRcName] = useState('')
   const [rcEmail, setRcEmail] = useState('')
@@ -1687,14 +1697,104 @@ export default function SettingsPage() {
     catch { return '—' }
   }
 
+  // --- Add member -----------------------------------------------------------
+  // Templates are pure UI. Each one just pre-ticks a set of pages in the Custom
+  // grid; nothing about "which template was used" is written anywhere, so there
+  // is no second permission concept to keep in sync with allowed_users.
+  const ACCESS_TEMPLATES = [
+    { id: 'marketing', label: 'Marketing analyst', desc: 'Ad platforms, ROAS, channel mix',
+      ids: ['overall', 'meta_ads', 'google_ads', 'bing_ads', 'roas', 'channel_mix', 'mtd', 'marketing_performance'] },
+    { id: 'lqops', label: 'QL Ops floor', desc: 'Lead quality and the QL Ops set',
+      ids: ['lead_quality', 'lq_ops', 'lq_ops_monthly', 'lq_ops_detail', 'lq_ops_ai_detail', 'lq_ops_human_unassigned', 'lq_ops_ai_unassigned', 'leads_assigned', 'futwork_errors'] },
+    { id: 'exec', label: 'Exec read-only', desc: 'Top-line revenue, P&L and cashflow',
+      ids: ['home', 'overall', 'revenue', 'mtd', 'roas', 'marketing_performance', 'ceo_b2c_pnl', 'ceo_b2c_cashflow'] },
+  ]
+  const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const initialsOf = (email) => ((email || '').split('@')[0] || '??').slice(0, 2).toUpperCase()
+  const avatarFor = (email) => {
+    const a = ['#1F3C84', '#1F3C84', '#4CAE6F', '#1F3C84', '#29B9C3'][((email || '').charCodeAt(0) || 65) % 5]
+    const b = ['#1F3C84', '#1F3C84', '#4CAE6F', '#1F3C84', '#1F3C84'][((email || '').charCodeAt(1) || 66) % 5]
+    return 'linear-gradient(135deg,' + a + ',' + b + ')'
+  }
+  // Admins paste lists out of spreadsheets and Slack, so commas, semicolons,
+  // newlines and plain spaces all count as separators rather than making anyone
+  // reformat. Repeats inside one paste collapse silently; a repeat of someone
+  // who already has access is called out instead, because that usually means
+  // the admin is working from a stale list.
+  const parseEmailList = (raw) => {
+    const seen = new Set()
+    const out = []
+    for (const piece of String(raw || '').split(/[\s,;]+/)) {
+      const email = piece.trim().toLowerCase().replace(/^<|>$/g, '')
+      if (!email || seen.has(email)) continue
+      seen.add(email)
+      let status = 'ok'
+      if (!EMAIL_SHAPE.test(email)) status = 'malformed'
+      else if (!email.endsWith('@leverageedu.com')) status = 'domain'
+      else if (accessList.some(u => (u.email || '').toLowerCase() === email)) status = 'exists'
+      out.push({ email, status })
+    }
+    return out
+  }
+  const ADD_STATUS_TEXT = { malformed: 'not an email', domain: 'wrong domain', exists: 'already has access' }
+  const resetAddForm = () => {
+    setNewEmail(''); setAddRole('viewer'); setAddIds([]); setAddTemplate('')
+    setAddJobTitle(''); setAddDepartment(''); setAddReports(false); setAddFailed([])
+  }
+  const closeAddMember = () => { setAddMemberOpen(false); resetAddForm() }
+  const applyTemplate = (tpl) => {
+    setAddRole('custom')
+    setAddTemplate(tpl.id)
+    setAddIds(tpl.ids.filter(id => DASHBOARDS.some(d => d.id === id) && !hiddenPages.includes(id)))
+  }
+  const toggleAddId = (id) => {
+    setAddTemplate('')
+    setAddIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
   const addUser = async () => {
-    const email = newEmail.trim().toLowerCase()
-    if (!email.endsWith('@leverageedu.com')) { setMsg('Only @leverageedu.com emails allowed'); return }
-    if (accessList.find(u => u.email === email)) { setMsg('Already has access'); return }
+    const parsed = parseEmailList(newEmail)
+    const ready = parsed.filter(p => p.status === 'ok')
+    if (!ready.length) { setMsg('Nothing to add yet - check the addresses above') ; return }
+    if (addRole === 'custom' && addIds.length === 0) { setMsg('Pick at least one page for a custom grant'); return }
+    // A plain Viewer has to be stored as the bare string, never as a frozen id
+    // list, or the person silently misses every dashboard added after today --
+    // the bug fixed in the Aug-2026 Settings pass. buildRoleString also collapses
+    // a Custom selection that happens to equal the current default set.
+    const role = addRole === 'admin' ? 'admin'
+      : addRole === 'viewer' ? 'viewer'
+        : buildRoleString(addIds, false)
+    const wantsProfile = !!(addJobTitle.trim() || addDepartment.trim() || addReports)
     setUsersLoading(true)
-    if (await addUserAccess(email, 'viewer', user?.email)) { setMsg('Added: ' + email); setNewEmail(''); setAddMemberOpen(false); await loadUsers() }
-    else setMsg('Failed to add')
+    setAddFailed([])
+    const failed = []
+    let added = 0
+    for (const p of ready) {
+      let ok = false
+      try { ok = await withTimeout(addUserAccess(p.email, role)) } catch { ok = false }
+      if (!ok) { failed.push(p.email); continue }
+      added += 1
+      // POST /api/users stays a two-field create on purpose -- it already
+      // validates the whole role string, so the grant lands in one call. The
+      // profile fields have a working PATCH, so they follow. If that second call
+      // dies the person still has the access, which is the part that matters.
+      if (wantsProfile) {
+        try {
+          await fetchT('/api/users', {
+            method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: p.email, job_title: addJobTitle.trim(), department: addDepartment.trim(), receive_reports: addReports }),
+          })
+        } catch { /* profile fields are best-effort, the grant is not */ }
+      }
+    }
+    await loadUsers()
     setUsersLoading(false)
+    if (failed.length) {
+      setAddFailed(failed)
+      setMsg("Couldn't add " + failed.length + ' of ' + ready.length + ' - the rest went through')
+      return
+    }
+    setMsg('Added ' + added + (added === 1 ? ' person' : ' people') + ' - access applies next time they sign in with Google')
+    closeAddMember()
   }
   const removeUser = async (email) => {
     if (email === user?.email) { setMsg("Can't remove yourself"); return }
@@ -2713,31 +2813,177 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 </Button>
               </div>
 
-              {addMemberOpen && (
-                <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) setAddMemberOpen(false) }}>
-                  <div className={styles.dsModal}>
+              {addMemberOpen && (() => {
+                const parsed = parseEmailList(newEmail)
+                const ready = parsed.filter(p => p.status === 'ok')
+                const skipped = parsed.length - ready.length
+                const grantIds = addRole === 'admin' ? DASHBOARDS.map(d => d.id) : addRole === 'viewer' ? DEFAULT_VIEWER_IDS : addIds
+                const visibleGrant = grantIds.filter(id => !hiddenPages.includes(id))
+                const blocked = grantIds.length - visibleGrant.length
+                const selectableIds = DASHBOARDS.filter(d => !hiddenPages.includes(d.id)).map(d => d.id)
+                const allSelected = selectableIds.length > 0 && selectableIds.every(id => addIds.includes(id))
+                const canSubmit = ready.length > 0 && !(addRole === 'custom' && addIds.length === 0) && !usersLoading
+                return (
+                <div className={styles.dsModalOverlay} onClick={e => { if (e.target === e.currentTarget) closeAddMember() }}>
+                  <div className={styles.addMemberCard} role="dialog" aria-modal="true" aria-label="Add members">
                     <div className={styles.dsModalHead}>
-                      <div className={styles.dsModalTitle}>Add a member</div>
-                      <button type="button" className={styles.dsModalClose} onClick={() => setAddMemberOpen(false)}>
+                      <div>
+                        <div className={styles.dsModalTitle}>Add members</div>
+                        <p className={styles.dsModalSub} style={{ margin: '3px 0 0' }}>Paste one or more @leverageedu.com addresses and set what they can see, in one go.</p>
+                      </div>
+                      <button type="button" className={styles.dsModalClose} onClick={closeAddMember} aria-label="Close">
                         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                       </button>
                     </div>
-                    <p className={styles.dsModalSub}>Adds them as a Viewer with access to all dashboards — use Edit afterward to restrict it to specific ones.</p>
-                    <div className={styles.dsField}>
-                      <label>Email</label>
-                      <input type="email" autoFocus placeholder="name@leverageedu.com" value={newEmail}
-                        onChange={e => setNewEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && addUser()} />
+
+                    <div className={styles.addNote} style={{ marginTop: 16 }}>
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="9" /><line x1="12" y1="11" x2="12" y2="16.5" /><line x1="12" y1="7.8" x2="12" y2="8" /></svg>
+                      <span>Nothing is emailed from here. The access is saved immediately and takes effect the next time they sign in with Google.</span>
                     </div>
-                    {accessMsg && !isOkMsg && (<p className={styles.note} style={{ margin: '-6px 0 12px', color: '#c0392b' }}>✕ {accessMsg}</p>)}
+
+                    <div className={styles.dsField}>
+                      <label htmlFor="lqAddEmails">Email addresses</label>
+                      <textarea id="lqAddEmails" autoFocus rows={2} value={newEmail}
+                        placeholder="name@leverageedu.com, another@leverageedu.com"
+                        onChange={e => setNewEmail(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && canSubmit) addUser() }} />
+                      <div className={styles.dsFieldHint}>Commas, spaces and new lines all work, so a pasted list needs no cleanup.</div>
+                    </div>
+
+                    {parsed.length > 0 && (
+                      <>
+                        <div className={styles.addChips}>
+                          {parsed.map(p => (
+                            <span key={p.email} className={`${styles.addChip} ${p.status === 'ok' ? styles.addChipOk : styles.addChipBad}`}>
+                              <span className={styles.addChipAvatar} style={{ background: p.status === 'ok' ? avatarFor(p.email) : '#94A3B8' }}>{initialsOf(p.email)}</span>
+                              <span className={styles.addChipMail}>{p.email}</span>
+                              {p.status !== 'ok' && <span className={styles.addChipWhy}>{ADD_STATUS_TEXT[p.status]}</span>}
+                            </span>
+                          ))}
+                        </div>
+                        <div className={styles.addChipsCount}>
+                          {ready.length} ready to add{skipped > 0 ? ' \u00b7 ' + skipped + ' skipped' : ''}
+                        </div>
+                      </>
+                    )}
+
+                    <div className={styles.roleOptions}>
+                      <label className={`${styles.roleOption} ${addRole === 'admin' ? styles.roleOptionActive : ''}`}>
+                        <input type="radio" name="addRole" checked={addRole === 'admin'} onChange={() => { setAddRole('admin'); setAddTemplate('') }} />
+                        Admin <span className={styles.roleHint}>Everything</span>
+                      </label>
+                      <label className={`${styles.roleOption} ${addRole === 'viewer' ? styles.roleOptionActive : ''}`}>
+                        <input type="radio" name="addRole" checked={addRole === 'viewer'} onChange={() => { setAddRole('viewer'); setAddTemplate('') }} />
+                        Viewer <span className={styles.roleHint}>Default set</span>
+                      </label>
+                      <label className={`${styles.roleOption} ${addRole === 'custom' ? styles.roleOptionActive : ''}`}>
+                        <input type="radio" name="addRole" checked={addRole === 'custom'} onChange={() => setAddRole('custom')} />
+                        Custom <span className={styles.roleHint}>Pick pages</span>
+                      </label>
+                    </div>
+
+                    {addRole === 'custom' && (
+                      <div className={styles.tplRow}>
+                        {ACCESS_TEMPLATES.map(t => (
+                          <button key={t.id} type="button"
+                            className={`${styles.tplBtn} ${addTemplate === t.id ? styles.tplBtnActive : ''}`}
+                            onClick={() => applyTemplate(t)}>
+                            <span className={styles.tplBtnLabel}>{t.label}</span>
+                            <span className={styles.tplBtnDesc}>{t.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className={styles.accessSummary}>
+                      <span><strong>Will see:</strong> {addRole === 'admin' ? 'every dashboard, plus Settings' : (() => {
+                        const names = DASHBOARDS.filter(d => visibleGrant.includes(d.id)).map(d => d.label)
+                        if (!names.length) return 'nothing yet - no pages selected'
+                        return names.length > 6 ? names.slice(0, 6).join(', ') + ' and ' + (names.length - 6) + ' more' : names.join(', ')
+                      })()}</span>
+                      <span className={styles.accessSummaryCount}>{addRole === 'admin' ? DASHBOARDS.length : visibleGrant.length} of {DASHBOARDS.length} pages</span>
+                      {addRole !== 'admin' && blocked > 0 && (
+                        <div className={styles.accessSummaryNote}>
+                          {blocked} more {blocked === 1 ? 'page is' : 'pages are'} in this grant but hidden for everyone in Global Page Visibility, so nobody will see {blocked === 1 ? 'it' : 'them'} until that changes.
+                        </div>
+                      )}
+                    </div>
+
+                    {addRole === 'custom' && (
+                      <>
+                        <div className={styles.gridTools}>
+                          <button type="button" className={styles.gridToolBtn} disabled={allSelected}
+                            onClick={() => { setAddTemplate(''); setAddIds(selectableIds) }}>Select all</button>
+                          <button type="button" className={styles.gridToolBtn} disabled={addIds.length === 0}
+                            onClick={() => { setAddTemplate(''); setAddIds([]) }}>Clear</button>
+                          <span className={styles.gridToolCount}>{addIds.length} selected</span>
+                        </div>
+                        <div className={styles.dashGrid}>
+                          {PAGE_ACCESS_GROUPS.flatMap(row => row.type === 'group'
+                            ? [{ isHeader: true, key: row.label, label: row.label }, ...row.children.map(d => ({ dash: d, isChild: true }))]
+                            : [{ dash: row.dash, isChild: false }]
+                          ).map(row => {
+                            if (row.isHeader) return <div key={'addh-' + row.key} className={styles.dashGroupHeader}>{row.label}</div>
+                            const d = row.dash
+                            const checked = addIds.includes(d.id)
+                            const gHidden = hiddenPages.includes(d.id)
+                            return (
+                              <label key={d.id}
+                                title={gHidden ? 'Hidden for everyone in Global Page Visibility above' : undefined}
+                                className={`${styles.dashChip} ${checked ? styles.dashChipActive : ''} ${row.isChild ? styles.dashChipChild : ''}`}
+                                style={gHidden ? { opacity: 0.38, cursor: 'not-allowed', filter: 'grayscale(1)' } : {}}>
+                                <input type="checkbox" checked={checked} disabled={gHidden} onChange={() => !gHidden && toggleAddId(d.id)} />
+                                {d.label}
+                                {gHidden && <span style={{ fontSize: 9, display: 'block', color: 'var(--text-3)', fontWeight: 600, lineHeight: 1.2, marginTop: 2 }}>hidden for everyone</span>}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
+
+                    {addRole === 'viewer' && (
+                      <p className={styles.addSubtle}>Saved as the shared Viewer default, so they automatically pick up any page later added to that default. Switch to Custom to pin an exact list.</p>
+                    )}
+                    {addRole === 'admin' && (
+                      <p className={styles.addSubtle}>Admins can also change access, page visibility and report settings on this page.</p>
+                    )}
+
+                    <div className={styles.editFieldsRow} style={{ marginTop: 4, marginBottom: 14 }}>
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6, letterSpacing: '0.05em' }}>JOB TITLE <span style={{ fontWeight: 500, letterSpacing: 0, color: 'var(--text-3)' }}>(optional)</span></label>
+                        <input value={addJobTitle} onChange={e => setAddJobTitle(e.target.value)} placeholder="e.g. Data Analyst"
+                          style={{ width: '100%', padding: '9px 11px', borderRadius: 9, border: '0.5px solid var(--border)', fontSize: 12.5, fontFamily: "'Plus Jakarta Sans',sans-serif", outline: 'none', boxSizing: 'border-box' }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6, letterSpacing: '0.05em' }}>DEPARTMENT <span style={{ fontWeight: 500, letterSpacing: 0, color: 'var(--text-3)' }}>(optional)</span></label>
+                        <input value={addDepartment} onChange={e => setAddDepartment(e.target.value)} placeholder="e.g. Growth"
+                          style={{ width: '100%', padding: '9px 11px', borderRadius: 9, border: '0.5px solid var(--border)', fontSize: 12.5, fontFamily: "'Plus Jakarta Sans',sans-serif", outline: 'none', boxSizing: 'border-box' }} />
+                      </div>
+                    </div>
+
+                    <label className={styles.addOptIn}>
+                      <input type="checkbox" checked={addReports} onChange={e => setAddReports(e.target.checked)} />
+                      Also send them the scheduled report emails
+                    </label>
+
+                    {addFailed.length > 0 && (
+                      <div className={styles.addWarn}>Not added: {addFailed.join(', ')}. Worth trying those again.</div>
+                    )}
+                    {accessMsg && !isOkMsg && (
+                      <div className={styles.addWarn}>{accessMsg}</div>
+                    )}
+
                     <div className={styles.dsModalActions}>
-                      <Button size="sm" variant="secondary" onClick={() => setAddMemberOpen(false)}>Cancel</Button>
-                      <Button size="sm" disabled={!newEmail.trim() || usersLoading} onClick={addUser}>
-                        {usersLoading ? 'Adding…' : 'Add member'}
+                      <Button size="sm" variant="secondary" onClick={closeAddMember}>Cancel</Button>
+                      <Button size="sm" disabled={!canSubmit} onClick={addUser}>
+                        {usersLoading ? 'Adding…' : ready.length > 1 ? 'Add ' + ready.length + ' members' : 'Add member'}
                       </Button>
                     </div>
                   </div>
                 </div>
-              )}
+                )
+              })()}
 
               {accessMsg && (
                 <div className={`${styles.toast} ${isOkMsg ? styles.toastOk : styles.toastErr}`}>{accessMsg}</div>

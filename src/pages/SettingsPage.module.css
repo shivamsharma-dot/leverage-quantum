@@ -1226,3 +1226,65 @@ input.searchInput { padding-left: 34px; }
   .skRow > :first-child { grid-column: 1 / -1; }
   .skInfoPop { width: calc(100vw - 48px); left: auto; right: 0; }
 }
+
+/* ---- Add-member modal (User Access) ----
+   Wider than .dsModal because role, the page grid and the profile fields now
+   live in the same modal instead of a second Edit-permissions trip. */
+.addMemberCard { width:600px; max-width:calc(100vw - 32px); max-height:calc(100vh - 64px); overflow-y:auto;
+  background:var(--card); border-radius:18px; padding:22px 24px 20px; box-shadow:0 30px 60px -20px rgba(0,0,0,.35);
+  font-family:inherit; }
+
+.dsFieldHint { font-size:11px; color:var(--text-3); margin-top:5px; line-height:1.4; }
+
+.dsField textarea { width:100%; padding:10px 11px; border-radius:9px; border:1px solid var(--border); background:var(--bg3);
+  color:var(--text); font-size:13px; font-family:inherit; line-height:1.55; outline:none; box-sizing:border-box;
+  resize:vertical; min-height:62px; transition:border-color .15s ease, box-shadow .15s ease; }
+.dsField textarea:focus { border-color:#1C9FD4; box-shadow:0 0 0 3px rgba(28,159,212,.15); }
+
+.addChips { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 0; }
+.addChip { display:inline-flex; align-items:center; gap:7px; padding:3px 11px 3px 3px; border-radius:999px;
+  border:1px solid var(--border); background:var(--card); font-size:12px; font-weight:600; color:var(--text-2); max-width:100%; }
+.addChipAvatar { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  color:#fff; font-size:9.5px; font-weight:700; letter-spacing:.4px; flex-shrink:0; }
+.addChipMail { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:230px; }
+.addChipOk { border-color:rgba(76,174,111,.5); background:rgba(76,174,111,.09); color:var(--text); }
+.addChipBad { border-color:var(--border); background:var(--bg3); color:var(--text-3); text-decoration:line-through; }
+.addChipWhy { font-size:10.5px; font-weight:600; color:var(--text-3); text-decoration:none; }
+.addChipsCount { font-size:11px; font-weight:600; color:var(--text-3); margin:9px 0 16px; }
+
+.tplRow { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
+.tplBtn { flex:1 1 0; min-width:150px; display:flex; flex-direction:column; align-items:flex-start; gap:1px;
+  padding:7px 11px; border-radius:11px; border:1px solid var(--border); background:var(--card); cursor:pointer;
+  font-family:inherit; text-align:left; transition:border-color .15s ease, background .15s ease; }
+.tplBtn:hover { border-color:#1C9FD4; }
+.tplBtnActive { border-color:var(--accent); background:var(--sel-bg); }
+.tplBtnLabel { font-size:12px; font-weight:700; color:var(--text); }
+.tplBtnDesc { font-size:10.5px; font-weight:500; color:var(--text-3); }
+
+.gridTools { display:flex; align-items:center; gap:12px; margin:0 0 8px; }
+.gridToolBtn { border:none; background:transparent; padding:0; font-family:inherit; font-size:11.5px; font-weight:700;
+  color:#1C9FD4; cursor:pointer; }
+.gridToolBtn:hover:enabled { text-decoration:underline; }
+.gridToolBtn:disabled { color:var(--text-3); cursor:default; }
+.gridToolCount { margin-left:auto; font-size:11px; font-weight:600; color:var(--text-3); }
+
+.addNote { display:flex; gap:8px; align-items:flex-start; padding:10px 12px; border-radius:11px; background:var(--bg3);
+  border:1px solid var(--border); font-size:11.5px; line-height:1.5; color:var(--text-2); margin-bottom:16px; }
+.addWarn { padding:9px 12px; border-radius:11px; background:var(--bg3); border:1px solid #94A3B8;
+  font-size:11.5px; line-height:1.5; font-weight:600; color:var(--text-2); margin-bottom:12px; }
+.addSubtle { font-size:11px; color:var(--text-3); line-height:1.45; margin:-4px 0 16px; }
+
+.addOptIn { display:flex; align-items:center; gap:9px; font-size:12.5px; font-weight:500; color:var(--text-2);
+  cursor:pointer; margin:0 0 4px; }
+.addOptIn input { accent-color:var(--accent); }
+
+@media (max-width: 640px) {
+  .addMemberCard { width:100%; max-width:100%; max-height:90vh; padding:18px 16px 16px; }
+  .addMemberCard .dashGrid { grid-template-columns:1fr; max-height:190px; }
+  .addMemberCard .roleOptions { flex-wrap:wrap; }
+  .addMemberCard .roleOption { flex:1 1 100%; }
+  .addMemberCard .tplBtn { flex:1 1 100%; }
+  .addMemberCard .editFieldsRow { flex-direction:column; }
+  .addMemberCard .addChipMail { max-width:170px; }
+  .addMemberCard .dsModalActions { flex-direction:column-reverse; }
+}
