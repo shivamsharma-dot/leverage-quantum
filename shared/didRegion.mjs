@@ -18,7 +18,7 @@
 export const FRAPP_TEAM_NAME = 'university admission opportunity'
 
 // Most Indian mobiles in this LeadSquared account are stored with NO country
-// code at all (e.g. "9821550658") -- confirmed live against the real Airtel
+// code at all (e.g. "9821550658") -- confirmed live against the real Virtual DID
 // Number field. A genuinely international number is the one that carries an
 // explicit "+<code>" prefix that ISN'T +91 (e.g. "+44-7911123456"). So: no "+"
 // prefix at all, or a "+91" prefix -> Indian; any other "+" prefix ->

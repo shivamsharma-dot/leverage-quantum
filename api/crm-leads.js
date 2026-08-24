@@ -788,8 +788,8 @@ async function fetchTeamUsersMerged(creds) {
 // return real phone numbers, custom fields, and the reporting-manager
 // relationship -- confirmed live against 4 real accounts here, cross-checked
 // field-for-field against the "Akash - Squad Mapping" sheet's own Phone
-// Number / Airtel Number / LS Manager Name columns, all matching exactly
-// (including a genuinely blank Airtel Number matching a genuinely absent
+// Number / Virtual DID / LS Manager Name columns, all matching exactly
+// (including a genuinely blank Virtual DID matching a genuinely absent
 // mx_Custom_2). So PhoneMain / mx_Custom_2 / ManagerName are now live data,
 // not manual fields -- see fetchLeadSquaredUserDetails below. Designation/
 // Department/Sales Regions/Skills still didn't appear in any of the 4 test
@@ -826,9 +826,9 @@ async function fetchLeadSquaredUserDetails(creds, ids, byId) {
       phoneMain: d.PhoneMain || null,
       // mx_Custom_2 has no human label from this endpoint (LeadSquared's admin
       // UI shows it as "DID Number") -- matched by VALUE against the sheet's
-      // Airtel Number column across 4 real users, not by any documented name,
+      // Virtual DID column across 4 real users, not by any documented name,
       // so this is fragile if this account's custom-field numbering ever
-      // changes. Worth re-verifying if Airtel Numbers ever look wrong here.
+      // changes. Worth re-verifying if Virtual DIDs ever look wrong here.
       airtelNumber: d.mx_Custom_2 || null,
       managerName: d.ManagerName || null,
       managerEmail: (mgr && mgr.email) || null,
@@ -836,7 +836,7 @@ async function fetchLeadSquaredUserDetails(creds, ids, byId) {
       // Work Details tab in LeadSquared's own Edit User screen (e.g.
       // "University Admission Opportunity"). Confirmed live across 4 real
       // users with distinct real team names ("University Admission
-      // Opportunity", "Online TATA Team", "Loan"), so unlike Airtel Number
+      // Opportunity", "Online TATA Team", "Loan"), so unlike Virtual DID
       // above this one has a documented, literal field name -- no
       // value-matching guesswork.
       teamId: d.TeamId || null,
@@ -1035,8 +1035,8 @@ async function regenerateTeamApiKey(me) {
 // LeadSquared per-user detail cache (team_mapping_ls_detail_cache) -- see
 // supabase/sql/team_mapping_ls_detail_cache_setup.sql for the full reasoning.
 // Short version: there is no cheap way to ask LeadSquared "who is on team X",
-// only an expensive per-user call that already returns Team/Airtel/Phone/
-// Manager -- the exact same call the live table's Phone/Airtel/Team columns
+// only an expensive per-user call that already returns Team/Virtual DID/Phone/
+// Manager -- the exact same call the live table's Phone/Virtual DID/Team columns
 // already make per visible page. This cache exists so the Frapp coaches push
 // (below) doesn't need to sweep the whole ~3,380-person roster live inside
 // one request. Populated client-driven, in batches of 60 (team_user_detail,
@@ -1141,7 +1141,7 @@ async function getDetailCacheEmails() {
 // How a NEW joiner is handled: fetchLeadSquaredTeamUsers (below) is the cheap
 // bulk call -- it's re-run fresh on every single preview/push, so a brand new
 // Active user shows up here immediately, at zero extra cost. What it does NOT
-// return is Team/Airtel Number (LeadSquared only exposes those per-user), so
+// return is Team/Virtual DID (LeadSquared only exposes those per-user), so
 // a genuinely new person has no cache row yet. Rather than make "someone
 // joined" a manual "click Sync coach directory" step, autoHealMissingCoaches
 // fetches detail for just the handful of newly-missing people, inline, right
@@ -1203,7 +1203,7 @@ async function buildFrappCoachList(creds) {
 
   const activeUsers = users.filter(u => u.status === 'Active' && u.email)
 
-  // Self-heal: anyone Active right now but never swept for Team/Airtel gets
+  // Self-heal: anyone Active right now but never swept for Team/Virtual DID gets
   // fetched live, right here -- this is what makes a new joiner need zero
   // manual steps. Only runs at all when there's a real gap.
   let autoHealed = 0
@@ -1495,7 +1495,7 @@ async function notifyTeamWatchers(event) {
 
 // Overwrites the FIRST tab of an existing spreadsheet with the full current
 // roster+manual snapshot -- a live mirror, not a fresh export-to-sheets.mjs
-// file-per-click. Deliberately excludes Phone/Airtel/Reporting Manager: those
+// file-per-click. Deliberately excludes Phone/Virtual DID/Reporting Manager: those
 // need one LeadSquared call PER PERSON (fetchLeadSquaredUserDetails), fine for
 // the ~50 rows a table page shows but far too expensive to redo for the whole
 // ~3,380-person roster on every single manual edit.

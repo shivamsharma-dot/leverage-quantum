@@ -13,7 +13,7 @@ import { classifyDidRegion } from '../../shared/didRegion.mjs'
 // group membership (reconstructed from that same roster -- LeadSquared has no
 // dedicated Sales-Groups API resource on this account, see api/crm-leads.js's own
 // comment on this) merged with the manual, human-entered fields kept in Supabase
-// (team_mapping_manual). Phone Number, Airtel Number and Reporting Manager are ALSO
+// (team_mapping_manual). Phone Number, Virtual DID and Reporting Manager are ALSO
 // live -- User/Retrieve/ByUserId, a real per-user detail endpoint found in
 // LeadSquared's own API docs, fetched lazily per roster page (see RosterTab's
 // detailCache) since it's a per-user call, not bulk. What's left genuinely manual
@@ -24,10 +24,10 @@ import { classifyDidRegion } from '../../shared/didRegion.mjs'
 const API = '/api/crm-leads?source=leadsquared'
 const PAGE_ROWS = 50
 
-// Phone Number, Airtel Number and LS Manager Name/Email are NOT in this list --
+// Phone Number, Virtual DID and LS Manager Name/Email are NOT in this list --
 // LeadSquared's own API docs (User/Retrieve/ByUserId) genuinely return PhoneMain,
 // the mx_Custom_2 custom field, and the real ManagerName/ManagerUserId, so those
-// three are live data now (see the roster table's Phone/Airtel/LS Manager cells).
+// three are live data now (see the roster table's Phone/Virtual DID/LS Manager cells).
 // employment_status was dropped for duplicating the live Active/Inactive status.
 // tier was renamed to role: a business-side designation (see ROLE_SUGGESTIONS),
 // distinct from LeadSquared's own coarse Role, labeled "LS Role" on this page.
@@ -316,7 +316,7 @@ function SuggestInput({ value, onChange, suggestions, placeholder }) {
 }
 
 // Read-only strip showing what LeadSquared itself reports for this person --
-// Phone/Airtel/Reporting Manager, all live via User/Retrieve/ByUserId, fetched
+// Phone/Virtual DID/Reporting Manager, all live via User/Retrieve/ByUserId, fetched
 // fresh every time the modal opens rather than reused from the roster table's
 // own (page-scoped, possibly stale-by-a-few-minutes) detail cache.
 function LiveDetailStrip({ userId }) {
@@ -334,7 +334,7 @@ function LiveDetailStrip({ userId }) {
       {[
         { label: 'Team', get: dt => dt?.teamName },
         { label: 'Phone', get: dt => dt?.phoneMain },
-        { label: 'Airtel', get: dt => dt?.airtelNumber },
+        { label: 'Virtual DID', get: dt => dt?.airtelNumber },
         { label: 'Reporting Manager', get: dt => dt?.managerName, sub: dt => dt?.managerEmail },
       ].map(({ label, get, sub: getSub }) => {
         const val = loading ? '…' : (get(detail) || '—')
@@ -869,7 +869,7 @@ function ActivityDetail({ row }) {
   // push ever logged, since there's nothing to diff against yet.
   if (row.type === 'frapp_push') {
     const skipped = [
-      detail.skippedNoMobile?.length ? `${detail.skippedNoMobile.length} no Airtel` : null,
+      detail.skippedNoMobile?.length ? `${detail.skippedNoMobile.length} no Virtual DID` : null,
       detail.skippedNoCountry?.length ? `${detail.skippedNoCountry.length} no Country` : null,
       detail.skippedInternational?.length ? `${detail.skippedInternational.length} International (blocked)` : null,
     ].filter(Boolean)
@@ -1097,7 +1097,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   // survive a refresh, and matches what team_manual_save keys on anyway.
   const [selected, setSelected] = useState(() => new Set())
   const { running: importRunning, progress: importProgress } = useImportProgress()
-  // Phone/Airtel/Reporting-Manager are live but per-user calls (LeadSquared has
+  // Phone/Virtual DID/Reporting-Manager are live but per-user calls (LeadSquared has
   // no bulk "by many ids" variant) -- fetched only for whichever ~50 rows are
   // actually on screen, cached by id so paging back to an already-seen page is
   // instant, mirroring the same page-scoped lazy-load pattern this app already
@@ -1260,8 +1260,8 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
               Name: r.name, Email: r.email, 'LS Role': (r.role || '').replace(/_/g, ' '), Status: r.status,
               Groups: (r.groups || []).join('; '),
               Team: d?.teamName || '',
-              Phone: d?.phoneMain || '', Airtel: d?.airtelNumber || '',
-              'Virtual DID': classifyDidRegion(d?.teamName, d?.airtelNumber) || '',
+              Phone: d?.phoneMain || '', 'Virtual DID': d?.airtelNumber || '',
+              'DID Region': classifyDidRegion(d?.teamName, d?.airtelNumber) || '',
               'Reporting Manager': d?.managerName || '', 'Reporting Manager Email': d?.managerEmail || '',
               'ASM/SM': r.manual?.asm_sm || '', 'ASM/SM Email': r.manual?.asm_sm_email || '',
               SSM: r.manual?.ssm || '', 'SSM Email': r.manual?.ssm_email || '',
@@ -1274,13 +1274,13 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
       </div>
 
       <p style={{ fontSize: 11.5, color: C.muted, marginTop: -4, marginBottom: 12 }}>
-        Name / Email / LS Role / Status / Groups / Phone / Airtel / Reporting Manager are all live
-        from LeadSquared, real-time. Phone, Airtel and Reporting Manager load per page (LeadSquared
-        has no bulk endpoint for them), so they show "…" for a moment on a page you haven't opened
-        yet. ASM/SM, SSM, Role, Level, Country and Centre Name are the only manually entered fields.
-        Virtual DID is computed, not stored: on "University Admission Opportunity" it reads "Indian"
-        or "International" off the Airtel number; everyone else shows "—". Only "Indian" is ever
-        pushed to Futwork — International is blocked on the API side too, not just hidden here.
+        Name / Email / LS Role / Status / Groups / Phone / Virtual DID / Reporting Manager are all
+        live from LeadSquared, real-time. Phone, Virtual DID and Reporting Manager load per page
+        (LeadSquared has no bulk endpoint for them), so they show "…" for a moment on a page you
+        haven't opened yet. ASM/SM, SSM, Role, Level, Country and Centre Name are the only manually
+        entered fields. DID Region is computed, not stored: on "University Admission Opportunity" it
+        reads "Indian" or "International" off the Virtual DID; everyone else shows "—". Only "Indian"
+        is ever pushed to Futwork — International is blocked on the API side too, not just hidden here.
       </p>
 
       {isAdmin && selected.size > 0 && (
@@ -1304,7 +1304,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                     <input type="checkbox" checked={pageAllSelected} onChange={togglePage} style={{ width: 15, height: 15, cursor: 'pointer' }} title="Select everyone on this page" />
                   </th>
                 )}
-                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Airtel', 'Virtual DID', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
+                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Virtual DID', 'DID Region', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
                   <th key={h} style={{ padding: '9px 12px', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -1545,7 +1545,7 @@ function ConnectorsTab() {
       <p style={{ fontSize: 12.5, color: C.muted, marginTop: 0, marginBottom: 18, maxWidth: 760 }}>
         Makes this page a real source of team mapping instead of a dead end -- every save, delete,
         restore or finished bulk import can push out to any of these four, independently. All four
-        deliberately exclude Phone/Airtel/Reporting Manager -- those need one LeadSquared call PER
+        deliberately exclude Phone/Virtual DID/Reporting Manager -- those need one LeadSquared call PER
         PERSON, fine for a table page's worth of rows, too expensive on every single edit.
       </p>
       {msg && <div style={{ padding: '9px 14px', borderRadius: 8, background: C.navyBg, color: C.navy, fontSize: 12.5, fontWeight: 700, marginBottom: 16 }}>{msg}</div>}
@@ -1609,7 +1609,7 @@ function ConnectorsTab() {
           </label>
           {form.api_key ? (
             <>
-              <ConnectorField label="Pull URL" hint="Anyone with this URL can read the roster + mapping (not Phone/Airtel/Reporting Manager) -- keep it private, same as a password.">
+              <ConnectorField label="Pull URL" hint="Anyone with this URL can read the roster + mapping (not Phone/Virtual DID/Reporting Manager) -- keep it private, same as a password.">
                 <div style={{ display: 'flex', gap: 6 }}>
                   <input readOnly style={{ ...inputStyle, fontSize: 11 }} value={pullUrl} onClick={e => e.target.select()} />
                   <Button variant="ghost" size="sm" onClick={() => copy(pullUrl)}>{copied ? 'Copied' : 'Copy'}</Button>
@@ -1634,7 +1634,7 @@ function ConnectorsTab() {
 // another company's production coach directory, and the very first pushes to
 // a brand-new, unverified external integration are safer done on purpose
 // than silently on every edit. Two steps, always in this order: sync the
-// coach-directory cache (LeadSquared's Team/Airtel fields, no bulk fetch
+// coach-directory cache (LeadSquared's Team/Virtual DID fields, no bulk fetch
 // exists for these -- see team_mapping_ls_detail_cache_setup.sql), then
 // preview/push, which reads that cache rather than hitting LeadSquared live.
 function FrappCoachesSection({ form, setForm, save, saving }) {
@@ -1754,7 +1754,7 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
   return (
     <Card
       title="Frapp coaches push"
-      sub={`Only Active people on the "University Admission Opportunity" LeadSquared team, with an Indian Airtel Number (see the "Virtual DID" column on Roster) -- name/email from LeadSquared, mobile from Airtel Number, country from the manual mapping`}
+      sub={`Only Active people on the "University Admission Opportunity" LeadSquared team, with an Indian Virtual DID (see the "DID Region" column on Roster) -- name/email from LeadSquared, mobile from Virtual DID, country from the manual mapping`}
       noPad
     >
       <div style={{ padding: '14px 18px' }}>
@@ -1802,7 +1802,7 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
             {(preview.uncached > 0 || preview.skippedNoMobile?.length > 0 || preview.skippedNoCountry?.length > 0 || preview.skippedInternational?.length > 0) && (
               <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
                 {preview.uncached > 0 && <div>{fmtN(preview.uncached)} active people still couldn't be looked up (more than 240 new at once -- run "Sync coach directory" to catch the rest).</div>}
-                {preview.skippedNoMobile?.length > 0 && <div>{preview.skippedNoMobile.length} on the team but missing an Airtel number -- excluded: {preview.skippedNoMobile.slice(0, 5).join(', ')}{preview.skippedNoMobile.length > 5 ? '…' : ''}</div>}
+                {preview.skippedNoMobile?.length > 0 && <div>{preview.skippedNoMobile.length} on the team but missing a Virtual DID -- excluded: {preview.skippedNoMobile.slice(0, 5).join(', ')}{preview.skippedNoMobile.length > 5 ? '…' : ''}</div>}
                 {preview.skippedNoCountry?.length > 0 && <div>{preview.skippedNoCountry.length} on the team but missing a Country mapping -- excluded: {preview.skippedNoCountry.slice(0, 5).join(', ')}{preview.skippedNoCountry.length > 5 ? '…' : ''}</div>}
                 {preview.skippedInternational?.length > 0 && <div>{preview.skippedInternational.length} on the team with a non-Indian number -- blocked from Futwork: {preview.skippedInternational.slice(0, 5).join(', ')}{preview.skippedInternational.length > 5 ? '…' : ''}</div>}
               </div>
