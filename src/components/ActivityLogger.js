@@ -35,15 +35,40 @@ export async function logActivity(email, action, page, detail = '') {
 }
 
 /* ── read ───────────────────────────────────────────────────── */
-export async function getActivityLog(limit = 200) {
-  try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/activity_log?select=*&order=created_at.desc&limit=${limit}`,
-      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
-    )
-    if (!res.ok) return []
-    return await res.json()
-  } catch { return [] }
+// IST midnight for a given day offset (0 = today, -1 = yesterday, ...), returned
+// as a UTC ISO string so it compares correctly against created_at (stored UTC).
+function istMidnightIso(dayOffset = 0) {
+  const now = new Date()
+  const istNow = new Date(now.getTime() + 5.5 * 3600000) // shift to IST wall-clock
+  istNow.setUTCDate(istNow.getUTCDate() + dayOffset)
+  istNow.setUTCHours(0, 0, 0, 0)
+  return new Date(istNow.getTime() - 5.5 * 3600000).toISOString() // shift back to real UTC instant
+}
+
+// The whole calendar day (IST), not a flat row cap -- Supabase's hosted PostgREST
+// caps any single response at 1000 rows regardless of `limit`, so a genuinely busy
+// day is paginated via the Range header (same pattern src/lib/overallBqCache.js and
+// leverageCareersCache.js already use for exactly this reason) rather than silently
+// truncated. Capped at 20 pages (20,000 rows) as a runaway-query backstop only --
+// real daily volume is nowhere near that.
+export async function getActivityLogForDay(dayOffset = 0) {
+  const since = istMidnightIso(dayOffset)
+  const until = istMidnightIso(dayOffset + 1)
+  const rows = []
+  for (let page = 0; page < 20; page++) {
+    const from = page * 1000, to = from + 999
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/activity_log?select=*&created_at=gte.${since}&created_at=lt.${until}&order=created_at.desc`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, Range: `${from}-${to}` } }
+      )
+      if (!res.ok) break
+      const batch = await res.json()
+      rows.push(...batch)
+      if (batch.length < 1000) break
+    } catch { break }
+  }
+  return rows
 }
 
 /* ── human-readable label for the current route ─────────────── */

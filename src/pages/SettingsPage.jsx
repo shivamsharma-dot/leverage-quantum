@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import Sidebar, { PAGE_LIST, NAV } from '../components/Sidebar'
 import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole } from '../hooks/useAuth'
-import { getActivityLog } from '../components/ActivityLogger.js'
+import { getActivityLogForDay } from '../components/ActivityLogger.js'
 import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
 import Dropdown from '../components/Dropdown'
@@ -592,11 +592,17 @@ export default function SettingsPage() {
   const [activityLog, setActivityLog] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
   const [actSearch, setActSearch] = useState('')
-  const loadActivity = async () => {
+  // 0 = today (IST), -1 = yesterday, etc. -- whole calendar day, not a flat row cap.
+  const [activityDayOffset, setActivityDayOffset] = useState(0)
+  const loadActivity = async (dayOffset = activityDayOffset) => {
     setActivityLoading(true)
-    setActivityLog(await getActivityLog(500))
+    setActivityLog(await getActivityLogForDay(dayOffset))
     setActivityLoading(false)
   }
+  const activityDayLabel = (() => {
+    const d = new Date(Date.now() + activityDayOffset * 86400000)
+    return activityDayOffset === 0 ? 'Today' : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  })()
 
   // Report Activity Log (send history — sent/skipped/failed, incl. cron + GitHub Actions triggers)
   const _rlRef = useRef(false)
@@ -1481,6 +1487,15 @@ export default function SettingsPage() {
     const rs = (Number(n || 0) / 1099511627776) * 6.25 * 88
     if (rs < 0.01) return 'under 1 paisa'
     return 'about \u20B9' + (rs < 1 ? rs.toFixed(2) : Math.round(rs).toLocaleString('en-IN'))
+  }
+  // Same flat rate as bqCost() above, applied to Anthropic's own USD-denominated
+  // Sonnet pricing (see PRICING in api/ask-ai.mjs) -- so every $-based estimate in
+  // this app reads in one consistent currency. Quantum's own rule: rupee symbol
+  // everywhere, never Rs/USD, wherever money is displayed.
+  const USD_TO_INR = 88
+  const usdInr = (usd) => {
+    const rs = Number(usd || 0) * USD_TO_INR
+    return '\u20B9' + (rs < 1 ? rs.toFixed(2) : rs.toLocaleString('en-IN', { maximumFractionDigits: rs < 100 ? 2 : 0 }))
   }
   const bqCell = (v) => {
     if (v === null || v === undefined) return '\u2014'
@@ -2571,13 +2586,11 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       </div>
                       <div className={styles.statCard}>
                         <div>
-                          <div className={styles.statLabel}>Bytes billed this month</div>
-                          <div className={styles.statValue}>{monthMeasuredJobs === 0 ? '—' : bqBytes(monthMeasuredBytes)}</div>
-                          {monthUnmeasured > 0 && (
-                            <div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 2 }}>
-                              {monthMeasuredJobs === 0 ? `all ${monthUnmeasured} job${monthUnmeasured === 1 ? '' : 's'} unmeasured` : `+${monthUnmeasured} unmeasured`}
-                            </div>
-                          )}
+                          <div className={styles.statLabel}>Cost this month (est.)</div>
+                          <div className={styles.statValue}>{monthMeasuredJobs === 0 ? '—' : bqCost(monthMeasuredBytes)}</div>
+                          <div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 2 }}>
+                            {monthMeasuredJobs === 0 ? '' : bqBytes(monthMeasuredBytes) + ' billed'}{monthUnmeasured > 0 ? `${monthMeasuredJobs === 0 ? `all ${monthUnmeasured} job${monthUnmeasured === 1 ? '' : 's'} unmeasured` : ` · +${monthUnmeasured} unmeasured`}` : ''}
+                          </div>
                         </div>
                         <span className={`${styles.statIcon} ${styles.statIconGreen}`}>
                           <span style={{ fontSize: 17, fontWeight: 800, lineHeight: 1 }} aria-hidden="true">₹</span>
@@ -3202,11 +3215,16 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <div className={styles.activityHeader}>
                 <div>
                   <h3 className={styles.cardTitle}>Activity Log</h3>
-                  <p className={styles.cardDesc} style={{ margin: 0 }}>See who viewed which dashboard and when.</p>
+                  <p className={styles.cardDesc} style={{ margin: 0 }}>See who viewed which dashboard and when — the whole calendar day (IST), not a flat row cap.</p>
                 </div>
-                <Button size="sm" variant="secondary" onClick={loadActivity}>
-                  {activityLoading ? 'Loading…' : '↻ Refresh'}
-                </Button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Button size="sm" variant="secondary" disabled={activityLoading} onClick={() => { const o = activityDayOffset - 1; setActivityDayOffset(o); loadActivity(o) }}>‹ Prev day</Button>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text)', minWidth: 90, textAlign: 'center' }}>{activityDayLabel}</span>
+                  <Button size="sm" variant="secondary" disabled={activityLoading || activityDayOffset >= 0} onClick={() => { const o = activityDayOffset + 1; setActivityDayOffset(o); loadActivity(o) }}>Next day ›</Button>
+                  <Button size="sm" variant="secondary" onClick={() => loadActivity()}>
+                    {activityLoading ? 'Loading…' : '↻ Refresh'}
+                  </Button>
+                </div>
               </div>
 
               {activityLog.length > 0 && (
@@ -3219,7 +3237,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
               {activityLog.length === 0 && !activityLoading && (
                 <div className={styles.empty}>
-                  Click “Load log” to see activity.<br />
+                  No activity logged for {activityDayLabel.toLowerCase() === 'today' ? 'today' : activityDayLabel}.<br />
                   Activity is tracked when users open dashboards.
                 </div>
               )}
@@ -3281,7 +3299,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </tbody>
                   </table>
                   </div>
-                  <div className={styles.alFoot}>Showing {activityLog.length} {activityLog.length===1?'entry':'entries'}</div>
+                  <div className={styles.alFoot}>Showing {activityLog.length} {activityLog.length===1?'entry':'entries'} for {activityDayLabel}</div>
                 </div>
                 )}
             </div>
@@ -4045,8 +4063,13 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             const askaiDaily = Object.values(byDay).sort((a, b) => b.day.localeCompare(a.day))
             const todayRow = byDay[todayStr] || { requests: 0, input: 0, output: 0, cost: 0 }
             const monthCost = askaiDaily.filter(d => d.day.startsWith(monthStr)).reduce((s, d) => s + d.cost, 0)
+            // budgetNum is entered in rupees (Quantum's own display currency) --
+            // monthCost is still tracked in USD internally (Anthropic's own pricing
+            // basis), so it's converted at the same flat rate as every other $
+            // figure on this card before comparing against the rupee ceiling.
             const budgetNum = parseFloat(askaiBudgetInput) || 0
-            const budgetPct = budgetNum > 0 ? Math.min(100, (monthCost / budgetNum) * 100) : 0
+            const monthCostInr = monthCost * USD_TO_INR
+            const budgetPct = budgetNum > 0 ? Math.min(100, (monthCostInr / budgetNum) * 100) : 0
             const budgetColor = budgetPct >= 90 ? '#1F3C84' : budgetPct >= 70 ? '#1C9FD4' : '#4CAE6F'
             const askaiToolNames = Array.from(new Set(askaiToolCalls.map(c => c.tool_name).filter(Boolean))).sort()
             const askaiFilteredCalls = askaiToolFilter === 'all' ? askaiToolCalls : askaiToolCalls.filter(c => c.tool_name === askaiToolFilter)
@@ -4066,7 +4089,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
                 <div className={styles.statStrip}>
                   <div className={styles.statCard}>
-                    <div><div className={styles.statLabel}>Today's cost (est.)</div><div className={styles.statValue}>${todayRow.cost.toFixed(2)}</div></div>
+                    <div><div className={styles.statLabel}>Today's cost (est.)</div><div className={styles.statValue}>{usdInr(todayRow.cost)}</div></div>
                     <span className={`${styles.statIcon} ${styles.statIconNavy}`}>
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg>
                     </span>
@@ -4078,7 +4101,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </span>
                   </div>
                   <div className={styles.statCard}>
-                    <div><div className={styles.statLabel}>This month (est.)</div><div className={styles.statValue}>${monthCost.toFixed(2)}</div></div>
+                    <div><div className={styles.statLabel}>This month (est.)</div><div className={styles.statValue}>{usdInr(monthCost)}</div></div>
                     <span className={`${styles.statIcon} ${styles.statIconCyan}`}>
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="1" y="4" width="22" height="16" rx="2" /><line x1="1" y1="10" x2="23" y2="10" /></svg>
                     </span>
@@ -4098,7 +4121,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.4 }}>No public Anthropic API exposes remaining account credits — set your own monthly ceiling to get an early warning as estimated spend approaches it.</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                      <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>$</span>
+                      <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>₹</span>
                       <input type="number" min="0" step="1" value={askaiBudgetInput} onChange={e => setAskaiBudgetInput(e.target.value)}
                         style={{ width: 90, padding: '7px 10px', borderRadius: 8, border: '0.5px solid var(--border)', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif" }} />
                       <Button size="sm" onClick={saveAskaiBudget} disabled={askaiBudgetSaving}>
@@ -4112,7 +4135,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div style={{ height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${budgetPct}%`, background: budgetColor, borderRadius: 4, transition: 'width .3s ease' }} />
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 5 }}>${monthCost.toFixed(2)} of ${budgetNum.toFixed(2)} used this month ({budgetPct.toFixed(0)}%){budgetPct >= 90 ? ' — approaching the ceiling' : ''}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 5 }}>₹{monthCostInr.toFixed(2)} of ₹{budgetNum.toFixed(2)} used this month ({budgetPct.toFixed(0)}%){budgetPct >= 90 ? ' — approaching the ceiling' : ''}</div>
                     </div>
                   )}
                 </div>
@@ -4131,7 +4154,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                               <td className={styles.alTd}>{d.requests}</td>
                               <td className={styles.alTd}>{fmtTok(d.input)}</td>
                               <td className={styles.alTd}>{fmtTok(d.output)}</td>
-                              <td className={styles.alTd}>${d.cost.toFixed(2)}</td>
+                              <td className={styles.alTd}>{usdInr(d.cost)}</td>
                             </tr>
                           ))}
                         </tbody>
