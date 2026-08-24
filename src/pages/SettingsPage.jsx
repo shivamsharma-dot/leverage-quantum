@@ -1730,13 +1730,19 @@ export default function SettingsPage() {
       seen.add(email)
       let status = 'ok'
       if (!EMAIL_SHAPE.test(email)) status = 'malformed'
-      else if (!email.endsWith('@leverageedu.com')) status = 'domain'
+      // Outside the org is flagged, not blocked -- an admin can knowingly grant
+      // access to an external consultant/partner. "Sign in with Google" stays
+      // hard-restricted to @leverageedu.com (both server-side in api/auth.mjs
+      // and by Google's own hd= consent-screen parameter), so an external
+      // grant only works via the "Send me a link" email sign-in on the login
+      // page -- gated purely by allowed_users membership, no domain check.
+      else if (!email.endsWith('@leverageedu.com')) status = 'external'
       else if (accessList.some(u => (u.email || '').toLowerCase() === email)) status = 'exists'
       out.push({ email, status })
     }
     return out
   }
-  const ADD_STATUS_TEXT = { malformed: 'not an email', domain: 'wrong domain', exists: 'already has access' }
+  const ADD_STATUS_TEXT = { malformed: 'not an email', external: 'outside your org — signs in via emailed link', exists: 'already has access' }
   const resetAddForm = () => {
     setNewEmail(''); setAddRole('viewer'); setAddIds([]); setAddTemplate('')
     setAddJobTitle(''); setAddDepartment(''); setAddReports(false); setAddFailed([])
@@ -1753,7 +1759,7 @@ export default function SettingsPage() {
   }
   const addUser = async () => {
     const parsed = parseEmailList(newEmail)
-    const ready = parsed.filter(p => p.status === 'ok')
+    const ready = parsed.filter(p => p.status === 'ok' || p.status === 'external')
     if (!ready.length) { setMsg('Nothing to add yet - check the addresses above') ; return }
     if (addRole === 'custom' && addIds.length === 0) { setMsg('Pick at least one page for a custom grant'); return }
     // A plain Viewer has to be stored as the bare string, never as a frozen id
@@ -1793,7 +1799,11 @@ export default function SettingsPage() {
       setMsg("Couldn't add " + failed.length + ' of ' + ready.length + ' - the rest went through')
       return
     }
-    setMsg('Added ' + added + (added === 1 ? ' person' : ' people') + ' - access applies next time they sign in with Google')
+    const addedExternal = ready.some(p => p.status === 'external' && !failed.includes(p.email))
+    const howSignIn = addedExternal
+      ? (ready.every(p => p.status === 'external') ? ' - they sign in via the emailed link on the login page' : ' - access applies next time they sign in with Google, or via the emailed link for anyone outside the org')
+      : ' - access applies next time they sign in with Google'
+    setMsg('Added ' + added + (added === 1 ? ' person' : ' people') + howSignIn)
     closeAddMember()
   }
   const removeUser = async (email) => {
@@ -2815,8 +2825,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
               {addMemberOpen && (() => {
                 const parsed = parseEmailList(newEmail)
-                const ready = parsed.filter(p => p.status === 'ok')
+                const ready = parsed.filter(p => p.status === 'ok' || p.status === 'external')
                 const skipped = parsed.length - ready.length
+                const hasExternal = parsed.some(p => p.status === 'external')
                 const grantIds = addRole === 'admin' ? DASHBOARDS.map(d => d.id) : addRole === 'viewer' ? DEFAULT_VIEWER_IDS : addIds
                 const visibleGrant = grantIds.filter(id => !hiddenPages.includes(id))
                 const blocked = grantIds.length - visibleGrant.length
@@ -2829,7 +2840,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <div className={styles.dsModalHead}>
                       <div>
                         <div className={styles.dsModalTitle}>Add members</div>
-                        <p className={styles.dsModalSub} style={{ margin: '3px 0 0' }}>Paste one or more @leverageedu.com addresses and set what they can see, in one go.</p>
+                        <p className={styles.dsModalSub} style={{ margin: '3px 0 0' }}>Paste one or more addresses and set what they can see, in one go.</p>
                       </div>
                       <button type="button" className={styles.dsModalClose} onClick={closeAddMember} aria-label="Close">
                         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -2840,6 +2851,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="9" /><line x1="12" y1="11" x2="12" y2="16.5" /><line x1="12" y1="7.8" x2="12" y2="8" /></svg>
                       <span>Nothing is emailed from here. The access is saved immediately and takes effect the next time they sign in with Google.</span>
                     </div>
+                    {hasExternal && (
+                      <div className={styles.addNote} style={{ marginTop: 8 }}>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#1C9FD4" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="9" /><line x1="12" y1="11" x2="12" y2="16.5" /><line x1="12" y1="7.8" x2="12" y2="8" /></svg>
+                        <span>One or more addresses aren't on your organisation's domain. "Sign in with Google" won't work for them — they'll need to use "Send me a link" on the login page instead, which emails a one-time sign-in link to anyone already on this access list.</span>
+                      </div>
+                    )}
 
                     <div className={styles.dsField}>
                       <label htmlFor="lqAddEmails">Email addresses</label>
@@ -2853,13 +2870,16 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     {parsed.length > 0 && (
                       <>
                         <div className={styles.addChips}>
-                          {parsed.map(p => (
-                            <span key={p.email} className={`${styles.addChip} ${p.status === 'ok' ? styles.addChipOk : styles.addChipBad}`}>
-                              <span className={styles.addChipAvatar} style={{ background: p.status === 'ok' ? avatarFor(p.email) : '#94A3B8' }}>{initialsOf(p.email)}</span>
+                          {parsed.map(p => {
+                            const includable = p.status === 'ok' || p.status === 'external'
+                            return (
+                            <span key={p.email} className={`${styles.addChip} ${includable ? styles.addChipOk : styles.addChipBad}`}>
+                              <span className={styles.addChipAvatar} style={{ background: includable ? avatarFor(p.email) : '#94A3B8' }}>{initialsOf(p.email)}</span>
                               <span className={styles.addChipMail}>{p.email}</span>
                               {p.status !== 'ok' && <span className={styles.addChipWhy}>{ADD_STATUS_TEXT[p.status]}</span>}
                             </span>
-                          ))}
+                            )
+                          })}
                         </div>
                         <div className={styles.addChipsCount}>
                           {ready.length} ready to add{skipped > 0 ? ' \u00b7 ' + skipped + ' skipped' : ''}

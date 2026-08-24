@@ -1,4 +1,4 @@
-import { getSessionUser, supabaseAdmin, ALLOWED_DOMAIN } from '../lib/auth.mjs'
+import { getSessionUser, supabaseAdmin } from '../lib/auth.mjs'
 
 // Roles are free text in the DB, but only these shapes mean anything to
 // lib/auth.mjs -- anything else falls through canAccessDashboard's unknown-role
@@ -7,6 +7,7 @@ import { getSessionUser, supabaseAdmin, ALLOWED_DOMAIN } from '../lib/auth.mjs'
 // about.
 const PLAIN_ROLE = /^(admin|viewer|roas_only)$/
 const SCOPED_ROLE = /^(viewer|custom):([a-z0-9_]+(,[a-z0-9_]+)*)?$/
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function validRole(role) {
   const r = String(role == null ? '' : role).trim()
@@ -30,8 +31,20 @@ export default async function handler(req, res) {
     const { email, role = 'viewer' } = req.body || {}
     const clean = (email || '').toLowerCase().trim()
     if (!validRole(role)) return res.status(400).json({ error: 'Invalid role.' })
-    if (!clean.endsWith(`@${ALLOWED_DOMAIN}`)) {
-      return res.status(400).json({ error: `Only @${ALLOWED_DOMAIN} emails are allowed.` })
+    // Not restricted to the org domain on purpose: an admin (the only caller
+    // who reaches this branch at all, see the role check above) can knowingly
+    // register someone outside the organisation -- an external consultant or
+    // partner, say. That person still cannot use "Sign in with Google": that
+    // path stays hard-gated to ALLOWED_DOMAIN both by api/auth.mjs's own check
+    // and by the hd= parameter Google enforces on its own consent screen
+    // (see src/components/LoginScene.jsx). They sign in instead via the
+    // emailed one-time link (api/auth.mjs's ?action=magic-request /
+    // magic-verify, and the "Send me a link" flow on the login page), which
+    // was already built to be gated purely by allowed_users membership, not
+    // domain -- this is the one thing that needed to change to let that path
+    // actually be used for someone outside leverageedu.com.
+    if (!EMAIL_SHAPE.test(clean)) {
+      return res.status(400).json({ error: 'That does not look like a valid email address.' })
     }
     const r = await supabaseAdmin('allowed_users', {
       method: 'POST',
