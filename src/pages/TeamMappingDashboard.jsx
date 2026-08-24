@@ -1578,37 +1578,63 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
   }, [])
   useEffect(() => { loadCacheStatus() }, [loadCacheStatus])
 
-  // Client-driven sweep of the WHOLE roster, batch of 60 at a time (the same
-  // 60-id cap team_user_detail already enforces server-side) -- strictly
-  // sequential, never parallel batches, so this can't pile onto LeadSquared's
-  // own account-wide rate limit the way a burst of concurrent requests could.
-  // Same "no real background worker on Vercel serverless" reasoning the bulk-
-  // import feature already solved with a client-driven loop; this just sweeps
-  // instead of importing. Takes a couple of minutes for the full roster --
-  // expected, not a bug, given ~3,380 people at 60 per round trip.
+  // Client-driven sweep of the whole roster -- strictly sequential batches,
+  // never parallel, so this can't pile onto LeadSquared's own rate limit the
+  // way a burst of concurrent requests could. Same "no real background worker
+  // on Vercel serverless" reasoning the bulk-import feature already solved
+  // with a client-driven loop; this just sweeps instead of importing.
+  //
+  // Batch size and pacing are tuned against a REAL limit hit live on
+  // 2026-08-24: "LeadSquared 429: API calls exceeded the limit of 72 in 5
+  // second(s)". team_user_detail fires one LeadSquared call per id, all at
+  // once (Promise.all server-side) -- the original 60-per-batch, no-delay
+  // version burst well past that on the very first few batches. 15 ids per
+  // batch with a 1.5s pause between batches keeps the worst case (several
+  // batches landing inside the same rolling 5s window) comfortably under 72.
+  const DETAIL_BATCH = 15
+  const BATCH_DELAY_MS = 1500
+  const sleep = ms => new Promise(res => setTimeout(res, ms))
+
   const syncCoachDirectory = async () => {
     setSyncing(true); setMsg('')
     try {
       const { rows } = await fetchJson(API + '&mode=team_users')
       const people = (rows || []).filter(r => r.id && r.email)
       setSyncProgress({ done: 0, total: people.length })
-      for (let i = 0; i < people.length; i += 60) {
-        const batch = people.slice(i, i + 60)
+      for (let i = 0; i < people.length; i += DETAIL_BATCH) {
+        const batch = people.slice(i, i + DETAIL_BATCH)
         const ids = batch.map(p => p.id).join(',')
-        const { details } = await fetchJson(API + '&mode=team_user_detail&ids=' + encodeURIComponent(ids))
         const emailById = {}
         batch.forEach(p => { emailById[p.id] = p.email })
+
+        // A 429 here is expected occasionally, not a failure -- back off hard
+        // and retry the SAME batch rather than aborting a multi-minute sweep
+        // over one transient rate-limit hit (a concurrent admin browsing the
+        // live roster table eats into the same per-account budget).
+        let details = null
+        for (let attempt = 0; attempt < 5; attempt++) {
+          try {
+            const r = await fetchJson(API + '&mode=team_user_detail&ids=' + encodeURIComponent(ids))
+            details = r.details
+            break
+          } catch (e) {
+            if (!/429/.test(e.message || '') || attempt === 4) throw e
+            await sleep(5000 * (attempt + 1))
+          }
+        }
+
         const withEmail = (details || []).map(d => ({ ...d, email: emailById[d.id] || null }))
         await fetchJson(API + '&mode=team_detail_cache_save', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ details: withEmail }),
         })
-        setSyncProgress({ done: Math.min(i + 60, people.length), total: people.length })
+        setSyncProgress({ done: Math.min(i + DETAIL_BATCH, people.length), total: people.length })
+        await sleep(BATCH_DELAY_MS)
       }
-      await loadCacheStatus()
     } catch (e) {
-      setMsg('Sync stopped early: ' + (e.message || e) + ' -- whatever synced so far is saved, run it again to pick up from a fresh full pass.')
+      setMsg('Sync stopped early: ' + (e.message || e) + ' -- whatever synced so far is saved, run it again to pick up where it left off.')
     } finally {
       setSyncing(false); setSyncProgress(null)
+      await loadCacheStatus()
     }
   }
 
@@ -1660,7 +1686,7 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
               <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Syncing… {fmtN(syncProgress.done)} of {fmtN(syncProgress.total)}</div>
             )}
             <Button size="sm" onClick={syncCoachDirectory} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync coach directory'}</Button>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Takes a few minutes for the full roster -- LeadSquared has no bulk "who's on which team" lookup, so this sweeps everyone once.</div>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Takes 6-8 minutes for the full roster, paced to stay under LeadSquared's rate limit -- there's no bulk "who's on which team" lookup, so this sweeps everyone once. Safe to leave the tab open and come back; a rate-limit hit mid-sweep retries automatically.</div>
           </div>
 
           <div style={{ border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px' }}>
