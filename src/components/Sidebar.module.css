@@ -18,19 +18,14 @@
   to   { transform: scaleY(1); opacity: 1; }
 }
 
-/* Mild ambient aurora -- two soft brand-colour glows drifting slowly behind the
-   nav content. Painted as extra background-image layers on the sidebar's own
-   box (not a separate ::before element), so it needs no z-index of its own and
-   can't interfere with the collapsed rail's flyout stacking (a real, previously
-   fixed bug in this file -- see the flyout notch history). Kept deliberately
-   faint (low alpha, ultra-slow drift) since this is on screen all day, not a
-   one-time login moment. */
-@keyframes sidebarAurora {
-  0%   { background-position: 15% 10%, 85% 90%, 0 0; }
-  50%  { background-position: 80% 30%, 20% 70%, 0 0; }
-  100% { background-position: 15% 10%, 85% 90%, 0 0; }
-}
-
+/* Mild ambient aurora -- two soft, STATIC brand-colour glows behind the nav
+   content. Deliberately not animated: Sidebar remounts on every route change
+   (a fresh <Sidebar/> per page, documented elsewhere in this app), so an
+   animated background-position restarted from its 0% keyframe on every single
+   click -- combined with background-position being a paint-triggering
+   property (recomputed every frame, unlike transform/opacity), that's exactly
+   what read as a "vibration"/latency jolt on navigation. A fixed gradient
+   costs nothing per frame and never has a keyframe to snap back to. */
 .sidebar {
   position: relative;
   width: 244px;
@@ -39,12 +34,9 @@
   border-radius: 18px;
   box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 14px 30px -14px rgba(31,60,132,0.20), 0 2px 8px rgba(15,23,42,0.05);
   background:
-    radial-gradient(circle, rgba(28,159,212,0.10), transparent 55%),
-    radial-gradient(circle, rgba(76,174,111,0.09), transparent 55%),
+    radial-gradient(circle at 20% 12%, rgba(28,159,212,0.09), transparent 50%),
+    radial-gradient(circle at 85% 92%, rgba(76,174,111,0.08), transparent 50%),
     var(--sidebar-bg);
-  background-size: 160% 160%, 160% 160%, 100% 100%;
-  background-repeat: no-repeat;
-  animation: sidebarAurora 70s ease-in-out infinite;
   border-right: 0.5px solid var(--card-border);
   display: flex;
   flex-direction: column;
@@ -239,12 +231,9 @@
   position: relative;
   width: 52px; height: 100vh;
   background:
-    radial-gradient(circle, rgba(28,159,212,0.10), transparent 55%),
-    radial-gradient(circle, rgba(76,174,111,0.09), transparent 55%),
+    radial-gradient(circle at 20% 12%, rgba(28,159,212,0.09), transparent 50%),
+    radial-gradient(circle at 85% 92%, rgba(76,174,111,0.08), transparent 50%),
     var(--sidebar-bg);
-  background-size: 160% 160%, 160% 160%, 100% 100%;
-  background-repeat: no-repeat;
-  animation: sidebarAurora 70s ease-in-out infinite;
   border-right: 0.5px solid var(--card-border);
   display: flex; flex-direction: column;
   align-items: center; flex-shrink: 0;
