@@ -1822,7 +1822,7 @@ function isIsoDate(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.te
 // window, not a client-side chartable dataset.
 async function fetchLeverageCareersRowsForGazette(since, until) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
-  const cols = 'lead_date,total_leads,total_interested,won'
+  const cols = 'campaign,lead_date,total_leads,total_interested,won'
   const rows = []
   let cursor = null
   for (let guard = 0; guard < 2000; guard++) {
@@ -1848,6 +1848,210 @@ function careersSumRows(rows) {
   return { leads, interested, won }
 }
 
+// ---------------------------------------------------------------------
+// Full-fidelity Gazette data (2026-08-25 rebuild) -- replaces the earlier,
+// much thinner LLM-tool-mediated snapshots above with direct, deterministic
+// queries against the same overall_funnel_daily cache analyze_campaign_
+// contribution already reads. The real design-proof edition (recovered from
+// its Claude Artifact source, see CLAUDE.md) computed every number and table
+// this way -- spend/QL/funnel-stage/channel/corridor/campaign rollups -- and
+// only used prose for the headline/pull-quote/editor's-note text, never for
+// a single figure. This section reproduces that split: numbers are always
+// code, never the model's to transcribe.
+async function fetchOverallFunnelRowsRange(since, until) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const cols = 'campaign,source,date,leads,queued,total_ql,spend,apps,offers,deposits,raus'
+  const rows = []
+  let offset = 0
+  for (let guard = 0; guard < 50; guard++) {
+    const path = 'overall_funnel_daily?select=' + encodeURIComponent(cols)
+      + '&date=gte.' + since + '&date=lte.' + until
+    const r = await supabaseAdmin(path, { headers: { Range: offset + '-' + (offset + 999) } })
+    if (!r.ok) throw new Error('overall_funnel_daily read failed: ' + (await r.text()).slice(0, 200))
+    const page = await r.json()
+    if (!Array.isArray(page) || page.length === 0) break
+    rows.push(...page)
+    if (page.length < 1000) break
+    offset += 1000
+  }
+  return rows
+}
+
+const GAZ_PAID_SOURCES = ['Facebook', 'Google', 'Affiliate', 'Remarketing']
+const GAZ_SR_APP_RATE = 0.09
+const GAZ_SR_FEE = 350000
+
+function gazSum(rows, key) { return rows.reduce((s, r) => s + (Number(r[key]) || 0), 0) }
+function gazIsPaid(source) { return GAZ_PAID_SOURCES.includes((source || '').trim()) }
+
+// Whole-account KPIs, paid-only for CPL/CPQL (matching the real edition's own
+// footnote: "CPQL and CPL divide spend by paid-source leads and QLs only" --
+// Total QL itself still includes free/earned channels).
+function gazAccountTotals(rows) {
+  const paid = rows.filter(r => gazIsPaid(r.source))
+  const spend = gazSum(rows, 'spend')
+  const totalQL = gazSum(rows, 'total_ql')
+  const paidLeads = gazSum(paid, 'leads')
+  const paidQL = gazSum(paid, 'total_ql')
+  const apps = gazSum(rows, 'apps'), offers = gazSum(rows, 'offers'), deposits = gazSum(rows, 'deposits')
+  return {
+    spend, totalQL, paidLeads, paidQL, apps, offers, deposits,
+    cpql: paidQL > 0 ? Math.round(spend / paidQL) : null,
+    cpl: paidLeads > 0 ? Math.round(spend / paidLeads) : null,
+    estSrRevenue: Math.round(apps * GAZ_SR_APP_RATE * GAZ_SR_FEE),
+    freeQL: totalQL - paidQL,
+  }
+}
+
+// Stage-by-stage funnel, both periods, plus "% of prior stage" for each.
+function gazFunnelStages(nowRows, prevRows) {
+  const stage = (rows, key) => gazSum(rows, key)
+  const nowLeads = stage(nowRows, 'leads'), prevLeads = stage(prevRows, 'leads')
+  const nowQueued = stage(nowRows, 'queued'), prevQueued = stage(prevRows, 'queued')
+  const nowQL = stage(nowRows, 'total_ql'), prevQL = stage(prevRows, 'total_ql')
+  const nowApps = stage(nowRows, 'apps'), prevApps = stage(prevRows, 'apps')
+  const nowOffers = stage(nowRows, 'offers'), prevOffers = stage(prevRows, 'offers')
+  const nowDeposits = stage(nowRows, 'deposits'), prevDeposits = stage(prevRows, 'deposits')
+  const pct = (a, b) => b > 0 ? (a / b) * 100 : null
+  return [
+    { label: 'Total Leads', now: nowLeads, prev: prevLeads, ofPrior: null },
+    { label: 'Queued for Qualification', now: nowQueued, prev: prevQueued, ofPrior: 'of Leads', nowPct: pct(nowQueued, nowLeads), prevPct: pct(prevQueued, prevLeads) },
+    { label: 'Qualified (Total QL)', now: nowQL, prev: prevQL, ofPrior: 'of Queued', nowPct: pct(nowQL, nowQueued), prevPct: pct(prevQL, prevQueued) },
+    { label: 'Applications', now: nowApps, prev: prevApps, ofPrior: 'of QLs', nowPct: pct(nowApps, nowQL), prevPct: pct(prevApps, prevQL) },
+    { label: 'Offers', now: nowOffers, prev: prevOffers, ofPrior: 'of Apps', nowPct: pct(nowOffers, nowApps), prevPct: pct(prevOffers, prevApps) },
+    { label: 'Deposits', now: nowDeposits, prev: prevDeposits, ofPrior: 'of Offers', nowPct: pct(nowDeposits, nowOffers), prevPct: pct(prevDeposits, prevOffers) },
+  ]
+}
+
+// Day-by-day QL + spend series for the current period only (the chart is
+// always "this period", never a comparison).
+function gazDaySeries(rows) {
+  const byDate = {}
+  rows.forEach(r => {
+    const d = r.date
+    if (!d) return
+    const e = byDate[d] || (byDate[d] = { date: d, totalQL: 0, spend: 0 })
+    e.totalQL += Number(r.total_ql) || 0
+    e.spend += Number(r.spend) || 0
+  })
+  return Object.values(byDate).sort((a, b) => a.date < b.date ? -1 : 1)
+}
+
+// Per-channel rollup (raw source strings, matching the real edition's own
+// "Facebook/Google/Affiliate/Remarketing" + "Organic/Referral/Others/Bing"
+// vocabulary -- deliberately NOT mapChannel()'s coarser Meta Ads/Google Ads
+// labels, since the Gazette names the literal sheet source).
+function gazChannelTable(nowRows, prevRows) {
+  const bySource = (rows) => {
+    const m = {}
+    rows.forEach(r => {
+      const s = (r.source || 'Other').trim() || 'Other'
+      const e = m[s] || (m[s] = { source: s, spend: 0, totalQL: 0 })
+      e.spend += Number(r.spend) || 0
+      e.totalQL += Number(r.total_ql) || 0
+    })
+    return m
+  }
+  const now = bySource(nowRows), prev = bySource(prevRows)
+  const allSources = new Set([...Object.keys(now), ...Object.keys(prev)])
+  const rows = Array.from(allSources).map(s => {
+    const n = now[s] || { spend: 0, totalQL: 0 }
+    const p = prev[s] || { spend: 0, totalQL: 0 }
+    return {
+      source: s, spend: n.spend, totalQL: n.totalQL,
+      cpql: n.totalQL > 0 ? Math.round(n.spend / n.totalQL) : null,
+      spendChange: pctChangeSafe(n.spend, p.spend),
+      qlChange: pctChangeSafe(n.totalQL, p.totalQL),
+      cpqlChange: pctChangeSafe(n.totalQL > 0 ? n.spend / n.totalQL : null, p.totalQL > 0 ? p.spend / p.totalQL : null),
+    }
+  })
+  const paidRows = rows.filter(r => gazIsPaid(r.source)).sort((a, b) => b.spend - a.spend)
+  const freeRows = rows.filter(r => !gazIsPaid(r.source))
+  return { paid: paidRows, free: freeRows }
+}
+function pctChangeSafe(now, was) {
+  if (now == null || was == null) return null
+  if (was === 0) return now > 0 ? 100 : null
+  return ((now - was) / Math.abs(was)) * 100
+}
+
+// Per-corridor rollup via the same corridor classifier the Overall dashboard
+// and every Slack report already use -- see shared/corridors.mjs for why this
+// is a literal copy of src/lib/corridors.js's rules rather than importing
+// that file directly (it's a plain .js with no "type":"module" scoping, so a
+// dynamic import from this CommonJS-bundled handler would try to parse its
+// `export` syntax as CommonJS and fail).
+async function gazCorridorTable(nowRows, prevRows) {
+  const { corridorLabelForName } = await import('../shared/corridors.mjs')
+  const byCorridor = (rows) => {
+    const m = {}
+    rows.forEach(r => {
+      const c = corridorLabelForName(r.campaign) || 'Unclassified'
+      const e = m[c] || (m[c] = { corridor: c, spend: 0, totalQL: 0 })
+      e.spend += Number(r.spend) || 0
+      e.totalQL += Number(r.total_ql) || 0
+    })
+    return m
+  }
+  const now = byCorridor(nowRows), prev = byCorridor(prevRows)
+  const all = new Set([...Object.keys(now), ...Object.keys(prev)])
+  return Array.from(all).map(c => {
+    const n = now[c] || { spend: 0, totalQL: 0 }
+    const p = prev[c] || { spend: 0, totalQL: 0 }
+    return {
+      corridor: c, spend: n.spend, totalQL: n.totalQL,
+      cpql: n.totalQL > 0 ? Math.round(n.spend / n.totalQL) : null,
+      cpqlChange: pctChangeSafe(n.totalQL > 0 ? n.spend / n.totalQL : null, p.totalQL > 0 ? p.spend / p.totalQL : null),
+    }
+  }).sort((a, b) => b.spend - a.spend)
+}
+
+// Campaign-level ledger: every campaign with >=25 QL and real spend, ranked
+// by CPQL -- the real edition's own "Campaign Ledger" cut. NON_QUALIFIED_
+// CORRIDORS mirrors the real edition's own carve-out (IVY100/MBBS leads are
+// never sent for qualification, so a CPQL for them measures the wrong thing).
+const GAZ_NON_QUALIFIED_CORRIDORS = new Set(['MBBS (India source)', 'IVY100'])
+async function gazCampaignLedger(nowRows) {
+  const { corridorLabelForName } = await import('../shared/corridors.mjs')
+  const byCampaign = {}
+  nowRows.forEach(r => {
+    const c = (r.campaign || '').trim()
+    if (!c) return
+    const e = byCampaign[c] || (byCampaign[c] = { campaign: c, source: r.source, corridor: corridorLabelForName(c) || 'Unclassified', spend: 0, totalQL: 0 })
+    e.spend += Number(r.spend) || 0
+    e.totalQL += Number(r.total_ql) || 0
+  })
+  const all = Object.values(byCampaign)
+  const excluded = all.filter(c => GAZ_NON_QUALIFIED_CORRIDORS.has(c.corridor))
+  const ranked = all
+    .filter(c => c.totalQL >= 25 && c.spend > 0 && !GAZ_NON_QUALIFIED_CORRIDORS.has(c.corridor))
+    .map(c => ({ ...c, cpql: Math.round(c.spend / c.totalQL) }))
+    .sort((a, b) => a.cpql - b.cpql)
+  return {
+    ranked,
+    excludedSpend: gazSum(excluded, 'spend'),
+    excludedQL: gazSum(excluded, 'totalQL'),
+    excludedCount: excluded.length,
+  }
+}
+
+export async function fetchMarketingGazetteData({ since, until, prevSince, prevUntil }) {
+  const [nowRows, prevRows] = await Promise.all([
+    fetchOverallFunnelRowsRange(since, until),
+    fetchOverallFunnelRowsRange(prevSince, prevUntil),
+  ])
+  const [corridors, ledger] = await Promise.all([gazCorridorTable(nowRows, prevRows), gazCampaignLedger(nowRows)])
+  return {
+    since, until, prevSince, prevUntil,
+    totals: { now: gazAccountTotals(nowRows), prev: gazAccountTotals(prevRows) },
+    stages: gazFunnelStages(nowRows, prevRows),
+    daySeries: gazDaySeries(nowRows),
+    channels: gazChannelTable(nowRows, prevRows),
+    corridors,
+    ledger,
+  }
+}
+
 export async function fetchCareersSnapshotForGazette() {
   const today = new Date()
   const iso = d => d.toISOString().slice(0, 10)
@@ -1864,6 +2068,47 @@ export async function fetchCareersSnapshotForGazette() {
     lastDay: { ...careersSumRows(lastDayRows), date: iso(yesterday) },
     mtd: { ...careersSumRows(mtdRows), from: iso(monthStart), to: iso(yesterday) },
     priorMonth: { ...careersSumRows(prevMonthRows), from: iso(prevMonthStart), to: iso(prevMonthEnd) },
+  }
+}
+
+// Full-fidelity Talent Mobility Gazette data (2026-08-25 rebuild) -- adds a
+// day-by-day series (for the chart) and a campaign table on top of the
+// leads/interested/won snapshot above. Ranked by CRM LEADS, not spend: unlike
+// the real edition's own "Campaigns Ranked by Spend" table, this cache has no
+// spend column at all (leverage_careers_daily is CRM-only -- spend only
+// exists client-side on the dashboard, pro-rata-allocated from a live Meta
+// fetch matched by ad name). Reproducing that exact join server-side is a
+// real, separate build (a live Meta Insights call + name-matching), not
+// attempted here -- flagged rather than faked with a placeholder number.
+export async function fetchCareersGazetteData({ since, until, prevSince, prevUntil }) {
+  const [nowRows, prevRows] = await Promise.all([
+    fetchLeverageCareersRowsForGazette(since, until),
+    fetchLeverageCareersRowsForGazette(prevSince, prevUntil),
+  ])
+  const byDate = {}
+  nowRows.forEach(r => {
+    const d = r.lead_date
+    if (!d) return
+    const e = byDate[d] || (byDate[d] = { date: d, leads: 0, interested: 0, won: 0 })
+    e.leads += Number(r.total_leads) || 0
+    e.interested += Number(r.total_interested) || 0
+    e.won += Number(r.won) || 0
+  })
+  const daySeries = Object.values(byDate).sort((a, b) => a.date < b.date ? -1 : 1)
+  const byCampaign = {}
+  nowRows.forEach(r => {
+    const c = (r.campaign || '').trim()
+    if (!c) return
+    const e = byCampaign[c] || (byCampaign[c] = { campaign: c, leads: 0, interested: 0, won: 0 })
+    e.leads += Number(r.total_leads) || 0
+    e.interested += Number(r.total_interested) || 0
+    e.won += Number(r.won) || 0
+  })
+  const campaigns = Object.values(byCampaign).filter(c => c.leads > 0).sort((a, b) => b.leads - a.leads).slice(0, 10)
+  return {
+    since, until, prevSince, prevUntil,
+    now: careersSumRows(nowRows), prev: careersSumRows(prevRows),
+    daySeries, campaigns,
   }
 }
 
@@ -1929,6 +2174,35 @@ async function handleBigQuery(req, res, me) {
   // rather than deleted only so any tab still running an older bundle keeps
   // working, at zero cost. careers_sync below is now the ONLY BigQuery reader for
   // this dashboard: 3x/day, on a schedule, never on a user action.
+  // Temporary verification hook for the Gazette rebuild (2026-08-25) -- admin
+  // only (gateId already resolved to 'settings' for any mode but
+  // careers_leads). Not wired into any UI; exists purely so the new data
+  // functions can be checked against live production data from a browser
+  // console before the agent pipeline that calls them is finished. Safe to
+  // remove once the rebuild is confirmed working end to end.
+  if (mode === 'gazette_test') {
+    const today = new Date()
+    const iso = d => d.toISOString().slice(0, 10)
+    const until = iso(new Date(today.getTime() - 86400000))
+    const since = iso(new Date(today.getFullYear(), today.getMonth(), 1))
+    const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+    const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0)
+    const untilDay = new Date(until).getDate()
+    const prevUntilDate = new Date(prevMonthStart.getFullYear(), prevMonthStart.getMonth(), Math.min(untilDay, prevMonthEnd.getDate()))
+    const prevSince = iso(prevMonthStart), prevUntil = iso(prevUntilDate)
+    const range = { since, until, prevSince, prevUntil }
+    try {
+      const [marketing, b2c, careers] = await Promise.all([
+        fetchMarketingGazetteData(range).catch(e => ({ error: e.message })),
+        fetchB2CGazetteData(range).catch(e => ({ error: e.message })),
+        fetchCareersGazetteData(range).catch(e => ({ error: e.message })),
+      ])
+      return res.status(200).json({ range, marketing, b2c, careers })
+    } catch (e) {
+      return res.status(500).json({ error: e.message })
+    }
+  }
+
   if (mode === 'careers_leads') {
     const { since, until } = req.query || {}
     if (!isIsoDate(since) || !isIsoDate(until)) {
@@ -2331,6 +2605,62 @@ export async function fetchB2CData() {
     }).filter(function (m) { return m.month });
   });
   return { configured: true, pnl: pnl, cashFlow: cashFlow, monthly: monthly, ts: Date.now() };
+}
+
+// Full-fidelity B2C Gazette data (2026-08-25 rebuild) -- revenue/cost LINE
+// ITEMS with % share (not just totals), a day-by-day series for the dual
+// revenue-vs-cost chart, and a fiscal-year YTD rollup (Apr 1 to `until`).
+// Reuses fetchB2CData() unchanged -- same source the b2c_daily_report cron
+// and the Daily P&L / Cash Flow dashboard pages already read, just summed a
+// different way.
+const B2C_PNL_LINES = [
+  ['SR Online', 'srOnline'], ['AC Online', 'ac'], ['Leverage One Online', 'vas'],
+  ['SR Offline', 'srOffline'], ['AC Offline', 'acOffline'], ['Leverage One Offline', 'vasOffline'],
+]
+const B2C_CASHFLOW_INFLOW_LINES = [
+  ['SR, Online and Offline', 'sr'], ['Actuals AC Online Revenue', 'ac'],
+  ['Actuals Leverage One Online Revenue', 'vas'], ['Actuals Offline Revenue, AC and Leverage One', 'offRev'],
+]
+const B2C_COST_LINES = [
+  ['People', 'people'], ['Performance Marketing', 'pm'], ['Product Operating Cost', 'op'],
+  ['Offline Cost', 'offCost'], ['Corp. Overheads', 'corp'],
+]
+const B2C_CASHFLOW_OUTFLOW_LINES = [
+  ['Actuals People Cost, Incl. Corporate', 'people'], ['Actuals PM Cost', 'pm'],
+  ['Actuals Operating Cost, AC and Leverage One', 'op'], ['Actuals Experience Centre and Partner Payout', 'offCost'],
+  ['Actuals Corp. Overheads', 'corp'],
+]
+function b2cLineItems(days, lines, totalKey) {
+  const sums = {}
+  lines.forEach(([, key]) => { sums[key] = 0 })
+  let total = 0
+  days.forEach(d => {
+    lines.forEach(([, key]) => { sums[key] += Number(d[key]) || 0 })
+    total += Number(d[totalKey]) || 0
+  })
+  return lines.map(([label, key]) => ({ label, value: sums[key], share: total > 0 ? (sums[key] / total) * 100 : 0 })).concat([{ label: null, value: total, share: 100, isTotal: true }])
+}
+export async function fetchB2CGazetteData({ since, until, prevSince, prevUntil }) {
+  const data = await fetchB2CData()
+  if (!data.configured) return { configured: false }
+  const inRange = (days, s, u) => (days || []).filter(d => d.date >= s && d.date <= u)
+  const pnlNow = inRange(data.pnl.days, since, until)
+  const pnlPrev = inRange(data.pnl.days, prevSince, prevUntil)
+  const cfNow = inRange(data.cashFlow.days, since, until)
+  const cfPrev = inRange(data.cashFlow.days, prevSince, prevUntil)
+  // Fiscal year: Apr 1 of the year `until` falls in (or the prior year if
+  // `until` is Jan-Mar) through `until` itself -- same rule CeoB2CDashboard
+  // uses for its own YTD box.
+  const untilD = new Date(until)
+  const fyStartYear = untilD.getMonth() >= 3 ? untilD.getFullYear() : untilD.getFullYear() - 1
+  const fyStart = fyStartYear + '-04-01'
+  const pnlYtd = inRange(data.pnl.days, fyStart, until)
+  const cfYtd = inRange(data.cashFlow.days, fyStart, until)
+  return {
+    configured: true, since, until, prevSince, prevUntil, fyStart, fyLabel: 'FY ' + fyStartYear + '-' + String(fyStartYear + 1).slice(2),
+    pnl: { now: b2cSumRange(data.pnl.days, since, until), prev: b2cSumRange(data.pnl.days, prevSince, prevUntil), lines: b2cLineItems(pnlNow, B2C_PNL_LINES, 'totalRev'), costLines: b2cLineItems(pnlNow, B2C_COST_LINES, 'totalCost'), daySeries: pnlNow, ytd: b2cSumRange(data.pnl.days, fyStart, until) },
+    cashFlow: { now: b2cSumRange(data.cashFlow.days, since, until), prev: b2cSumRange(data.cashFlow.days, prevSince, prevUntil), inflowLines: b2cLineItems(cfNow, B2C_CASHFLOW_INFLOW_LINES, 'totalRev'), outflowLines: b2cLineItems(cfNow, B2C_CASHFLOW_OUTFLOW_LINES, 'totalCost'), ytd: b2cSumRange(data.cashFlow.days, fyStart, until) },
+  }
 }
 
 // Sums a statement's own days over [since,until] inclusive -- both P&L and
