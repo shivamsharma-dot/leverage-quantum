@@ -1067,19 +1067,32 @@ async function getDetailCacheStatus() {
 // PostgREST caps a single response at 1000 rows regardless of what's asked
 // for, hence the Range-header paging -- same lesson this codebase already
 // learned the hard way for overall_bq_daily/leverage_careers_daily.
-async function getDetailCacheEmails() {
+// PostgREST caps a single response at 1000 rows no matter what's asked for --
+// the same lesson this codebase already learned the hard way for
+// overall_bq_daily/leverage_careers_daily. This cache table already holds the
+// FULL ~3,389-person roster (deliberately, so the Frapp filter can see
+// everyone), which is well past that cap, so every read of it -- not just
+// this one -- has to page with the Range header or it silently only sees the
+// first ~1000 rows (in whatever order Postgres happens to return, not
+// necessarily alphabetical or by any field this code controls).
+async function fetchAllDetailCacheRows(select) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
-  const emails = []
+  const all = []
   for (let offset = 0; ; offset += 1000) {
-    const r = await supabaseAdmin('team_mapping_ls_detail_cache?select=email', {
+    const r = await supabaseAdmin(`team_mapping_ls_detail_cache?select=${select}`, {
       headers: { Range: `${offset}-${offset + 999}` },
     })
     if (!r.ok) break
     const rows = await r.json()
-    rows.forEach(row => { if (row.email) emails.push(row.email) })
+    all.push(...rows)
     if (rows.length < 1000) break
   }
-  return { emails }
+  return all
+}
+
+async function getDetailCacheEmails() {
+  const rows = await fetchAllDetailCacheRows('email')
+  return { emails: rows.map(r => r.email).filter(Boolean) }
 }
 
 // ---------------------------------------------------------------------
@@ -1110,12 +1123,18 @@ const FRAPP_COACHES_URL = 'https://asia-south1-frapp-prod.cloudfunctions.net/gcf
 
 async function buildFrappCoachList(creds) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
-  const [users, cacheRes, manualRes] = await Promise.all([
+  // fetchAllDetailCacheRows pages past PostgREST's 1000-row cap -- a plain,
+  // unpaginated select here silently saw only the first ~1000 of 3,389 cached
+  // people (whichever order Postgres happened to return), so most of the
+  // roster read as "not cached" even right after a full successful sync.
+  // Caught live 2026-08-24: a direct comparison of the full cache against the
+  // live active roster found 0 people actually missing, while this function's
+  // own (unpaginated) join reported 180 -- confirming the cap, not a real gap.
+  const [users, cacheRows, manualRes] = await Promise.all([
     fetchLeadSquaredTeamUsers(creds),
-    supabaseAdmin('team_mapping_ls_detail_cache?select=email,airtel_number,team_name'),
+    fetchAllDetailCacheRows('email,airtel_number,team_name'),
     supabaseAdmin('team_mapping_manual?select=ls_email,country'),
   ])
-  const cacheRows = cacheRes.ok ? await cacheRes.json() : []
   const manualRows = manualRes.ok ? await manualRes.json() : []
   const cacheByEmail = {}
   cacheRows.forEach(r => { if (r.email) cacheByEmail[r.email.toLowerCase()] = r })
