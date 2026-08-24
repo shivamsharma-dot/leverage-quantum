@@ -3857,7 +3857,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>The Quantum Gazette</h3>
                 <p className={styles.cardDesc}>
-                  Monthly performance report — Marketing, Corporate Finance, Talent Mobility. Sends the snapshot saved here{gazetteUpdatedAt ? (' (captured ' + new Date(gazetteUpdatedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ')') : ''} — this is a static snapshot, not live-regenerated, so ask for a refresh first if the numbers need to be current.
+                  Nightly editorial digest — Marketing and Growth, Corporate Finance, Talent Mobility, month-to-date vs. the same days last month. Regenerated automatically every night at 9 PM IST by the Quantum Gazette agent (Agents page); sends whichever edition was saved last{gazetteUpdatedAt ? (' (' + new Date(gazetteUpdatedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ')') : ''} — use "Run now" on the Agents page first if tonight's edition hasn't landed yet.
                 </p>
                 {!gazetteLoading && !gazetteHtml && (
                   <p className={styles.note}>No Gazette snapshot saved yet.</p>
