@@ -802,7 +802,7 @@ async function fetchLeadSquaredUserDetails(creds, ids, byId) {
   ))
   return capped.map((id, i) => {
     const d = results[i]
-    if (!d) return { id, phoneMain: null, airtelNumber: null, managerName: null, managerEmail: null, teamName: null }
+    if (!d) return { id, phoneMain: null, airtelNumber: null, managerName: null, managerEmail: null, teamId: null, teamName: null }
     const mgr = d.ManagerUserId && byId[d.ManagerUserId]
     return {
       id,
@@ -815,14 +815,14 @@ async function fetchLeadSquaredUserDetails(creds, ids, byId) {
       airtelNumber: d.mx_Custom_2 || null,
       managerName: d.ManagerName || null,
       managerEmail: (mgr && mgr.email) || null,
-      // This endpoint's own TeamName -- the same "Team" shown on the Work
-      // Details tab in LeadSquared's own Edit User screen (e.g. "University
-      // Admission Opportunity"). Confirmed live across 4 real users with
-      // distinct real team names ("University Admission Opportunity",
-      // "Online TATA Team", "Loan"), so unlike Airtel Number above this one
-      // has a documented, literal field name -- no value-matching guesswork.
-      // A TeamId sits alongside it in the same response if a stable key is
-      // ever needed instead of the display name.
+      // This endpoint's own TeamId/TeamName -- the same "Team" shown on the
+      // Work Details tab in LeadSquared's own Edit User screen (e.g.
+      // "University Admission Opportunity"). Confirmed live across 4 real
+      // users with distinct real team names ("University Admission
+      // Opportunity", "Online TATA Team", "Loan"), so unlike Airtel Number
+      // above this one has a documented, literal field name -- no
+      // value-matching guesswork.
+      teamId: d.TeamId || null,
       teamName: d.TeamName || null,
     }
   })
@@ -978,7 +978,7 @@ async function getTeamConnectorsConfig() {
 // the Slack channel typed into a different card.
 async function saveTeamConnectorsConfig(body, me) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
-  const ALLOWED = ['webhook_enabled', 'webhook_url', 'slack_enabled', 'slack_channel', 'sheet_enabled', 'sheet_id', 'api_enabled']
+  const ALLOWED = ['webhook_enabled', 'webhook_url', 'slack_enabled', 'slack_channel', 'sheet_enabled', 'sheet_id', 'api_enabled', 'frapp_enabled']
   const patch = { id: 'default', updated_by: me.email || null, updated_at: new Date().toISOString() }
   ALLOWED.forEach(k => { if (body && Object.prototype.hasOwnProperty.call(body, k)) patch[k] = body[k] })
   const r = await supabaseAdmin('team_mapping_connectors', {
@@ -1012,6 +1012,149 @@ async function regenerateTeamApiKey(me) {
   if (!r.ok) throw new Error('Could not save the new key: ' + (await r.text()).slice(0, 300))
   const saved = await r.json()
   return Array.isArray(saved) ? saved[0] : saved
+}
+
+// ---------------------------------------------------------------------
+// LeadSquared per-user detail cache (team_mapping_ls_detail_cache) -- see
+// supabase/sql/team_mapping_ls_detail_cache_setup.sql for the full reasoning.
+// Short version: there is no cheap way to ask LeadSquared "who is on team X",
+// only an expensive per-user call that already returns Team/Airtel/Phone/
+// Manager -- the exact same call the live table's Phone/Airtel/Team columns
+// already make per visible page. This cache exists so the Frapp coaches push
+// (below) doesn't need to sweep the whole ~3,380-person roster live inside
+// one request. Populated client-driven, in batches of 60 (team_user_detail,
+// already built, unchanged) -- same "no real background worker on Vercel
+// serverless" pattern the bulk-import feature already uses elsewhere on this
+// page, just for a sweep instead of an import.
+async function saveDetailCacheBatch(details) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const rows = (details || [])
+    .filter(d => d && d.id)
+    .map(d => ({
+      ls_user_id: d.id,
+      email: d.email || null,
+      phone_main: d.phoneMain || null,
+      airtel_number: d.airtelNumber || null,
+      manager_name: d.managerName || null,
+      manager_email: d.managerEmail || null,
+      team_id: d.teamId || null,
+      team_name: d.teamName || null,
+      synced_at: new Date().toISOString(),
+    }))
+  if (!rows.length) return { saved: 0 }
+  const r = await supabaseAdmin('team_mapping_ls_detail_cache', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(rows),
+  })
+  if (!r.ok) throw new Error('Cache save failed: ' + (await r.text()).slice(0, 300))
+  return { saved: rows.length }
+}
+
+async function getDetailCacheStatus() {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const r = await supabaseAdmin('team_mapping_ls_detail_cache?select=ls_user_id&limit=1', {
+    headers: { Prefer: 'count=exact', Range: '0-0' },
+  })
+  const contentRange = r.headers.get('content-range') || ''
+  const count = parseInt(contentRange.split('/')[1] || '0', 10) || 0
+  const r2 = await supabaseAdmin('team_mapping_ls_detail_cache?select=synced_at&order=synced_at.desc&limit=1')
+  const rows2 = r2.ok ? await r2.json() : []
+  return { count, lastSyncedAt: (rows2[0] && rows2[0].synced_at) || null }
+}
+
+// ---------------------------------------------------------------------
+// Frapp "coaches" push -- see supabase/sql/team_mapping_connectors_add_frapp.sql.
+// Only ACTIVE people on the "University Admission Opportunity" LeadSquared
+// team are coaches, matched case-insensitively against the cache's team_name
+// (confirmed live 2026-08-24 by calling LeadSquared's own
+// User/Retrieve/ByUserId directly for 4 real accounts -- see the comment on
+// fetchLeadSquaredUserDetails). name/email/status come fresh from the cheap
+// bulk Users.Get call (1 request) rather than the cache, so status in
+// particular is never stale; mobile/team come from the cache (airtel_number
+// -- confirmed as the right "mobile" field directly by the person who
+// supplied this API spec, NOT PhoneMain); country comes from the existing
+// manual mapping.
+//
+// How a person going inactive is handled: there is no per-record "remove" or
+// "inactive" field in Frapp's own update-coaches spec, only a full array of
+// current coaches. So every push sends the CURRENT complete filtered list --
+// whoever no longer qualifies (went inactive, left the team) is simply absent
+// from this run's payload, rather than sent with some deactivated flag. This
+// is correct if update-coaches replaces Frapp's whole list on each call; if it
+// only upserts and never removes, a departed coach would need Frapp's own
+// side to notice they stopped appearing -- worth confirming with Frapp/Futwork
+// directly, since it isn't something this app can infer from the API docs
+// alone. Flagged here rather than guessed at.
+const FRAPP_TEAM_NAME = 'university admission opportunity'
+const FRAPP_COACHES_URL = 'https://asia-south1-frapp-prod.cloudfunctions.net/gcf-connector-leverage/update-coaches'
+
+async function buildFrappCoachList(creds) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const [users, cacheRes, manualRes] = await Promise.all([
+    fetchLeadSquaredTeamUsers(creds),
+    supabaseAdmin('team_mapping_ls_detail_cache?select=email,airtel_number,team_name'),
+    supabaseAdmin('team_mapping_manual?select=ls_email,country'),
+  ])
+  const cacheRows = cacheRes.ok ? await cacheRes.json() : []
+  const manualRows = manualRes.ok ? await manualRes.json() : []
+  const cacheByEmail = {}
+  cacheRows.forEach(r => { if (r.email) cacheByEmail[r.email.toLowerCase()] = r })
+  const countryByEmail = {}
+  manualRows.forEach(r => { if (r.ls_email) countryByEmail[r.ls_email.toLowerCase()] = r.country })
+
+  const activeUsers = users.filter(u => u.status === 'Active' && u.email)
+  let uncached = 0
+  const skippedNoMobile = []
+  const skippedNoCountry = []
+  const coaches = []
+  activeUsers.forEach(u => {
+    const key = u.email.toLowerCase()
+    const cached = cacheByEmail[key]
+    if (!cached) { uncached++; return }
+    if ((cached.team_name || '').trim().toLowerCase() !== FRAPP_TEAM_NAME) return
+    const mobile = (cached.airtel_number || '').trim()
+    const country = (countryByEmail[key] || '').trim()
+    if (!mobile) { skippedNoMobile.push(u.email); return }
+    if (!country) { skippedNoCountry.push(u.email); return }
+    coaches.push({ name: u.name, mobile, email: u.email, country })
+  })
+  return {
+    coaches,
+    uncached,
+    skippedNoMobile,
+    skippedNoCountry,
+    totalActive: activeUsers.length,
+  }
+}
+
+async function frappPush(creds) {
+  const built = await buildFrappCoachList(creds)
+  const apiKey = process.env.FRAPP_COACHES_API_KEY
+  if (!apiKey) throw new Error('FRAPP_COACHES_API_KEY is not set in Vercel env')
+  let r, text
+  try {
+    r = await fetch(FRAPP_COACHES_URL, {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ coaches: built.coaches }),
+    })
+    text = await r.text()
+  } catch (e) {
+    await patchFrappStatus('error: ' + String((e && e.message) || e).slice(0, 200), null)
+    throw e
+  }
+  let data
+  try { data = JSON.parse(text) } catch { data = text }
+  const status = r.ok ? `ok (${built.coaches.length} pushed)` : `error: HTTP ${r.status} -- ${String(typeof data === 'string' ? data : JSON.stringify(data)).slice(0, 150)}`
+  await patchFrappStatus(status, r.ok ? built.coaches.length : null)
+  if (!r.ok) throw new Error('Frapp update-coaches failed: HTTP ' + r.status + ' -- ' + (typeof data === 'string' ? data.slice(0, 300) : JSON.stringify(data).slice(0, 300)))
+  return { ...built, frappResponse: data }
+}
+
+async function patchFrappStatus(status, count) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const patch = { frapp_last_status: status, frapp_last_at: new Date().toISOString() }
+  if (count != null) patch.frapp_last_count = count
+  await supabaseAdmin('team_mapping_connectors?id=eq.default', { method: 'PATCH', body: JSON.stringify(patch) }).catch(() => {})
 }
 
 // Plain, short, professional text -- this is a routine ops notification
@@ -1401,7 +1544,12 @@ async function handleLeadSquared(req, res, me) {
   const TEAM_ACTIVITY_MODES = ['team_activity_create', 'team_activity_update', 'team_activity_list']
   const TEAM_CONNECTOR_MODES = ['team_connectors_get', 'team_connectors_save', 'team_connectors_regenerate_key', 'team_connectors_test']
   const TEAM_WATCHER_MODES = ['team_watchers_list', 'team_watchers_add', 'team_watchers_remove', 'team_watchers_test_dm']
-  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES]
+  // team_detail_cache_* back the "Sync coach directory" sweep; team_frapp_*
+  // back the Frapp coaches push -- both admin-only end to end (see below),
+  // same treatment as the connector config modes, since both involve either
+  // writing to an external system or reading data scoped for that push.
+  const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push']
+  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES, ...TEAM_FRAPP_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
@@ -1416,7 +1564,7 @@ async function handleLeadSquared(req, res, me) {
   // team_watchers_list is readable by anyone with page access (same as
   // team_activity_list) -- only adding/removing a subscription is admin-only,
   // since this is set up on someone's behalf, not day-to-day self-serve.
-  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', 'team_watchers_add', 'team_watchers_remove', 'team_watchers_test_dm', ...TEAM_CONNECTOR_MODES].includes(mode) && me.role !== 'admin') {
+  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', 'team_watchers_add', 'team_watchers_remove', 'team_watchers_test_dm', ...TEAM_CONNECTOR_MODES, ...TEAM_FRAPP_MODES].includes(mode) && me.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only' })
   }
   // Cheap (env-var only, no network call) -- computed up front so the finished-
@@ -1439,6 +1587,8 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_watchers_add') return res.status(200).json(await addTeamWatcher(req.body || req.query, me))
     if (mode === 'team_watchers_remove') return res.status(200).json(await removeTeamWatcher((req.body && req.body.id) || req.query.id))
     if (mode === 'team_watchers_test_dm') return res.status(200).json(await testWatcherDM((req.body && req.body.email) || req.query.email, me))
+    if (mode === 'team_detail_cache_status') return res.status(200).json(await getDetailCacheStatus())
+    if (mode === 'team_detail_cache_save') return res.status(200).json(await saveDetailCacheBatch((req.body && req.body.details) || []))
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
   }
@@ -1459,6 +1609,8 @@ async function handleLeadSquared(req, res, me) {
       ;(await fetchLeadSquaredTeamUsers(creds)).forEach(u => { byId[u.id] = u })
       return res.status(200).json({ details: await fetchLeadSquaredUserDetails(creds, ids, byId) })
     }
+    if (mode === 'team_frapp_preview') return res.status(200).json(await buildFrappCoachList(creds))
+    if (mode === 'team_frapp_push') return res.status(200).json(await frappPush(creds))
     if (mode === 'opportunities') return res.status(200).json(await fetchLeadSquaredOpportunities(creds, p))
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))

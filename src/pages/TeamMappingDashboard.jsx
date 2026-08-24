@@ -1549,7 +1549,175 @@ function ConnectorsTab() {
           )}
         </Card>
       </div>
+
+      <FrappCoachesSection form={form} setForm={setForm} save={save} saving={saving} />
     </div>
+  )
+}
+
+// A 5th connector, kept visually separate from the four above rather than a
+// 5th grid tile: unlike those four (which fire automatically on every save),
+// this one is a deliberate manual action -- "Push to Frapp" writes into
+// another company's production coach directory, and the very first pushes to
+// a brand-new, unverified external integration are safer done on purpose
+// than silently on every edit. Two steps, always in this order: sync the
+// coach-directory cache (LeadSquared's Team/Airtel fields, no bulk fetch
+// exists for these -- see team_mapping_ls_detail_cache_setup.sql), then
+// preview/push, which reads that cache rather than hitting LeadSquared live.
+function FrappCoachesSection({ form, setForm, save, saving }) {
+  const [cacheStatus, setCacheStatus] = useState(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncProgress, setSyncProgress] = useState(null) // { done, total }
+  const [preview, setPreview] = useState(null)
+  const [previewing, setPreviewing] = useState(false)
+  const [pushing, setPushing] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const loadCacheStatus = useCallback(() => {
+    fetchJson(API + '&mode=team_detail_cache_status').then(setCacheStatus).catch(() => {})
+  }, [])
+  useEffect(() => { loadCacheStatus() }, [loadCacheStatus])
+
+  // Client-driven sweep of the WHOLE roster, batch of 60 at a time (the same
+  // 60-id cap team_user_detail already enforces server-side) -- strictly
+  // sequential, never parallel batches, so this can't pile onto LeadSquared's
+  // own account-wide rate limit the way a burst of concurrent requests could.
+  // Same "no real background worker on Vercel serverless" reasoning the bulk-
+  // import feature already solved with a client-driven loop; this just sweeps
+  // instead of importing. Takes a couple of minutes for the full roster --
+  // expected, not a bug, given ~3,380 people at 60 per round trip.
+  const syncCoachDirectory = async () => {
+    setSyncing(true); setMsg('')
+    try {
+      const { rows } = await fetchJson(API + '&mode=team_users')
+      const people = (rows || []).filter(r => r.id && r.email)
+      setSyncProgress({ done: 0, total: people.length })
+      for (let i = 0; i < people.length; i += 60) {
+        const batch = people.slice(i, i + 60)
+        const ids = batch.map(p => p.id).join(',')
+        const { details } = await fetchJson(API + '&mode=team_user_detail&ids=' + encodeURIComponent(ids))
+        const emailById = {}
+        batch.forEach(p => { emailById[p.id] = p.email })
+        const withEmail = (details || []).map(d => ({ ...d, email: emailById[d.id] || null }))
+        await fetchJson(API + '&mode=team_detail_cache_save', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ details: withEmail }),
+        })
+        setSyncProgress({ done: Math.min(i + 60, people.length), total: people.length })
+      }
+      await loadCacheStatus()
+    } catch (e) {
+      setMsg('Sync stopped early: ' + (e.message || e) + ' -- whatever synced so far is saved, run it again to pick up from a fresh full pass.')
+    } finally {
+      setSyncing(false); setSyncProgress(null)
+    }
+  }
+
+  const runPreview = async () => {
+    setPreviewing(true); setMsg(''); setPreview(null)
+    try { setPreview(await fetchJson(API + '&mode=team_frapp_preview')) }
+    catch (e) { setMsg('Preview failed: ' + (e.message || e)) }
+    finally { setPreviewing(false) }
+  }
+
+  const runPush = async () => {
+    if (!preview || !preview.coaches.length) return
+    if (!window.confirm(`Push ${preview.coaches.length} coach(es) to Frapp now? This writes into their production system.`)) return
+    setPushing(true); setMsg('')
+    try {
+      const result = await fetchJson(API + '&mode=team_frapp_push', { method: 'POST' })
+      setPreview(result)
+      setMsg(`Pushed ${result.coaches.length} coach(es) to Frapp.`)
+      fetchJson(API + '&mode=team_connectors_get').then(setForm).catch(() => {})
+    } catch (e) {
+      setMsg('Push failed: ' + (e.message || e))
+    } finally {
+      setPushing(false)
+    }
+  }
+
+  return (
+    <Card
+      title="Frapp coaches push"
+      sub={`Only Active people on the "University Admission Opportunity" LeadSquared team -- name/email from LeadSquared, mobile from Airtel Number, country from the manual mapping`}
+      noPad
+    >
+      <div style={{ padding: '14px 18px' }}>
+        {msg && <div style={{ padding: '9px 14px', borderRadius: 8, background: C.navyBg, color: C.navy, fontSize: 12.5, fontWeight: 700, marginBottom: 14 }}>{msg}</div>}
+
+        <label style={enableRowStyle}>
+          <input type="checkbox" checked={!!form.frapp_enabled} onChange={e => save('frapp', { frapp_enabled: e.target.checked })} style={{ width: 15, height: 15 }} />
+          Enabled
+        </label>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 16, marginBottom: 14 }}>
+          <div style={{ border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>1. Coach directory cache</div>
+            <div style={{ fontSize: 12.5, color: C.text, marginBottom: 8 }}>
+              {cacheStatus ? `${fmtN(cacheStatus.count)} people cached` : 'Loading…'}
+              {cacheStatus && cacheStatus.lastSyncedAt && <span style={{ color: C.muted }}> · last synced {new Date(cacheStatus.lastSyncedAt).toLocaleString()}</span>}
+            </div>
+            {syncing && syncProgress && (
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 8 }}>Syncing… {fmtN(syncProgress.done)} of {fmtN(syncProgress.total)}</div>
+            )}
+            <Button size="sm" onClick={syncCoachDirectory} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync coach directory'}</Button>
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Takes a few minutes for the full roster -- LeadSquared has no bulk "who's on which team" lookup, so this sweeps everyone once.</div>
+          </div>
+
+          <div style={{ border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>2. Preview, then push</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <ConnectorStatus status={form.frapp_last_status} at={form.frapp_last_at} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button variant="ghost" size="sm" onClick={runPreview} disabled={previewing}>{previewing ? 'Loading…' : 'Preview'}</Button>
+              <Button size="sm" onClick={runPush} disabled={pushing || !preview || !preview.coaches.length}>{pushing ? 'Pushing…' : 'Push to Frapp'}</Button>
+            </div>
+          </div>
+        </div>
+
+        {preview && (
+          <div style={{ border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, marginBottom: 8 }}>
+              {fmtN(preview.coaches.length)} coach(es) ready to send
+            </div>
+            {(preview.uncached > 0 || preview.skippedNoMobile?.length > 0 || preview.skippedNoCountry?.length > 0) && (
+              <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
+                {preview.uncached > 0 && <div>{fmtN(preview.uncached)} active people haven't been cached yet (sync the directory to include them if they might be on the team).</div>}
+                {preview.skippedNoMobile?.length > 0 && <div>{preview.skippedNoMobile.length} on the team but missing an Airtel number -- excluded: {preview.skippedNoMobile.slice(0, 5).join(', ')}{preview.skippedNoMobile.length > 5 ? '…' : ''}</div>}
+                {preview.skippedNoCountry?.length > 0 && <div>{preview.skippedNoCountry.length} on the team but missing a Country mapping -- excluded: {preview.skippedNoCountry.slice(0, 5).join(', ')}{preview.skippedNoCountry.length > 5 ? '…' : ''}</div>}
+              </div>
+            )}
+            {preview.coaches.length > 0 && (
+              <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid ' + C.border, borderRadius: 8 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid ' + C.border, background: 'var(--bg3)' }}>
+                      {['Name', 'Mobile', 'Email', 'Country'].map(h => (
+                        <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 800, color: C.muted, textTransform: 'uppercase', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.coaches.map(c => (
+                      <tr key={c.email} style={{ borderBottom: '1px solid ' + C.border }}>
+                        <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{c.name}</td>
+                        <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{c.mobile}</td>
+                        <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{c.email}</td>
+                        <td style={{ padding: '6px 10px', whiteSpace: 'nowrap' }}>{c.country}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>
+          A person who leaves the team or goes inactive is simply left out of the next push, not sent with a "removed" flag -- Frapp's own update-coaches API has no such field. This is correct if that endpoint replaces the whole coach list each time; if it only adds/updates and never removes, a departed coach staying in Frapp's own directory would need to be confirmed and handled on their side.
+        </div>
+      </div>
+    </Card>
   )
 }
 
