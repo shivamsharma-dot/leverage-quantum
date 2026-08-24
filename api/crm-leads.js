@@ -802,7 +802,7 @@ async function fetchLeadSquaredUserDetails(creds, ids, byId) {
   ))
   return capped.map((id, i) => {
     const d = results[i]
-    if (!d) return { id, phoneMain: null, airtelNumber: null, managerName: null, managerEmail: null }
+    if (!d) return { id, phoneMain: null, airtelNumber: null, managerName: null, managerEmail: null, teamName: null }
     const mgr = d.ManagerUserId && byId[d.ManagerUserId]
     return {
       id,
@@ -815,6 +815,15 @@ async function fetchLeadSquaredUserDetails(creds, ids, byId) {
       airtelNumber: d.mx_Custom_2 || null,
       managerName: d.ManagerName || null,
       managerEmail: (mgr && mgr.email) || null,
+      // This endpoint's own TeamName -- the same "Team" shown on the Work
+      // Details tab in LeadSquared's own Edit User screen (e.g. "University
+      // Admission Opportunity"). Confirmed live across 4 real users with
+      // distinct real team names ("University Admission Opportunity",
+      // "Online TATA Team", "Loan"), so unlike Airtel Number above this one
+      // has a documented, literal field name -- no value-matching guesswork.
+      // A TeamId sits alongside it in the same response if a stable key is
+      // ever needed instead of the display name.
+      teamName: d.TeamName || null,
     }
   })
 }

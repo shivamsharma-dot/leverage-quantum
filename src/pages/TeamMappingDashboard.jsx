@@ -322,10 +322,15 @@ function LiveDetailStrip({ userId }) {
       .finally(() => setLoading(false))
   }, [userId])
   return (
-    <div style={{ background: 'var(--bg3)', borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-      {['Phone', 'Airtel', 'Reporting Manager'].map((label, i) => {
-        const val = loading ? '…' : (i === 0 ? detail?.phoneMain : i === 1 ? detail?.airtelNumber : detail?.managerName) || '—'
-        const sub = i === 2 && !loading ? detail?.managerEmail : null
+    <div style={{ background: 'var(--bg3)', borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+      {[
+        { label: 'Team', get: dt => dt?.teamName },
+        { label: 'Phone', get: dt => dt?.phoneMain },
+        { label: 'Airtel', get: dt => dt?.airtelNumber },
+        { label: 'Reporting Manager', get: dt => dt?.managerName, sub: dt => dt?.managerEmail },
+      ].map(({ label, get, sub: getSub }) => {
+        const val = loading ? '…' : (get(detail) || '—')
+        const sub = getSub && !loading ? getSub(detail) : null
         return (
           <div key={label}>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label} · live</div>
@@ -1196,6 +1201,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
             return {
               Name: r.name, Email: r.email, 'LS Role': (r.role || '').replace(/_/g, ' '), Status: r.status,
               Groups: (r.groups || []).join('; '),
+              Team: d?.teamName || '',
               Phone: d?.phoneMain || '', Airtel: d?.airtelNumber || '',
               'Reporting Manager': d?.managerName || '', 'Reporting Manager Email': d?.managerEmail || '',
               'ASM/SM': r.manual?.asm_sm || '', 'ASM/SM Email': r.manual?.asm_sm_email || '',
@@ -1236,7 +1242,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                     <input type="checkbox" checked={pageAllSelected} onChange={togglePage} style={{ width: 15, height: 15, cursor: 'pointer' }} title="Select everyone on this page" />
                   </th>
                 )}
-                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Phone', 'Airtel', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
+                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Airtel', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
                   <th key={h} style={{ padding: '9px 12px', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -1263,6 +1269,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{(r.role || '').replace(/_/g, ' ')}</td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}><StatusBadge status={r.status} /></td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}><GroupsButton groups={r.groups} /></td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pending ? '…' : (d.teamName || '—')}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pending ? '…' : (d.phoneMain || '—')}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pending ? '…' : (d.airtelNumber || '—')}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }} title={pending ? '' : (d.managerEmail || '')}>{pending ? '…' : (d.managerName || '—')}</td>
