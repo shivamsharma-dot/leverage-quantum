@@ -364,12 +364,6 @@ export default function Sidebar() {
   const isExpanded = (item) => !!expandedKeys[item.navKey]
   const toggleExpanded = (item) => setExpandedKeys(prev => ({ ...prev, [item.navKey]: !prev[item.navKey] }))
 
-  const toggle = () => {
-    const next = !collapsed
-    setCollapsed(next)
-    try { localStorage.setItem('lq_sidebar_collapsed', String(next)) } catch {}
-  }
-
   const handleLogout = () => { logout(); }
 
   const userRole = user?.role || 'viewer'
@@ -529,9 +523,6 @@ export default function Sidebar() {
           </svg>
           <span>QUANTUM</span>
         </div>
-        <button className={styles.collapseBtnExpanded} onClick={toggle} title="Collapse sidebar">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
       </div>
 
       <nav className={styles.nav}>
@@ -726,9 +717,7 @@ export default function Sidebar() {
       )}
       <aside className={styles.sidebarCollapsed}>
         {/* Quantum logo mark — visible when collapsed. Centred 44px tile, matching
-            the 40px nav tiles below it. The toggle sits in normal flow underneath
-            this band (see .sidebarCollapsed .collapseBtn), which is why the tile
-            gets the whole band to itself. */}
+            the 40px nav tiles below it. */}
         <div style={{
           height: 58, display:'flex', alignItems:'center', justifyContent:'center',
           flexShrink: 0, borderBottom: '0.5px solid var(--card-border)', width:'100%'
@@ -743,9 +732,6 @@ export default function Sidebar() {
             </svg>
           </div>
         </div>
-        <button className={styles.collapseBtn} onClick={toggle} title="Expand sidebar">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
         <div className={styles.collapsedNav}>
           {NAV.map(group => group.items.filter(item => groupVisible(item)).map(item => (
             item.subItems ? (

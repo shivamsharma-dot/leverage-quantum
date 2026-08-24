@@ -18,6 +18,19 @@
   to   { transform: scaleY(1); opacity: 1; }
 }
 
+/* Mild ambient aurora -- two soft brand-colour glows drifting slowly behind the
+   nav content. Painted as extra background-image layers on the sidebar's own
+   box (not a separate ::before element), so it needs no z-index of its own and
+   can't interfere with the collapsed rail's flyout stacking (a real, previously
+   fixed bug in this file -- see the flyout notch history). Kept deliberately
+   faint (low alpha, ultra-slow drift) since this is on screen all day, not a
+   one-time login moment. */
+@keyframes sidebarAurora {
+  0%   { background-position: 15% 10%, 85% 90%, 0 0; }
+  50%  { background-position: 80% 30%, 20% 70%, 0 0; }
+  100% { background-position: 15% 10%, 85% 90%, 0 0; }
+}
+
 .sidebar {
   position: relative;
   width: 244px;
@@ -25,7 +38,13 @@
   margin: 12px 0 12px 12px;
   border-radius: 18px;
   box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 14px 30px -14px rgba(31,60,132,0.20), 0 2px 8px rgba(15,23,42,0.05);
-  background: var(--sidebar-bg);
+  background:
+    radial-gradient(circle, rgba(28,159,212,0.10), transparent 55%),
+    radial-gradient(circle, rgba(76,174,111,0.09), transparent 55%),
+    var(--sidebar-bg);
+  background-size: 160% 160%, 160% 160%, 100% 100%;
+  background-repeat: no-repeat;
+  animation: sidebarAurora 70s ease-in-out infinite;
   border-right: 0.5px solid var(--card-border);
   display: flex;
   flex-direction: column;
@@ -219,7 +238,13 @@
 .sidebarCollapsed {
   position: relative;
   width: 52px; height: 100vh;
-  background: var(--sidebar-bg);
+  background:
+    radial-gradient(circle, rgba(28,159,212,0.10), transparent 55%),
+    radial-gradient(circle, rgba(76,174,111,0.09), transparent 55%),
+    var(--sidebar-bg);
+  background-size: 160% 160%, 160% 160%, 100% 100%;
+  background-repeat: no-repeat;
+  animation: sidebarAurora 70s ease-in-out infinite;
   border-right: 0.5px solid var(--card-border);
   display: flex; flex-direction: column;
   align-items: center; flex-shrink: 0;
@@ -400,75 +425,7 @@
 .collapsedActive { background: linear-gradient(135deg, rgba(28,159,212,0.12), rgba(31,60,132,0.08)) !important; color: var(--brand-ink) !important; }
 .avatar { box-shadow: 0 0 0 2px #fff, 0 0 0 3px rgba(31,60,132,0.15) !important; }
 
-/* === Expand/collapse toggle — restored to the placement it had before this
-   session's redesign attempts, at the user's request.
-   Expanded: a 24px rounded square inside the header, top-right.
-   Collapsed: in normal flow, centred below the logo tile.
-   Known and accepted: because the two states use different layout modes, the
-   button moves 179px across and 56px down on click (measured live), so
-   collapse -> expand is not a repeatable double-click. Two attempts to fix that
-   were rejected on looks; the placement below is the one that was approved, so
-   the travel stays. If it is ever worth revisiting, the fix is to give both
-   states the same anchor -- not to re-tune this block.
-   The two dead position:fixed layers and the dead "floating circular edge
-   control" that used to sit above this in the file are NOT restored: they were
-   overridden by this block in every state and had no effect on what rendered.
-   This block reproduces the original computed result exactly. */
-.collapseBtn, .collapseBtnExpanded {
-  position: absolute !important;
-  top: 16px !important;
-  right: 14px !important;
-  left: auto !important;
-  bottom: auto !important;
-  width: 24px !important;
-  height: 24px !important;
-  border-radius: 7px !important;
-  background: var(--bg3) !important;
-  border: 1px solid var(--card-border) !important;
-  box-shadow: none !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  color: var(--brand-ink) !important;
-  cursor: pointer !important;
-  z-index: 5 !important;
-  transition: background .18s ease, color .18s ease, transform .18s ease !important;
-  padding: 0 !important;
-}
-.collapseBtn:hover, .collapseBtnExpanded:hover {
-  background: #1F3C84 !important;
-  color: #fff !important;
-  transform: none !important;
-  box-shadow: 0 2px 6px rgba(31,60,132,0.28) !important;
-}
-.collapseBtn svg, .collapseBtnExpanded svg { width: 13px !important; height: 13px !important; }
-
-/* collapsed-state toggle: centred under the logo (avoid overlapping logo icon) */
-.collapseBtn {
-  top: 56px !important;
-  right: auto !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-}
-.collapseBtn:hover {
-  transform: translateX(-50%) !important;
-}
-
-/* === collapsed toggle: in-flow, no overlap with Ask AI === */
-.sidebarCollapsed .collapseBtn {
-  position: static !important;
-  transform: none !important;
-  top: auto !important;
-  left: auto !important;
-  right: auto !important;
-  align-self: center !important;
-  margin: 2px auto 8px !important;
-  z-index: 1 !important;
-}
-.sidebarCollapsed .collapseBtn:hover { transform: none !important; }
-
 /* === kill janky expand/collapse drag animation === */
-.collapseBtn, .collapseBtnExpanded { transition: background 0.12s ease, color 0.12s ease !important; }
 .nav, .collapsedNav, .navItem, .navItem a { animation: none !important; }
 .nav .navItem { transition: background 0.12s ease, color 0.12s ease !important; }
 
