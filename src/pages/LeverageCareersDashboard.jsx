@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList,
-  CartesianGrid, LineChart, Line, Legend,
+  ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  CartesianGrid, Legend,
 } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
@@ -12,7 +12,7 @@ import SlackReportPanel from '../components/SlackReportPanel'
 import { SlackIcon } from '../components/icons/BrandIcons'
 import { InlineLoader } from '../components/SkeletonLoader'
 import { toast } from '../components/ToastHost'
-import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS_H } from '../ui/dashboardKit'
+import { C, FONT, fmtN, pct, Card, PremKPI, KPI_ICONS, BarGrad, barFill, BAR_RADIUS, RankedBars, sourceColor, NEUTRAL_TRACK } from '../ui/dashboardKit'
 import { CAREERS_REPORT_VERSIONS } from '../lib/careersReport'
 import { fetchCareersCacheRows, fetchCareersCacheSyncedAt } from '../lib/leverageCareersCache'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
@@ -111,8 +111,8 @@ const PRESETS = [
 ]
 
 // Granular fetch: one row per (date, ad-name, CRM source, CRM contact channel),
-// for any window -- shared by the main page, Trend Analysis and Compare, so all
-// three can never disagree about what a number means. Meta's own day-level
+// for any window -- shared by the main page and Compare, so the two can never
+// disagree about what a number means. Meta's own day-level
 // insights (time_increment=1) give the (date, ad) side; BigQuery's careers_leads
 // mode (grouped by day+campaign+source+channel, see api/crm-leads.js) gives the
 // CRM side. Joined by exact normalized name, same convention as every other
@@ -138,8 +138,8 @@ async function fetchGranular(token, since, until) {
     // Was a live BigQuery call (?source=bigquery&mode=careers_leads) -- every
     // call scanned the whole ~11.5GB table regardless of since/until (see the
     // comment on careersLeadsSql in api/crm-leads.js), and this function is
-    // called independently by the main page, Trend Analysis AND Compare, each
-    // with their own date window, so ordinary interactive use multiplied that
+    // called independently by the main page AND Compare, each with their own
+    // date window, so ordinary interactive use multiplied that
     // scan cost by however many windows got touched -- the documented cause
     // of the Aug 2026 BigQuery cost spikes. Now reads the same rows out of a
     // Supabase cache synced 3x/day (leverage-careers-sync.yml), so exploring
@@ -267,6 +267,15 @@ function sumTotals(rows) {
 const fmtINR = n => n == null ? '—' : '₹' + Math.round(n).toLocaleString('en-IN')
 const deltaPct = (cur, prev) => (prev == null || prev === 0) ? (cur > 0 ? 100 : null) : ((cur - prev) / prev) * 100
 
+// Charts on this page mix units in one tooltip (rupees, counts, percentages), so
+// the SERIES NAME decides the format -- same convention the table columns use.
+const tipFmt = (name, value) => {
+  const n = String(name || '')
+  if (/spend|cpl|cps|cpi|cost/i.test(n)) return fmtINR(value)
+  if (/rate|ctr|%/i.test(n)) return value == null ? '\u2014' : Number(value).toFixed(2) + '%'
+  return fmtN(value)
+}
+
 function BrandTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null
   return (
@@ -275,7 +284,7 @@ function BrandTooltip({ active, payload, label }) {
       {payload.map((p, i) => (
         <div key={i} style={{ fontSize: 11.5, color: 'var(--text2)', display: 'flex', justifyContent: 'space-between', gap: 18 }}>
           <span style={{ color: p.color || p.fill }}>{p.name}</span>
-          <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fmtN(p.value)}</span>
+          <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{tipFmt(p.name, p.value)}</span>
         </div>
       ))}
     </div>
@@ -288,23 +297,75 @@ const sectionTitle = (t, s) => (
   </div>
 )
 const axis = { fontSize: 11, fill: C.muted, fontFamily: FONT }
+const fmtPct1 = v => v == null ? '\u2014' : v.toFixed(1) + '%'
+// hex -> rgba. Used for the cohort heat cells and the funnel bar gradients, so the
+// hue stays a brand hue and only its opacity carries the value.
+function tint(hex, a) {
+  const n = parseInt(String(hex).replace('#', ''), 16)
+  return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'
+}
+
+// ---- Funnel view ----------------------------------------------------------
+// One column of the funnel. Bar width is proportional to the TOP STAGE OF ITS OWN
+// COLUMN, never across columns: impressions and Won differ by ~5 orders of
+// magnitude on this account, so a single shared scale renders every stage after
+// the first as an invisible sliver. Splitting the journey at the one place the
+// unit genuinely changes -- what Meta delivered vs. what the CRM did with it --
+// keeps every bar readable without distorting a single ratio, and the step chip
+// between two bars states the exact conversion and drop-off in numbers.
+function FunnelColumn({ title, note, stages, accent }) {
+  const top = stages.length ? stages[0].value : 0
+  return (
+    <div style={{ border: '0.5px solid var(--card-border)', borderRadius: 14, padding: '14px 16px 10px', background: 'var(--bg2)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: C.text, letterSpacing: '-0.1px' }}>{title}</span>
+        <span style={{ fontSize: 10.5, color: C.muted }}>{note}</span>
+      </div>
+      {stages.map((s, i) => {
+        const w = top > 0 ? Math.max((s.value / top) * 100, 4) : 4
+        const nxt = stages[i + 1]
+        const step = nxt ? (s.value > 0 ? (nxt.value / s.value) * 100 : null) : null
+        return (
+          <div key={s.key}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 5 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{s.label}</span>
+              <span style={{ marginLeft: 'auto', fontSize: 14.5, fontWeight: 800, color: s.color, fontVariantNumeric: 'tabular-nums' }}>{fmtN(s.value)}</span>
+            </div>
+            <div style={{ height: 24, borderRadius: 7, background: tint(NEUTRAL_TRACK, 0.55), display: 'flex', justifyContent: 'center', overflow: 'hidden' }}>
+              <div style={{ width: w + '%', height: '100%', borderRadius: 7, background: 'linear-gradient(90deg,' + tint(s.color, 0.95) + ',' + tint(s.color, 0.6) + ')', boxShadow: '0 3px 10px -5px ' + tint(s.color, 0.95), transition: 'width .6s cubic-bezier(.4,0,.2,1)' }} />
+            </div>
+            {nxt ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, margin: '8px 0 9px' }}>
+                <span style={{ fontSize: 10, fontWeight: 800, padding: '2.5px 9px', borderRadius: 99, background: tint(accent, 0.12), color: accent }}>{fmtPct1(step)} continue</span>
+                <span style={{ fontSize: 10, color: C.muted }}>{fmtN(Math.max(0, s.value - nxt.value))} drop-off</span>
+              </div>
+            ) : null}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// A single stage-to-stage conversion rate. Same visual grammar as the Marketing
+// Performance agent's KPI tiles (uppercase micro-label, one big number, one line
+// of definition underneath) so the two pages read as the same product.
+function StepTile({ label, value, sub, color }) {
+  return (
+    <div style={{ border: '0.5px solid var(--card-border)', borderRadius: 12, padding: '11px 13px', background: 'var(--card)', position: 'relative', overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color }} />
+      <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: C.muted, marginTop: 3 }}>{label}</div>
+      <div style={{ fontSize: 17, fontWeight: 800, color: color, marginTop: 4, letterSpacing: '-0.3px', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2 }}>{sub}</div>
+    </div>
+  )
+}
 
 const TABLE_TABS = [['campaign', 'Campaign'], ['source', 'Source'], ['channel', 'Channel'], ['month', 'Month'], ['day', 'Day']]
 // First-column header per grouping tab, reused by the table AND the exports so a
 // downloaded CSV always names its group column the same way the screen does.
 const GROUP_LABEL = { campaign: 'Ad Name', source: 'Source', channel: 'Channel', month: 'Month', day: 'Date' }
 const EXPORT_KEY = { campaign: 'Campaign', source: 'Source', channel: 'Channel', month: 'Month', day: 'Date' }
-const METRICS = [
-  { key: 'spend', label: 'Spend', fmt: fmtINR },
-  { key: 'metaLeads', label: 'Meta Leads', fmt: fmtN },
-  { key: 'crmLeads', label: 'CRM Leads', fmt: fmtN },
-  { key: 'interested', label: 'Interested', fmt: fmtN },
-  { key: 'won', label: 'Won', fmt: fmtN },
-  { key: 'cpl', label: 'CPL (Meta)', fmt: fmtINR },
-  { key: 'cplCrm', label: 'CPL (CRM)', fmt: fmtINR },
-  { key: 'cpi', label: 'CPI', fmt: fmtINR },
-  { key: 'cps', label: 'CPS', fmt: fmtINR },
-]
 function labelForDim(dim, key) {
   if (dim === 'day') return dayLabelOf(key)
   if (dim === 'month') return monthLabelOf(key)
@@ -360,8 +421,8 @@ function optionsFor(rows, field) {
   return ['All', ...Array.from(m.entries()).sort((a, b) => b[1] - a[1]).map(e => e[0])]
 }
 
-// THE one predicate every row-filtering site uses -- main page, Trend and Compare
-// all call this with the same `filters` object, so the three can never disagree
+// THE one predicate every row-filtering site uses -- main page, funnel, cohort and
+// Compare all call this with the same `filters` object, so they can never disagree
 // about what a filtered number means (the construction Overall already uses for
 // its Source/Corridor/campaign filters).
 //
@@ -440,7 +501,7 @@ export default function LeverageCareersDashboard() {
 
   const [tableDim, setTableDim] = useState('campaign')
   // Advanced filters. These are page-level, not table-level: every KPI, the funnel,
-  // the table, the exports, Trend and Compare all read the SAME filters object via
+  // the cohort table, the charts, the exports and Compare all read the SAME filters object via
   // applyFilters(), so a filtered CPI on a card can never disagree with a filtered
   // CPI in the table. The old table-only search box was removed in favour of the
   // debounced ad-name search here, which previously filtered the visible rows while
@@ -454,14 +515,8 @@ export default function LeverageCareersDashboard() {
   const nameQueryDebounced = useDebouncedValue(nameQuery, 250)
   const [tableSort, setTableSort] = useState({ key: 'spend', dir: 'desc' })
 
-  const [trendOpen, setTrendOpen] = useState(false)
-  const [trendDim, setTrendDim] = useState('Month')
-  const [trendGranularity, setTrendGranularity] = useState('Day')
-  const [trendPeriods, setTrendPeriods] = useState(6)
-  const [trendMetric, setTrendMetric] = useState('Spend')
-  const [trendRows, setTrendRows] = useState(null)
-  const [trendLoading, setTrendLoading] = useState(false)
-  const [trendError, setTrendError] = useState('')
+  // Cohort view bucket -- Month or Week. Shared Dropdown, never a native select.
+  const [cohortBy, setCohortBy] = useState('Month')
 
   const [compareOpen, setCompareOpen] = useState(false)
   const [compareMode, setCompareMode] = useState('prev')
@@ -589,87 +644,91 @@ export default function LeverageCareersDashboard() {
     return { pngBase64: shot ? shot.base64 : null, pixelRatio: shot ? shot.pixelRatio : null, csv: rowsToCsv(Object.keys(exportRawRows[0] || {}), exportRawRows) }
   }, [exportRawRows])
 
-  // ---- Trend Analysis ----
-  const trendPeriodUnit = trendDim === 'Day' ? 'days' : trendDim === 'Month' ? 'months'
-    : trendGranularity === 'Week' ? 'weeks' : trendGranularity === 'Month' ? 'months' : 'days'
-  const trendWindow = useMemo(() => {
-    const anchor = shiftDate(d1, -1) // last complete day -- avoids a half-finished today skewing a trend
-    if (trendDim === 'Day') return { from: shiftDate(anchor, -(trendPeriods - 1)), to: anchor }
-    if (trendDim === 'Month') return { from: addMonthsIso(anchor.slice(0, 8) + '01', -(trendPeriods - 1)), to: anchor }
-    // Campaign dimension -- bucketed by the chosen granularity
-    const n = trendGranularity === 'Month' ? trendPeriods : trendGranularity === 'Week' ? trendPeriods * 7 : trendPeriods
-    return { from: shiftDate(anchor, -(n - 1)), to: anchor }
-  }, [trendDim, trendGranularity, trendPeriods, d1])
+  // ---- Funnel view ----
+  // Two funnels, not one six-stage tower -- see FunnelColumn's comment for why.
+  const deliveryStages = useMemo(() => ([
+    { key: 'impr', label: 'Impressions', value: totals.impressions, color: C.navy },
+    { key: 'clicks', label: 'Clicks', value: totals.clicks, color: '#3A5BA0' },
+    { key: 'metaLeads', label: 'Meta leads', value: totals.metaLeads, color: C.blue },
+  ]), [totals])
+  const pipelineStages = useMemo(() => ([
+    { key: 'crmLeads', label: 'CRM leads', value: totals.crmLeads, color: C.cyan },
+    { key: 'interested', label: 'Interested', value: totals.interested, color: '#5BCAD2' },
+    { key: 'won', label: 'Won', value: totals.won, color: C.green },
+  ]), [totals])
+  // Every stage-to-stage rate is recomputed from the summed totals, never averaged
+  // from per-day rates -- same rule the table's TOTAL row follows.
+  const stepTiles = useMemo(() => ([
+    { label: 'CTR', value: pct(totals.clicks, totals.impressions), sub: 'clicks / impressions', color: C.navy },
+    { label: 'Click \u2192 lead', value: pct(totals.metaLeads, totals.clicks), sub: 'Meta leads / clicks', color: '#3A5BA0' },
+    { label: 'Meta \u2192 CRM', value: pct(totals.crmLeads, totals.metaLeads), sub: 'CRM leads / Meta leads', color: C.blue },
+    { label: 'Interested rate', value: pct(totals.interested, totals.crmLeads), sub: 'interested / CRM leads', color: C.cyan },
+    { label: 'Won rate', value: pct(totals.won, totals.interested), sub: 'Won / interested', color: C.green },
+    { label: 'Lead \u2192 Won', value: pct(totals.won, totals.crmLeads), sub: 'end to end, on CRM leads', color: C.navy },
+  ]), [totals])
 
-  useEffect(() => {
-    if (!trendOpen || !token) return
-    let cancelled = false
-    setTrendLoading(true); setTrendError('')
-    fetchGranular(token, trendWindow.from, trendWindow.to)
-      .then(rows => { if (!cancelled) setTrendRows(rows) })
-      .catch(e => { if (!cancelled) setTrendError(e.message || 'Failed to load trend data') })
-      .finally(() => { if (!cancelled) setTrendLoading(false) })
-    return () => { cancelled = true }
-  }, [trendOpen, token, trendWindow.from, trendWindow.to])
+  // ---- Chart series ----
+  // Built off `rows` (post-filter), so every chart moves with the filter bar in
+  // lockstep with the KPIs and the table.
+  const dailySeries = useMemo(() => sortGroup('day', groupRows(rows, 'day')).map(d => ({
+    label: dayLabelOf(d.key),
+    Spend: Math.round(d.spend),
+    'CRM leads': d.crmLeads,
+    Interested: d.interested,
+    Won: d.won,
+    'CPL (CRM)': d.cplCrm != null ? Math.round(d.cplCrm) : null,
+    'Won rate': d.interested > 0 ? +((d.won / d.interested) * 100).toFixed(2) : 0,
+  })), [rows])
+  // Thin the x-axis labels once a window is long enough that they would collide.
+  const dayTickInterval = dailySeries.length > 20 ? Math.ceil(dailySeries.length / 12) : 0
 
-  const trendResult = useMemo(() => {
-    const rows = applyFilters(trendRows || [], filters)
-    const metric = METRICS.find(m => m.label === trendMetric) || METRICS[0]
-    if (trendDim === 'Day' || trendDim === 'Month') {
-      const dim = trendDim === 'Day' ? 'day' : 'month'
-      const buckets = sortGroup(dim, groupRows(rows, dim))
-      const chart = buckets.map(b => ({ period: labelForDim(dim, b.key), value: b[metric.key] }))
-      const exportRows2 = buckets.map(b => ({
-        Period: labelForDim(dim, b.key), Spend: Math.round(b.spend), Impressions: b.impressions, Clicks: b.clicks,
-        'Meta Leads': b.metaLeads, 'CRM Leads': b.crmLeads, Interested: b.interested, Won: b.won,
-        'CPL (Meta)': b.cpl != null ? Math.round(b.cpl) : '', 'CPL (CRM)': b.cplCrm != null ? Math.round(b.cplCrm) : '',
-        CPI: b.cpi != null ? Math.round(b.cpi) : '', CPS: b.cps != null ? Math.round(b.cps) : '',
+  const sourceRanked = useMemo(() => {
+    const m = new Map()
+    ;(rows || []).forEach(r => { const k = r.source || 'Unknown'; m.set(k, (m.get(k) || 0) + r.crmLeads) })
+    return Array.from(m.entries()).map(([source, count]) => ({ source, count }))
+      .filter(r => r.count > 0).sort((a, b) => b.count - a.count).slice(0, 8)
+  }, [rows])
+  const sourceTotal = useMemo(() => sourceRanked.reduce((s, r) => s + r.count, 0), [sourceRanked])
+
+  // ---- Cohort view ----
+  // A cohort is every CRM lead that ARRIVED in the same month (or week), followed
+  // through to Interested and Won. Read a rate column down, not a row across: the
+  // newest cohort has had the least time to convert, so its Won rate is a floor
+  // rather than a verdict. Spend is attributed on the ad-day the lead came from
+  // (see fetchGranular), so CPL and CPS stay inside the cohort instead of being
+  // smeared over the whole window.
+  const cohortRows = useMemo(() => {
+    const m = new Map()
+    ;(rows || []).forEach(r => {
+      const k = cohortBy === 'Week' ? isoWeekStart(r.date) : monthKeyOf(r.date)
+      let g = m.get(k)
+      if (!g) { g = { key: k, spend: 0, metaLeads: 0, crmLeads: 0, interested: 0, won: 0 }; m.set(k, g) }
+      g.spend += r.spend; g.metaLeads += r.metaLeads; g.crmLeads += r.crmLeads
+      g.interested += r.interested; g.won += r.won
+    })
+    return Array.from(m.values())
+      .sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0)
+      .map(g => ({
+        ...g,
+        label: cohortBy === 'Week' ? 'wk ' + dayLabelOf(g.key) : monthLabelOf(g.key),
+        intRate: g.crmLeads > 0 ? (g.interested / g.crmLeads) * 100 : null,
+        wonRate: g.interested > 0 ? (g.won / g.interested) * 100 : null,
+        endRate: g.crmLeads > 0 ? (g.won / g.crmLeads) * 100 : null,
+        cplCrm: g.crmLeads > 0 ? g.spend / g.crmLeads : null,
+        cps: g.won > 0 ? g.spend / g.won : null,
       }))
-      return { single: true, chart, table: buckets, exportRows: exportRows2, metric }
-    }
-    // Campaign dimension: bucket by day/week/month, top 8 campaigns by total metric as lines
-    const bucketKey = r => trendGranularity === 'Month' ? monthKeyOf(r.date) : trendGranularity === 'Week' ? isoWeekStart(r.date) : r.date
-    const bucketLabel = k => trendGranularity === 'Month' ? monthLabelOf(k) : trendGranularity === 'Week' ? ('wk ' + dayLabelOf(k)) : dayLabelOf(k)
-    const byCampaign = sortGroup('campaign', groupRows(rows, 'campaign'))
-    const top = byCampaign.slice(0, 8).map(c => c.label)
-    const bucketMap = new Map()
-    rows.forEach(r => {
-      const bk = bucketKey(r)
-      if (!bucketMap.has(bk)) bucketMap.set(bk, new Map())
-      const inner = bucketMap.get(bk)
-      const cur = inner.get(r.name) || { spend: 0, impressions: 0, clicks: 0, metaLeads: 0, crmLeads: 0, interested: 0, won: 0 }
-      cur.spend += r.spend; cur.impressions += r.impressions; cur.clicks += r.clicks
-      cur.metaLeads += r.metaLeads; cur.crmLeads += r.crmLeads; cur.interested += r.interested; cur.won += r.won
-      inner.set(r.name, cur)
-    })
-    const bucketKeys = Array.from(bucketMap.keys()).sort()
-    const derive = c => ({
-      ...c,
-      cpl: c.metaLeads > 0 ? c.spend / c.metaLeads : null,
-      cplCrm: c.crmLeads > 0 ? c.spend / c.crmLeads : null,
-      cpi: c.interested > 0 ? c.spend / c.interested : null,
-      cps: c.won > 0 ? c.spend / c.won : null,
-    })
-    const chart = bucketKeys.map(bk => {
-      const row = { period: bucketLabel(bk) }
-      top.forEach(name => {
-        const c = bucketMap.get(bk).get(name)
-        row[name] = c ? derive(c)[metric.key] : 0
-      })
-      return row
-    })
-    const exportRows2 = bucketKeys.flatMap(bk => top.map(name => {
-      const c = bucketMap.get(bk).get(name)
-      const d2 = c ? derive(c) : { spend: 0, impressions: 0, clicks: 0, metaLeads: 0, crmLeads: 0, interested: 0, won: 0, cpl: null, cplCrm: null, cpi: null, cps: null }
-      return {
-        Period: bucketLabel(bk), Campaign: name, Spend: Math.round(d2.spend), Impressions: d2.impressions, Clicks: d2.clicks,
-        'Meta Leads': d2.metaLeads, 'CRM Leads': d2.crmLeads, Interested: d2.interested, Won: d2.won,
-        'CPL (Meta)': d2.cpl != null ? Math.round(d2.cpl) : '', 'CPL (CRM)': d2.cplCrm != null ? Math.round(d2.cplCrm) : '',
-        CPI: d2.cpi != null ? Math.round(d2.cpi) : '', CPS: d2.cps != null ? Math.round(d2.cps) : '',
-      }
-    }))
-    return { single: false, chart, lines: top, exportRows: exportRows2, metric, coveredOf: byCampaign.length }
-  }, [trendRows, trendDim, trendGranularity, trendMetric, filters])
+  }, [rows, cohortBy])
+  // Heat is scaled to the best cohort in view, so the tint always spans the full
+  // range of what is on screen rather than a fixed scale nothing ever reaches.
+  const cohortMax = useMemo(() => ({
+    intRate: Math.max(...cohortRows.map(r => r.intRate || 0), 0.0001),
+    wonRate: Math.max(...cohortRows.map(r => r.wonRate || 0), 0.0001),
+    endRate: Math.max(...cohortRows.map(r => r.endRate || 0), 0.0001),
+  }), [cohortRows])
+  const cohortChart = useMemo(() => cohortRows.map(r => ({
+    label: r.label, 'CRM leads': r.crmLeads, Interested: r.interested, Won: r.won,
+    'Won rate': r.endRate != null ? +r.endRate.toFixed(2) : 0,
+  })), [cohortRows])
 
   // ---- Compare ----
   const compareSpanA = useMemo(() => {
@@ -732,7 +791,7 @@ export default function LeverageCareersDashboard() {
       <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid var(--card-border)', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
         {/* HEADER — same structure/behavior as Overall's own header (floating card, pill
-            date group, Trend/Compare buttons, Synced/Refreshing tag, spin-on-refresh). */}
+            date group, Compare button, Synced/Refreshing tag, spin-on-refresh). */}
         <div style={{ background: 'var(--card)', borderBottom: `0.5px solid ${C.border}`, padding: '10px 28px', minHeight: 56, height: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, overflow: 'visible', flexWrap: 'wrap' }}>
           <div>
             <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Meta Ads / Leverage Careers</p>
@@ -769,10 +828,6 @@ export default function LeverageCareersDashboard() {
               size="sm" variant="secondary" onClick={() => setCompareOpen(true)} disabled={!token}
               icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3m0 8v3a2 2 0 002 2h3m8 0h3a2 2 0 002-2v-3m0-8V5a2 2 0 00-2-2h-3" /><line x1="8" y1="12" x2="16" y2="12" /></svg>}
             >Compare</Button>
-            <Button
-              size="sm" variant="secondary" onClick={() => setTrendOpen(true)} disabled={!token}
-              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 17 9 11 13 15 21 6" /><polyline points="15 6 21 6 21 12" /></svg>}
-            >Trend</Button>
 
             {tokenChecked && token && (
               <span style={{ fontSize: 11, color: loading ? C.blue : C.muted, fontWeight: loading ? 700 : 400, fontFamily: FONT, whiteSpace: 'nowrap' }}>
@@ -846,23 +901,165 @@ export default function LeverageCareersDashboard() {
                 <PremKPI label="CTR" value={pct(totals.clicks, totals.impressions)} sub="clicks / impressions" accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.globe} />
               </div>
 
-              <Card noPad>
-                <div style={{ padding: '16px 20px' }}>
-                  {sectionTitle('Leverage Careers funnel', windowLabel + ' — CRM leads → Interested → Won')}
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={funnel} layout="vertical" margin={{ left: 20, right: 50, top: 4, bottom: 4 }}>
-                      <defs><BarGrad id="g-lc-funnel" color={C.navy} dir="h" /></defs>
-                      <CartesianGrid horizontal={false} stroke={C.border} />
-                      <XAxis type="number" tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
-                      <YAxis type="category" dataKey="stage" tick={axis} axisLine={false} tickLine={false} width={90} />
-                      <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
-                      <Bar dataKey="count" name="Count" fill={barFill('g-lc-funnel')} radius={BAR_RADIUS_H} barSize={22}>
-                        <LabelList dataKey="count" position="right" formatter={fmtN} style={{ fontSize: 12.5, fontWeight: 700, fill: C.sub }} />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+              {/* FUNNEL VIEW -- Meta delivery and CRM pipeline, side by side. */}
+              <Card
+                title="Conversion funnel"
+                sub={windowLabel + ' \u2014 impressions \u2192 clicks \u2192 Meta leads \u2192 CRM leads \u2192 Interested \u2192 Won'}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: 14 }}>
+                  <FunnelColumn title="Meta delivery" note="what the ads did" stages={deliveryStages} accent={C.navy} />
+                  <FunnelColumn title="CRM pipeline" note="what LeadSquared did with it" stages={pipelineStages} accent={C.green} />
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(146px, 1fr))', gap: 10, marginTop: 14 }}>
+                  {stepTiles.map(s => <StepTile key={s.label} {...s} />)}
+                </div>
+                <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.7, margin: '12px 0 0' }}>
+                  Each funnel is scaled to its own first stage. Impressions and Won are about five orders of
+                  magnitude apart on this account, so a single shared scale would flatten every stage after the
+                  first into an invisible sliver \u2014 the step chips and the tiles above carry the exact conversion
+                  instead. Meta&nbsp;\u2192&nbsp;CRM can read above 100%: LeadSquared keeps leads whose ad name Meta
+                  no longer reports spend against on the same day.
+                </p>
               </Card>
+
+              <div style={{ height: 16 }} />
+
+              {/* CHARTS -- Marketing Performance agent chart treatment: one hue per series,
+                  gradient bar fill, hairline horizontal-only grid, circle legend, no flat fills. */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))', gap: 14 }}>
+                <Card title="Spend and CRM leads" sub={windowLabel + ' \u2014 by day'} noPad>
+                  <div style={{ padding: '12px 16px 6px' }}>
+                    <ResponsiveContainer width="100%" height={230}>
+                      <ComposedChart data={dailySeries} margin={{ left: 0, right: 8, top: 6, bottom: 0 }}>
+                        <defs><BarGrad id="g-lc-spend" color={C.navy} /></defs>
+                        <CartesianGrid vertical={false} stroke={C.border} />
+                        <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} interval={dayTickInterval} />
+                        <YAxis yAxisId="l" tick={axis} axisLine={false} tickLine={false} width={62} tickFormatter={v => '\u20B9' + fmtN(v)} />
+                        <YAxis yAxisId="r" orientation="right" tick={axis} axisLine={false} tickLine={false} allowDecimals={false} width={40} />
+                        <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
+                        <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} iconType="circle" />
+                        <Bar yAxisId="l" dataKey="Spend" fill={barFill('g-lc-spend')} radius={BAR_RADIUS} barSize={10} />
+                        <Line yAxisId="r" type="monotone" dataKey="CRM leads" stroke={C.cyan} strokeWidth={2.4} dot={false} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+
+                <Card title="Cost and conversion" sub={windowLabel + ' \u2014 CPL (CRM) against Won rate'} noPad>
+                  <div style={{ padding: '12px 16px 6px' }}>
+                    <ResponsiveContainer width="100%" height={230}>
+                      <ComposedChart data={dailySeries} margin={{ left: 0, right: 8, top: 6, bottom: 0 }}>
+                        <CartesianGrid vertical={false} stroke={C.border} />
+                        <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} interval={dayTickInterval} />
+                        <YAxis yAxisId="l" tick={axis} axisLine={false} tickLine={false} width={62} tickFormatter={v => '\u20B9' + fmtN(v)} />
+                        <YAxis yAxisId="r" orientation="right" tick={axis} axisLine={false} tickLine={false} unit="%" width={46} />
+                        <Tooltip content={<BrandTooltip />} />
+                        <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} iconType="circle" />
+                        <Line yAxisId="l" type="monotone" dataKey="CPL (CRM)" stroke={C.navy} strokeWidth={2.4} strokeDasharray="4 3" dot={false} connectNulls />
+                        <Line yAxisId="r" type="monotone" dataKey="Won rate" stroke={C.green} strokeWidth={2.4} dot={false} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+
+                <Card title="Interested and Won" sub={windowLabel + ' \u2014 by day'} noPad>
+                  <div style={{ padding: '12px 16px 6px' }}>
+                    <ResponsiveContainer width="100%" height={230}>
+                      <ComposedChart data={dailySeries} margin={{ left: 0, right: 8, top: 6, bottom: 0 }}>
+                        <defs>
+                          <BarGrad id="g-lc-int" color={C.cyan} />
+                          <BarGrad id="g-lc-won" color={C.green} />
+                        </defs>
+                        <CartesianGrid vertical={false} stroke={C.border} />
+                        <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} interval={dayTickInterval} />
+                        <YAxis tick={axis} axisLine={false} tickLine={false} allowDecimals={false} width={40} />
+                        <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
+                        <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} iconType="circle" />
+                        <Bar dataKey="Interested" fill={barFill('g-lc-int')} radius={BAR_RADIUS} barSize={9} />
+                        <Bar dataKey="Won" fill={barFill('g-lc-won')} radius={BAR_RADIUS} barSize={9} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Card>
+
+                <Card title="Where the leads come from" sub={windowLabel + ' \u2014 top ' + sourceRanked.length + ' CRM sources by lead volume'}>
+                  {sourceRanked.length === 0 ? (
+                    <div className={styles.empty}>No CRM leads in this window.</div>
+                  ) : (
+                    <RankedBars
+                      data={sourceRanked} labelKey="source" showRank
+                      max={sourceRanked[0].count} total={sourceTotal}
+                      colorFn={i => sourceColor(sourceRanked[i] && sourceRanked[i].source)}
+                    />
+                  )}
+                </Card>
+              </div>
+
+              <div style={{ height: 16 }} />
+              {/* COHORT VIEW -- lead arrival cohorts, followed through to Won. */}
+              <Card
+                title="Cohort view"
+                sub={windowLabel + ' \u2014 every CRM lead grouped by when it arrived, followed to Won'}
+                action={<Dropdown label="Cohort" options={['Month', 'Week']} value={cohortBy} onChange={setCohortBy} minWidth={110} />}
+              >
+                {cohortRows.length === 0 ? (
+                  <div className={styles.empty}>No leads in this window.</div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={215}>
+                      <ComposedChart data={cohortChart} margin={{ left: 0, right: 8, top: 6, bottom: 0 }}>
+                        <defs>
+                          <BarGrad id="g-lc-coh-l" color={C.cyan} />
+                          <BarGrad id="g-lc-coh-i" color={C.blue} />
+                        </defs>
+                        <CartesianGrid vertical={false} stroke={C.border} />
+                        <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} />
+                        <YAxis yAxisId="l" tick={axis} axisLine={false} tickLine={false} allowDecimals={false} width={46} />
+                        <YAxis yAxisId="r" orientation="right" tick={axis} axisLine={false} tickLine={false} unit="%" width={46} />
+                        <Tooltip content={<BrandTooltip />} cursor={{ fill: 'rgba(31,60,132,0.04)' }} />
+                        <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} iconType="circle" />
+                        <Bar yAxisId="l" dataKey="CRM leads" fill={barFill('g-lc-coh-l')} radius={BAR_RADIUS} barSize={14} />
+                        <Bar yAxisId="l" dataKey="Interested" fill={barFill('g-lc-coh-i')} radius={BAR_RADIUS} barSize={14} />
+                        <Line yAxisId="r" type="monotone" dataKey="Won rate" stroke={C.green} strokeWidth={2.4} dot={{ r: 2.5 }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                    <div style={{ overflowX: 'auto', marginTop: 14 }}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            <th>{cohortBy === 'Week' ? 'Week of' : 'Month'}</th>
+                            <th>Spend</th><th>CRM Leads</th><th>Interested</th><th>Won</th>
+                            <th>Interested %</th><th>Won % of interested</th><th>Won % of leads</th>
+                            <th>CPL (CRM)</th><th>CPS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cohortRows.map(r => (
+                            <tr key={r.key}>
+                              <td style={{ fontWeight: 800 }}>{r.label}</td>
+                              <td>{fmtINR(r.spend)}</td><td>{fmtN(r.crmLeads)}</td>
+                              <td>{fmtN(r.interested)}</td><td>{fmtN(r.won)}</td>
+                              <td style={{ fontWeight: 700, background: tint(C.cyan, 0.08 + 0.5 * Math.min(1, (r.intRate || 0) / cohortMax.intRate)) }}>{fmtPct1(r.intRate)}</td>
+                              <td style={{ fontWeight: 700, background: tint(C.green, 0.08 + 0.5 * Math.min(1, (r.wonRate || 0) / cohortMax.wonRate)) }}>{fmtPct1(r.wonRate)}</td>
+                              <td style={{ fontWeight: 700, background: tint(C.navy, 0.08 + 0.5 * Math.min(1, (r.endRate || 0) / cohortMax.endRate)) }}>{fmtPct1(r.endRate)}</td>
+                              <td>{fmtINR(r.cplCrm)}</td><td>{fmtINR(r.cps)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className={styles.note}>
+                      Read a rate column down, not a row across. Cohorts are keyed on the day the lead arrived, so
+                      the newest {cohortBy === 'Week' ? 'week' : 'month'} has had the least time to convert and its
+                      Won rates are a floor rather than a verdict. Cell shading is scaled to the strongest cohort
+                      currently in view. Spend sits on the ad-day the lead came from, so CPL and CPS stay inside the
+                      cohort instead of being smeared across the whole window.
+                    </p>
+                  </>
+                )}
+              </Card>
+
+              <div style={{ height: 16 }} />
 
               <Card
                 action={
@@ -933,68 +1130,6 @@ export default function LeverageCareersDashboard() {
           )}
         </div>
       </div>
-
-      {trendOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setTrendOpen(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--card)', borderRadius: 16, width: 'min(1100px, 96vw)', maxHeight: '92vh', overflowY: 'auto', padding: 24, fontFamily: FONT, boxShadow: '0 24px 60px rgba(0,0,0,0.28)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>Trend Analysis</div>
-                <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Leverage Careers — trailing periods, real day-level data</div>
-              </div>
-              <button onClick={() => setTrendOpen(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 20, lineHeight: 1 }}>×</button>
-            </div>
-
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
-              <Dropdown label="Dimension" options={['Month', 'Day', 'Campaign']} value={trendDim} onChange={setTrendDim} minWidth={110} />
-              {trendDim === 'Campaign' && <Dropdown label="Bucket" options={['Day', 'Week', 'Month']} value={trendGranularity} onChange={setTrendGranularity} minWidth={100} />}
-              <Dropdown
-                label="Trailing"
-                options={[3, 6, 12, 24].map(n => n + ' ' + trendPeriodUnit)}
-                value={trendPeriods + ' ' + trendPeriodUnit}
-                onChange={v => setTrendPeriods(Number(v.split(' ')[0]))}
-                minWidth={110}
-              />
-              <Dropdown label="Metric" options={METRICS.map(m => m.label)} value={trendMetric} onChange={setTrendMetric} minWidth={120} />
-            </div>
-
-            {trendLoading && !trendRows ? (
-              <InlineLoader label="Loading trend data" />
-            ) : trendError ? (
-              <div className={styles.empty}>{trendError}</div>
-            ) : (
-              <>
-                <ResponsiveContainer width="100%" height={280}>
-                  <LineChart data={trendResult.chart} margin={{ left: 10, right: 20, top: 8, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                    <XAxis dataKey="period" tick={axis} axisLine={false} tickLine={false} />
-                    <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={trendResult.metric.fmt} width={70} />
-                    <Tooltip content={<BrandTooltip />} />
-                    {trendResult.single ? (
-                      <Line type="monotone" dataKey="value" name={trendResult.metric.label} stroke={C.navy} strokeWidth={2.5} dot={{ r: 3 }} strokeDasharray={trendLoading ? '5 4' : undefined} />
-                    ) : (
-                      <>
-                        <Legend wrapperStyle={{ fontSize: 11, fontFamily: FONT }} />
-                        {trendResult.lines.map((name, i) => (
-                          <Line key={name} type="monotone" dataKey={name} stroke={['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F', '#3A5BA0', '#52B5DC', '#5BCAD2', '#73C58E'][i % 8]} strokeWidth={2} dot={false} strokeDasharray={trendLoading ? '5 4' : undefined} />
-                        ))}
-                      </>
-                    )}
-                  </LineChart>
-                </ResponsiveContainer>
-                {!trendResult.single && (
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>
-                    Charting the top {trendResult.lines.length} of {trendResult.coveredOf} campaigns by {trendResult.metric.label} — every one is in the export below.
-                  </div>
-                )}
-                <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-end' }}>
-                  <ExportButton data={trendResult.exportRows} filename="leverage_careers_trend" dashboardId="leverage_careers" />
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
 
       {compareOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }} onClick={() => setCompareOpen(false)}>
