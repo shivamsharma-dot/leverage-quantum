@@ -404,7 +404,7 @@ function assemble({ editionNo, dateLabel, throughLabel, editionsInside, sections
 <body style="margin:0;padding:0;background-color:#FFFFFF;font-family:${F};color:#000000;-webkit-font-smoothing:antialiased">
 <div style="margin:0;padding:36px 14px;background-color:#FFFFFF">
 <div style="max-width:940px;margin:0 auto">
-  ${masthead({ editionNo, dateLabel, sectionsLine: 'Three Sections &middot; Marketing &middot; Corporate Finance &middot; Talent Mobility', throughLabel, editionsInside })}
+  ${masthead({ editionNo, dateLabel, sectionsLine: 'Three Sections · Marketing · Corporate Finance · Talent Mobility', throughLabel, editionsInside })}
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF;border:3px solid #000000;border-top:none;box-shadow:0 24px 60px -24px rgba(0,0,0,0.35)">
   <tr><td style="padding:0 58px 34px" bgcolor="#FFFFFF">
     ${sectionsA}

@@ -1413,13 +1413,13 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
   const funnelA = T.funnelViz('Funnel, This Period', m.stages.map((s, i) => ({ label: s.label, value: s.now, color: RAMP[i % RAMP.length] })))
   const minQL = Math.min(...m.daySeries.map(d => d.totalQL))
   const chartA = T.dayBarChart(m.daySeries.map(d => ({ label: gazDayLabel(d.date), value: d.totalQL, flag: d.totalQL === minQL, tip: d.date + ': ' + fmtN(d.totalQL) + ' QL, ' + fmtINR(d.spend).replace(/&#8377;/, '₹') + ' spend' })))
-  const chHeaders = [{ label: 'Channel' }, { label: 'Spend', align: 'right' }, { label: 'Total QL', align: 'right' }, { label: 'CPQL', align: 'right' }, { label: 'CPQL &Delta;', align: 'right' }]
+  const chHeaders = [{ label: 'Channel' }, { label: 'Spend', align: 'right' }, { label: 'Total QL', align: 'right' }, { label: 'CPQL', align: 'right' }, { label: 'CPQL Δ', align: 'right' }]
   const chRow = c => ({ cells: [{ text: c.source }, { html: fmtINR(c.spend), align: 'right' }, { html: fmtN(c.totalQL), align: 'right' }, { html: c.cpql != null ? fmtINR(c.cpql) : '&mdash;', align: 'right' }, { html: deltaSpan(c.cpqlChange, false), align: 'right' }] })
   const tableChannels = T.sectionTitle('Channels', 'paid then free traffic') + T.dataTable(chHeaders, [...m.channels.paid, ...m.channels.free].map(chRow))
   const corRow = c => ({ cells: [{ text: c.corridor }, { html: fmtINR(c.spend), align: 'right' }, { html: fmtN(c.totalQL), align: 'right' }, { html: c.cpql != null ? fmtINR(c.cpql) : '&mdash;', align: 'right' }, { html: deltaSpan(c.cpqlChange, false), align: 'right' }] })
-  const tableCorridors = T.sectionTitle('Corridors', 'by spend, descending') + T.dataTable([{ label: 'Corridor' }, { label: 'Spend', align: 'right' }, { label: 'Total QL', align: 'right' }, { label: 'CPQL', align: 'right' }, { label: 'CPQL &Delta;', align: 'right' }], m.corridors.map(corRow))
+  const tableCorridors = T.sectionTitle('Corridors', 'by spend, descending') + T.dataTable([{ label: 'Corridor' }, { label: 'Spend', align: 'right' }, { label: 'Total QL', align: 'right' }, { label: 'CPQL', align: 'right' }, { label: 'CPQL Δ', align: 'right' }], m.corridors.map(corRow))
   const ranked = m.ledger.ranked
-  const ledgerCard = c => ({ name: c.campaign, meta: c.source + ' &middot; ' + c.corridor, priceHtml: fmtINR(c.cpql) + ' <span style="font-size:12px;font-weight:400;color:#666666">/ QL</span>' })
+  const ledgerCard = c => ({ name: c.campaign, meta: c.source + ' · ' + c.corridor, priceHtml: fmtINR(c.cpql) + ' <span style="font-size:12px;font-weight:400;color:#666666">/ QL</span>' })
   const remaining = ranked.slice(3, Math.max(3, ranked.length - 3))
   const ledgerA = T.campaignLedger({
     title: 'Campaign Ledger', subtitle: ranked.length + ' campaigns ranked by CPQL, cheapest first',
@@ -1441,7 +1441,7 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
   if (b2c.configured) {
     const marginNow = b2c.pnl.now.totalRev > 0 ? (b2c.pnl.now.net / b2c.pnl.now.totalRev) * 100 : null
     const marginPrev = b2c.pnl.prev.totalRev > 0 ? (b2c.pnl.prev.net / b2c.pnl.prev.totalRev) * 100 : null
-    const kpiB = T.kpiBox('B2C at a Glance (P&amp;L)', [
+    const kpiB = T.kpiBox('B2C at a Glance (P&L)', [
       { label: 'Total Revenue', value: fmtINR(b2c.pnl.now.totalRev), delta: { pct: gazDeltaPct(b2c.pnl.now.totalRev, b2c.pnl.prev.totalRev), goodIfUp: true }, compareLabel: 'vs prior period' },
       { label: 'Total Cost', value: fmtINR(b2c.pnl.now.totalCost), delta: { pct: gazDeltaPct(b2c.pnl.now.totalCost, b2c.pnl.prev.totalCost), goodIfUp: false }, compareLabel: 'vs prior period' },
       { label: 'Net', value: fmtINR(b2c.pnl.now.net), delta: { pct: gazDeltaPct(b2c.pnl.now.net, b2c.pnl.prev.net), goodIfUp: true }, compareLabel: 'vs prior period' },
@@ -1461,7 +1461,7 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
       cashFlow: [['Total Cash Inflow', fmtINR(b2c.cashFlow.ytd.totalRev)], ['Total Cash Outflow', fmtINR(b2c.cashFlow.ytd.totalCost)], ['Net Cash Inflow', fmtINR(b2c.cashFlow.ytd.net), b2c.cashFlow.ytd.net >= 0 ? T.GREEN : T.NAVY]],
       footnote: ebitdaNote,
     })
-    sectionsB = T.sectionHeader('B', 'Corporate Finance', 'P&amp;L, Cash Flow, YTD') + T.paragraph(prose.sectionB.intro, { size: 16, mb: 20 })
+    sectionsB = T.sectionHeader('B', 'Corporate Finance', 'P&L, Cash Flow, YTD') + T.paragraph(prose.sectionB.intro, { size: 16, mb: 20 })
       + kpiB + tablesB + chartB + ytdB + T.editorsNote("Editor's Notes, Finance", '', prose.sectionB.notes)
   } else {
     sectionsB = T.sectionHeader('B', 'Corporate Finance', 'Not Yet Connected') + T.paragraph('The B2C finance sheet is not configured for this environment, so tonight’s edition has no Corporate Finance desk. Connect it in Settings &gt; Data &gt; B2C Finance Sheet.', { size: 15, mb: 20 })
@@ -1480,7 +1480,7 @@ async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }
   const chartC = T.dayBarChart(careers.daySeries.map(d => ({ label: gazDayLabel(d.date), value: d.leads, tip: d.date + ': ' + fmtN(d.leads) + ' leads, ' + fmtN(d.won) + ' won' })))
   const campRow = c => ({ cells: [{ text: c.campaign }, { html: fmtN(c.leads), align: 'right' }, { html: fmtN(c.interested), align: 'right' }, { html: fmtN(c.won), align: 'right' }] })
   const tableC = T.sectionTitle('Top Campaigns by CRM Leads') + T.dataTable([{ label: 'Campaign' }, { label: 'Leads', align: 'right' }, { label: 'Interested', align: 'right' }, { label: 'Won', align: 'right' }], careers.campaigns.map(campRow))
-  const sectionsC = T.sectionHeader('C', 'Talent Mobility', 'Leverage Careers &middot; Leads, Interest and Won Deals') + T.paragraph(prose.sectionC.intro, { size: 16, mb: 20 })
+  const sectionsC = T.sectionHeader('C', 'Talent Mobility', 'Leverage Careers · Leads, Interest and Won Deals') + T.paragraph(prose.sectionC.intro, { size: 16, mb: 20 })
     + kpiC + T.sectionTitle('Funnel and Daily Volume') + funnelC + chartC + tableC
     + T.editorsNote("Editor's Notes, Talent", '', prose.sectionC.notes)
 
