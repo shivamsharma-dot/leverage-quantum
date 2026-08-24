@@ -2667,11 +2667,36 @@ export async function fetchB2CGazetteData({ since, until, prevSince, prevUntil }
 // Cash Flow rows normalize down to the same sr/ac/vas/offRev/totalRev/
 // totalCost/net/ebitdaBeforeCorp key set (see b2cParseDays above), so one
 // summing function covers both statements.
+// Null-aware column sum, matching CeoB2CDashboard.jsx's own col() helper --
+// a day with no value for this field is skipped rather than treated as 0, so
+// the caller can tell "genuinely zero" apart from "the column never resolved".
+function b2cCol(days, key) {
+  let t = null;
+  for (const d of days) { if (d[key] != null) t = (t == null ? 0 : t) + Number(d[key]); }
+  return t;
+}
 function b2cSumRange(days, since, until) {
   const inRange = (days || []).filter(d => d.date >= since && d.date <= until);
-  const sum = { totalRev: 0, totalCost: 0, net: 0, ebitdaBeforeCorp: 0, sr: 0, ac: 0, vas: 0, offRev: 0 };
-  inRange.forEach(d => { Object.keys(sum).forEach(k => { sum[k] += Number(d[k]) || 0 }) });
-  return { ...sum, days: inRange.length, from: inRange[0]?.date || null, to: inRange[inRange.length - 1]?.date || null };
+  const totalRev = b2cCol(inRange, 'totalRev') || 0;
+  const totalCost = b2cCol(inRange, 'totalCost') || 0;
+  // Cash Flow's sheet 'net cash inflow' column has never actually resolved
+  // (confirmed live -- it summed to exactly 0), which is why the real, live
+  // CeoB2CDashboard.jsx already falls back to rev-cost whenever the sheet's
+  // own net is null; mirrored here so the Gazette's Cash Flow figures agree
+  // with what that page shows. P&L's own net column IS populated, so this
+  // fallback never fires there -- the real sheet value is used as-is.
+  let net = b2cCol(inRange, 'net');
+  if (net == null) net = totalRev - totalCost;
+  // Same idea for ebitdaBeforeCorp, which per b2cParseDays' own comment above
+  // only ever resolves on P&L -- Cash Flow has no such concept at all, so
+  // this always falls back there (net + corp added back).
+  let ebitdaBeforeCorp = b2cCol(inRange, 'ebitdaBeforeCorp');
+  if (ebitdaBeforeCorp == null) ebitdaBeforeCorp = net + (b2cCol(inRange, 'corp') || 0);
+  const sr = b2cCol(inRange, 'sr') || 0;
+  const ac = b2cCol(inRange, 'ac') || 0;
+  const vas = b2cCol(inRange, 'vas') || 0;
+  const offRev = b2cCol(inRange, 'offRev') || 0;
+  return { totalRev, totalCost, net, ebitdaBeforeCorp, sr, ac, vas, offRev, days: inRange.length, from: inRange[0]?.date || null, to: inRange[inRange.length - 1]?.date || null };
 }
 
 // Condensed MTD-vs-prior-month-same-days snapshot for the Quantum Gazette's
