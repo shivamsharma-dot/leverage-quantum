@@ -683,25 +683,6 @@ Two independent ways to scope it, usable together:
   }
 }
 
-// Both snapshot tools take no parameters -- they're fixed "yesterday / MTD /
-// prior-month" windows, not a flexible date-range query, matching exactly
-// what the Quantum Gazette's Corporate Finance / Talent Mobility sections
-// need and nothing more. The actual aggregation lives in api/crm-leads.js
-// (fetchB2CSnapshotForGazette / fetchCareersSnapshotForGazette) -- dynamically
-// imported in runOne below, same "avoid ERR_REQUIRE_ESM on a cross-file
-// import" pattern this app already uses everywhere (see api/send-report.mjs's
-// fetchB2CDataSafe).
-const B2C_SNAPSHOT_TOOL = {
-  name: 'get_b2c_snapshot',
-  description: `Returns Leverage Edu's B2C business unit's Daily P&L and Daily Cash Flow, summarized into: last complete day, month-to-date, and the same number of days in the prior month (for a fair MTD-vs-MTD comparison). Each period carries totalRev, totalCost, net (EBITDA after Corp. Overheads for P&L / Net Cash Inflow for Cash Flow), and ebitdaBeforeCorp (P&L only, null on Cash Flow). Real money in rupees, sourced from the same finance-maintained sheet the Daily P&L / Daily Cash Flow dashboard pages read. Takes no parameters.`,
-  input_schema: { type: 'object', properties: {} },
-}
-const CAREERS_SNAPSHOT_TOOL = {
-  name: 'get_careers_snapshot',
-  description: `Returns Leverage Careers' (the "Talent Mobility" desk) CRM funnel -- leads, interested, won -- summarized into: last complete day, month-to-date, and the full prior calendar month. Sourced from the same BigQuery-backed data the Leverage Careers dashboard page reads. Takes no parameters.`,
-  input_schema: { type: 'object', properties: {} },
-}
-
 const GOOGLE_ADS_TOOL = {
   name: 'query_google_ads',
   description: `Query Google Ads for live campaign, ad group, keyword, search term, or trend data. Use this when the initial 30-day summary does not answer the question: specific date ranges, ad group/keyword/search-term detail, or day-by-day/month-by-month trends. NOTE: This returns Google in-platform conversions. For CRM-attributed Google leads, use query_google_crm_leads. Call multiple times if needed. Always prefer live data over estimates.`,
@@ -1181,43 +1162,27 @@ const AGENTS = {
   },
   quantum_gazette: {
     label: 'The Quantum Gazette',
-    // Wider tool set than the other two agents -- it covers three business
-    // desks (Marketing, Corporate Finance, Talent Mobility), not just Meta/
-    // Google marketing data, so it needs the two new snapshot tools on top
-    // of the usual set.
-    tools: [META_TOOL, META_CRM_TOOL, GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL, CONTRIBUTION_TOOL, OVERALL_TOTALS_TOOL, B2C_SNAPSHOT_TOOL, CAREERS_SNAPSHOT_TOOL],
-    // Marks this agent's markdown output for HTML-shell wrapping + a write
-    // into app_preferences.gazette_html (see buildGazetteHtml / the
-    // isGazette branch in handleAgentRun) -- every other agent's output is
-    // markdown shown only on the Agents page; this one is ALSO an emailable
-    // report, which the other two never needed.
-    isGazette: true,
-    buildPrompt() {
+    // Full-fidelity rebuild (2026-08-25): no longer an LLM tool-loop agent at
+    // all -- handleAgentRun special-cases this agentId and calls
+    // buildQuantumGazetteEdition() instead, which fetches deterministic data
+    // directly (api/crm-leads.js's fetch*GazetteData functions) and makes
+    // exactly one short, structured-output prose call. `tools`/`isGazette`
+    // are gone; only the date-range calculation survives here, reused by
+    // both the manual "Run now" button and the nightly cron.
+    isGazetteV2: true,
+    // MTD vs the same number of days in the prior month -- matches the real
+    // sent edition's own YTD/monthly framing and CeoB2CDashboard's own MTD
+    // convention, not a rolling 7-day window (which the old freeform-prose
+    // version used).
+    buildRange() {
       const iso = d => d.toISOString().slice(0, 10)
       const today = new Date()
       const until = new Date(today); until.setDate(until.getDate() - 1) // yesterday -- today's data is still incomplete
-      const since = new Date(until); since.setDate(since.getDate() - 6)
-      const prevUntil = new Date(since); prevUntil.setDate(prevUntil.getDate() - 1)
-      const prevSince = new Date(prevUntil); prevSince.setDate(prevSince.getDate() - 6)
-      return {
-        since: iso(since), until: iso(until),
-        text: `Write today's edition of "The Quantum Gazette" -- a nightly, editorial-style digest across three desks: Marketing and Growth, Corporate Finance, and Talent Mobility. Voice: a dry, literary, old-fashioned newspaper -- confident, a little wry, never breathless -- but every claim must be backed by a real number from a tool call. No hedging, no vague language, no bullet-point-only sections -- write in real paragraphs.
-
-For Marketing and Growth: call analyze_campaign_contribution (compare ${iso(since)} to ${iso(until)} against the prior 7 days ${iso(prevSince)} to ${iso(prevUntil)}, no channel filter) and get_overall_totals as needed. For Corporate Finance: call get_b2c_snapshot. For Talent Mobility: call get_careers_snapshot.
-
-Produce exactly this markdown structure, nothing before or after it:
-
-## Section A: Marketing and Growth
-(a headline sentence, then 2-4 paragraphs -- the CPQL/QL story, what moved and why, naming real campaigns/channels from analyze_campaign_contribution)
-
-## Section B: Corporate Finance
-(2-3 paragraphs -- P&L and Cash Flow, MTD vs the same number of days last month, margin direction, one number worth a call to finance)
-
-## Section C: Talent Mobility
-(2-3 paragraphs -- Leverage Careers' funnel, MTD vs last month, leads/interested/won and what the conversion trend says)
-
-Be quantitative and specific in every paragraph -- name real figures, real percentage changes, real campaign/channel names. Never write a paragraph that could apply to any month.`,
-      }
+      const since = new Date(today.getFullYear(), today.getMonth(), 1)
+      const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+      const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0)
+      const prevUntil = new Date(prevMonthStart.getFullYear(), prevMonthStart.getMonth(), Math.min(until.getDate(), prevMonthEnd.getDate()))
+      return { since: iso(since), until: iso(until), prevSince: iso(prevMonthStart), prevUntil: iso(prevUntil) }
     },
   },
   weekly_executive_digest: {
@@ -1255,8 +1220,6 @@ async function runAgentToolLoop({ system, userText, tools, agentId }) {
     else if (toolUse.name === 'query_google_crm_leads') result = await fetchCrmLeads((await getSheetOverride('sheet_url_googleleads')) || GOOGLE_LEADS_SHEET, toolUse.input || {})
     else if (toolUse.name === 'analyze_campaign_contribution') result = await analyzeCampaignContribution(toolUse.input || {})
     else if (toolUse.name === 'get_overall_totals') result = await fetchOverallTotals(toolUse.input || {})
-    else if (toolUse.name === 'get_b2c_snapshot') result = await (await import('./crm-leads.js')).fetchB2CSnapshotForGazette()
-    else if (toolUse.name === 'get_careers_snapshot') result = await (await import('./crm-leads.js')).fetchCareersSnapshotForGazette()
     else result = { error: 'Unknown tool: ' + toolUse.name }
     await logToolCall({ convId: null, userId: 'agent:' + agentId, toolName: toolUse.name, params: toolUse.input, rowCount: resultRowCount(result), latencyMs: Date.now() - _t0, hadError: !!(result && result.error) })
     toolLog.push({ name: toolUse.name, input: toolUse.input || {}, result })
@@ -1302,91 +1265,6 @@ async function runAgentToolLoop({ system, userText, tools, agentId }) {
   return { text, totalInputTokens, totalOutputTokens, toolCallsCount, toolLog }
 }
 
-// A small, self-contained markdown -> HTML converter -- deliberately not a
-// full markdown library. The Gazette agent's prompt constrains its own output
-// to a narrow set of constructs (## headings, **bold**, plain paragraphs, and
-// a stray "|"-piped table row here or there), so this only needs to handle
-// exactly those, not arbitrary markdown. Kept separate from AskAI.jsx's own
-// `ih()`/Markdown() (a React-JSX renderer) since this runs server-side and
-// must produce a plain HTML string to store in app_preferences.gazette_html.
-function gzEscape(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
-function gzInline(s) {
-  return gzEscape(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>')
-}
-function mdBodyToHtml(md) {
-  const lines = (md || '').split('\n')
-  const blocks = []
-  let para = []
-  let table = null
-  const flushPara = () => { if (para.length) { blocks.push('<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#2A2A2A">' + gzInline(para.join(' ')) + '</p>'); para = [] } }
-  const flushTable = () => {
-    if (!table || !table.length) { table = null; return }
-    const [head, ...body] = table
-    const th = head.map(c => `<th style="text-align:left;padding:6px 12px;border-bottom:2px solid #1F3C84;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:#1F3C84">${gzInline(c)}</th>`).join('')
-    const rows = body.map(r => '<tr>' + r.map(c => `<td style="padding:6px 12px;border-bottom:1px solid #E5E1D8;font-size:13.5px;color:#2A2A2A">${gzInline(c)}</td>`).join('') + '</tr>').join('')
-    blocks.push(`<table style="width:100%;border-collapse:collapse;margin:0 0 16px"><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table>`)
-    table = null
-  }
-  lines.forEach(raw => {
-    const line = raw.trim()
-    if (!line) { flushPara(); flushTable(); return }
-    if (line.startsWith('|')) {
-      flushPara()
-      if (/^\|[\s:-]+\|$/.test(line.replace(/\|/g, '|'))) return // a "|---|---|" separator row
-      const cells = line.split('|').map(c => c.trim()).filter((c, i, a) => !(i === 0 && c === '') && !(i === a.length - 1 && c === ''))
-      table = table || []
-      table.push(cells)
-      return
-    }
-    flushTable()
-    para.push(line)
-  })
-  flushPara(); flushTable()
-  return blocks.join('\n')
-}
-
-// Splits the agent's raw markdown on its own "## Section X: ..." headings
-// (exactly what the quantum_gazette prompt asks it to produce) and wraps the
-// three bodies in a fixed, brand-safe newspaper shell. The shell itself is
-// deterministic code, not LLM output -- so the Gazette's visual layout stays
-// IDENTICAL every single day even though the prose and numbers inside it are
-// freshly written each time. (The pre-2026-08-25 Gazette was the opposite:
-// a one-off HTML document an LLM wrote by hand with inline styles throughout
-// -- real, but frozen forever after that single save, since nothing in the
-// app could ever regenerate it. See CLAUDE.md's dated entry on this fix.)
-function buildGazetteHtml(markdown, { since, until } = {}) {
-  const sectionRe = /## Section ([ABC]): ([^\n]*)\n([\s\S]*?)(?=\n## Section [ABC]:|$)/g
-  const sections = {}
-  let m
-  while ((m = sectionRe.exec(markdown || '')) !== null) sections[m[1]] = { title: m[2].trim(), body: m[3].trim() }
-  const dateLabel = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
-  const edition = Math.max(1, Math.ceil((Date.now() - new Date('2026-01-01').getTime()) / 86400000))
-  const section = (label, key, fallbackTitle) => {
-    const s = sections[key] || { title: fallbackTitle, body: '_No filing from this desk tonight._' }
-    return `
-      <tr><td style="padding:28px 36px 4px">
-        <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#8A8272;margin-bottom:4px">Section ${key}</div>
-        <h2 style="margin:0 0 14px;font-size:22px;line-height:1.25;color:#14110D;border-bottom:1px solid #D8D2C4;padding-bottom:10px">${gzEscape(s.title)}</h2>
-        ${mdBodyToHtml(s.body)}
-      </td></tr>`
-  }
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>The Quantum Gazette</title></head>
-  <body style="margin:0;padding:24px 12px;background:#EFEAE0;font-family:Georgia,'Times New Roman',serif">
-    <table role="presentation" style="max-width:640px;margin:0 auto;background:#FBF9F4;border:1px solid #D8D2C4">
-      <tr><td style="padding:32px 36px 20px;text-align:center;border-bottom:3px double #14110D">
-        <div style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#8A8272;margin-bottom:10px">Vol. I &middot; No. ${edition} &middot; Marketing, Finance &amp; Talent Edition</div>
-        <div style="font-size:34px;font-weight:400;letter-spacing:0.02em;color:#14110D">THE QUANTUM GAZETTE</div>
-        <div style="font-size:12.5px;color:#5B5344;margin-top:8px;font-style:italic">A Nightly Reckoning of Growth, Cash and Craft &middot; ${gzEscape(dateLabel)}</div>
-      </td></tr>
-      ${section('Marketing and Growth', 'A', 'Marketing and Growth')}
-      ${section('Corporate Finance', 'B', 'Corporate Finance')}
-      ${section('Talent Mobility', 'C', 'Talent Mobility')}
-      <tr><td style="padding:20px 36px 32px;text-align:center;border-top:1px solid #D8D2C4">
-        <div style="font-size:11px;color:#8A8272">Compiled nightly by the Quantum Gazette agent &middot; regenerated fresh every edition, never a re-run of a stale one &middot; ${since && until ? gzEscape(since + ' to ' + until) : ''}</div>
-      </td></tr>
-    </table>
-  </body></html>`
-}
 
 async function saveGazetteHtml(html) {
   const r = await fetch(`${SB_URL}/rest/v1/app_preferences`, {
@@ -1429,6 +1307,203 @@ async function isAgentEnabled(agentId) {
   } catch { return true }
 }
 
+// -- Quantum Gazette (full-fidelity rebuild, 2026-08-25) --------------------
+// Reproduces the real hand-built edition's design (see shared/gazetteTemplate
+// .mjs's own header comment) rather than the freeform-LLM-prose version that
+// briefly replaced it. Numbers are ALWAYS computed by code -- api/crm-leads
+// .js's fetch*GazetteData functions, reading the same Supabase caches the
+// rest of the app already trusts -- never something the model transcribes.
+// The ONE Anthropic call in this whole pipeline writes only the headline /
+// lede / pull-quote / editor's-note prose, grounded in a compact digest of
+// the real figures, and is explicitly told never to state a number that
+// isn't given to it verbatim.
+function gazDeltaPct(now, was) { return was === 0 || was == null ? (now > 0 ? 100 : null) : ((now - was) / Math.abs(was)) * 100 }
+function gazDayLabel(iso) { return String(iso || '').slice(8, 10) || iso }
+
+async function generateGazetteProse(digest) {
+  const noteSchema = { type: 'array', items: { type: 'object', properties: { lead: { type: 'string' }, rest: { type: 'string' } }, required: ['lead', 'rest'] } }
+  const sectionSchema = { type: 'object', properties: { intro: { type: 'string' }, notes: noteSchema }, required: ['intro', 'notes'] }
+  const schema = {
+    name: 'submit_gazette_prose',
+    description: "Submit tonight's written content for The Quantum Gazette.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        headline: { type: 'string', description: 'One newspaper-style headline sentence for the whole edition, under 16 words, no trailing period.' },
+        aboveFold: { type: 'string', description: "2-3 sentence lede paragraph opening the edition, dry/literary newspaper voice." },
+        pullQuoteText: { type: 'string', description: 'One memorable, quotable sentence drawn from the substance of the edition.' },
+        pullQuoteByline: { type: 'string', description: 'A short byline, e.g. "Marketing Desk" or "The Editors".' },
+        sectionA: { ...sectionSchema, description: 'Marketing and Growth desk -- 2-3 sentence intro plus exactly 3 editor-note items.' },
+        sectionB: { ...sectionSchema, description: 'Corporate Finance desk -- 2-3 sentence intro plus exactly 2 editor-note items.' },
+        sectionC: { ...sectionSchema, description: 'Talent Mobility desk -- 2-3 sentence intro plus exactly 2 editor-note items.' },
+      },
+      required: ['headline', 'aboveFold', 'pullQuoteText', 'pullQuoteByline', 'sectionA', 'sectionB', 'sectionC'],
+    },
+  }
+  const system = `You write "The Quantum Gazette", a nightly internal newspaper for Leverage Edu's marketing, finance and talent teams. Voice: dry, literary, confident, a little wry -- never breathless, never generic corporate boilerplate. You are given a JSON digest of REAL, already-computed figures for tonight's edition; every number in it is already correct and pre-formatted. Rules, all mandatory: (1) Never invent, round differently, or restate a number that is not present verbatim in the digest -- if you cite a figure, copy it exactly as given, character for character. (2) Prefer interpretation and consequence over restating numbers the reader will already see in the tables and charts printed right next to your prose -- your job is to say what it MEANS, not to repeat it. (3) Each "note" item is one sentence split into a short, punchy bold "lead" phrase (a few words) and the rest of the sentence as "rest". (4) Never write a sentence generic enough to apply to any edition -- every sentence must be specific to what's actually in tonight's digest. (5) If a figure in the digest is null or the section is unavailable, say so plainly rather than inventing a placeholder.`
+  const r = await fetch(ANTHROPIC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: MODEL, max_tokens: 3072, stream: false, system,
+      messages: [{ role: 'user', content: "Tonight's digest:\n\n" + JSON.stringify(digest, null, 1) }],
+      tools: [schema], tool_choice: { type: 'tool', name: 'submit_gazette_prose' },
+    }),
+  })
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e?.error?.message || `Anthropic API error ${r.status}`) }
+  const response = await r.json()
+  const usage = response.usage ? { inputTokens: response.usage.input_tokens || 0, outputTokens: response.usage.output_tokens || 0 } : { inputTokens: 0, outputTokens: 0 }
+  const toolUse = (response.content || []).find(b => b.type === 'tool_use' && b.name === 'submit_gazette_prose')
+  if (!toolUse) throw new Error('Gazette prose call returned no structured output')
+  return { prose: toolUse.input, usage }
+}
+
+// Assembles tonight's full edition: fetches the three desks' deterministic
+// data, gets the one short prose call, then wires everything through shared/
+// gazetteTemplate.mjs's pure render functions. Returns {html, usage}.
+async function buildQuantumGazetteEdition({ since, until, prevSince, prevUntil }) {
+  const T = await import('../shared/gazetteTemplate.mjs')
+  const crm = await import('./crm-leads.js')
+  const [marketing, b2c, careers] = await Promise.all([
+    crm.fetchMarketingGazetteData({ since, until, prevSince, prevUntil }),
+    crm.fetchB2CGazetteData({ since, until, prevSince, prevUntil }),
+    crm.fetchCareersGazetteData({ since, until, prevSince, prevUntil }),
+  ])
+  const { fmtINR, fmtN, fmtPct, deltaSpan } = T
+  const m = marketing
+  const RAMP = [T.NAVY, T.BLUE, T.CYAN, T.GREEN]
+
+  // --- Digest for the prose call: pre-formatted strings only, so the model
+  // never has to (and never should) do its own arithmetic or formatting. ---
+  const digest = {
+    dateRange: { thisPeriod: since + ' to ' + until, priorPeriod: prevSince + ' to ' + prevUntil },
+    marketing: {
+      spend: { now: fmtINR(m.totals.now.spend).replace(/&#8377;/, '₹'), prior: fmtINR(m.totals.prev.spend).replace(/&#8377;/, '₹'), changePct: fmtPct(gazDeltaPct(m.totals.now.spend, m.totals.prev.spend)) },
+      totalQL: { now: fmtN(m.totals.now.totalQL), prior: fmtN(m.totals.prev.totalQL), changePct: fmtPct(gazDeltaPct(m.totals.now.totalQL, m.totals.prev.totalQL)) },
+      cpql: { now: fmtINR(m.totals.now.cpql).replace(/&#8377;/, '₹'), prior: fmtINR(m.totals.prev.cpql).replace(/&#8377;/, '₹'), changePct: fmtPct(gazDeltaPct(m.totals.now.cpql, m.totals.prev.cpql)) },
+      topSpendChannel: m.channels.paid[0] ? { name: m.channels.paid[0].source, spend: fmtINR(m.channels.paid[0].spend).replace(/&#8377;/, '₹'), cpqlChangePct: fmtPct(m.channels.paid[0].cpqlChange) } : null,
+      cheapestCampaign: m.ledger.ranked[0] ? { name: m.ledger.ranked[0].campaign, cpql: fmtINR(m.ledger.ranked[0].cpql).replace(/&#8377;/, '₹') } : null,
+      priciestCampaign: m.ledger.ranked[m.ledger.ranked.length - 1] ? { name: m.ledger.ranked[m.ledger.ranked.length - 1].campaign, cpql: fmtINR(m.ledger.ranked[m.ledger.ranked.length - 1].cpql).replace(/&#8377;/, '₹') } : null,
+      topCorridorBySpend: m.corridors[0] ? { name: m.corridors[0].corridor, spend: fmtINR(m.corridors[0].spend).replace(/&#8377;/, '₹') } : null,
+    },
+    b2c: b2c.configured ? {
+      totalRevenue: { now: fmtINR(b2c.pnl.now.totalRev).replace(/&#8377;/, '₹'), prior: fmtINR(b2c.pnl.prev.totalRev).replace(/&#8377;/, '₹') },
+      totalCost: { now: fmtINR(b2c.pnl.now.totalCost).replace(/&#8377;/, '₹'), prior: fmtINR(b2c.pnl.prev.totalCost).replace(/&#8377;/, '₹') },
+      net: { now: fmtINR(b2c.pnl.now.net).replace(/&#8377;/, '₹'), prior: fmtINR(b2c.pnl.prev.net).replace(/&#8377;/, '₹') },
+      netCashInflow: { now: fmtINR(b2c.cashFlow.now.net).replace(/&#8377;/, '₹'), prior: fmtINR(b2c.cashFlow.prev.net).replace(/&#8377;/, '₹') },
+      ytdNet: fmtINR(b2c.pnl.ytd.net).replace(/&#8377;/, '₹'),
+    } : null,
+    careers: {
+      leads: { now: fmtN(careers.now.leads), prior: fmtN(careers.prev.leads) },
+      interested: { now: fmtN(careers.now.interested), prior: fmtN(careers.prev.interested) },
+      won: { now: fmtN(careers.now.won), prior: fmtN(careers.prev.won) },
+      topCampaign: careers.campaigns[0] ? { name: careers.campaigns[0].campaign, leads: fmtN(careers.campaigns[0].leads) } : null,
+    },
+  }
+  const { prose, usage } = await generateGazetteProse(digest)
+
+  // --- Section A: Marketing and Growth ---------------------------------
+  const dChNow = (now, prev) => ({ pct: gazDeltaPct(now, prev), goodIfUp: false })
+  const kpiA = T.kpiBox('Marketing at a Glance', [
+    { label: 'Spend', value: fmtINR(m.totals.now.spend), delta: { pct: gazDeltaPct(m.totals.now.spend, m.totals.prev.spend), goodIfUp: false }, compareLabel: 'vs prior period' },
+    { label: 'Total QL', value: fmtN(m.totals.now.totalQL), delta: { pct: gazDeltaPct(m.totals.now.totalQL, m.totals.prev.totalQL), goodIfUp: true }, compareLabel: 'vs prior period' },
+    { label: 'CPQL', value: fmtINR(m.totals.now.cpql), delta: { pct: gazDeltaPct(m.totals.now.cpql, m.totals.prev.cpql), goodIfUp: false }, compareLabel: 'vs prior period' },
+    { label: 'Est. SR Revenue', value: fmtINR(m.totals.now.estSrRevenue), delta: { pct: gazDeltaPct(m.totals.now.estSrRevenue, m.totals.prev.estSrRevenue), goodIfUp: true }, compareLabel: 'vs prior period' },
+  ], `This period ${since} to ${until} &middot; prior period ${prevSince} to ${prevUntil} (equal-length window immediately before).`)
+  const funnelA = T.funnelViz('Funnel, This Period', m.stages.map((s, i) => ({ label: s.label, value: s.now, color: RAMP[i % RAMP.length] })))
+  const minQL = Math.min(...m.daySeries.map(d => d.totalQL))
+  const chartA = T.dayBarChart(m.daySeries.map(d => ({ label: gazDayLabel(d.date), value: d.totalQL, flag: d.totalQL === minQL, tip: d.date + ': ' + fmtN(d.totalQL) + ' QL, ' + fmtINR(d.spend).replace(/&#8377;/, '₹') + ' spend' })))
+  const chHeaders = [{ label: 'Channel' }, { label: 'Spend', align: 'right' }, { label: 'Total QL', align: 'right' }, { label: 'CPQL', align: 'right' }, { label: 'CPQL &Delta;', align: 'right' }]
+  const chRow = c => ({ cells: [{ text: c.source }, { html: fmtINR(c.spend), align: 'right' }, { html: fmtN(c.totalQL), align: 'right' }, { html: c.cpql != null ? fmtINR(c.cpql) : '&mdash;', align: 'right' }, { html: deltaSpan(c.cpqlChange, false), align: 'right' }] })
+  const tableChannels = T.sectionTitle('Channels', 'paid then free traffic') + T.dataTable(chHeaders, [...m.channels.paid, ...m.channels.free].map(chRow))
+  const corRow = c => ({ cells: [{ text: c.corridor }, { html: fmtINR(c.spend), align: 'right' }, { html: fmtN(c.totalQL), align: 'right' }, { html: c.cpql != null ? fmtINR(c.cpql) : '&mdash;', align: 'right' }, { html: deltaSpan(c.cpqlChange, false), align: 'right' }] })
+  const tableCorridors = T.sectionTitle('Corridors', 'by spend, descending') + T.dataTable([{ label: 'Corridor' }, { label: 'Spend', align: 'right' }, { label: 'Total QL', align: 'right' }, { label: 'CPQL', align: 'right' }, { label: 'CPQL &Delta;', align: 'right' }], m.corridors.map(corRow))
+  const ranked = m.ledger.ranked
+  const ledgerCard = c => ({ name: c.campaign, meta: c.source + ' &middot; ' + c.corridor, priceHtml: fmtINR(c.cpql) + ' <span style="font-size:12px;font-weight:400;color:#666666">/ QL</span>' })
+  const remaining = ranked.slice(3, Math.max(3, ranked.length - 3))
+  const ledgerA = T.campaignLedger({
+    title: 'Campaign Ledger', subtitle: ranked.length + ' campaigns ranked by CPQL, cheapest first',
+    bestLabel: 'Cheapest to Qualify', best: ranked.slice(0, 3).map(ledgerCard),
+    priciestLabel: 'Priciest to Qualify', priciest: ranked.slice(-3).reverse().map(ledgerCard),
+    remaining: remaining.map(c => ({ cells: [{ text: c.campaign }, { text: c.source }, { text: c.corridor }, { html: fmtINR(c.spend), align: 'right' }, { html: fmtN(c.totalQL), align: 'right' }, { html: fmtINR(c.cpql), align: 'right' }] })),
+    remainingCols: [{ label: 'Campaign' }, { label: 'Source' }, { label: 'Corridor' }, { label: 'Spend', align: 'right' }, { label: 'Total QL', align: 'right' }, { label: 'CPQL', align: 'right' }],
+    remainingLabel: remaining.length + ' more ranked campaigns',
+  })
+  const ledgerFootnote = T.paragraph(m.ledger.excludedCount + ' campaigns (' + fmtINR(m.ledger.excludedSpend).replace(/&#8377;/, '₹') + ', ' + fmtN(m.ledger.excludedQL) + ' QL) sit below the 25-QL/real-spend ranking threshold or in a corridor not eligible for CPQL ranking (MBBS, IVY100).', { size: 13, color: '#666666', mb: 20 })
+  const sectionsA = T.sectionHeader('A', 'Marketing and Growth', 'Spend, QL Volume, CPQL and the Campaign Ledger')
+    + T.headline(prose.headline) + T.dropCapParagraph(prose.aboveFold) + T.pullQuote(prose.pullQuoteText)
+    + kpiA + T.sectionTitle('Funnel and Daily Volume') + funnelA + chartA + tableChannels + tableCorridors
+    + ledgerA + ledgerFootnote
+    + T.editorsNote("Editor's Notes, Marketing", prose.sectionA.intro, prose.sectionA.notes)
+
+  // --- Section B: Corporate Finance -------------------------------------
+  let sectionsB
+  if (b2c.configured) {
+    const marginNow = b2c.pnl.now.totalRev > 0 ? (b2c.pnl.now.net / b2c.pnl.now.totalRev) * 100 : null
+    const marginPrev = b2c.pnl.prev.totalRev > 0 ? (b2c.pnl.prev.net / b2c.pnl.prev.totalRev) * 100 : null
+    const kpiB = T.kpiBox('B2C at a Glance (P&amp;L)', [
+      { label: 'Total Revenue', value: fmtINR(b2c.pnl.now.totalRev), delta: { pct: gazDeltaPct(b2c.pnl.now.totalRev, b2c.pnl.prev.totalRev), goodIfUp: true }, compareLabel: 'vs prior period' },
+      { label: 'Total Cost', value: fmtINR(b2c.pnl.now.totalCost), delta: { pct: gazDeltaPct(b2c.pnl.now.totalCost, b2c.pnl.prev.totalCost), goodIfUp: false }, compareLabel: 'vs prior period' },
+      { label: 'Net', value: fmtINR(b2c.pnl.now.net), delta: { pct: gazDeltaPct(b2c.pnl.now.net, b2c.pnl.prev.net), goodIfUp: true }, compareLabel: 'vs prior period' },
+      { label: 'Net Margin', value: marginNow == null ? '&mdash;' : fmtPct(marginNow), sub: marginPrev == null ? '' : 'prior ' + fmtPct(marginPrev) },
+    ], 'P&amp;L revenue is recognised on the date a sale is recorded; Cash Flow (shown in the YTD box below) records actual cash moved. This period ' + since + ' to ' + until + ' &middot; prior period ' + prevSince + ' to ' + prevUntil + '.')
+    const lineRow = r => ({ cells: [{ text: r.label || 'Total', bold: !!r.isTotal }, { html: fmtINR(r.value), align: 'right', bold: !!r.isTotal }, { html: fmtPct(r.share), align: 'right', bold: !!r.isTotal }] })
+    const lineHeaders = [{ label: 'Line Item' }, { label: 'Value', align: 'right' }, { label: 'Share', align: 'right' }]
+    const tablesB = T.sectionTitle('Revenue by Line') + T.dataTable(lineHeaders, b2c.pnl.lines.map(lineRow))
+      + T.sectionTitle('Cost by Line') + T.dataTable(lineHeaders, b2c.pnl.costLines.map(lineRow))
+    const chartB = T.sectionTitle('Revenue vs. Cost, Daily') + T.dualDayBarChart(b2c.pnl.daySeries.map(d => ({ label: gazDayLabel(d.date), a: d.totalRev || 0, b: d.totalCost || 0, tip: d.date + ': rev ' + fmtINR(d.totalRev).replace(/&#8377;/, '₹') + ', cost ' + fmtINR(d.totalCost).replace(/&#8377;/, '₹') })))
+    const ebitdaNote = (b2c.pnl.ytd.ebitdaBeforeCorp >= 0 && b2c.pnl.now.ebitdaBeforeCorp < 0)
+      ? ('YTD EBITDA before Corp. Overheads is positive at ' + fmtINR(b2c.pnl.ytd.ebitdaBeforeCorp) + ', even though this period alone is negative at ' + fmtINR(b2c.pnl.now.ebitdaBeforeCorp) + ' &mdash; the earlier months carried the year.')
+      : ('EBITDA before Corp. Overheads stands at ' + fmtINR(b2c.pnl.ytd.ebitdaBeforeCorp) + ' year-to-date, versus ' + fmtINR(b2c.pnl.now.ebitdaBeforeCorp) + ' for this period alone.')
+    const ytdB = T.ytdBox({
+      label: b2c.fyLabel + ', Year to Date', dateRange: b2c.fyStart + ' to ' + until,
+      pnl: [['Total Revenue', fmtINR(b2c.pnl.ytd.totalRev)], ['Total Cost', fmtINR(b2c.pnl.ytd.totalCost)], ['Net', fmtINR(b2c.pnl.ytd.net), b2c.pnl.ytd.net >= 0 ? T.GREEN : T.NAVY]],
+      cashFlow: [['Total Cash Inflow', fmtINR(b2c.cashFlow.ytd.totalRev)], ['Total Cash Outflow', fmtINR(b2c.cashFlow.ytd.totalCost)], ['Net Cash Inflow', fmtINR(b2c.cashFlow.ytd.net), b2c.cashFlow.ytd.net >= 0 ? T.GREEN : T.NAVY]],
+      footnote: ebitdaNote,
+    })
+    sectionsB = T.sectionHeader('B', 'Corporate Finance', 'P&amp;L, Cash Flow, YTD') + T.paragraph(prose.sectionB.intro, { size: 16, mb: 20 })
+      + kpiB + tablesB + chartB + ytdB + T.editorsNote("Editor's Notes, Finance", '', prose.sectionB.notes)
+  } else {
+    sectionsB = T.sectionHeader('B', 'Corporate Finance', 'Not Yet Connected') + T.paragraph('The B2C finance sheet is not configured for this environment, so tonight’s edition has no Corporate Finance desk. Connect it in Settings &gt; Data &gt; B2C Finance Sheet.', { size: 15, mb: 20 })
+  }
+
+  // --- Section C: Talent Mobility ----------------------------------------
+  const wonRateNow = careers.now.leads > 0 ? (careers.now.won / careers.now.leads) * 100 : null
+  const wonRatePrev = careers.prev.leads > 0 ? (careers.prev.won / careers.prev.leads) * 100 : null
+  const kpiC = T.kpiBox('Careers at a Glance', [
+    { label: 'CRM Leads', value: fmtN(careers.now.leads), delta: { pct: gazDeltaPct(careers.now.leads, careers.prev.leads), goodIfUp: true }, compareLabel: 'vs prior period' },
+    { label: 'Interested', value: fmtN(careers.now.interested), delta: { pct: gazDeltaPct(careers.now.interested, careers.prev.interested), goodIfUp: true }, compareLabel: 'vs prior period' },
+    { label: 'Won', value: fmtN(careers.now.won), delta: { pct: gazDeltaPct(careers.now.won, careers.prev.won), goodIfUp: true }, compareLabel: 'vs prior period' },
+    { label: 'Won Rate', value: wonRateNow == null ? '&mdash;' : fmtPct(wonRateNow), sub: wonRatePrev == null ? '' : 'prior ' + fmtPct(wonRatePrev) },
+  ], 'This period ' + since + ' to ' + until + ' &middot; prior period ' + prevSince + ' to ' + prevUntil + '. Ranked by CRM leads, not spend -- Leverage Careers spend is not attributed at the campaign level in this cache.')
+  const funnelC = T.funnelViz('Funnel, This Period', [{ label: 'CRM Leads', value: careers.now.leads, color: T.NAVY }, { label: 'Interested', value: careers.now.interested, color: T.BLUE }, { label: 'Won', value: careers.now.won, color: T.GREEN }])
+  const chartC = T.dayBarChart(careers.daySeries.map(d => ({ label: gazDayLabel(d.date), value: d.leads, tip: d.date + ': ' + fmtN(d.leads) + ' leads, ' + fmtN(d.won) + ' won' })))
+  const campRow = c => ({ cells: [{ text: c.campaign }, { html: fmtN(c.leads), align: 'right' }, { html: fmtN(c.interested), align: 'right' }, { html: fmtN(c.won), align: 'right' }] })
+  const tableC = T.sectionTitle('Top Campaigns by CRM Leads') + T.dataTable([{ label: 'Campaign' }, { label: 'Leads', align: 'right' }, { label: 'Interested', align: 'right' }, { label: 'Won', align: 'right' }], careers.campaigns.map(campRow))
+  const sectionsC = T.sectionHeader('C', 'Talent Mobility', 'Leverage Careers &middot; Leads, Interest and Won Deals') + T.paragraph(prose.sectionC.intro, { size: 16, mb: 20 })
+    + kpiC + T.sectionTitle('Funnel and Daily Volume') + funnelC + chartC + tableC
+    + T.editorsNote("Editor's Notes, Talent", '', prose.sectionC.notes)
+
+  const dateLabel = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
+  const edition = Math.max(1, Math.ceil((Date.now() - new Date('2026-01-01').getTime()) / 86400000))
+  const editionsInside = [
+    { letter: 'A', title: 'Marketing and Growth', teaser: 'Total QL ' + fmtN(m.totals.now.totalQL) + ', CPQL ' + fmtINR(m.totals.now.cpql).replace(/&#8377;/, '₹') },
+    { letter: 'B', title: 'Corporate Finance', teaser: b2c.configured ? ('Net ' + fmtINR(b2c.pnl.now.net).replace(/&#8377;/, '₹') + ' on ' + fmtINR(b2c.pnl.now.totalRev).replace(/&#8377;/, '₹') + ' revenue') : 'Not yet connected' },
+    { letter: 'C', title: 'Talent Mobility', teaser: fmtN(careers.now.leads) + ' leads, ' + fmtN(careers.now.won) + ' won' },
+  ]
+  const html = T.assemble({
+    editionNo: edition, dateLabel, throughLabel: 'Through ' + until, editionsInside,
+    sectionsA, sectionsB, sectionsC,
+    sources: [
+      { letter: 'M', label: 'Marketing:', detail: 'overall_funnel_daily cache, the same source Ask AI’s campaign-contribution tool reads.' },
+      { letter: 'F', label: 'Finance:', detail: 'the Daily P&L / Daily Cash Flow finance sheet, same as the CEO B2C dashboards.' },
+      { letter: 'T', label: 'Talent:', detail: 'leverage_careers_daily cache, synced from BigQuery three times a day.' },
+    ],
+    notice: 'Regenerated fresh every edition from live data — never a re-run of a stale one. Compiled by the Quantum Gazette agent.',
+  })
+  return { html, usage }
+}
+
 async function handleAgentRun(req, res, me) {
   const agentId = req.body?.agent_id || 'marketing_performance'
   const agent = AGENTS[agentId]
@@ -1442,12 +1517,23 @@ async function handleAgentRun(req, res, me) {
     return res.status(200).json({ ok: false, skipped: true, reason: 'This agent is turned off in Settings/Agents.' })
   }
   try {
+    // The Gazette (full-fidelity rebuild, 2026-08-25) is no longer an LLM
+    // tool-loop agent -- it fetches deterministic data directly and makes one
+    // short, structured-output prose call. Every other agent is unaffected.
+    if (agent.isGazetteV2) {
+      const { since, until, prevSince, prevUntil } = agent.buildRange()
+      const { html, usage } = await buildQuantumGazetteEdition({ since, until, prevSince, prevUntil })
+      const finishedAt = new Date().toISOString()
+      const title = `${agent.label} — ${since} to ${until}`
+      let gazetteSaveError = null
+      try { await saveGazetteHtml(html) } catch (e) { gazetteSaveError = e.message }
+      const summaryLine = `${since} to ${until} vs ${prevSince} to ${prevUntil} · Marketing, Corporate Finance, Talent Mobility.`
+      const runId = await logAgentRun({ agentId, title, summary: summaryLine, content: html, status: 'ok', toolCallsCount: 0, startedAt, finishedAt, triggeredBy })
+      await logUsage({ convId: null, userId: 'agent:' + agentId, model: MODEL, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens })
+      return res.status(200).json({ ok: true, runId, title, gazetteSaveError })
+    }
     const systemText = await buildSystemPrompt((await getTokenFromSupabase()) || '', [])
     const { text: userText, since, until } = agent.buildPrompt()
-    // Per-agent tool list when the agent declares one (quantum_gazette needs
-    // the B2C/Careers snapshot tools on top of the marketing set) -- falls
-    // back to the original hardcoded set for the two agents that predate this
-    // and never declared their own `tools`, so they're unaffected.
     const tools = agent.tools || [META_TOOL, META_CRM_TOOL, GOOGLE_ADS_TOOL, GOOGLE_CRM_TOOL, CONTRIBUTION_TOOL]
     const { text, totalInputTokens, totalOutputTokens, toolCallsCount } = await runAgentToolLoop({
       system: [{ type: 'text', text: systemText }], userText, tools, agentId,
@@ -1455,22 +1541,9 @@ async function handleAgentRun(req, res, me) {
     const finishedAt = new Date().toISOString()
     const title = `${agent.label} — ${since} to ${until}`
     const summaryLine = (text.split('\n').find(l => l.trim() && !l.trim().startsWith('#')) || '').replace(/[*_`]/g, '').slice(0, 200)
-    // The Gazette is ALSO a sendable report, unlike the other two agents --
-    // wrap its raw markdown in the fixed newspaper shell and persist it as the
-    // new gazette_html snapshot, so the very next thing an admin does in
-    // Settings > Reports > "The Quantum Gazette" > Preview/Send now reflects
-    // tonight's edition, not the frozen one from 2026-08-22. A failure here
-    // is logged but does NOT fail the whole run -- the agent_run itself (and
-    // its markdown, visible on the Agents page) already succeeded independent
-    // of whether the HTML snapshot save also worked.
-    let gazetteSaveError = null
-    if (agent.isGazette) {
-      try { await saveGazetteHtml(buildGazetteHtml(text, { since, until })) }
-      catch (e) { gazetteSaveError = e.message }
-    }
     const runId = await logAgentRun({ agentId, title, summary: summaryLine, content: text, status: 'ok', toolCallsCount, startedAt, finishedAt, triggeredBy })
     await logUsage({ convId: null, userId: 'agent:' + agentId, model: MODEL, inputTokens: totalInputTokens, outputTokens: totalOutputTokens })
-    return res.status(200).json({ ok: true, runId, title, gazetteSaveError })
+    return res.status(200).json({ ok: true, runId, title })
   } catch (e) {
     await logAgentRun({ agentId, title: `${agent.label} — failed`, summary: e.message, content: '', status: 'error', error: e.message, toolCallsCount: 0, startedAt, finishedAt: new Date().toISOString(), triggeredBy })
     return res.status(500).json({ error: e.message })
