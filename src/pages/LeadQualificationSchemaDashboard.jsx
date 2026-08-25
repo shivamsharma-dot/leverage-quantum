@@ -514,6 +514,22 @@ export default function LeadQualificationSchemaDashboard() {
     )
   }
 
+  // Was previously silent -- an error here (e.g. a 403 on one of the three
+  // Promise.all calls) left `types`/`schemas` empty with no render branch at
+  // all, so the page just looked permanently blank instead of saying why.
+  if (error) {
+    return (
+      <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
+        <Sidebar />
+        <div style={{ flex: 1, overflow: 'auto', padding: 28 }}>
+          <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5, maxWidth: 480 }}>
+            ✕ Couldn't load the field schema: {error}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
       <style>{'@keyframes lqsPulse{0%,100%{opacity:1}50%{opacity:.3}}'}</style>

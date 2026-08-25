@@ -1832,7 +1832,18 @@ async function handleLeadSquared(req, res, me) {
   // team_mapping access, same as team_users/team_groups.
   const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', 'team_cache_lookup', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES, ...TEAM_FRAPP_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
-  if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
+  const { canAccessDashboard } = await import('../lib/auth.mjs')
+  // activity_types is read by BOTH the main LeadSquared page (gated on
+  // 'leadsquared') and the Field Schema page (gated on 'lq_field_schema',
+  // a separate grant) -- a user with only one of the two, e.g. granted
+  // lq_field_schema but not leadsquared, got a hard 403 here that the Field
+  // Schema page's own useSchema() never surfaces as an error (no `if (error)`
+  // render branch), so the whole page just stayed blank. Confirmed live
+  // 2026-08-25 for sneha@futwork.com, whose role has lq_field_schema only.
+  const allowed = mode === 'activity_types'
+    ? (canAccessDashboard(me.role, 'leadsquared') || canAccessDashboard(me.role, 'lq_field_schema'))
+    : canAccessDashboard(me.role, gateId)
+  if (!allowed) {
     return res.status(403).json({ error: 'Forbidden' })
   }
   // Writing a manual note (or logging an import/export) is admin-only regardless
