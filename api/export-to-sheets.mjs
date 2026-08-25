@@ -33,6 +33,30 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Google Sheets export is not configured (missing GOOGLE_SHEETS_CLIENT_EMAIL/GOOGLE_SHEETS_PRIVATE_KEY)' })
   }
 
+  // Temporary, admin-only diagnostic (2026-08-25) -- neither Workspace-admin fix
+  // (domain-wide delegation or a Shared Drive) is wired into the code below yet,
+  // and we need to know which one was actually granted before writing that code.
+  // Checks both paths directly against Google's own APIs and reports which (if
+  // either) is live. Safe to remove once the real fix is implemented and confirmed.
+  if (req.body?.diag && me.role === 'admin') {
+    const out = { clientEmail }
+    try {
+      const plainAuth = new JWT({ email: clientEmail, key: privateKey, scopes: ['https://www.googleapis.com/auth/drive.readonly'] })
+      const { access_token: plainToken } = await plainAuth.authorize()
+      const drivesRes = await fetch('https://www.googleapis.com/drive/v3/drives?pageSize=50', { headers: { Authorization: `Bearer ${plainToken}` } })
+      out.sharedDrives = await drivesRes.json()
+      out.sharedDrivesOk = drivesRes.ok
+    } catch (e) { out.sharedDrivesError = String(e?.message || e) }
+    try {
+      const delegatedAuth = new JWT({ email: clientEmail, key: privateKey, scopes: ['https://www.googleapis.com/auth/drive'], subject: me.email })
+      const { access_token: delegatedToken } = await delegatedAuth.authorize()
+      const aboutRes = await fetch('https://www.googleapis.com/drive/v3/about?fields=user,storageQuota', { headers: { Authorization: `Bearer ${delegatedToken}` } })
+      out.delegation = await aboutRes.json()
+      out.delegationOk = aboutRes.ok
+    } catch (e) { out.delegationError = String(e?.message || e) }
+    return res.status(200).json(out)
+  }
+
   try {
     const auth = new JWT({
       email: clientEmail,
