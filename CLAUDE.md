@@ -5189,3 +5189,13 @@ Asked to leave only Status as a standalone dropdown and give "for all the column
 **Live-verified end-to-end**, not just built: opened "+ Filter", picked Region, only "Indian" was offered as a value (no "International" among Active people currently — a real data fact, not a bug), checked it — table went 480 → 197 people, all real "University Admission Opportunity" rows. Stacked a second filter (Role = Consultant) on top — 197 → 160, correctly AND-combined (confirmed "Adarsh Kushwaha", known from an earlier check to be an Intern not a Consultant, dropped out of this narrower set). "Clear all" correctly reset to 480/0 chips. Zero console errors throughout (a real, empty result this time — no benign extension noise since console tracking started fresh after these actions).
 
 **Gotcha hit during verification, worth remembering**: this browser tool's synthetic clicks intermittently miss React-rendered popover buttons when clicked by raw screenshot-derived coordinates right after a re-render (a checkbox click registered zero times, twice, before switching to `read_page`'s own element refs and clicking those directly, which worked every time thereafter). When a click "does nothing" in this environment, don't assume the feature is broken — re-verify via `read_page` refs before concluding anything.
+
+## 2026-08-25 (later still) — Team Mapping: filter moved inline, footnote -> "(i)" tooltip (commit `b21f5ee`)
+
+Two follow-ups on the just-shipped rich filter bar, from a screenshot: "+ Filter" was sitting alone on its own row below the main toolbar, and the long always-visible explanatory paragraph made the page feel cluttered.
+
+**Filter moved inline**: "+ Filter" (and any active chips/"Clear all") now sit in the SAME row as the search box, positioned right before the Status dropdown — matching exactly what was circled. The two previously-separate `<div>` rows were merged into one.
+
+**Footnote -> "(i)" tooltip**: the whole paragraph is gone from the page. A compact "(i)" button (same convention already used on AI/Human QL Detail) sits at the end of the toolbar row; clicking it opens a short bullet-point popover with the same information, condensed to 7 one-line bullets instead of one dense paragraph — including the live "last synced" cache timestamp.
+
+Live-verified: toolbar now reads Search → + Filter → Status → (spacer) → Bulk import/Export/History/(i), all one row; clicking "(i)" opens the bullet popover correctly. Zero console errors.
