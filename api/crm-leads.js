@@ -694,28 +694,93 @@ async function fetchLeadSquaredOpportunityActivities(creds, { opportunityId }) {
   return { opportunityId, count: (data && data.RecordCount) || rows.length, rows }
 }
 
-// UserManagement.svc/Users.Get -- the ONLY LeadSquared endpoint this account's API
-// credentials can actually reach for user/group data (every "Sales Groups" path
-// LeadSquared's own naming conventions suggest -- SalesGroup/Get, Groups.Get,
-// UserGroups.Get, Team.Get, etc -- 404s live against this account; confirmed by
-// probing all of them directly before writing this). It returns the FULL roster in
-// one call, no pagination -- confirmed live at 3,380 rows, well under any
-// page-size concern. StatusCode 0/1 = Active/Inactive, cross-checked against this
-// account's own Manage Users screen (its default "Status: Active" filter's
-// headcount matches the StatusCode===0 count here, not the StatusCode===1 one).
+// UserManagement.svc/User/AdvancedSearch -- confirmed live against this account
+// (2026-08-25, via a temporary diagnostic endpoint, cross-checked field-for-field
+// against fetchLeadSquaredUserDetail's own known-good per-user values for real
+// sampled users -- exact match on PhoneMain, TeamId, StatusCode and Groups) to be
+// a genuine BULK, paginated endpoint that replaces BOTH the old Users.Get call
+// AND almost all of the old per-user User/Retrieve/ByUserId loop below in one
+// shot. This directly answers "why does Team/Phone/Manager load slower than
+// Name/Email/Role/Groups, and can it come from one place": it can, for
+// everything except Virtual DID (a genuinely unavailable custom field here --
+// see fetchLeadSquaredUserDetails' own comment for the one thing still per-user).
+// This account's own real quirks, worth remembering if this ever needs touching:
+//  - PageSize is hard-capped at 1000 ("PageSize can't be greater than 1000"),
+//    contrary to the public docs saying no maximum is specified -- LSQ_PAGE_SIZE
+//    already equals this, so fetchAllPages' existing multi-page logic just works.
+//  - Naming ManagerName OR TeamName explicitly in Include_CSV 500s with "User
+//    search has some invalid Attributes" -- but ManagerName rides along for free
+//    whenever ManagerUserId is requested, so it's simply never named below.
+//    TeamName has no such free ride and isn't returned by this endpoint under
+//    ANY column name (confirmed: its "Team" field stays null even when TeamId is
+//    populated) -- resolved separately via resolveTeamNames, since the account
+//    has only a small, bounded number of distinct teams, not one per person.
+//  - Groups comes back as a comma-joined STRING ("A,B,C"), not an array like
+//    Users.Get's MemberOfGroups -- split before use.
+//  - StatusCode is a STRING ("0"/"1") here, not a number like Users.Get, but the
+//    same convention (0 = Active) -- confirmed against a real inactive + a real
+//    active user via the existing roster.
+//  - isPhoneCallAgent/tag aren't exposed by this endpoint and default to
+//    false/null below -- confirmed via grep that neither is actually read
+//    anywhere downstream, so this isn't a real regression.
 async function fetchLeadSquaredTeamUsers(creds) {
-  const data = await leadsquaredGet('/v2/UserManagement.svc/Users.Get', creds)
-  const rows = Array.isArray(data) ? data : []
-  return rows.map(u => ({
-    id: u.ID,
-    name: [u.FirstName, u.LastName].filter(Boolean).join(' ').trim() || u.EmailAddress || u.ID,
-    email: u.EmailAddress || null,
-    role: u.Role || null,
-    status: u.StatusCode === 0 ? 'Active' : 'Inactive',
-    groups: Array.isArray(u.MemberOfGroups) ? u.MemberOfGroups : [],
-    isPhoneCallAgent: !!u.IsPhoneCallAgent,
-    tag: u.Tag || null,
-  }))
+  const ADVANCED_SEARCH_COLUMNS = 'UserId,FirstName,LastName,EmailAddress,Role,StatusCode,PhoneMain,TeamId,ManagerUserId,Groups'
+  const fetchPage = (pageIndex, pageSize) => leadsquaredPost('/v2/UserManagement.svc/User/AdvancedSearch', creds, {
+    Columns: { Include_CSV: ADVANCED_SEARCH_COLUMNS },
+    GroupConditions: [{ Condition: [{ LookupName: 'EmailAddress', Operator: 'lik', LookupValue: '@', ConditionOperator: null }], GroupOperator: null }],
+    GroupOperator: null,
+    Paging: { PageIndex: pageIndex, PageSize: pageSize },
+  }).then(data => Array.isArray(data?.Users) ? data.Users : [])
+  // Generous headroom over the ~3,400 real headcount (8,000 users) -- same
+  // "cap sized to real volume, not unbounded" reasoning as every other
+  // fetchAllPages caller in this file.
+  const { rows } = await fetchAllPages(fetchPage, 8)
+
+  const byId = {}
+  rows.forEach(u => { byId[u.UserId] = { name: [u.FirstName, u.LastName].filter(Boolean).join(' ').trim() || u.EmailAddress || u.UserId, email: u.EmailAddress || null } })
+
+  const teamIds = Array.from(new Set(rows.map(u => u.TeamId).filter(Boolean)))
+  const teamNames = await resolveTeamNames(creds, rows, teamIds)
+
+  return rows.map(u => {
+    const mgr = u.ManagerUserId && byId[u.ManagerUserId]
+    return {
+      id: u.UserId,
+      name: byId[u.UserId]?.name || u.UserId,
+      email: u.EmailAddress || null,
+      role: u.Role || null,
+      status: String(u.StatusCode) === '0' ? 'Active' : 'Inactive',
+      groups: typeof u.Groups === 'string' && u.Groups ? u.Groups.split(',').map(s => s.trim()).filter(Boolean) : [],
+      isPhoneCallAgent: false,
+      tag: null,
+      // The fields the old page-scoped detail fetch used to be the only source
+      // for -- now populated for the WHOLE roster in the same bulk call.
+      phoneMain: u.PhoneMain || null,
+      managerUserId: u.ManagerUserId || null,
+      managerName: u.ManagerName || null,
+      managerEmail: (mgr && mgr.email) || null,
+      teamId: u.TeamId || null,
+      teamName: (u.TeamId && teamNames[u.TeamId]) || null,
+    }
+  })
+}
+
+// TeamId has no name attached anywhere in User/AdvancedSearch's response (see
+// the comment above) -- but this account only has a small, bounded number of
+// distinct teams (in the tens, not the thousands), so rather than a per-PERSON
+// call this resolves it via one per-TEAM call: pick any one member already seen
+// with that TeamId and ask the known-good per-user endpoint for ITS TeamName.
+// Cached in-memory per cold start (teams essentially never change), same
+// pattern as _lsqUsersCache above.
+let _teamNameCache = {}
+async function resolveTeamNames(creds, rows, teamIds) {
+  const missing = teamIds.filter(id => !(id in _teamNameCache))
+  if (missing.length) {
+    const exemplars = missing.map(id => rows.find(u => u.TeamId === id)).filter(Boolean)
+    const resolved = await Promise.all(exemplars.map(u => fetchLeadSquaredUserDetail(creds, u.UserId).catch(() => null)))
+    resolved.forEach((d, i) => { _teamNameCache[exemplars[i].TeamId] = (d && d.TeamName) || null })
+  }
+  return _teamNameCache
 }
 
 // Sales Groups have no dedicated API resource on this account (see the comment
