@@ -909,6 +909,9 @@ async function testAdvancedSearch(creds, opts) {
     firstRawUser: bulkUsers[0] || null,
     groundTruthCallMs: groundTruthMs,
     comparison,
+    findIds: (opts && opts.findIds)
+      ? String(opts.findIds).split(',').map(s => s.trim()).filter(Boolean).map(id => bulkUsers.find(u => u.UserId === id) || { userId: id, notFoundInThisPage: true })
+      : undefined,
     // How many of the bulk rows carry a usable PhoneMain/ManagerUserId/TeamId
     // without any per-user follow-up call -- the real question for whether
     // this can replace fetchLeadSquaredUserDetails wholesale (minus Virtual DID).
