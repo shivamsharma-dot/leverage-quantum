@@ -7,7 +7,7 @@ import Dropdown from '../components/Dropdown'
 import Button from '../components/Button'
 import ExportButton from '../components/ExportButton'
 import { useAuth } from '../hooks/useAuth'
-import { classifyDidRegion } from '../../shared/didRegion.mjs'
+import { classifyDidRegion, FRAPP_TEAM_NAME } from '../../shared/didRegion.mjs'
 
 // Real-time roster (LeadSquared UserManagement.svc/Users.Get, one call, no cache) +
 // group membership (reconstructed from that same roster -- LeadSquared has no
@@ -173,6 +173,22 @@ function StatStrip({ items }) {
 // ASM/SM assignment nobody has revisited in 90+ days is exactly the kind of
 // thing worth a second look (a promotion, a team reshuffle, someone who left).
 const STALE_DAYS = 90
+// Informational only -- NEVER used for the actual Frapp push gate (that stays
+// strictly Virtual DID-based, in shared/didRegion.mjs's classifyDidRegion, enforced
+// server-side in api/crm-leads.js). Checked live against a real ~840-person sample:
+// of the on-team people who have BOTH a Virtual DID and a Main Phone, the two agree
+// on Indian/International 100% of the time -- so this isn't a second, competing
+// classification, it's the same rule applied to whichever number happens to be on
+// file when Virtual DID itself is blank (about 1 in 7 on-team people in that sample
+// had no Virtual DID at all, so Region showed a bare "--" even though their Main
+// Phone clearly indicated a country). Same India-detection rule as classifyDidRegion:
+// no "+" prefix, or "+91" -> Indian; any other "+" prefix -> International.
+function mainPhoneRegionHint(phoneMain) {
+  const raw = String(phoneMain || '').trim()
+  if (!raw) return null
+  if (!raw.startsWith('+')) return 'Indian'
+  return raw.replace(/[\s-]/g, '').startsWith('+91') ? 'Indian' : 'International'
+}
 function staleDays(manual) {
   if (!manual || !manual.updated_at) return null
   const ms = Date.now() - new Date(manual.updated_at).getTime()
@@ -1281,6 +1297,8 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         entered fields. Region is computed, not stored: on "University Admission Opportunity" it
         reads "Indian" or "International" off the Virtual DID; everyone else shows "—". Only "Indian"
         is ever pushed to Futwork — International is blocked on the API side too, not just hidden here.
+        On that team with no Virtual DID on file, a muted "Main: Indian/International" shows what the
+        Main Phone number suggests instead — informational only, never the enforced Frapp region.
       </p>
 
       {isAdmin && selected.size > 0 && (
@@ -1337,8 +1355,14 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       {pending ? '…' : (() => {
                         const region = classifyDidRegion(d.teamName, d.airtelNumber)
-                        if (!region) return <span style={{ color: C.muted }}>—</span>
-                        return <span style={{ fontWeight: 700, color: region === 'Indian' ? C.green : C.navy }}>{region}</span>
+                        if (region) return <span style={{ fontWeight: 700, color: region === 'Indian' ? C.green : C.navy }}>{region}</span>
+                        // No enforced region (no Virtual DID, or not on the Frapp team) -- if
+                        // there's still a Main Phone on file, show what IT suggests as a muted,
+                        // clearly-secondary hint, never as if it were the real/enforced value.
+                        const onTeam = d.teamName && String(d.teamName).trim().toLowerCase() === FRAPP_TEAM_NAME
+                        const hint = onTeam ? mainPhoneRegionHint(d.phoneMain) : null
+                        if (!hint) return <span style={{ color: C.muted }}>—</span>
+                        return <span style={{ color: C.muted, fontSize: 11.5 }} title="No Virtual DID on file -- this reflects the Main Phone number instead, not the enforced Frapp region">Main: {hint}</span>
                       })()}
                     </td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }} title={pending ? '' : (d.managerEmail || '')}>{pending ? '…' : (d.managerName || '—')}</td>
