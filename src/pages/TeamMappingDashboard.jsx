@@ -1113,11 +1113,16 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   // survive a refresh, and matches what team_manual_save keys on anyway.
   const [selected, setSelected] = useState(() => new Set())
   const { running: importRunning, progress: importProgress } = useImportProgress()
-  // Phone/Virtual DID/Reporting-Manager are live but per-user calls (LeadSquared has
-  // no bulk "by many ids" variant) -- fetched only for whichever ~50 rows are
-  // actually on screen, cached by id so paging back to an already-seen page is
-  // instant, mirroring the same page-scoped lazy-load pattern this app already
-  // uses for Meta Ads creative thumbnails (same rate-limit-avoidance reasoning).
+  // Virtual DID is the ONE field LeadSquared genuinely has no bulk source for
+  // (confirmed live 2026-08-25 -- see fetchLeadSquaredTeamUsers' own comment in
+  // api/crm-leads.js: User/AdvancedSearch does NOT expose mx_Custom_2 under any
+  // column name). Team/Phone/Reporting Manager used to live here too and were
+  // exactly as slow as this -- they're now part of `data.rows` itself, bulk,
+  // instant, for the whole roster. Virtual DID is still fetched only for
+  // whichever ~50 rows are actually on screen, cached by id so paging back to
+  // an already-seen page is instant, mirroring the same page-scoped lazy-load
+  // pattern this app already uses for Meta Ads creative thumbnails (same
+  // rate-limit-avoidance reasoning).
   const [detailCache, setDetailCache] = useState({})
 
   const load = useCallback(() => {
@@ -1271,14 +1276,17 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
           filename="team-mapping-roster"
           onExported={({ rows: n }) => logExportActivity('Roster CSV', n)}
           data={filtered.map(r => {
+            // Virtual DID is still the one field that only exists once this row's
+            // page has actually been visited (see the detailCache comment above) --
+            // everything else here is bulk/instant off `r` itself now.
             const d = detailCache[r.id]
             return {
               Name: r.name, Email: r.email, 'LS Role': (r.role || '').replace(/_/g, ' '), Status: r.status,
               Groups: (r.groups || []).join('; '),
-              Team: d?.teamName || '',
-              Phone: d?.phoneMain || '', 'Virtual DID': d?.airtelNumber || '',
-              'Region': classifyDidRegion(d?.teamName, d?.airtelNumber) || '',
-              'Reporting Manager': d?.managerName || '', 'Reporting Manager Email': d?.managerEmail || '',
+              Team: r.teamName || '',
+              Phone: r.phoneMain || '', 'Virtual DID': d?.airtelNumber || '',
+              'Region': classifyDidRegion(r.teamName, d?.airtelNumber) || '',
+              'Reporting Manager': r.managerName || '', 'Reporting Manager Email': r.managerEmail || '',
               'ASM/SM': r.manual?.asm_sm || '', 'ASM/SM Email': r.manual?.asm_sm_email || '',
               SSM: r.manual?.ssm || '', 'SSM Email': r.manual?.ssm_email || '',
               Role: r.manual?.role || '', Level: r.manual?.level || '', Country: r.manual?.country || '',
@@ -1290,11 +1298,11 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
       </div>
 
       <p style={{ fontSize: 11.5, color: C.muted, marginTop: -4, marginBottom: 12 }}>
-        Name / Email / LS Role / Status / Groups / Phone / Virtual DID / Reporting Manager are all
-        live from LeadSquared, real-time. Phone, Virtual DID and Reporting Manager load per page
-        (LeadSquared has no bulk endpoint for them), so they show "…" for a moment on a page you
-        haven't opened yet. ASM/SM, SSM, Role, Level, Country and Centre Name are the only manually
-        entered fields. Region is computed, not stored: on "University Admission Opportunity" it
+        Name / Email / LS Role / Status / Groups / Team / Phone / Reporting Manager are all live from
+        LeadSquared, real-time, and load in one bulk call for the whole roster. Virtual DID is the one
+        field LeadSquared has no bulk source for, so it still loads per page and shows "…" for a moment
+        on a page you haven't opened yet. ASM/SM, SSM, Role, Level, Country and Centre Name are the only
+        manually entered fields. Region is computed, not stored: on "University Admission Opportunity" it
         reads "Indian" or "International" off the Virtual DID; everyone else shows "—". Only "Indian"
         is ever pushed to Futwork — International is blocked on the API side too, not just hidden here.
         On that team with no Virtual DID on file, a muted "Main: Indian/International" shows what the
@@ -1329,8 +1337,11 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
             </thead>
             <tbody>
               {pageRows.map((r, i) => {
+                // Virtual DID is the only field still gated on the per-page detail
+                // fetch -- Team/Phone/Reporting Manager are bulk/instant off `r`.
                 const d = detailCache[r.id]
-                const pending = !d
+                const pendingDid = !d
+                const onFrappTeam = r.teamName && String(r.teamName).trim().toLowerCase() === FRAPP_TEAM_NAME
                 const stale = isStaleMapping(r.manual)
                 return (
                   <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 ? 'transparent' : 'var(--bg3)' }}>
@@ -1349,23 +1360,22 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{(r.role || '').replace(/_/g, ' ')}</td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}><StatusBadge status={r.status} /></td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}><GroupsButton groups={r.groups} /></td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pending ? '…' : (d.teamName || '—')}</td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pending ? '…' : (d.phoneMain || '—')}</td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pending ? '…' : (d.airtelNumber || '—')}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.teamName || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.phoneMain || '—'}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{pendingDid ? '…' : (d.airtelNumber || '—')}</td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
-                      {pending ? '…' : (() => {
-                        const region = classifyDidRegion(d.teamName, d.airtelNumber)
+                      {(onFrappTeam && pendingDid) ? '…' : (() => {
+                        const region = classifyDidRegion(r.teamName, d?.airtelNumber)
                         if (region) return <span style={{ fontWeight: 700, color: region === 'Indian' ? C.green : C.navy }}>{region}</span>
                         // No enforced region (no Virtual DID, or not on the Frapp team) -- if
                         // there's still a Main Phone on file, show what IT suggests as a muted,
                         // clearly-secondary hint, never as if it were the real/enforced value.
-                        const onTeam = d.teamName && String(d.teamName).trim().toLowerCase() === FRAPP_TEAM_NAME
-                        const hint = onTeam ? mainPhoneRegionHint(d.phoneMain) : null
+                        const hint = onFrappTeam ? mainPhoneRegionHint(r.phoneMain) : null
                         if (!hint) return <span style={{ color: C.muted }}>—</span>
                         return <span style={{ color: C.muted, fontSize: 11.5 }} title="No Virtual DID on file -- this reflects the Main Phone number instead, not the enforced Frapp region">Main: {hint}</span>
                       })()}
                     </td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }} title={pending ? '' : (d.managerEmail || '')}>{pending ? '…' : (d.managerName || '—')}</td>
+                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }} title={r.managerEmail || ''}>{r.managerName || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.asm_sm || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.ssm || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.role || '—'}</td>

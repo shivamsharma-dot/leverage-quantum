@@ -923,87 +923,6 @@ async function fetchLeadSquaredUserDetails(creds, ids, byId) {
   })
 }
 
-// TEMPORARY diagnostic (2026-08-25) -- checking whether UserManagement.svc/
-// User/AdvancedSearch (a bulk, paginated, filterable endpoint per LeadSquared's
-// own docs at apidocs.leadsquared.com/user-advanced-search/) can replace the
-// per-user User/Retrieve/ByUserId loop above with ONE call. Its documented
-// sample response lists PhoneMain/TeamId/TeamName/ManagerName/ManagerUserId --
-// everything fetchLeadSquaredUserDetails currently needs a per-user round trip
-// for -- but this account's LeadSquared instance has a real history of
-// documented endpoints 404ing (see the Sales Groups comment above), so this
-// runs a real call and cross-checks it against the known-good per-user
-// endpoint for the same real users before trusting it. Admin-only, safe to
-// remove once the real answer is known and (if it works) crm-leads.js is
-// refactored to use it directly.
-async function testAdvancedSearch(creds, opts) {
-  const t0 = Date.now()
-  const columnsCsv = (opts && opts.columns) || 'UserID,FirstName,LastName,EmailAddress,PhoneMain,TeamId,ManagerUserId,mx_Custom_2,Role,StatusCode'
-  const pageSize = (opts && Number(opts.pageSize)) || 10
-  const body = {
-    Columns: { Include_CSV: columnsCsv },
-    GroupConditions: [
-      { Condition: [{ LookupName: 'EmailAddress', Operator: 'lik', LookupValue: '@', ConditionOperator: null }], GroupOperator: null },
-    ],
-    GroupOperator: null,
-    Paging: { PageIndex: 1, PageSize: pageSize },
-  }
-  let bulkResult = null, bulkError = null
-  try {
-    bulkResult = await leadsquaredPost('/v2/UserManagement.svc/User/AdvancedSearch', creds, body)
-  } catch (e) {
-    bulkError = String((e && e.message) || e)
-  }
-  const bulkMs = Date.now() - t0
-
-  // Real response uses "UserId" (lowercase d), not the "UserID" the docs' own
-  // sample request/response casing suggested -- confirmed live.
-  const bulkUsers = Array.isArray(bulkResult) ? bulkResult : (Array.isArray(bulkResult?.Users) ? bulkResult.Users : [])
-  const sampleIds = (bulkUsers || []).slice(0, 3).map(u => u.UserId).filter(Boolean)
-
-  let groundTruth = []
-  let groundTruthMs = null
-  if (sampleIds.length) {
-    const t1 = Date.now()
-    groundTruth = await Promise.all(sampleIds.map(id => fetchLeadSquaredUserDetail(creds, id).catch(e => ({ __error: String(e) }))))
-    groundTruthMs = Date.now() - t1
-  }
-
-  const comparison = sampleIds.map((id, i) => {
-    const bulk = bulkUsers.find(u => u.UserId === id) || null
-    const truth = groundTruth[i] || null
-    return {
-      userId: id,
-      bulkFull: bulk,
-      truth: truth && !truth.__error ? { PhoneMain: truth.PhoneMain, TeamId: truth.TeamId, TeamName: truth.TeamName, ManagerUserId: truth.ManagerUserId, ManagerName: truth.ManagerName, mx_Custom_2: truth.mx_Custom_2 } : truth,
-    }
-  })
-
-  return {
-    endpointReachable: !bulkError,
-    bulkError,
-    bulkCallMs: bulkMs,
-    bulkRawShape: bulkResult && typeof bulkResult === 'object' ? Object.keys(bulkResult) : typeof bulkResult,
-    bulkUserCount: bulkUsers.length,
-    firstRawUser: bulkUsers[0] || null,
-    groundTruthCallMs: groundTruthMs,
-    comparison,
-    findIds: (opts && opts.findIds)
-      ? String(opts.findIds).split(',').map(s => s.trim()).filter(Boolean).map(id => bulkUsers.find(u => u.UserId === id) || { userId: id, notFoundInThisPage: true })
-      : undefined,
-    // How many of the bulk rows carry a usable PhoneMain/ManagerUserId/TeamId
-    // without any per-user follow-up call -- the real question for whether
-    // this can replace fetchLeadSquaredUserDetails wholesale (minus Virtual DID).
-    coverage: {
-      total: bulkUsers.length,
-      withPhoneMain: bulkUsers.filter(u => u.PhoneMain).length,
-      withManagerUserId: bulkUsers.filter(u => u.ManagerUserId).length,
-      withManagerName: bulkUsers.filter(u => u.ManagerName).length,
-      withTeamId: bulkUsers.filter(u => u.TeamId).length,
-      distinctTeamIds: [...new Set(bulkUsers.map(u => u.TeamId).filter(Boolean))],
-    },
-  }
-}
-
 // employment_status was dropped -- it duplicated the live LeadSquared Status
 // (Active/Inactive) already shown for every row. ls_manager_name/email and
 // phone_number/airtel_number were ALSO dropped from the manual set for the
@@ -1885,7 +1804,7 @@ async function handleLeadSquared(req, res, me) {
   // same treatment as the connector config modes, since both involve either
   // writing to an external system or reading data scoped for that push.
   const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_list', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push', 'team_centre_options']
-  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', 'team_advanced_search_diag', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES, ...TEAM_FRAPP_MODES]
+  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES, ...TEAM_FRAPP_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
@@ -1900,7 +1819,7 @@ async function handleLeadSquared(req, res, me) {
   // team_watchers_list is readable by anyone with page access (same as
   // team_activity_list) -- only adding/removing a subscription is admin-only,
   // since this is set up on someone's behalf, not day-to-day self-serve.
-  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', 'team_watchers_add', 'team_watchers_remove', 'team_watchers_test_dm', 'team_advanced_search_diag', ...TEAM_CONNECTOR_MODES, ...TEAM_FRAPP_MODES].includes(mode) && me.role !== 'admin') {
+  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', 'team_watchers_add', 'team_watchers_remove', 'team_watchers_test_dm', ...TEAM_CONNECTOR_MODES, ...TEAM_FRAPP_MODES].includes(mode) && me.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only' })
   }
   // Cheap (env-var only, no network call) -- computed up front so the finished-
@@ -1946,7 +1865,6 @@ async function handleLeadSquared(req, res, me) {
       ;(await fetchLeadSquaredTeamUsers(creds)).forEach(u => { byId[u.id] = u })
       return res.status(200).json({ details: await fetchLeadSquaredUserDetails(creds, ids, byId) })
     }
-    if (mode === 'team_advanced_search_diag') return res.status(200).json(await testAdvancedSearch(creds, req.query))
     if (mode === 'team_frapp_preview') return res.status(200).json(await buildFrappCoachList(creds))
     if (mode === 'team_frapp_push') return res.status(200).json(await frappPush(creds, me))
     if (mode === 'team_centre_options') return res.status(200).json(await fetchTeamCentreOptions(creds))
