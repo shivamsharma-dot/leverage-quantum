@@ -1261,6 +1261,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   // { fieldKey: string[] of selected values }. See TEAM_FILTERABLE_FIELDS above.
   const [activeFilters, setActiveFilters] = useState({})
   const [openFilterKey, setOpenFilterKey] = useState(null) // fieldKey whose popover is open, or '__add'
+  const [showInfo, setShowInfo] = useState(false)
   const [page, setPage] = useState(1)
   const [editUser, setEditUser] = useState(null)
   const [showImport, setShowImport] = useState(false)
@@ -1478,6 +1479,21 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
             style={{ ...inputStyle, width: '100%', padding: '9px 12px 9px 32px', fontSize: 13.5 }}
           />
         </div>
+        {Object.keys(activeFilters).map(key => {
+          const field = TEAM_FILTERABLE_FIELDS.find(f => f.key === key)
+          if (!field) return null
+          return (
+            <TeamFilterChip key={key} field={field} values={activeFilters[key]} options={filterOptions[key] || []}
+              open={openFilterKey === key} onToggle={() => setOpenFilterKey(v => v === key ? null : key)}
+              onToggleValue={v => toggleFilterValue(key, v)} onRemove={() => removeFilter(key)} />
+          )
+        })}
+        <TeamAddFilterButton allFields={TEAM_FILTERABLE_FIELDS} activeFilters={activeFilters} filterOptions={filterOptions}
+          open={openFilterKey === '__add'} onToggle={() => setOpenFilterKey(v => v === '__add' ? null : '__add')}
+          onToggleValue={toggleFilterValue} />
+        {Object.keys(activeFilters).length > 0 && (
+          <button type="button" onClick={clearAllFilters} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 11.5, fontWeight: 600, textDecoration: 'underline', flexShrink: 0 }}>Clear all</button>
+        )}
         <Dropdown label="Status" options={['All', 'Active', 'Inactive']} value={statusFilter} onChange={setStatusFilter} minWidth={110} />
         <div style={{ flex: 1 }} />
         {isAdmin && <Button size="sm" icon={<UploadIcon />} onClick={() => setShowImport(true)}>Bulk import</Button>}
@@ -1510,43 +1526,27 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
           })}
         />
         <Button variant="ghost" size="sm" icon={<ClockIcon />} onClick={onOpenHistory}>History</Button>
+        <div style={{ position: 'relative' }}>
+          <button type="button" onClick={() => setShowInfo(v => !v)} title="Column info" style={{ width: 30, height: 30, borderRadius: 8, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.navy, fontStyle: 'italic', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>i</button>
+          {showInfo && (
+            <>
+              <div onClick={() => setShowInfo(false)} style={{ position: 'fixed', inset: 0, zIndex: 300 }} />
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400, width: 320, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14, fontSize: 11.5, color: C.text, lineHeight: 1.55 }}>
+                <div style={{ fontWeight: 800, color: C.navy, marginBottom: 8 }}>How this roster works</div>
+                <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <li>Name/Email/LS Role/Status/Groups/Team/Phone/Reporting Manager — live from LeadSquared, one bulk call for the whole roster.</li>
+                  <li>Virtual DID — the one field with no bulk source; loads per page, briefly shows "…" on a page you haven't opened yet.</li>
+                  <li>ASM/SM, SSM, Role, Country, Centre Name — the only manually entered fields.</li>
+                  <li>Region — computed. "Indian"/"International" from Virtual DID, only on "University Admission Opportunity"; "—" elsewhere. Only "Indian" is ever pushed to Futwork (blocked server-side too).</li>
+                  <li>No Virtual DID on that team? A muted "Main: Indian/International" hint from the Main Phone shows instead — informational only.</li>
+                  <li>Call Transfer — computed: "Yes" only when Team = University Admission Opportunity, phone is Indian, and Role is Consultant.</li>
+                  <li>+ Filter — filter by any column. Region/Call Transfer there read the same coach-directory cache the Frapp push uses{cacheSyncedAt ? ` (last synced ${new Date(cacheSyncedAt).toLocaleString()})` : ''} — resync via Connectors → "Sync coach directory" if it looks stale.</li>
+                </ul>
+              </div>
+            </>
+          )}
+        </div>
       </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        {Object.keys(activeFilters).map(key => {
-          const field = TEAM_FILTERABLE_FIELDS.find(f => f.key === key)
-          if (!field) return null
-          return (
-            <TeamFilterChip key={key} field={field} values={activeFilters[key]} options={filterOptions[key] || []}
-              open={openFilterKey === key} onToggle={() => setOpenFilterKey(v => v === key ? null : key)}
-              onToggleValue={v => toggleFilterValue(key, v)} onRemove={() => removeFilter(key)} />
-          )
-        })}
-        <TeamAddFilterButton allFields={TEAM_FILTERABLE_FIELDS} activeFilters={activeFilters} filterOptions={filterOptions}
-          open={openFilterKey === '__add'} onToggle={() => setOpenFilterKey(v => v === '__add' ? null : '__add')}
-          onToggleValue={toggleFilterValue} />
-        {Object.keys(activeFilters).length > 0 && (
-          <button type="button" onClick={clearAllFilters} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 11.5, fontWeight: 600, textDecoration: 'underline', flexShrink: 0 }}>Clear all</button>
-        )}
-      </div>
-
-      <p style={{ fontSize: 11.5, color: C.muted, marginTop: -4, marginBottom: 12 }}>
-        Name / Email / LS Role / Status / Groups / Team / Phone / Reporting Manager are all live from
-        LeadSquared, real-time, and load in one bulk call for the whole roster. Virtual DID is the one
-        field LeadSquared has no bulk source for, so it still loads per page and shows "…" for a moment
-        on a page you haven't opened yet. ASM/SM, SSM, Role, Country and Centre Name are the only
-        manually entered fields. Region is computed, not stored: on "University Admission Opportunity" it
-        reads "Indian" or "International" off the Virtual DID; everyone else shows "—". Only "Indian"
-        is ever pushed to Futwork — International is blocked on the API side too, not just hidden here.
-        On that team with no Virtual DID on file, a muted "Main: Indian/International" shows what the
-        Main Phone number suggests instead — informational only, never the enforced Frapp region.
-        Call Transfer is also computed, not stored: it shows "Yes" only when someone is on
-        "University Admission Opportunity", their phone is Indian, and their Role is Consultant.
-        Filter by any column with the "+ Filter" button below — Region and Call Transfer there use
-        the same coach-directory cache the Frapp push itself reads{cacheSyncedAt ? ` (last synced ${new Date(cacheSyncedAt).toLocaleString()})` : ''},
-        so it can check everyone at once, not just pages you've opened; if it looks stale, resync it
-        from Team Mapping → Connectors → "Sync coach directory".
-      </p>
 
       {isAdmin && selected.size > 0 && (
         <div style={{
