@@ -1101,15 +1101,166 @@ function HistoryTab({ onBack }) {
 
 // ---------------------------------------------------------------- Roster tab
 
+// Every column worth filtering on, EXCEPT Status -- that one stays its own
+// standalone dropdown (explicit request: "only leave status dropdown", since
+// it's the one filter almost every view starts from). `get` returns either a
+// single string or an array of strings (Group -- one person can be in several);
+// the filter engine below handles both the same way. `region`/`callTransfer`
+// read off `_region`/`_callTransfer`, two fields RosterTab computes itself from
+// the whole-roster coach-directory cache (see getTeamCacheLookup in
+// api/crm-leads.js) -- NOT the live per-page detailCache the table cells use,
+// because Virtual DID has no bulk LeadSquared source, so there is no way to
+// know Region/Call Transfer for someone whose page hasn't been opened without
+// a cache. Only ever 'Indian'/'International' and 'Yes' are exposed as values
+// (never a spelled-out "No") to match exactly what the table's own Region/Call
+// Transfer cells show -- a dash there always means "not applicable or
+// unknown", never a real "No".
+const TEAM_FILTERABLE_FIELDS = [
+  { key: 'role', label: 'LS Role', get: r => (r.role || '').replace(/_/g, ' ') || null },
+  { key: 'groups', label: 'Group', get: r => r.groups || [] },
+  { key: 'teamName', label: 'Team', get: r => r.teamName || null },
+  { key: 'region', label: 'Region', get: r => r._region || null },
+  { key: 'callTransfer', label: 'Call Transfer', get: r => r._callTransfer === 'Yes' ? 'Yes' : null },
+  { key: 'managerName', label: 'LS Manager', get: r => r.managerName || null },
+  { key: 'mapping', label: 'Mapping', get: r => r.manual ? (isStaleMapping(r.manual) ? 'Stale (90+ days)' : 'Mapped') : 'Unmapped' },
+  { key: 'manualRole', label: 'Role', get: r => r.manual?.role || null },
+  { key: 'manualCountry', label: 'Country', get: r => r.manual?.country || null },
+  { key: 'manualCentre', label: 'Centre', get: r => r.manual?.centre_name || null },
+  { key: 'asmSm', label: 'ASM/SM', get: r => r.manual?.asm_sm || null },
+  { key: 'ssm', label: 'SSM', get: r => r.manual?.ssm || null },
+]
+
+// One popover, checkbox per distinct value, with its own search box -- shared
+// shape used both by an already-active filter's chip (re-editing it) and by
+// AddFilterButton (picking values for a brand-new one). Mirrors the identical
+// pattern already shipped on AI/Human QL Detail's own per-column filter bar,
+// so a person who's used those feels no different here.
+function TeamFilterValuePopover({ field, options, selected, onToggleValue, onClose }) {
+  const [q, setQ] = useState('')
+  const shown = q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
+      <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 240, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+        <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder={'Search ' + field.label.toLowerCase() + '…'}
+          style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+        <div style={{ maxHeight: 230, overflowY: 'auto' }}>
+          {shown.map(o => {
+            const checked = selected.includes(o)
+            return (
+              <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: checked ? 700 : 500, color: checked ? C.navy : C.text, background: checked ? C.navyBg : 'transparent' }}>
+                <input type="checkbox" checked={checked} onChange={() => onToggleValue(o)} style={{ accentColor: C.navy, cursor: 'pointer', flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
+              </label>
+            )
+          })}
+          {shown.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No matches</div>}
+        </div>
+      </div>
+    </>
+  )
+}
+
+function TeamFilterChip({ field, values, options, open, onToggle, onToggleValue, onRemove }) {
+  const summary = values.length === 1 ? values[0] : values.length + ' selected'
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', borderRadius: 8, border: '0.5px solid rgba(31,60,132,0.35)', background: C.navyBg, overflow: 'hidden' }}>
+        <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 9px 6px 11px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontFamily: FONT, whiteSpace: 'nowrap' }}>
+          <span style={{ color: C.navy, fontWeight: 700 }}>{field.label}</span>
+          <span style={{ color: C.text, fontWeight: 600, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{summary}</span>
+          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke={C.navy} strokeWidth="3" strokeLinecap="round" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
+        </button>
+        <button type="button" onClick={onRemove} title="Remove filter" style={{ border: 'none', borderLeft: '0.5px solid rgba(31,60,132,0.2)', background: 'transparent', cursor: 'pointer', color: C.navy, padding: '6px 9px', display: 'flex', alignItems: 'center' }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      {open && <TeamFilterValuePopover field={field} options={options} selected={values} onToggleValue={onToggleValue} onClose={onToggle} />}
+    </div>
+  )
+}
+
+// Two-step wizard in ONE popover -- pick a column, then check off its values.
+function TeamAddFilterButton({ allFields, activeFilters, filterOptions, open, onToggle, onToggleValue }) {
+  const [step, setStep] = useState('pick')
+  const [q, setQ] = useState('')
+  useEffect(() => { if (open) { setStep('pick'); setQ('') } }, [open])
+
+  const pickable = allFields.filter(f => !activeFilters[f.key])
+  const shownFields = q.trim() ? pickable.filter(f => f.label.toLowerCase().includes(q.trim().toLowerCase())) : pickable
+  const activeField = step !== 'pick' ? allFields.find(f => f.key === step) : null
+  const options = activeField ? (filterOptions[activeField.key] || []) : []
+  const shownOptions = activeField && q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.muted, whiteSpace: 'nowrap' }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+        Filter
+      </button>
+      {open && (
+        <>
+          <div onClick={onToggle} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200, width: 230, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 8 }}>
+            {step === 'pick' ? (
+              <>
+                <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Find a column…"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+                <div style={{ maxHeight: 240, overflowY: 'auto' }}>
+                  {shownFields.map(f => (
+                    <button key={f.key} type="button" onClick={() => { setStep(f.key); setQ('') }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 9px', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, fontFamily: FONT, color: C.text, background: 'transparent' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                      {f.label}
+                    </button>
+                  ))}
+                  {shownFields.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No columns match</div>}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <button type="button" onClick={() => { setStep('pick'); setQ('') }} title="Back" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                  </button>
+                  <span style={{ fontSize: 11.5, fontWeight: 800, color: C.text }}>{activeField.label}</span>
+                </div>
+                <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder={'Search ' + activeField.label.toLowerCase() + '…'}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '6px 9px', border: '0.5px solid ' + C.border, borderRadius: 7, fontSize: 12, fontFamily: FONT, outline: 'none', marginBottom: 6, background: 'var(--bg3)', color: C.text }} />
+                <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                  {shownOptions.map(o => {
+                    const checked = (activeFilters[activeField.key] || []).includes(o)
+                    return (
+                      <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 7px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: checked ? 700 : 500, color: checked ? C.navy : C.text, background: checked ? C.navyBg : 'transparent' }}>
+                        <input type="checkbox" checked={checked} onChange={() => onToggleValue(activeField.key, o)} style={{ accentColor: C.navy, cursor: 'pointer', flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o}</span>
+                      </label>
+                    )
+                  })}
+                  {shownOptions.length === 0 && <div style={{ fontSize: 11.5, color: C.muted, padding: '6px 7px' }}>No matches</div>}
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('Active')
-  const [groupFilter, setGroupFilter] = useState('All')
-  const [mappedFilter, setMappedFilter] = useState('All')
+  // Every other filter (LS Role, Group, Team, Region, Call Transfer, LS Manager,
+  // Mapping, and the manual Role/Country/Centre/ASM-SM/SSM fields) lives in one
+  // rich, Notion/Linear-style chip system instead of a separate dropdown each --
+  // { fieldKey: string[] of selected values }. See TEAM_FILTERABLE_FIELDS above.
+  const [activeFilters, setActiveFilters] = useState({})
+  const [openFilterKey, setOpenFilterKey] = useState(null) // fieldKey whose popover is open, or '__add'
   const [page, setPage] = useState(1)
   const [editUser, setEditUser] = useState(null)
   const [showImport, setShowImport] = useState(false)
@@ -1130,6 +1281,32 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   // pattern this app already uses for Meta Ads creative thumbnails (same
   // rate-limit-avoidance reasoning).
   const [detailCache, setDetailCache] = useState({})
+
+  const toggleFilterValue = (field, val) => setActiveFilters(prev => {
+    const cur = prev[field] || []
+    const next = cur.includes(val) ? cur.filter(x => x !== val) : [...cur, val]
+    const copy = { ...prev }
+    if (next.length) copy[field] = next; else delete copy[field]
+    return copy
+  })
+  const removeFilter = field => setActiveFilters(prev => { const c = { ...prev }; delete c[field]; return c })
+  const clearAllFilters = () => setActiveFilters({})
+
+  // Region/Call Transfer need Virtual DID for the WHOLE roster to filter by --
+  // fetched once here from the same coach-directory cache the Frapp push
+  // itself reads (team_cache_lookup -> team_mapping_ls_detail_cache), not the
+  // page-scoped detailCache the table cells use. See TEAM_FILTERABLE_FIELDS'
+  // own comment for why these two sources are deliberately different.
+  const [cacheByEmail, setCacheByEmail] = useState({})
+  const [cacheSyncedAt, setCacheSyncedAt] = useState(null)
+  useEffect(() => {
+    fetchJson(API + '&mode=team_cache_lookup').then(d => {
+      const map = {}
+      ;(d.rows || []).forEach(r => { if (r.email) map[r.email.toLowerCase()] = r })
+      setCacheByEmail(map)
+      setCacheSyncedAt(d.lastSyncedAt || null)
+    }).catch(() => {})
+  }, [])
 
   const load = useCallback(() => {
     setLoading(true); setError('')
@@ -1156,12 +1333,21 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   }, [importRunning, load])
 
   const rows = data?.rows || []
-  const roleOptions = useMemo(() => ['All', ...Array.from(new Set(rows.map(r => r.role).filter(Boolean))).sort()], [rows])
-  const groupOptions = useMemo(() => {
-    const s = new Set()
-    rows.forEach(r => (r.groups || []).forEach(g => s.add(g)))
-    return ['All', ...Array.from(s).sort()]
-  }, [rows])
+
+  // Region/Call Transfer, computed once per row from the whole-roster cache
+  // (not the live per-page detailCache) so the advanced filter can see
+  // everyone, not just whoever's page has been opened. `_region`/`_callTransfer`
+  // are read by TEAM_FILTERABLE_FIELDS' own `get()`, and by nothing else --
+  // the table's on-screen cells keep using the live per-page fetch, unchanged.
+  const augmentedRows = useMemo(() => rows.map(r => {
+    const onFrappTeam = r.teamName && String(r.teamName).trim().toLowerCase() === FRAPP_TEAM_NAME
+    if (!onFrappTeam) return { ...r, _region: null, _callTransfer: null }
+    const cached = cacheByEmail[(r.email || '').toLowerCase()]
+    const region = classifyDidRegion(r.teamName, cached?.airtel_number) || null
+    const isConsultant = (r.manual?.role || '').trim().toLowerCase() === 'consultant'
+    return { ...r, _region: region, _callTransfer: (region === 'Indian' && isConsultant) ? 'Yes' : null }
+  }), [rows, cacheByEmail])
+
   // Live names, for the ASM/SM and SSM type-ahead in the edit/bulk-edit
   // modals -- see MANUAL_FIELDS' suggest:'roster' comment.
   const rosterNames = useMemo(() => Array.from(new Set(rows.map(r => r.name).filter(Boolean))).sort(), [rows])
@@ -1176,21 +1362,42 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
     fetchJson(API + '&mode=team_centre_options').then(d => setCentreOptions(d.options || [])).catch(() => {})
   }, [])
 
+  // Distinct values per filterable field, derived from rows already narrowed by
+  // Status (the one standalone dropdown) -- so picking "Inactive" first doesn't
+  // still offer LS Roles that only ever appear on Active people, matching the
+  // same "options reflect the one independent dimension" convention AI/Human QL
+  // Detail's own filter bar already uses.
+  const statusScoped = useMemo(() => statusFilter === 'All' ? augmentedRows : augmentedRows.filter(r => r.status === statusFilter), [augmentedRows, statusFilter])
+  const filterOptions = useMemo(() => {
+    const map = {}
+    TEAM_FILTERABLE_FIELDS.forEach(f => {
+      const set = new Set()
+      statusScoped.forEach(r => {
+        const v = f.get(r)
+        if (Array.isArray(v)) v.forEach(x => x && set.add(x))
+        else if (v) set.add(v)
+      })
+      map[f.key] = [...set].sort()
+    })
+    return map
+  }, [statusScoped])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return rows.filter(r => {
-      if (roleFilter !== 'All' && r.role !== roleFilter) return false
-      if (statusFilter !== 'All' && r.status !== statusFilter) return false
-      if (groupFilter !== 'All' && !(r.groups || []).includes(groupFilter)) return false
-      if (mappedFilter === 'Mapped' && !r.manual) return false
-      if (mappedFilter === 'Unmapped' && r.manual) return false
-      if (mappedFilter === 'Stale (90+ days)' && !isStaleMapping(r.manual)) return false
+    return statusScoped.filter(r => {
+      for (const f of TEAM_FILTERABLE_FIELDS) {
+        const sel = activeFilters[f.key]
+        if (!sel || !sel.length) continue
+        const v = f.get(r)
+        const ok = Array.isArray(v) ? v.some(x => sel.includes(x)) : sel.includes(v)
+        if (!ok) return false
+      }
       if (q && !((r.name || '').toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q))) return false
       return true
     })
-  }, [rows, search, roleFilter, statusFilter, groupFilter, mappedFilter])
+  }, [statusScoped, search, activeFilters])
 
-  useEffect(() => { setPage(1) }, [search, roleFilter, statusFilter, groupFilter, mappedFilter])
+  useEffect(() => { setPage(1) }, [search, statusFilter, activeFilters])
   // Selection follows filtering: a person filtered out of view (a status
   // change, a search edit) drops out of the selection too, so "apply to N
   // selected" never silently includes someone no longer on screen.
@@ -1222,9 +1429,9 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
     const active = rows.filter(r => r.status === 'Active').length
     const mapped = rows.filter(r => r.manual).length
     const stale = rows.filter(r => isStaleMapping(r.manual)).length
-    const groupCount = groupOptions.length - 1
+    const groupCount = new Set(rows.flatMap(r => r.groups || [])).size
     return { total: rows.length, active, mapped, stale, groupCount }
-  }, [rows, groupOptions])
+  }, [rows])
 
   const selectedRows = useMemo(() => filtered.filter(r => selected.has(r.email)), [filtered, selected])
   const toggleOne = email => setSelected(prev => {
@@ -1271,10 +1478,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
             style={{ ...inputStyle, width: '100%', padding: '9px 12px 9px 32px', fontSize: 13.5 }}
           />
         </div>
-        <Dropdown label="LS Role" options={roleOptions} value={roleFilter} onChange={setRoleFilter} minWidth={130} />
         <Dropdown label="Status" options={['All', 'Active', 'Inactive']} value={statusFilter} onChange={setStatusFilter} minWidth={110} />
-        <Dropdown label="Group" options={groupOptions} value={groupFilter} onChange={setGroupFilter} minWidth={160} />
-        <Dropdown label="Mapping" options={['All', 'Mapped', 'Unmapped', 'Stale (90+ days)']} value={mappedFilter} onChange={setMappedFilter} minWidth={140} />
         <div style={{ flex: 1 }} />
         {isAdmin && <Button size="sm" icon={<UploadIcon />} onClick={() => setShowImport(true)}>Bulk import</Button>}
         <ExportButton
@@ -1308,6 +1512,24 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         <Button variant="ghost" size="sm" icon={<ClockIcon />} onClick={onOpenHistory}>History</Button>
       </div>
 
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        {Object.keys(activeFilters).map(key => {
+          const field = TEAM_FILTERABLE_FIELDS.find(f => f.key === key)
+          if (!field) return null
+          return (
+            <TeamFilterChip key={key} field={field} values={activeFilters[key]} options={filterOptions[key] || []}
+              open={openFilterKey === key} onToggle={() => setOpenFilterKey(v => v === key ? null : key)}
+              onToggleValue={v => toggleFilterValue(key, v)} onRemove={() => removeFilter(key)} />
+          )
+        })}
+        <TeamAddFilterButton allFields={TEAM_FILTERABLE_FIELDS} activeFilters={activeFilters} filterOptions={filterOptions}
+          open={openFilterKey === '__add'} onToggle={() => setOpenFilterKey(v => v === '__add' ? null : '__add')}
+          onToggleValue={toggleFilterValue} />
+        {Object.keys(activeFilters).length > 0 && (
+          <button type="button" onClick={clearAllFilters} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: C.muted, fontSize: 11.5, fontWeight: 600, textDecoration: 'underline', flexShrink: 0 }}>Clear all</button>
+        )}
+      </div>
+
       <p style={{ fontSize: 11.5, color: C.muted, marginTop: -4, marginBottom: 12 }}>
         Name / Email / LS Role / Status / Groups / Team / Phone / Reporting Manager are all live from
         LeadSquared, real-time, and load in one bulk call for the whole roster. Virtual DID is the one
@@ -1320,6 +1542,10 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         Main Phone number suggests instead — informational only, never the enforced Frapp region.
         Call Transfer is also computed, not stored: it shows "Yes" only when someone is on
         "University Admission Opportunity", their phone is Indian, and their Role is Consultant.
+        Filter by any column with the "+ Filter" button below — Region and Call Transfer there use
+        the same coach-directory cache the Frapp push itself reads{cacheSyncedAt ? ` (last synced ${new Date(cacheSyncedAt).toLocaleString()})` : ''},
+        so it can check everyone at once, not just pages you've opened; if it looks stale, resync it
+        from Team Mapping → Connectors → "Sync coach directory".
       </p>
 
       {isAdmin && selected.size > 0 && (

@@ -1195,6 +1195,21 @@ async function getDetailCacheEmails() {
   return { emails: rows.map(r => r.email).filter(Boolean) }
 }
 
+// What the Roster tab's advanced filter uses for Region/Call Transfer -- those
+// two need Virtual DID for the WHOLE roster to filter correctly, but Virtual
+// DID has no bulk LeadSquared source (see fetchLeadSquaredTeamUsers' own
+// comment), so a live whole-roster fetch isn't possible on every page load.
+// This cache table already holds Virtual DID for the whole roster -- it's the
+// SAME source buildFrappCoachList (the real Frapp push) already relies on, so
+// filtering here matches what an actual push would send, at the cost of being
+// only as fresh as the last "Sync coach directory" run (surfaced to the user
+// via lastSyncedAt, same as the Connectors tab's own cache-status display).
+async function getTeamCacheLookup() {
+  const rows = await fetchAllDetailCacheRows('email,airtel_number,team_name,synced_at')
+  const lastSyncedAt = rows.reduce((max, r) => (r.synced_at && (!max || r.synced_at > max)) ? r.synced_at : max, null)
+  return { rows, lastSyncedAt }
+}
+
 // ---------------------------------------------------------------------
 // Frapp "coaches" push -- see supabase/sql/team_mapping_connectors_add_frapp.sql.
 // Only ACTIVE people on the "University Admission Opportunity" LeadSquared
@@ -1811,7 +1826,11 @@ async function handleLeadSquared(req, res, me) {
   // same treatment as the connector config modes, since both involve either
   // writing to an external system or reading data scoped for that push.
   const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_list', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push', 'team_centre_options']
-  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES, ...TEAM_FRAPP_MODES]
+  // team_cache_lookup is deliberately its own read, NOT part of TEAM_FRAPP_MODES
+  // (which is admin-only, gated below) -- the Roster tab's advanced filter needs
+  // it for Region/Call Transfer, and that tab is readable by anyone with
+  // team_mapping access, same as team_users/team_groups.
+  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', 'team_cache_lookup', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES, ...TEAM_FRAPP_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   if (!(await import('../lib/auth.mjs')).canAccessDashboard(me.role, gateId)) {
     return res.status(403).json({ error: 'Forbidden' })
@@ -1852,6 +1871,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_detail_cache_status') return res.status(200).json(await getDetailCacheStatus())
     if (mode === 'team_detail_cache_list') return res.status(200).json(await getDetailCacheEmails())
     if (mode === 'team_detail_cache_save') return res.status(200).json(await saveDetailCacheBatch((req.body && req.body.details) || []))
+    if (mode === 'team_cache_lookup') return res.status(200).json(await getTeamCacheLookup())
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
   }
