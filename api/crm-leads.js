@@ -909,6 +909,17 @@ async function testAdvancedSearch(creds, opts) {
     firstRawUser: bulkUsers[0] || null,
     groundTruthCallMs: groundTruthMs,
     comparison,
+    // How many of the bulk rows carry a usable PhoneMain/ManagerUserId/TeamId
+    // without any per-user follow-up call -- the real question for whether
+    // this can replace fetchLeadSquaredUserDetails wholesale (minus Virtual DID).
+    coverage: {
+      total: bulkUsers.length,
+      withPhoneMain: bulkUsers.filter(u => u.PhoneMain).length,
+      withManagerUserId: bulkUsers.filter(u => u.ManagerUserId).length,
+      withManagerName: bulkUsers.filter(u => u.ManagerName).length,
+      withTeamId: bulkUsers.filter(u => u.TeamId).length,
+      distinctTeamIds: [...new Set(bulkUsers.map(u => u.TeamId).filter(Boolean))],
+    },
   }
 }
 
