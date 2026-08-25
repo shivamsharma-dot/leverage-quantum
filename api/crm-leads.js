@@ -774,11 +774,24 @@ async function fetchLeadSquaredTeamUsers(creds) {
 // pattern as _lsqUsersCache above.
 let _teamNameCache = {}
 async function resolveTeamNames(creds, rows, teamIds) {
-  const missing = teamIds.filter(id => !(id in _teamNameCache))
+  // Retried, not just tried once: a team whose FIRST member found happens to be
+  // inactive (confirmed live -- fetchLeadSquaredUserDetail/ByUserId can return
+  // null for an inactive user even though AdvancedSearch lists them fine) would
+  // otherwise get permanently cached as "resolved to null" and never retried,
+  // which is exactly why the first version of this only resolved 442 of 3,397
+  // people's teams. Tries up to 5 candidates per unresolved team, active users
+  // first, and only gives up once genuinely exhausted.
+  const missing = teamIds.filter(id => _teamNameCache[id] == null)
   if (missing.length) {
-    const exemplars = missing.map(id => rows.find(u => u.TeamId === id)).filter(Boolean)
-    const resolved = await Promise.all(exemplars.map(u => fetchLeadSquaredUserDetail(creds, u.UserId).catch(() => null)))
-    resolved.forEach((d, i) => { _teamNameCache[exemplars[i].TeamId] = (d && d.TeamName) || null })
+    await Promise.all(missing.map(async id => {
+      const candidates = rows.filter(u => u.TeamId === id)
+      const ordered = [...candidates.filter(u => String(u.StatusCode) === '0'), ...candidates.filter(u => String(u.StatusCode) !== '0')]
+      for (const cand of ordered.slice(0, 5)) {
+        const d = await fetchLeadSquaredUserDetail(creds, cand.UserId).catch(() => null)
+        if (d && d.TeamName) { _teamNameCache[id] = d.TeamName; return }
+      }
+      if (_teamNameCache[id] == null) _teamNameCache[id] = null
+    }))
   }
   return _teamNameCache
 }
