@@ -51,7 +51,6 @@ const MANUAL_FIELDS = [
   { key: 'asm_sm_email', label: 'ASM/SM Email', suggest: 'roster_email' },
   { key: 'ssm', label: 'SSM', suggest: 'roster' },
   { key: 'ssm_email', label: 'SSM Email', suggest: 'roster_email' },
-  { key: 'level', label: 'Level' },
   { key: 'country', label: 'Country' },
   { key: 'centre_name', label: 'Centre Name', suggest: 'centre' },
 ]
@@ -70,13 +69,13 @@ const IMPORT_ALIASES = {
   'asm/sm email': 'asm_sm_email', 'asm sm email': 'asm_sm_email',
   'ssm': 'ssm', 'ssm email': 'ssm_email',
   'status': 'role', 'tier': 'role', 'role': 'role',
-  'level': 'level', 'country': 'country', 'centre name': 'centre_name', 'center name': 'centre_name',
+  'country': 'country', 'centre name': 'centre_name', 'center name': 'centre_name',
 }
 // The exact columns + one worked example the "Download template" button ships --
 // deliberately the same alias vocabulary as IMPORT_ALIASES above, so a template
 // round-tripped straight back through "Upload" needs no edits to import cleanly.
-const TEMPLATE_HEADERS = ['Associate Mail ID', 'ASM/SM', 'ASM/SM Email', 'SSM', 'SSM Email', 'Role', 'Level', 'Country', 'Centre Name']
-const TEMPLATE_EXAMPLE = ['jane.doe@leverageedu.com', 'Kartikey Kedia', 'kartikey.kedia@leverageedu.com', 'Manish Singh', 'manish@leverageedu.com', 'Consultant', 'Level 1', 'AC + SR', 'Delhi']
+const TEMPLATE_HEADERS = ['Associate Mail ID', 'ASM/SM', 'ASM/SM Email', 'SSM', 'SSM Email', 'Role', 'Country', 'Centre Name']
+const TEMPLATE_EXAMPLE = ['jane.doe@leverageedu.com', 'Kartikey Kedia', 'kartikey.kedia@leverageedu.com', 'Manish Singh', 'manish@leverageedu.com', 'Consultant', 'AC + SR', 'Delhi']
 
 async function fetchJson(url, opts) {
   const r = await fetch(url, { credentials: 'include', ...opts })
@@ -841,6 +840,13 @@ const TYPE_ICON = {
   frapp_push: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z" /></svg>,
 }
 const TYPE_ICON_COLOR = { import: [C.navy, C.navyBg], export: [C.cyan, C.cyanBg], edit: [C.blue, C.blueBg], delete: [C.navy, C.navyBg], restore: [C.green, C.greenBg], frapp_push: [C.blue, C.blueBg] }
+// `level` is retired (see MANUAL_FIELDS above -- 2026-08 -- Level is no longer
+// editable or shown as a column), but kept here + in TEAM_MANUAL_FIELDS_DISPLAY
+// below on purpose: an OLD activity-log entry from before the retirement can
+// still carry a `level` value in its snapshot/diff, and this is only ever read
+// for that historical display, never for editing. The underlying Supabase
+// column isn't dropped either, for the same reason -- nothing is deleted, the
+// feature is just no longer surfaced going forward.
 const FIELD_LABELS = { asm_sm: 'ASM/SM', asm_sm_email: 'ASM/SM Email', ssm: 'SSM', ssm_email: 'SSM Email', role: 'Role', level: 'Level', country: 'Country', centre_name: 'Centre Name' }
 
 // Renders the "what actually changed" body of one history row -- a field-by-
@@ -1286,10 +1292,15 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
               Team: r.teamName || '',
               Phone: r.phoneMain || '', 'Virtual DID': d?.airtelNumber || '',
               'Region': classifyDidRegion(r.teamName, d?.airtelNumber) || '',
+              // Same rule as the on-screen column: Team = University Admission
+              // Opportunity, phone = Indian, Role = Consultant.
+              'Call Transfer': (r.teamName && String(r.teamName).trim().toLowerCase() === FRAPP_TEAM_NAME
+                && (r.manual?.role || '').trim().toLowerCase() === 'consultant'
+                && classifyDidRegion(r.teamName, d?.airtelNumber) === 'Indian') ? 'Yes' : '',
               'Reporting Manager': r.managerName || '', 'Reporting Manager Email': r.managerEmail || '',
               'ASM/SM': r.manual?.asm_sm || '', 'ASM/SM Email': r.manual?.asm_sm_email || '',
               SSM: r.manual?.ssm || '', 'SSM Email': r.manual?.ssm_email || '',
-              Role: r.manual?.role || '', Level: r.manual?.level || '', Country: r.manual?.country || '',
+              Role: r.manual?.role || '', Country: r.manual?.country || '',
               'Centre Name': r.manual?.centre_name || '',
             }
           })}
@@ -1301,12 +1312,14 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         Name / Email / LS Role / Status / Groups / Team / Phone / Reporting Manager are all live from
         LeadSquared, real-time, and load in one bulk call for the whole roster. Virtual DID is the one
         field LeadSquared has no bulk source for, so it still loads per page and shows "…" for a moment
-        on a page you haven't opened yet. ASM/SM, SSM, Role, Level, Country and Centre Name are the only
+        on a page you haven't opened yet. ASM/SM, SSM, Role, Country and Centre Name are the only
         manually entered fields. Region is computed, not stored: on "University Admission Opportunity" it
         reads "Indian" or "International" off the Virtual DID; everyone else shows "—". Only "Indian"
         is ever pushed to Futwork — International is blocked on the API side too, not just hidden here.
         On that team with no Virtual DID on file, a muted "Main: Indian/International" shows what the
         Main Phone number suggests instead — informational only, never the enforced Frapp region.
+        Call Transfer is also computed, not stored: it shows "Yes" only when someone is on
+        "University Admission Opportunity", their phone is Indian, and their Role is Consultant.
       </p>
 
       {isAdmin && selected.size > 0 && (
@@ -1330,7 +1343,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                     <input type="checkbox" checked={pageAllSelected} onChange={togglePage} style={{ width: 15, height: 15, cursor: 'pointer' }} title="Select everyone on this page" />
                   </th>
                 )}
-                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Virtual DID', 'Region', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
+                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Virtual DID', 'Region', 'Call Transfer', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
                   <th key={h} style={{ padding: '9px 12px', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -1342,6 +1355,13 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                 const d = detailCache[r.id]
                 const pendingDid = !d
                 const onFrappTeam = r.teamName && String(r.teamName).trim().toLowerCase() === FRAPP_TEAM_NAME
+                // Call Transfer: Team is University Admission Opportunity, phone is
+                // Indian, and the (manual) business Role is Consultant -- Team/Role are
+                // known immediately, so only the Indian/International check (which needs
+                // Virtual DID) ever waits, and only for people who already clear the
+                // other two.
+                const isConsultant = (r.manual?.role || '').trim().toLowerCase() === 'consultant'
+                const callTransferCandidate = onFrappTeam && isConsultant
                 const stale = isStaleMapping(r.manual)
                 return (
                   <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 ? 'transparent' : 'var(--bg3)' }}>
@@ -1374,6 +1394,13 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
                         if (!hint) return <span style={{ color: C.muted }}>—</span>
                         return <span style={{ color: C.muted, fontSize: 11.5 }} title="No Virtual DID on file -- this reflects the Main Phone number instead, not the enforced Frapp region">Main: {hint}</span>
                       })()}
+                    </td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }} title="Team is University Admission Opportunity, phone is Indian, and Role is Consultant">
+                      {!callTransferCandidate ? <span style={{ color: C.muted }}>—</span>
+                        : pendingDid ? '…'
+                        : classifyDidRegion(r.teamName, d.airtelNumber) === 'Indian'
+                          ? <span style={{ fontWeight: 700, color: C.green }}>Yes</span>
+                          : <span style={{ color: C.muted }}>—</span>}
                     </td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }} title={r.managerEmail || ''}>{r.managerName || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.asm_sm || '—'}</td>

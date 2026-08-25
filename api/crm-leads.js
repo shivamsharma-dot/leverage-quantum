@@ -930,7 +930,12 @@ async function fetchLeadSquaredUserDetails(creds, ids, byId) {
 // renamed to role: a business-side designation (ASM/Consultant/Manager/...),
 // distinct from LeadSquared's own coarse Role (Sales_User/Administrator/...)
 // which the frontend now labels "LS Role" to avoid the two being confused.
-const TEAM_MANUAL_FIELDS = ['asm_sm', 'asm_sm_email', 'ssm', 'ssm_email', 'role', 'level', 'country', 'centre_name']
+// 'level' was retired 2026-08 (no longer editable, no longer a column) -- left
+// OUT of this whitelist on purpose so a save/restore never touches that column
+// again, but the Supabase column itself isn't dropped and existing values for
+// people who already had one stay exactly as they are, just no longer shown
+// or writable from here.
+const TEAM_MANUAL_FIELDS = ['asm_sm', 'asm_sm_email', 'ssm', 'ssm_email', 'role', 'country', 'centre_name']
 
 // Fetches the current row (if any) for one email -- used before every save/
 // delete to compute a before/after diff, and before a restore to know what
@@ -1586,18 +1591,20 @@ async function syncTeamMappingSheet(sheetId, creds) {
   const { access_token } = await auth.authorize()
 
   const { rows } = await fetchTeamUsersMerged(creds)
-  const header = ['Name', 'Email', 'LS Role', 'Status', 'Groups', 'ASM/SM', 'ASM/SM Email', 'SSM', 'SSM Email', 'Role', 'Level', 'Country', 'Centre Name']
+  // 'Level' dropped 2026-08 (retired, see TEAM_MANUAL_FIELDS' own comment) --
+  // 12 columns now (A-L), not 13 (A-M), so both ranges below moved with it.
+  const header = ['Name', 'Email', 'LS Role', 'Status', 'Groups', 'ASM/SM', 'ASM/SM Email', 'SSM', 'SSM Email', 'Role', 'Country', 'Centre Name']
   const grid = [header, ...rows.map(r => [
     r.name, r.email || '', (r.role || '').replace(/_/g, ' '), r.status, (r.groups || []).join('; '),
     r.manual?.asm_sm || '', r.manual?.asm_sm_email || '', r.manual?.ssm || '', r.manual?.ssm_email || '',
-    r.manual?.role || '', r.manual?.level || '', r.manual?.country || '', r.manual?.centre_name || '',
+    r.manual?.role || '', r.manual?.country || '', r.manual?.centre_name || '',
   ])]
 
-  const clearRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:M20000:clear`, {
+  const clearRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:L20000:clear`, {
     method: 'POST', headers: { Authorization: `Bearer ${access_token}` },
   })
   if (!clearRes.ok) throw new Error('Could not clear the target sheet -- check the Sheet ID and that it is shared with ' + clientEmail)
-  const writeRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:M${grid.length}?valueInputOption=RAW`, {
+  const writeRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:L${grid.length}?valueInputOption=RAW`, {
     method: 'PUT', headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ values: grid }),
   })
@@ -1699,7 +1706,7 @@ async function handleTeamExportPull(req, res) {
       name: r.name, email: r.email, ls_role: (r.role || '').replace(/_/g, ' '), status: r.status, groups: r.groups || [],
       asm_sm: r.manual?.asm_sm || null, asm_sm_email: r.manual?.asm_sm_email || null,
       ssm: r.manual?.ssm || null, ssm_email: r.manual?.ssm_email || null,
-      role: r.manual?.role || null, level: r.manual?.level || null, country: r.manual?.country || null,
+      role: r.manual?.role || null, country: r.manual?.country || null,
       centre_name: r.manual?.centre_name || null, mapping_updated_at: r.manual?.updated_at || null,
     }))
     return res.status(200).json({ generated_at: new Date().toISOString(), count: flat.length, rows: flat })
