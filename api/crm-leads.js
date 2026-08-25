@@ -877,8 +877,10 @@ async function testAdvancedSearch(creds, opts) {
   }
   const bulkMs = Date.now() - t0
 
-  const bulkUsers = Array.isArray(bulkResult) ? bulkResult : (bulkResult && (bulkResult.Users || bulkResult.RecordCount != null ? bulkResult.Users || [] : null)) || (Array.isArray(bulkResult?.Users) ? bulkResult.Users : [])
-  const sampleIds = (bulkUsers || []).slice(0, 3).map(u => u.UserID).filter(Boolean)
+  // Real response uses "UserId" (lowercase d), not the "UserID" the docs' own
+  // sample request/response casing suggested -- confirmed live.
+  const bulkUsers = Array.isArray(bulkResult) ? bulkResult : (Array.isArray(bulkResult?.Users) ? bulkResult.Users : [])
+  const sampleIds = (bulkUsers || []).slice(0, 3).map(u => u.UserId).filter(Boolean)
 
   let groundTruth = []
   let groundTruthMs = null
@@ -889,15 +891,12 @@ async function testAdvancedSearch(creds, opts) {
   }
 
   const comparison = sampleIds.map((id, i) => {
-    const bulk = bulkUsers.find(u => u.UserID === id) || null
+    const bulk = bulkUsers.find(u => u.UserId === id) || null
     const truth = groundTruth[i] || null
     return {
       userId: id,
-      bulk: bulk ? { PhoneMain: bulk.PhoneMain, TeamId: bulk.TeamId, TeamName: bulk.TeamName, ManagerUserId: bulk.ManagerUserId, ManagerName: bulk.ManagerName, mx_Custom_2: bulk.mx_Custom_2 } : null,
+      bulkFull: bulk,
       truth: truth && !truth.__error ? { PhoneMain: truth.PhoneMain, TeamId: truth.TeamId, TeamName: truth.TeamName, ManagerUserId: truth.ManagerUserId, ManagerName: truth.ManagerName, mx_Custom_2: truth.mx_Custom_2 } : truth,
-      match: !!(bulk && truth && !truth.__error &&
-        bulk.PhoneMain === truth.PhoneMain && bulk.TeamId === truth.TeamId && bulk.TeamName === truth.TeamName &&
-        bulk.ManagerUserId === truth.ManagerUserId && bulk.ManagerName === truth.ManagerName && bulk.mx_Custom_2 === truth.mx_Custom_2),
     }
   })
 
@@ -910,7 +909,6 @@ async function testAdvancedSearch(creds, opts) {
     firstRawUser: bulkUsers[0] || null,
     groundTruthCallMs: groundTruthMs,
     comparison,
-    allFieldsMatch: comparison.length > 0 && comparison.every(c => c.match),
   }
 }
 
