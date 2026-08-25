@@ -857,15 +857,17 @@ async function fetchLeadSquaredUserDetails(creds, ids, byId) {
 // endpoint for the same real users before trusting it. Admin-only, safe to
 // remove once the real answer is known and (if it works) crm-leads.js is
 // refactored to use it directly.
-async function testAdvancedSearch(creds) {
+async function testAdvancedSearch(creds, opts) {
   const t0 = Date.now()
+  const columnsCsv = (opts && opts.columns) || 'UserID,FirstName,LastName,EmailAddress,PhoneMain,TeamId,ManagerUserId,mx_Custom_2,Role,StatusCode'
+  const pageSize = (opts && Number(opts.pageSize)) || 10
   const body = {
-    Columns: { Include_CSV: 'UserID,FirstName,LastName,EmailAddress,PhoneMain,TeamId,TeamName,ManagerUserId,ManagerName,mx_Custom_2,Role,StatusCode' },
+    Columns: { Include_CSV: columnsCsv },
     GroupConditions: [
       { Condition: [{ LookupName: 'EmailAddress', Operator: 'lik', LookupValue: '@', ConditionOperator: null }], GroupOperator: null },
     ],
     GroupOperator: null,
-    Paging: { PageIndex: 1, PageSize: 10 },
+    Paging: { PageIndex: 1, PageSize: pageSize },
   }
   let bulkResult = null, bulkError = null
   try {
@@ -1854,7 +1856,7 @@ async function handleLeadSquared(req, res, me) {
       ;(await fetchLeadSquaredTeamUsers(creds)).forEach(u => { byId[u.id] = u })
       return res.status(200).json({ details: await fetchLeadSquaredUserDetails(creds, ids, byId) })
     }
-    if (mode === 'team_advanced_search_diag') return res.status(200).json(await testAdvancedSearch(creds))
+    if (mode === 'team_advanced_search_diag') return res.status(200).json(await testAdvancedSearch(creds, req.query))
     if (mode === 'team_frapp_preview') return res.status(200).json(await buildFrappCoachList(creds))
     if (mode === 'team_frapp_push') return res.status(200).json(await frappPush(creds, me))
     if (mode === 'team_centre_options') return res.status(200).json(await fetchTeamCentreOptions(creds))
