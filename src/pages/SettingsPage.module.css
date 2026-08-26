@@ -25,6 +25,20 @@
   --ctl-h:       32px;   /* referenced by .dsField / .dsField input */
   --ctl-r:       11px;
 
+  /* Settings audit (2026-08-27): 12-16 distinct radii per tab (8, 9, 10, 11,
+     12, 14, 16, 18, 50%, 99px, 999px were all in live use, with 999px AND
+     99px both used as "the" pill radius), because no radius token existed --
+     every card invented its own value. These four map to what already
+     dominated: 11 for controls (matches --ctl-r above), 12 for an inner
+     tile/nested card, 16 for the outer card surface, 999 for a pill. New
+     code should reach for these instead of a literal; NOT retrofitted onto
+     the ~15 sessions' worth of existing literals in this file -- that's a
+     larger, separately-verified sweep, not folded in here. */
+  --radius-sm:   11px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-pill: 999px;
+
   display: flex;
   height: 100vh;
   overflow: hidden;
