@@ -879,8 +879,8 @@ export default function Sidebar() {
                   onFocus={(e)=>{ openFlyout(item, e.currentTarget.parentElement); prefetchRoute(item.defaultTo || firstReachableSubTo(item)) }}
                   onContextMenu={!isRouteGroup(item) ? (e) => openHideMenu(e, idMap[item.label], item.label) : undefined}
                   className={`${styles.collapsedItem} ${parentActiveFor(item) ? styles.collapsedActive : ''}`}
-                  title={item.label}>
-                  {item.icon}
+                  title={item.label} aria-label={item.label} aria-haspopup="true">
+                  <span aria-hidden="true">{item.icon}</span>
                 </NavLink>
               </div>
             ) : (
@@ -888,8 +888,8 @@ export default function Sidebar() {
                 onMouseEnter={()=>prefetchRoute(item.defaultTo || item.to)} onFocus={()=>prefetchRoute(item.defaultTo || item.to)}
                 onContextMenu={(e) => openHideMenu(e, idMap[item.label], item.label)}
                 className={({ isActive }) => `${styles.collapsedItem} ${isActive ? styles.collapsedActive : ''}`}
-                title={item.label}>
-                {item.icon}
+                title={item.label} aria-label={item.label}>
+                <span aria-hidden="true">{item.icon}</span>
               </NavLink>
             )
           )))}
