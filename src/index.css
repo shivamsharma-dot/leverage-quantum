@@ -17,7 +17,19 @@
 
   --text:          #0F172A;
   --text2:         #475569;
-  --text3:         #94A3B8;
+  /* SYS-1 (Team Mapping UI audit): was #94A3B8, which measures 2.56:1 on
+     #FFFFFF and 2.37:1 on #F4F6F9 -- below the WCAG AA 4.5:1 floor for normal
+     text. This is the app's universal secondary-text token (table headers,
+     stat labels, captions, breadcrumbs, muted text everywhere), so nudging it
+     is a global change, not a Team Mapping-only one -- deliberate, per the
+     audit's own instruction to fix this as a token change. #57607A verified
+     at 6.25:1 / 5.77:1 on the same two backgrounds, comfortably clearing the
+     floor, same hue family (blue-grey) so the visual hierarchy is unchanged,
+     just darker. Scoped to the light theme only (this block + the mirrored
+     [data-theme="light"] block below): dark/navy/stone are not reachable in
+     production today (no ThemeProvider mount, see CLAUDE.md) and already
+     have their own separately-verified --text3 values. */
+  --text3:         #57607A;
 
   --navy:          #1F3C84;
   --blue:          #1C9FD4;
@@ -372,7 +384,7 @@ input:focus, textarea:focus {
   --header-border: #E5E7EB;
   --text:          #0F172A;
   --text2:         #475569;
-  --text3:         #94A3B8;
+  --text3:         #57607A; /* SYS-1 -- kept in sync with the bare :root value above */
   --input-bg:     #F8FAFC;
   --input-border: #E2E8F0;
   --sb-thumb:     rgba(15,23,42,0.15);
