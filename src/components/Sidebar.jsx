@@ -45,7 +45,7 @@ export const NAV = [
       { to: '/dashboard/overall', icon: <OverallIcon />, label: 'Overall', end: false },
       // Genuinely restricted to Shivam's own email, not just admin-only -- see
       // canSee()'s OVERALL_BIGQUERY_EMAILS check further down this file.
-      { to: '/dashboard/overall-bigquery', icon: <OverallIcon />, label: 'Overall (BigQuery)', end: false },
+      { to: '/dashboard/overall-bigquery', icon: <OverallBigQueryIcon />, label: 'Overall (BigQuery)', end: false },
       {
         to: '/dashboard/ceo-b2c-pnl',
         navKey: 'b2c',
@@ -185,6 +185,12 @@ export const PAGE_LIST = [
 
 function HomeIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> }
 function OverallIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> }
+// NAV-6: was reusing OverallIcon verbatim, so Overall and Overall (BigQuery)
+// were literally indistinguishable in the collapsed rail -- the only way to
+// tell them apart was hovering for the native title tooltip. A database
+// glyph (distinct silhouette from the stacked-layers OverallIcon) instead --
+// this page's whole point is that it reads from BigQuery, not the sheet.
+function OverallBigQueryIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg> }
 function ChartIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> }
 function FunnelIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 3H2l8 9.46V19l4 2V12.46L22 3z"/></svg> }
 function MTDIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> }
@@ -246,7 +252,7 @@ function FutworkErrorIcon(){ return <svg width="14" height="14" viewBox="0 0 24 
 function FieldSchemaIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/></svg> }
 
 const ICON_MAP = {
-  'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'Overall (BigQuery)': <OverallIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
+  'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'Overall (BigQuery)': <OverallBigQueryIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
   'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
   'Revenue': <RevenueIcon/>, 'B2C': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>, 'Leverage Careers': <CareersIcon/>,
   'Google Ads': <GoogleAdsIcon/>, 'Lead Qualification': <PeopleIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
