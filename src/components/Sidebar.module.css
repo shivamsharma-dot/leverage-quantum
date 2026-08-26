@@ -477,7 +477,16 @@
   border: 1.5px solid #fff;
   box-shadow: 0 0 0 1.5px var(--card-border), 0 2px 6px rgba(31,60,132,0.12);
   flex-shrink: 0;
+  /* NAV-3: the earlier .avatar rule (top of this file) sets overflow:hidden
+     to round the image into a circle -- which also clips this box's own
+     .statusDot child (positioned to sit proud of the circle's edge), leaving
+     only a fragment of its white ring visible as a "notch". overflow:visible
+     here lets the dot sit outside the circle as designed; .avatar img below
+     takes over the circular clipping the wrapper's overflow:hidden used to
+     provide. */
+  overflow: visible;
 }
+.avatar img { border-radius: 50%; }
 .statusDot {
   position: absolute;
   right: -1px; bottom: -1px;
