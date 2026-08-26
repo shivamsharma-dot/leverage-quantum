@@ -645,7 +645,15 @@ export default function Sidebar() {
           if (visibleItems.length === 0) return null
           return (
           <div key={group.label} className={styles.group}>
-            {group.label !== 'Intelligence' && <p className={styles.groupLabel}>{group.label}</p>}
+            {/* NAV-5: this used to skip the label specifically for
+                'Intelligence' (Ask AI/Agents), so with no OVERVIEW/ANALYTICS-
+                style heading above it, Agents (the second item, so not even
+                first-in-nav) read as orphaned rather than as its own
+                deliberate section. Giving every group a real label -- the
+                .group:first-child rule below still bolds/brand-inks Ask AI's
+                own row for prominence, unaffected by whether a heading
+                renders above the group. */}
+            <p className={styles.groupLabel}>{group.label}</p>
             {visibleItems.map(item => {
               if (item.subItems) {
                 const parentActive = parentActiveFor(item)
@@ -767,9 +775,9 @@ export default function Sidebar() {
               if (!vis.length) return null
               return (
               <div key={group.label} style={{marginBottom:8,padding:'0 10px'}}>
-                {group.label !== 'Intelligence' && (
-                  <div style={{fontSize:11,fontWeight:700,color:'var(--text2)',letterSpacing:'0.09em',textTransform:'uppercase',padding:'12px 6px 4px'}}>{group.label}</div>
-                )}
+                {/* NAV-5: mirrors the same fix in the desktop nav above -- every
+                    group gets its section heading, including Intelligence. */}
+                <div style={{fontSize:11,fontWeight:700,color:'var(--text2)',letterSpacing:'0.09em',textTransform:'uppercase',padding:'12px 6px 4px'}}>{group.label}</div>
                 {vis.map(item=>{
                   const parentActive = item.subItems ? parentActiveFor(item) : location.pathname === item.to
                   return (
