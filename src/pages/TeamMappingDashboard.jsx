@@ -458,21 +458,27 @@ function ClockIcon() {
 // Groups column: a compact "View" button + count instead of inline chips, so the
 // column stays a fixed width regardless of how many groups someone's in -- opens
 // the full, un-truncated list rather than "+2 more" with no way to see the rest.
+// TBL-2: a zero-groups row used to still render a disabled "View" button --
+// greyed, unclickable, 49px wide against its 80-83px "View (N)" neighbours,
+// reading as a control that failed to load rather than a real "nothing
+// here" state. Plain muted text for the zero case, and the real button gets
+// a minWidth so the column doesn't ragged-edge between rows either.
 function GroupsButton({ groups }) {
   const [open, setOpen] = useState(false)
   const n = (groups || []).length
+  if (!n) return <span style={{ fontSize: 11.5, color: C.muted }}>—</span>
   return (
     <>
       <button
-        onClick={() => n && setOpen(true)} disabled={!n}
+        onClick={() => setOpen(true)}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7,
-          border: '0.5px solid ' + C.border, background: 'var(--card)', cursor: n ? 'pointer' : 'default',
-          fontSize: 11.5, fontWeight: 700, color: n ? C.navy : C.muted, fontFamily: FONT,
+          display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, minWidth: 64, justifyContent: 'center',
+          border: '0.5px solid ' + C.border, background: 'var(--card)', cursor: 'pointer',
+          fontSize: 11.5, fontWeight: 700, color: C.navy, fontFamily: FONT,
         }}
       >
-        View{n > 0 ? ` (${n})` : ''}
-        {n > 0 && <ChevronDown />}
+        View ({n})
+        <ChevronDown />
       </button>
       {open && (
         <Modal onClose={() => setOpen(false)} title={`Groups (${n})`} width={440}>
