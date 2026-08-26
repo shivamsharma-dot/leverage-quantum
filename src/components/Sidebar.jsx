@@ -775,6 +775,21 @@ export default function Sidebar() {
               style={{position:'absolute',top:'calc(10px + env(safe-area-inset-top))',right:14,zIndex:1,width:32,height:32,borderRadius:8,border:'0.5px solid var(--card-border)',background:'var(--card)',color:'var(--text2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
+            {/* RES-3: the drawer showed no name, email or avatar at all --
+                only Settings/Sign out at the very foot, with nothing
+                identifying whose account this even is. Same avatar/initials
+                logic the desktop footer already uses, kept intentionally
+                simple (no grid/role-badge/hover chrome) since this is a
+                once-per-open glance, not the persistent footer card. */}
+            <div style={{display:'flex',alignItems:'center',gap:10,padding:'4px 20px 14px',borderBottom:'1px solid var(--card-border)',margin:'0 10px 8px'}}>
+              <span style={{width:34,height:34,borderRadius:'50%',flexShrink:0,overflow:'hidden',background:'#E8EFF9',border:'1.5px solid #fff',boxShadow:'0 0 0 1.5px var(--card-border)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:12.5,fontWeight:700,color:'var(--brand-ink,#1F3C84)'}}>
+                {user?.picture ? <img src={user.picture} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/> : initials}
+              </span>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:'var(--text)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{user?.name?.split(' ')[0] || 'User'}</div>
+                <div style={{fontSize:12,color:'var(--text3)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}} title={user?.email}>{user?.email}</div>
+              </div>
+            </div>
             <div style={{flex:1}}>
             {NAV.map(group=>{
               const vis = group.items.filter(groupVisible)
@@ -796,7 +811,22 @@ export default function Sidebar() {
                         background: parentActive ? 'linear-gradient(90deg, rgba(28,159,212,0.10), rgba(31,60,132,0.06))' : 'none',
                         color: parentActive ? 'var(--brand-ink)' : 'var(--text2)',
                         fontSize:14.5,fontWeight: parentActive ? 750 : 650,fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
-                      <span style={{display:'flex',flexShrink:0}} aria-hidden="true">{item.icon}</span>{item.label}
+                      <span style={{display:'flex',flexShrink:0}} aria-hidden="true">{item.icon}</span>
+                      <span style={{flex:1}}>{item.label}</span>
+                      {/* RES-3: the desktop nav marks a sub-menu with a chevron;
+                          the drawer dropped it, so all five multi-page groups
+                          (Agents/B2C/Meta Ads/Google Ads/Lead Qualification/
+                          LeadSquared) looked like plain leaf links with nothing
+                          hinting they lead to more than one page. Same glyph as
+                          desktop, purely decorative (tapping still navigates,
+                          same as before -- this isn't a click-to-toggle
+                          control on mobile, just the missing visual cue). */}
+                      {item.subItems && (
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true"
+                          style={{flexShrink:0,opacity:.4,transform: parentActive ? 'rotate(180deg)' : 'none',transition:'transform .2s'}}>
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      )}
                     </button>
                     {/* Sub-pages were simply absent on mobile before this: the drawer
                         rendered only item.label, so Daily P&L, Daily Cash Flow, the QL
