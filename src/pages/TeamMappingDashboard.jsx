@@ -131,6 +131,122 @@ function parseCreateUsersText(text) {
   return { rows, skipped, unmapped, binary: false }
 }
 
+// The target fields the Add User wizard's Mapping step offers -- same key
+// vocabulary as CREATE_USER_ALIASES' values, same order as
+// CREATE_USER_TEMPLATE_HEADERS, so a row built from this list already matches
+// exactly what runCreateUsersInBackground/team_create_user expect with no
+// translation step in between.
+const WIZARD_FIELDS = [
+  { key: 'first_name', label: 'First Name', required: true },
+  { key: 'last_name', label: 'Last Name', required: false },
+  { key: 'email', label: 'Email', required: true },
+  { key: 'role', label: 'Role', required: false },
+  { key: 'team_name', label: 'Team', required: false },
+  { key: 'manager_email', label: 'Manager Email', required: false },
+  { key: 'phone', label: 'Phone', required: false },
+  { key: 'virtual_did', label: 'Virtual DID', required: false },
+  { key: 'permission_template', label: 'Permission Template', required: false },
+]
+
+// Raw, un-aliased parse for the Mapping wizard step -- unlike parseCreateUsersText
+// (which silently matches headers against CREATE_USER_ALIASES and drops anything
+// it doesn't recognize), this keeps every real column exactly as uploaded so the
+// Mapping step can show the file's own header names and real sample values, and
+// let the admin confirm or override the guess rather than trusting a silent match.
+function parseRawTable(text) {
+  if (looksBinary(text)) return { binary: true, headers: [], rows: [] }
+  const lines = text.split(/\r?\n/).map(l => l.replace(/\r$/, '')).filter(l => l.trim().length)
+  if (lines.length < 2) return { binary: false, headers: [], rows: [] }
+  const delim = lines[0].includes('\t') ? '\t' : ','
+  const headers = splitDelimited(lines[0], delim).map(h => h.trim()).filter(Boolean)
+  const rows = []
+  for (let i = 1; i < lines.length; i++) {
+    const cells = splitDelimited(lines[i], delim)
+    const row = {}
+    headers.forEach((h, ci) => { row[h] = (cells[ci] || '').trim() })
+    rows.push(row)
+  }
+  return { binary: false, headers, rows }
+}
+
+// Turns a raw parsed table + a { targetField: csvHeaderName } map into the exact
+// row shape team_create_user/runCreateUsersInBackground expect. A row missing
+// First Name or Email (the only two required fields) is counted as skipped, not
+// silently dropped -- the wizard's own summary states the count.
+function buildResolvedRows(table, fieldMap) {
+  const rows = []
+  let skipped = 0
+  ;(table?.rows || []).forEach(r => {
+    const row = {}
+    WIZARD_FIELDS.forEach(f => { row[f.key] = fieldMap[f.key] ? (r[fieldMap[f.key]] || '').trim() : '' })
+    if (!row.first_name || !row.email) { skipped++; return }
+    rows.push(row)
+  })
+  return { rows, skipped }
+}
+
+// A reasonably complete, curated dial-code list (not the full ISO-3166 set --
+// this is a searchable picker, not an exhaustive directory) with India first
+// since this is an India-based business. Deliberately NOT auto-detected from
+// typed digits: "+1" alone is shared by the US, Canada and a dozen Caribbean
+// nations, so guessing would just be wrong some of the time -- the admin picks.
+const COUNTRY_CODES = [
+  { code: '+91', name: 'India', flag: '🇮🇳' },
+  { code: '+1', name: 'United States', flag: '🇺🇸' },
+  { code: '+1', name: 'Canada', flag: '🇨🇦' },
+  { code: '+44', name: 'United Kingdom', flag: '🇬🇧' },
+  { code: '+971', name: 'United Arab Emirates', flag: '🇦🇪' },
+  { code: '+966', name: 'Saudi Arabia', flag: '🇸🇦' },
+  { code: '+974', name: 'Qatar', flag: '🇶🇦' },
+  { code: '+968', name: 'Oman', flag: '🇴🇲' },
+  { code: '+965', name: 'Kuwait', flag: '🇰🇼' },
+  { code: '+973', name: 'Bahrain', flag: '🇧🇭' },
+  { code: '+65', name: 'Singapore', flag: '🇸🇬' },
+  { code: '+60', name: 'Malaysia', flag: '🇲🇾' },
+  { code: '+61', name: 'Australia', flag: '🇦🇺' },
+  { code: '+64', name: 'New Zealand', flag: '🇳🇿' },
+  { code: '+49', name: 'Germany', flag: '🇩🇪' },
+  { code: '+33', name: 'France', flag: '🇫🇷' },
+  { code: '+39', name: 'Italy', flag: '🇮🇹' },
+  { code: '+34', name: 'Spain', flag: '🇪🇸' },
+  { code: '+31', name: 'Netherlands', flag: '🇳🇱' },
+  { code: '+41', name: 'Switzerland', flag: '🇨🇭' },
+  { code: '+353', name: 'Ireland', flag: '🇮🇪' },
+  { code: '+46', name: 'Sweden', flag: '🇸🇪' },
+  { code: '+47', name: 'Norway', flag: '🇳🇴' },
+  { code: '+45', name: 'Denmark', flag: '🇩🇰' },
+  { code: '+7', name: 'Russia', flag: '🇷🇺' },
+  { code: '+86', name: 'China', flag: '🇨🇳' },
+  { code: '+81', name: 'Japan', flag: '🇯🇵' },
+  { code: '+82', name: 'South Korea', flag: '🇰🇷' },
+  { code: '+852', name: 'Hong Kong', flag: '🇭🇰' },
+  { code: '+63', name: 'Philippines', flag: '🇵🇭' },
+  { code: '+62', name: 'Indonesia', flag: '🇮🇩' },
+  { code: '+66', name: 'Thailand', flag: '🇹🇭' },
+  { code: '+84', name: 'Vietnam', flag: '🇻🇳' },
+  { code: '+880', name: 'Bangladesh', flag: '🇧🇩' },
+  { code: '+92', name: 'Pakistan', flag: '🇵🇰' },
+  { code: '+94', name: 'Sri Lanka', flag: '🇱🇰' },
+  { code: '+977', name: 'Nepal', flag: '🇳🇵' },
+  { code: '+95', name: 'Myanmar', flag: '🇲🇲' },
+  { code: '+27', name: 'South Africa', flag: '🇿🇦' },
+  { code: '+234', name: 'Nigeria', flag: '🇳🇬' },
+  { code: '+254', name: 'Kenya', flag: '🇰🇪' },
+  { code: '+20', name: 'Egypt', flag: '🇪🇬' },
+  { code: '+212', name: 'Morocco', flag: '🇲🇦' },
+  { code: '+55', name: 'Brazil', flag: '🇧🇷' },
+  { code: '+52', name: 'Mexico', flag: '🇲🇽' },
+  { code: '+54', name: 'Argentina', flag: '🇦🇷' },
+  { code: '+972', name: 'Israel', flag: '🇮🇱' },
+  { code: '+90', name: 'Turkey', flag: '🇹🇷' },
+  { code: '+48', name: 'Poland', flag: '🇵🇱' },
+  { code: '+420', name: 'Czech Republic', flag: '🇨🇿' },
+  { code: '+43', name: 'Austria', flag: '🇦🇹' },
+  { code: '+32', name: 'Belgium', flag: '🇧🇪' },
+  { code: '+351', name: 'Portugal', flag: '🇵🇹' },
+  { code: '+30', name: 'Greece', flag: '🇬🇷' },
+]
+
 async function fetchJson(url, opts) {
   const r = await fetch(url, { credentials: 'include', ...opts })
   const d = await r.json()
@@ -380,6 +496,70 @@ function SuggestInput({ value, onChange, suggestions, placeholder }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function CheckGlyph({ color, size = 15 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+}
+function AlertGlyph({ color, size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" /><line x1="12" y1="7.5" x2="12" y2="13" /><circle cx="12" cy="16.6" r="0.6" fill={color} stroke="none" />
+    </svg>
+  )
+}
+
+// Searchable country-code picker (flag + name + dial code), paired with a plain
+// number input by PhoneField below -- deliberately NOT auto-detected from typed
+// digits (see COUNTRY_CODES' own comment on why that would be unreliable).
+function CountryCodeSelect({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const ref = useRef(null)
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [])
+  const current = COUNTRY_CODES.find(c => c.code === value) || COUNTRY_CODES[0]
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    if (!s) return COUNTRY_CODES
+    return COUNTRY_CODES.filter(c => c.name.toLowerCase().includes(s) || c.code.includes(s))
+  }, [q])
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(v => !v)} style={{ ...inputStyle, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', width: 112, justifyContent: 'space-between' }}>
+        <span>{current.flag} {current.code}</span>
+        <ChevronDown />
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 20, width: 260, background: 'var(--card)', border: '0.5px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.25)' }}>
+          <div style={{ padding: 8, borderBottom: '0.5px solid ' + C.border }}>
+            <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search country or code…" style={inputStyle} />
+          </div>
+          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+            {filtered.length === 0 && <div style={{ padding: '10px 12px', fontSize: 12, color: C.muted }}>No match</div>}
+            {filtered.map((c, i) => (
+              <div key={c.name + i} onMouseDown={e => { e.preventDefault(); onChange(c.code); setOpen(false); setQ('') }}
+                style={{ padding: '7px 12px', fontSize: 12.5, cursor: 'pointer', color: C.text, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>{c.flag} {c.name}</span>
+                <span style={{ color: C.muted, fontWeight: 700 }}>{c.code}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+function PhoneField({ code, number, onCodeChange, onNumberChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      <CountryCodeSelect value={code} onChange={onCodeChange} />
+      <input style={{ ...inputStyle, flex: 1 }} value={number} onChange={e => onNumberChange(e.target.value.replace(/[^\d\s-]/g, ''))} placeholder="9876543210" />
     </div>
   )
 }
@@ -820,27 +1000,74 @@ function useCreateUsersProgress() {
 
 // ---------------------------------------------------------------- Bulk import modal
 
-function BulkImportModal({ onClose, onStarted }) {
-  const [parsed, setParsed] = useState(null) // result of parseImportText, once a file/paste is loaded
-  const [label, setLabel] = useState('')
+// Modern file/paste input: an always-visible segmented control (Upload file /
+// Paste rows) instead of a hidden "Or paste rows instead" text link -- shared
+// by BulkImportModal below and the Add User wizard's Step 1, so both stayed
+// visually consistent per explicit instruction to modernize both, not just
+// the new flow. `parseFn` is whichever parser the caller needs (parseImportText,
+// parseCreateUsersText, or the wizard's own parseRawTable) -- this component
+// only owns the file-vs-paste UI, never the parsing itself.
+function FileOrPasteInput({ onParsed, parseFn, accept = '.csv,.tsv,.txt', fileHint }) {
+  const [srcMode, setSrcMode] = useState('file') // 'file' | 'paste'
   const [dragOver, setDragOver] = useState(false)
-  const [showPaste, setShowPaste] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const fileRef = useRef(null)
 
   const loadFile = file => {
     if (!file) return
-    setLabel(file.name)
     const reader = new FileReader()
-    reader.onload = ev => setParsed(parseImportText(String(ev.target.result || '')))
+    reader.onload = ev => onParsed(parseFn(String(ev.target.result || '')), file.name)
     reader.readAsText(file)
   }
-
   const onDrop = e => {
     e.preventDefault(); setDragOver(false)
-    const file = e.dataTransfer.files && e.dataTransfer.files[0]
-    loadFile(file)
+    loadFile(e.dataTransfer.files && e.dataTransfer.files[0])
   }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 12, padding: 3, borderRadius: 10, background: 'var(--bg3)', width: 'fit-content' }}>
+        {[['file', 'Upload file'], ['paste', 'Paste rows']].map(([m, lbl]) => (
+          <button key={m} type="button" onClick={() => setSrcMode(m)} style={{
+            padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: FONT,
+            background: srcMode === m ? 'var(--card)' : 'transparent', color: srcMode === m ? C.navy : C.muted,
+            boxShadow: srcMode === m ? '0 1px 4px rgba(15,23,42,0.10)' : 'none', transition: 'all .15s',
+          }}>{lbl}</button>
+        ))}
+      </div>
+      {srcMode === 'file' ? (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          onClick={() => fileRef.current && fileRef.current.click()}
+          style={{
+            border: '1.5px dashed ' + (dragOver ? C.blue : C.border), borderRadius: 12, padding: '30px 20px',
+            textAlign: 'center', cursor: 'pointer', background: dragOver ? C.blueBg : 'var(--bg3)', transition: 'background .15s, border-color .15s',
+          }}
+        >
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 4 }}>Drop a CSV file here, or click to browse</div>
+          <div style={{ fontSize: 11.5, color: C.muted }}>{fileHint || '.csv, .tsv or .txt — first row must be real column headers'}</div>
+          <input ref={fileRef} type="file" accept={accept} onChange={e => loadFile(e.target.files && e.target.files[0])} style={{ display: 'none' }} />
+        </div>
+      ) : (
+        <div>
+          <textarea
+            value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Paste tab- or comma-separated rows here, including the header row…"
+            style={{ ...inputStyle, height: 140, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+            <Button size="sm" onClick={() => onParsed(parseFn(pasteText), 'pasted rows')} disabled={!pasteText.trim()}>Parse pasted rows</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BulkImportModal({ onClose, onStarted }) {
+  const [parsed, setParsed] = useState(null) // result of parseImportText, once a file/paste is loaded
+  const [label, setLabel] = useState('')
 
   const startImport = () => {
     if (!parsed || !parsed.rows.length) return
@@ -860,20 +1087,7 @@ function BulkImportModal({ onClose, onStarted }) {
       </div>
 
       {!parsed && (
-        <div
-          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={onDrop}
-          onClick={() => fileRef.current && fileRef.current.click()}
-          style={{
-            border: '1.5px dashed ' + (dragOver ? C.blue : C.border), borderRadius: 12, padding: '30px 20px',
-            textAlign: 'center', cursor: 'pointer', background: dragOver ? C.blueBg : 'var(--bg3)', transition: 'background .15s, border-color .15s',
-          }}
-        >
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 4 }}>Drop a CSV file here, or click to browse</div>
-          <div style={{ fontSize: 11.5, color: C.muted }}>.csv, .tsv or .txt — first row must be real column headers</div>
-          <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" onChange={e => loadFile(e.target.files && e.target.files[0])} style={{ display: 'none' }} />
-        </div>
+        <FileOrPasteInput onParsed={(p, lbl) => { setLabel(lbl); setParsed(p) }} parseFn={parseImportText} />
       )}
 
       {parsed && parsed.binary && (
@@ -926,24 +1140,6 @@ function BulkImportModal({ onClose, onStarted }) {
         </div>
       )}
 
-      {!parsed && (
-        <div style={{ marginTop: 12 }}>
-          {!showPaste ? (
-            <span onClick={() => setShowPaste(true)} style={{ fontSize: 12, color: C.blue, fontWeight: 700, cursor: 'pointer' }}>Or paste rows instead</span>
-          ) : (
-            <>
-              <textarea
-                value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Paste tab- or comma-separated rows here…"
-                style={{ ...inputStyle, height: 100, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical' }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                <Button variant="ghost" size="sm" onClick={() => { setLabel('pasted rows'); setParsed(parseImportText(pasteText)) }} disabled={!pasteText.trim()}>Parse pasted rows</Button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
         <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
         <Button size="sm" onClick={startImport} disabled={!parsed || parsed.binary || !parsed.rows.length}>
@@ -954,16 +1150,146 @@ function BulkImportModal({ onClose, onStarted }) {
   )
 }
 
-// ---------------------------------------------------------------- Add User modal
+// ---------------------------------------------------------------- Add User page
 //
-// Deliberately a SEPARATE button/modal from "Bulk import" above, not a mode
-// inside it -- that one maps ASM/SM/Role/Country onto people who already
-// exist in LeadSquared; this one creates brand-new people in LeadSquared
-// itself. Same "one person" vs "many (CSV)" toggle inside ONE entry point,
-// so there's still only ever one new button on the toolbar, not two.
+// A full-page tab (activeTab === 'add-user' in the outer component), not a
+// Modal -- matches how "History" already works: reached only via a button,
+// not listed in the pill row, with its own "Back to Roster". Deliberately a
+// SEPARATE entry point from "Bulk import" above, not a mode inside it -- that
+// one maps ASM/SM/Role/Country onto people who already exist in LeadSquared;
+// this one creates brand-new people in LeadSquared itself. Still one "One
+// person" vs "Many (CSV)" toggle inside ONE page, so there's still only ever
+// one new button on the toolbar, not two.
 const smallLabelStyle = { fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block' }
 
-function AddUserModal({ onClose, rows, rosterEmails, onCreated, onBulkStarted }) {
+// Mapping step: one row per target field, a checkmark once it's mapped (navy
+// "needs attention" if a REQUIRED field is still unmapped -- never red/amber,
+// same brand rule as everywhere else on this page), a real "CSV Column"
+// dropdown built from the uploaded file's own header row (pre-selected via
+// CREATE_USER_ALIASES as a smart suggestion the admin can override, never a
+// silent hard match), and live "CSV Example Data" sampled from whichever
+// column is currently mapped.
+function MappingStep({ table, fieldMap, setFieldMap }) {
+  return (
+    <div style={{ border: '0.5px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <thead>
+          <tr style={{ background: 'var(--bg3)' }}>
+            {['', 'Field', 'CSV Column', 'CSV Example Data'].map(h => (
+              <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 800, color: C.muted, textTransform: 'uppercase', fontSize: 10 }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {WIZARD_FIELDS.map(f => {
+            const mapped = fieldMap[f.key] || ''
+            const samples = mapped ? table.rows.map(r => r[mapped]).filter(Boolean).slice(0, 3) : []
+            return (
+              <tr key={f.key} style={{ borderTop: '0.5px solid ' + C.border }}>
+                <td style={{ padding: '9px 12px', width: 30 }}>
+                  {mapped ? <CheckGlyph color={C.green} /> : f.required ? <AlertGlyph color={C.navy} /> : <span style={{ color: C.muted }}>—</span>}
+                </td>
+                <td style={{ padding: '9px 12px', fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>
+                  {f.label}{f.required && <span style={{ color: C.navy }}> *</span>}
+                </td>
+                <td style={{ padding: '9px 12px' }}>
+                  <Dropdown
+                    options={['— Not mapped —', ...table.headers]}
+                    value={mapped || '— Not mapped —'}
+                    onChange={v => setFieldMap(m => ({ ...m, [f.key]: v === '— Not mapped —' ? '' : v }))}
+                    minWidth={220}
+                  />
+                </td>
+                <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11.5 }}>{samples.length ? samples.join('  ·  ') : '—'}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// Data Import step: the resolved preview, one row per person who'll actually
+// be created. Team/Manager Email/Permission Template are validated against
+// what's really in the roster/template list right now -- navy (never red)
+// when a mapped value doesn't match anything, so it's visible before the real
+// LeadSquared write happens rather than only discovered afterward.
+function DataImportStep({ resolved, lookups }) {
+  const { rows, skipped } = resolved
+  const cell = (v, ok) => <span style={{ color: !v ? C.muted : (ok ? C.text : C.navy), fontWeight: (v && !ok) ? 700 : 400 }}>{v || '—'}</span>
+  return (
+    <div>
+      <div style={{ fontSize: 12.5, color: C.text, marginBottom: 10 }}>
+        <b>{fmtN(rows.length)}</b> user(s) ready to create{skipped > 0 && <>, <b>{fmtN(skipped)}</b> skipped (missing First Name or Email)</>}.
+      </div>
+      <div style={{ overflowX: 'auto', border: '0.5px solid ' + C.border, borderRadius: 10 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+          <thead>
+            <tr style={{ background: 'var(--bg3)' }}>
+              {['First Name', 'Last Name', 'Email', 'Role', 'Team', 'Manager Email', 'Phone', 'Virtual DID', 'Permission Template'].map(h => (
+                <th key={h} style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 800, color: C.muted, textTransform: 'uppercase', fontSize: 10, whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, 25).map((row, i) => {
+              const teamOk = !row.team_name || !!lookups.teamNameToId[row.team_name.trim().toLowerCase()]
+              const mgrOk = !row.manager_email || !!lookups.managerEmailToId[row.manager_email.trim().toLowerCase()]
+              const tplOk = !row.permission_template || !!lookups.templateNameToId[row.permission_template.trim().toLowerCase()]
+              return (
+                <tr key={i} style={{ borderTop: '0.5px solid ' + C.border }}>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.first_name}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.last_name || '—'}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.email}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.role || '—'}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{cell(row.team_name, teamOk)}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{cell(row.manager_email, mgrOk)}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.phone || '—'}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{row.virtual_did || '—'}</td>
+                  <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>{cell(row.permission_template, tplOk)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        {rows.length > 25 && <div style={{ padding: '6px 10px', fontSize: 11, color: C.muted }}>+ {fmtN(rows.length - 25)} more row(s)</div>}
+      </div>
+      <div style={{ marginTop: 10, fontSize: 11.5, color: C.muted }}>
+        <span style={{ color: C.navy, fontWeight: 700 }}>Navy</span> means that value doesn't match anyone in the roster / any available template — the person will still be created, just without that field set (fix it in LeadSquared afterward, or go back and remap).
+      </div>
+    </div>
+  )
+}
+
+// The three-step-wizard progress rail -- Select File → Mapping → Data Import.
+function WizardSteps({ step }) {
+  const steps = ['Select File', 'Mapping', 'Data Import']
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+      {steps.map((label, i) => {
+        const n = i + 1
+        const done = n < step, active = n === step
+        return (
+          <React.Fragment key={label}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                width: 24, height: 24, borderRadius: '50%', flexShrink: 0, fontSize: 11.5, fontWeight: 800,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                background: done ? C.green : active ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'var(--bg3)',
+                color: done || active ? '#fff' : C.muted,
+              }}>{done ? <CheckGlyph color="#fff" size={12} /> : n}</span>
+              <span style={{ fontSize: 12.5, fontWeight: active ? 800 : 700, color: active ? C.text : C.muted }}>{label}</span>
+            </div>
+            {n < steps.length && <span style={{ width: 28, height: 1, background: C.border, flexShrink: 0 }} />}
+          </React.Fragment>
+        )
+      })}
+    </div>
+  )
+}
+
+function AddUserPage({ onBack, onBulkStarted, rows, rosterEmails, onCreated }) {
   const [mode, setMode] = useState('single') // 'single' | 'bulk'
   const [templates, setTemplates] = useState(null) // null = loading, [] = none, or [{id,name}]
   const [templatesError, setTemplatesError] = useState('')
@@ -989,8 +1315,10 @@ function AddUserModal({ onClose, rows, rosterEmails, onCreated, onBulkStarted })
     return { teamNameToId, managerEmailToId, templateNameToId }
   }, [rows, templates])
 
+  const blankForm = { firstName: '', lastName: '', email: '', role: 'Sales_User', teamId: '', managerEmail: '', phoneCode: '+91', phoneNumber: '', virtualDid: '', permissionTemplateId: '', password: '' }
+
   // -------- single-person form
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', role: 'Sales_User', teamId: '', managerEmail: '', phone: '', virtualDid: '', permissionTemplateId: '', password: '' })
+  const [form, setForm] = useState(blankForm)
   const setF = (k, v) => setForm(p => ({ ...p, [k]: v }))
   const [creating, setCreating] = useState(false)
   const [createResult, setCreateResult] = useState(null) // { id, templateApplied, templateError }
@@ -1002,11 +1330,12 @@ function AddUserModal({ onClose, rows, rosterEmails, onCreated, onBulkStarted })
     setCreating(true); setCreateError(''); setCreateResult(null)
     try {
       const managerUserId = form.managerEmail ? lookups.managerEmailToId[form.managerEmail.trim().toLowerCase()] : undefined
+      const phone = form.phoneNumber.trim() ? `${form.phoneCode}-${form.phoneNumber.trim()}` : undefined
       const result = await fetchJson(API + '&mode=team_create_user', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(),
-          role: form.role, teamId: form.teamId || undefined, managerUserId, phone: form.phone.trim() || undefined,
+          role: form.role, teamId: form.teamId || undefined, managerUserId, phone,
           virtualDid: form.virtualDid.trim() || undefined, password: form.password || undefined,
           permissionTemplateId: form.permissionTemplateId || undefined,
         }),
@@ -1020,42 +1349,54 @@ function AddUserModal({ onClose, rows, rosterEmails, onCreated, onBulkStarted })
     }
   }
 
-  // -------- bulk form (mirrors BulkImportModal's file/paste UI)
-  const [parsed, setParsed] = useState(null)
-  const [label, setLabel] = useState('')
-  const [dragOver, setDragOver] = useState(false)
-  const [showPaste, setShowPaste] = useState(false)
-  const [pasteText, setPasteText] = useState('')
-  const fileRef = useRef(null)
+  // -------- bulk wizard: Select File -> Mapping -> Data Import
+  const [step, setStep] = useState(1)
+  const [table, setTable] = useState(null) // { headers, rows } from parseRawTable, un-aliased
+  const [srcLabel, setSrcLabel] = useState('')
+  const [fieldMap, setFieldMap] = useState({})
 
-  const loadFile = file => {
-    if (!file) return
-    setLabel(file.name)
-    const reader = new FileReader()
-    reader.onload = ev => setParsed(parseCreateUsersText(String(ev.target.result || '')))
-    reader.readAsText(file)
+  const resetBulk = () => { setStep(1); setTable(null); setSrcLabel(''); setFieldMap({}) }
+
+  const onParsedTable = (parsedTable, fileLabel) => {
+    if (parsedTable.binary) { window.alert(`"${fileLabel}" doesn't look like a text CSV -- if this is an Excel file, use File → Save As → CSV (Comma delimited) first, then upload that.`); return }
+    if (!parsedTable.headers.length) { window.alert('No usable rows found -- the first line has to be a real header row, and there has to be at least one data row below it.'); return }
+    // Smart default per field, guessed from CREATE_USER_ALIASES -- a suggestion
+    // the admin sees and can override in the Mapping step, never a silent match.
+    const guess = {}
+    WIZARD_FIELDS.forEach(f => {
+      const h = parsedTable.headers.find(hh => CREATE_USER_ALIASES[hh.trim().toLowerCase()] === f.key)
+      if (h) guess[f.key] = h
+    })
+    setTable(parsedTable); setSrcLabel(fileLabel); setFieldMap(guess); setStep(2)
   }
-  const onDrop = e => {
-    e.preventDefault(); setDragOver(false)
-    const file = e.dataTransfer.files && e.dataTransfer.files[0]
-    loadFile(file)
-  }
+
+  const resolved = useMemo(() => buildResolvedRows(table, fieldMap), [table, fieldMap])
+  const requiredMapped = !!fieldMap.first_name && !!fieldMap.email
+
   const startBulk = () => {
-    if (!parsed || !parsed.rows.length) return
-    if (!window.confirm(`Create ${parsed.rows.length} real user(s) in LeadSquared now? This can't be bulk-undone -- each would need removing one at a time.`)) return
-    runCreateUsersInBackground(parsed.rows, label || 'pasted rows', parsed.skipped, lookups)
+    if (!resolved.rows.length) return
+    if (!window.confirm(`Create ${resolved.rows.length} real user(s) in LeadSquared now? This can't be bulk-undone -- each would need removing one at a time.`)) return
+    runCreateUsersInBackground(resolved.rows, srcLabel || 'pasted rows', resolved.skipped, lookups)
     onBulkStarted()
   }
 
   return (
-    <Modal onClose={onClose} title="Add User" width={620}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+    <div>
+      <button type="button" onClick={onBack} style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer',
+        color: C.muted, fontSize: 12.5, fontWeight: 700, padding: 0, marginBottom: 16,
+      }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+        Back to Roster
+      </button>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
         <div style={pillStyle(mode === 'single')} onClick={() => setMode('single')}>One person</div>
         <div style={pillStyle(mode === 'bulk')} onClick={() => setMode('bulk')}>Many (upload CSV)</div>
       </div>
 
       {mode === 'single' && (
-        <div>
+        <Card title="New person" sub="Creates a real user directly in LeadSquared.">
           {createResult ? (
             <div style={{ padding: '12px 14px', borderRadius: 10, background: C.greenBg, border: '0.5px solid rgba(76,174,111,0.35)', color: C.text, fontSize: 12.5 }}>
               <div style={{ fontWeight: 800, color: C.green, marginBottom: 4 }}>User created</div>
@@ -1065,14 +1406,15 @@ function AddUserModal({ onClose, rows, rosterEmails, onCreated, onBulkStarted })
                   ? <div style={{ marginTop: 4 }}>Permission template applied.</div>
                   : <div style={{ marginTop: 4, color: C.navy }}>User created, but the permission template failed to apply{createResult.templateError ? `: ${createResult.templateError}` : ''} — apply it manually in LeadSquared.</div>
               )}
-              <div style={{ marginTop: 10 }}>
-                <Button size="sm" variant="ghost" onClick={() => { setCreateResult(null); setForm({ firstName: '', lastName: '', email: '', role: 'Sales_User', teamId: '', managerEmail: '', phone: '', virtualDid: '', permissionTemplateId: '', password: '' }) }}>Create another</Button>
+              <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+                <Button size="sm" variant="ghost" onClick={() => { setCreateResult(null); setForm(blankForm) }}>Create another</Button>
+                <Button size="sm" onClick={onBack}>Back to Roster</Button>
               </div>
             </div>
           ) : (
-            <>
+            <div style={{ maxWidth: 640 }}>
               {createError && (
-                <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5, marginBottom: 12 }}>✕ {createError}</div>
+                <div style={{ padding: '10px 14px', borderRadius: 10, background: C.navyBg, border: '0.5px solid rgba(31,60,132,0.25)', color: C.navy, fontSize: 12.5, marginBottom: 12 }}>{createError}</div>
               )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div><span style={smallLabelStyle}>First Name *</span><input style={inputStyle} value={form.firstName} onChange={e => setF('firstName', e.target.value)} /></div>
@@ -1101,7 +1443,10 @@ function AddUserModal({ onClose, rows, rosterEmails, onCreated, onBulkStarted })
                 <SuggestInput value={form.managerEmail} onChange={v => setF('managerEmail', v)} suggestions={rosterEmails} placeholder="Start typing an existing person's email…" />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                <div><span style={smallLabelStyle}>Phone</span><input style={inputStyle} value={form.phone} onChange={e => setF('phone', e.target.value)} placeholder="+91-9876543210" /></div>
+                <div>
+                  <span style={smallLabelStyle}>Phone</span>
+                  <PhoneField code={form.phoneCode} number={form.phoneNumber} onCodeChange={v => setF('phoneCode', v)} onNumberChange={v => setF('phoneNumber', v)} />
+                </div>
                 <div><span style={smallLabelStyle}>Virtual DID</span><input style={inputStyle} value={form.virtualDid} onChange={e => setF('virtualDid', e.target.value)} /></div>
               </div>
               <div style={{ marginBottom: 12 }}>
@@ -1117,124 +1462,75 @@ function AddUserModal({ onClose, rows, rosterEmails, onCreated, onBulkStarted })
                   />
                 )}
               </div>
-              <div style={{ marginBottom: 4 }}>
+              <div style={{ marginBottom: 16 }}>
                 <span style={smallLabelStyle}>Password (optional)</span><input style={inputStyle} type="password" value={form.password} onChange={e => setF('password', e.target.value)} />
               </div>
-            </>
+              <Button size="sm" onClick={submitSingle} disabled={creating || !form.firstName.trim() || !form.email.trim()}>
+                {creating ? 'Creating…' : 'Create User'}
+              </Button>
+            </div>
           )}
-        </div>
+        </Card>
       )}
 
       {mode === 'bulk' && (
         <div>
-          <p style={{ fontSize: 12.5, color: C.muted, marginTop: 0 }}>
-            Each row creates a real, brand-new user in LeadSquared. First Name and Email are required;
-            everything else is optional. Team/Manager/Permission Template are matched by name against
-            who's already in the roster/available templates — a name that doesn't match anything is
-            just left blank on that row, not a hard failure.
-          </p>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            <Button variant="ghost" size="sm" onClick={downloadCreateUsersTemplate}>Download template (CSV)</Button>
-          </div>
-          {!parsed && (
-            <div
-              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={onDrop}
-              onClick={() => fileRef.current && fileRef.current.click()}
-              style={{
-                border: '1.5px dashed ' + (dragOver ? C.blue : C.border), borderRadius: 12, padding: '30px 20px',
-                textAlign: 'center', cursor: 'pointer', background: dragOver ? C.blueBg : 'var(--bg3)', transition: 'background .15s, border-color .15s',
-              }}
-            >
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 4 }}>Drop a CSV file here, or click to browse</div>
-              <div style={{ fontSize: 11.5, color: C.muted }}>.csv, .tsv or .txt — first row must be real column headers</div>
-              <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" onChange={e => loadFile(e.target.files && e.target.files[0])} style={{ display: 'none' }} />
-            </div>
-          )}
-          {parsed && parsed.binary && (
-            <div style={{ padding: '12px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5 }}>
-              "{label}" doesn't look like a text CSV — if this is an Excel file, use File → Save As → CSV (Comma delimited) first, then upload that.
-              <div style={{ marginTop: 8 }}><Button variant="ghost" size="sm" onClick={() => { setParsed(null); setLabel('') }}>Try another file</Button></div>
-            </div>
-          )}
-          {parsed && !parsed.binary && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{label}</div>
-                <Button variant="ghost" size="sm" onClick={() => { setParsed(null); setLabel('') }}>Choose a different file</Button>
+          <WizardSteps step={step} />
+
+          {step === 1 && (
+            <Card title="1. Select File" sub="Each row creates a real, brand-new user in LeadSquared.">
+              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                <Button variant="ghost" size="sm" onClick={downloadCreateUsersTemplate}>Download template (CSV)</Button>
               </div>
-              {parsed.rows.length === 0 ? (
-                <div style={{ padding: '12px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5 }}>
-                  No rows had both a First Name and an Email. Check the header row matches the downloaded template.
-                  {parsed.unmapped.length > 0 && <div style={{ marginTop: 6 }}>Unrecognized headers found: {parsed.unmapped.join(', ')}</div>}
-                </div>
-              ) : (
-                <>
-                  <div style={{ fontSize: 12.5, color: C.text, marginBottom: 10 }}>
-                    <b>{parsed.rows.length}</b> row(s) ready to create{parsed.skipped > 0 && <>, <b>{parsed.skipped}</b> skipped (missing First Name or Email)</>}.
-                    {parsed.unmapped.length > 0 && <> Ignored column(s): {parsed.unmapped.join(', ')}.</>}
-                  </div>
-                  <div style={{ overflowX: 'auto', border: '0.5px solid ' + C.border, borderRadius: 10, marginBottom: 14 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
-                      <thead>
-                        <tr style={{ background: 'var(--bg3)' }}>
-                          {Object.keys(parsed.rows[0]).map(k => (
-                            <th key={k} style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 800, color: C.muted, textTransform: 'uppercase', fontSize: 10, whiteSpace: 'nowrap' }}>{k}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {parsed.rows.slice(0, 3).map((row, i) => (
-                          <tr key={i} style={{ borderTop: '0.5px solid ' + C.border }}>
-                            {Object.keys(parsed.rows[0]).map(k => (
-                              <td key={k} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{row[k] || '—'}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {parsed.rows.length > 3 && <div style={{ padding: '6px 10px', fontSize: 11, color: C.muted }}>+ {parsed.rows.length - 3} more row(s)</div>}
-                  </div>
-                </>
-              )}
-            </div>
+              <FileOrPasteInput onParsed={onParsedTable} parseFn={parseRawTable} fileHint=".csv, .tsv or .txt — first row must be real column headers" />
+            </Card>
           )}
-          {!parsed && (
-            <div style={{ marginTop: 12 }}>
-              {!showPaste ? (
-                <span onClick={() => setShowPaste(true)} style={{ fontSize: 12, color: C.blue, fontWeight: 700, cursor: 'pointer' }}>Or paste rows instead</span>
-              ) : (
-                <>
-                  <textarea
-                    value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Paste tab- or comma-separated rows here…"
-                    style={{ ...inputStyle, height: 100, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                    <Button variant="ghost" size="sm" onClick={() => { setLabel('pasted rows'); setParsed(parseCreateUsersText(pasteText)) }} disabled={!pasteText.trim()}>Parse pasted rows</Button>
-                  </div>
-                </>
-              )}
-            </div>
+
+          {step === 2 && table && (
+            <Card title="2. Mapping" sub={`${srcLabel} — ${fmtN(table.rows.length)} row(s). Match each field to a column from your file.`}
+              action={<Button variant="ghost" size="sm" onClick={resetBulk}>Choose a different file</Button>}>
+              <MappingStep table={table} fieldMap={fieldMap} setFieldMap={setFieldMap} />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                <Button variant="ghost" size="sm" onClick={() => setStep(1)}>Back</Button>
+                <Button size="sm" disabled={!requiredMapped} onClick={() => setStep(3)}>Continue</Button>
+              </div>
+              {!requiredMapped && <div style={{ marginTop: 8, fontSize: 11.5, color: C.navy, textAlign: 'right' }}>First Name and Email both need a mapped column before continuing.</div>}
+            </Card>
+          )}
+
+          {step === 3 && table && (
+            <Card title="3. Data Import" sub="Review before creating -- nothing is written to LeadSquared until you confirm below.">
+              <DataImportStep resolved={resolved} lookups={lookups} />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                <Button variant="ghost" size="sm" onClick={() => setStep(2)}>Back to mapping</Button>
+                <Button size="sm" onClick={startBulk} disabled={!resolved.rows.length}>
+                  {resolved.rows.length ? `Create ${fmtN(resolved.rows.length)} user(s) in background` : 'Create'}
+                </Button>
+              </div>
+            </Card>
           )}
         </div>
       )}
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
-        <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
-        {mode === 'single' && !createResult && (
-          <Button size="sm" onClick={submitSingle} disabled={creating || !form.firstName.trim() || !form.email.trim()}>
-            {creating ? 'Creating…' : 'Create User'}
-          </Button>
-        )}
-        {mode === 'bulk' && (
-          <Button size="sm" onClick={startBulk} disabled={!parsed || parsed.binary || !parsed.rows.length}>
-            {parsed && parsed.rows.length ? `Create ${parsed.rows.length} user(s) in background` : 'Create'}
-          </Button>
-        )}
-      </div>
-    </Modal>
+    </div>
   )
+}
+
+// AddUserPage needs the same roster (for Team/Manager lookups) RosterTab
+// already fetches -- but the two are now separate, mutually-exclusive tabs
+// (matching History's own pattern), so RosterTab isn't mounted while this one
+// is. This wrapper owns its own independent team_users fetch rather than
+// trying to thread data across two unmounted siblings.
+function AddUserPageWrapper({ onBack, onBulkStarted }) {
+  const [data, setData] = useState(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    fetchJson(API + '&mode=team_users').then(setData).catch(e => setError(String(e.message || e)))
+  }, [])
+  if (error) return <div style={{ padding: '10px 14px', borderRadius: 10, background: C.navyBg, border: '0.5px solid rgba(31,60,132,0.25)', color: C.navy, fontSize: 12.5 }}>{error}</div>
+  if (!data) return <InlineLoader label="Loading roster" />
+  const rows = data.rows || []
+  const rosterEmails = Array.from(new Set(rows.map(r => r.email).filter(Boolean))).sort()
+  return <AddUserPage onBack={onBack} onBulkStarted={onBulkStarted} rows={rows} rosterEmails={rosterEmails} />
 }
 
 // ---------------------------------------------------------------- History page
@@ -1694,7 +1990,7 @@ function TeamAddFilterButton({ allFields, activeFilters, filterOptions, open, on
   )
 }
 
-function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
+function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1710,7 +2006,6 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   const [page, setPage] = useState(1)
   const [editUser, setEditUser] = useState(null)
   const [showImport, setShowImport] = useState(false)
-  const [showAddUser, setShowAddUser] = useState(false)
   const [showBulkEdit, setShowBulkEdit] = useState(false)
   // Selection is by email (a stable, human-meaningful key) rather than the
   // LeadSquared numeric id -- so it reads sensibly if this ever needs to
@@ -1960,7 +2255,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         <Dropdown label="Status" options={['All', 'Active', 'Inactive']} value={statusFilter} onChange={setStatusFilter} minWidth={110} />
         <div style={{ flex: 1 }} />
         {isAdmin && <Button size="sm" icon={<UploadIcon />} onClick={() => setShowImport(true)}>Bulk import</Button>}
-        {isAdmin && <Button size="sm" onClick={() => setShowAddUser(true)}>+ Add User</Button>}
+        {isAdmin && <Button size="sm" onClick={onOpenAddUser}>+ Add User</Button>}
         <ExportButton
           hideSlack hideJson hideSheets
           filename="team-mapping-roster"
@@ -2136,15 +2431,6 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         <BulkImportModal
           onClose={() => setShowImport(false)}
           onStarted={() => { setShowImport(false); onOpenHistory() }}
-        />
-      )}
-      {showAddUser && (
-        <AddUserModal
-          rows={rows}
-          rosterEmails={rosterEmails}
-          onClose={() => setShowAddUser(false)}
-          onCreated={load}
-          onBulkStarted={() => { setShowAddUser(false); onOpenHistory() }}
         />
       )}
       {showBulkEdit && (
@@ -2876,16 +3162,17 @@ export default function TeamMappingDashboard() {
             {activeTab === 'history' && ' / History'}
             {activeTab === 'orgchart' && ' / Org Chart'}
             {activeTab === 'connectors' && ' / Connectors'}
+            {activeTab === 'add-user' && ' / Add User'}
           </p>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '2px 0 10px' }}>
             <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: 0, letterSpacing: '-0.4px', fontFamily: FONT }}>
-              {activeTab === 'history' ? 'Import & Export History' : 'Team Mapping'}
+              {activeTab === 'history' ? 'Import & Export History' : activeTab === 'add-user' ? 'Add User' : 'Team Mapping'}
             </h1>
-            {activeTab !== 'history' && activeTab !== 'connectors' && (
+            {activeTab !== 'history' && activeTab !== 'connectors' && activeTab !== 'add-user' && (
               <Button variant="ghost" size="sm" icon={<span style={{ display: 'inline-flex', animation: refreshing ? 'teamMapSpin .6s linear infinite' : 'none' }}><RefreshIcon /></span>} onClick={doRefresh}>Refresh</Button>
             )}
           </div>
-          {activeTab !== 'history' && (
+          {activeTab !== 'history' && activeTab !== 'add-user' && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} className="lq-header-controls">
               <div style={pillStyle(activeTab === 'roster')} onClick={() => setTab('roster')}>Roster</div>
               <div style={pillStyle(activeTab === 'groups')} onClick={() => setTab('groups')}>Sales Groups</div>
@@ -2896,11 +3183,14 @@ export default function TeamMappingDashboard() {
         </div>
         <style>{`@keyframes teamMapSpin { to { transform: rotate(360deg) } }`}</style>
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
-          {activeTab === 'roster' && <RosterTab isAdmin={isAdmin} onOpenHistory={() => setTab('history')} registerRefresh={registerRefresh} />}
+          {activeTab === 'roster' && <RosterTab isAdmin={isAdmin} onOpenHistory={() => setTab('history')} onOpenAddUser={() => setTab('add-user')} registerRefresh={registerRefresh} />}
           {activeTab === 'groups' && <GroupsTab registerRefresh={registerRefresh} />}
           {activeTab === 'orgchart' && <OrgChartTab registerRefresh={registerRefresh} isAdmin={isAdmin} />}
           {activeTab === 'connectors' && (isAdmin ? <ConnectorsTab /> : <div style={{ color: C.muted, fontSize: 13 }}>Admin only.</div>)}
           {activeTab === 'history' && <HistoryTab onBack={() => setTab('roster')} />}
+          {activeTab === 'add-user' && (isAdmin
+            ? <AddUserPageWrapper onBack={() => setTab('roster')} onBulkStarted={() => setTab('history')} />
+            : <div style={{ color: C.muted, fontSize: 13 }}>Admin only.</div>)}
         </div>
       </div>
     </div>
