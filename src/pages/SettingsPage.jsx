@@ -4069,8 +4069,16 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             // figure on this card before comparing against the rupee ceiling.
             const budgetNum = parseFloat(askaiBudgetInput) || 0
             const monthCostInr = monthCost * USD_TO_INR
-            const budgetPct = budgetNum > 0 ? Math.min(100, (monthCostInr / budgetNum) * 100) : 0
-            const budgetColor = budgetPct >= 90 ? '#1F3C84' : budgetPct >= 70 ? '#1C9FD4' : '#4CAE6F'
+            // Settings audit (2026-08-27): budgetPct used to be Math.min(100, ...)
+            // -- clamped for BOTH the bar width and the displayed percentage, so a
+            // real 474% overrun read as "100% -- approaching the ceiling" (the
+            // exact opposite of true). budgetPctReal is the true, uncapped figure
+            // for copy; budgetPctBar is clamped only for the bar's own width,
+            // which can't sensibly render past 100%.
+            const budgetPctReal = budgetNum > 0 ? (monthCostInr / budgetNum) * 100 : 0
+            const budgetPctBar = Math.min(100, budgetPctReal)
+            const budgetOver = budgetPctReal > 100
+            const budgetColor = budgetOver || budgetPctReal >= 90 ? '#1F3C84' : budgetPctReal >= 70 ? '#1C9FD4' : '#4CAE6F'
             const askaiToolNames = Array.from(new Set(askaiToolCalls.map(c => c.tool_name).filter(Boolean))).sort()
             const askaiFilteredCalls = askaiToolFilter === 'all' ? askaiToolCalls : askaiToolCalls.filter(c => c.tool_name === askaiToolFilter)
             const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : String(n || 0)
@@ -4133,9 +4141,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   {budgetNum > 0 && (
                     <div>
                       <div style={{ height: 8, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${budgetPct}%`, background: budgetColor, borderRadius: 4, transition: 'width .3s ease' }} />
+                        <div style={{ height: '100%', width: `${budgetPctBar}%`, background: budgetColor, borderRadius: 4, transition: 'width .3s ease' }} />
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 5 }}>₹{monthCostInr.toFixed(2)} of ₹{budgetNum.toFixed(2)} used this month ({budgetPct.toFixed(0)}%){budgetPct >= 90 ? ' — approaching the ceiling' : ''}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 5, fontWeight: budgetOver ? 700 : 400 }}>₹{monthCostInr.toFixed(2)} of ₹{budgetNum.toFixed(2)} used this month ({budgetPctReal.toFixed(0)}%){budgetOver ? ' — over budget' : budgetPctReal >= 90 ? ' — approaching the ceiling' : ''}</div>
                     </div>
                   )}
                 </div>
