@@ -328,7 +328,7 @@ function StatStrip({ items }) {
         <div key={it.label} style={{
           flex: '1 1 160px', padding: '13px 18px', borderLeft: i === 0 ? 'none' : '0.5px solid ' + C.border,
         }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{it.label}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{it.label}</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: C.text, fontFamily: FONT }}>{it.value}</div>
           {it.sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{it.sub}</div>}
         </div>
@@ -2329,7 +2329,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                   </th>
                 )}
                 {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Virtual DID', 'Region', 'Call Transfer', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
-                  <th key={h} style={{ padding: '9px 12px', fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={h} style={{ padding: '9px 12px', fontSize: 12, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
