@@ -749,9 +749,15 @@ input.searchInput { padding-left: 34px; }
 .alCard .tableWrap { max-height: 560px; overflow: auto; }
 .alHead th { position: sticky; top: 0; z-index: 2; }
 
-/* ---- 4 - tab bar scrolls instead of orphaning a pill onto row 2 ---- */
-.tabBar { max-width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-.tabBar::-webkit-scrollbar { display: none; }
+/* ---- 4 - Settings audit (2026-08-27): the scroll-not-wrap fix below hid the
+   overflow behind a scrollbar suppressed via scrollbar-width:none +
+   ::-webkit-scrollbar{display:none} -- so at any ~1024-1357px width, Profile
+   (and Appearance below ~1000px) silently scrolled off with zero visible
+   affordance that more tabs existed. The base .tabBar rule above already
+   declares flex-wrap:wrap; removing this override lets it govern again at
+   normal widths -- two clean rows instead of a hidden-scrollbar strip. The
+   @media(max-width:768px) block below keeps its own !important nowrap+scroll
+   for real mobile, where wrapping 8 pills would read worse than scrolling. */
 .tab { flex: 0 0 auto; }
 
 /* ---- 5 - radius rhythm: 16 outer surfaces / 12 inner tiles ---- */
