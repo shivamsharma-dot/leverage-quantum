@@ -23,6 +23,12 @@ import { classifyDidRegion, FRAPP_TEAM_NAME } from '../../shared/didRegion.mjs'
 // for this page (via "Bulk import" below), not an ongoing source.
 const API = '/api/crm-leads?source=leadsquared'
 const PAGE_ROWS = 50
+// TBL-1: the roster table's checkbox column is frozen (position:sticky;left:0)
+// alongside the Name column, which needs to know exactly how wide the checkbox
+// column renders to sit at the right offset. A plain "width" hint isn't
+// reliable in table-layout:auto -- width+minWidth+maxWidth all pinned to the
+// same value is what actually forces a fixed rendered width.
+const TBL_CHECKBOX_COL_WIDTH = 44
 
 // Phone Number, Virtual DID and LS Manager Name/Email are NOT in this list --
 // LeadSquared's own API docs (User/Retrieve/ByUserId) genuinely return PhoneMain,
@@ -2319,17 +2325,33 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
       )}
 
       <Card title={`${fmtN(filtered.length)} people`} sub={`Page ${page} of ${totalPages}`} noPad>
-        <div style={{ overflowX: 'auto' }}>
+        {/* TBL-1: Card's own outer wrapper is overflow:hidden (dashboardKit.jsx --
+            shared across the whole app, so it can't be touched here without
+            risking every other Card on every other page). A sticky header can't
+            escape that clip if the PAGE is the one scrolling, so this inner div
+            is made the bounded scroll container instead (maxHeight + its own
+            overflowY) -- the same "sticky header + maxHeight wrapper" pattern
+            already used for the BigQuery result table and the Activity Log
+            table elsewhere in this app. Header <th>s get position:sticky;top:0;
+            the checkbox and Name columns additionally get position:sticky;left
+            so both freeze while scrolling right through the other 16 columns. */}
+        <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 560, position: 'relative' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1000 }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid ' + C.border }}>
                 {isAdmin && (
-                  <th style={{ padding: '9px 8px 9px 14px', width: 30 }}>
-                    <input type="checkbox" checked={pageAllSelected} onChange={togglePage} style={{ width: 15, height: 15, cursor: 'pointer' }} title="Select everyone on this page" />
+                  <th style={{ padding: '9px 8px 9px 14px', width: TBL_CHECKBOX_COL_WIDTH, minWidth: TBL_CHECKBOX_COL_WIDTH, maxWidth: TBL_CHECKBOX_COL_WIDTH, position: 'sticky', top: 0, left: 0, zIndex: 3, background: 'var(--card)' }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={pageAllSelected} onChange={togglePage} style={{ width: 15, height: 15, cursor: 'pointer', margin: 0 }} aria-label="Select all people on this page" title="Select everyone on this page" />
+                    </label>
                   </th>
                 )}
-                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Virtual DID', 'Region', 'Call Transfer', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map(h => (
-                  <th key={h} style={{ padding: '9px 12px', fontSize: 12, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Virtual DID', 'Region', 'Call Transfer', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map((h, hi) => (
+                  <th key={h} style={{
+                    padding: '9px 12px', fontSize: 12, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                    position: 'sticky', top: 0, zIndex: 2, background: 'var(--card)',
+                    ...(hi === 0 ? { left: isAdmin ? TBL_CHECKBOX_COL_WIDTH : 0, zIndex: 3 } : {}),
+                  }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -2348,14 +2370,21 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                 const isConsultant = (r.manual?.role || '').trim().toLowerCase() === 'consultant'
                 const callTransferCandidate = onFrappTeam && isConsultant
                 const stale = isStaleMapping(r.manual)
+                // A frozen (position:sticky) cell needs a genuinely opaque
+                // background -- 'transparent' let the row underneath show through
+                // as soon as it was pinned mid-scroll, which is why this is now a
+                // real resolved colour rather than the literal string 'transparent'.
+                const rowBg = i % 2 ? 'var(--card)' : 'var(--bg3)'
                 return (
-                  <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border, background: i % 2 ? 'transparent' : 'var(--bg3)' }}>
+                  <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border, background: rowBg }}>
                     {isAdmin && (
-                      <td style={{ padding: '10px 8px 10px 14px' }}>
-                        <input type="checkbox" checked={selected.has(r.email)} onChange={() => r.email && toggleOne(r.email)} disabled={!r.email} style={{ width: 15, height: 15, cursor: r.email ? 'pointer' : 'default' }} />
+                      <td style={{ padding: '10px 8px 10px 14px', width: TBL_CHECKBOX_COL_WIDTH, minWidth: TBL_CHECKBOX_COL_WIDTH, maxWidth: TBL_CHECKBOX_COL_WIDTH, position: 'sticky', left: 0, zIndex: 2, background: rowBg }}>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, cursor: r.email ? 'pointer' : 'default' }}>
+                          <input type="checkbox" checked={selected.has(r.email)} onChange={() => r.email && toggleOne(r.email)} disabled={!r.email} style={{ width: 15, height: 15, cursor: r.email ? 'pointer' : 'default', margin: 0 }} aria-label={r.name ? `Select ${r.name}` : 'Select this person'} />
+                        </label>
                       </td>
                     )}
-                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', position: 'sticky', left: isAdmin ? TBL_CHECKBOX_COL_WIDTH : 0, zIndex: 1, background: rowBg }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                         <Avatar name={r.name} />
                         <span style={{ fontWeight: 700, color: C.text }}>{r.name}</span>
