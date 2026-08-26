@@ -293,7 +293,13 @@ const inputStyle = { fontFamily: FONT, fontSize: 12.5, color: C.text, border: '0
 const pillStyle = (active) => ({
   padding: '7px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
   background: active ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'transparent',
-  color: active ? '#fff' : C.muted, border: active ? 'none' : '0.5px solid ' + C.border,
+  color: active ? '#fff' : C.muted,
+  // SYS-3: was '0.5px solid' -- a genuine half-pixel border rounds differently
+  // per device pixel ratio (measured live at DPR 1.5 as a reported
+  // 0.666667px), so the same hairline can render at visibly different
+  // weights across displays, or vanish on some. Whole pixels round the same
+  // everywhere.
+  border: active ? 'none' : '1px solid ' + C.border,
   whiteSpace: 'nowrap', boxShadow: active ? '0 3px 10px rgba(31,60,132,.20)' : 'none',
 })
 
