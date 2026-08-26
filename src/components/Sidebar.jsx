@@ -338,9 +338,22 @@ export default function Sidebar() {
     const pageId = idMap[label]
     return !pageId || !hiddenPages.includes(pageId)
   }
+  // NAV-1: this used to only ever collapse (`if (e.matches) setCollapsed(true)`)
+  // and never had a branch that expanded back -- so narrowing past 1024px then
+  // widening back out left the rail stuck collapsed until a full reload. Now
+  // handles both directions, but an explicit user choice from Settings >
+  // Appearance > Sidebar Layout (persisted as lq_sidebar_collapsed) always wins
+  // over the viewport: that's a deliberate, standing preference and a resize
+  // must never silently override it. Only the auto (viewport-driven) collapse
+  // is allowed to reverse itself.
   React.useEffect(() => {
     const mq = window.matchMedia('(max-width: 1024px)')
-    const handler = (e) => { if (e.matches) setCollapsed(true) }
+    const handler = (e) => {
+      let userCollapsed = false
+      try { userCollapsed = localStorage.getItem('lq_sidebar_collapsed') === 'true' } catch {}
+      if (userCollapsed) return
+      setCollapsed(e.matches)
+    }
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
@@ -497,6 +510,21 @@ export default function Sidebar() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [railExpanded])
+
+  // NAV-1: the collapsed rail's footer avatar had zero interactive children --
+  // no Settings, no Sign out, no menu -- so a keyboard or touch user (anyone
+  // who can't rely on the whole-rail hover-to-expand above) had genuinely no
+  // way to reach either. This makes the avatar a real button that opens a
+  // small menu reusing the same two controls the expanded footer already has.
+  const [avatarMenuOpen, setAvatarMenuOpen] = React.useState(false)
+  React.useEffect(() => {
+    if (!avatarMenuOpen) return
+    const onKey = (e) => { if (e.key === 'Escape') setAvatarMenuOpen(false) }
+    const onClick = (e) => { if (!e.target.closest('[data-avatar-menu]')) setAvatarMenuOpen(false) }
+    window.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onClick)
+    return () => { window.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onClick) }
+  }, [avatarMenuOpen])
 
   // Right-click "hide from sidebar" -- admin only, writes to the EXACT SAME
   // app_preferences.hidden_pages key Settings > User Access > Global Page
@@ -840,10 +868,38 @@ export default function Sidebar() {
           </div>
           )
         })()}
-        <div className={styles.collapsedAvatar} title={user?.email}>
-          <div className={styles.avatar}>
-            {user?.picture ? <img src={user.picture} alt={user.name}/> : initials}
-          </div>
+        <div className={styles.collapsedAvatar} style={{ position: 'relative' }} data-avatar-menu>
+          <button type="button" onClick={() => setAvatarMenuOpen(v => !v)}
+            aria-haspopup="menu" aria-expanded={avatarMenuOpen}
+            aria-label={`Account menu for ${user?.email || 'your account'}`}
+            title={user?.email}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex' }}>
+            <div className={styles.avatar}>
+              {user?.picture ? <img src={user.picture} alt={user.name}/> : initials}
+            </div>
+          </button>
+          {avatarMenuOpen && (
+            <div role="menu" aria-label="Account" className={styles.collapsedFlyout}
+              style={{ left: 60, bottom: 0, top: 'auto' }}>
+              <div className={styles.collapsedFlyoutHeader}>{user?.email}</div>
+              {canSee('settings') && (
+                <button type="button" role="menuitem" className={styles.collapsedFlyoutItem}
+                  onClick={() => { setAvatarMenuOpen(false); navigate('/settings') }}
+                  style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                  <span className={styles.collapsedFlyoutIcon} aria-hidden="true"><SettingsIcon/></span>
+                  Settings
+                </button>
+              )}
+              <button type="button" role="menuitem" className={styles.collapsedFlyoutItem}
+                onClick={() => { setAvatarMenuOpen(false); handleLogout() }}
+                style={{ background: 'none', border: 'none', font: 'inherit', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                <span className={styles.collapsedFlyoutIcon} aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                </span>
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
         <SnapshotTool/>
       </aside>
