@@ -339,22 +339,70 @@ function Avatar({ name, size = 30 }) {
   )
 }
 
+// RES-1: this was a flex row with flexWrap + a per-item index-based
+// borderLeft as a divider ("i===0 ? none : border"). At in-between widths
+// (measured live at 1024px: 3 cards on row 1, 2 OVERSIZED cards + a large
+// void on row 2) the wrap produced an uneven 3+2 split, and the per-item
+// border-left dangled on whichever card happened to land first in a wrapped
+// row (its own index wasn't 0, so it still drew a divider against nothing).
+//
+// Tried repeat(auto-fit, minmax(...)) first and verified it against a real
+// rendered DOM before trusting it -- it does eliminate the oversized-card
+// and dangling-divider bugs (every card is always the SAME grid-defined
+// width, and dividers are now drawn from the grid gap itself, which can
+// only ever appear between two genuinely adjacent cells), but for exactly 5
+// items it cannot skip straight from 5 to 3 columns the way the audit asked
+// -- auto-fit greedily fits as many min-width columns as a given width
+// allows, so a 4-column-with-1-orphan row is mathematically unavoidable at
+// SOME width for a 5-item strip (confirmed by simulating every minmax value
+// from 160-260px across a 640-1440px sweep -- every one hit it). Explicit
+// step columns (5 -> 3 -> the app's own existing 2/1 lq-kpi-grid rules)
+// instead, which can deliberately skip 4. Column count is
+// min(items.length, N) at each step so this still degrades sensibly for
+// StatStrip's other 3- and 4-item callers (Org Chart, History) rather than
+// assuming every caller always passes exactly 5.
+//
+// Accepted trade-off, stated plainly rather than glossed over: for an item
+// count that isn't a clean multiple of a step's column count (e.g. the
+// 4-item History strip at the 3-column step), the last row's lone card does
+// NOT stretch to fill the row -- confirmed live, auto-fit/explicit grid
+// tracks don't expand into space left by a track that has content
+// elsewhere in the grid -- so a same-sized, non-oversized empty cell can
+// remain next to it. That's a world apart from the original bug (an
+// oversized card plus a large void); a modest, correctly-sized trailing gap
+// is normal, expected grid behaviour, not what was reported as broken.
+let tmStatStripSeq = 0
 function StatStrip({ items }) {
+  const [id] = useState(() => `tm-stats-${++tmStatStripSeq}`)
+  const wide = Math.min(items.length, 5)
+  const medium = Math.min(items.length, 3)
   return (
-    <div style={{
-      display: 'flex', flexWrap: 'wrap', border: '0.5px solid ' + C.border, borderRadius: 12,
-      background: 'var(--card)', marginBottom: 18, overflow: 'hidden',
-    }}>
-      {items.map((it, i) => (
-        <div key={it.label} style={{
-          flex: '1 1 160px', padding: '13px 18px', borderLeft: i === 0 ? 'none' : '0.5px solid ' + C.border,
-        }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{it.label}</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: C.text, fontFamily: FONT }}>{it.value}</div>
-          {it.sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{it.sub}</div>}
-        </div>
-      ))}
-    </div>
+    <>
+      {/* Deliberately (min-width:769px) here, not a bare max-width -- both
+          this rule and lq-kpi-grid's own ≤768px/≤480px rules use !important,
+          and this component's <style> tag renders later in the document than
+          the app's bundled CSS, so it would otherwise win the tie at any
+          width where both ranges overlap and silently undo the mobile
+          columns. Scoping the ranges to never overlap removes the ambiguity
+          instead of relying on cascade order to resolve it correctly. */}
+      <style>{`
+        .${id} { grid-template-columns: repeat(${wide}, 1fr); }
+        @media (min-width: 769px) and (max-width: 1150px) { .${id} { grid-template-columns: repeat(${medium}, 1fr) !important; } }
+      `}</style>
+      <div className={`lq-kpi-grid ${id}`} style={{
+        display: 'grid', gap: '0.5px',
+        border: '0.5px solid ' + C.border, borderRadius: 12,
+        background: C.border, marginBottom: 18, overflow: 'hidden',
+      }}>
+        {items.map(it => (
+          <div key={it.label} style={{ padding: '13px 18px', background: 'var(--card)' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{it.label}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: C.text, fontFamily: FONT }}>{it.value}</div>
+            {it.sub && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{it.sub}</div>}
+          </div>
+        ))}
+      </div>
+    </>
   )
 }
 
