@@ -628,7 +628,7 @@ export default function Sidebar() {
       <>
       <div className={styles.logoArea}>
         <div className={styles.logoPill}>
-          <img src="https://publicassets.leverageedu.com/landing-pages-new/logo-dark.svg" alt="Leverage Edu" className={styles.logoImg}/>
+          <img src="/leverage-edu-lockup.png" alt="Leverage Edu" className={styles.logoImg}/>
         </div>
         <div className={styles.dividerLine}/>
         <div className={styles.quantumLabel}>
