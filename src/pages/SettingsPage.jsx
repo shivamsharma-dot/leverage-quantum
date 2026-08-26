@@ -2759,14 +2759,25 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     )
                   }
                   if (row.type === 'group') {
+                    // Settings audit (2026-08-27): .pvGroupBlock used to wrap each
+                    // group's tiles in their own padded, bordered panel with a
+                    // nested .pvGroupGrid -- so a group's tiles rendered ~10px
+                    // narrower and started at a different x than ungrouped tiles
+                    // one level up, columns never lined up down the page, and a
+                    // 2-child group left an empty cell in its own private
+                    // 3-column grid. The header renders full-width directly in
+                    // the shared .pvGrid instead (it was already built for this --
+                    // .pvGroupHeader carries its own grid-column:1/-1 + dashed
+                    // rule), and every tile is now a direct .pvGrid sibling, so
+                    // grouped and ungrouped tiles share one set of column tracks.
                     return (
-                      <div className={styles.pvGroupBlock} key={row.label}>
+                      <React.Fragment key={row.label}>
                         <div className={styles.pvGroupHeader}>
                           <span className={styles.pvGroupLabel}>{row.label}</span>
                           <span className={styles.pvGroupCount}>{row.children.length} pages</span>
                         </div>
-                        <div className={styles.pvGroupGrid}>{row.children.map(page => renderTile(page, true))}</div>
-                      </div>
+                        {row.children.map(page => renderTile(page, true))}
+                      </React.Fragment>
                     )
                   }
                   return renderTile(row.dash, false)
@@ -3193,7 +3204,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 </Button>
               </div>
               {recentCommits.length === 0 && !commitsLoading && (
-                <div className={styles.empty}>No commit history available right now.</div>
+                // Settings audit (2026-08-27): the shared .empty class's 44px
+                // vertical padding made this ~160px-tall card for one centred
+                // line, the most disproportionate case of the 7 places that
+                // share it -- scoped down here rather than touching the class
+                // other tabs' genuinely-empty tables/lists still rely on.
+                <div className={styles.empty} style={{ padding: '14px 20px' }}>No commit history available right now.</div>
               )}
               {recentCommits.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -3248,15 +3264,18 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <table className={styles.alTable}>
                     <thead className={styles.alHead}>
                       <tr>
-                        {['USER','ACTION','PAGE','DETAIL','DATE','TIME','AGO'].map(h=>(
+                        {/* Settings audit (2026-08-27): the table rendered 973px wide
+                            inside a 930px wrapper with no horizontal-scroll affordance,
+                            clipping AGO's own header and values by 43px -- AGO also
+                            duplicates DATE + TIME (same fact, third form), so it's
+                            dropped rather than the columns tightened. */}
+                        {['USER','ACTION','PAGE','DETAIL','DATE','TIME'].map(h=>(
                           <th key={h}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {activityLog.filter(log => { const q = actSearch.trim().toLowerCase(); if (!q) return true; const u = (log.email||'').toLowerCase(); return u.includes(q); }).map((log,idx)=>{
-                        const diff = Date.now()-new Date(log.created_at)
-                        const rel = diff<60000?'just now':diff<3600000?Math.round(diff/60000)+'m ago':diff<86400000?Math.round(diff/3600000)+'h ago':Math.round(diff/86400000)+'d ago'
                         const avColor = ['#1F3C84','#1F3C84','#4CAE6F','#1F3C84','#1F3C84'][((log.email||'').charCodeAt(0)||65)%5]
                         const avColor2 = ['#1F3C84','#1F3C84','#4CAE6F','#1F3C84','#1F3C84'][((log.email||'').charCodeAt(1)||66)%5]
                         const pg = (log.page||'app').replace('/dashboard/','').replace('/','').split('?')[0]||'app'
@@ -3292,7 +3311,6 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                             <td className={`${styles.alTd} ${styles.alDetail}`} title={log.detail||''}>{log.detail||'—'}</td>
                             <td className={styles.alTd}>{dateStr}</td>
                             <td className={styles.alTd}>{timeStr}</td>
-                            <td className={`${styles.alTd} ${styles.alMuted}`}>{rel}</td>
                           </tr>
                         )
                       })}
@@ -4311,7 +4329,10 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1F3C84" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </div>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:2}}>Global Page Visibility</div>
+                  {/* Settings audit (2026-08-27): was "Global Page Visibility",
+                      the exact title of the real card this links to on User
+                      Access -- one name for a link and the thing it points at. */}
+                  <div style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:2}}>Page visibility</div>
                   <div style={{fontSize:12,color:'var(--text-3)',lineHeight:1.5}}>Unified with per-user access in the <strong>User Access</strong> tab — manage global and individual page access together.</div>
                 </div>
                 <button onClick={()=>setActiveTab('users')} style={{padding:'7px 14px',borderRadius:8,background:'var(--bg3)',border:'0.5px solid var(--border)',fontSize:12,fontWeight:600,color:'var(--brand-ink)',cursor:'pointer',whiteSpace:'nowrap',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>

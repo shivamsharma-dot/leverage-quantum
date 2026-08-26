@@ -777,11 +777,13 @@ input.searchInput { padding-left: 34px; }
 .pxStatRow { gap: 18px; }
 .pxDetailGrid { gap: 12px 18px; margin-top: 16px; }
 
-/* ---- 7 - page-visibility groups own their own band, so the ungrouped
-   pages that follow a group no longer read as members of it ---- */
-.pvGroupBlock { grid-column: 1 / -1; margin: 4px 0; padding: 12px 14px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
-.pvGroupBlock .pvGroupHeader { margin-top: 0; padding-top: 0; border-top: none; margin-bottom: 10px; }
-.pvGroupGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+/* ---- 7 - Settings audit (2026-08-27): the .pvGroupBlock band above (and its
+   own nested .pvGroupGrid) made a group's tiles ~10px narrower than
+   ungrouped tiles and start at a different x, since they lived in a second,
+   independently-padded grid one level deep -- columns never lined up down
+   the page. Dropped in favour of .pvGroupHeader's own grid-column:1/-1 +
+   dashed-rule treatment (below) rendering directly in the shared .pvGrid,
+   so every tile -- grouped or not -- shares one column track. */
 
 /* The Global Page Visibility tiles are real role="switch" controls now (they were
    divs with onClick and tabIndex -1), so keyboard users need to see where they
