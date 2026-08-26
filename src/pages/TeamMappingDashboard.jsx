@@ -2345,7 +2345,12 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
         </div>
       )}
 
-      <Card title={`${fmtN(filtered.length)} people`} sub={`Page ${page} of ${totalPages}`} noPad>
+      {/* BAR-3: the page position used to be stated twice -- "Page X of Y"
+          here, before the reader has even seen a control that relates to it,
+          and "X / Y" again at the pagination controls below. Kept it in the
+          one place that's actually next to the Prev/Next buttons that change
+          it; the count up here is enough on its own. */}
+      <Card title={`${fmtN(filtered.length)} people`} noPad>
         {/* TBL-1: Card's own outer wrapper is overflow:hidden (dashboardKit.jsx --
             shared across the whole app, so it can't be touched here without
             risking every other Card on every other page). A sticky header can't
