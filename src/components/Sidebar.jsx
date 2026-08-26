@@ -301,6 +301,40 @@ export default function Sidebar() {
     try { return localStorage.getItem('lq_sidebar_collapsed') === 'true' } catch { return false }
   })
   const [mobileOpen, setMobileOpen] = React.useState(false)
+  // NAV-2: the drawer had no Escape handling, no visible close control (the
+  // backdrop click was the only, undiscoverable dismiss path), no focus trap,
+  // and stayed mounted/overlaid on the desktop layout if the window widened
+  // past the mobile breakpoint mid-session -- it only ever closed via a
+  // backdrop click. hamburgerRef lets Escape/close return focus to the
+  // control that opened it, matching the standard dialog contract.
+  const hamburgerRef = React.useRef(null)
+  const mobileDrawerRef = React.useRef(null)
+  React.useEffect(() => {
+    if (!mobileOpen) return
+    const closeAndReturnFocus = () => { setMobileOpen(false); hamburgerRef.current?.focus() }
+    const onKey = (e) => {
+      if (e.key === 'Escape') { closeAndReturnFocus(); return }
+      if (e.key !== 'Tab' || !mobileDrawerRef.current) return
+      // Focus trap: Tab/Shift+Tab wrap within the drawer's own focusable elements
+      // rather than escaping into the (still-present, just visually covered) page
+      // behind it -- an overlay dialog's standard contract.
+      const focusables = mobileDrawerRef.current.querySelectorAll('button, a[href], input, [tabindex]:not([tabindex="-1"])')
+      if (!focusables.length) return
+      const first = focusables[0], last = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+    // Widening back past the mobile breakpoint must close the drawer -- it was
+    // otherwise left overlaid on top of the desktop layout until a stray
+    // backdrop click happened to land, since nothing watched the breakpoint.
+    const mq = window.matchMedia('(min-width: 769px)')
+    const onWiden = (e) => { if (e.matches) closeAndReturnFocus() }
+    window.addEventListener('keydown', onKey)
+    mq.addEventListener('change', onWiden)
+    // Move focus into the drawer on open, completing the dialog contract.
+    mobileDrawerRef.current?.querySelector('button, a[href]')?.focus()
+    return () => { window.removeEventListener('keydown', onKey); mq.removeEventListener('change', onWiden) }
+  }, [mobileOpen])
   // The logo mark's "grow in" flourish (barGrow keyframe below) was meant to play
   // once, on first load -- but Sidebar remounts fresh on every route change (a
   // fresh <aside> instance per navigation, confirmed live), so it was replaying
@@ -716,13 +750,17 @@ export default function Sidebar() {
           <svg width="20" height="20" viewBox={BRAND_LOGO_VIEWBOX} fill="none">{BRAND_LOGO_BARS.map((b,i)=><rect key={i} x={b.x} y={b.y} width={b.w} height={b.h} rx="1.5" fill={b.color}/>)}</svg>
           <span style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:11,fontWeight:700,color:'#1C9FD4',letterSpacing:'2px',textTransform:'uppercase'}}>QUANTUM</span>
         </div>
-        <button onClick={()=>setMobileOpen(o=>!o)} style={{background:'none',border:'none',cursor:'pointer',padding:6,color:'var(--text2)',display:'flex',alignItems:'center'}}>
+        <button ref={hamburgerRef} onClick={()=>setMobileOpen(o=>!o)} aria-expanded={mobileOpen} aria-haspopup="dialog" aria-label="Open navigation menu" style={{background:'none',border:'none',cursor:'pointer',padding:6,color:'var(--text2)',display:'flex',alignItems:'center'}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
       </div>
       {mobileOpen && (
-        <div style={{position:'fixed',inset:0,zIndex:999,display:'flex'}} onClick={()=>setMobileOpen(false)}>
-          <div style={{width:260,height:'100%',background:'var(--sidebar-bg)',borderRight:'0.5px solid var(--card-border)',overflowY:'auto',display:'flex',flexDirection:'column',paddingTop:'calc(52px + env(safe-area-inset-top))'}} onClick={e=>e.stopPropagation()}>
+        <div role="dialog" aria-modal="true" aria-label="Navigation menu" style={{position:'fixed',inset:0,zIndex:999,display:'flex'}} onClick={()=>{ setMobileOpen(false); hamburgerRef.current?.focus() }}>
+          <div ref={mobileDrawerRef} style={{position:'relative',width:260,height:'100%',background:'var(--sidebar-bg)',borderRight:'0.5px solid var(--card-border)',overflowY:'auto',display:'flex',flexDirection:'column',paddingTop:'calc(52px + env(safe-area-inset-top))'}} onClick={e=>e.stopPropagation()}>
+            <button type="button" onClick={()=>{ setMobileOpen(false); hamburgerRef.current?.focus() }} aria-label="Close navigation menu"
+              style={{position:'absolute',top:'calc(10px + env(safe-area-inset-top))',right:14,zIndex:1,width:32,height:32,borderRadius:8,border:'0.5px solid var(--card-border)',background:'var(--card)',color:'var(--text2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
             <div style={{flex:1}}>
             {NAV.map(group=>{
               const vis = group.items.filter(groupVisible)
