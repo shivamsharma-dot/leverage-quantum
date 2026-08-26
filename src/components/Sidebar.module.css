@@ -512,7 +512,15 @@
   min-width: 0;
 }
 .userName {
-  flex: 0 1 auto;
+  /* NAV-4: was flex:0 1 auto -- flex-grow:0 means it never claimed any of
+     .userMeta's spare width, so the ADMIN/VIEWER badge (flex-shrink:0, fixed
+     width) got first claim on the row and userName was left with whatever
+     was over, measured live as 34px for a name needing ~48px ("Shivam" ->
+     "Shi..."). flex:1 makes it the one element that grows to fill the row;
+     min-width:0 keeps it able to shrink/ellipsis for a genuinely long name
+     instead of forcing overflow. */
+  flex: 1;
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
   color: var(--text);

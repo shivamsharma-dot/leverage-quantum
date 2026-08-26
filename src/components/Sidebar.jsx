@@ -719,7 +719,7 @@ export default function Sidebar() {
               {userRole==='admin' ? 'Admin' : 'Viewer'}
             </NavLink>
           </div>
-          <p className={styles.userEmail}>{user?.email}</p>
+          <p className={styles.userEmail} title={user?.email}>{user?.email}</p>
         </div>
         {canSee('settings') && (
           <NavLink to="/settings" title="Settings"
