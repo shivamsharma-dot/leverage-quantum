@@ -2273,7 +2273,20 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
     return next
   })
 
-  if (loading) return <InlineLoader label="Loading LeadSquared roster" />
+  {/* RES-2: a centred spinner at the default 300px height replaced the stat
+      cards AND the whole filter bar, so everything below jumped down once
+      real data landed. A full shaped skeleton (KPIGridSkeleton/TableSkeleton
+      -- both still exported from SkeletonLoader.jsx) was tried first, but the
+      rest of the app deliberately moved away from that -- see this file's own
+      "Skeleton entry points now show the same simple loader so the shimmer
+      never appears alongside it" comment, i.e. every other dashboard already
+      renders a plain spinner, not a skeleton. Making Roster the one page with
+      a bespoke skeleton would be the inconsistent choice here, not the fix.
+      Kept the same InlineLoader, just given a height approximating the real
+      loaded layout (stat strip + filter bar + a maxHeight:560 table +
+      pagination) instead of the 300px default, so the page still settles
+      into roughly the right amount of space up front. */}
+  if (loading) return <InlineLoader label="Loading LeadSquared roster" height={760} />
   if (error) return <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5 }}>✕ {error}</div>
 
   return (
