@@ -796,6 +796,72 @@ async function resolveTeamNames(creds, rows, teamIds) {
   return _teamNameCache
 }
 
+// PermissionTemplate.svc/Retrieve -- confirmed via LeadSquared's own docs
+// (apidocs.leadsquared.com/retrieve-permission-template/) 2026-08-25, not yet
+// live-tested against this account. PageSize 200 in one call: this account's
+// template list is a small, bounded set (tens, not thousands), same "generous
+// headroom, single call" reasoning as the team-name resolution above.
+async function fetchLeadSquaredPermissionTemplates(creds) {
+  const data = await leadsquaredPost('/v2/PermissionTemplate.svc/Retrieve', creds, {
+    Parameter: {},
+    Paging: { PageIndex: 1, PageSize: 200 },
+  })
+  const list = (data && data.List) || []
+  return list.map(t => ({ id: t.Id, name: t.Name, description: t.Description || null }))
+}
+
+// UserManagement.svc/User/Create -- confirmed via LeadSquared's own docs
+// (apidocs.leadsquared.com/create-a-user/) 2026-08-25. NOT yet live-tested
+// against this account -- every LeadSquared endpoint touched this session has
+// had at least one real gap vs its documented shape (wrong page-size caps,
+// column names that 500 despite being valid response fields), so the first
+// few real creates through this are the actual verification, not this
+// comment. Permission templates cannot be assigned at creation time
+// (confirmed via apidocs.leadsquared.com/apply-permission-templates/) -- it's
+// always a second call, PermissionTemplate.svc/Apply, fired here right after
+// Create succeeds so the two read as one action from Quantum's side. A
+// template failure does NOT undo the user creation (the person still exists,
+// just without the template) -- surfaced back to the caller as
+// templateError, not thrown, since silently deleting a just-created user over
+// a second, unrelated call failing would be worse than leaving it half-done
+// and visible.
+async function createLeadSquaredUser(creds, fields) {
+  const body = {
+    FirstName: fields.firstName,
+    LastName: fields.lastName || '',
+    EmailAddress: fields.email,
+    Role: fields.role || 'Sales_User',
+  }
+  if (fields.teamId) body.TeamId = fields.teamId
+  if (fields.managerUserId) body.ManagerUserId = fields.managerUserId
+  if (fields.phone) body.AssociatedPhoneNumbers = fields.phone
+  // mx_Custom_2 is confirmed (via User/Retrieve/ByUserId, see
+  // fetchLeadSquaredUserDetails above) as this account's real Virtual DID
+  // field -- UNVERIFIED whether Create's CustomFields accepts that same raw
+  // name rather than a different display SchemaName. Best-effort: if it
+  // doesn't stick, Virtual DID can still be set the normal way afterward.
+  if (fields.virtualDid) body.CustomFields = { mx_Custom_2: fields.virtualDid }
+  if (fields.password) body.Password = fields.password
+
+  const data = await leadsquaredPost('/v2/UserManagement.svc/User/Create', creds, body)
+  const newId = data && data.Status === 'Success' && data.Message && data.Message.Id
+  if (!newId) {
+    const msg = (data && data.Message && (data.Message.Message || JSON.stringify(data.Message))) || (data && data.Status) || 'User creation failed'
+    throw new Error(String(msg))
+  }
+
+  let templateApplied = false, templateError = null
+  if (fields.permissionTemplateId) {
+    try {
+      await leadsquaredPost('/v2/PermissionTemplate.svc/Apply', creds, { Id: fields.permissionTemplateId, UserIds: [newId] })
+      templateApplied = true
+    } catch (e) {
+      templateError = String((e && e.message) || e)
+    }
+  }
+  return { id: newId, templateApplied, templateError }
+}
+
 // Sales Groups have no dedicated API resource on this account (see the comment
 // above) -- the only place group membership appears at all is each user's own
 // MemberOfGroups array, so the group list/roster is reconstructed by aggregating
@@ -1447,6 +1513,10 @@ function teamMappingSlackText(event) {
     const s = event.summary || {}
     return `Team Mapping: bulk import "${event.label || 'import'}" finished -- ${s.done || 0} done, ${s.failed || 0} failed, ${s.skipped || 0} skipped${who}`
   }
+  if (event.kind === 'create_users') {
+    const s = event.summary || {}
+    return `Team Mapping: bulk create users "${event.label || 'create users'}" finished -- ${s.done || 0} created, ${s.failed || 0} failed, ${s.skipped || 0} skipped${who}`
+  }
   const fields = Object.keys(event.changes || {})
   const changeText = fields.length
     ? fields.map(f => `${f}: ${(event.changes[f].from) || '(empty)'} -> ${(event.changes[f].to) || '(empty)'}`).join(', ')
@@ -1781,12 +1851,13 @@ async function updateTeamActivity(body, creds) {
   if (!r.ok) throw new Error('Could not update activity row: ' + (await r.text()).slice(0, 300))
   const saved = await r.json()
   const row = Array.isArray(saved) ? saved[0] : saved
-  // One aggregate notification per finished import, not per row -- fired here
-  // (the ONLY place that sees the transition into a terminal status) rather
-  // than from the frontend's own per-row save loop, which never sees "done".
-  if (row && row.type === 'import' && (patch.status === 'done' || patch.status === 'failed')) {
+  // One aggregate notification per finished import (or bulk user-create), not
+  // per row -- fired here (the ONLY place that sees the transition into a
+  // terminal status) rather than from the frontend's own per-row save loop,
+  // which never sees "done".
+  if (row && (row.type === 'import' || row.type === 'create_users') && (patch.status === 'done' || patch.status === 'failed')) {
     await notifyTeamMappingConnectors({
-      kind: 'import', label: row.label, by: row.created_by,
+      kind: row.type, label: row.label, by: row.created_by,
       summary: { done: row.done, failed: row.failed, skipped: row.skipped, total: row.total },
     }, creds).catch(() => {})
   }
@@ -1826,11 +1897,17 @@ async function handleLeadSquared(req, res, me) {
   // same treatment as the connector config modes, since both involve either
   // writing to an external system or reading data scoped for that push.
   const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_list', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push', 'team_centre_options']
+  // Both admin-only, same reasoning as TEAM_FRAPP_MODES: team_create_user writes
+  // a real user into production LeadSquared (plus, optionally, a permission
+  // template) -- team_permission_templates is just a read, but has no legitimate
+  // use outside the Add User modal that needs it, so it gets the same treatment
+  // rather than a narrower carve-out for one read-only mode.
+  const TEAM_CREATE_USER_MODES = ['team_permission_templates', 'team_create_user']
   // team_cache_lookup is deliberately its own read, NOT part of TEAM_FRAPP_MODES
   // (which is admin-only, gated below) -- the Roster tab's advanced filter needs
   // it for Region/Call Transfer, and that tab is readable by anyone with
   // team_mapping access, same as team_users/team_groups.
-  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', 'team_cache_lookup', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES, ...TEAM_FRAPP_MODES]
+  const TEAM_MODES = ['team_users', 'team_groups', 'team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_user_detail', 'team_cache_lookup', ...TEAM_ACTIVITY_MODES, ...TEAM_CONNECTOR_MODES, ...TEAM_WATCHER_MODES, ...TEAM_FRAPP_MODES, ...TEAM_CREATE_USER_MODES]
   const gateId = FIELD_SCHEMA_MODES.includes(mode) ? 'lq_field_schema' : TEAM_MODES.includes(mode) ? 'team_mapping' : 'leadsquared'
   const { canAccessDashboard } = await import('../lib/auth.mjs')
   // activity_types is read by BOTH the main LeadSquared page (gated on
@@ -1856,7 +1933,7 @@ async function handleLeadSquared(req, res, me) {
   // team_watchers_list is readable by anyone with page access (same as
   // team_activity_list) -- only adding/removing a subscription is admin-only,
   // since this is set up on someone's behalf, not day-to-day self-serve.
-  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', 'team_watchers_add', 'team_watchers_remove', 'team_watchers_test_dm', ...TEAM_CONNECTOR_MODES, ...TEAM_FRAPP_MODES].includes(mode) && me.role !== 'admin') {
+  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', 'team_watchers_add', 'team_watchers_remove', 'team_watchers_test_dm', ...TEAM_CONNECTOR_MODES, ...TEAM_FRAPP_MODES, ...TEAM_CREATE_USER_MODES].includes(mode) && me.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only' })
   }
   // Cheap (env-var only, no network call) -- computed up front so the finished-
@@ -1905,6 +1982,23 @@ async function handleLeadSquared(req, res, me) {
     }
     if (mode === 'team_frapp_preview') return res.status(200).json(await buildFrappCoachList(creds))
     if (mode === 'team_frapp_push') return res.status(200).json(await frappPush(creds, me))
+    if (mode === 'team_permission_templates') return res.status(200).json({ templates: await fetchLeadSquaredPermissionTemplates(creds) })
+    if (mode === 'team_create_user') {
+      const result = await createLeadSquaredUser(creds, req.body || {})
+      // Per-row callers (the bulk-create loop) set skipActivityLog the same way
+      // the existing bulk-import loop does, for the same reason: one aggregate
+      // "create_users" row is what's worth showing in History for a 200-person
+      // batch, not 200 individual entries -- the loop's own progress row already
+      // carries done/failed/skipped.
+      if (!(req.body && req.body.skipActivityLog)) {
+        await logTeamActivity({
+          type: 'create_user', label: (req.body && req.body.email) || result.id, target_email: (req.body && req.body.email) || null,
+          detail: JSON.stringify({ id: result.id, role: req.body && req.body.role, templateApplied: result.templateApplied, templateError: result.templateError }),
+          status: 'done', total: 1, done: 1,
+        }, me).catch(() => {})
+      }
+      return res.status(200).json(result)
+    }
     if (mode === 'team_centre_options') return res.status(200).json(await fetchTeamCentreOptions(creds))
     if (mode === 'opportunities') return res.status(200).json(await fetchLeadSquaredOpportunities(creds, p))
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))

@@ -77,6 +77,60 @@ const IMPORT_ALIASES = {
 const TEMPLATE_HEADERS = ['Associate Mail ID', 'ASM/SM', 'ASM/SM Email', 'SSM', 'SSM Email', 'Role', 'Country', 'Centre Name']
 const TEMPLATE_EXAMPLE = ['jane.doe@leverageedu.com', 'Kartikey Kedia', 'kartikey.kedia@leverageedu.com', 'Manish Singh', 'manish@leverageedu.com', 'Consultant', 'AC + SR', 'Delhi']
 
+// LeadSquared's own Role enum for a NEW account (apidocs.leadsquared.com/create-a-user/)
+// -- deliberately separate from ROLE_SUGGESTIONS above, which is this app's own
+// free-text BUSINESS designation (Consultant/ASM/Manager/...) for people who
+// already exist. Confusing the two would put "Consultant" into a field
+// LeadSquared expects to be Sales_User/Sales_Manager/Marketing_User/Administrator.
+const LS_ROLE_OPTIONS = ['Sales_User', 'Sales_Manager', 'Marketing_User', 'Administrator']
+
+// Bulk Create Users' own template/aliases -- a SEPARATE parser from
+// IMPORT_ALIASES/parseImportText above (which is for the manual-mapping
+// import, anchored on ls_email). This one creates brand-new LeadSquared
+// users, so it needs LeadSquared's own fields (First Name, Email, Role, ...),
+// not the manual overlay fields, and its required-field check is First Name
+// + Email rather than a match against an existing person.
+const CREATE_USER_ALIASES = {
+  'first name': 'first_name', 'firstname': 'first_name',
+  'last name': 'last_name', 'lastname': 'last_name',
+  'email': 'email', 'email address': 'email', 'associate mail id': 'email',
+  'role': 'role',
+  'team': 'team_name',
+  'manager email': 'manager_email', 'manager': 'manager_email',
+  'phone': 'phone', 'associated phone numbers': 'phone',
+  'virtual did': 'virtual_did',
+  'permission template': 'permission_template',
+  'password': 'password',
+}
+const CREATE_USER_TEMPLATE_HEADERS = ['First Name', 'Last Name', 'Email', 'Role', 'Team', 'Manager Email', 'Phone', 'Virtual DID', 'Permission Template']
+const CREATE_USER_TEMPLATE_EXAMPLE = ['Jane', 'Doe', 'jane.doe@leverageedu.com', 'Sales_User', 'University Admission Opportunity', 'manager@leverageedu.com', '+91-9876543210', '', '']
+function downloadCreateUsersTemplate() {
+  const csv = [CREATE_USER_TEMPLATE_HEADERS, CREATE_USER_TEMPLATE_EXAMPLE].map(row => row.map(csvCell).join(',')).join('\r\n')
+  triggerDownload('team-mapping-create-users-template.csv', csv, 'text/csv;charset=utf-8')
+}
+// Mirrors parseImportText's shape (same splitDelimited/looksBinary helpers,
+// same tab-or-comma auto-detect) but anchored on First Name + Email instead
+// of ls_email, since these rows create people rather than match existing ones.
+function parseCreateUsersText(text) {
+  if (looksBinary(text)) return { rows: [], skipped: 0, unmapped: [], binary: true }
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length)
+  if (lines.length < 2) return { rows: [], skipped: 0, unmapped: [], binary: false }
+  const delim = lines[0].includes('\t') ? '\t' : ','
+  const headerCells = splitDelimited(lines[0], delim).map(h => h.trim().toLowerCase())
+  const fieldForCol = headerCells.map(h => CREATE_USER_ALIASES[h] || null)
+  const unmapped = headerCells.filter((h, i) => !fieldForCol[i]).filter(Boolean)
+  const rows = []
+  let skipped = 0
+  for (let i = 1; i < lines.length; i++) {
+    const cells = splitDelimited(lines[i], delim)
+    const row = {}
+    cells.forEach((val, ci) => { const f = fieldForCol[ci]; if (f) row[f] = val.trim() })
+    if (!row.first_name || !row.email) { skipped++; continue }
+    rows.push(row)
+  }
+  return { rows, skipped, unmapped, binary: false }
+}
+
 async function fetchJson(url, opts) {
   const r = await fetch(url, { credentials: 'include', ...opts })
   const d = await r.json()
@@ -680,6 +734,90 @@ async function logExportActivity(kind, rows) {
   } catch { /* export already happened client-side either way -- logging is best-effort */ }
 }
 
+// ---------------------------------------------------------------- Background create-users store
+//
+// Deliberate near-copy of importStore/runImportInBackground/useImportProgress
+// above rather than a shared generalization -- creating a real LeadSquared
+// user is a distinct, higher-stakes action from mapping an existing person
+// (see createLeadSquaredUser's own comment in api/crm-leads.js: it writes
+// into production LeadSquared, not just this app's own Supabase table), and
+// keeping them as two plain, readable copies is safer than one abstraction
+// two very different call sites both have to reason about.
+const createUsersStore = {
+  running: false,
+  progress: null, // { done, total, failed, skipped, label }
+  listeners: new Set(),
+  set(patch) { Object.assign(this, patch); this.listeners.forEach(l => l()) },
+  subscribe(l) { this.listeners.add(l); return () => this.listeners.delete(l) },
+}
+
+// `lookups` ({ teamNameToId, managerEmailToId }) is a snapshot of the roster
+// ALREADY loaded on screen at the moment the batch starts -- resolving Team/
+// Manager here client-side means zero extra LeadSquared calls for something
+// this app already has in memory. A team/manager name that doesn't match
+// anything just gets left blank on that row (not a hard failure) -- the user
+// still gets created, and the field can be filled in from LeadSquared's own
+// UI afterward, same "degrade, don't block" reasoning as the rest of this page.
+async function runCreateUsersInBackground(rows, label, skippedCount, lookups, onSettled) {
+  if (createUsersStore.running) return
+  createUsersStore.set({ running: true, progress: { done: 0, total: rows.length, failed: 0, skipped: skippedCount, label } })
+
+  let activity = null
+  try {
+    activity = await fetchJson(API + '&mode=team_activity_create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'create_users', label, total: rows.length, status: 'running' }),
+    })
+  } catch { /* logging failing shouldn't block the actual creation */ }
+
+  let done = 0, failed = 0
+  for (const row of rows) {
+    let rowOk = true
+    try {
+      const payload = {
+        firstName: row.first_name, lastName: row.last_name || '', email: row.email,
+        role: LS_ROLE_OPTIONS.includes(row.role) ? row.role : 'Sales_User',
+        teamId: (row.team_name && lookups.teamNameToId[row.team_name.trim().toLowerCase()]) || undefined,
+        managerUserId: (row.manager_email && lookups.managerEmailToId[row.manager_email.trim().toLowerCase()]) || undefined,
+        phone: row.phone || undefined,
+        virtualDid: row.virtual_did || undefined,
+        password: row.password || undefined,
+        permissionTemplateId: (row.permission_template && lookups.templateNameToId[row.permission_template.trim().toLowerCase()]) || undefined,
+        skipActivityLog: true,
+      }
+      await fetchJson(API + '&mode=team_create_user', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      })
+      done++
+    } catch { failed++; rowOk = false }
+    createUsersStore.set({ progress: { done: done + failed, total: rows.length, failed, skipped: skippedCount, label, currentRow: row.email, currentRowOk: rowOk } })
+    if (activity && (done + failed) % 5 === 0) {
+      fetchJson(API + '&mode=team_activity_update', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: activity.id, done, failed, skipped: skippedCount }),
+      }).catch(() => {})
+    }
+  }
+  if (activity) {
+    fetchJson(API + '&mode=team_activity_update', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: activity.id, done, failed, skipped: skippedCount, status: failed && !done ? 'failed' : 'done' }),
+    }).catch(() => {})
+  }
+  createUsersStore.set({ running: false, progress: null })
+  if (onSettled) onSettled({ done, failed, skipped: skippedCount })
+}
+
+function useCreateUsersProgress() {
+  const [state, setState] = useState({ running: createUsersStore.running, progress: createUsersStore.progress })
+  useEffect(() => {
+    const sync = () => setState({ running: createUsersStore.running, progress: createUsersStore.progress })
+    sync()
+    return createUsersStore.subscribe(sync)
+  }, [])
+  return state
+}
+
 // ---------------------------------------------------------------- Bulk import modal
 
 function BulkImportModal({ onClose, onStarted }) {
@@ -816,6 +954,289 @@ function BulkImportModal({ onClose, onStarted }) {
   )
 }
 
+// ---------------------------------------------------------------- Add User modal
+//
+// Deliberately a SEPARATE button/modal from "Bulk import" above, not a mode
+// inside it -- that one maps ASM/SM/Role/Country onto people who already
+// exist in LeadSquared; this one creates brand-new people in LeadSquared
+// itself. Same "one person" vs "many (CSV)" toggle inside ONE entry point,
+// so there's still only ever one new button on the toolbar, not two.
+const smallLabelStyle = { fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block' }
+
+function AddUserModal({ onClose, rows, rosterEmails, onCreated, onBulkStarted }) {
+  const [mode, setMode] = useState('single') // 'single' | 'bulk'
+  const [templates, setTemplates] = useState(null) // null = loading, [] = none, or [{id,name}]
+  const [templatesError, setTemplatesError] = useState('')
+  useEffect(() => {
+    fetchJson(API + '&mode=team_permission_templates')
+      .then(d => setTemplates(d.templates || []))
+      .catch(e => { setTemplates([]); setTemplatesError(String(e.message || e)) })
+  }, [])
+
+  // Team/Manager options are derived from the roster ALREADY loaded on screen
+  // -- no extra LeadSquared call. teamNameToId/managerEmailToId are also what
+  // the bulk-CSV path resolves free-text Team/Manager Email columns against.
+  const teamOptions = useMemo(() => {
+    const m = new Map()
+    rows.forEach(r => { if (r.teamId && r.teamName) m.set(r.teamId, r.teamName) })
+    return Array.from(m.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+  }, [rows])
+  const lookups = useMemo(() => {
+    const teamNameToId = {}, managerEmailToId = {}, templateNameToId = {}
+    rows.forEach(r => { if (r.teamName) teamNameToId[r.teamName.trim().toLowerCase()] = r.teamId })
+    rows.forEach(r => { if (r.email) managerEmailToId[r.email.trim().toLowerCase()] = r.id })
+    ;(templates || []).forEach(t => { templateNameToId[t.name.trim().toLowerCase()] = t.id })
+    return { teamNameToId, managerEmailToId, templateNameToId }
+  }, [rows, templates])
+
+  // -------- single-person form
+  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', role: 'Sales_User', teamId: '', managerEmail: '', phone: '', virtualDid: '', permissionTemplateId: '', password: '' })
+  const setF = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  const [creating, setCreating] = useState(false)
+  const [createResult, setCreateResult] = useState(null) // { id, templateApplied, templateError }
+  const [createError, setCreateError] = useState('')
+
+  const submitSingle = async () => {
+    if (!form.firstName.trim() || !form.email.trim()) return
+    if (!window.confirm(`Create "${(form.firstName + ' ' + form.lastName).trim()}" (${form.email}) as a real user in LeadSquared now?`)) return
+    setCreating(true); setCreateError(''); setCreateResult(null)
+    try {
+      const managerUserId = form.managerEmail ? lookups.managerEmailToId[form.managerEmail.trim().toLowerCase()] : undefined
+      const result = await fetchJson(API + '&mode=team_create_user', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(),
+          role: form.role, teamId: form.teamId || undefined, managerUserId, phone: form.phone.trim() || undefined,
+          virtualDid: form.virtualDid.trim() || undefined, password: form.password || undefined,
+          permissionTemplateId: form.permissionTemplateId || undefined,
+        }),
+      })
+      setCreateResult(result)
+      if (onCreated) onCreated()
+    } catch (e) {
+      setCreateError(String(e.message || e))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  // -------- bulk form (mirrors BulkImportModal's file/paste UI)
+  const [parsed, setParsed] = useState(null)
+  const [label, setLabel] = useState('')
+  const [dragOver, setDragOver] = useState(false)
+  const [showPaste, setShowPaste] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const fileRef = useRef(null)
+
+  const loadFile = file => {
+    if (!file) return
+    setLabel(file.name)
+    const reader = new FileReader()
+    reader.onload = ev => setParsed(parseCreateUsersText(String(ev.target.result || '')))
+    reader.readAsText(file)
+  }
+  const onDrop = e => {
+    e.preventDefault(); setDragOver(false)
+    const file = e.dataTransfer.files && e.dataTransfer.files[0]
+    loadFile(file)
+  }
+  const startBulk = () => {
+    if (!parsed || !parsed.rows.length) return
+    if (!window.confirm(`Create ${parsed.rows.length} real user(s) in LeadSquared now? This can't be bulk-undone -- each would need removing one at a time.`)) return
+    runCreateUsersInBackground(parsed.rows, label || 'pasted rows', parsed.skipped, lookups)
+    onBulkStarted()
+  }
+
+  return (
+    <Modal onClose={onClose} title="Add User" width={620}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div style={pillStyle(mode === 'single')} onClick={() => setMode('single')}>One person</div>
+        <div style={pillStyle(mode === 'bulk')} onClick={() => setMode('bulk')}>Many (upload CSV)</div>
+      </div>
+
+      {mode === 'single' && (
+        <div>
+          {createResult ? (
+            <div style={{ padding: '12px 14px', borderRadius: 10, background: C.greenBg, border: '0.5px solid rgba(76,174,111,0.35)', color: C.text, fontSize: 12.5 }}>
+              <div style={{ fontWeight: 800, color: C.green, marginBottom: 4 }}>User created</div>
+              {form.firstName} ({form.email}) now exists in LeadSquared (id {createResult.id}).
+              {form.permissionTemplateId && (
+                createResult.templateApplied
+                  ? <div style={{ marginTop: 4 }}>Permission template applied.</div>
+                  : <div style={{ marginTop: 4, color: C.navy }}>User created, but the permission template failed to apply{createResult.templateError ? `: ${createResult.templateError}` : ''} — apply it manually in LeadSquared.</div>
+              )}
+              <div style={{ marginTop: 10 }}>
+                <Button size="sm" variant="ghost" onClick={() => { setCreateResult(null); setForm({ firstName: '', lastName: '', email: '', role: 'Sales_User', teamId: '', managerEmail: '', phone: '', virtualDid: '', permissionTemplateId: '', password: '' }) }}>Create another</Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {createError && (
+                <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5, marginBottom: 12 }}>✕ {createError}</div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div><span style={smallLabelStyle}>First Name *</span><input style={inputStyle} value={form.firstName} onChange={e => setF('firstName', e.target.value)} /></div>
+                <div><span style={smallLabelStyle}>Last Name</span><input style={inputStyle} value={form.lastName} onChange={e => setF('lastName', e.target.value)} /></div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <span style={smallLabelStyle}>Email *</span><input style={inputStyle} type="email" value={form.email} onChange={e => setF('email', e.target.value)} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <span style={smallLabelStyle}>Role</span>
+                  <Dropdown options={LS_ROLE_OPTIONS} value={form.role} onChange={v => setF('role', v)} minWidth={160} />
+                </div>
+                <div>
+                  <span style={smallLabelStyle}>Team</span>
+                  <Dropdown
+                    options={['None', ...teamOptions.map(t => t.name)]}
+                    value={teamOptions.find(t => t.id === form.teamId)?.name || 'None'}
+                    onChange={name => setF('teamId', name === 'None' ? '' : (teamOptions.find(t => t.name === name)?.id || ''))}
+                    minWidth={160}
+                  />
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <span style={smallLabelStyle}>Reporting Manager (email)</span>
+                <SuggestInput value={form.managerEmail} onChange={v => setF('managerEmail', v)} suggestions={rosterEmails} placeholder="Start typing an existing person's email…" />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div><span style={smallLabelStyle}>Phone</span><input style={inputStyle} value={form.phone} onChange={e => setF('phone', e.target.value)} placeholder="+91-9876543210" /></div>
+                <div><span style={smallLabelStyle}>Virtual DID</span><input style={inputStyle} value={form.virtualDid} onChange={e => setF('virtualDid', e.target.value)} /></div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <span style={smallLabelStyle}>Permission Template</span>
+                {templatesError ? (
+                  <div style={{ fontSize: 11.5, color: C.muted }}>Couldn't load templates ({templatesError}) — user can still be created without one.</div>
+                ) : (
+                  <Dropdown
+                    options={['None', ...(templates || []).map(t => t.name)]}
+                    value={(templates || []).find(t => t.id === form.permissionTemplateId)?.name || 'None'}
+                    onChange={name => setF('permissionTemplateId', name === 'None' ? '' : ((templates || []).find(t => t.name === name)?.id || ''))}
+                    minWidth={200} disabled={!templates}
+                  />
+                )}
+              </div>
+              <div style={{ marginBottom: 4 }}>
+                <span style={smallLabelStyle}>Password (optional)</span><input style={inputStyle} type="password" value={form.password} onChange={e => setF('password', e.target.value)} />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {mode === 'bulk' && (
+        <div>
+          <p style={{ fontSize: 12.5, color: C.muted, marginTop: 0 }}>
+            Each row creates a real, brand-new user in LeadSquared. First Name and Email are required;
+            everything else is optional. Team/Manager/Permission Template are matched by name against
+            who's already in the roster/available templates — a name that doesn't match anything is
+            just left blank on that row, not a hard failure.
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <Button variant="ghost" size="sm" onClick={downloadCreateUsersTemplate}>Download template (CSV)</Button>
+          </div>
+          {!parsed && (
+            <div
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              onClick={() => fileRef.current && fileRef.current.click()}
+              style={{
+                border: '1.5px dashed ' + (dragOver ? C.blue : C.border), borderRadius: 12, padding: '30px 20px',
+                textAlign: 'center', cursor: 'pointer', background: dragOver ? C.blueBg : 'var(--bg3)', transition: 'background .15s, border-color .15s',
+              }}
+            >
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 4 }}>Drop a CSV file here, or click to browse</div>
+              <div style={{ fontSize: 11.5, color: C.muted }}>.csv, .tsv or .txt — first row must be real column headers</div>
+              <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" onChange={e => loadFile(e.target.files && e.target.files[0])} style={{ display: 'none' }} />
+            </div>
+          )}
+          {parsed && parsed.binary && (
+            <div style={{ padding: '12px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5 }}>
+              "{label}" doesn't look like a text CSV — if this is an Excel file, use File → Save As → CSV (Comma delimited) first, then upload that.
+              <div style={{ marginTop: 8 }}><Button variant="ghost" size="sm" onClick={() => { setParsed(null); setLabel('') }}>Try another file</Button></div>
+            </div>
+          )}
+          {parsed && !parsed.binary && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{label}</div>
+                <Button variant="ghost" size="sm" onClick={() => { setParsed(null); setLabel('') }}>Choose a different file</Button>
+              </div>
+              {parsed.rows.length === 0 ? (
+                <div style={{ padding: '12px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5 }}>
+                  No rows had both a First Name and an Email. Check the header row matches the downloaded template.
+                  {parsed.unmapped.length > 0 && <div style={{ marginTop: 6 }}>Unrecognized headers found: {parsed.unmapped.join(', ')}</div>}
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12.5, color: C.text, marginBottom: 10 }}>
+                    <b>{parsed.rows.length}</b> row(s) ready to create{parsed.skipped > 0 && <>, <b>{parsed.skipped}</b> skipped (missing First Name or Email)</>}.
+                    {parsed.unmapped.length > 0 && <> Ignored column(s): {parsed.unmapped.join(', ')}.</>}
+                  </div>
+                  <div style={{ overflowX: 'auto', border: '0.5px solid ' + C.border, borderRadius: 10, marginBottom: 14 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+                      <thead>
+                        <tr style={{ background: 'var(--bg3)' }}>
+                          {Object.keys(parsed.rows[0]).map(k => (
+                            <th key={k} style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 800, color: C.muted, textTransform: 'uppercase', fontSize: 10, whiteSpace: 'nowrap' }}>{k}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parsed.rows.slice(0, 3).map((row, i) => (
+                          <tr key={i} style={{ borderTop: '0.5px solid ' + C.border }}>
+                            {Object.keys(parsed.rows[0]).map(k => (
+                              <td key={k} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{row[k] || '—'}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {parsed.rows.length > 3 && <div style={{ padding: '6px 10px', fontSize: 11, color: C.muted }}>+ {parsed.rows.length - 3} more row(s)</div>}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {!parsed && (
+            <div style={{ marginTop: 12 }}>
+              {!showPaste ? (
+                <span onClick={() => setShowPaste(true)} style={{ fontSize: 12, color: C.blue, fontWeight: 700, cursor: 'pointer' }}>Or paste rows instead</span>
+              ) : (
+                <>
+                  <textarea
+                    value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Paste tab- or comma-separated rows here…"
+                    style={{ ...inputStyle, height: 100, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                    <Button variant="ghost" size="sm" onClick={() => { setLabel('pasted rows'); setParsed(parseCreateUsersText(pasteText)) }} disabled={!pasteText.trim()}>Parse pasted rows</Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+        <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
+        {mode === 'single' && !createResult && (
+          <Button size="sm" onClick={submitSingle} disabled={creating || !form.firstName.trim() || !form.email.trim()}>
+            {creating ? 'Creating…' : 'Create User'}
+          </Button>
+        )}
+        {mode === 'bulk' && (
+          <Button size="sm" onClick={startBulk} disabled={!parsed || parsed.binary || !parsed.rows.length}>
+            {parsed && parsed.rows.length ? `Create ${parsed.rows.length} user(s) in background` : 'Create'}
+          </Button>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
 // ---------------------------------------------------------------- History page
 
 function statusColor(status) {
@@ -838,8 +1259,13 @@ const TYPE_ICON = {
   // a Frapp push is a real external write (a live call-routing system), not
   // just a local bulk-import row.
   frapp_push: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z" /></svg>,
+  // A person-plus glyph -- distinct from import's up-arrow, since this writes
+  // a brand-new person into production LeadSquared, not a local Supabase row.
+  // Reused for both the single-create (create_user) and bulk (create_users) types.
+  create_user: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="17" y1="11" x2="23" y2="11" /></svg>,
 }
-const TYPE_ICON_COLOR = { import: [C.navy, C.navyBg], export: [C.cyan, C.cyanBg], edit: [C.blue, C.blueBg], delete: [C.navy, C.navyBg], restore: [C.green, C.greenBg], frapp_push: [C.blue, C.blueBg] }
+TYPE_ICON.create_users = TYPE_ICON.create_user
+const TYPE_ICON_COLOR = { import: [C.navy, C.navyBg], export: [C.cyan, C.cyanBg], edit: [C.blue, C.blueBg], delete: [C.navy, C.navyBg], restore: [C.green, C.greenBg], frapp_push: [C.blue, C.blueBg], create_user: [C.green, C.greenBg], create_users: [C.green, C.greenBg] }
 // `level` is retired (see MANUAL_FIELDS above -- 2026-08 -- Level is no longer
 // editable or shown as a column), but kept here + in TEAM_MANUAL_FIELDS_DISPLAY
 // below on purpose: an OLD activity-log entry from before the retirement can
@@ -911,6 +1337,15 @@ function ActivityDetail({ row }) {
       </div>
     )
   }
+  if (row.type === 'create_user') {
+    return (
+      <div style={{ fontSize: 11.5, marginTop: 4, color: C.muted }}>
+        {detail.role && <>Role: {detail.role}</>}
+        {detail.templateApplied && <> · permission template applied</>}
+        {detail.templateError && <div style={{ color: C.navy, fontWeight: 700, marginTop: 2 }}>Permission template failed to apply: {detail.templateError}</div>}
+      </div>
+    )
+  }
   return null
 }
 const TEAM_MANUAL_FIELDS_DISPLAY = ['role', 'asm_sm', 'asm_sm_email', 'ssm', 'ssm_email', 'level', 'country', 'centre_name']
@@ -959,7 +1394,15 @@ function HistoryTab({ onBack }) {
   const [rows, setRows] = useState(null)
   const [error, setError] = useState('')
   const [restoringId, setRestoringId] = useState(null)
-  const { running, progress } = useImportProgress()
+  const importState = useImportProgress()
+  const createUsersState = useCreateUsersProgress()
+  // Only one of the two background jobs can realistically be running at once
+  // from the UI (each has its own "already running, ignore" guard), so this
+  // picks whichever is actually active rather than trying to show both live
+  // cards at the same time.
+  const running = importState.running || createUsersState.running
+  const progress = importState.running ? importState.progress : createUsersState.progress
+  const liveType = importState.running ? 'import' : (createUsersState.running ? 'create_users' : null)
   const wasRunning = useRef(false)
 
   const load = useCallback(() => {
@@ -1048,7 +1491,7 @@ function HistoryTab({ onBack }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {rows.map((r, i) => {
-              const isLiveRow = running && progress && r.type === 'import' && r.status === 'running'
+              const isLiveRow = running && progress && r.type === liveType && r.status === 'running'
               const d = isLiveRow ? progress.done : (r.done || 0)
               const failed = isLiveRow ? progress.failed : (r.failed || 0)
               const total = isLiveRow ? progress.total : (r.total || 0)
@@ -1067,15 +1510,17 @@ function HistoryTab({ onBack }) {
                       <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label || '—'}</span>
                       <span style={{ fontSize: 10, fontWeight: 800, color: statusColor(status), background: statusBg(status), padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>{status}</span>
                     </div>
-                    {r.type === 'import' && (
+                    {(r.type === 'import' || r.type === 'create_users') && (
                       <div style={{ height: 6, borderRadius: 99, background: 'var(--bg3)', overflow: 'hidden', marginBottom: 5, maxWidth: 360 }}>
                         <div style={{ height: '100%', width: pct + '%', borderRadius: 99, background: statusColor(status), transition: 'width .25s ease' }} />
                       </div>
                     )}
                     <div style={{ fontSize: 11.5, color: C.muted }}>
                       {r.type === 'import' ? `${fmtN(d)} done, ${fmtN(failed)} failed, ${fmtN(r.skipped || 0)} skipped of ${fmtN(total)}`
+                        : r.type === 'create_users' ? `${fmtN(d)} created, ${fmtN(failed)} failed, ${fmtN(r.skipped || 0)} skipped of ${fmtN(total)}`
                         : r.type === 'export' ? `${fmtN(r.total || 0)} row(s) exported`
                         : r.type === 'frapp_push' ? `${fmtN(r.total || 0)} coach(es) in this push`
+                        : r.type === 'create_user' ? '1 user created'
                         : null}
                     </div>
                     <ActivityDetail row={r} />
@@ -1265,12 +1710,14 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
   const [page, setPage] = useState(1)
   const [editUser, setEditUser] = useState(null)
   const [showImport, setShowImport] = useState(false)
+  const [showAddUser, setShowAddUser] = useState(false)
   const [showBulkEdit, setShowBulkEdit] = useState(false)
   // Selection is by email (a stable, human-meaningful key) rather than the
   // LeadSquared numeric id -- so it reads sensibly if this ever needs to
   // survive a refresh, and matches what team_manual_save keys on anyway.
   const [selected, setSelected] = useState(() => new Set())
   const { running: importRunning, progress: importProgress } = useImportProgress()
+  const { running: createUsersRunning, progress: createUsersProgress } = useCreateUsersProgress()
   // Virtual DID is the ONE field LeadSquared genuinely has no bulk source for
   // (confirmed live 2026-08-25 -- see fetchLeadSquaredTeamUsers' own comment in
   // api/crm-leads.js: User/AdvancedSearch does NOT expose mx_Custom_2 under any
@@ -1332,6 +1779,14 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
     if (wasImporting.current && !importRunning) load()
     wasImporting.current = importRunning
   }, [importRunning, load])
+  // Same reasoning as wasImporting above -- a finished bulk create-users run
+  // should refresh the roster so the new people show up without a manual
+  // Refresh click, guarded the same true->false way.
+  const wasCreatingUsers = useRef(false)
+  useEffect(() => {
+    if (wasCreatingUsers.current && !createUsersRunning) load()
+    wasCreatingUsers.current = createUsersRunning
+  }, [createUsersRunning, load])
 
   const rows = data?.rows || []
 
@@ -1469,6 +1924,14 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         </div>
       )}
 
+      {createUsersRunning && createUsersProgress && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: C.greenBg, marginBottom: 12, fontSize: 12.5, color: C.text, fontWeight: 700 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: C.green, flexShrink: 0 }} />
+          Creating users "{createUsersProgress.label}" in background — {createUsersProgress.done} of {createUsersProgress.total}
+          <span onClick={onOpenHistory} style={{ marginLeft: 'auto', cursor: 'pointer', color: C.blue, textDecoration: 'underline' }}>View progress</span>
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ position: 'relative', flex: '1 1 260px', minWidth: 220, maxWidth: 380 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.2" strokeLinecap="round" style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
@@ -1497,6 +1960,7 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         <Dropdown label="Status" options={['All', 'Active', 'Inactive']} value={statusFilter} onChange={setStatusFilter} minWidth={110} />
         <div style={{ flex: 1 }} />
         {isAdmin && <Button size="sm" icon={<UploadIcon />} onClick={() => setShowImport(true)}>Bulk import</Button>}
+        {isAdmin && <Button size="sm" onClick={() => setShowAddUser(true)}>+ Add User</Button>}
         <ExportButton
           hideSlack hideJson hideSheets
           filename="team-mapping-roster"
@@ -1672,6 +2136,15 @@ function RosterTab({ isAdmin, onOpenHistory, registerRefresh }) {
         <BulkImportModal
           onClose={() => setShowImport(false)}
           onStarted={() => { setShowImport(false); onOpenHistory() }}
+        />
+      )}
+      {showAddUser && (
+        <AddUserModal
+          rows={rows}
+          rosterEmails={rosterEmails}
+          onClose={() => setShowAddUser(false)}
+          onCreated={load}
+          onBulkStarted={() => { setShowAddUser(false); onOpenHistory() }}
         />
       )}
       {showBulkEdit && (
