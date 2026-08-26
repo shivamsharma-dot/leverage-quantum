@@ -243,7 +243,12 @@ input:focus, textarea:focus {
   --input-bg:#0A0F1B;
   --text:#E9EEF8;
   --text2:#A2ADC4;
-  --text3:#6E7A90;
+  /* Settings audit (2026-08-27): #6E7A90 measured 3.80:1 on card / 4.25:1 on
+     page -- below the 4.5:1 AA floor for normal text, on ~204 nodes (every
+     caption/helper/secondary-text element app-wide). #868FA3 verified at
+     5.67:1 / 6.07:1 / 5.19:1 on card/page/bg3(zebra stripe), same blue-grey
+     hue family so the hierarchy reads unchanged, just legible. */
+  --text3:#868FA3;
   --sb-thumb:rgba(150,172,232,0.22);
   --surface-hover:rgba(150,172,232,0.07);
   --brand-ink:#4FBBEA;
@@ -293,7 +298,10 @@ input:focus, textarea:focus {
   --input-bg:#081029;
   --text:#E6EDFB;
   --text2:#9DACCD;
-  --text3:#7482AC;
+  /* Settings audit (2026-08-27): #7482AC measured 4.21:1 on card / 4.20:1 on
+     page -- just under the 4.5:1 AA floor. #828FB8 verified at 5.62 / 6.12 /
+     4.98 on card/page/bg3, same hue family. */
+  --text3:#828FB8;
   --sb-thumb:rgba(168,190,255,0.24);
   --surface-hover:rgba(168,190,255,0.08);
   --brand-ink:#5FC6F0;
@@ -341,7 +349,10 @@ input:focus, textarea:focus {
   --header-border:#E4E1DA;
   --text:#1B1917;
   --text2:#57534E;
-  --text3:#857F76;
+  /* Settings audit (2026-08-27): #857F76 measured 3.86:1 on card / 3.51:1 on
+     page -- below the 4.5:1 AA floor. #6E6862 verified at 5.35 / 4.86 / 5.04
+     on card/page/bg3, same warm-grey hue family. */
+  --text3:#6E6862;
   --input-bg:#F1EFE9;
   --input-border:#DEDAD2;
   --sb-thumb:rgba(41,37,36,0.18);
