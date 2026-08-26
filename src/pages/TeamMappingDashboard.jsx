@@ -2099,6 +2099,19 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
   // pattern this app already uses for Meta Ads creative thumbnails (same
   // rate-limit-avoidance reasoning).
   const [detailCache, setDetailCache] = useState({})
+  // TBL-3: nothing signalled the table scrolls sideways -- you had to scroll
+  // past 50 rows first (thanks to TBL-1's own maxHeight wrapper) to even
+  // discover 12 more columns exist. A right-edge shadow (and a left one once
+  // actually scrolled) that tracks the wrapper's own scroll position, so the
+  // affordance is visible the moment the table renders, not only after
+  // stumbling onto it.
+  const tableScrollRef = useRef(null)
+  const [edgeShadow, setEdgeShadow] = useState({ left: false, right: false })
+  const updateEdgeShadow = useCallback(() => {
+    const el = tableScrollRef.current
+    if (!el) return
+    setEdgeShadow({ left: el.scrollLeft > 1, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 })
+  }, [])
 
   const toggleFilterValue = (field, val) => setActiveFilters(prev => {
     const cur = prev[field] || []
@@ -2237,6 +2250,15 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_ROWS))
   const pageRows = filtered.slice((page - 1) * PAGE_ROWS, page * PAGE_ROWS)
+
+  // TBL-3: check the overflow state as soon as this page's rows actually
+  // render (not just on the user's first scroll), and again if the window
+  // is resized -- both can flip whether the table overflows horizontally.
+  useEffect(() => {
+    const raf = requestAnimationFrame(updateEdgeShadow)
+    window.addEventListener('resize', updateEdgeShadow)
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', updateEdgeShadow) }
+  }, [pageRows, updateEdgeShadow])
 
   useEffect(() => {
     const missing = pageRows.filter(r => !detailCache[r.id]).map(r => r.id)
@@ -2422,7 +2444,31 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
             table elsewhere in this app. Header <th>s get position:sticky;top:0;
             the checkbox and Name columns additionally get position:sticky;left
             so both freeze while scrolling right through the other 16 columns. */}
-        <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 560, position: 'relative' }}>
+        <div ref={tableScrollRef} onScroll={updateEdgeShadow} style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 560, position: 'relative' }}>
+          {/* TBL-3 edge shadows. Absolutely positioned against the wrapper's
+              OWN padding box (the wrapper is both the overflow:auto scroller
+              and the position:relative containing block) -- an absolutely
+              positioned element is removed from normal flow, so it does not
+              scroll with the table content underneath it and stays pinned to
+              the visible edge as the user scrolls horizontally.
+              pointer-events:none so it never intercepts a click meant for
+              the table; top/bottom (not a fixed height) so it always spans
+              whatever the wrapper's own current maxHeight-bounded height is. */}
+          {edgeShadow.right && (
+            <div aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 28, pointerEvents: 'none', zIndex: 1, background: 'linear-gradient(to left, rgba(15,23,42,0.10), transparent)' }} />
+          )}
+          {/* z-index:1 (not above 1) is deliberate for the left shadow: TBL-1's
+              frozen checkbox+Name columns sit at z-index 2/3 with an opaque
+              background, so a shadow ABOVE them would incorrectly darken
+              content that's always fully visible regardless of scroll
+              position. At z-index:1 it renders behind the frozen cells
+              (invisibly, which is correct -- they don't need a "there's more"
+              hint, they're pinned) and in front of the plain, unpositioned
+              body cells (z-index:auto) to their right, which is where the
+              hint is actually meaningful. */}
+          {edgeShadow.left && (
+            <div aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 28, pointerEvents: 'none', zIndex: 1, background: 'linear-gradient(to right, rgba(15,23,42,0.10), transparent)' }} />
+          )}
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1000 }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid ' + C.border }}>
