@@ -29,6 +29,15 @@ const PAGE_ROWS = 50
 // reliable in table-layout:auto -- width+minWidth+maxWidth all pinned to the
 // same value is what actually forces a fixed rendered width.
 const TBL_CHECKBOX_COL_WIDTH = 44
+// A11Y-1: the outer Roster/Sales Groups/Org Chart/Connectors tab strip's real
+// tab list, driving both the role="tablist" button row and the matching
+// role="tabpanel" wiring below it.
+const TM_TABS = [
+  { id: 'roster', label: 'Roster' },
+  { id: 'groups', label: 'Sales Groups' },
+  { id: 'orgchart', label: 'Org Chart' },
+  { id: 'connectors', label: 'Connectors', adminOnly: true },
+]
 
 // Phone Number, Virtual DID and LS Manager Name/Email are NOT in this list --
 // LeadSquared's own API docs (User/Retrieve/ByUserId) genuinely return PhoneMain,
@@ -3202,16 +3211,42 @@ export default function TeamMappingDashboard() {
             )}
           </div>
           {activeTab !== 'history' && activeTab !== 'add-user' && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} className="lq-header-controls">
-              <div style={pillStyle(activeTab === 'roster')} onClick={() => setTab('roster')}>Roster</div>
-              <div style={pillStyle(activeTab === 'groups')} onClick={() => setTab('groups')}>Sales Groups</div>
-              <div style={pillStyle(activeTab === 'orgchart')} onClick={() => setTab('orgchart')}>Org Chart</div>
-              {isAdmin && <div style={pillStyle(activeTab === 'connectors')} onClick={() => setTab('connectors')}>Connectors</div>}
+            // A11Y-1: these were plain <div onClick> -- looked and behaved
+            // interactively for a mouse but a keyboard/screen-reader user could
+            // not switch tabs at all. Real <button role="tab"> in a
+            // role="tablist", roving tabindex (only the active tab is in the
+            // Tab order, matching every standard tab widget), and Left/Right
+            // arrow keys move + activate + move focus, per the WAI-ARIA tabs
+            // pattern.
+            <div role="tablist" aria-label="Team Mapping sections" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} className="lq-header-controls"
+              onKeyDown={e => {
+                if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+                e.preventDefault()
+                const idx = TM_TABS.findIndex(t => t.id === activeTab)
+                if (idx === -1) return
+                const visible = TM_TABS.filter(t => !t.adminOnly || isAdmin)
+                const vi = visible.findIndex(t => t.id === activeTab)
+                const next = visible[(vi + (e.key === 'ArrowRight' ? 1 : -1) + visible.length) % visible.length]
+                setTab(next.id)
+                requestAnimationFrame(() => document.getElementById(`tm-tab-${next.id}`)?.focus())
+              }}>
+              {TM_TABS.filter(t => !t.adminOnly || isAdmin).map(t => (
+                <button key={t.id} type="button" id={`tm-tab-${t.id}`} role="tab"
+                  aria-selected={activeTab === t.id} aria-controls={`tm-panel-${t.id}`}
+                  tabIndex={activeTab === t.id ? 0 : -1}
+                  onClick={() => setTab(t.id)}
+                  style={{ ...pillStyle(activeTab === t.id), fontFamily: FONT }}>
+                  {t.label}
+                </button>
+              ))}
             </div>
           )}
         </div>
         <style>{`@keyframes teamMapSpin { to { transform: rotate(360deg) } }`}</style>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
+        <div id={activeTab !== 'history' && activeTab !== 'add-user' ? `tm-panel-${activeTab}` : undefined}
+          role={activeTab !== 'history' && activeTab !== 'add-user' ? 'tabpanel' : undefined}
+          aria-labelledby={activeTab !== 'history' && activeTab !== 'add-user' ? `tm-tab-${activeTab}` : undefined}
+          style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
           {activeTab === 'roster' && <RosterTab isAdmin={isAdmin} onOpenHistory={() => setTab('history')} onOpenAddUser={() => setTab('add-user')} registerRefresh={registerRefresh} />}
           {activeTab === 'groups' && <GroupsTab registerRefresh={registerRefresh} />}
           {activeTab === 'orgchart' && <OrgChartTab registerRefresh={registerRefresh} isAdmin={isAdmin} />}
