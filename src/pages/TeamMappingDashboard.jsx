@@ -1941,8 +1941,8 @@ function TeamAddFilterButton({ allFields, activeFilters, filterOptions, open, on
 
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}>
-      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: FONT, color: C.muted, whiteSpace: 'nowrap' }}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+      <button type="button" onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 11, border: '1px dashed ' + C.border, background: 'transparent', cursor: 'pointer', fontSize: 13.5, fontWeight: 700, fontFamily: FONT, color: C.muted, whiteSpace: 'nowrap' }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
         Filter
       </button>
       {open && (
@@ -2240,7 +2240,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
           </svg>
           <input
             value={search} onChange={e => setSearch(e.target.value)} placeholder="Find someone by name or email…"
-            style={{ ...inputStyle, width: '100%', padding: '9px 12px 9px 32px', fontSize: 13.5 }}
+            style={{ ...inputStyle, width: '100%', padding: '7px 12px 7px 32px', fontSize: 13.5, borderRadius: 11 }}
           />
         </div>
         {Object.keys(activeFilters).map(key => {
@@ -2292,7 +2292,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
         />
         <Button variant="ghost" size="sm" icon={<ClockIcon />} onClick={onOpenHistory}>History</Button>
         <div style={{ position: 'relative' }}>
-          <button type="button" onClick={() => setShowInfo(v => !v)} title="Column info" style={{ width: 30, height: 30, borderRadius: 8, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.navy, fontStyle: 'italic', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>i</button>
+          <button type="button" onClick={() => setShowInfo(v => !v)} title="Column info" aria-label="Column info" aria-expanded={showInfo} style={{ width: 32, height: 32, borderRadius: 11, border: '0.5px solid ' + C.border, background: 'var(--card)', color: C.navy, fontStyle: 'italic', fontWeight: 800, fontSize: 13.5, cursor: 'pointer' }}>i</button>
           {showInfo && (
             <>
               <div onClick={() => setShowInfo(false)} style={{ position: 'fixed', inset: 0, zIndex: 300 }} />
