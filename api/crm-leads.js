@@ -2170,13 +2170,18 @@ async function handleLeadSquared(req, res, me) {
     // Temporary, read-only -- looking for a "System Test" style service user that the
     // team_users email-required filter would exclude (it may have no email on file).
     if (mode === 'leadsquared_find_system_user') {
-      const data = await leadsquaredPost('/v2/UserManagement.svc/User/AdvancedSearch', creds, {
+      const search = (lookupName, value) => leadsquaredPost('/v2/UserManagement.svc/User/AdvancedSearch', creds, {
         Columns: { Include_CSV: 'UserId,FirstName,LastName,EmailAddress,Role,StatusCode' },
-        GroupConditions: [{ Condition: [{ LookupName: 'FirstName', Operator: 'lik', LookupValue: 'system', ConditionOperator: null }], GroupOperator: null }],
+        GroupConditions: [{ Condition: [{ LookupName: lookupName, Operator: 'lik', LookupValue: value, ConditionOperator: null }], GroupOperator: null }],
         GroupOperator: null,
         Paging: { PageIndex: 0, PageSize: 50 },
       })
-      return res.status(200).json(data)
+      const [byFirst, byLast, byEmail] = await Promise.all([
+        search('FirstName', 'test'),
+        search('LastName', 'system'),
+        search('EmailAddress', 'system'),
+      ])
+      return res.status(200).json({ byFirst, byLast, byEmail })
     }
     if (mode === 'create_opportunity') {
       const body = req.body || {}
