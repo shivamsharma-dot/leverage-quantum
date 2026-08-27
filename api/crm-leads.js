@@ -2167,6 +2167,17 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'lead_schema') return res.status(200).json(await fetchLeadSquaredLeadSchema(creds, { refresh: refresh === '1' }))
     if (mode === 'opportunity_detail') return res.status(200).json(await fetchLeadSquaredOpportunityDetail(creds, { opportunityId: req.query.opportunityId }))
     if (mode === 'opportunity_activities') return res.status(200).json(await fetchLeadSquaredOpportunityActivities(creds, { opportunityId: req.query.opportunityId }))
+    // Temporary, read-only -- Users.Get is the same call this app already uses successfully
+    // elsewhere to resolve real owner names (fetchLeadSquaredUsersMap); the earlier
+    // AdvancedSearch-based hunt for "System Test" returned zero matches, which turned out
+    // to be wrong (the account's own UI clearly shows it as a real, selectable Owner) --
+    // using the already-confirmed-working call this time instead of guessing again.
+    if (mode === 'leadsquared_find_system_user_v2') {
+      const data = await leadsquaredGet('/v2/UserManagement.svc/Users.Get', creds)
+      const rows = Array.isArray(data) ? data : []
+      const matches = rows.filter(u => `${u.FirstName || ''} ${u.LastName || ''}`.toLowerCase().includes('system'))
+      return res.status(200).json({ totalUsers: rows.length, matches })
+    }
     if (mode === 'create_opportunity') {
       const body = req.body || {}
       let result = null, threw = null
