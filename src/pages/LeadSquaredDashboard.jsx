@@ -1213,7 +1213,7 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
 
   const start = () => {
     if (!resolved.rows.length) return
-    if (!window.confirm(`Create/update ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in production LeadSquared${overwriteFields ? ' (updating any that already exist)' : ''}? This runs in the background and cannot be undone.`)) return
+    if (!window.confirm(`${overwriteFields ? 'Create or update' : 'Create'} ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in production LeadSquared${overwriteFields ? ' (updating any that already exist)' : ''}? This runs in the background and cannot be undone.`)) return
     runOppImportInBackground(resolved.rows, label || 'pasted rows', resolved.skipped, { searchByAttr, eventCode: Number(eventCode) || 12003, overwriteFields })
   }
 
@@ -1260,7 +1260,7 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
             <b>{fmtN(resolved.rows.length)}</b> ready to send{resolved.skipped > 0 && <>, <b>{fmtN(resolved.skipped)}</b> skipped (no "{searchLabel}" value)</>}.
           </div>
           <Button onClick={start} disabled={!resolved.rows.length || !mapping.searchByValue}>
-            {`Create/update ${fmtN(resolved.rows.length)} Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in the background`}
+            {`${overwriteFields ? 'Create / Update' : 'Create'} ${fmtN(resolved.rows.length)} Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in the background`}
           </Button>
         </>
       )}
