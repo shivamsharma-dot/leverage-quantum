@@ -5331,3 +5331,11 @@ Diagnostic mode removed immediately after use (`node --check` + `npm run build` 
 ## 2026-08-27 (later) — LeadSquared: permission fix confirmed live, Update now works (commit `62dad30` area)
 
 User's LeadSquared admin flipped the Permission Template. Re-checked directly against LeadSquared's own permission API (temporarily re-added `leadsquared_permission_check`, confirmed, removed again): Opportunity type 12003 (University Admission Opportunity) now shows `Update: FullAccess` (was `NoAccess`) -- Import also opened to `FullAccess` as a bonus. Create/Delete remain `NoAccess`, untouched, which is fine since nothing built here needs them.
+
+## 2026-08-27 (later still) — LeadSquared: "System Test" isn't a real user account (commit `48b6bf7`/cleanup)
+
+User pointed at the Activity History screenshot showing "Modified by Shivam Sharma" and asked why it isn't "System Test," which they believed was an existing dedicated integration account. Searched exhaustively via LeadSquared's own `User/AdvancedSearch` -- FirstName contains "system"/"test", LastName contains "system", EmailAddress contains "system" -- across the entire ~3,400-user account. **Zero matches on all three.** No LeadSquared user account named anything close to "System Test" exists.
+
+What "System" almost certainly refers to: LeadSquared's own built-in platform action label (visible in the real Opportunities list this session, e.g. "Dropped by System" in the Stage column for auto-dropped opportunities) -- a baked-in automation actor, not a real user account. It has no login, no API keys, because it isn't a user at all. Can't be used as integration credentials.
+
+Confirmed the dedicated-integration-user approach (a real, newly created LeadSquared user, e.g. "Quantum Sync") is still the only real path -- there's no pre-existing "System Test" account to repurpose.

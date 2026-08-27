@@ -2167,22 +2167,6 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'lead_schema') return res.status(200).json(await fetchLeadSquaredLeadSchema(creds, { refresh: refresh === '1' }))
     if (mode === 'opportunity_detail') return res.status(200).json(await fetchLeadSquaredOpportunityDetail(creds, { opportunityId: req.query.opportunityId }))
     if (mode === 'opportunity_activities') return res.status(200).json(await fetchLeadSquaredOpportunityActivities(creds, { opportunityId: req.query.opportunityId }))
-    // Temporary, read-only -- looking for a "System Test" style service user that the
-    // team_users email-required filter would exclude (it may have no email on file).
-    if (mode === 'leadsquared_find_system_user') {
-      const search = (lookupName, value) => leadsquaredPost('/v2/UserManagement.svc/User/AdvancedSearch', creds, {
-        Columns: { Include_CSV: 'UserId,FirstName,LastName,EmailAddress,Role,StatusCode' },
-        GroupConditions: [{ Condition: [{ LookupName: lookupName, Operator: 'lik', LookupValue: value, ConditionOperator: null }], GroupOperator: null }],
-        GroupOperator: null,
-        Paging: { PageIndex: 0, PageSize: 50 },
-      })
-      const [byFirst, byLast, byEmail] = await Promise.all([
-        search('FirstName', 'test'),
-        search('LastName', 'system'),
-        search('EmailAddress', 'system'),
-      ])
-      return res.status(200).json({ byFirst, byLast, byEmail })
-    }
     if (mode === 'create_opportunity') {
       const body = req.body || {}
       let result = null, threw = null
