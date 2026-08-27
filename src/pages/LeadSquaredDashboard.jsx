@@ -1147,23 +1147,37 @@ const oppImportStore = {
 async function runOppImportInBackground(rows, label, skippedCount, opts) {
   if (oppImportStore.running) return
   const failures = []
-  oppImportStore.set({ running: true, progress: { done: 0, total: rows.length, failed: 0, skipped: skippedCount, label, failures } })
+  // Ties every row this run creates back together in History without forcing a grouped
+  // view -- each row is still logged individually server-side (see logOpportunityActivity),
+  // this is purely a display label.
+  const batchLabel = `${label} (${rows.length} row${rows.length === 1 ? '' : 's'})`
+  oppImportStore.set({ running: true, progress: { done: 0, total: rows.length, failed: 0, skipped: skippedCount, label, failures, finished: false } })
   let done = 0, failed = 0
   for (const row of rows) {
     let rowOk = true
     try {
-      await fetchJson(`${API}&mode=create_opportunity`, {
+      // Backend no longer throws on a LeadSquared LOGICAL failure (Status:1) -- it returns
+      // 200 with the real response body so the activity log can capture it. fetchJson only
+      // throws on a genuine HTTP-level failure now, so a Status:1 has to be checked here
+      // explicitly or it would silently count as "done".
+      const d = await fetchJson(`${API}&mode=create_opportunity`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ searchByAttr: opts.searchByAttr, searchByValue: row.searchByValue, prospectId: row.prospectId || undefined, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, overwriteFields: opts.overwriteFields }),
+        body: JSON.stringify({ searchByAttr: opts.searchByAttr, searchByValue: row.searchByValue, prospectId: row.prospectId || undefined, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, overwriteFields: opts.overwriteFields, batchLabel }),
       })
-      done++
+      if (d && d.Status === 1) {
+        failed++; rowOk = false
+        if (failures.length < 50) failures.push({ label: row.searchByValue, message: d.ExceptionMessage || 'LeadSquared rejected the request.' })
+      } else done++
     } catch (e) {
       failed++; rowOk = false
       if (failures.length < 50) failures.push({ label: row.searchByValue, message: e.message })
     }
-    oppImportStore.set({ progress: { done: done + failed, total: rows.length, failed, skipped: skippedCount, label, currentRow: row.searchByValue, currentRowOk: rowOk, failures: failures.slice() } })
+    oppImportStore.set({ progress: { done: done + failed, total: rows.length, failed, skipped: skippedCount, label, currentRow: row.searchByValue, currentRowOk: rowOk, failures: failures.slice(), finished: false } })
   }
-  oppImportStore.set({ running: false, progress: null })
+  // Kept, not cleared -- a run finishing used to silently revert the panel straight back to
+  // the file-upload screen with zero confirmation of what just happened. Now it stays put,
+  // marked finished, until the admin explicitly starts a new one (or the tab is closed).
+  oppImportStore.set({ running: false, progress: { done, total: rows.length, failed, skipped: skippedCount, label, failures: failures.slice(), finished: true } })
 }
 function useOppImportProgress() {
   const [state, setState] = useState({ running: oppImportStore.running, progress: oppImportStore.progress })
@@ -1258,21 +1272,30 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
   }
 
   if (running || progress) {
-    const pct = progress ? Math.round((progress.done / Math.max(1, progress.total)) * 100) : 0
+    const pct = progress ? Math.round(((progress.done + progress.failed) / Math.max(1, progress.total)) * 100) : 0
+    const finished = !running && progress && progress.finished
     return (
       <div>
-        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 8 }}>Running -- {progress?.done || 0} of {progress?.total || 0}</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 8 }}>
+          {finished ? 'Finished' : 'Running'} -- {progress?.done || 0} of {progress?.total || 0}
+        </div>
         <div style={{ height: 8, borderRadius: 999, background: 'var(--bg3)', overflow: 'hidden', marginBottom: 10 }}>
-          <div style={{ height: '100%', width: pct + '%', background: 'linear-gradient(135deg,#1F3C84,#1C9FD4)', transition: 'width .2s' }} />
+          <div style={{ height: '100%', width: pct + '%', background: finished ? 'linear-gradient(135deg,#4CAE6F,#29B9C3)' : 'linear-gradient(135deg,#1F3C84,#1C9FD4)', transition: 'width .2s' }} />
         </div>
         <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12 }}>
-          {progress?.failed || 0} failed · {progress?.skipped || 0} skipped (no match value) · currently: {progress?.currentRow || '—'}
+          {progress?.failed || 0} failed · {progress?.skipped || 0} skipped (no match value){!finished && <> · currently: {progress?.currentRow || '—'}</>}
         </div>
         {progress?.failures?.length > 0 && (
-          <div style={{ border: '0.5px solid #FECACA', borderRadius: 10, maxHeight: 200, overflowY: 'auto', padding: '8px 10px', background: '#FEF2F2' }}>
+          <div style={{ border: '0.5px solid #FECACA', borderRadius: 10, maxHeight: 200, overflowY: 'auto', padding: '8px 10px', background: '#FEF2F2', marginBottom: finished ? 12 : 0 }}>
             {progress.failures.map((f, i) => (
               <div key={i} style={{ fontSize: 11.5, color: '#B91C1C', marginBottom: 4 }}><b>{f.label}</b> — {f.message}</div>
             ))}
+          </div>
+        )}
+        {finished && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Button size="sm" onClick={() => { oppImportStore.set({ progress: null }); setTable(null); setMapping({}); setLabel('') }}>Start a new import</Button>
+            <span style={{ fontSize: 11.5, color: C.muted }}>Every row's own LeadSquared response is in the History tab above.</span>
           </div>
         )}
       </div>
@@ -1311,6 +1334,131 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
             {`${overwriteFields ? 'Create / Update' : 'Create'} ${fmtN(resolved.rows.length)} Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in the background`}
           </Button>
         </>
+      )}
+    </div>
+  )
+}
+
+// Status pills mirror this app's own brand-color rule (never red/amber on a data
+// element) and the exact same three-way convention Team Mapping's own History tab
+// already uses for done/failed: green for a real success, blue for a neutral
+// outcome (a duplicate was detected, nothing changed), navy for a failure.
+const OPP_STATUS_STYLE = {
+  success: { color: '#178A54', bg: '#E9F8EF', label: 'Success' },
+  duplicate: { color: '#1C9FD4', bg: '#E8F6FA', label: 'Duplicate' },
+  failed: { color: '#1F3C84', bg: '#E8EFF9', label: 'Failed' },
+}
+
+function OpportunityActivityRow({ row }) {
+  const [open, setOpen] = useState(false)
+  const st = OPP_STATUS_STYLE[row.status] || OPP_STATUS_STYLE.failed
+  let response = null, request = null
+  try { response = row.response_json ? JSON.parse(row.response_json) : null } catch (_) { /* stored malformed, show raw string instead */ }
+  try { request = row.request_json ? JSON.parse(row.request_json) : null } catch (_) { /* same */ }
+  return (
+    <div style={{ padding: '14px 18px', borderTop: '0.5px solid ' + C.border }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: st.color, background: st.bg, padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{st.label}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{SEARCH_BY_OPTIONS.find(o => o.v === row.search_by_attr)?.l || row.search_by_attr}: {row.target_value}</span>
+            {row.batch_label && <span style={{ fontSize: 10.5, color: C.muted, background: 'var(--bg3)', padding: '2px 8px', borderRadius: 999 }}>{row.batch_label}</span>}
+          </div>
+          <div style={{ fontSize: 11.5, color: C.muted }}>
+            {row.prospect_id && <>Lead ID {short(row.prospect_id)} · </>}
+            Event code {row.event_code || '—'}{row.overwrite_fields && <> · update mode</>}
+            {row.created_opportunity_id && <> · created id {short(row.created_opportunity_id)}</>}
+            {row.conflicted_opportunity_id && <> · matched existing id {short(row.conflicted_opportunity_id)}</>}
+          </div>
+          {row.exception_message && <div style={{ fontSize: 11.5, color: '#1F3C84', marginTop: 4 }}>{row.exception_message}</div>}
+          {open && (
+            <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: 'uppercase', marginBottom: 4 }}>Sent to LeadSquared</div>
+                <pre style={{ margin: 0, fontSize: 11, fontFamily: 'ui-monospace,monospace', background: 'var(--bg3)', borderRadius: 8, padding: 10, overflowX: 'auto', maxHeight: 220 }}>{request ? JSON.stringify(request, null, 2) : (row.request_json || '—')}</pre>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: 'uppercase', marginBottom: 4 }}>LeadSquared's response</div>
+                <pre style={{ margin: 0, fontSize: 11, fontFamily: 'ui-monospace,monospace', background: 'var(--bg3)', borderRadius: 8, padding: 10, overflowX: 'auto', maxHeight: 220 }}>{response ? JSON.stringify(response, null, 2) : (row.response_json || '(no response body -- the request itself failed, see the message above)')}</pre>
+              </div>
+            </div>
+          )}
+          <button type="button" onClick={() => setOpen(v => !v)} style={{ marginTop: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#1C9FD4', fontSize: 11.5, fontWeight: 700 }}>
+            {open ? 'Hide' : 'View'} request &amp; LeadSquared response
+          </button>
+        </div>
+        <div style={{ textAlign: 'right', fontSize: 11, color: C.muted, flexShrink: 0 }}>
+          <div style={{ fontWeight: 700, color: C.text }}>{row.created_by || 'unknown'}</div>
+          <div>{row.created_at ? new Date(row.created_at).toLocaleString() : ''}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function OpportunityHistoryTab() {
+  const [rows, setRows] = useState(null)
+  const [error, setError] = useState('')
+  const { running } = useOppImportProgress()
+  const wasRunning = useRef(false)
+
+  const load = useCallback(() => {
+    fetchJson(`${API}&mode=opportunity_activity_list`).then(d => { setRows(d.rows || []); setError('') }).catch(e => setError(String(e.message || e)))
+  }, [])
+
+  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (!running) return
+    const t = setInterval(load, 2500)
+    return () => clearInterval(t)
+  }, [load, running])
+  // Catches the LAST row of a run that just finished (the polling loop above stops
+  // the instant `running` flips false, which can be a beat before that final row's
+  // own write has landed in Supabase).
+  useEffect(() => {
+    if (wasRunning.current && !running) { load(); setTimeout(load, 900) }
+    wasRunning.current = running
+  }, [running, load])
+
+  const notSetUp = !!error
+  const stats = useMemo(() => {
+    const list = rows || []
+    return {
+      total: list.length,
+      success: list.filter(r => r.status === 'success').length,
+      duplicate: list.filter(r => r.status === 'duplicate').length,
+      failed: list.filter(r => r.status === 'failed').length,
+    }
+  }, [rows])
+
+  return (
+    <div>
+      {notSetUp ? (
+        <div style={{ padding: '16px 20px', borderRadius: 12, background: '#E8EFF9', border: '1px solid rgba(31,60,132,0.2)', marginBottom: 20 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1F3C84', marginBottom: 4 }}>History isn't set up yet</div>
+          <div style={{ fontSize: 12.5, color: C.text }}>
+            Run <code style={{ background: 'var(--bg3)', padding: '1px 6px', borderRadius: 5 }}>supabase/sql/leadsquared_opportunity_activity_setup.sql</code> once in the Supabase SQL editor. Creating/updating Opportunities already works either way -- this only affects whether it's logged here.
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
+          {[['Total attempts', stats.total], ['Success', stats.success], ['Duplicate', stats.duplicate], ['Failed', stats.failed]].map(([lbl, v]) => (
+            <div key={lbl}>
+              <div style={{ fontSize: 19, fontWeight: 800, color: C.text }}>{fmtN(v)}</div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{lbl}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!rows && !notSetUp ? (
+        <InlineLoader label="Loading history" height={140} />
+      ) : notSetUp ? null : rows.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: C.muted, fontSize: 13.5 }}>Nothing yet -- every Create/Update attempt, single or bulk, will show up here.</div>
+      ) : (
+        <div style={{ border: '0.5px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
+          {rows.map(r => <OpportunityActivityRow key={r.id} row={r} />)}
+        </div>
       )}
     </div>
   )
@@ -1374,9 +1522,9 @@ function CreateOpportunityTab() {
   const set1 = (schemaName, v) => setFieldValues(prev => ({ ...prev, [schemaName]: v }))
 
   return (
-    <div style={{ maxWidth: mode === 'bulk' ? 760 : 640 }}>
+    <div style={{ maxWidth: mode === 'history' ? 980 : mode === 'bulk' ? 760 : 640 }}>
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, padding: 3, borderRadius: 10, background: 'var(--bg3)', width: 'fit-content' }}>
-        {[['single', 'Single'], ['bulk', 'Bulk import']].map(([m, lbl]) => (
+        {[['single', 'Single'], ['bulk', 'Bulk import'], ['history', 'History']].map(([m, lbl]) => (
           <button key={m} type="button" onClick={() => setMode(m)} style={{
             padding: '6px 16px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: FONT,
             background: mode === m ? 'var(--card)' : 'transparent', color: mode === m ? '#1F3C84' : C.muted,
@@ -1385,6 +1533,8 @@ function CreateOpportunityTab() {
         ))}
       </div>
 
+      {mode === 'history' ? <OpportunityHistoryTab /> : (
+      <>
       <div style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>1. Match or create the lead</div>
         <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
@@ -1468,9 +1618,12 @@ function CreateOpportunityTab() {
             </SuccessNote>
           )}
           {submitError && <ErrorNote message={submitError} />}
+          {(result || submitError) && <p style={{ fontSize: 11, color: C.muted, margin: '-6px 0 12px' }}>Every attempt, including LeadSquared's own response, is kept in the History tab above.</p>}
 
           <Button onClick={submit} disabled={submitting || !searchByValue.trim()}>{submitting ? 'Creating…' : (overwriteFields ? 'Create / Update Opportunity' : 'Create Opportunity')}</Button>
         </>
+      )}
+      </>
       )}
     </div>
   )

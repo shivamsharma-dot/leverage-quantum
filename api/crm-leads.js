@@ -642,11 +642,53 @@ async function captureLeadSquaredOpportunity(creds, payload) {
     ...(fields.length ? { Fields: fields.map(f => ({ SchemaName: f.schemaName, Value: f.value })) } : {}),
   }
 
-  const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Capture', creds, { LeadDetails: leadDetails, Opportunity: opportunity })
-  if (data && data.Status === 1) {
-    throw new Error(data.ExceptionMessage || 'LeadSquared rejected the request (Status: Failure).')
+  const requestBody = { LeadDetails: leadDetails, Opportunity: opportunity }
+  // Deliberately does NOT throw on a Status:1 (logical failure) response -- LeadSquared
+  // still returns a real body in that case (ExceptionMessage/ExceptionType/RequestId etc),
+  // and the caller needs that FULL raw response to both show the user and persist to the
+  // activity log ("most important is lsq response on our activity" -- an explicit ask).
+  // Only a genuine transport/HTTP failure (leadsquaredPost itself throwing) propagates as
+  // a real exception here. The caller classifies success/duplicate/failed off data.Status/
+  // data.ConflictedOpportunityId itself.
+  const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Capture', creds, requestBody)
+  return { requestBody, data }
+}
+
+// Audit log for Create Opportunity -- one row per actual Capture-Opportunities call
+// (single-form submit OR a single row of a bulk import; bulk rows share a batch_label so
+// they can be grouped in the History view without forcing it). Own table, own dispatch
+// modes, gated on 'leadsquared' (not 'team_mapping') -- see the setup SQL's own comment for
+// why this isn't just reusing team_mapping_activity. Table: leadsquared_opportunity_activity
+// (supabase/sql/leadsquared_opportunity_activity_setup.sql).
+async function logOpportunityActivity(fields, me) {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const payload = {
+    batch_label: fields.batch_label || null,
+    search_by_attr: fields.search_by_attr,
+    target_value: fields.target_value,
+    prospect_id: fields.prospect_id || null,
+    event_code: fields.event_code || null,
+    overwrite_fields: !!fields.overwrite_fields,
+    status: fields.status,
+    created_opportunity_id: fields.created_opportunity_id || null,
+    conflicted_opportunity_id: fields.conflicted_opportunity_id || null,
+    exception_message: fields.exception_message || null,
+    request_json: fields.request_json || null,
+    response_json: fields.response_json || null,
+    created_by: (me && me.email) || null,
   }
-  return data
+  const r = await supabaseAdmin('leadsquared_opportunity_activity', {
+    method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(payload),
+  })
+  if (!r.ok) throw new Error('Could not write opportunity activity row: ' + (await r.text()).slice(0, 300))
+  const saved = await r.json()
+  return Array.isArray(saved) ? saved[0] : saved
+}
+async function listOpportunityActivity() {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const r = await supabaseAdmin('leadsquared_opportunity_activity?select=*&order=created_at.desc&limit=200')
+  if (!r.ok) throw new Error('leadsquared_opportunity_activity may not exist yet -- run supabase/sql/leadsquared_opportunity_activity_setup.sql')
+  return await r.json()
 }
 
 // Powers the "Centre Name" field in Team Mapping's manual-mapping modal --
@@ -2021,6 +2063,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_detail_cache_list') return res.status(200).json(await getDetailCacheEmails())
     if (mode === 'team_detail_cache_save') return res.status(200).json(await saveDetailCacheBatch((req.body && req.body.details) || []))
     if (mode === 'team_cache_lookup') return res.status(200).json(await getTeamCacheLookup())
+    if (mode === 'opportunity_activity_list') return res.status(200).json({ rows: await listOpportunityActivity() })
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
   }
@@ -2071,7 +2114,28 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'lead_schema') return res.status(200).json(await fetchLeadSquaredLeadSchema(creds, { refresh: refresh === '1' }))
     if (mode === 'opportunity_detail') return res.status(200).json(await fetchLeadSquaredOpportunityDetail(creds, { opportunityId: req.query.opportunityId }))
     if (mode === 'opportunity_activities') return res.status(200).json(await fetchLeadSquaredOpportunityActivities(creds, { opportunityId: req.query.opportunityId }))
-    if (mode === 'create_opportunity') return res.status(200).json(await captureLeadSquaredOpportunity(creds, req.body || {}))
+    if (mode === 'create_opportunity') {
+      const body = req.body || {}
+      let result = null, threw = null
+      try { result = await captureLeadSquaredOpportunity(creds, body) }
+      catch (e) { threw = String((e && e.message) || e) }
+      const data = result && result.data
+      // Classified off LeadSquared's own response shape, not guessed -- see
+      // captureLeadSquaredOpportunity's comment for why Status:1 no longer throws.
+      const status = threw ? 'failed' : (data && data.Status === 1) ? 'failed' : (data && data.ConflictedOpportunityId) ? 'duplicate' : 'success'
+      logOpportunityActivity({
+        batch_label: body.batchLabel || null,
+        search_by_attr: body.searchByAttr, target_value: body.searchByValue, prospect_id: body.prospectId || null,
+        event_code: body.eventCode != null ? String(body.eventCode) : null, overwrite_fields: !!body.overwriteFields,
+        status,
+        created_opportunity_id: data && data.CreatedOpportunityId, conflicted_opportunity_id: data && data.ConflictedOpportunityId,
+        exception_message: threw || (data && data.ExceptionMessage),
+        request_json: result ? JSON.stringify(result.requestBody) : JSON.stringify(body),
+        response_json: data ? JSON.stringify(data) : null,
+      }, me).catch(() => {})
+      if (threw) return res.status(502).json({ error: threw })
+      return res.status(200).json(data)
+    }
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
