@@ -316,7 +316,7 @@ function ConnectScreen({ onConnect, onPaste, error, loading }) {
         <p className={styles.connectDesc}>Authorise Quantum to access campaigns, creatives and pixel data for <strong>act_641914389215638</strong>.</p>
         <div className={styles.connectPerms}>
           <p className={styles.connectPermsLabel}>Permissions requested</p>
-          {['ads_read', 'ads_management', 'business_management', 'pages_show_list', 'pages_read_engagement'].map(p => (
+          {['ads_read', 'ads_management', 'business_management'].map(p => (
             <div key={p} className={styles.connectPerm}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               <code>{p}</code>
@@ -1830,7 +1830,7 @@ export default function MetaAdsDashboard() {
         fetchAdAccounts(t)
         notifyTokenStored(result)
       } else { setError('Authorization cancelled. Try pasting token manually.'); setLoading(false) }
-    }, { scope: 'ads_read,ads_management,business_management,pages_show_list,pages_read_engagement', auth_type: 'rerequest' })
+    }, { scope: 'ads_read,ads_management,business_management' })
   }
 
   const handlePaste = async (t) => {
