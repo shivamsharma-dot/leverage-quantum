@@ -3321,14 +3321,19 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           {activeTab === 'reports' && userIsAdmin && reportsSubView === 'slack' && (
             <ReportsSlackContent onBack={backToReports} />
           )}
-          {activeTab === 'reports' && userIsAdmin && !reportsSubView && (
+          {activeTab === 'reports' && userIsAdmin && (
             <>
-              {/* Reports redesign (2026-08-27): Email and Slack now have their own
-                  drill-down content (ReportsEmailContent/ReportsSlackContent above),
-                  reached via real routes -- these two cards navigate there in-place
-                  (same Sidebar/tab bar, real back button) rather than opening a
-                  separate page. The rest of this tab is still the old inline
-                  layout, migrated in a later pass. */}
+              {/* Reports redesign (2026-08-27), corrected same day: the landing
+                  (reportsSubView === null) now shows ONLY the two entry cards and
+                  Report Activity -- everything else that used to sit permanently on
+                  this tab (the Scheduled-reports summary bar + its Preview/Edit/Send
+                  modals, the full Slack card with CEO-PIN/guarded-channels/B2C
+                  routing, and the standalone Unassigned Leads Alert card) is
+                  UNCHANGED in content and logic, just re-gated to render under the
+                  matching sub-view instead of always. Nothing moved, nothing
+                  rewritten -- only the condition wrapping each block changed, so
+                  none of the existing state/handlers needed touching. */}
+              {!reportsSubView && (
               <div className={styles.card} style={{ display: 'flex', gap: 12 }}>
                 <button onClick={() => navigate('/settings/reports/email')} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderRadius: 12, border: '0.5px solid var(--border)', background: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                   <GmailIcon size={22} />
@@ -3339,7 +3344,17 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Slack</div><div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Team channel, test channels, browse all →</div></div>
                 </button>
               </div>
-              {(() => {
+              )}
+              {/* Disabled (2026-08-27): this whole block (Scheduled-reports summary
+                  bar + Preview email / Edit settings / Send Report / Recipients
+                  modals) duplicated most of what ReportsEmailContent above already
+                  covers -- rendering both stacked was worse clutter than either
+                  alone. Left in place, never rendered, rather than deleted: Preview
+                  email (a real iframe Gmail mockup) and a genuine full-audience
+                  Send Report are real capabilities this hides that ReportsEmailPage
+                  doesn't have a replacement for yet -- a disclosed gap, not a
+                  silent one, same as the CEO-PIN section on the Slack side. */}
+              {false && (() => {
                 const reportRecipients = accessList.filter(u => u.receive_reports)
                 const recipCount = reportRecipients.length
                 return (
@@ -3634,6 +3649,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   approval-destination options, the webhook fallback and
                   saveSlackConfig -- is untouched.
                   ---------------------------------------------------------------- */}
+              {reportsSubView === 'slack' && (
+              <>
               <div className={styles.card + ' ' + styles.skCardShell}>
                 <div className={styles.cardHead}>
                   {/* The real, true-colour Slack mark (already used on the Send to Slack
@@ -3659,7 +3676,12 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                 </div>
 
-                {/* ---- Channels: the plain, freely-editable roster ---- */}
+                {/* Disabled (2026-08-27): the team channel + test channel roster now
+                    lives on ReportsSlackPage above (with a real "browse every
+                    channel" picker on top) -- rendering both here duplicated it.
+                    Locked channels / CEO PIN / B2C routing below are unaffected,
+                    still the one place that content lives. */}
+                {false && (
                 <div className={styles.skGroup}>
                   <span className={styles.skGroupHead}>
                     <span className={styles.skGroupIconChip} data-accent="blue"><SlackChannelIcon /></span>
@@ -3716,6 +3738,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     </p>
                   </div>
                 </div>
+                )}
 
                 {/* ---- Locked channels, and the one PIN that gates all of them ----
                     The PIN block used to sit below the B2C approval block, i.e. two
@@ -3995,7 +4018,14 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                 )}
               </div>
+              </>
+              )}
 
+              {/* Disabled (2026-08-27): ReportsEmailPage's own Unassigned Leads Alert
+                  row now covers this exactly, including a real (non-test) Send now
+                  -- rendering both here was duplication. Left in place, unreachable,
+                  rather than deleted. */}
+              {false && (
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>Unassigned Leads Alert</h3>
                 <p className={styles.cardDesc}>Lead Qualification &middot; flags leads still owned by a bot/vendor placeholder (Futwork/Futwork AI/Superbot) instead of a real floor owner. Fixed recipient, separate from the scheduled reports above — not part of the general opt-in recipient list.</p>
@@ -4009,7 +4039,9 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   {unassignedMsg && <span className={styles.rcFeedback + ' ' + (unassignedMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{unassignedMsg}</span>}
                 </div>
               </div>
+              )}
 
+              {!reportsSubView && (
               <div className={styles.card}>
                 <div className={styles.activityHeader}>
                   <div>
@@ -4031,7 +4063,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     <table className={styles.alTable}>
                       <thead className={styles.alHead}>
                         <tr>
-                          {['TYPE','STATUS','TRIGGER','RECIPIENTS','SENT AT','DETAIL'].map(h=>(
+                          {['TYPE','CHANNEL','STATUS','TRIGGER','RECIPIENTS','SENT AT','ERROR'].map(h=>(
                             <th key={h}>{h}</th>
                           ))}
                         </tr>
@@ -4053,15 +4085,31 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           const dt = log.sent_at ? new Date(log.sent_at) : null
                           const dateStr = dt ? dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—'
                           const timeStr = dt ? dt.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}) : ''
-                          const rcptCount = Array.isArray(log.recipients) ? log.recipients.length : 0
+                          const rcpts = Array.isArray(log.recipients) ? log.recipients : []
+                          // Report Activity redesign (2026-08-27): every logReport() call already
+                          // stamps its recipients as either real email addresses or 'slack' /
+                          // 'slack:<channel label>' -- a 100%-reliable signal for which channel a
+                          // send actually used, since it's the exact string the send itself wrote,
+                          // not a guess parsed from the report_type name (which doesn't reliably
+                          // say 'slack' either -- e.g. b2c_daily_report is Slack-only but its type
+                          // string never says so).
+                          const isSlack = rcpts.length > 0 && String(rcpts[0]).startsWith('slack')
+                          const rcptCount = rcpts.length
+                          const slackChannelLabel = isSlack ? (rcpts[0].includes(':') ? rcpts[0].split(':').slice(1).join(':') : 'test/default') : ''
                           return (
                             <tr key={log.id||idx} className={styles.alRow}>
                               <td className={`${styles.alTd} ${styles.alPage}`} style={{textTransform:'capitalize'}}>{log.report_type||'—'}</td>
                               <td className={styles.alTd}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: 'var(--text-2)' }}>
+                                  {isSlack ? <SlackIcon size={13} /> : <GmailIcon size={13} />}
+                                  {isSlack ? 'Slack' : 'Email'}
+                                </span>
+                              </td>
+                              <td className={styles.alTd}>
                                 <span className={styles.alTag} style={{background:s.bg,color:s.c}}>{s.label}</span>
                               </td>
                               <td className={styles.alTd}><span className={styles.alTag} style={{ background: trigTag.bg, color: trigTag.c }}>{trigMode}</span><div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 3, textTransform: 'none', letterSpacing: 0 }}>{trigWho}</div></td>
-                              <td className={styles.alTd}>{rcptCount > 0 ? `${rcptCount} recipient${rcptCount!==1?'s':''}` : '—'}</td>
+                              <td className={styles.alTd}>{isSlack ? `#${slackChannelLabel}` : rcptCount > 0 ? `${rcptCount} recipient${rcptCount!==1?'s':''}` : '—'}</td>
                               <td className={styles.alTd}>{dateStr}{timeStr ? ` \u00b7 ${timeStr}` : ''}</td>
                               <td className={`${styles.alTd} ${styles.alDetail}`} title={log.error||''}>{log.error || '—'}</td>
                             </tr>
@@ -4074,6 +4122,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                 )}
               </div>
+              )}
             </>
           )}
 

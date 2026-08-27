@@ -115,6 +115,21 @@ export default function ReportsEmailPage({ userEmail, accessList, onBack }) {
     finally { setSendingTest(false); setTimeout(() => setMsg(''), 6000) }
   }
 
+  // Unassigned Leads Alert is a real operational alert to a fixed recipient
+  // (akash.saxena, CC shivam.sharma), not a subscribable digest -- "Send a
+  // test" (self-only) doesn't make sense for it the way it does for the
+  // Meta reports, so this row gets a genuine "Send now" instead, matching
+  // exactly what the old standalone card's own real send used to do.
+  const sendUnassignedNow = async () => {
+    setSendingTest('unassigned_leads')
+    try {
+      const r = await fetchT('/api/send-report', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'unassigned_leads', triggered_by: userEmail || 'manual' }) })
+      const j = await r.json().catch(() => ({}))
+      setMsg(r.ok ? `Sent — ${j.total ?? '?'} unassigned leads (${j.humanCount ?? '?'} human, ${j.aiCount ?? '?'} AI)` : '✕ ' + (j.error || 'Send failed'))
+    } catch (e) { setMsg('✕ ' + e.message) }
+    finally { setSendingTest(false); setTimeout(() => setMsg(''), 8000) }
+  }
+
   return (
     <>
       <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 12.5, fontWeight: 700, padding: 0, marginBottom: 14 }}>
@@ -169,12 +184,12 @@ export default function ReportsEmailPage({ userEmail, accessList, onBack }) {
                     <input className={styles.input} value={subjects[type]} onChange={e => setSubjects(prev => ({ ...prev, [type]: e.target.value }))}
                       placeholder={'Default ' + type + ' subject'} style={{ flex: 1, minWidth: 180 }} />
                   )}
-                  <Button size="sm" variant="secondary" disabled={sendingTest === type} onClick={() => sendTest(type)}>
-                    {sendingTest === type ? 'Sending…' : 'Send a test'}
+                  <Button size="sm" variant="secondary" disabled={sendingTest === type} onClick={() => type === 'unassigned_leads' ? sendUnassignedNow() : sendTest(type)}>
+                    {sendingTest === type ? 'Sending…' : type === 'unassigned_leads' ? 'Send now' : 'Send a test'}
                   </Button>
                 </div>
                 {type === 'unassigned_leads' && (
-                  <p style={{ fontSize: 11.5, color: 'var(--text-3)', margin: '10px 0 0' }}>To akash.saxena@leverageedu.com, always CC shivam.sharma@leverageedu.com -- fixed, not the recipient list below.</p>
+                  <p style={{ fontSize: 11.5, color: 'var(--text-3)', margin: '10px 0 0' }}>To akash.saxena@leverageedu.com, always CC shivam.sharma@leverageedu.com -- fixed, not the recipient list below. "Send now" is a real send, not a test.</p>
                 )}
               </div>
             )
