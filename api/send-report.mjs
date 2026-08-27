@@ -316,6 +316,57 @@ async function deliverToSlack(hook, payload) {
   return postToSlack(hook.url, payload)
 }
 
+// Settings > Reports > Slack redesign (2026-08-27): the channel picker used
+// to only ever show channels someone had already typed in by hand. This
+// lists every real channel the bot token can see, via conversations.list.
+// channels:read (already granted) covers public channels; a private one
+// only appears if the app also has groups:read AND the bot has been
+// invited to it -- both real, separate requirements, so a channel missing
+// from this list isn't necessarily a bug, it's one of those two gates.
+async function handleSlackChannelList(req, res) {
+  const { getSessionUser } = await import('../lib/auth.mjs')
+  const me = getSessionUser(req)
+  if (!me) return res.status(401).json({ error: 'Not signed in' })
+  if (me.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+
+  const token = process.env.SLACK_BOT_TOKEN
+  if (!token) return res.status(500).json({ error: 'SLACK_BOT_TOKEN is not configured' })
+
+  const channels = []
+  let cursor = ''
+  try {
+    do {
+      const q = new URLSearchParams({
+        types: 'public_channel,private_channel',
+        exclude_archived: 'true',
+        limit: '200',
+        ...(cursor ? { cursor } : {}),
+      })
+      const r = await fetch('https://slack.com/api/conversations.list?' + q.toString(), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await r.json()
+      if (!data.ok) {
+        const hints = {
+          invalid_auth: 'SLACK_BOT_TOKEN is invalid or revoked',
+          not_authed: 'SLACK_BOT_TOKEN is missing',
+          missing_scope: `the app is missing a scope conversations.list needs (channels:read, and groups:read for private channels)`,
+        }
+        return res.status(502).json({ error: hints[data.error] || data.error || 'Slack conversations.list failed' })
+      }
+      for (const c of data.channels || []) {
+        channels.push({ id: c.id, name: c.name, isPrivate: !!c.is_private, isMember: !!c.is_member, numMembers: c.num_members || 0 })
+      }
+      cursor = data.response_metadata?.next_cursor || ''
+    } while (cursor)
+  } catch (e) {
+    return res.status(502).json({ error: 'Slack request failed: ' + e.message })
+  }
+
+  channels.sort((a, b) => a.name.localeCompare(b.name))
+  return res.status(200).json({ channels })
+}
+
 async function postToSlack(webhookUrl, payload) {
   const res = await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
   const text = await res.text()
@@ -2528,6 +2579,9 @@ export default async function handler(req, res) {
     }
   }
 
+  if ((req.body?.type || req.query?.type) === 'slack_channel_list') {
+    return handleSlackChannelList(req, res)
+  }
   if ((req.body?.type || req.query?.type) === 'slack_export') {
     return handleSlackExport(req, res)
   }
