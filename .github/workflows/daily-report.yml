@@ -1,8 +1,11 @@
 name: Daily Meta Campaign Report
 
 on:
-  schedule:
-    - cron: '0 4 * * *'
+  # Retired 2026-08-27: the actual schedule now lives in Settings > Reports >
+  # Email (app_preferences.report_schedules) and is fired by
+  # report-scheduler.yml, which reads that value every 5 minutes -- editable
+  # from the UI instead of requiring a repo edit. Kept as workflow_dispatch
+  # for manual testing.
   workflow_dispatch:
 
 jobs:

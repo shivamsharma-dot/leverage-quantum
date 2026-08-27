@@ -1,0 +1,108 @@
+name: Report Scheduler (Email)
+
+on:
+  schedule:
+    # Fires every 5 minutes. Each run checks the real cadence stored in Settings
+    # > Reports > Email (app_preferences.report_schedules) and only fires the
+    # reports whose scheduled day/time falls in THIS 5-minute bucket -- replaces
+    # the 4 old fixed-cron workflows (daily/weekly/monthly/unassigned-leads
+    # report.yml), which hardcoded their time directly in cron syntax and could
+    # only be changed by editing this repo. Same self-gating pattern already
+    # proven by source-health-check.yml, extended with day-of-week/day-of-month
+    # and minute precision since a recurring send needs both.
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check-and-send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check schedule and trigger any reports due this window
+        env:
+          SB_URL: https://tsyekthwthxszmsgqfej.supabase.co
+          SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 << 'PYEOF'
+          import json, urllib.request, os
+          from datetime import datetime, timedelta
+
+          SB_URL = os.environ['SB_URL']
+          SB_KEY = os.environ['SB_KEY']
+          CRON_SECRET = os.environ['CRON_SECRET']
+
+          # Defaults match exactly what the 4 retired fixed-cron workflows used to
+          # fire at, so switching to this scheduler doesn't silently change any
+          # existing send time until someone edits it in Settings.
+          DEFAULTS = {
+              'daily':            {'hour': 9, 'minute': 30},
+              'weekly':           {'dayOfWeek': 1, 'hour': 9, 'minute': 30},   # 1 = Monday (JS getDay())
+              'monthly':          {'dayOfMonth': 1, 'hour': 9, 'minute': 30},
+              'unassigned_leads': {'hour': 9, 'minute': 0},
+          }
+          # type -> the exact POST body the old workflow used to send
+          BODIES = {
+              'daily':            {},
+              'weekly':           {'type': 'weekly', 'triggered_by': 'cron'},
+              'monthly':          {'type': 'monthly', 'triggered_by': 'cron'},
+              'unassigned_leads': {'type': 'unassigned_leads', 'triggered_by': 'cron'},
+          }
+
+          def sb_get(path):
+              req = urllib.request.Request(SB_URL + '/rest/v1/' + path, headers={'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY})
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  return json.loads(r.read().decode('utf-8'))
+
+          schedules = dict(DEFAULTS)
+          try:
+              rows = sb_get('app_preferences?select=value&key=eq.report_schedules&limit=1')
+              if rows and rows[0].get('value'):
+                  stored = rows[0]['value']
+                  for k in schedules:
+                      if k in stored and isinstance(stored[k], dict):
+                          schedules[k] = {**schedules[k], **stored[k]}
+          except Exception as e:
+              print('could not read report_schedules, using defaults:', e)
+
+          now_ist = datetime.utcnow() + timedelta(hours=5, minutes=30)
+          bucket = now_ist.minute - (now_ist.minute % 5)
+          is_manual = os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch'
+          print('IST now:', now_ist.strftime('%Y-%m-%d %H:%M (%A)'), '/ bucket minute:', bucket, '/ manual run:', is_manual)
+
+          def due(sched):
+              if is_manual:
+                  return False  # manual runs are for testing the scheduler itself, not for re-sending every report at once
+              sched_bucket = sched['minute'] - (sched['minute'] % 5)
+              if now_ist.hour != sched['hour'] or bucket != sched_bucket:
+                  return False
+              if 'dayOfWeek' in sched and now_ist.isoweekday() % 7 != sched['dayOfWeek']:
+                  return False
+              if 'dayOfMonth' in sched and now_ist.day != sched['dayOfMonth']:
+                  return False
+              return True
+
+          any_sent = False
+          for report_type, sched in schedules.items():
+              if not due(sched):
+                  continue
+              any_sent = True
+              body = json.dumps(BODIES[report_type]).encode()
+              req = urllib.request.Request(
+                  'https://quantum.leverageedu.com/api/send-report',
+                  data=body, method='POST',
+                  headers={'Content-Type': 'application/json', 'x-cron-secret': CRON_SECRET},
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      resp = json.loads(r.read().decode())
+                      if resp.get('skipped'):
+                          print('::warning::' + report_type + ' report SKIPPED -- Automatic Reports is disabled in Settings')
+                      else:
+                          print(report_type, 'report sent:', resp)
+              except urllib.error.HTTPError as e:
+                  print('::error::' + report_type + ' report failed:', e.code, e.read().decode()[:300])
+
+          if not any_sent:
+              print('Nothing due this window.')
+          PYEOF

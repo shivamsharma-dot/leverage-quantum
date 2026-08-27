@@ -1,8 +1,8 @@
 name: Monthly Meta Ads Report
 
 on:
-  schedule:
-    - cron: '0 4 1 * *'
+  # Retired 2026-08-27: see daily-report.yml -- schedule now lives in Settings
+  # > Reports > Email, fired by report-scheduler.yml.
   workflow_dispatch:
 
 jobs:

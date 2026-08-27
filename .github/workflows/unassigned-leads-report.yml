@@ -1,8 +1,8 @@
 name: Unassigned Leads Report
 
 on:
-  schedule:
-    - cron: '30 3 * * *'
+  # Retired 2026-08-27: see daily-report.yml -- schedule now lives in Settings
+  # > Reports > Email, fired by report-scheduler.yml.
   workflow_dispatch:
 
 jobs:
