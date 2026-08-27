@@ -110,7 +110,12 @@ export default function CreativeDownloaderDashboard() {
       const perAccount = await Promise.all(accounts.map(async acct => {
         try {
           const r = await graphGet(`${acct.id}/ads`, token, {
-            fields: 'id,name,status,creative{object_type,image_hash,thumbnail_url,video_id}',
+            // Advantage+ / Dynamic Creative ads carry no single creative.image_hash at
+            // all -- their images live under asset_feed_spec.images[].hash instead
+            // (confirmed live: GER19 has image_hash=null but 2 real asset_feed images).
+            // Both are requested so the resolver below can fall back correctly rather
+            // than silently landing on the low-res thumbnail for every such ad.
+            fields: 'id,name,status,creative{object_type,image_hash,thumbnail_url,video_id,asset_feed_spec{images}}',
             filtering: decodeURIComponent(filt), limit: 25,
           })
           return (r.data || []).map(ad => ({ ...ad, acctId: acct.id, acctName: acct.name }))
@@ -129,8 +134,19 @@ export default function CreativeDownloaderDashboard() {
       }
 
       const resolved = matched.map(ad => {
-        const hash = ad.creative?.image_hash
-        const fromIndex = hash ? imageIndexes[ad.acctId]?.[hash] : null
+        const index = imageIndexes[ad.acctId] || {}
+        // Ordinary creatives carry one hash at creative.image_hash. Advantage+ /
+        // Dynamic Creative ads carry none there at all -- their real images live
+        // under asset_feed_spec.images[].hash instead (confirmed live against a
+        // real ad: image_hash was null while asset_feed_spec had 2 real hashes).
+        // Every candidate hash is tried against the same full-res index; the first
+        // one that resolves wins, so this doesn't care which shape a given ad uses.
+        const candidateHashes = [
+          ad.creative?.image_hash,
+          ...((ad.creative?.asset_feed_spec?.images || []).map(i => i.hash)),
+        ].filter(Boolean)
+        let fromIndex = null
+        for (const h of candidateHashes) { if (index[h]) { fromIndex = index[h]; break } }
         const isVideo = ad.creative?.object_type === 'VIDEO' || !!ad.creative?.video_id
         let image = null
         if (fromIndex) {
