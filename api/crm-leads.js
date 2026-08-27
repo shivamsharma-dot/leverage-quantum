@@ -2167,16 +2167,6 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'lead_schema') return res.status(200).json(await fetchLeadSquaredLeadSchema(creds, { refresh: refresh === '1' }))
     if (mode === 'opportunity_detail') return res.status(200).json(await fetchLeadSquaredOpportunityDetail(creds, { opportunityId: req.query.opportunityId }))
     if (mode === 'opportunity_activities') return res.status(200).json(await fetchLeadSquaredOpportunityActivities(creds, { opportunityId: req.query.opportunityId }))
-    // Temporary read-only re-check (no write) -- confirming whether the Permission Template
-    // edit was actually applied yet. Remove again once confirmed either way.
-    if (mode === 'leadsquared_permission_check') {
-      const [who, perms] = await Promise.allSettled([
-        leadsquaredGet('/v2/Authentication.svc/UserByAccessKey.Get', creds),
-        leadsquaredGet('/v2/PermissionTemplate.svc/User/GetPermissions', creds),
-      ])
-      const unwrap = (settled) => settled.status === 'fulfilled' ? settled.value : { error: String((settled.reason && settled.reason.message) || settled.reason) }
-      return res.status(200).json({ whoAmI: unwrap(who), permissions: unwrap(perms) })
-    }
     if (mode === 'create_opportunity') {
       const body = req.body || {}
       let result = null, threw = null

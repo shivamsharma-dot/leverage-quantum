@@ -5327,3 +5327,7 @@ User asked to check the LeadSquared portal directly for the block, and whether a
 Diagnostic mode removed immediately after use (`node --check` + `npm run build` both clean) -- it answered the one question it was built for and isn't a permanent feature.
 
 **Real, concrete next step for the user**: in LeadSquared, go to the Permission Template assigned to this API user and change **Opportunity > University Admission Opportunity (12003) > Update** from No Access to Full (or Partial) Access. That is the one specific setting blocking every write attempt made this session.
+
+## 2026-08-27 (later) — LeadSquared: permission fix confirmed live, Update now works (commit `62dad30` area)
+
+User's LeadSquared admin flipped the Permission Template. Re-checked directly against LeadSquared's own permission API (temporarily re-added `leadsquared_permission_check`, confirmed, removed again): Opportunity type 12003 (University Admission Opportunity) now shows `Update: FullAccess` (was `NoAccess`) -- Import also opened to `FullAccess` as a bonus. Create/Delete remain `NoAccess`, untouched, which is fine since nothing built here needs them.
