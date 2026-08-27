@@ -2173,10 +2173,19 @@ async function handleLeadSquared(req, res, me) {
     // to be wrong (the account's own UI clearly shows it as a real, selectable Owner) --
     // using the already-confirmed-working call this time instead of guessing again.
     if (mode === 'leadsquared_find_system_user_v2') {
-      const data = await leadsquaredGet('/v2/UserManagement.svc/Users.Get', creds)
-      const rows = Array.isArray(data) ? data : []
-      const matches = rows.filter(u => `${u.FirstName || ''} ${u.LastName || ''}`.toLowerCase().includes('system'))
-      return res.status(200).json({ totalUsers: rows.length, matches })
+      const targetId = '39e9f9ab-f347-11ea-9e36-0a2bd9889d72'
+      const [usersGet, advByEmail] = await Promise.all([
+        leadsquaredGet('/v2/UserManagement.svc/Users.Get', creds),
+        leadsquaredPost('/v2/UserManagement.svc/User/AdvancedSearch', creds, {
+          Columns: { Include_CSV: 'UserId,FirstName,LastName,EmailAddress,Role,StatusCode' },
+          GroupConditions: [{ Condition: [{ LookupName: 'UserId', Operator: 'eq', LookupValue: targetId, ConditionOperator: null }], GroupOperator: null }],
+          GroupOperator: null,
+          Paging: { PageIndex: 0, PageSize: 5 },
+        }),
+      ])
+      const rows = Array.isArray(usersGet) ? usersGet : []
+      const byId = rows.find(u => u.ID === targetId || u.UserId === targetId || u.Id === targetId)
+      return res.status(200).json({ totalUsers: rows.length, sampleRow: rows[0], foundById: byId || null, advByEmail })
     }
     if (mode === 'create_opportunity') {
       const body = req.body || {}
