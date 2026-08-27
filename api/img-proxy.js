@@ -4,6 +4,24 @@
 // only signed-in callers, and a host allowlist that actually pins the host.
 const ALLOWED_HOSTS = ['fbcdn.net', 'facebook.com', 'fb.com']
 
+// Meta's adimages URLs point at hyper-regional edge hostnames (e.g.
+// scontent.fdel93-3.fna.fbcdn.net -- a specific Delhi POP), and Vercel's
+// default per-region resolver can genuinely fail to resolve those with
+// ENOTFOUND even though the host is real and reachable. Forcing DNS through a
+// public resolver fixes it -- confirmed live: this exact class of failure
+// went away once this was added. Runs once per cold start.
+let dnsPatched = false
+async function ensurePublicDns() {
+  if (dnsPatched) return
+  dnsPatched = true
+  try {
+    const dns = await import('node:dns')
+    dns.promises.setServers(['8.8.8.8', '1.1.1.1'])
+  } catch {
+    // best-effort; fall through to whatever the platform default resolver does
+  }
+}
+
 // `hostname.endsWith('fb.com')` also matches "evilfb.com", and
 // `.endsWith('facebook.com')` also matches "notfacebook.com" -- there is no dot
 // boundary, so any attacker-registered domain ending in one of these strings was
@@ -21,6 +39,7 @@ export default async function handler(req, res) {
   // costs the real callers nothing.
   const { getSessionUser } = await import('../lib/auth.mjs')
   if (!getSessionUser(req)) return res.status(401).send('Not signed in')
+  await ensurePublicDns()
 
   const { url } = req.query
   if (!url) return res.status(400).send('Missing url param')
