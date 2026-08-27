@@ -11,6 +11,20 @@ import { toast } from '../components/ToastHost'
 // fbcdn actually wants), so no new backend code is needed for images at all.
 const proxyImg = url => (url ? `/api/img-proxy?url=${encodeURIComponent(url)}` : null)
 
+// Same account MetaAdsDashboard.jsx falls back to (its own DEFAULT_AD_ACCOUNT).
+// me/adaccounts lists whatever ad accounts happen to be directly attached to
+// the CURRENT token's personal profile, which can genuinely change across a
+// re-authorization -- confirmed live tonight: re-authorizing this same token
+// with two extra Page-related scopes (needed for an unrelated video-download
+// investigation) made me/adaccounts drop from listing this account down to a
+// single unrelated personal one, even though the token still works fine for
+// direct account-scoped calls. The main Meta Ads dashboard never noticed
+// because it never calls me/adaccounts at all -- it always reads this exact
+// hardcoded account directly. This page is unioned with whatever
+// me/adaccounts DOES return, rather than replacing it, so a second real
+// account showing up there in the future still gets searched too.
+const REAL_AD_ACCOUNT = 'act_641914389215638'
+
 // Below this, on either axis, something is always a UI icon or a blank
 // placeholder frame -- never a real creative. Matches the same floor used
 // when this was done by hand.
@@ -176,8 +190,18 @@ export default function CreativeDownloaderDashboard() {
       if (!token) throw new Error('No Meta access token on file -- connect Meta Ads first from Settings > Data.')
 
       setProgress('Listing ad accounts…')
-      const acctRes = await graphGet('me/adaccounts', token, { fields: 'id,name,account_status', limit: 50 })
-      const accounts = acctRes.data || []
+      let listed = []
+      try {
+        const acctRes = await graphGet('me/adaccounts', token, { fields: 'id,name,account_status', limit: 50 })
+        listed = acctRes.data || []
+      } catch { /* fall through to the guaranteed account below */ }
+      // me/adaccounts can genuinely omit the real account depending on what
+      // the current token's personal profile happens to have attached (see
+      // the comment on REAL_AD_ACCOUNT above) -- always include it directly
+      // rather than trusting that list alone.
+      const accounts = listed.some(a => a.id === REAL_AD_ACCOUNT)
+        ? listed
+        : [{ id: REAL_AD_ACCOUNT, name: 'Leverage Edu_Client Account' }, ...listed]
 
       setProgress(`Searching ${accounts.length} ad accounts for "${name}"…`)
       const filt = encodeURIComponent(JSON.stringify([{ field: 'name', operator: 'CONTAIN', value: name }]))
