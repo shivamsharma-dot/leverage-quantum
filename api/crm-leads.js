@@ -676,6 +676,36 @@ async function captureLeadSquaredOpportunity(creds, payload) {
   return { requestBody, data }
 }
 
+// Update an Opportunity (apidocs.leadsquared.com/update-an-opportunity/) -- a genuinely
+// different endpoint from Capture, and the correct one for "I already know which Opportunity
+// this is, just fix its fields" (e.g. correcting a misattributed campaign) rather than
+// Capture's "find/create a lead, then let LeadSquared's own duplicate-detection decide
+// whether this becomes a new Opportunity or updates an existing one for that lead" model.
+// Real user feedback 2026-08-27: "we would want to update everything on opportunity level
+// but we're doing this on prospect id not opportunity id" -- correct, and neither Capture nor
+// Add-Opportunities-in-Bulk supports targeting a specific OpportunityId at all (both are
+// lead-attribute-matched only, per LeadSquared's own docs -- confirmed by reading both specs
+// directly, not assumed). This endpoint takes ProspectOpportunityId straight in the body: no
+// lead matching, no duplicate-detection, no OverwriteFields/UpdateEmptyFields concept at all
+// -- it always just updates whichever fields are passed, nothing else touched. Response shape
+// is ALSO genuinely different from Capture's (a string Status:"Success" + Message:{Id} on
+// success, not the numeric Status 0/1/2 -- confirmed from the documented sample response), so
+// callers must not reuse Capture's status-classification logic against this.
+async function updateLeadSquaredOpportunity(creds, payload) {
+  const opportunityId = String((payload && payload.opportunityId) || '').trim()
+  if (!opportunityId) throw new Error('The real Opportunity ID is required.')
+  const fields = Array.isArray(payload && payload.fields)
+    ? payload.fields.filter(f => f && f.schemaName && String(f.value == null ? '' : f.value).trim() !== '')
+    : []
+  const requestBody = {
+    ProspectOpportunityId: opportunityId,
+    ...(payload && payload.note ? { OpportunityNote: String(payload.note) } : {}),
+    ...(fields.length ? { Fields: fields.map(f => ({ SchemaName: f.schemaName, Value: f.value })) } : {}),
+  }
+  const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Update', creds, requestBody)
+  return { requestBody, data }
+}
+
 // Audit log for Create Opportunity -- one row per actual Capture-Opportunities call
 // (single-form submit OR a single row of a bulk import; bulk rows share a batch_label so
 // they can be grouped in the History view without forcing it). Own table, own dispatch
@@ -2026,8 +2056,9 @@ async function handleLeadSquared(req, res, me) {
   const TEAM_CREATE_USER_MODES = ['team_permission_templates', 'team_create_user']
   // create_opportunity writes a real Opportunity (and, if the SearchBy value matches no
   // existing lead, a real new Lead too) into production LeadSquared -- same admin-only
-  // treatment as team_create_user, for the same reason.
-  const LEADSQUARED_WRITE_MODES = ['create_opportunity']
+  // treatment as team_create_user, for the same reason. update_opportunity_by_id is the
+  // same treatment for the direct-by-OpportunityId endpoint (see updateLeadSquaredOpportunity).
+  const LEADSQUARED_WRITE_MODES = ['create_opportunity', 'update_opportunity_by_id']
   // team_cache_lookup is deliberately its own read, NOT part of TEAM_FRAPP_MODES
   // (which is admin-only, gated below) -- the Roster tab's advanced filter needs
   // it for Region/Call Transfer, and that tab is readable by anyone with
@@ -2158,6 +2189,29 @@ async function handleLeadSquared(req, res, me) {
         status,
         created_opportunity_id: data && data.CreatedOpportunityId, conflicted_opportunity_id: data && data.ConflictedOpportunityId,
         exception_message: threw || (data && data.ExceptionMessage),
+        request_json: result ? JSON.stringify(result.requestBody) : JSON.stringify(body),
+        response_json: data ? JSON.stringify(data) : null,
+      }, me).catch(() => {})
+      if (threw) return res.status(502).json({ error: threw })
+      return res.status(200).json(data)
+    }
+    if (mode === 'update_opportunity_by_id') {
+      const body = req.body || {}
+      let result = null, threw = null
+      try { result = await updateLeadSquaredOpportunity(creds, body) }
+      catch (e) { threw = String((e && e.message) || e) }
+      const data = result && result.data
+      // Update's success shape is a STRING Status:"Success" (+ Message:{Id}), not Capture's
+      // numeric 0/1/2 -- these are different endpoints, do not share a classifier.
+      const ok = data && data.Status === 'Success'
+      const status = threw ? 'failed' : ok ? 'success' : 'failed'
+      logOpportunityActivity({
+        batch_label: body.batchLabel || null,
+        search_by_attr: 'OpportunityID', target_value: body.opportunityId, prospect_id: null,
+        event_code: body.eventCode != null ? String(body.eventCode) : null, overwrite_fields: false,
+        status,
+        created_opportunity_id: null, conflicted_opportunity_id: null,
+        exception_message: threw || (data && (data.ExceptionMessage || (typeof data.Message === 'string' ? data.Message : null))),
         request_json: result ? JSON.stringify(result.requestBody) : JSON.stringify(body),
         response_json: data ? JSON.stringify(data) : null,
       }, me).catch(() => {})

@@ -969,13 +969,22 @@ function OpportunitiesTab() {
 // parameter expects a lead to be matched on (apidocs.leadsquared.com/capture-opportunities/).
 // ProspectId matches an EXISTING lead only (an unrecognized one won't create a new lead the
 // way Email/Phone/Mobile would), which is why it's flagged as such in the label below.
+// OpportunityID is fundamentally different from the four above it -- it does NOT go
+// through LeadSquared's Capture Opportunities (lead-matching + duplicate-detection)
+// flow at all. It calls LeadSquared's separate "Update an Opportunity" API directly
+// by ProspectOpportunityId: no lead matching, nothing new is ever created, and it
+// fails outright if the id doesn't already exist. Added per direct user feedback --
+// every match method above still updates via the LEAD, when the real intent is often
+// "I already know exactly which opportunity to change." Matches
+// updateLeadSquaredOpportunity's dispatch in api/crm-leads.js -- keep both in sync.
 const SEARCH_BY_OPTIONS = [
   { v: 'EmailAddress', l: 'Email' },
   { v: 'Phone', l: 'Phone' },
   { v: 'Mobile', l: 'Mobile' },
   { v: 'ProspectID', l: 'Lead ID (ProspectID -- matches an existing lead only)' },
+  { v: 'OpportunityID', l: 'Opportunity ID (direct update -- no lead matching)' },
 ]
-const SEARCH_BY_EXAMPLE = { EmailAddress: 'jane@example.com', Phone: '+91 98765 43210', Mobile: '+91 98765 43210', ProspectID: '(a real, existing Lead ID)' }
+const SEARCH_BY_EXAMPLE = { EmailAddress: 'jane@example.com', Phone: '+91 98765 43210', Mobile: '+91 98765 43210', ProspectID: '(a real, existing Lead ID)', OpportunityID: '(a real, existing Opportunity ID)' }
 
 // Status alone is NOT a reliable failure signal from LeadSquared's Capture Opportunities
 // response -- confirmed live 2026-08-27: a request LeadSquared genuinely rejected
@@ -1085,7 +1094,7 @@ function downloadOpportunitySampleCsv({ searchByAttr, searchLabel, fields, examp
   // Lead ID (ProspectID) always leads the file -- the one truly unambiguous LeadSquared
   // identifier -- except when it's already the active match field (searchLabel/exampleValue
   // cover that case instead, no point in the same column twice).
-  const includeProspectId = searchByAttr !== 'ProspectID'
+  const includeProspectId = searchByAttr !== 'ProspectID' && searchByAttr !== 'OpportunityID'
   const headers = [...(includeProspectId ? ['Lead ID (ProspectID)'] : []), searchLabel, 'Note', ...fields.map(f => f.displayName)]
   const example = [...(includeProspectId ? [''] : []), exampleValue, 'Called, interested in Fall intake', ...fields.map(f => (Array.isArray(f.inlineOptions) && f.inlineOptions.length ? f.inlineOptions[0] : ''))]
   const csv = [headers, example].map(row => row.map(lsqCsvCell).join(',')).join('\r\n')
@@ -1168,13 +1177,22 @@ async function runOppImportInBackground(rows, label, skippedCount, opts) {
       // 200 with the real response body so the activity log can capture it. fetchJson only
       // throws on a genuine HTTP-level failure now, so a Status:1 has to be checked here
       // explicitly or it would silently count as "done".
-      const d = await fetchJson(`${API}&mode=create_opportunity`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ searchByAttr: opts.searchByAttr, searchByValue: row.searchByValue, prospectId: row.prospectId || undefined, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, overwriteFields: opts.overwriteFields, batchLabel }),
-      })
-      if (lsqRejected(d)) {
+      // directOppUpdate rows skip Capture Opportunities entirely -- they go straight to the
+      // Update-an-Opportunity endpoint by row.searchByValue (the mapped Opportunity ID
+      // column), with its own genuinely different success shape (Status:"Success", not 1).
+      const d = opts.directOppUpdate
+        ? await fetchJson(`${API}&mode=update_opportunity_by_id`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ opportunityId: row.searchByValue, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, batchLabel }),
+          })
+        : await fetchJson(`${API}&mode=create_opportunity`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ searchByAttr: opts.searchByAttr, searchByValue: row.searchByValue, prospectId: row.prospectId || undefined, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, overwriteFields: opts.overwriteFields, batchLabel }),
+          })
+      const rowRejected = opts.directOppUpdate ? !(d && d.Status === 'Success') : lsqRejected(d)
+      if (rowRejected) {
         failed++; rowOk = false
-        if (failures.length < 50) failures.push({ label: row.searchByValue, message: d.ExceptionMessage || 'LeadSquared rejected the request.' })
+        if (failures.length < 50) failures.push({ label: row.searchByValue, message: (d && (d.ExceptionMessage || (typeof d.Message === 'string' ? d.Message : null))) || 'LeadSquared rejected the request.' })
       } else done++
     } catch (e) {
       failed++; rowOk = false
@@ -1238,7 +1256,7 @@ function OpportunityMappingStep({ table, mapping, setMapping, targets }) {
   )
 }
 
-function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteFields }) {
+function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteFields, isDirect }) {
   const [table, setTable] = useState(null)
   const [label, setLabel] = useState('')
   const [mapping, setMapping] = useState({})
@@ -1248,13 +1266,14 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
   // ProspectID gets its own always-first column whenever it ISN'T already the primary match
   // field (in which case it'd be a redundant duplicate of the searchByValue column right
   // below it) -- it's the one truly unambiguous LeadSquared identifier, so it's worth having
-  // as a standing reference even when matching on Email/Phone/Mobile.
+  // as a standing reference even when matching on Email/Phone/Mobile. Not applicable at all
+  // in direct-update mode (isDirect) -- there's no lead matching to carry a Lead ID alongside.
   const targets = useMemo(() => [
-    ...(searchByAttr !== 'ProspectID' ? [{ key: 'prospectId', label: 'Lead ID (ProspectID)', required: false }] : []),
+    ...(searchByAttr !== 'ProspectID' && !isDirect ? [{ key: 'prospectId', label: 'Lead ID (ProspectID)', required: false }] : []),
     { key: 'searchByValue', label: searchLabel, required: true },
     { key: 'note', label: 'Note', required: false },
     ...fields.map(f => ({ key: f.schemaName, label: f.displayName, required: false })),
-  ], [searchByAttr, searchLabel, fields])
+  ], [searchByAttr, searchLabel, fields, isDirect])
 
   const resolved = useMemo(() => {
     if (!table) return { rows: [], skipped: 0 }
@@ -1275,8 +1294,11 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
 
   const start = () => {
     if (!resolved.rows.length) return
-    if (!window.confirm(`${overwriteFields ? 'Create or update' : 'Create'} ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in production LeadSquared${overwriteFields ? ' (updating any that already exist)' : ''}? This runs in the background and cannot be undone.`)) return
-    runOppImportInBackground(resolved.rows, label || 'pasted rows', resolved.skipped, { searchByAttr, eventCode: Number(eventCode) || 12003, overwriteFields })
+    const confirmMsg = isDirect
+      ? `Update ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} directly in production LeadSquared, by Opportunity ID? No lead matching happens in this mode -- any row whose id doesn't already exist will simply fail. This runs in the background and cannot be undone.`
+      : `${overwriteFields ? 'Create or update' : 'Create'} ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in production LeadSquared${overwriteFields ? ' (updating any that already exist)' : ''}? This runs in the background and cannot be undone.`
+    if (!window.confirm(confirmMsg)) return
+    runOppImportInBackground(resolved.rows, label || 'pasted rows', resolved.skipped, { searchByAttr, eventCode: Number(eventCode) || 12003, overwriteFields, directOppUpdate: isDirect })
   }
 
   if (running || progress) {
@@ -1314,7 +1336,9 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
     <div>
       <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>3. Import a file</div>
       <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
-        One row per Opportunity. The column mapped to "{searchLabel}" below is what each row is matched (or created) on.
+        {isDirect
+          ? `One row per Opportunity. The column mapped to "${searchLabel}" below is the exact Opportunity each row updates directly -- no lead matching, nothing new is ever created.`
+          : `One row per Opportunity. The column mapped to "${searchLabel}" below is what each row is matched (or created) on.`}
       </p>
       <div style={{ marginBottom: 12 }}>
         <Button size="sm" variant="ghost" onClick={() => downloadOpportunitySampleCsv({ searchByAttr, searchLabel, fields, exampleValue: SEARCH_BY_EXAMPLE[searchByAttr] || 'value' })}>
@@ -1339,7 +1363,9 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
             <b>{fmtN(resolved.rows.length)}</b> ready to send{resolved.skipped > 0 && <>, <b>{fmtN(resolved.skipped)}</b> skipped (no "{searchLabel}" value)</>}.
           </div>
           <Button onClick={start} disabled={!resolved.rows.length || !mapping.searchByValue}>
-            {`${overwriteFields ? 'Create / Update' : 'Create'} ${fmtN(resolved.rows.length)} Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in the background`}
+            {isDirect
+              ? `Update ${fmtN(resolved.rows.length)} Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in the background`
+              : `${overwriteFields ? 'Create / Update' : 'Create'} ${fmtN(resolved.rows.length)} Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in the background`}
           </Button>
         </>
       )}
@@ -1505,9 +1531,33 @@ function CreateOpportunityTab() {
 
   const fields = useMemo(() => (schema && schema.fields ? schema.fields.filter(f => !OPPORTUNITY_AUDIT_FIELDS.has(f.schemaName)) : []), [schema])
 
+  // Direct-by-OpportunityID is a genuinely different LeadSquared API (Update an Opportunity,
+  // not Capture Opportunities) -- see the SEARCH_BY_OPTIONS comment above.
+  const isDirect = searchByAttr === 'OpportunityID'
+
   const submit = async () => {
     setResult(null); setSubmitError(null)
-    if (!searchByValue.trim()) { setSubmitError('Enter the lead-matching value.'); return }
+    if (!searchByValue.trim()) { setSubmitError(isDirect ? 'Enter the Opportunity ID.' : 'Enter the lead-matching value.'); return }
+
+    if (isDirect) {
+      if (!window.confirm(`Update this exact Opportunity (id ${searchByValue.trim()}) directly in production LeadSquared? No lead matching happens in this mode -- if that id doesn't already exist, LeadSquared will reject the request rather than creating anything new.`)) return
+      setSubmitting(true)
+      try {
+        const payload = {
+          opportunityId: searchByValue.trim(), eventCode: Number(eventCode) || 12003,
+          note: note.trim() || undefined,
+          fields: Object.entries(fieldValues).filter(([, v]) => String(v || '').trim() !== '').map(([schemaName, value]) => ({ schemaName, value })),
+        }
+        const d = await fetchJson(`${API}&mode=update_opportunity_by_id`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+        })
+        setResult(d)
+        if (d && d.Status === 'Success') { setSearchByValue(''); setNote(''); setFieldValues({}) }
+      } catch (e) { setSubmitError(e.message) }
+      finally { setSubmitting(false) }
+      return
+    }
+
     const label = `${SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l || searchByAttr}: ${searchByValue}`
     if (!window.confirm(`${overwriteFields ? 'Create or update' : 'Create'} a real Opportunity in production LeadSquared for ${label}? If no matching lead exists yet, a new one will be created too.`)) return
     setSubmitting(true)
@@ -1544,12 +1594,14 @@ function CreateOpportunityTab() {
       {mode === 'history' ? <OpportunityHistoryTab /> : (
       <>
       <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>1. Match or create the lead</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>1. {isDirect ? 'Which Opportunity to update' : 'Match or create the lead'}</div>
         <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
-          LeadSquared matches on the field below. If nothing matches, a brand-new lead is created automatically.
+          {isDirect
+            ? 'Updates one specific, already-existing Opportunity directly by its own Opportunity ID -- no lead matching, and nothing new is ever created. Use this when you already know exactly which opportunity to change (e.g. fixing a misattributed campaign on it).'
+            : 'LeadSquared matches on the field below. If nothing matches, a brand-new lead is created automatically.'}
         </p>
 
-        {searchByAttr !== 'ProspectID' && (
+        {searchByAttr !== 'ProspectID' && !isDirect && (
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
               Lead ID (ProspectID) <span style={{ fontWeight: 500 }}>-- optional, doesn't change which field is matched on below</span>
@@ -1563,9 +1615,9 @@ function CreateOpportunityTab() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Dropdown value={SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l} onChange={l => setSearchByAttr(SEARCH_BY_OPTIONS.find(o => o.l === l)?.v || searchByAttr)}
             options={SEARCH_BY_OPTIONS.map(o => o.l)} minWidth={200} />
-          {mode === 'single' && <input value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder="e.g. jane@example.com" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />}
+          {mode === 'single' && <input value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder={isDirect ? 'e.g. 7c8901ce-ddc2-423b-b7d8-c6eca200c360' : 'e.g. jane@example.com'} style={{ ...inputStyle, flex: 1, minWidth: 200 }} />}
         </div>
-        {mode === 'bulk' && <p style={{ fontSize: 11, color: C.muted, margin: '8px 0 0' }}>Each row's match value comes from your file, mapped in step 4 below.</p>}
+        {mode === 'bulk' && <p style={{ fontSize: 11, color: C.muted, margin: '8px 0 0' }}>Each row's {isDirect ? 'Opportunity ID' : 'match value'} comes from your file, mapped in step 4 below.</p>}
       </div>
 
       <div style={{ marginBottom: 18 }}>
@@ -1581,10 +1633,13 @@ function CreateOpportunityTab() {
         {schemaError && <div style={{ marginTop: 8 }}><ErrorNote message={schemaError} /></div>}
       </div>
 
-      <ReplaceModeToggle checked={overwriteFields} onChange={setOverwriteFields} />
+      {/* OverwriteFields/UpdateEmptyFields are a Capture Opportunities concept -- the direct
+          Update-an-Opportunity API this mode uses always writes exactly the fields sent, so
+          there's no "replace or leave alone" choice to make here. */}
+      {!isDirect && <ReplaceModeToggle checked={overwriteFields} onChange={setOverwriteFields} />}
 
       {mode === 'bulk' ? (
-        <BulkOpportunityImport searchByAttr={searchByAttr} eventCode={eventCode} fields={fields} overwriteFields={overwriteFields} />
+        <BulkOpportunityImport searchByAttr={searchByAttr} eventCode={eventCode} fields={fields} overwriteFields={overwriteFields} isDirect={isDirect} />
       ) : (
         <>
           {fields.length > 0 && (
@@ -1613,22 +1668,35 @@ function CreateOpportunityTab() {
             <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} style={{ ...inputStyle, width: '100%', resize: 'vertical', fontFamily: FONT }} />
           </div>
 
-          {result && lsqRejected(result) && <ErrorNote message={result.ExceptionMessage || 'LeadSquared reported a failure.'} />}
-          {result && !lsqRejected(result) && (
-            <SuccessNote>
-              {result.CreatedOpportunityId
-                ? <>Opportunity created (id {short(result.CreatedOpportunityId)}).</>
-                : result.ConflictedOpportunityId
-                  ? (overwriteFields
-                    ? <>A matching opportunity (id {short(result.ConflictedOpportunityId)}) was found and updated.</>
-                    : <>A duplicate was detected for this opportunity -- the existing one (id {short(result.ConflictedOpportunityId)}) was not changed, but a captured activity was posted on the lead. Turn on "Update the existing Opportunity" above to replace its fields instead.</>)
-                  : <>Sent -- LeadSquared accepted the request.</>}
-            </SuccessNote>
+          {isDirect ? (
+            <>
+              {result && result.Status !== 'Success' && <ErrorNote message={result.ExceptionMessage || (typeof result.Message === 'string' ? result.Message : null) || 'LeadSquared reported a failure.'} />}
+              {result && result.Status === 'Success' && (
+                <SuccessNote>Opportunity updated{result.Message && result.Message.Id ? <> (id {short(result.Message.Id)})</> : null}.</SuccessNote>
+              )}
+            </>
+          ) : (
+            <>
+              {result && lsqRejected(result) && <ErrorNote message={result.ExceptionMessage || 'LeadSquared reported a failure.'} />}
+              {result && !lsqRejected(result) && (
+                <SuccessNote>
+                  {result.CreatedOpportunityId
+                    ? <>Opportunity created (id {short(result.CreatedOpportunityId)}).</>
+                    : result.ConflictedOpportunityId
+                      ? (overwriteFields
+                        ? <>A matching opportunity (id {short(result.ConflictedOpportunityId)}) was found and updated.</>
+                        : <>A duplicate was detected for this opportunity -- the existing one (id {short(result.ConflictedOpportunityId)}) was not changed, but a captured activity was posted on the lead. Turn on "Update the existing Opportunity" above to replace its fields instead.</>)
+                      : <>Sent -- LeadSquared accepted the request.</>}
+                </SuccessNote>
+              )}
+            </>
           )}
           {submitError && <ErrorNote message={submitError} />}
           {(result || submitError) && <p style={{ fontSize: 11, color: C.muted, margin: '-6px 0 12px' }}>Every attempt, including LeadSquared's own response, is kept in the History tab above.</p>}
 
-          <Button onClick={submit} disabled={submitting || !searchByValue.trim()}>{submitting ? 'Creating…' : (overwriteFields ? 'Create / Update Opportunity' : 'Create Opportunity')}</Button>
+          <Button onClick={submit} disabled={submitting || !searchByValue.trim()}>
+            {submitting ? (isDirect ? 'Updating…' : 'Creating…') : isDirect ? 'Update Opportunity' : (overwriteFields ? 'Create / Update Opportunity' : 'Create Opportunity')}
+          </Button>
         </>
       )}
       </>
@@ -1685,7 +1753,7 @@ function PageInfoButton() {
 
           <div style={{ fontSize: 11.5, fontWeight: 700, color: C.text, marginBottom: 3 }}>Read-only, except Create Opportunity</div>
           <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: 0 }}>
-            Leads, Activities, and Opportunities are read-only views -- editing or deleting still has to happen in LeadSquared itself. Create Opportunity is the one exception: it writes a real Opportunity (and, if no matching lead exists yet, a real new Lead too) directly into production LeadSquared via LeadSquared's own Capture Opportunities API. Admin only.
+            Leads, Activities, and Opportunities are read-only views -- editing or deleting still has to happen in LeadSquared itself. Create Opportunity is the one exception: matching on Email/Phone/Mobile/Lead ID writes a real Opportunity (and, if no matching lead exists yet, a real new Lead too) via LeadSquared's Capture Opportunities API; matching on Opportunity ID instead updates one specific, already-existing Opportunity directly via LeadSquared's separate Update-an-Opportunity API, with no lead matching and nothing new ever created. Both write to production LeadSquared. Admin only.
           </p>
         </div>
       )}
