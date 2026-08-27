@@ -5315,3 +5315,15 @@ User asked to actually run the direct-Opportunity-ID update path live with their
 **Still unresolved, external**: the account-level LeadSquared permission block itself. Needs a LeadSquared admin to grant the API credentials' user Edit rights on Opportunities for the "University Admission Opportunity" type (Permission Templates, per the guidance already given this session) -- no code fix exists for it.
 
 `node --check api/crm-leads.js` and `npm run build` both passed clean before pushing.
+
+## 2026-08-27 (later) — LeadSquared: confirmed the permission block directly from LeadSquared's own API + no webhook workaround exists (commit `b3f38e6` diagnostic, removed after use)
+
+User asked to check the LeadSquared portal directly for the block, and whether a webhook could update an Opportunity instead. Couldn't log into the portal myself (no credentials -- that stays the user's own action, per this project's standing rule), so instead added a temporary read-only diagnostic mode (`leadsquared_permission_check`, no writes) calling LeadSquared's own `Authentication.svc/UserByAccessKey.Get` + `PermissionTemplate.svc/User/GetPermissions` with the existing API credentials -- answers the question directly from LeadSquared itself, no portal login needed.
+
+**Confirmed, verbatim from LeadSquared**: the API credentials belong to Shivam Sharma, role "Administrator" -- but a granular Permission Template is still applied on top of that role. Opportunity permissions are keyed per Opportunity Type (numeric event code), not one blanket "Opportunity" entity, exactly as guessed earlier this session. For type **12003 (University Admission Opportunity)**, the real permission set is `Create: NoAccess, Update: NoAccess, Delete: NoAccess, Export: FullAccess, Import: NoAccess, View: FullAccess`. That `Update: NoAccess` is the exact, confirmed cause of every 401 hit today -- not a guess anymore, read straight from LeadSquared's own permission API.
+
+**Webhooks -- researched, not a workaround**: LeadSquared's webhooks are strictly outbound (LeadSquared pushes events OUT to a URL you configure) -- there's no inbound webhook mechanism to write/update LeadSquared data. Updating an Opportunity always goes through the REST API (Capture or Update), which is what's already being used and what's genuinely blocked by the Permission Template above. No webhook-based bypass exists.
+
+Diagnostic mode removed immediately after use (`node --check` + `npm run build` both clean) -- it answered the one question it was built for and isn't a permanent feature.
+
+**Real, concrete next step for the user**: in LeadSquared, go to the Permission Template assigned to this API user and change **Opportunity > University Admission Opportunity (12003) > Update** from No Access to Full (or Partial) Access. That is the one specific setting blocking every write attempt made this session.
