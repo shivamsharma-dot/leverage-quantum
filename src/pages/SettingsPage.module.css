@@ -861,14 +861,11 @@ input.searchInput { padding-left: 34px; }
    chip, .dsCatCard's soft-shadow elevation) instead of inventing anything.
 ============================================================ */
 
-/* ---- 8-pre - the card itself: a brand gradient bar + the real Slack mark ----
-   .card is shared by every card on this page, so the top bar and the extra
-   overflow:hidden live on this ADDITIONAL class, scoped to just this card. */
+/* ---- 8-pre - the real Slack mark ----
+   .card is shared by every card on this page. Settings redesign
+   (2026-08-27): dropped the 4px top gradient bar this class used to add --
+   an isolated stripe with nothing under it, flagged directly as noise. */
 .skCardShell { position: relative; overflow: hidden; }
-.skCardShell::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-  background: linear-gradient(90deg, #1F3C84, #1C9FD4, #29B9C3, #4CAE6F);
-}
 /* Neutral white/card chip, not a tinted one -- Slack's mark is already four
    colours, and a coloured background behind it would fight its own palette.
    Matches DESIGN_SYSTEM.md's own carve-out: "third-party brand colours...

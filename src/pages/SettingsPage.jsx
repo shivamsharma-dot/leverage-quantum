@@ -11,40 +11,13 @@ import { useDesignStyle, saveDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
 import styles from './SettingsPage.module.css'
 import { SLACK_CHANNELS, confirmPhrase, channelHandle } from '../../shared/slackChannels.mjs'
-import { SlackIcon } from '../components/icons/BrandIcons'
+import { SlackIcon, GmailIcon } from '../components/icons/BrandIcons'
 import { DEFAULT_REV_VS_CASHFLOW_NOTE } from '../lib/b2cReport'
 import { canAccessDashboard } from '../../shared/access.mjs'
 
-// An offline or black-holed request leaves fetch() pending forever, which is how
-// a Settings save could sit on "Saving..." with no error and no way back. Every
-// /api/ call on this page goes through fetchT so a dead network always surfaces
-// as a real message instead of a spinner that never resolves.
-const REQ_TIMEOUT_MS = 20000
-
-async function fetchT(url, opts = {}, ms = REQ_TIMEOUT_MS) {
-  const ac = new AbortController()
-  const timer = setTimeout(() => ac.abort(), ms)
-  try {
-    return await fetch(url, { ...opts, signal: ac.signal })
-  } catch (e) {
-    if (e && e.name === 'AbortError') throw new Error('The request timed out - check your connection and try again.')
-    throw new Error('Network error - check your connection and try again.')
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-// Same protection for promises that are not our own fetch (the shared
-// updateUserRole/addUserAccess helpers in useAuth.jsx).
-function withTimeout(promise, ms = REQ_TIMEOUT_MS) {
-  let timer
-  return Promise.race([
-    Promise.resolve(promise).finally(() => clearTimeout(timer)),
-    new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error('The request timed out - check your connection and try again.')), ms)
-    }),
-  ])
-}
+// Moved to src/lib/fetchT.js (2026-08-27) so the new Reports > Email/Slack
+// pages can share it instead of duplicating it.
+import { fetchT, withTimeout } from '../lib/fetchT'
 
 
 // The locked rooms, in the order shared/slackChannels.mjs lists them. Settings only
@@ -3327,6 +3300,20 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           {/* --------------- REPORTS --------------- */}
           {activeTab === 'reports' && userIsAdmin && (
             <>
+              {/* Reports redesign (2026-08-27): Email and Slack are moving to their
+                  own real, bookmarkable pages (a new tab, not a modal) -- this
+                  entry point links out while the rest of this tab is still the
+                  old inline layout, migrated in the next pass. */}
+              <div className={styles.card} style={{ display: 'flex', gap: 12 }}>
+                <a href="/settings/reports/email" target="_blank" rel="noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderRadius: 12, border: '0.5px solid var(--border)', textDecoration: 'none', color: 'inherit' }}>
+                  <GmailIcon size={22} />
+                  <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Email reports</div><div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Sender, cadence, recipients →</div></div>
+                </a>
+                <a href="/settings/reports/slack" target="_blank" rel="noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderRadius: 12, border: '0.5px solid var(--border)', textDecoration: 'none', color: 'inherit' }}>
+                  <SlackIcon size={22} />
+                  <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Slack</div><div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Team channel, test channels, browse all →</div></div>
+                </a>
+              </div>
               {(() => {
                 const reportRecipients = accessList.filter(u => u.receive_reports)
                 const recipCount = reportRecipients.length

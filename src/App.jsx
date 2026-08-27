@@ -35,6 +35,8 @@ const AgentsDashboard = lazy(COMPONENT_IMPORTS.AgentsDashboard)
 const MarketingPerformanceReport = lazy(COMPONENT_IMPORTS.MarketingPerformanceReport)
 const CeoB2CDashboard = lazy(COMPONENT_IMPORTS.CeoB2CDashboard)
 const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
+const ReportsEmailPage = lazy(COMPONENT_IMPORTS.ReportsEmailPage)
+const ReportsSlackPage = lazy(COMPONENT_IMPORTS.ReportsSlackPage)
 
 // Suspense fallback — slim skeleton shown while lazy chunk loads
 
@@ -71,6 +73,8 @@ const PAGE_TITLES = {
   '/dashboard/agents': 'Agents',
   '/dashboard/marketing-performance': 'Marketing Performance',
   '/settings': 'Settings',
+  '/settings/reports/email': 'Email Reports',
+  '/settings/reports/slack': 'Slack',
 }
 
 // ── Route fade transition ──────────────────────────────────────────────────────
@@ -290,6 +294,8 @@ export default function App() {
           <Route path="/dashboard/agents" element={<ProtectedRoute dashboardId="agents"> <AgentsDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/marketing-performance" element={<ProtectedRoute dashboardId="marketing_performance"> <MarketingPerformanceReport /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute dashboardId="settings"> <SettingsPage /></ProtectedRoute>} />
+          <Route path="/settings/reports/email" element={<ProtectedRoute dashboardId="settings"> <ReportsEmailPage /></ProtectedRoute>} />
+          <Route path="/settings/reports/slack" element={<ProtectedRoute dashboardId="settings"> <ReportsSlackPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
