@@ -602,6 +602,14 @@ async function fetchLeadSquaredOpportunitySchema(creds, { code, refresh }) {
 // needed, LeadSquared's own MXInvalidActivityFieldsException names it explicitly and is
 // surfaced to the caller as-is (via the Status:1/ExceptionMessage check below) rather than
 // guessed at up front. Response Status: 0 Success, 1 Failure, 2 PartialSuccess.
+//
+// Update/replace semantics: by default, if LeadSquared's own duplicate-detection rules match
+// an EXISTING opportunity, nothing on it changes -- only a "duplicate detected" activity is
+// posted. payload.overwriteFields turns that into a real update: LeadSquared's own
+// OverwriteFields (replace non-empty existing values too) and UpdateEmptyFields (also fill in
+// whatever's currently blank on the record) flags are both set together, since a caller asking
+// to "replace the existing one" wants the whole record to end up matching what was submitted,
+// not just the previously-empty half of it.
 async function captureLeadSquaredOpportunity(creds, payload) {
   const searchByAttr = String((payload && payload.searchByAttr) || '').trim()
   const searchByValue = String((payload && payload.searchByValue) || '').trim()
@@ -615,8 +623,10 @@ async function captureLeadSquaredOpportunity(creds, payload) {
   const fields = Array.isArray(payload && payload.fields)
     ? payload.fields.filter(f => f && f.schemaName && String(f.value == null ? '' : f.value).trim() !== '')
     : []
+  const replace = !!(payload && payload.overwriteFields)
   const opportunity = {
     OpportunityEventCode: eventCode,
+    ...(replace ? { OverwriteFields: true, UpdateEmptyFields: true } : {}),
     ...(payload && payload.note ? { OpportunityNote: String(payload.note) } : {}),
     ...(fields.length ? { Fields: fields.map(f => ({ SchemaName: f.schemaName, Value: f.value })) } : {}),
   }

@@ -981,13 +981,303 @@ const SEARCH_BY_OPTIONS = [
 // meaningful to hand-fill on create, so excluded from the dynamic field list below.
 const OPPORTUNITY_AUDIT_FIELDS = new Set(['CreatedOn', 'ModifiedOn', 'CreatedBy', 'ModifiedBy'])
 
+function CheckGlyph({ color = '#4CAE6F', size = 13 }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+}
+function DotGlyph({ color = '#1F3C84', size = 8 }) {
+  return <span style={{ display: 'inline-block', width: size, height: size, borderRadius: '50%', background: color }} />
+}
+
+// Same shape as OverwriteFields/UpdateEmptyFields on LeadSquared's own Capture Opportunities
+// API (see captureLeadSquaredOpportunity's comment in api/crm-leads.js) -- one checkbox, both
+// flags together, shared by single-create and bulk-import so "replace the existing one" means
+// the same thing in both places.
+function ReplaceModeToggle({ checked, onChange }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 18, padding: '10px 12px', borderRadius: 10, background: checked ? '#F0FBFF' : 'var(--bg3)', border: '0.5px solid ' + (checked ? '#BAE6FD' : C.border) }}>
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ marginTop: 2 }} />
+      <span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text }}>Update the existing Opportunity if one is found</span>
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.5 }}>
+          Off (default): if LeadSquared already has a matching Opportunity, nothing on it changes -- only a "duplicate detected" note is posted.
+          On: its fields are replaced with whatever is entered here (blank fields here are left alone, not cleared).
+        </div>
+      </span>
+    </label>
+  )
+}
+
+// Raw, un-aliased CSV/TSV parse -- keeps every real column exactly as uploaded so the
+// Mapping step can show the file's own header names + real sample values, and let the
+// admin confirm the guess rather than trusting a silent header match. Local copy of the
+// same technique already used for Team Mapping's bulk-create wizard (splitDelimited/
+// looksBinary/parseRawTable there) -- not shared across files on purpose, same reasoning
+// as that file's own near-copies: this is a distinct, higher-stakes write (a real
+// Opportunity/Lead in production LeadSquared), worth keeping as its own readable copy.
+function lsqSplitDelimited(line, delim) {
+  const out = []; let cur = ''; let q = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (q) { if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++ } else q = false } else cur += c }
+    else if (c === '"') q = true
+    else if (c === delim) { out.push(cur); cur = '' }
+    else cur += c
+  }
+  out.push(cur)
+  return out
+}
+function lsqLooksBinary(text) {
+  if (text.includes('\x00')) return true
+  if (/^PK\x03\x04/.test(text)) return true
+  if (/^%PDF/.test(text)) return true
+  const head = text.slice(0, 2000)
+  const control = (head.match(/[\x00-\x08\x0E-\x1F]/g) || []).length
+  return head.length > 0 && control / head.length > 0.05
+}
+function lsqParseRawTable(text) {
+  if (lsqLooksBinary(text)) return { binary: true, headers: [], rows: [] }
+  const lines = text.split(/\r?\n/).map(l => l.replace(/\r$/, '')).filter(l => l.trim().length)
+  if (lines.length < 2) return { binary: false, headers: [], rows: [] }
+  const delim = lines[0].includes('\t') ? '\t' : ','
+  const headers = lsqSplitDelimited(lines[0], delim).map(h => h.trim()).filter(Boolean)
+  const rows = []
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lsqSplitDelimited(lines[i], delim)
+    const row = {}
+    headers.forEach((h, ci) => { row[h] = (cells[ci] || '').trim() })
+    rows.push(row)
+  }
+  return { binary: false, headers, rows }
+}
+
+// Same "Upload file / Paste rows" segmented control as Team Mapping's bulk-import
+// (a local copy, same reasoning as the parse helpers above).
+function LsqFileOrPasteInput({ onParsed }) {
+  const [srcMode, setSrcMode] = useState('file')
+  const [dragOver, setDragOver] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const fileRef = useRef(null)
+  const loadFile = file => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => onParsed(lsqParseRawTable(String(ev.target.result || '')), file.name)
+    reader.readAsText(file)
+  }
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 12, padding: 3, borderRadius: 10, background: 'var(--bg3)', width: 'fit-content' }}>
+        {[['file', 'Upload file'], ['paste', 'Paste rows']].map(([m, lbl]) => (
+          <button key={m} type="button" onClick={() => setSrcMode(m)} style={{
+            padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: FONT,
+            background: srcMode === m ? 'var(--card)' : 'transparent', color: srcMode === m ? '#1F3C84' : C.muted,
+            boxShadow: srcMode === m ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
+          }}>{lbl}</button>
+        ))}
+      </div>
+      {srcMode === 'file' ? (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => { e.preventDefault(); setDragOver(false); loadFile(e.dataTransfer.files && e.dataTransfer.files[0]) }}
+          onClick={() => fileRef.current && fileRef.current.click()}
+          style={{ border: '1.5px dashed ' + (dragOver ? '#1C9FD4' : C.border), borderRadius: 12, padding: '30px 20px', textAlign: 'center', cursor: 'pointer', background: dragOver ? '#E8F6FA' : 'var(--bg3)' }}
+        >
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 4 }}>Drop a CSV file here, or click to browse</div>
+          <div style={{ fontSize: 11.5, color: C.muted }}>.csv, .tsv or .txt -- first row must be real column headers</div>
+          <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" onChange={e => loadFile(e.target.files && e.target.files[0])} style={{ display: 'none' }} />
+        </div>
+      ) : (
+        <div>
+          <textarea value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Paste tab- or comma-separated rows here, including the header row…"
+            style={{ ...inputStyle, height: 140, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical', width: '100%' }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+            <Button size="sm" onClick={() => onParsed(lsqParseRawTable(pasteText), 'pasted rows')} disabled={!pasteText.trim()}>Parse pasted rows</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Background bulk-create store -- a plain module-level object (same pattern as Team
+// Mapping's createUsersStore) so the run survives switching tabs/pages within this
+// browser tab; it does NOT survive a full reload, and there's no server-side audit
+// log for this yet (LeadSquared's own "Manage Opportunities" log is the real record).
+const oppImportStore = {
+  running: false,
+  progress: null, // { done, total, failed, skipped, label, currentRow, currentRowOk, failures }
+  listeners: new Set(),
+  set(patch) { Object.assign(this, patch); this.listeners.forEach(l => l()) },
+  subscribe(l) { this.listeners.add(l); return () => this.listeners.delete(l) },
+}
+async function runOppImportInBackground(rows, label, skippedCount, opts) {
+  if (oppImportStore.running) return
+  const failures = []
+  oppImportStore.set({ running: true, progress: { done: 0, total: rows.length, failed: 0, skipped: skippedCount, label, failures } })
+  let done = 0, failed = 0
+  for (const row of rows) {
+    let rowOk = true
+    try {
+      await fetchJson(`${API}&mode=create_opportunity`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ searchByAttr: opts.searchByAttr, searchByValue: row.searchByValue, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, overwriteFields: opts.overwriteFields }),
+      })
+      done++
+    } catch (e) {
+      failed++; rowOk = false
+      if (failures.length < 50) failures.push({ label: row.searchByValue, message: e.message })
+    }
+    oppImportStore.set({ progress: { done: done + failed, total: rows.length, failed, skipped: skippedCount, label, currentRow: row.searchByValue, currentRowOk: rowOk, failures: failures.slice() } })
+  }
+  oppImportStore.set({ running: false, progress: null })
+}
+function useOppImportProgress() {
+  const [state, setState] = useState({ running: oppImportStore.running, progress: oppImportStore.progress })
+  useEffect(() => {
+    const sync = () => setState({ running: oppImportStore.running, progress: oppImportStore.progress })
+    sync()
+    return oppImportStore.subscribe(sync)
+  }, [])
+  return state
+}
+
+// The Mapping table -- one row per real target field (the match value, Note, and every
+// live schema field), each with a CSV Column picker + a live sample from the parsed
+// file. Same visual pattern as Team Mapping's own MappingStep, adapted since Opportunity
+// fields are dynamic (depend on the event code) rather than a fixed list.
+function OpportunityMappingStep({ table, mapping, setMapping, targets }) {
+  return (
+    <div style={{ border: '0.5px solid ' + C.border, borderRadius: 12, overflow: 'hidden', maxHeight: 420, overflowY: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+        <thead style={{ position: 'sticky', top: 0 }}>
+          <tr style={{ background: 'var(--bg3)' }}>
+            {['', 'Field', 'CSV Column', 'Example data'].map(h => (
+              <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 800, color: C.muted, textTransform: 'uppercase', fontSize: 10, background: 'var(--bg3)' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {targets.map(f => {
+            const mapped = mapping[f.key] || ''
+            const samples = mapped ? table.rows.map(r => r[mapped]).filter(Boolean).slice(0, 3) : []
+            return (
+              <tr key={f.key} style={{ borderTop: '0.5px solid ' + C.border }}>
+                <td style={{ padding: '9px 12px', width: 26 }}>
+                  {mapped ? <CheckGlyph /> : f.required ? <DotGlyph /> : <span style={{ color: C.muted }}>—</span>}
+                </td>
+                <td style={{ padding: '9px 12px', fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>
+                  {f.label}{f.required && <span style={{ color: '#1F3C84' }}> *</span>}
+                </td>
+                <td style={{ padding: '9px 12px' }}>
+                  <Dropdown options={['— Not mapped —', ...table.headers]} value={mapped || '— Not mapped —'}
+                    onChange={v => setMapping(m => ({ ...m, [f.key]: v === '— Not mapped —' ? '' : v }))} minWidth={200} />
+                </td>
+                <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11.5 }}>{samples.length ? samples.join('  ·  ') : '—'}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteFields }) {
+  const [table, setTable] = useState(null)
+  const [label, setLabel] = useState('')
+  const [mapping, setMapping] = useState({})
+  const { running, progress } = useOppImportProgress()
+
+  const searchLabel = SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l || searchByAttr
+  const targets = useMemo(() => [
+    { key: 'searchByValue', label: searchLabel, required: true },
+    { key: 'note', label: 'Note', required: false },
+    ...fields.map(f => ({ key: f.schemaName, label: f.displayName, required: false })),
+  ], [searchLabel, fields])
+
+  const resolved = useMemo(() => {
+    if (!table) return { rows: [], skipped: 0 }
+    let skipped = 0
+    const rows = []
+    table.rows.forEach(r => {
+      const searchByValue = mapping.searchByValue ? (r[mapping.searchByValue] || '').trim() : ''
+      if (!searchByValue) { skipped++; return }
+      const note = mapping.note ? (r[mapping.note] || '').trim() : ''
+      const rowFields = fields
+        .filter(f => mapping[f.schemaName] && (r[mapping[f.schemaName]] || '').trim() !== '')
+        .map(f => ({ schemaName: f.schemaName, value: (r[mapping[f.schemaName]] || '').trim() }))
+      rows.push({ searchByValue, note, fields: rowFields })
+    })
+    return { rows, skipped }
+  }, [table, mapping, fields])
+
+  const start = () => {
+    if (!resolved.rows.length) return
+    if (!window.confirm(`Create/update ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in production LeadSquared${overwriteFields ? ' (updating any that already exist)' : ''}? This runs in the background and cannot be undone.`)) return
+    runOppImportInBackground(resolved.rows, label || 'pasted rows', resolved.skipped, { searchByAttr, eventCode: Number(eventCode) || 12003, overwriteFields })
+  }
+
+  if (running || progress) {
+    const pct = progress ? Math.round((progress.done / Math.max(1, progress.total)) * 100) : 0
+    return (
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 8 }}>Running -- {progress?.done || 0} of {progress?.total || 0}</div>
+        <div style={{ height: 8, borderRadius: 999, background: 'var(--bg3)', overflow: 'hidden', marginBottom: 10 }}>
+          <div style={{ height: '100%', width: pct + '%', background: 'linear-gradient(135deg,#1F3C84,#1C9FD4)', transition: 'width .2s' }} />
+        </div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12 }}>
+          {progress?.failed || 0} failed · {progress?.skipped || 0} skipped (no match value) · currently: {progress?.currentRow || '—'}
+        </div>
+        {progress?.failures?.length > 0 && (
+          <div style={{ border: '0.5px solid #FECACA', borderRadius: 10, maxHeight: 200, overflowY: 'auto', padding: '8px 10px', background: '#FEF2F2' }}>
+            {progress.failures.map((f, i) => (
+              <div key={i} style={{ fontSize: 11.5, color: '#B91C1C', marginBottom: 4 }}><b>{f.label}</b> — {f.message}</div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>3. Import a file</div>
+      <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
+        One row per Opportunity. The column mapped to "{searchLabel}" below is what each row is matched (or created) on.
+      </p>
+      {!table && <LsqFileOrPasteInput onParsed={(t, lbl) => { setLabel(lbl); setTable(t); setMapping({}) }} />}
+      {table && table.binary && <ErrorNote message="That file doesn't look like a text CSV/TSV -- an Excel .xlsx export needs to be saved as CSV first." />}
+      {table && !table.binary && table.rows.length === 0 && <ErrorNote message="No data rows found -- make sure the first row is real column headers." />}
+      {table && !table.binary && table.rows.length > 0 && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span style={{ fontSize: 11.5, color: C.muted }}>{fmtN(table.rows.length)} row(s) from "{label}"</span>
+            <Button size="sm" variant="secondary" onClick={() => { setTable(null); setMapping({}) }}>Choose a different file</Button>
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>4. Map columns</div>
+          <OpportunityMappingStep table={table} mapping={mapping} setMapping={setMapping} targets={targets} />
+          <div style={{ margin: '12px 0', fontSize: 12.5, color: C.text }}>
+            <b>{fmtN(resolved.rows.length)}</b> ready to send{resolved.skipped > 0 && <>, <b>{fmtN(resolved.skipped)}</b> skipped (no "{searchLabel}" value)</>}.
+          </div>
+          <Button onClick={start} disabled={!resolved.rows.length || !mapping.searchByValue}>
+            {`Create/update ${fmtN(resolved.rows.length)} Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in the background`}
+          </Button>
+        </>
+      )}
+    </div>
+  )
+}
+
 function CreateOpportunityTab() {
+  const [mode, setMode] = useState('single') // 'single' | 'bulk'
   const [eventCode, setEventCode] = useState(String(DEFAULT_OPPORTUNITY_EVENT_CODE))
   const [schema, setSchema] = useState(null)
   const [schemaLoading, setSchemaLoading] = useState(false)
   const [schemaError, setSchemaError] = useState(null)
 
   const [searchByAttr, setSearchByAttr] = useState('EmailAddress')
+  const [overwriteFields, setOverwriteFields] = useState(false)
+
   const [searchByValue, setSearchByValue] = useState('')
   const [note, setNote] = useState('')
   const [fieldValues, setFieldValues] = useState({})
@@ -1014,12 +1304,12 @@ function CreateOpportunityTab() {
     setResult(null); setSubmitError(null)
     if (!searchByValue.trim()) { setSubmitError('Enter the lead-matching value.'); return }
     const label = `${SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l || searchByAttr}: ${searchByValue}`
-    if (!window.confirm(`Create a real Opportunity in production LeadSquared for ${label}? If no matching lead exists yet, a new one will be created too.`)) return
+    if (!window.confirm(`${overwriteFields ? 'Create or update' : 'Create'} a real Opportunity in production LeadSquared for ${label}? If no matching lead exists yet, a new one will be created too.`)) return
     setSubmitting(true)
     try {
       const payload = {
         searchByAttr, searchByValue: searchByValue.trim(), eventCode: Number(eventCode) || 12003,
-        note: note.trim() || undefined,
+        note: note.trim() || undefined, overwriteFields,
         fields: Object.entries(fieldValues).filter(([, v]) => String(v || '').trim() !== '').map(([schemaName, value]) => ({ schemaName, value })),
       }
       const d = await fetchJson(`${API}&mode=create_opportunity`, {
@@ -1034,7 +1324,17 @@ function CreateOpportunityTab() {
   const set1 = (schemaName, v) => setFieldValues(prev => ({ ...prev, [schemaName]: v }))
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: mode === 'bulk' ? 760 : 640 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, padding: 3, borderRadius: 10, background: 'var(--bg3)', width: 'fit-content' }}>
+        {[['single', 'Single'], ['bulk', 'Bulk import']].map(([m, lbl]) => (
+          <button key={m} type="button" onClick={() => setMode(m)} style={{
+            padding: '6px 16px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: FONT,
+            background: mode === m ? 'var(--card)' : 'transparent', color: mode === m ? '#1F3C84' : C.muted,
+            boxShadow: mode === m ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
+          }}>{lbl}</button>
+        ))}
+      </div>
+
       <div style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>1. Match or create the lead</div>
         <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
@@ -1043,8 +1343,9 @@ function CreateOpportunityTab() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Dropdown value={SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l} onChange={l => setSearchByAttr(SEARCH_BY_OPTIONS.find(o => o.l === l)?.v || searchByAttr)}
             options={SEARCH_BY_OPTIONS.map(o => o.l)} minWidth={200} />
-          <input value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder="e.g. jane@example.com" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
+          {mode === 'single' && <input value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder="e.g. jane@example.com" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />}
         </div>
+        {mode === 'bulk' && <p style={{ fontSize: 11, color: C.muted, margin: '8px 0 0' }}>Each row's match value comes from your file, mapped in step 4 below.</p>}
       </div>
 
       <div style={{ marginBottom: 18 }}>
@@ -1060,45 +1361,55 @@ function CreateOpportunityTab() {
         {schemaError && <div style={{ marginTop: 8 }}><ErrorNote message={schemaError} /></div>}
       </div>
 
-      {fields.length > 0 && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>3. Opportunity fields <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional -- leave blank to skip)</span></div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
-            {fields.map(f => (
-              <div key={f.schemaName}>
-                <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
-                  {f.displayName}{f.isMandatory ? <span style={{ color: '#B91C1C' }}> *</span> : null}
-                </label>
-                {Array.isArray(f.inlineOptions) && f.inlineOptions.length > 0 ? (
-                  <Dropdown value={fieldValues[f.schemaName] || ''} onChange={v => set1(f.schemaName, v)}
-                    options={['', ...f.inlineOptions]} minWidth={140} />
-                ) : (
-                  <input value={fieldValues[f.schemaName] || ''} onChange={e => set1(f.schemaName, e.target.value)} style={{ ...inputStyle, width: '100%' }} />
-                )}
+      <ReplaceModeToggle checked={overwriteFields} onChange={setOverwriteFields} />
+
+      {mode === 'bulk' ? (
+        <BulkOpportunityImport searchByAttr={searchByAttr} eventCode={eventCode} fields={fields} overwriteFields={overwriteFields} />
+      ) : (
+        <>
+          {fields.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>3. Opportunity fields <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional -- leave blank to skip)</span></div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+                {fields.map(f => (
+                  <div key={f.schemaName}>
+                    <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
+                      {f.displayName}{f.isMandatory ? <span style={{ color: '#B91C1C' }}> *</span> : null}
+                    </label>
+                    {Array.isArray(f.inlineOptions) && f.inlineOptions.length > 0 ? (
+                      <Dropdown value={fieldValues[f.schemaName] || ''} onChange={v => set1(f.schemaName, v)}
+                        options={['', ...f.inlineOptions]} minWidth={140} />
+                    ) : (
+                      <input value={fieldValues[f.schemaName] || ''} onChange={e => set1(f.schemaName, e.target.value)} style={{ ...inputStyle, width: '100%' }} />
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+          )}
+
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>Note <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional)</span></div>
+            <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} style={{ ...inputStyle, width: '100%', resize: 'vertical', fontFamily: FONT }} />
           </div>
-        </div>
+
+          {result && result.Status === 1 && <ErrorNote message={result.ExceptionMessage || 'LeadSquared reported a failure.'} />}
+          {result && result.Status !== 1 && (
+            <SuccessNote>
+              {result.CreatedOpportunityId
+                ? <>Opportunity created (id {short(result.CreatedOpportunityId)}).</>
+                : result.ConflictedOpportunityId
+                  ? (overwriteFields
+                    ? <>A matching opportunity (id {short(result.ConflictedOpportunityId)}) was found and updated.</>
+                    : <>A duplicate was detected for this opportunity -- the existing one (id {short(result.ConflictedOpportunityId)}) was not changed, but a captured activity was posted on the lead. Turn on "Update the existing Opportunity" above to replace its fields instead.</>)
+                  : <>Sent -- LeadSquared accepted the request.</>}
+            </SuccessNote>
+          )}
+          {submitError && <ErrorNote message={submitError} />}
+
+          <Button onClick={submit} disabled={submitting || !searchByValue.trim()}>{submitting ? 'Creating…' : (overwriteFields ? 'Create / Update Opportunity' : 'Create Opportunity')}</Button>
+        </>
       )}
-
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>Note <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional)</span></div>
-        <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} style={{ ...inputStyle, width: '100%', resize: 'vertical', fontFamily: FONT }} />
-      </div>
-
-      {result && result.Status === 1 && <ErrorNote message={result.ExceptionMessage || 'LeadSquared reported a failure.'} />}
-      {result && result.Status !== 1 && (
-        <SuccessNote>
-          {result.CreatedOpportunityId
-            ? <>Opportunity created (id {short(result.CreatedOpportunityId)}).</>
-            : result.ConflictedOpportunityId
-              ? <>A duplicate was detected for this opportunity -- the existing one (id {short(result.ConflictedOpportunityId)}) was not overwritten, but a captured activity was posted on the lead.</>
-              : <>Sent -- LeadSquared accepted the request.</>}
-        </SuccessNote>
-      )}
-      {submitError && <ErrorNote message={submitError} />}
-
-      <Button onClick={submit} disabled={submitting || !searchByValue.trim()}>{submitting ? 'Creating…' : 'Create Opportunity'}</Button>
     </div>
   )
 }
