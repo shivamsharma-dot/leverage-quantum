@@ -37,19 +37,31 @@ export default async function handler(req, res) {
     return res.status(400).send('Invalid url')
   }
 
+  const attempt = async () => fetch(decoded, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': 'https://www.facebook.com/',
+      'sec-fetch-dest': 'image',
+      'sec-fetch-mode': 'no-cors',
+      'sec-fetch-site': 'cross-site',
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(15000)
+  })
+
   try {
-    const imgRes = await fetch(decoded, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.facebook.com/',
-        'sec-fetch-dest': 'image',
-        'sec-fetch-mode': 'no-cors',
-        'sec-fetch-site': 'cross-site',
-      },
-      redirect: 'follow'
-    })
+    // Undici's outbound fetch on Vercel occasionally drops the connection to a
+    // specific fbcdn edge node on the first try; a same-URL retry after a short
+    // pause reliably recovers it without needing a different node/URL.
+    let imgRes
+    try {
+      imgRes = await attempt()
+    } catch {
+      await new Promise(r => setTimeout(r, 400))
+      imgRes = await attempt()
+    }
     if (!imgRes.ok) return res.status(imgRes.status).send('Upstream ' + imgRes.status)
     const contentType = imgRes.headers.get('content-type') || 'image/jpeg'
     res.setHeader('Content-Type', contentType)
@@ -58,6 +70,7 @@ export default async function handler(req, res) {
     const buf = await imgRes.arrayBuffer()
     res.send(Buffer.from(buf))
   } catch (e) {
-    res.status(500).send('Proxy error: ' + e.message)
+    const cause = e && e.cause ? (e.cause.code || e.cause.message || String(e.cause)) : null
+    res.status(502).send('Proxy error: ' + e.message + (cause ? ' (' + cause + ')' : ''))
   }
 }
