@@ -23,6 +23,7 @@ const LeadQualificationSchemaDashboard = lazy(COMPONENT_IMPORTS.LeadQualificatio
 const WhatsAppDashboard = lazy(COMPONENT_IMPORTS.WhatsAppDashboard)
 const MTDDashboard = lazy(COMPONENT_IMPORTS.MTDDashboard)
 const MetaAdsDashboard = lazy(COMPONENT_IMPORTS.MetaAdsDashboard)
+const CreativeDownloaderDashboard = lazy(COMPONENT_IMPORTS.CreativeDownloaderDashboard)
 const LeverageCareersDashboard = lazy(COMPONENT_IMPORTS.LeverageCareersDashboard)
 const GoogleAdsDashboard = lazy(COMPONENT_IMPORTS.GoogleAdsDashboard)
 const BingAdsDashboard = lazy(COMPONENT_IMPORTS.BingAdsDashboard)
@@ -46,6 +47,7 @@ const PAGE_TITLES = {
   '/dashboard/ceo-b2c-pnl': 'Daily P&L',
   '/dashboard/ceo-b2c-cashflow': 'Daily Cash Flow',
   '/dashboard/meta-ads': 'Meta Ads',
+  '/dashboard/creative-downloader': 'Creative Downloader',
   '/dashboard/leverage-careers': 'Leverage Careers',
   '/dashboard/google-ads': 'Google Ads',
   '/dashboard/bing-ads': 'Bing Ads',
@@ -291,6 +293,7 @@ export default function App() {
           <Route path="/dashboard/team-mapping" element={<ProtectedRoute dashboardId="team_mapping"><TeamMappingDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/whatsapp" element={<ProtectedRoute dashboardId="whatsapp"> <WhatsAppDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/meta-ads" element={<ProtectedRoute dashboardId="meta_ads"> <MetaAdsDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/creative-downloader" element={<ProtectedRoute dashboardId="creative_downloader"> <CreativeDownloaderDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/leverage-careers" element={<ProtectedRoute dashboardId="leverage_careers"> <LeverageCareersDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/google-ads" element={<ProtectedRoute dashboardId="google_ads"> <GoogleAdsDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/bing-ads" element={<ProtectedRoute dashboardId="bing_ads"> <BingAdsDashboard /></ProtectedRoute>} />
