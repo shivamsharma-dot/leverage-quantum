@@ -530,8 +530,8 @@ function CampaignsTab({ data }) {
             </div>
             {expanded===c.id&&(
               <div style={{ padding:'16px 16px 16px 32px',background:'#F9FAFB',borderBottom:'0.5px solid #E5E7EB' }}>
-                <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:10,marginBottom:10 }}>
-                  {[{l:'Reach',v:fmtN(c.reach)},{l:'CPC',v:c.cpc>0?'₹'+Math.round(c.cpc):'—'},{l:'CPM',v:c.cpm>0?'₹'+Math.round(c.cpm):'—'},{l:'Conv. Rate',v:c.convRate>0?c.convRate.toFixed(2)+'%':'—'},{l:'Frequency',v:c.frequency>0?c.frequency.toFixed(2):'—',w:c.frequency>3},{l:'Spend Share',v:c.spendShare.toFixed(1)+'%'},{l:'CRM Conv. Rate',v:(c.crmLeads>0&&c.clicks>0)?((c.crmLeads/c.clicks*100).toFixed(2)+'%'):'—'}].map(m=><div key={m.l} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:8,padding:'10px 14px' }}><div style={{ fontSize:10,color:'#9CA3AF',fontWeight:600,marginBottom:4 }}>{m.l}</div><div style={{ fontSize:16,fontWeight:700,color:m.w?'#1F3C84':'#111827' }}>{m.v}</div></div>)}
+                <div className='lq-kpi-grid' style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:10,marginBottom:10 }}>
+                  {[{l:'Reach',v:fmtN(c.reach)},{l:'CPC',v:c.cpc>0?'₹'+Math.round(c.cpc):'—'},{l:'CPM',v:c.cpm>0?'₹'+Math.round(c.cpm):'—'},{l:'Conv. Rate',v:c.convRate>0?c.convRate.toFixed(2)+'%':'—'},{l:'Frequency',v:c.frequency>0?c.frequency.toFixed(2):'—',w:c.frequency>3},{l:'Spend Share',v:c.spendShare.toFixed(1)+'%'},{l:'CRM Conv. Rate',v:(c.crmLeads>0&&c.clicks>0)?((c.crmLeads/c.clicks*100).toFixed(2)+'%'):'—'},{l:'Campaign ID',v:c.id||'—',id:true}].map(m=><div key={m.l} style={{ background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:8,padding:'10px 14px',minWidth:0 }}><div style={{ fontSize:10,color:'#9CA3AF',fontWeight:600,marginBottom:4 }}>{m.l}</div><div style={{ fontSize:m.id?11:16,fontWeight:m.id?600:700,fontFamily:m.id?'monospace':'inherit',color:m.w?'#1F3C84':m.id?'#6B7280':'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{m.v}</div></div>)}
                 </div>
                 {c.fatigueLevel!=='healthy'&&<div style={{ padding:'10px 14px',background:c.fatigueLevel==='fatigue'?'#FEF2F2':'#FEF9C3',borderRadius:8,fontSize:12,color:c.fatigueLevel==='fatigue'?'#991B1B':'#854D0E',fontWeight:500 }}>{c.fatigueLevel==='fatigue'?'⚠ High frequency ('+c.frequency.toFixed(1)+') — audience fatigued. Refresh creatives or expand targeting.':'⚡ Frequency '+c.frequency.toFixed(1)+' approaching fatigue. Monitor CTR closely.'}</div>}
               </div>
@@ -593,6 +593,7 @@ const CREATIVE_COLS = [
   { key:'ctr', label:'CTR', width:90, align:'center', render:(ad,ctx)=><div style={{ fontSize:12,color:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?'#1F3C84':'#374151',fontWeight:ad.ctr<ctx.accCTRpct*0.6&&ad.ctr>0?600:400 }}>{ad.ctr.toFixed(2)}%</div> },
   { key:'freq', label:'Freq', width:80, align:'center', render:(ad)=><div style={{ fontSize:12,color:ad.frequency>4.5?'#1F3C84':ad.frequency>3?'#1C9FD4':'#374151',fontWeight:ad.frequency>3?600:400 }}>{ad.frequency>0?ad.frequency.toFixed(1):'—'}</div> },
   { key:'score', label:'Score', width:100, align:'center', render:(ad)=><div style={{ display:'flex',alignItems:'center',gap:4 }}><div style={{ width:28,height:4,background:'#F3F4F6',borderRadius:2,overflow:'hidden' }}><div style={{ height:'100%',width:ad.score+'%',background:ad.score>65?'#4CAE6F':ad.score>40?'#F59E0B':'#EF4444',borderRadius:2 }}/></div><span style={{ fontSize:10,color:'#6B7280' }}>{ad.score}</span></div> },
+  { key:'adId', label:'Ad ID', width:150, align:'left', render:(ad)=><div style={{ fontSize:11,color:'#9CA3AF',fontFamily:'monospace' }}>{ad.id||'—'}</div> },
 ]
 function CreativesTab({ data, token }) {
   const { account, lifetimeAccount = {}, ads = [], accountAvgCTR, insightsMap = {}, crmSummary = {} } = data
@@ -772,6 +773,7 @@ function CreativesTab({ data, token }) {
     'CTR %': +(ad.ctr || 0).toFixed(2),
     Freq: +(ad.frequency || 0).toFixed(2), Score: ad.score || 0,
     'Ad Link': ad.previewLink || '',
+    'Ad ID': ad.id || '',
   })), [filtered])
 
   const [creativeReportBusy, setCreativeReportBusy] = useState(false)
