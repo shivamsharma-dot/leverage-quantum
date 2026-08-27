@@ -456,7 +456,7 @@ function CampaignsTab({ data }) {
     let out = processed
     if (statusFilter !== 'all') out = out.filter(c => c.status?.toLowerCase() === statusFilter)
     if (corridorFilter !== 'all') out = out.filter(c => c.corridorId === corridorFilter)
-    if (search) out = out.filter(c => c.name?.toLowerCase().includes(search.toLowerCase()))
+    if (search) out = out.filter(c => c.name?.toLowerCase().includes(search.toLowerCase()) || c.id?.includes(search))
     return [...out].sort((a, b) => sortDir === 'desc' ? (b[sortBy]||0)-(a[sortBy]||0) : (a[sortBy]||0)-(b[sortBy]||0))
   }, [processed, statusFilter, corridorFilter, search, sortBy, sortDir])
   const totFatigue = useMemo(() => processed.filter(c => c.fatigueLevel === 'fatigue').length, [processed])
@@ -492,7 +492,7 @@ function CampaignsTab({ data }) {
           ))}
         </div>
       <div style={{ display:'flex',gap:8,marginBottom:14,alignItems:'center',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'10px 14px',flexWrap:'wrap' }}>
-        <input type="text" placeholder="Search campaigns..." value={search} onChange={e=>setSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:220,background:'#FAFAFA' }}/>
+        <input type="text" placeholder="Search name or ID..." value={search} onChange={e=>setSearch(e.target.value)} style={{ padding:'6px 11px',border:'0.5px solid #E5E7EB',borderRadius:7,fontSize:12,fontFamily:'inherit',outline:'none',width:220,background:'#FAFAFA' }}/>
         <div style={{ display:'flex',gap:3 }}>
           {['all','active','paused'].map(s=><button key={s} onClick={()=>setStatusFilter(s)} style={{ padding:'5px 12px',borderRadius:7,border:'0.5px solid #E5E7EB',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'inherit',background:statusFilter===s?'#1F3C84':'#fff',color:statusFilter===s?'#fff':'#6B7280' }}>{s.charAt(0).toUpperCase()+s.slice(1)}</button>)}
         </div>
@@ -747,7 +747,7 @@ function CreativesTab({ data, token }) {
     else if (healthFilter==='moderate') out=out.filter(a=>a.fatigueLabel==='Moderate')
     else if (healthFilter==='fatigue') out=out.filter(a=>a.fatigueLabel==='High Fatigue')
     if (corridorFilter!=='all') out=out.filter(a=>a.corridorId===corridorFilter)
-    if (adNameSearch) out=out.filter(a=>a.name?.toLowerCase().includes(adNameSearch.toLowerCase()))
+    if (adNameSearch) out=out.filter(a=>a.name?.toLowerCase().includes(adNameSearch.toLowerCase()) || a.id?.includes(adNameSearch))
     const getVal = CREATIVE_SORT_VALUE[sortBy] || (a => a[sortBy])
     return [...out].sort((a,b) => {
       let av = getVal(a), bv = getVal(b)
@@ -1012,7 +1012,7 @@ function CreativesTab({ data, token }) {
           )
         })()}
       <div style={{ display:'flex',gap:6,marginBottom:14,alignItems:'center',flexWrap:'nowrap',background:'#fff',border:'0.5px solid #E5E7EB',borderRadius:10,padding:'8px 10px' }}>
-        <input type="text" placeholder="Search ad name..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'7px 12px',border:'0.5px solid #E5E7EB',borderRadius:8,fontSize:12.5,fontFamily:'inherit',outline:'none',width:110,minWidth:0,flexShrink:1,flexGrow:0,background:'#FAFAFA' }}/>
+        <input type="text" placeholder="Search name or ID..." value={adNameSearch} onChange={e=>setAdNameSearch(e.target.value)} style={{ padding:'7px 12px',border:'0.5px solid #E5E7EB',borderRadius:8,fontSize:12.5,fontFamily:'inherit',outline:'none',width:110,minWidth:0,flexShrink:1,flexGrow:0,background:'#FAFAFA' }}/>
         <FilterDropdown label="Format" value={adTypeFilter} options={[{v:'all',l:'All'},{v:'video',l:'Video'},{v:'image',l:'Image'},{v:'carousel',l:'Carousel'}]}
           open={openFilterMenu==='format'} onToggle={()=>setOpenFilterMenu(v=>v==='format'?null:'format')} onSelect={v=>{ setAdTypeFilter(v); setOpenFilterMenu(null) }} />
         <FilterDropdown label="Corridor" value={corridorFilter} options={[{v:'all',l:'All'},...CORRIDORS.map(c=>({v:c.id,l:c.label}))]}
