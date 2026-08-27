@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import Sidebar, { PAGE_LIST, NAV } from '../components/Sidebar'
 import { useAuth, getAccessList, addUserAccess, removeUserAccess, updateUserRole } from '../hooks/useAuth'
 import { getActivityLogForDay } from '../components/ActivityLogger.js'
@@ -14,6 +14,8 @@ import { SLACK_CHANNELS, confirmPhrase, channelHandle } from '../../shared/slack
 import { SlackIcon, GmailIcon } from '../components/icons/BrandIcons'
 import { DEFAULT_REV_VS_CASHFLOW_NOTE } from '../lib/b2cReport'
 import { canAccessDashboard } from '../../shared/access.mjs'
+import ReportsEmailContent from './ReportsEmailPage'
+import ReportsSlackContent from './ReportsSlackPage'
 
 // Moved to src/lib/fetchT.js (2026-08-27) so the new Reports > Email/Slack
 // pages can share it instead of duplicating it.
@@ -545,16 +547,31 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState(userIsAdmin ? 'data' : 'profile')
   const [copied, setCopied] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
 
-  // Open a specific tab when navigated with ?tab=... (e.g. role badge -> profile). Depends on
-  // location.search (not a mount-only []) -- otherwise a same-page navigation while Settings is
-  // already mounted (e.g. clicking the sidebar role badge -> /settings?tab=profile while already
-  // viewing a different tab) never re-parses the URL and the tab silently fails to switch.
+  // Reports > Email/Slack (2026-08-27): both /settings/reports/email and
+  // /settings/reports/slack render this exact component (see App.jsx) --
+  // reportsSubView is which drill-down content shows below the Reports tab,
+  // derived straight from the URL so a bookmark/reload lands correctly and
+  // the browser back button works via real router history, without ever
+  // unmounting Sidebar/the tab bar (ProtectedRoute keys all /settings*
+  // paths together for exactly this reason).
+  const reportsSubView = location.pathname === '/settings/reports/email' ? 'email'
+    : location.pathname === '/settings/reports/slack' ? 'slack' : null
+
+  // Open a specific tab when navigated with ?tab=... (e.g. role badge -> profile), or when a
+  // Reports sub-route is the current URL. Depends on location (not a mount-only []) -- otherwise
+  // a same-page navigation while Settings is already mounted (e.g. clicking the sidebar role
+  // badge -> /settings?tab=profile while already viewing a different tab) never re-parses the
+  // URL and the tab silently fails to switch.
   useEffect(() => {
+    if (reportsSubView) { setActiveTab('reports'); return }
     const params = new URLSearchParams(location.search);
     const requested = params.get('tab');
     if (requested && ['data','bigquery','users','activity','reports','askai','appearance','profile'].includes(requested)) setActiveTab(requested);
-  }, [location.search]);
+  }, [location.search, location.pathname, reportsSubView]);
+
+  const backToReports = () => navigate('/settings?tab=reports')
 
   const _actRef = useRef(false)
   useEffect(() => {
@@ -2108,8 +2125,8 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
           <div className={styles.tabBar}>
             {TABS.map(t => (
               <button key={t.id}
-                className={`${styles.tab} ${activeTab === t.id ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab(t.id)}>
+                className={`${styles.tab} ${activeTab === t.id && !reportsSubView ? styles.tabActive : ''}`}
+                onClick={() => { setActiveTab(t.id); if (reportsSubView) navigate('/settings?tab=' + t.id) }}>
                 <KpiIconPreview name={t.icon} color="currentColor" />
                 {t.label}
               </button>
@@ -3298,21 +3315,29 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
           {/* ---------------- PROFILE ---------------- */}
           {/* --------------- REPORTS --------------- */}
-          {activeTab === 'reports' && userIsAdmin && (
+          {activeTab === 'reports' && userIsAdmin && reportsSubView === 'email' && (
+            <ReportsEmailContent userEmail={user?.email} accessList={accessList} onBack={backToReports} />
+          )}
+          {activeTab === 'reports' && userIsAdmin && reportsSubView === 'slack' && (
+            <ReportsSlackContent onBack={backToReports} />
+          )}
+          {activeTab === 'reports' && userIsAdmin && !reportsSubView && (
             <>
-              {/* Reports redesign (2026-08-27): Email and Slack are moving to their
-                  own real, bookmarkable pages (a new tab, not a modal) -- this
-                  entry point links out while the rest of this tab is still the
-                  old inline layout, migrated in the next pass. */}
+              {/* Reports redesign (2026-08-27): Email and Slack now have their own
+                  drill-down content (ReportsEmailContent/ReportsSlackContent above),
+                  reached via real routes -- these two cards navigate there in-place
+                  (same Sidebar/tab bar, real back button) rather than opening a
+                  separate page. The rest of this tab is still the old inline
+                  layout, migrated in a later pass. */}
               <div className={styles.card} style={{ display: 'flex', gap: 12 }}>
-                <a href="/settings/reports/email" target="_blank" rel="noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderRadius: 12, border: '0.5px solid var(--border)', textDecoration: 'none', color: 'inherit' }}>
+                <button onClick={() => navigate('/settings/reports/email')} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderRadius: 12, border: '0.5px solid var(--border)', background: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                   <GmailIcon size={22} />
                   <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Email reports</div><div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Sender, cadence, recipients →</div></div>
-                </a>
-                <a href="/settings/reports/slack" target="_blank" rel="noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderRadius: 12, border: '0.5px solid var(--border)', textDecoration: 'none', color: 'inherit' }}>
+                </button>
+                <button onClick={() => navigate('/settings/reports/slack')} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderRadius: 12, border: '0.5px solid var(--border)', background: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                   <SlackIcon size={22} />
                   <div><div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Slack</div><div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>Team channel, test channels, browse all →</div></div>
-                </a>
+                </button>
               </div>
               {(() => {
                 const reportRecipients = accessList.filter(u => u.receive_reports)

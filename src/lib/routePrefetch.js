@@ -32,8 +32,6 @@ export const COMPONENT_IMPORTS = {
   MarketingPerformanceReport: () => import('../pages/MarketingPerformanceReport'),
   CeoB2CDashboard: () => import('../pages/CeoB2CDashboard'),
   SettingsPage: () => import('../pages/SettingsPage'),
-  ReportsEmailPage: () => import('../pages/ReportsEmailPage'),
-  ReportsSlackPage: () => import('../pages/ReportsSlackPage'),
 }
 
 // Route path (no query string) -> component key above.
@@ -69,8 +67,8 @@ const ROUTE_COMPONENT = {
   '/dashboard/ceo-b2c-pnl': 'CeoB2CDashboard',
   '/dashboard/ceo-b2c-cashflow': 'CeoB2CDashboard',
   '/settings': 'SettingsPage',
-  '/settings/reports/email': 'ReportsEmailPage',
-  '/settings/reports/slack': 'ReportsSlackPage',
+  '/settings/reports/email': 'SettingsPage',
+  '/settings/reports/slack': 'SettingsPage',
 }
 
 const warmed = new Set()

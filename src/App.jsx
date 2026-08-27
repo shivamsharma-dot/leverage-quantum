@@ -35,8 +35,6 @@ const AgentsDashboard = lazy(COMPONENT_IMPORTS.AgentsDashboard)
 const MarketingPerformanceReport = lazy(COMPONENT_IMPORTS.MarketingPerformanceReport)
 const CeoB2CDashboard = lazy(COMPONENT_IMPORTS.CeoB2CDashboard)
 const SettingsPage = lazy(COMPONENT_IMPORTS.SettingsPage)
-const ReportsEmailPage = lazy(COMPONENT_IMPORTS.ReportsEmailPage)
-const ReportsSlackPage = lazy(COMPONENT_IMPORTS.ReportsSlackPage)
 
 // Suspense fallback — slim skeleton shown while lazy chunk loads
 
@@ -216,9 +214,15 @@ function ProtectedRoute({ children, dashboardId }) {
     return <Navigate to={fallback ? fallback.path : '/login'} replace />
   }
 
-  // Wrap in fade div
+  // Wrap in fade div. Settings and its /settings/reports/* sub-routes all
+  // render the same <SettingsPage/> tree (2026-08-27) -- keying on the raw
+  // pathname here would remount it (and lose activeTab, unsaved form
+  // fields, etc.) on every drill-down navigation, exactly the "fixed
+  // header, content changes below it" behavior this was built to avoid.
+  // Every other page keeps the original per-path key/fade.
+  const stableKey = location.pathname.startsWith('/settings') ? '/settings' : location.pathname
   return (
-    <div key={location.pathname} className="q-page-enter">
+    <div key={stableKey} className="q-page-enter">
       {children}
     </div>
   )
@@ -293,9 +297,15 @@ export default function App() {
           <Route path="/ask-ai" element={<ProtectedRoute dashboardId="ask_ai"> <AskAI /></ProtectedRoute>} />
           <Route path="/dashboard/agents" element={<ProtectedRoute dashboardId="agents"> <AgentsDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/marketing-performance" element={<ProtectedRoute dashboardId="marketing_performance"> <MarketingPerformanceReport /></ProtectedRoute>} />
+          {/* Reports > Email/Slack (2026-08-27, corrected same day): these are NOT
+              separate pages -- both routes render the exact same <SettingsPage/>,
+              which reads location.pathname itself to decide what renders below
+              its own fixed Data/BigQuery/User Access/... tab bar. Real routes so
+              the URL is bookmarkable and the browser back button works; one
+              continuous component tree so the Sidebar/tab bar never unmounts. */}
           <Route path="/settings" element={<ProtectedRoute dashboardId="settings"> <SettingsPage /></ProtectedRoute>} />
-          <Route path="/settings/reports/email" element={<ProtectedRoute dashboardId="settings"> <ReportsEmailPage /></ProtectedRoute>} />
-          <Route path="/settings/reports/slack" element={<ProtectedRoute dashboardId="settings"> <ReportsSlackPage /></ProtectedRoute>} />
+          <Route path="/settings/reports/email" element={<ProtectedRoute dashboardId="settings"> <SettingsPage /></ProtectedRoute>} />
+          <Route path="/settings/reports/slack" element={<ProtectedRoute dashboardId="settings"> <SettingsPage /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
