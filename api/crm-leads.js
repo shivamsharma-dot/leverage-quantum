@@ -61,7 +61,7 @@ function splitCsvLine(line) {
 
 // ── LeadSquared (live API) ──────────────────────────────────────────────────
 // Merged into this endpoint rather than a new /api file -- Vercel Hobby is at the
-// 12-function cap. Reached via ?source=leadsquared&mode=leads|opportunities|opportunity_meta|activities|activity_types.
+// 12-function cap. Reached via ?source=leadsquared&mode=leads|opportunities|opportunity_meta|activities|activity_types|create_opportunity.
 //
 // Credentials: LEADSQUARED_ACCESS_KEY / LEADSQUARED_SECRET_KEY, Vercel env only (never
 // app_preferences -- that table is readable with the public anon key, see the Slack bot
@@ -590,6 +590,42 @@ async function fetchLeadSquaredOpportunitySchema(creds, { code, refresh }) {
     }) : []
   const resolvedCode = (data && (data.EventCode || data.EventCode === 0)) ? data.EventCode : (Number(code) || 12003)
   return { code: String(resolvedCode), displayName: (data && data.DisplayName) || '', fields }
+}
+
+// Capture Opportunities (apidocs.leadsquared.com/capture-opportunities/) -- the one write
+// API that can create a brand-new Lead automatically if the SearchBy value matches nothing
+// (unlike "Add Opportunities in Bulk", which 404s/no-ops on an unknown lead). Per that doc,
+// strictly mandatory: at least 1 unique LeadDetails attribute-value pair, an explicit
+// "SearchBy" attribute naming which one to match on, and Opportunity.OpportunityEventCode.
+// mx_Custom_19 is CONDITIONALLY mandatory (only if this account has "comments on status
+// change" enabled) -- not force-required here since that's unverified either way; if it's
+// needed, LeadSquared's own MXInvalidActivityFieldsException names it explicitly and is
+// surfaced to the caller as-is (via the Status:1/ExceptionMessage check below) rather than
+// guessed at up front. Response Status: 0 Success, 1 Failure, 2 PartialSuccess.
+async function captureLeadSquaredOpportunity(creds, payload) {
+  const searchByAttr = String((payload && payload.searchByAttr) || '').trim()
+  const searchByValue = String((payload && payload.searchByValue) || '').trim()
+  const eventCode = Number(payload && payload.eventCode) || 12003
+  if (!searchByAttr || !searchByValue) throw new Error('Pick a lead-matching field (e.g. Email) and enter its value.')
+
+  const leadDetails = [
+    { Attribute: searchByAttr, Value: searchByValue },
+    { Attribute: 'SearchBy', Value: searchByAttr },
+  ]
+  const fields = Array.isArray(payload && payload.fields)
+    ? payload.fields.filter(f => f && f.schemaName && String(f.value == null ? '' : f.value).trim() !== '')
+    : []
+  const opportunity = {
+    OpportunityEventCode: eventCode,
+    ...(payload && payload.note ? { OpportunityNote: String(payload.note) } : {}),
+    ...(fields.length ? { Fields: fields.map(f => ({ SchemaName: f.schemaName, Value: f.value })) } : {}),
+  }
+
+  const data = await leadsquaredPost('/v2/OpportunityManagement.svc/Capture', creds, { LeadDetails: leadDetails, Opportunity: opportunity })
+  if (data && data.Status === 1) {
+    throw new Error(data.ExceptionMessage || 'LeadSquared rejected the request (Status: Failure).')
+  }
+  return data
 }
 
 // Powers the "Centre Name" field in Team Mapping's manual-mapping modal --
@@ -1903,6 +1939,10 @@ async function handleLeadSquared(req, res, me) {
   // use outside the Add User modal that needs it, so it gets the same treatment
   // rather than a narrower carve-out for one read-only mode.
   const TEAM_CREATE_USER_MODES = ['team_permission_templates', 'team_create_user']
+  // create_opportunity writes a real Opportunity (and, if the SearchBy value matches no
+  // existing lead, a real new Lead too) into production LeadSquared -- same admin-only
+  // treatment as team_create_user, for the same reason.
+  const LEADSQUARED_WRITE_MODES = ['create_opportunity']
   // team_cache_lookup is deliberately its own read, NOT part of TEAM_FRAPP_MODES
   // (which is admin-only, gated below) -- the Roster tab's advanced filter needs
   // it for Region/Call Transfer, and that tab is readable by anyone with
@@ -1933,7 +1973,7 @@ async function handleLeadSquared(req, res, me) {
   // team_watchers_list is readable by anyone with page access (same as
   // team_activity_list) -- only adding/removing a subscription is admin-only,
   // since this is set up on someone's behalf, not day-to-day self-serve.
-  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', 'team_watchers_add', 'team_watchers_remove', 'team_watchers_test_dm', ...TEAM_CONNECTOR_MODES, ...TEAM_FRAPP_MODES, ...TEAM_CREATE_USER_MODES].includes(mode) && me.role !== 'admin') {
+  if (['team_manual_save', 'team_manual_delete', 'team_manual_restore', 'team_activity_create', 'team_activity_update', 'team_watchers_add', 'team_watchers_remove', 'team_watchers_test_dm', ...TEAM_CONNECTOR_MODES, ...TEAM_FRAPP_MODES, ...TEAM_CREATE_USER_MODES, ...LEADSQUARED_WRITE_MODES].includes(mode) && me.role !== 'admin') {
     return res.status(403).json({ error: 'Admin only' })
   }
   // Cheap (env-var only, no network call) -- computed up front so the finished-
@@ -2010,6 +2050,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'lead_schema') return res.status(200).json(await fetchLeadSquaredLeadSchema(creds, { refresh: refresh === '1' }))
     if (mode === 'opportunity_detail') return res.status(200).json(await fetchLeadSquaredOpportunityDetail(creds, { opportunityId: req.query.opportunityId }))
     if (mode === 'opportunity_activities') return res.status(200).json(await fetchLeadSquaredOpportunityActivities(creds, { opportunityId: req.query.opportunityId }))
+    if (mode === 'create_opportunity') return res.status(200).json(await captureLeadSquaredOpportunity(creds, req.body || {}))
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })

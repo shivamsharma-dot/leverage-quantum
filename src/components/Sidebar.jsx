@@ -136,6 +136,7 @@ export const NAV = [
           { to: '/dashboard/leadsquared?tab=leads', label: 'Leads', matchType: 'query', tabKey: 'leads' },
           { to: '/dashboard/leadsquared?tab=activities', label: 'Activities', matchType: 'query', tabKey: 'activities' },
           { to: '/dashboard/leadsquared?tab=opportunities', label: 'Opportunities', matchType: 'query', tabKey: 'opportunities' },
+          { to: '/dashboard/leadsquared?tab=create-opportunity', label: 'Create Opportunity', matchType: 'query', tabKey: 'create-opportunity' },
         ]
       },
       { to: '/dashboard/team-mapping', icon: <TeamMappingIcon />, label: 'Team Mapping', end: false },
@@ -238,6 +239,7 @@ function LeadSquaredIcon() { return <svg width="14" height="14" viewBox="0 0 136
 // mapping layer, not another LeadSquared-native view.
 function TeamMappingIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="2.4"/><path d="M12 7.4V12"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M12 12 6 15.8M12 12l6 3.8"/></svg> }
 function OpportunityIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg> }
+function CreateOpportunityIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg> }
 // Daily P&L -- a statement (document with ruled lines), distinct from the plain
 // document-agnostic RevenueIcon used for the parent nav row.
 function PnLIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg> }
@@ -274,7 +276,7 @@ const ICON_MAP = {
   'Audiences': <PeopleIcon/>, 'Schedule': <ClockIcon/>, 'Assets': <FolderIcon/>,
   'Month on Month': <ChartIcon/>, 'Day on Day': <DayIcon/>,
   'LeadSquared': <LeadSquaredIcon/>, 'Team Mapping': <TeamMappingIcon/>,
-  'Leads': <PeopleIcon/>, 'Activities': <ClockIcon/>, 'Opportunities': <OpportunityIcon/>,
+  'Leads': <PeopleIcon/>, 'Activities': <ClockIcon/>, 'Opportunities': <OpportunityIcon/>, 'Create Opportunity': <CreateOpportunityIcon/>,
   'Daily P&L': <PnLIcon/>, 'Daily Cash Flow': <CashFlowIcon/>,
 }
 function GoogleAdsIcon(){

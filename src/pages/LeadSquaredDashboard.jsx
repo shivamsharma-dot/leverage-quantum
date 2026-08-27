@@ -5,6 +5,7 @@ import Sidebar from '../components/Sidebar'
 import { InlineLoader } from '../components/SkeletonLoader'
 import { C, FONT, fmtN } from '../ui/dashboardKit'
 import FilterDropdown from '../components/FilterDropdown'
+import Dropdown from '../components/Dropdown'
 import Button from '../components/Button'
 
 // Real LeadSquared deep-link patterns, already used elsewhere in this app
@@ -42,8 +43,8 @@ function todayIso() { return new Date().toISOString().slice(0, 10) }
 function short(id) { return id ? String(id).slice(0, 8) + '…' : '—' }
 function fmtDate(s) { return s ? String(s).slice(0, 16) : '—' }
 
-async function fetchJson(url) {
-  const r = await fetch(url, { credentials: 'include' })
+async function fetchJson(url, opts) {
+  const r = await fetch(url, { credentials: 'include', ...opts })
   const d = await r.json()
   if (!r.ok) throw new Error(d.error || 'Request failed')
   return d
@@ -84,6 +85,9 @@ function Toolbar({ children }) { return <div style={{ display: 'flex', alignItem
 
 function ErrorNote({ message }) {
   return <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5, marginBottom: 14 }}>✕ {message}</div>
+}
+function SuccessNote({ children }) {
+  return <div style={{ padding: '10px 14px', borderRadius: 10, background: '#F0FDF4', border: '0.5px solid #BBF7D0', color: '#15803D', fontSize: 12.5, marginBottom: 14 }}>✓ {children}</div>
 }
 function EmptyNote({ label }) {
   return <div style={{ padding: '48px 0', textAlign: 'center', color: C.muted, fontSize: 13 }}>{label}</div>
@@ -959,12 +963,153 @@ function OpportunitiesTab() {
   )
 }
 
+// ------------------------------------------------------------ Create Opportunity
+
+// Real, commonly-unique LeadSquared lead attributes -- what LeadSquared's own "SearchBy"
+// parameter expects a lead to be matched on (apidocs.leadsquared.com/capture-opportunities/).
+// ProspectId matches an EXISTING lead only (an unrecognized one won't create a new lead the
+// way Email/Phone/Mobile would), which is why it's flagged as such in the label below.
+const SEARCH_BY_OPTIONS = [
+  { v: 'EmailAddress', l: 'Email' },
+  { v: 'Phone', l: 'Phone' },
+  { v: 'Mobile', l: 'Mobile' },
+  { v: 'ProspectID', l: 'Lead ID (ProspectID -- matches an existing lead only)' },
+]
+
+// Always-present, read-only audit fields on every LeadSquared Opportunity type (confirmed
+// live -- see fetchLeadSquaredOpportunitySchema's own comment in api/crm-leads.js) -- not
+// meaningful to hand-fill on create, so excluded from the dynamic field list below.
+const OPPORTUNITY_AUDIT_FIELDS = new Set(['CreatedOn', 'ModifiedOn', 'CreatedBy', 'ModifiedBy'])
+
+function CreateOpportunityTab() {
+  const [eventCode, setEventCode] = useState(String(DEFAULT_OPPORTUNITY_EVENT_CODE))
+  const [schema, setSchema] = useState(null)
+  const [schemaLoading, setSchemaLoading] = useState(false)
+  const [schemaError, setSchemaError] = useState(null)
+
+  const [searchByAttr, setSearchByAttr] = useState('EmailAddress')
+  const [searchByValue, setSearchByValue] = useState('')
+  const [note, setNote] = useState('')
+  const [fieldValues, setFieldValues] = useState({})
+
+  const [submitting, setSubmitting] = useState(false)
+  const [result, setResult] = useState(null)
+  const [submitError, setSubmitError] = useState(null)
+
+  const loadSchema = useCallback(async () => {
+    setSchemaLoading(true); setSchemaError(null)
+    try {
+      const d = await fetchJson(`${API}&mode=opportunity_schema&code=${encodeURIComponent(eventCode)}`)
+      setSchema(d)
+      setFieldValues({})
+    } catch (e) { setSchemaError(e.message); setSchema(null) }
+    finally { setSchemaLoading(false) }
+  }, [eventCode])
+
+  useEffect(() => { loadSchema() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fields = useMemo(() => (schema && schema.fields ? schema.fields.filter(f => !OPPORTUNITY_AUDIT_FIELDS.has(f.schemaName)) : []), [schema])
+
+  const submit = async () => {
+    setResult(null); setSubmitError(null)
+    if (!searchByValue.trim()) { setSubmitError('Enter the lead-matching value.'); return }
+    const label = `${SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l || searchByAttr}: ${searchByValue}`
+    if (!window.confirm(`Create a real Opportunity in production LeadSquared for ${label}? If no matching lead exists yet, a new one will be created too.`)) return
+    setSubmitting(true)
+    try {
+      const payload = {
+        searchByAttr, searchByValue: searchByValue.trim(), eventCode: Number(eventCode) || 12003,
+        note: note.trim() || undefined,
+        fields: Object.entries(fieldValues).filter(([, v]) => String(v || '').trim() !== '').map(([schemaName, value]) => ({ schemaName, value })),
+      }
+      const d = await fetchJson(`${API}&mode=create_opportunity`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      })
+      setResult(d)
+      if (d && d.Status !== 1) { setSearchByValue(''); setNote(''); setFieldValues({}) }
+    } catch (e) { setSubmitError(e.message) }
+    finally { setSubmitting(false) }
+  }
+
+  const set1 = (schemaName, v) => setFieldValues(prev => ({ ...prev, [schemaName]: v }))
+
+  return (
+    <div style={{ maxWidth: 640 }}>
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>1. Match or create the lead</div>
+        <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
+          LeadSquared matches on this field. If nothing matches, a brand-new lead is created automatically.
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Dropdown value={SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l} onChange={l => setSearchByAttr(SEARCH_BY_OPTIONS.find(o => o.l === l)?.v || searchByAttr)}
+            options={SEARCH_BY_OPTIONS.map(o => o.l)} minWidth={200} />
+          <input value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder="e.g. jane@example.com" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>2. Opportunity type</div>
+        <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
+          The event code for this opportunity type -- find it at LeadSquared &rarr; My Profile &rarr; Settings &rarr; Opportunities &rarr; Opportunity Types.
+        </p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input value={eventCode} onChange={e => setEventCode(e.target.value.replace(/[^0-9]/g, ''))} style={{ ...inputStyle, width: 120 }} />
+          <Button size="sm" variant="secondary" onClick={loadSchema} disabled={schemaLoading}>{schemaLoading ? 'Loading fields…' : 'Load fields'}</Button>
+          {schema && schema.displayName && <span style={{ fontSize: 11.5, color: C.muted }}>{schema.displayName}</span>}
+        </div>
+        {schemaError && <div style={{ marginTop: 8 }}><ErrorNote message={schemaError} /></div>}
+      </div>
+
+      {fields.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>3. Opportunity fields <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional -- leave blank to skip)</span></div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+            {fields.map(f => (
+              <div key={f.schemaName}>
+                <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
+                  {f.displayName}{f.isMandatory ? <span style={{ color: '#B91C1C' }}> *</span> : null}
+                </label>
+                {Array.isArray(f.inlineOptions) && f.inlineOptions.length > 0 ? (
+                  <Dropdown value={fieldValues[f.schemaName] || ''} onChange={v => set1(f.schemaName, v)}
+                    options={['', ...f.inlineOptions]} minWidth={140} />
+                ) : (
+                  <input value={fieldValues[f.schemaName] || ''} onChange={e => set1(f.schemaName, e.target.value)} style={{ ...inputStyle, width: '100%' }} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>Note <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional)</span></div>
+        <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} style={{ ...inputStyle, width: '100%', resize: 'vertical', fontFamily: FONT }} />
+      </div>
+
+      {result && result.Status === 1 && <ErrorNote message={result.ExceptionMessage || 'LeadSquared reported a failure.'} />}
+      {result && result.Status !== 1 && (
+        <SuccessNote>
+          {result.CreatedOpportunityId
+            ? <>Opportunity created (id {short(result.CreatedOpportunityId)}).</>
+            : result.ConflictedOpportunityId
+              ? <>A duplicate was detected for this opportunity -- the existing one (id {short(result.ConflictedOpportunityId)}) was not overwritten, but a captured activity was posted on the lead.</>
+              : <>Sent -- LeadSquared accepted the request.</>}
+        </SuccessNote>
+      )}
+      {submitError && <ErrorNote message={submitError} />}
+
+      <Button onClick={submit} disabled={submitting || !searchByValue.trim()}>{submitting ? 'Creating…' : 'Create Opportunity'}</Button>
+    </div>
+  )
+}
+
 // ------------------------------------------------------------------- Page
 
 const TABS = [
   { key: 'leads', label: 'Leads' },
   { key: 'activities', label: 'Activities' },
   { key: 'opportunities', label: 'Opportunities' },
+  { key: 'create-opportunity', label: 'Create Opportunity' },
 ]
 
 // Page-level "i" -- deliberately for the OWNER, not a metric-calculation explainer like
@@ -1004,9 +1149,9 @@ function PageInfoButton() {
             Search, the column picker, and Advanced Search all run against the rows already fetched for the current window -- they don't trigger a fresh LeadSquared call per keystroke. Changing the date range, Activity Type, or hitting Refresh does.
           </p>
 
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.text, marginBottom: 3 }}>Read-only</div>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.text, marginBottom: 3 }}>Read-only, except Create Opportunity</div>
           <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: 0 }}>
-            This page only reads from LeadSquared. Creating, editing, or deleting a Lead/Activity/Opportunity still has to happen in LeadSquared itself.
+            Leads, Activities, and Opportunities are read-only views -- editing or deleting still has to happen in LeadSquared itself. Create Opportunity is the one exception: it writes a real Opportunity (and, if no matching lead exists yet, a real new Lead too) directly into production LeadSquared via LeadSquared's own Capture Opportunities API. Admin only.
           </p>
         </div>
       )}
@@ -1052,6 +1197,7 @@ export default function LeadSquaredDashboard() {
           {activeTab === 'leads' && <LeadsTab />}
           {activeTab === 'activities' && <ActivitiesTab />}
           {activeTab === 'opportunities' && <OpportunitiesTab />}
+          {activeTab === 'create-opportunity' && <CreateOpportunityTab />}
         </div>
       </div>
     </div>
