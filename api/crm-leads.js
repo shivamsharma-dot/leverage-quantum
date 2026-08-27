@@ -617,10 +617,24 @@ async function captureLeadSquaredOpportunity(creds, payload) {
   const eventCode = Number(payload && payload.eventCode) || 12003
   if (!searchByAttr || !searchByValue) throw new Error('Pick a lead-matching field (e.g. Email) and enter its value.')
 
+  // LeadSquared's own documented sample payload for this endpoint pairs
+  // {"Attribute":"ProspectID", ...} with {"Attribute":"SearchBy","Value":"ProspectId"} --
+  // genuinely different casing for the SAME concept (the LeadDetails attribute name is
+  // "ProspectID", the SearchBy enum value is "ProspectId", lowercase d). Sending "ProspectID"
+  // for both -- what this used to do -- is exactly what produces LeadSquared's real
+  // "MXInvalidInputException: Invalid SearchBy value provided" (confirmed live 2026-08-27
+  // against a real existing opportunity). Email/Phone/Mobile have no such quirk -- already
+  // confirmed working live with the attribute name used verbatim as the SearchBy value.
+  const SEARCH_BY_VALUE = { ProspectID: 'ProspectId' }
   const leadDetails = [
     { Attribute: searchByAttr, Value: searchByValue },
-    { Attribute: 'SearchBy', Value: searchByAttr },
+    { Attribute: 'SearchBy', Value: SEARCH_BY_VALUE[searchByAttr] || searchByAttr },
   ]
+  // Per the same documented sample: whenever ProspectID drives the match, LeadSquared also
+  // expects __UseUserDefinedGuid__ alongside it.
+  if (searchByAttr === 'ProspectID') {
+    leadDetails.push({ Attribute: '__UseUserDefinedGuid__', Value: 'true' })
+  }
   // A real, known Lead ID (ProspectID) carried alongside whichever field is actually driving
   // the match. NOT itself used for matching here -- only the SearchBy-named attribute is --
   // but LeadSquared's own sample payload for this endpoint sends multiple simultaneous
