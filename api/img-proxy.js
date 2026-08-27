@@ -83,7 +83,12 @@ export default async function handler(req, res) {
     } catch (e) {
       const isDnsFailure = e && ((e.cause && e.cause.code === 'ENOTFOUND') || /ENOTFOUND/.test(e.message || ''))
       if (!isDnsFailure) throw e
-      result = await viaFetch(weservFallbackUrl(decoded), { 'User-Agent': upstreamHeaders['User-Agent'] })
+      try {
+        result = await viaFetch(weservFallbackUrl(decoded), { 'User-Agent': upstreamHeaders['User-Agent'] })
+      } catch (e2) {
+        const cause2 = e2 && e2.cause ? (e2.cause.code || e2.cause.message || String(e2.cause)) : null
+        throw new Error('fallback also failed: ' + e2.message + (cause2 ? ' (' + cause2 + ')' : ''))
+      }
     }
     if (result.statusCode < 200 || result.statusCode >= 300) {
       return res.status(result.statusCode).send('Upstream ' + result.statusCode)
