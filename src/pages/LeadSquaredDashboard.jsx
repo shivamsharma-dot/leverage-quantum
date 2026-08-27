@@ -977,6 +977,14 @@ const SEARCH_BY_OPTIONS = [
 ]
 const SEARCH_BY_EXAMPLE = { EmailAddress: 'jane@example.com', Phone: '+91 98765 43210', Mobile: '+91 98765 43210', ProspectID: '(a real, existing Lead ID)' }
 
+// Status alone is NOT a reliable failure signal from LeadSquared's Capture Opportunities
+// response -- confirmed live 2026-08-27: a request LeadSquared genuinely rejected
+// (MXInvalidInputException, e.g. "OverwriteFields and UpdateEmptyFields both cannot be true")
+// came back with Status:0 and a populated ExceptionMessage, which a Status===1-only check
+// reads as a false success. Matches the same rejected() logic in api/crm-leads.js's
+// create_opportunity dispatch -- keep both in sync if this ever changes.
+function lsqRejected(d) { return !!(d && (d.Status === 1 || d.ExceptionMessage || d.ExceptionType)) }
+
 // Always-present, read-only audit fields on every LeadSquared Opportunity type (confirmed
 // live -- see fetchLeadSquaredOpportunitySchema's own comment in api/crm-leads.js) -- not
 // meaningful to hand-fill on create, so excluded from the dynamic field list below.
@@ -1164,7 +1172,7 @@ async function runOppImportInBackground(rows, label, skippedCount, opts) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ searchByAttr: opts.searchByAttr, searchByValue: row.searchByValue, prospectId: row.prospectId || undefined, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, overwriteFields: opts.overwriteFields, batchLabel }),
       })
-      if (d && d.Status === 1) {
+      if (lsqRejected(d)) {
         failed++; rowOk = false
         if (failures.length < 50) failures.push({ label: row.searchByValue, message: d.ExceptionMessage || 'LeadSquared rejected the request.' })
       } else done++
@@ -1514,7 +1522,7 @@ function CreateOpportunityTab() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       })
       setResult(d)
-      if (d && d.Status !== 1) { setSearchByValue(''); setProspectId(''); setNote(''); setFieldValues({}) }
+      if (!lsqRejected(d)) { setSearchByValue(''); setProspectId(''); setNote(''); setFieldValues({}) }
     } catch (e) { setSubmitError(e.message) }
     finally { setSubmitting(false) }
   }
@@ -1605,8 +1613,8 @@ function CreateOpportunityTab() {
             <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} style={{ ...inputStyle, width: '100%', resize: 'vertical', fontFamily: FONT }} />
           </div>
 
-          {result && result.Status === 1 && <ErrorNote message={result.ExceptionMessage || 'LeadSquared reported a failure.'} />}
-          {result && result.Status !== 1 && (
+          {result && lsqRejected(result) && <ErrorNote message={result.ExceptionMessage || 'LeadSquared reported a failure.'} />}
+          {result && !lsqRejected(result) && (
             <SuccessNote>
               {result.CreatedOpportunityId
                 ? <>Opportunity created (id {short(result.CreatedOpportunityId)}).</>

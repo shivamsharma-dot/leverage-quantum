@@ -651,7 +651,15 @@ async function captureLeadSquaredOpportunity(creds, payload) {
   const replace = !!(payload && payload.overwriteFields)
   const opportunity = {
     OpportunityEventCode: eventCode,
-    ...(replace ? { OverwriteFields: true, UpdateEmptyFields: true } : {}),
+    // LeadSquared genuinely rejects OverwriteFields and UpdateEmptyFields both being true in
+    // the same request -- confirmed live 2026-08-27, MXInvalidInputException "OverwriteFields
+    // and UpdateEmptyFields both cannot be true". Sending both (the original assumption behind
+    // "replace mode") was wrong. OverwriteFields alone is the correct one for "replace the
+    // existing one": it overwrites the fields actually being sent, non-empty or not, which is
+    // what a real correction (e.g. fixing a misattributed campaign name) needs. UpdateEmptyFields
+    // alone means something different -- fill in whatever's CURRENTLY BLANK on the record from
+    // this payload -- not exposed as a separate option here since nothing has asked for it yet.
+    ...(replace ? { OverwriteFields: true } : {}),
     ...(payload && payload.note ? { OpportunityNote: String(payload.note) } : {}),
     ...(fields.length ? { Fields: fields.map(f => ({ SchemaName: f.schemaName, Value: f.value })) } : {}),
   }
@@ -2135,8 +2143,14 @@ async function handleLeadSquared(req, res, me) {
       catch (e) { threw = String((e && e.message) || e) }
       const data = result && result.data
       // Classified off LeadSquared's own response shape, not guessed -- see
-      // captureLeadSquaredOpportunity's comment for why Status:1 no longer throws.
-      const status = threw ? 'failed' : (data && data.Status === 1) ? 'failed' : (data && data.ConflictedOpportunityId) ? 'duplicate' : 'success'
+      // captureLeadSquaredOpportunity's comment for why Status:1 no longer throws. Status
+      // alone is NOT a reliable failure signal -- confirmed live 2026-08-27: a request LeadSquared
+      // genuinely rejected (MXInvalidInputException) came back with Status:0 and a populated
+      // ExceptionMessage, which the Status===1-only check below used to read as a false "success".
+      // A real ExceptionMessage/ExceptionType on the response means the request was rejected,
+      // whatever the numeric Status says.
+      const rejected = (data && data.Status === 1) || (data && (data.ExceptionMessage || data.ExceptionType))
+      const status = threw ? 'failed' : rejected ? 'failed' : (data && data.ConflictedOpportunityId) ? 'duplicate' : 'success'
       logOpportunityActivity({
         batch_label: body.batchLabel || null,
         search_by_attr: body.searchByAttr, target_value: body.searchByValue, prospect_id: body.prospectId || null,
