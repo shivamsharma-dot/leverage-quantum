@@ -1073,9 +1073,13 @@ function lsqTriggerDownload(filename, content, mime) {
 // not real data: fields with a real inline option list (Status, Stage-style
 // dropdowns) get their first real option so the exact valid spelling is obvious;
 // free-text fields are left blank rather than filled with invented business data.
-function downloadOpportunitySampleCsv({ searchLabel, fields, exampleValue }) {
-  const headers = [searchLabel, 'Note', ...fields.map(f => f.displayName)]
-  const example = [exampleValue, 'Called, interested in Fall intake', ...fields.map(f => (Array.isArray(f.inlineOptions) && f.inlineOptions.length ? f.inlineOptions[0] : ''))]
+function downloadOpportunitySampleCsv({ searchByAttr, searchLabel, fields, exampleValue }) {
+  // Lead ID (ProspectID) always leads the file -- the one truly unambiguous LeadSquared
+  // identifier -- except when it's already the active match field (searchLabel/exampleValue
+  // cover that case instead, no point in the same column twice).
+  const includeProspectId = searchByAttr !== 'ProspectID'
+  const headers = [...(includeProspectId ? ['Lead ID (ProspectID)'] : []), searchLabel, 'Note', ...fields.map(f => f.displayName)]
+  const example = [...(includeProspectId ? [''] : []), exampleValue, 'Called, interested in Fall intake', ...fields.map(f => (Array.isArray(f.inlineOptions) && f.inlineOptions.length ? f.inlineOptions[0] : ''))]
   const csv = [headers, example].map(row => row.map(lsqCsvCell).join(',')).join('\r\n')
   lsqTriggerDownload('leadsquared-create-opportunity-sample.csv', csv, 'text/csv;charset=utf-8')
 }
@@ -1150,7 +1154,7 @@ async function runOppImportInBackground(rows, label, skippedCount, opts) {
     try {
       await fetchJson(`${API}&mode=create_opportunity`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ searchByAttr: opts.searchByAttr, searchByValue: row.searchByValue, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, overwriteFields: opts.overwriteFields }),
+        body: JSON.stringify({ searchByAttr: opts.searchByAttr, searchByValue: row.searchByValue, prospectId: row.prospectId || undefined, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, overwriteFields: opts.overwriteFields }),
       })
       done++
     } catch (e) {
@@ -1219,11 +1223,16 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
   const { running, progress } = useOppImportProgress()
 
   const searchLabel = SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l || searchByAttr
+  // ProspectID gets its own always-first column whenever it ISN'T already the primary match
+  // field (in which case it'd be a redundant duplicate of the searchByValue column right
+  // below it) -- it's the one truly unambiguous LeadSquared identifier, so it's worth having
+  // as a standing reference even when matching on Email/Phone/Mobile.
   const targets = useMemo(() => [
+    ...(searchByAttr !== 'ProspectID' ? [{ key: 'prospectId', label: 'Lead ID (ProspectID)', required: false }] : []),
     { key: 'searchByValue', label: searchLabel, required: true },
     { key: 'note', label: 'Note', required: false },
     ...fields.map(f => ({ key: f.schemaName, label: f.displayName, required: false })),
-  ], [searchLabel, fields])
+  ], [searchByAttr, searchLabel, fields])
 
   const resolved = useMemo(() => {
     if (!table) return { rows: [], skipped: 0 }
@@ -1233,10 +1242,11 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
       const searchByValue = mapping.searchByValue ? (r[mapping.searchByValue] || '').trim() : ''
       if (!searchByValue) { skipped++; return }
       const note = mapping.note ? (r[mapping.note] || '').trim() : ''
+      const prospectId = mapping.prospectId ? (r[mapping.prospectId] || '').trim() : ''
       const rowFields = fields
         .filter(f => mapping[f.schemaName] && (r[mapping[f.schemaName]] || '').trim() !== '')
         .map(f => ({ schemaName: f.schemaName, value: (r[mapping[f.schemaName]] || '').trim() }))
-      rows.push({ searchByValue, note, fields: rowFields })
+      rows.push({ searchByValue, note, prospectId, fields: rowFields })
     })
     return { rows, skipped }
   }, [table, mapping, fields])
@@ -1276,7 +1286,7 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
         One row per Opportunity. The column mapped to "{searchLabel}" below is what each row is matched (or created) on.
       </p>
       <div style={{ marginBottom: 12 }}>
-        <Button size="sm" variant="ghost" onClick={() => downloadOpportunitySampleCsv({ searchLabel, fields, exampleValue: SEARCH_BY_EXAMPLE[searchByAttr] || 'value' })}>
+        <Button size="sm" variant="ghost" onClick={() => downloadOpportunitySampleCsv({ searchByAttr, searchLabel, fields, exampleValue: SEARCH_BY_EXAMPLE[searchByAttr] || 'value' })}>
           Download sample CSV
         </Button>
         <span style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>
@@ -1317,6 +1327,7 @@ function CreateOpportunityTab() {
   const [overwriteFields, setOverwriteFields] = useState(false)
 
   const [searchByValue, setSearchByValue] = useState('')
+  const [prospectId, setProspectId] = useState('')
   const [note, setNote] = useState('')
   const [fieldValues, setFieldValues] = useState({})
 
@@ -1347,6 +1358,7 @@ function CreateOpportunityTab() {
     try {
       const payload = {
         searchByAttr, searchByValue: searchByValue.trim(), eventCode: Number(eventCode) || 12003,
+        prospectId: (searchByAttr !== 'ProspectID' && prospectId.trim()) || undefined,
         note: note.trim() || undefined, overwriteFields,
         fields: Object.entries(fieldValues).filter(([, v]) => String(v || '').trim() !== '').map(([schemaName, value]) => ({ schemaName, value })),
       }
@@ -1354,7 +1366,7 @@ function CreateOpportunityTab() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
       })
       setResult(d)
-      if (d && d.Status !== 1) { setSearchByValue(''); setNote(''); setFieldValues({}) }
+      if (d && d.Status !== 1) { setSearchByValue(''); setProspectId(''); setNote(''); setFieldValues({}) }
     } catch (e) { setSubmitError(e.message) }
     finally { setSubmitting(false) }
   }
@@ -1376,8 +1388,20 @@ function CreateOpportunityTab() {
       <div style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>1. Match or create the lead</div>
         <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
-          LeadSquared matches on this field. If nothing matches, a brand-new lead is created automatically.
+          LeadSquared matches on the field below. If nothing matches, a brand-new lead is created automatically.
         </p>
+
+        {searchByAttr !== 'ProspectID' && (
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
+              Lead ID (ProspectID) <span style={{ fontWeight: 500 }}>-- optional, doesn't change which field is matched on below</span>
+            </label>
+            {mode === 'single'
+              ? <input value={prospectId} onChange={e => setProspectId(e.target.value)} placeholder="e.g. 4d03f397-49e7-4e4e-8168-5f51d591c592" style={{ ...inputStyle, width: '100%', maxWidth: 420 }} />
+              : <p style={{ fontSize: 11, color: C.muted, margin: 0 }}>Mapped per row from your file in step 4 below, if you have it.</p>}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Dropdown value={SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l} onChange={l => setSearchByAttr(SEARCH_BY_OPTIONS.find(o => o.l === l)?.v || searchByAttr)}
             options={SEARCH_BY_OPTIONS.map(o => o.l)} minWidth={200} />

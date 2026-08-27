@@ -613,6 +613,7 @@ async function fetchLeadSquaredOpportunitySchema(creds, { code, refresh }) {
 async function captureLeadSquaredOpportunity(creds, payload) {
   const searchByAttr = String((payload && payload.searchByAttr) || '').trim()
   const searchByValue = String((payload && payload.searchByValue) || '').trim()
+  const prospectId = String((payload && payload.prospectId) || '').trim()
   const eventCode = Number(payload && payload.eventCode) || 12003
   if (!searchByAttr || !searchByValue) throw new Error('Pick a lead-matching field (e.g. Email) and enter its value.')
 
@@ -620,6 +621,16 @@ async function captureLeadSquaredOpportunity(creds, payload) {
     { Attribute: searchByAttr, Value: searchByValue },
     { Attribute: 'SearchBy', Value: searchByAttr },
   ]
+  // A real, known Lead ID (ProspectID) carried alongside whichever field is actually driving
+  // the match. NOT itself used for matching here -- only the SearchBy-named attribute is --
+  // but LeadSquared's own sample payload for this endpoint sends multiple simultaneous
+  // LeadDetails attributes together (EmailAddress + ProspectID, with SearchBy naming just
+  // one), so a second unique attribute alongside the primary one is a documented, supported
+  // shape, not a guess. Skipped when ProspectID IS the primary match field -- already covered
+  // by the pair above, adding it twice would be redundant.
+  if (prospectId && searchByAttr !== 'ProspectID') {
+    leadDetails.push({ Attribute: 'ProspectID', Value: prospectId })
+  }
   const fields = Array.isArray(payload && payload.fields)
     ? payload.fields.filter(f => f && f.schemaName && String(f.value == null ? '' : f.value).trim() !== '')
     : []
