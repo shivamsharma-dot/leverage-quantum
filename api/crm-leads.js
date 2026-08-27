@@ -2167,6 +2167,21 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'lead_schema') return res.status(200).json(await fetchLeadSquaredLeadSchema(creds, { refresh: refresh === '1' }))
     if (mode === 'opportunity_detail') return res.status(200).json(await fetchLeadSquaredOpportunityDetail(creds, { opportunityId: req.query.opportunityId }))
     if (mode === 'opportunity_activities') return res.status(200).json(await fetchLeadSquaredOpportunityActivities(creds, { opportunityId: req.query.opportunityId }))
+    // Read-only diagnostic (no LeadSquared write) -- answers "is our API key's own account
+    // actually restricted" directly from LeadSquared itself, without needing portal login.
+    // Temporary: added 2026-08-27 to investigate the 401 "insufficient permissions" block
+    // hit by the real Create/Update Opportunity tests earlier the same day.
+    if (mode === 'leadsquared_permission_check') {
+      // leadsquaredGet already parses the body and throws on a non-2xx -- settle both calls
+      // independently so one failing (e.g. GetPermissions itself needing a permission this
+      // key lacks) doesn't hide the other's real answer.
+      const [who, perms] = await Promise.allSettled([
+        leadsquaredGet('/v2/Authentication.svc/UserByAccessKey.Get', creds),
+        leadsquaredGet('/v2/PermissionTemplate.svc/User/GetPermissions', creds),
+      ])
+      const unwrap = (settled) => settled.status === 'fulfilled' ? settled.value : { error: String((settled.reason && settled.reason.message) || settled.reason) }
+      return res.status(200).json({ whoAmI: unwrap(who), permissions: unwrap(perms) })
+    }
     if (mode === 'create_opportunity') {
       const body = req.body || {}
       let result = null, threw = null
