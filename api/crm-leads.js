@@ -2182,7 +2182,10 @@ async function handleLeadSquared(req, res, me) {
       // whatever the numeric Status says.
       const rejected = (data && data.Status === 1) || (data && (data.ExceptionMessage || data.ExceptionType))
       const status = threw ? 'failed' : rejected ? 'failed' : (data && data.ConflictedOpportunityId) ? 'duplicate' : 'success'
-      logOpportunityActivity({
+      // Awaited, not fire-and-forget -- Vercel can freeze/terminate the function the instant
+      // the response is sent, so an un-awaited write here can silently never land (confirmed
+      // live 2026-08-27: a real, successful direct-Update call produced zero History rows).
+      await logOpportunityActivity({
         batch_label: body.batchLabel || null,
         search_by_attr: body.searchByAttr, target_value: body.searchByValue, prospect_id: body.prospectId || null,
         event_code: body.eventCode != null ? String(body.eventCode) : null, overwrite_fields: !!body.overwriteFields,
@@ -2205,7 +2208,9 @@ async function handleLeadSquared(req, res, me) {
       // numeric 0/1/2 -- these are different endpoints, do not share a classifier.
       const ok = data && data.Status === 'Success'
       const status = threw ? 'failed' : ok ? 'success' : 'failed'
-      logOpportunityActivity({
+      // Awaited -- see the identical note on the create_opportunity branch above. This is
+      // the exact call that was silently dropping every row before this fix.
+      await logOpportunityActivity({
         batch_label: body.batchLabel || null,
         search_by_attr: 'OpportunityID', target_value: body.opportunityId, prospect_id: null,
         event_code: body.eventCode != null ? String(body.eventCode) : null, overwrite_fields: false,
