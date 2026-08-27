@@ -975,6 +975,7 @@ const SEARCH_BY_OPTIONS = [
   { v: 'Mobile', l: 'Mobile' },
   { v: 'ProspectID', l: 'Lead ID (ProspectID -- matches an existing lead only)' },
 ]
+const SEARCH_BY_EXAMPLE = { EmailAddress: 'jane@example.com', Phone: '+91 98765 43210', Mobile: '+91 98765 43210', ProspectID: '(a real, existing Lead ID)' }
 
 // Always-present, read-only audit fields on every LeadSquared Opportunity type (confirmed
 // live -- see fetchLeadSquaredOpportunitySchema's own comment in api/crm-leads.js) -- not
@@ -1048,6 +1049,35 @@ function lsqParseRawTable(text) {
     rows.push(row)
   }
   return { binary: false, headers, rows }
+}
+
+function lsqCsvCell(v) {
+  const s = v == null ? '' : String(v)
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+}
+function lsqTriggerDownload(filename, content, mime) {
+  const blob = new Blob([content], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+// Builds a ready-to-fill sample CSV off whatever is actually loaded right now (the
+// match field's real label + every live schema field for the current event code) --
+// not a generic static template, since the field set genuinely differs by
+// OpportunityEventCode. Column names double as a hint for the Mapping step (mapping
+// is by manual pick, not a forced header match, so renaming/reordering/dropping
+// columns in the downloaded file is fine). The one example row demonstrates format,
+// not real data: fields with a real inline option list (Status, Stage-style
+// dropdowns) get their first real option so the exact valid spelling is obvious;
+// free-text fields are left blank rather than filled with invented business data.
+function downloadOpportunitySampleCsv({ searchLabel, fields, exampleValue }) {
+  const headers = [searchLabel, 'Note', ...fields.map(f => f.displayName)]
+  const example = [exampleValue, 'Called, interested in Fall intake', ...fields.map(f => (Array.isArray(f.inlineOptions) && f.inlineOptions.length ? f.inlineOptions[0] : ''))]
+  const csv = [headers, example].map(row => row.map(lsqCsvCell).join(',')).join('\r\n')
+  lsqTriggerDownload('leadsquared-create-opportunity-sample.csv', csv, 'text/csv;charset=utf-8')
 }
 
 // Same "Upload file / Paste rows" segmented control as Team Mapping's bulk-import
@@ -1245,6 +1275,14 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
       <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
         One row per Opportunity. The column mapped to "{searchLabel}" below is what each row is matched (or created) on.
       </p>
+      <div style={{ marginBottom: 12 }}>
+        <Button size="sm" variant="ghost" onClick={() => downloadOpportunitySampleCsv({ searchLabel, fields, exampleValue: SEARCH_BY_EXAMPLE[searchByAttr] || 'value' })}>
+          Download sample CSV
+        </Button>
+        <span style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>
+          {fields.length} field header{fields.length === 1 ? '' : 's'} for event code {eventCode} right now -- columns can be renamed, reordered, or dropped, mapping below is manual either way.
+        </span>
+      </div>
       {!table && <LsqFileOrPasteInput onParsed={(t, lbl) => { setLabel(lbl); setTable(t); setMapping({}) }} />}
       {table && table.binary && <ErrorNote message="That file doesn't look like a text CSV/TSV -- an Excel .xlsx export needs to be saved as CSV first." />}
       {table && !table.binary && table.rows.length === 0 && <ErrorNote message="No data rows found -- make sure the first row is real column headers." />}
