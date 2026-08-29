@@ -122,6 +122,14 @@ function magicLinkEmailHtml(link, email) {
 }
 
 export default async function handler(req, res) {
+  // Vercel's own default for a serverless function response with no explicit
+  // Cache-Control is `public, max-age=0, must-revalidate` -- fine for genuinely
+  // public data, wrong here: every action on this endpoint returns or acts on one
+  // specific person's identity (email/name/role, or their session cookie). `public`
+  // permits a shared/intermediary cache to store and replay one user's identity to
+  // a different requester; `no-store` is the correct instruction regardless of
+  // which action ends up handling the request.
+  res.setHeader('Cache-Control', 'private, no-store')
   const action = req.query.action
 
   if (action === 'me') {

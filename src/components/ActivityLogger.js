@@ -17,21 +17,36 @@ const SBH = {
 }
 
 /* ── core write ─────────────────────────────────────────────── */
+// Confirmed live 2026-08-29: this POST intermittently comes back 503 under real
+// page-load conditions (reproducible via the app itself), while an identical,
+// isolated request (same key, same payload, same headers, from outside the
+// browser) succeeds every time -- points at a transient connection-pool/edge
+// hiccup on Supabase's side under the real page's concurrent-request burst, not
+// a config problem here. There is no error-monitoring tool wired into this app
+// (confirmed: no Sentry/PostHog, nothing), and the old bare `catch {}` swallowed
+// every failure with zero trace anywhere -- the activity log for a tool that
+// writes to production LeadSquared had been silently going dark with nobody
+// notified. One retry gives a transient blip a real second chance (matches the
+// same pattern useAuth.jsx's refreshUser() already uses for its own Supabase-
+// adjacent call), and a real console.error on total failure means this is now at
+// least visible in DevTools/any future monitoring instead of invisible always.
 export async function logActivity(email, action, page, detail = '') {
   if (!email) return
+  const payload = JSON.stringify({
+    email,
+    action,
+    page,
+    detail: String(detail).slice(0, 240),
+    created_at: new Date().toISOString(),
+  })
+  const attempt = () => fetch(`${SUPABASE_URL}/rest/v1/activity_log`, { method: 'POST', headers: SBH, body: payload })
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/activity_log`, {
-      method: 'POST',
-      headers: SBH,
-      body: JSON.stringify({
-        email,
-        action,
-        page,
-        detail: String(detail).slice(0, 240),
-        created_at: new Date().toISOString(),
-      }),
-    })
-  } catch {}
+    let r = await attempt()
+    if (!r.ok) r = await attempt()
+    if (!r.ok) console.error(`[activity_log] write failed after retry: ${r.status} ${r.statusText}`, { action, page })
+  } catch (e) {
+    console.error('[activity_log] write threw (network-level failure)', e)
+  }
 }
 
 /* ── read ───────────────────────────────────────────────────── */
