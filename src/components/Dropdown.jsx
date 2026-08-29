@@ -10,7 +10,7 @@ const MENU_MAX = 280   // tallest the option list is ever allowed to be
 const GAP = 6          // breathing room between trigger and menu
 const EDGE = 8         // never let the menu touch the viewport edge
 
-function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabled }) {
+function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabled, fullWidth }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const btnRef = useRef(null)
@@ -49,9 +49,9 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
   const current = items.find(o => o.value === value)
 
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} ref={ref}>
+    <div style={{ display: fullWidth ? 'flex' : 'inline-flex', width: fullWidth ? '100%' : undefined, alignItems: 'center', gap: 6 }} ref={ref}>
       {label && <span style={{ fontSize: 12.5, color: 'var(--text3)', whiteSpace: 'nowrap' }}>{label}</span>}
-      <div style={{ position: 'relative', display: 'inline-block' }}>
+      <div style={{ position: 'relative', display: fullWidth ? 'block' : 'inline-block', width: fullWidth ? '100%' : undefined }}>
         <button
           type="button"
           disabled={disabled}
@@ -68,10 +68,11 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
             cursor: disabled ? 'default' : 'pointer',
             opacity: disabled ? 0.55 : 1,
             fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit',
+            width: fullWidth ? '100%' : undefined, boxSizing: 'border-box',
             minWidth, whiteSpace: 'nowrap', transition: 'all .15s'
           }}
         >
-          <span style={{ flex: 1, textAlign: 'left' }}>{current ? current.label : value}</span>
+          <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis' }}>{current ? current.label : value}</span>
           <svg width="10" height="6" viewBox="0 0 10 6" fill="none"
             style={{ flexShrink: 0, transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
             <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -80,7 +81,7 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
 
         {open && (
           <div style={{
-            position: 'absolute', left: 0, zIndex: 500,
+            position: 'absolute', left: 0, right: fullWidth ? 0 : undefined, zIndex: 500,
             top: drop.up ? 'auto' : 'calc(100% + ' + GAP + 'px)',
             bottom: drop.up ? 'calc(100% + ' + GAP + 'px)' : 'auto',
             background: 'var(--card)', border: '0.5px solid var(--card-border)',

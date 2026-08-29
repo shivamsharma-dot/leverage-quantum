@@ -1706,7 +1706,7 @@ function CreateOpportunityTab() {
   const set1 = (schemaName, v) => setFieldValues(prev => ({ ...prev, [schemaName]: v }))
 
   return (
-    <div style={{ maxWidth: mode === 'history' ? 980 : mode === 'bulk' ? 760 : 640 }}>
+    <div style={{ maxWidth: mode === 'history' ? 1040 : mode === 'bulk' ? 880 : 900 }}>
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, padding: 3, borderRadius: 10, background: 'var(--bg3)', width: 'fit-content' }}>
         {[['single', 'Single'], ['bulk', 'Bulk import'], ['history', 'History']].map(([m, lbl]) => (
           <button key={m} type="button" onClick={() => setMode(m)} style={{
@@ -1779,7 +1779,7 @@ function CreateOpportunityTab() {
                     </label>
                     {Array.isArray(f.inlineOptions) && f.inlineOptions.length > 0 ? (
                       <Dropdown value={fieldValues[f.schemaName] || ''} onChange={v => set1(f.schemaName, v)}
-                        options={['', ...f.inlineOptions]} minWidth={140} />
+                        options={['', ...f.inlineOptions]} fullWidth />
                     ) : (
                       <input value={fieldValues[f.schemaName] || ''} onChange={e => set1(f.schemaName, e.target.value)} style={{ ...oppCtl, width: '100%' }} />
                     )}
