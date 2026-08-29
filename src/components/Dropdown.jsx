@@ -10,7 +10,7 @@ const MENU_MAX = 280   // tallest the option list is ever allowed to be
 const GAP = 6          // breathing room between trigger and menu
 const EDGE = 8         // never let the menu touch the viewport edge
 
-function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabled, fullWidth, id, 'aria-required': ariaRequired }) {
+function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabled, fullWidth, id, 'aria-required': ariaRequired, borderColor }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const btnRef = useRef(null)
@@ -47,6 +47,12 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
 
   const items = options.map(o => (o && typeof o === 'object' ? o : { value: o, label: o }))
   const current = items.find(o => o.value === value)
+  // An empty-string value is this codebase's own convention for "nothing picked" (All/
+  // None/unset -- every consumer of this component already uses '' that way). Rendered
+  // identically to real data before this: same weight, same near-black colour -- so a
+  // form with a dozen untouched dropdowns read as already filled in. Muted + regular
+  // weight matches how every text input's own placeholder already looks.
+  const isPlaceholder = current ? current.value === '' : !value
 
   return (
     <div style={{ display: fullWidth ? 'flex' : 'inline-flex', width: fullWidth ? '100%' : undefined, alignItems: 'center', gap: 6 }} ref={ref}>
@@ -68,12 +74,12 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
             // input (32px) in the same form row, misaligning every row it sits in and
             // shrinking its own click target below the 24px minimum touch target.
             minHeight: 32, padding: '7px 12px', borderRadius: 11,
-            border: '0.5px solid ' + (open ? NAVY : 'var(--card-border)'),
+            border: '0.5px solid ' + (open ? NAVY : (borderColor || 'var(--card-border)')),
             background: open ? NAVY_TINT : 'var(--card)',
-            color: open ? NAVY : 'var(--text)',
+            color: open ? NAVY : (isPlaceholder ? 'var(--text3)' : 'var(--text)'),
             cursor: disabled ? 'default' : 'pointer',
             opacity: disabled ? 0.55 : 1,
-            fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit',
+            fontSize: 13.5, fontWeight: (!open && isPlaceholder) ? 400 : 700, fontFamily: 'inherit',
             width: fullWidth ? '100%' : undefined, boxSizing: 'border-box',
             minWidth, whiteSpace: 'nowrap', transition: 'all .15s'
           }}

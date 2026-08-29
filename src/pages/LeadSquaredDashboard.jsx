@@ -64,7 +64,12 @@ async function fetchJson(url, opts) {
 // against this page's white control fill measured ~1.14:1 (WCAG 1.4.11 non-text contrast
 // needs >=3:1), so you genuinely could not see where an input box started or ended. Scoped
 // to this file rather than changing the shared token everywhere it's used.
-const inputStyle = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '1px solid rgba(15,23,42,0.5)', borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
+// Shared so the Dropdown component (a different border by default, 'var(--card-border)')
+// can be told to match -- otherwise a text input and a Dropdown sitting in the same row
+// end up with two visibly different border weights, exactly the mismatch this constant
+// exists to prevent.
+const CTL_BORDER = 'rgba(15,23,42,0.5)'
+const inputStyle = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '1px solid ' + CTL_BORDER, borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
 
 const pillStyle = (active) => ({
   padding: '6px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
@@ -558,9 +563,9 @@ function LeadsTab() {
         <DateRangeRow since={since} until={until} onSince={setSince} onUntil={setUntil} />
         <SearchBox value={search} onChange={setSearch} placeholder="Search name, email, phone…" />
         <AdvancedSearchButton fields={LEADS_COLUMNS} advSearch={advSearch} onApply={setAdvSearch} onClear={() => setAdvSearch(null)} />
-        <FilterDropdown label="Status" value={status} options={statusOptions.map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} />
-        <FilterDropdown label="Stage" value={stage} options={stageOptions.map(o => ({ v: o, l: o }))} open={openDD === 'stage'} onToggle={() => setOpenDD(openDD === 'stage' ? null : 'stage')} onSelect={v => { setStage(v); setOpenDD(null) }} />
-        <FilterDropdown label="Owner" value={owner} options={ownerOptions.map(o => ({ v: o, l: o }))} open={openDD === 'owner'} onToggle={() => setOpenDD(openDD === 'owner' ? null : 'owner')} onSelect={v => { setOwner(v); setOpenDD(null) }} />
+        <FilterDropdown label="Status" value={status} options={statusOptions.map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} borderColor={CTL_BORDER} />
+        <FilterDropdown label="Stage" value={stage} options={stageOptions.map(o => ({ v: o, l: o }))} open={openDD === 'stage'} onToggle={() => setOpenDD(openDD === 'stage' ? null : 'stage')} onSelect={v => { setStage(v); setOpenDD(null) }} borderColor={CTL_BORDER} />
+        <FilterDropdown label="Owner" value={owner} options={ownerOptions.map(o => ({ v: o, l: o }))} open={openDD === 'owner'} onToggle={() => setOpenDD(openDD === 'owner' ? null : 'owner')} onSelect={v => { setOwner(v); setOpenDD(null) }} borderColor={CTL_BORDER} />
         <Button size="sm" variant="secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</Button>
         <ColumnPickerButton columns={LEADS_COLUMNS} hidden={hiddenCols} onApply={setHiddenCols} />
       </Toolbar>
@@ -697,12 +702,12 @@ function ActivitiesTab() {
       <Toolbar>
         {typeOptions.length === 0
           ? <span style={{ fontSize: 12, color: C.muted, fontStyle: 'italic' }}>Loading activity types…</span>
-          : <FilterDropdown label="Activity Type" value={String(eventCode)} options={typeOptions} open={openDD === 'type'} onToggle={() => setOpenDD(openDD === 'type' ? null : 'type')} onSelect={v => { setEventCode(v); setOpenDD(null) }} />}
+          : <FilterDropdown label="Activity Type" value={String(eventCode)} options={typeOptions} open={openDD === 'type'} onToggle={() => setOpenDD(openDD === 'type' ? null : 'type')} onSelect={v => { setEventCode(v); setOpenDD(null) }} borderColor={CTL_BORDER} />}
         <DateRangeRow since={since} until={until} onSince={setSince} onUntil={setUntil} />
         <SearchBox value={search} onChange={setSearch} placeholder="Search contact, details, actor…" />
         <AdvancedSearchButton fields={allColumns} advSearch={advSearch} onApply={setAdvSearch} onClear={() => setAdvSearch(null)} />
-        <FilterDropdown label="Status" value={status} options={statusOptions.map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} />
-        <FilterDropdown label="Actor" value={actor} options={actorOptions.map(o => ({ v: o, l: o }))} open={openDD === 'actor'} onToggle={() => setOpenDD(openDD === 'actor' ? null : 'actor')} onSelect={v => { setActor(v); setOpenDD(null) }} />
+        <FilterDropdown label="Status" value={status} options={statusOptions.map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} borderColor={CTL_BORDER} />
+        <FilterDropdown label="Actor" value={actor} options={actorOptions.map(o => ({ v: o, l: o }))} open={openDD === 'actor'} onToggle={() => setOpenDD(openDD === 'actor' ? null : 'actor')} onSelect={v => { setActor(v); setOpenDD(null) }} borderColor={CTL_BORDER} />
         <Button size="sm" variant="secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</Button>
         <ColumnPickerButton columns={allColumns} hidden={hiddenCols} onApply={setHiddenCols} />
       </Toolbar>
@@ -944,9 +949,9 @@ function OpportunitiesTab() {
         <DateRangeRow since={since} until={until} onSince={setSince} onUntil={setUntil} />
         <SearchBox value={search} onChange={setSearch} placeholder="Search name, source…" />
         <AdvancedSearchButton fields={allColumns} advSearch={advSearch} onApply={setAdvSearch} onClear={() => setAdvSearch(null)} />
-        <FilterDropdown label="Status" value={status} options={['All', 'Open', 'Won', 'Lost'].map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} />
-        <FilterDropdown label="Stage" value={stage} options={stageOptions.map(o => ({ v: o, l: o }))} open={openDD === 'stage'} onToggle={() => setOpenDD(openDD === 'stage' ? null : 'stage')} onSelect={v => { setStage(v); setOpenDD(null) }} />
-        <FilterDropdown label="Owner" value={owner} options={ownerOptions.map(o => ({ v: o, l: o }))} open={openDD === 'owner'} onToggle={() => setOpenDD(openDD === 'owner' ? null : 'owner')} onSelect={v => { setOwner(v); setOpenDD(null) }} />
+        <FilterDropdown label="Status" value={status} options={['All', 'Open', 'Won', 'Lost'].map(o => ({ v: o, l: o }))} open={openDD === 'status'} onToggle={() => setOpenDD(openDD === 'status' ? null : 'status')} onSelect={v => { setStatus(v); setOpenDD(null) }} borderColor={CTL_BORDER} />
+        <FilterDropdown label="Stage" value={stage} options={stageOptions.map(o => ({ v: o, l: o }))} open={openDD === 'stage'} onToggle={() => setOpenDD(openDD === 'stage' ? null : 'stage')} onSelect={v => { setStage(v); setOpenDD(null) }} borderColor={CTL_BORDER} />
+        <FilterDropdown label="Owner" value={owner} options={ownerOptions.map(o => ({ v: o, l: o }))} open={openDD === 'owner'} onToggle={() => setOpenDD(openDD === 'owner' ? null : 'owner')} onSelect={v => { setOwner(v); setOpenDD(null) }} borderColor={CTL_BORDER} />
         <Button size="sm" variant="secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</Button>
         <ColumnPickerButton columns={allColumns} hidden={hiddenCols} onApply={setHiddenCols} />
       </Toolbar>
@@ -1206,7 +1211,7 @@ function LsqFileOrPasteInput({ onParsed }) {
 // which is why every text input on this tab looked out of place next to its own
 // Dropdowns and Buttons. Scoped to Create Opportunity only; the read-only tabs'
 // date/search inputs keep the original `inputStyle`.
-const oppCtl = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '1px solid rgba(15,23,42,0.5)', borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
+const oppCtl = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '1px solid ' + CTL_BORDER, borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
 
 // Background bulk-create store -- a plain module-level object (same pattern as Team
 // Mapping's createUsersStore) so the run survives switching tabs/pages within this
@@ -1305,7 +1310,7 @@ function OpportunityMappingStep({ table, mapping, setMapping, targets }) {
                 </td>
                 <td style={{ padding: '9px 12px' }}>
                   <Dropdown options={['— Not mapped —', ...table.headers]} value={mapped || '— Not mapped —'}
-                    onChange={v => setMapping(m => ({ ...m, [f.key]: v === '— Not mapped —' ? '' : v }))} minWidth={200} />
+                    onChange={v => setMapping(m => ({ ...m, [f.key]: v === '— Not mapped —' ? '' : v }))} minWidth={200} borderColor={CTL_BORDER} />
                 </td>
                 <td style={{ padding: '9px 12px', color: C.muted, fontSize: 11.5 }}>{samples.length ? samples.join('  ·  ') : '—'}</td>
               </tr>
@@ -1728,8 +1733,13 @@ function CreateOpportunityTab() {
 
   const set1 = (schemaName, v) => setFieldValues(prev => ({ ...prev, [schemaName]: v }))
 
+  // Deliberately left-aligned, not centred -- centring this alone (while the page header
+  // above it stays left-aligned) put the H1/tabs/breadcrumb 79px to the left of the form
+  // body they belong to, which read as worse than the dead space it was meant to fix.
+  // Left-aligned keeps this sharing the same edge as the header, and a wider maxWidth
+  // eats most of the dead space anyway.
   return (
-    <div style={{ maxWidth: mode === 'history' ? 1040 : mode === 'bulk' ? 880 : 900, margin: '0 auto' }}>
+    <div style={{ maxWidth: mode === 'history' ? 1040 : mode === 'bulk' ? 880 : 1040 }}>
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, padding: 3, borderRadius: 10, background: 'var(--bg3)', width: 'fit-content' }}>
         {[['single', 'Single'], ['bulk', 'Bulk import'], ['history', 'History']].map(([m, lbl]) => (
           <button key={m} type="button" onClick={() => setMode(m)} style={{
@@ -1763,8 +1773,8 @@ function CreateOpportunityTab() {
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <Dropdown value={SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l} onChange={l => setSearchByAttr(SEARCH_BY_OPTIONS.find(o => o.l === l)?.v || searchByAttr)}
-            options={SEARCH_BY_OPTIONS.map(o => o.l)} minWidth={200} />
-          {mode === 'single' && <input value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder={isDirect ? 'e.g. 7c8901ce-ddc2-423b-b7d8-c6eca200c360' : 'e.g. jane@example.com'} aria-label={isDirect ? 'Opportunity ID to update' : 'Lead match value'} aria-required="true" className={styles.ctl} style={{ ...oppCtl, flex: 1, minWidth: 220 }} />}
+            options={SEARCH_BY_OPTIONS.map(o => o.l)} minWidth={200} borderColor={CTL_BORDER} />
+          {mode === 'single' && <input type={searchByAttr === 'EmailAddress' ? 'email' : searchByAttr === 'Phone' || searchByAttr === 'Mobile' ? 'tel' : 'text'} value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder={isDirect ? 'e.g. 7c8901ce-ddc2-423b-b7d8-c6eca200c360' : 'e.g. jane@example.com'} aria-label={isDirect ? 'Opportunity ID to update' : 'Lead match value'} aria-required="true" className={styles.ctl} style={{ ...oppCtl, flex: 1, minWidth: 220 }} />}
         </div>
         {mode === 'bulk' && <p style={{ fontSize: 11, color: C.muted, margin: '8px 0 0' }}>Each row's {isDirect ? 'Opportunity ID' : 'match value'} comes from your file, mapped in step 4 below.</p>}
       </div>
@@ -1795,7 +1805,7 @@ function CreateOpportunityTab() {
             <div style={{ marginBottom: 18 }}>
               <h3 style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4, marginTop: 0 }}>3. Opportunity fields</h3>
               <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
-                Everything below can be left blank except the fields marked <span style={{ color: '#1F3C84', fontWeight: 900 }}>*</span> — LeadSquared is more likely to reject or misfile the request without those.
+                Everything below can be left blank except the fields marked <span style={{ color: '#1F3C84', fontWeight: 900, lineHeight: 1 }}>*</span> — LeadSquared is more likely to reject or misfile the request without those.
               </p>
               {fields.length > 8 && (
                 <div style={{ marginBottom: 10 }}>
@@ -1806,11 +1816,11 @@ function CreateOpportunityTab() {
                 {visibleFields.map(f => (
                   <div key={f.schemaName}>
                     <label htmlFor={'opp-f-' + f.schemaName} style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
-                      {f.displayName}{f.isMandatory ? <span style={{ color: '#1F3C84', fontWeight: 900, fontSize: 13 }}> *</span> : null}
+                      {f.displayName}{f.isMandatory ? <span style={{ color: '#1F3C84', fontWeight: 900, fontSize: 13, lineHeight: 1, display: 'inline-block', verticalAlign: 'baseline' }}> *</span> : null}
                     </label>
                     {Array.isArray(f.inlineOptions) && f.inlineOptions.length > 0 ? (
                       <Dropdown id={'opp-f-' + f.schemaName} value={fieldValues[f.schemaName] || ''} onChange={v => set1(f.schemaName, v)}
-                        options={[{ value: '', label: '— None —' }, ...f.inlineOptions]} aria-required={f.isMandatory} fullWidth />
+                        options={[{ value: '', label: '— None —' }, ...f.inlineOptions]} aria-required={f.isMandatory} fullWidth borderColor={CTL_BORDER} />
                     ) : (
                       <input id={'opp-f-' + f.schemaName} value={fieldValues[f.schemaName] || ''} onChange={e => set1(f.schemaName, e.target.value)} aria-required={f.isMandatory} className={styles.ctl} style={{ ...oppCtl, width: '100%' }} />
                     )}
