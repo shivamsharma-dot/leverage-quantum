@@ -182,7 +182,7 @@ async function fetchLeadSquaredLeads(creds, { since, until }) {
   // one field/operator/value triple) -- filtered client-side on the returned rows instead.
   const filtered = until ? rows.filter(r => !r.CreatedOn || r.CreatedOn <= until + ' 23:59:59') : rows
   const ownerMap = await fetchLeadSquaredUsersMap(creds)
-  filtered.forEach(r => { if (r.Owner) r.OwnerName = ownerMap[r.Owner] || r.Owner })
+  filtered.forEach(r => { if (r.Owner) r.OwnerName = resolveOwnerName(ownerMap, r.Owner) })
   return { rows: filtered, count: filtered.length, truncated, since, until }
 }
 
@@ -200,6 +200,22 @@ async function fetchLeadSquaredUsersMap(creds) {
   rows.forEach(u => { byId[u.ID] = [u.FirstName, u.LastName].filter(Boolean).join(' ').trim() || u.EmailAddress || u.ID })
   _lsqUsersCache = byId
   return byId
+}
+
+// 39e9f9ab-f347-11ea-9e36-0a2bd9889d72 -- LeadSquared's own reserved, platform-internal
+// placeholder owner (confirmed live: it's what a brand-new, not-yet-distributed lead's
+// OwnerId resolves to; LeadSquared's UI itself renders it as "System Test"). It genuinely
+// has no row in Users.Get/User/AdvancedSearch/User/Retrieve-ByUserId under ANY lookup --
+// verified via all three -- so ownerMap[owner] always misses it and every Owner/OwnerName
+// column on this page was showing the raw 36-char GUID instead of a real name. Resolved
+// here to the same label LeadSquared itself uses, and any OTHER genuinely-unresolvable
+// owner id (should be rare -- a real edge case, not the common path) is truncated rather
+// than dumped as a full raw GUID.
+const LEADSQUARED_UNASSIGNED_OWNER_ID = '39e9f9ab-f347-11ea-9e36-0a2bd9889d72'
+function resolveOwnerName(ownerMap, ownerId) {
+  if (ownerMap[ownerId]) return ownerMap[ownerId]
+  if (ownerId === LEADSQUARED_UNASSIGNED_OWNER_ID) return 'System Test (unassigned)'
+  return typeof ownerId === 'string' && ownerId.length > 12 ? ownerId.slice(0, 8) + '…' : ownerId
 }
 
 // Opportunity/Retrieve/BySearchParameter -- OpportunityEventCode is account-specific;
@@ -288,7 +304,7 @@ async function fetchLeadSquaredOpportunities(creds, { since, until, eventCode, s
       .forEach(f => { fieldLabels[f.SchemaName] = f.DisplayName || f.SchemaName; fieldOrder.push(f.DisplayName || f.SchemaName) })
   }
   rows.forEach(r => {
-    if (r.Owner) r.OwnerName = ownerMap[r.Owner] || r.Owner
+    if (r.Owner) r.OwnerName = resolveOwnerName(ownerMap, r.Owner)
     r.ContactName = contactNames[r.RelatedProspectId] || null
     const fields = {}
     Object.keys(r).forEach(k => {
