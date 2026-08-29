@@ -8,6 +8,7 @@ import FilterDropdown from '../components/FilterDropdown'
 import Dropdown from '../components/Dropdown'
 import Button from '../components/Button'
 import DateRangePicker from '../components/DateRangePicker'
+import styles from './LeadSquaredDashboard.module.css'
 
 // Real LeadSquared deep-link patterns, already used elsewhere in this app
 // (HumanQLDetailDashboard.jsx) -- reused here so a contact/opportunity opens
@@ -59,7 +60,11 @@ async function fetchJson(url, opts) {
 // Matches the shared Button/Dropdown standard (7px/12px padding, radius 11, 13.5px/700)
 // used app-wide -- was fontSize 12/padding 6px 10px/radius 8, visibly thinner and smaller
 // than every Button/Dropdown/pill on this same page.
-const inputStyle = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '0.5px solid ' + C.border, borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
+// Border is a deliberately stronger rgba, not the shared C.border token -- C.border
+// against this page's white control fill measured ~1.14:1 (WCAG 1.4.11 non-text contrast
+// needs >=3:1), so you genuinely could not see where an input box started or ended. Scoped
+// to this file rather than changing the shared token everywhere it's used.
+const inputStyle = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '1px solid rgba(15,23,42,0.45)', borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
 
 const pillStyle = (active) => ({
   padding: '6px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
@@ -106,7 +111,7 @@ function SearchBox({ value, onChange, placeholder }) {
   return (
     <div style={{ position: 'relative', flex: '0 1 240px', minWidth: 160 }}>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ ...inputStyle, paddingLeft: 30, width: '100%' }} />
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={styles.ctl} style={{ ...inputStyle, paddingLeft: 30, width: '100%' }} />
     </div>
   )
 }
@@ -442,7 +447,7 @@ function AdvancedSearchButton({ fields, advSearch, onApply, onClear }) {
                         <AdvSearchDropdown label="Op" value={c.op} options={ADV_OPERATORS} onSelect={v => updateRow(i, { op: v })} />
                       </div>
                       {c.op !== 'isempty' && c.op !== 'isnotempty' && (
-                        <input value={c.value} onChange={e => updateRow(i, { value: e.target.value })} placeholder="Value" style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', background: 'var(--card)' }} />
+                        <input value={c.value} onChange={e => updateRow(i, { value: e.target.value })} placeholder="Value" className={styles.ctl} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', background: 'var(--card)' }} />
                       )}
                     </div>
                   ))}
@@ -1043,10 +1048,22 @@ function DotGlyph({ color = '#1F3C84', size = 8 }) {
 // API (see captureLeadSquaredOpportunity's comment in api/crm-leads.js) -- one checkbox, both
 // flags together, shared by single-create and bulk-import so "replace the existing one" means
 // the same thing in both places.
+// Custom checkbox (styles.checkWrap/.checkInput/.checkBox in LeadSquaredDashboard.module.css)
+// -- was a bare native 13x13 checkbox, the only unstyled control on a page where every
+// other control is an 11px-radius custom component, and measured ~6px off-centre from
+// its own label text (a plain 13px checkbox next to a 17.5px line-height text block
+// centres wrong by default without an explicit align fix). The native input is kept,
+// just visually hidden (opacity:0, not display:none) so it's still the real focusable/
+// checkable element for keyboard and screen-reader users -- only its paint is replaced.
 function ReplaceModeToggle({ checked, onChange }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 18, padding: '10px 12px', borderRadius: 10, background: checked ? '#F0FBFF' : 'var(--bg3)', border: '0.5px solid ' + (checked ? '#BAE6FD' : C.border) }}>
-      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ marginTop: 2 }} />
+    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 18, padding: '10px 12px', borderRadius: 10, background: checked ? '#F0FBFF' : 'var(--bg3)', border: '0.5px solid ' + (checked ? '#BAE6FD' : C.border) }}>
+      <span className={styles.checkWrap}>
+        <input type="checkbox" className={styles.checkInput} checked={checked} onChange={e => onChange(e.target.checked)} />
+        <span className={styles.checkBox} aria-hidden="true">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+        </span>
+      </span>
       <span>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text }}>Update the existing Opportunity if one is found</span>
         <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.5 }}>
@@ -1173,7 +1190,7 @@ function LsqFileOrPasteInput({ onParsed }) {
       ) : (
         <div>
           <textarea value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Paste tab- or comma-separated rows here, including the header row…"
-            style={{ ...oppCtl, height: 140, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical', width: '100%' }} />
+            className={styles.ctl} style={{ ...oppCtl, height: 140, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical', width: '100%' }} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
             <Button size="sm" onClick={() => onParsed(lsqParseRawTable(pasteText), 'pasted rows')} disabled={!pasteText.trim()}>Parse pasted rows</Button>
           </div>
@@ -1189,7 +1206,7 @@ function LsqFileOrPasteInput({ onParsed }) {
 // which is why every text input on this tab looked out of place next to its own
 // Dropdowns and Buttons. Scoped to Create Opportunity only; the read-only tabs'
 // date/search inputs keep the original `inputStyle`.
-const oppCtl = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '0.5px solid ' + C.border, borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
+const oppCtl = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '1px solid rgba(15,23,42,0.45)', borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
 
 // Background bulk-create store -- a plain module-level object (same pattern as Team
 // Mapping's createUsersStore) so the run survives switching tabs/pages within this
@@ -1642,6 +1659,7 @@ function CreateOpportunityTab() {
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState(null)
   const [submitError, setSubmitError] = useState(null)
+  const [fieldSearch, setFieldSearch] = useState('')
 
   const loadSchema = useCallback(async () => {
     setSchemaLoading(true); setSchemaError(null)
@@ -1656,6 +1674,11 @@ function CreateOpportunityTab() {
   useEffect(() => { loadSchema() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fields = useMemo(() => (schema && schema.fields ? schema.fields.filter(f => !OPPORTUNITY_AUDIT_FIELDS.has(f.schemaName)) : []), [schema])
+  const visibleFields = useMemo(() => {
+    const q = fieldSearch.trim().toLowerCase()
+    return q ? fields.filter(f => f.displayName.toLowerCase().includes(q)) : fields
+  }, [fields, fieldSearch])
+  const missingRequired = useMemo(() => fields.filter(f => f.isMandatory && !String(fieldValues[f.schemaName] || '').trim()), [fields, fieldValues])
 
   // Direct-by-OpportunityID is a genuinely different LeadSquared API (Update an Opportunity,
   // not Capture Opportunities) -- see the SEARCH_BY_OPTIONS comment above.
@@ -1706,7 +1729,7 @@ function CreateOpportunityTab() {
   const set1 = (schemaName, v) => setFieldValues(prev => ({ ...prev, [schemaName]: v }))
 
   return (
-    <div style={{ maxWidth: mode === 'history' ? 1040 : mode === 'bulk' ? 880 : 900 }}>
+    <div style={{ maxWidth: mode === 'history' ? 1040 : mode === 'bulk' ? 880 : 900, margin: '0 auto' }}>
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, padding: 3, borderRadius: 10, background: 'var(--bg3)', width: 'fit-content' }}>
         {[['single', 'Single'], ['bulk', 'Bulk import'], ['history', 'History']].map(([m, lbl]) => (
           <button key={m} type="button" onClick={() => setMode(m)} style={{
@@ -1720,7 +1743,7 @@ function CreateOpportunityTab() {
       {mode === 'history' ? <OpportunityHistoryTab /> : (
       <>
       <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>1. {isDirect ? 'Which Opportunity to update' : 'Match or create the lead'}</div>
+        <h3 style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4, marginTop: 0 }}>1. {isDirect ? 'Which Opportunity to update' : 'Match or create the lead'}</h3>
         <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
           {isDirect
             ? 'Updates one specific, already-existing Opportunity directly by its own Opportunity ID — no lead matching, and nothing new is ever created. Use this when you already know exactly which opportunity to change (e.g. fixing a misattributed campaign on it).'
@@ -1729,11 +1752,11 @@ function CreateOpportunityTab() {
 
         {searchByAttr !== 'ProspectID' && !isDirect && (
           <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
+            <label htmlFor="opp-prospect-id" style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
               Lead ID (ProspectID) <span style={{ fontWeight: 500 }}>— optional, doesn't change which field is matched on below</span>
             </label>
             {mode === 'single'
-              ? <input value={prospectId} onChange={e => setProspectId(e.target.value)} placeholder="e.g. 4d03f397-49e7-4e4e-8168-5f51d591c592" style={{ ...oppCtl, width: '100%', maxWidth: 420 }} />
+              ? <input id="opp-prospect-id" value={prospectId} onChange={e => setProspectId(e.target.value)} placeholder="e.g. 4d03f397-49e7-4e4e-8168-5f51d591c592" className={styles.ctl} style={{ ...oppCtl, width: '100%', maxWidth: 420 }} />
               : <p style={{ fontSize: 11, color: C.muted, margin: 0 }}>Mapped per row from your file in step 4 below, if you have it.</p>}
           </div>
         )}
@@ -1741,18 +1764,18 @@ function CreateOpportunityTab() {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <Dropdown value={SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l} onChange={l => setSearchByAttr(SEARCH_BY_OPTIONS.find(o => o.l === l)?.v || searchByAttr)}
             options={SEARCH_BY_OPTIONS.map(o => o.l)} minWidth={200} />
-          {mode === 'single' && <input value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder={isDirect ? 'e.g. 7c8901ce-ddc2-423b-b7d8-c6eca200c360' : 'e.g. jane@example.com'} style={{ ...oppCtl, flex: 1, minWidth: 220 }} />}
+          {mode === 'single' && <input value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder={isDirect ? 'e.g. 7c8901ce-ddc2-423b-b7d8-c6eca200c360' : 'e.g. jane@example.com'} aria-label={isDirect ? 'Opportunity ID to update' : 'Lead match value'} aria-required="true" className={styles.ctl} style={{ ...oppCtl, flex: 1, minWidth: 220 }} />}
         </div>
         {mode === 'bulk' && <p style={{ fontSize: 11, color: C.muted, margin: '8px 0 0' }}>Each row's {isDirect ? 'Opportunity ID' : 'match value'} comes from your file, mapped in step 4 below.</p>}
       </div>
 
       <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>2. Opportunity type</div>
+        <h3 style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4, marginTop: 0 }}>2. Opportunity type</h3>
         <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
           The event code for this opportunity type — find it at LeadSquared &rarr; My Profile &rarr; Settings &rarr; Opportunities &rarr; Opportunity Types.
         </p>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <input value={eventCode} onChange={e => setEventCode(e.target.value.replace(/[^0-9]/g, ''))} style={{ ...oppCtl, width: 130 }} />
+          <input value={eventCode} onChange={e => setEventCode(e.target.value.replace(/[^0-9]/g, ''))} aria-label="Opportunity event code" className={styles.ctl} style={{ ...oppCtl, width: 130 }} />
           <Button size="sm" variant="secondary" onClick={loadSchema} disabled={schemaLoading}>{schemaLoading ? 'Loading fields…' : 'Load fields'}</Button>
           {schema && schema.displayName && <span style={{ fontSize: 11.5, color: C.muted }}>{schema.displayName}</span>}
         </div>
@@ -1767,31 +1790,40 @@ function CreateOpportunityTab() {
       {mode === 'bulk' ? (
         <BulkOpportunityImport searchByAttr={searchByAttr} eventCode={eventCode} fields={fields} overwriteFields={overwriteFields} isDirect={isDirect} />
       ) : (
-        <>
+        <form onSubmit={e => { e.preventDefault(); submit() }}>
           {fields.length > 0 && (
             <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>3. Opportunity fields <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional — leave blank to skip)</span></div>
+              <h3 style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4, marginTop: 0 }}>3. Opportunity fields</h3>
+              <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
+                Everything below can be left blank except the fields marked <span style={{ color: '#1F3C84', fontWeight: 900 }}>*</span> — LeadSquared is more likely to reject or misfile the request without those.
+              </p>
+              {fields.length > 8 && (
+                <div style={{ marginBottom: 10 }}>
+                  <input value={fieldSearch} onChange={e => setFieldSearch(e.target.value)} placeholder={`Search ${fields.length} fields…`} aria-label="Search opportunity fields" className={styles.ctl} style={{ ...oppCtl, width: '100%', maxWidth: 320 }} />
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
-                {fields.map(f => (
+                {visibleFields.map(f => (
                   <div key={f.schemaName}>
-                    <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
-                      {f.displayName}{f.isMandatory ? <span style={{ color: '#1F3C84' }}> *</span> : null}
+                    <label htmlFor={'opp-f-' + f.schemaName} style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
+                      {f.displayName}{f.isMandatory ? <span style={{ color: '#1F3C84', fontWeight: 900, fontSize: 13 }}> *</span> : null}
                     </label>
                     {Array.isArray(f.inlineOptions) && f.inlineOptions.length > 0 ? (
-                      <Dropdown value={fieldValues[f.schemaName] || ''} onChange={v => set1(f.schemaName, v)}
-                        options={['', ...f.inlineOptions]} fullWidth />
+                      <Dropdown id={'opp-f-' + f.schemaName} value={fieldValues[f.schemaName] || ''} onChange={v => set1(f.schemaName, v)}
+                        options={[{ value: '', label: '— None —' }, ...f.inlineOptions]} aria-required={f.isMandatory} fullWidth />
                     ) : (
-                      <input value={fieldValues[f.schemaName] || ''} onChange={e => set1(f.schemaName, e.target.value)} style={{ ...oppCtl, width: '100%' }} />
+                      <input id={'opp-f-' + f.schemaName} value={fieldValues[f.schemaName] || ''} onChange={e => set1(f.schemaName, e.target.value)} aria-required={f.isMandatory} className={styles.ctl} style={{ ...oppCtl, width: '100%' }} />
                     )}
                   </div>
                 ))}
+                {visibleFields.length === 0 && <p style={{ fontSize: 12, color: C.muted, gridColumn: '1 / -1' }}>No field matches "{fieldSearch}".</p>}
               </div>
             </div>
           )}
 
           <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>Note <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional)</span></div>
-            <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} style={{ ...oppCtl, width: '100%', resize: 'vertical', fontFamily: FONT, lineHeight: 1.5 }} />
+            <label htmlFor="opp-note" style={{ display: 'block', fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>Note <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional)</span></label>
+            <textarea id="opp-note" value={note} onChange={e => setNote(e.target.value)} rows={2} className={styles.ctl} style={{ ...oppCtl, width: '100%', resize: 'vertical', fontFamily: FONT, lineHeight: 1.5 }} />
           </div>
 
           {isDirect ? (
@@ -1820,10 +1852,16 @@ function CreateOpportunityTab() {
           {submitError && <ErrorNote message={submitError} />}
           {(result || submitError) && <p style={{ fontSize: 11, color: C.muted, margin: '-6px 0 12px' }}>Every attempt, including LeadSquared's own response, is kept in the History tab above.</p>}
 
-          <Button onClick={submit} disabled={submitting || !searchByValue.trim()}>
+          {!isDirect && missingRequired.length > 0 && (
+            <p style={{ fontSize: 11.5, color: '#1F3C84', margin: '0 0 10px' }}>
+              {missingRequired.length} required field{missingRequired.length === 1 ? '' : 's'} not filled in yet ({missingRequired.map(f => f.displayName).join(', ')}) — LeadSquared may still accept this, but it's more likely to be rejected or come back incomplete.
+            </p>
+          )}
+
+          <Button type="submit" disabled={submitting || !searchByValue.trim()}>
             {submitting ? (isDirect ? 'Updating…' : 'Creating…') : isDirect ? 'Update Opportunity' : (overwriteFields ? 'Create / Update Opportunity' : 'Create Opportunity')}
           </Button>
-        </>
+        </form>
       )}
       </>
       )}
@@ -1847,7 +1885,7 @@ function PageInfoButton() {
   const [open, setOpen] = useState(false)
   return (
     <div style={{ position: 'relative' }}>
-      <button type="button" onClick={() => setOpen(v => !v)} title="What this page can and can't show"
+      <button type="button" onClick={() => setOpen(v => !v)} title="What this page can and can't show" aria-label="What this page can and can't show" aria-expanded={open}
         style={{ width: 30, height: 30, borderRadius: 8, border: '0.5px solid ' + (open ? '#1C9FD4' : C.border), background: open ? '#E8EFF9' : 'var(--card)', color: '#1F3C84', fontSize: 14, fontWeight: 700, fontStyle: 'italic', fontFamily: 'Georgia,serif', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>i</button>
       {open && <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />}
       {open && (
@@ -1920,8 +1958,24 @@ export default function LeadSquaredDashboard() {
             </div>
             <div style={{ marginTop: 2 }}><PageInfoButton /></div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} className="lq-header-controls">
-            {TABS.map(t => <div key={t.key} style={pillStyle(activeTab === t.key)} onClick={() => setTab(t.key)}>{t.label}</div>)}
+          {/* Was 4 plain <div>s with tabIndex:-1 -- the page's primary navigation was
+              unreachable by keyboard and invisible to a screen reader (this exact
+              header switches the whole page's content, it's not decorative). Real
+              tabs, real roles, and Left/Right arrow-key switching to match native
+              tab-list behaviour. */}
+          <div role="tablist" aria-label="LeadSquared views" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} className="lq-header-controls"
+            onKeyDown={e => {
+              if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+              e.preventDefault()
+              const i = TABS.findIndex(t => t.key === activeTab)
+              const next = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length]
+              setTab(next.key)
+            }}>
+            {TABS.map(t => (
+              <button key={t.key} type="button" role="tab" aria-selected={activeTab === t.key} tabIndex={activeTab === t.key ? 0 : -1}
+                style={{ ...pillStyle(activeTab === t.key), fontFamily: 'inherit', margin: 0 }}
+                onClick={() => setTab(t.key)}>{t.label}</button>
+            ))}
           </div>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>

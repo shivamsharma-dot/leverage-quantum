@@ -10,7 +10,7 @@ const MENU_MAX = 280   // tallest the option list is ever allowed to be
 const GAP = 6          // breathing room between trigger and menu
 const EDGE = 8         // never let the menu touch the viewport edge
 
-function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabled, fullWidth }) {
+function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabled, fullWidth, id, 'aria-required': ariaRequired }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const btnRef = useRef(null)
@@ -54,14 +54,20 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
       <div style={{ position: 'relative', display: fullWidth ? 'block' : 'inline-block', width: fullWidth ? '100%' : undefined }}>
         <button
           type="button"
+          id={id}
           disabled={disabled}
+          aria-required={ariaRequired || undefined}
           ref={btnRef}
           aria-haspopup="listbox"
           aria-expanded={open}
-          onClick={toggle}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            padding: '7px 12px', borderRadius: 11,
+            // minHeight is load-bearing, not decorative: when nothing is selected the
+            // label span below renders empty, and with no explicit height the whole
+            // flex row collapses to ~21px -- visibly shorter than every sibling text
+            // input (32px) in the same form row, misaligning every row it sits in and
+            // shrinking its own click target below the 24px minimum touch target.
+            minHeight: 32, padding: '7px 12px', borderRadius: 11,
             border: '0.5px solid ' + (open ? NAVY : 'var(--card-border)'),
             background: open ? NAVY_TINT : 'var(--card)',
             color: open ? NAVY : 'var(--text)',
@@ -71,6 +77,7 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
             width: fullWidth ? '100%' : undefined, boxSizing: 'border-box',
             minWidth, whiteSpace: 'nowrap', transition: 'all .15s'
           }}
+          onClick={toggle}
         >
           <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis' }}>{current ? current.label : value}</span>
           <svg width="10" height="6" viewBox="0 0 10 6" fill="none"
@@ -80,7 +87,7 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
         </button>
 
         {open && (
-          <div style={{
+          <div role="listbox" style={{
             position: 'absolute', left: 0, right: fullWidth ? 0 : undefined, zIndex: 500,
             top: drop.up ? 'auto' : 'calc(100% + ' + GAP + 'px)',
             bottom: drop.up ? 'calc(100% + ' + GAP + 'px)' : 'auto',
@@ -95,6 +102,8 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
                 <button
                   key={String(opt.value)}
                   type="button"
+                  role="option"
+                  aria-selected={active}
                   onClick={() => { onChange(opt.value); setOpen(false) }}
                   onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg3)' }}
                   onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}

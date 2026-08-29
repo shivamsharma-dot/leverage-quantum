@@ -91,6 +91,17 @@
 
 .nav {
   flex: 1;
+  /* min-height:0 is load-bearing here, not decorative -- a flex child's default
+     min-height is `auto`, which lets it grow taller than its flex-basis to fit its
+     own content, completely ignoring `flex:1` and `overflow-y:auto` below. On a
+     short viewport with every nav group expanded, .nav was overflowing .sidebar's
+     fixed height instead of scrolling internally, and .sidebar's own
+     `overflow:hidden` silently clipped/overlapped the last 1-2 nav items with the
+     .userArea footer beneath it (confirmed live: the active page's own nav item and
+     the item after it rendered underneath the profile card, both partly
+     unreachable). This one line lets .nav actually shrink to its allotted space so
+     ITS OWN scrollbar handles overflow instead of the outer box clipping it.  */
+  min-height: 0;
   padding: 12px 10px;
   display: flex;
   flex-direction: column;
