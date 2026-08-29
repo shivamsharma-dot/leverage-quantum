@@ -1014,8 +1014,8 @@ const SEARCH_BY_OPTIONS = [
   { v: 'EmailAddress', l: 'Email' },
   { v: 'Phone', l: 'Phone' },
   { v: 'Mobile', l: 'Mobile' },
-  { v: 'ProspectID', l: 'Lead ID (ProspectID -- matches an existing lead only)' },
-  { v: 'OpportunityID', l: 'Opportunity ID (direct update -- no lead matching)' },
+  { v: 'ProspectID', l: 'Lead ID (ProspectID — matches an existing lead only)' },
+  { v: 'OpportunityID', l: 'Opportunity ID (direct update — no lead matching)' },
 ]
 const SEARCH_BY_EXAMPLE = { EmailAddress: 'jane@example.com', Phone: '+91 98765 43210', Mobile: '+91 98765 43210', ProspectID: '(a real, existing Lead ID)', OpportunityID: '(a real, existing Opportunity ID)' }
 
@@ -1050,7 +1050,7 @@ function ReplaceModeToggle({ checked, onChange }) {
       <span>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text }}>Update the existing Opportunity if one is found</span>
         <div style={{ fontSize: 11, color: C.muted, marginTop: 2, lineHeight: 1.5 }}>
-          Off (default): if LeadSquared already has a matching Opportunity, nothing on it changes -- only a "duplicate detected" note is posted.
+          Off (default): if LeadSquared already has a matching Opportunity, nothing on it changes — only a "duplicate detected" note is posted.
           On: its fields are replaced with whatever is entered here (blank fields here are left alone, not cleared).
         </div>
       </span>
@@ -1167,7 +1167,7 @@ function LsqFileOrPasteInput({ onParsed }) {
           style={{ border: '1.5px dashed ' + (dragOver ? '#1C9FD4' : C.border), borderRadius: 12, padding: '30px 20px', textAlign: 'center', cursor: 'pointer', background: dragOver ? '#E8F6FA' : 'var(--bg3)' }}
         >
           <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, marginBottom: 4 }}>Drop a CSV file here, or click to browse</div>
-          <div style={{ fontSize: 11.5, color: C.muted }}>.csv, .tsv or .txt -- first row must be real column headers</div>
+          <div style={{ fontSize: 11.5, color: C.muted }}>.csv, .tsv or .txt — first row must be real column headers</div>
           <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" onChange={e => loadFile(e.target.files && e.target.files[0])} style={{ display: 'none' }} />
         </div>
       ) : (
@@ -1339,7 +1339,7 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
   const start = () => {
     if (!resolved.rows.length) return
     const confirmMsg = isDirect
-      ? `Update ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} directly in production LeadSquared, by Opportunity ID? No lead matching happens in this mode -- any row whose id doesn't already exist will simply fail. This runs in the background and cannot be undone.`
+      ? `Update ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} directly in production LeadSquared, by Opportunity ID? No lead matching happens in this mode — any row whose id doesn't already exist will simply fail. This runs in the background and cannot be undone.`
       : `${overwriteFields ? 'Create or update' : 'Create'} ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in production LeadSquared${overwriteFields ? ' (updating any that already exist)' : ''}? This runs in the background and cannot be undone.`
     if (!window.confirm(confirmMsg)) return
     runOppImportInBackground(resolved.rows, label || 'pasted rows', resolved.skipped, { searchByAttr, eventCode: Number(eventCode) || 12003, overwriteFields, directOppUpdate: isDirect })
@@ -1351,7 +1351,7 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
     return (
       <div>
         <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 8 }}>
-          {finished ? 'Finished' : 'Running'} -- {progress?.done || 0} of {progress?.total || 0}
+          {finished ? 'Finished' : 'Running'} — {progress?.done || 0} of {progress?.total || 0}
         </div>
         <div style={{ height: 8, borderRadius: 999, background: 'var(--bg3)', overflow: 'hidden', marginBottom: 10 }}>
           <div style={{ height: '100%', width: pct + '%', background: finished ? 'linear-gradient(135deg,#4CAE6F,#29B9C3)' : 'linear-gradient(135deg,#1F3C84,#1C9FD4)', transition: 'width .2s' }} />
@@ -1381,7 +1381,7 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
       <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>3. Import a file</div>
       <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
         {isDirect
-          ? `One row per Opportunity. The column mapped to "${searchLabel}" below is the exact Opportunity each row updates directly -- no lead matching, nothing new is ever created.`
+          ? `One row per Opportunity. The column mapped to "${searchLabel}" below is the exact Opportunity each row updates directly — no lead matching, nothing new is ever created.`
           : `One row per Opportunity. The column mapped to "${searchLabel}" below is what each row is matched (or created) on.`}
       </p>
       <div style={{ marginBottom: 12 }}>
@@ -1389,12 +1389,12 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
           Download sample CSV
         </Button>
         <span style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>
-          {fields.length} field header{fields.length === 1 ? '' : 's'} for event code {eventCode} right now -- columns can be renamed, reordered, or dropped, mapping below is manual either way.
+          {fields.length} field header{fields.length === 1 ? '' : 's'} for event code {eventCode} right now — columns can be renamed, reordered, or dropped, mapping below is manual either way.
         </span>
       </div>
       {!table && <LsqFileOrPasteInput onParsed={(t, lbl) => { setLabel(lbl); setTable(t); setMapping({}) }} />}
-      {table && table.binary && <ErrorNote message="That file doesn't look like a text CSV/TSV -- an Excel .xlsx export needs to be saved as CSV first." />}
-      {table && !table.binary && table.rows.length === 0 && <ErrorNote message="No data rows found -- make sure the first row is real column headers." />}
+      {table && table.binary && <ErrorNote message="That file doesn't look like a text CSV/TSV — an Excel .xlsx export needs to be saved as CSV first." />}
+      {table && !table.binary && table.rows.length === 0 && <ErrorNote message="No data rows found — make sure the first row is real column headers." />}
       {table && !table.binary && table.rows.length > 0 && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -1457,7 +1457,7 @@ function OpportunityActivityRow({ row, nested }) {
               </div>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: 'uppercase', marginBottom: 4 }}>LeadSquared's response</div>
-                <pre style={{ margin: 0, fontSize: 11, fontFamily: 'ui-monospace,monospace', background: 'var(--bg3)', borderRadius: 8, padding: 10, overflowX: 'auto', maxHeight: 220 }}>{response ? JSON.stringify(response, null, 2) : (row.response_json || '(no response body -- the request itself failed, see the message above)')}</pre>
+                <pre style={{ margin: 0, fontSize: 11, fontFamily: 'ui-monospace,monospace', background: 'var(--bg3)', borderRadius: 8, padding: 10, overflowX: 'auto', maxHeight: 220 }}>{response ? JSON.stringify(response, null, 2) : (row.response_json || '(no response body — the request itself failed, see the message above)')}</pre>
               </div>
             </div>
           )}
@@ -1590,7 +1590,7 @@ function OpportunityHistoryTab() {
         <div style={{ padding: '16px 20px', borderRadius: 12, background: '#E8EFF9', border: '1px solid rgba(31,60,132,0.2)', marginBottom: 20 }}>
           <div style={{ fontSize: 13.5, fontWeight: 800, color: '#1F3C84', marginBottom: 4 }}>History isn't set up yet</div>
           <div style={{ fontSize: 12.5, color: C.text }}>
-            Run <code style={{ background: 'var(--bg3)', padding: '1px 6px', borderRadius: 5 }}>supabase/sql/leadsquared_opportunity_activity_setup.sql</code> once in the Supabase SQL editor. Creating/updating Opportunities already works either way -- this only affects whether it's logged here.
+            Run <code style={{ background: 'var(--bg3)', padding: '1px 6px', borderRadius: 5 }}>supabase/sql/leadsquared_opportunity_activity_setup.sql</code> once in the Supabase SQL editor. Creating/updating Opportunities already works either way — this only affects whether it's logged here.
           </div>
         </div>
       ) : (
@@ -1607,7 +1607,7 @@ function OpportunityHistoryTab() {
       {!rows && !notSetUp ? (
         <InlineLoader label="Loading history" height={140} />
       ) : notSetUp ? null : rows.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: C.muted, fontSize: 13.5 }}>Nothing yet -- every Create/Update attempt, single or bulk, will show up here.</div>
+        <div style={{ textAlign: 'center', padding: '48px 0', color: C.muted, fontSize: 13.5 }}>Nothing yet — every Create/Update attempt, single or bulk, will show up here.</div>
       ) : (
         <>
           {meta.truncated && (
@@ -1666,7 +1666,7 @@ function CreateOpportunityTab() {
     if (!searchByValue.trim()) { setSubmitError(isDirect ? 'Enter the Opportunity ID.' : 'Enter the lead-matching value.'); return }
 
     if (isDirect) {
-      if (!window.confirm(`Update this exact Opportunity (id ${searchByValue.trim()}) directly in production LeadSquared? No lead matching happens in this mode -- if that id doesn't already exist, LeadSquared will reject the request rather than creating anything new.`)) return
+      if (!window.confirm(`Update this exact Opportunity (id ${searchByValue.trim()}) directly in production LeadSquared? No lead matching happens in this mode — if that id doesn't already exist, LeadSquared will reject the request rather than creating anything new.`)) return
       setSubmitting(true)
       try {
         const payload = {
@@ -1723,14 +1723,14 @@ function CreateOpportunityTab() {
         <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>1. {isDirect ? 'Which Opportunity to update' : 'Match or create the lead'}</div>
         <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
           {isDirect
-            ? 'Updates one specific, already-existing Opportunity directly by its own Opportunity ID -- no lead matching, and nothing new is ever created. Use this when you already know exactly which opportunity to change (e.g. fixing a misattributed campaign on it).'
+            ? 'Updates one specific, already-existing Opportunity directly by its own Opportunity ID — no lead matching, and nothing new is ever created. Use this when you already know exactly which opportunity to change (e.g. fixing a misattributed campaign on it).'
             : 'LeadSquared matches on the field below. If nothing matches, a brand-new lead is created automatically.'}
         </p>
 
         {searchByAttr !== 'ProspectID' && !isDirect && (
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
-              Lead ID (ProspectID) <span style={{ fontWeight: 500 }}>-- optional, doesn't change which field is matched on below</span>
+              Lead ID (ProspectID) <span style={{ fontWeight: 500 }}>— optional, doesn't change which field is matched on below</span>
             </label>
             {mode === 'single'
               ? <input value={prospectId} onChange={e => setProspectId(e.target.value)} placeholder="e.g. 4d03f397-49e7-4e4e-8168-5f51d591c592" style={{ ...oppCtl, width: '100%', maxWidth: 420 }} />
@@ -1749,7 +1749,7 @@ function CreateOpportunityTab() {
       <div style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>2. Opportunity type</div>
         <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
-          The event code for this opportunity type -- find it at LeadSquared &rarr; My Profile &rarr; Settings &rarr; Opportunities &rarr; Opportunity Types.
+          The event code for this opportunity type — find it at LeadSquared &rarr; My Profile &rarr; Settings &rarr; Opportunities &rarr; Opportunity Types.
         </p>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <input value={eventCode} onChange={e => setEventCode(e.target.value.replace(/[^0-9]/g, ''))} style={{ ...oppCtl, width: 130 }} />
@@ -1770,7 +1770,7 @@ function CreateOpportunityTab() {
         <>
           {fields.length > 0 && (
             <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>3. Opportunity fields <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional -- leave blank to skip)</span></div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>3. Opportunity fields <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional — leave blank to skip)</span></div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
                 {fields.map(f => (
                   <div key={f.schemaName}>
@@ -1811,8 +1811,8 @@ function CreateOpportunityTab() {
                     : result.ConflictedOpportunityId
                       ? (overwriteFields
                         ? <>A matching opportunity (id {short(result.ConflictedOpportunityId)}) was found and updated.</>
-                        : <>A duplicate was detected for this opportunity -- the existing one (id {short(result.ConflictedOpportunityId)}) was not changed, but a captured activity was posted on the lead. Turn on "Update the existing Opportunity" above to replace its fields instead.</>)
-                      : <>Sent -- LeadSquared accepted the request.</>}
+                        : <>A duplicate was detected for this opportunity — the existing one (id {short(result.ConflictedOpportunityId)}) was not changed, but a captured activity was posted on the lead. Turn on "Update the existing Opportunity" above to replace its fields instead.</>)
+                      : <>Sent — LeadSquared accepted the request.</>}
                 </SuccessNote>
               )}
             </>
@@ -1856,30 +1856,30 @@ function PageInfoButton() {
 
           <div style={{ fontSize: 11.5, fontWeight: 700, color: C.text, marginBottom: 3 }}>Live, not cached</div>
           <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: '0 0 12px' }}>
-            Every page load and every "Refresh" click calls LeadSquared's real API directly, in that moment. Nothing here is pre-computed or snapshotted in Quantum's own database -- what you see is exactly what LeadSquared's own API returns right now for the selected window.
+            Every page load and every "Refresh" click calls LeadSquared's real API directly, in that moment. Nothing here is pre-computed or snapshotted in Quantum's own database — what you see is exactly what LeadSquared's own API returns right now for the selected window.
           </p>
 
           <div style={{ fontSize: 11.5, fontWeight: 700, color: C.text, marginBottom: 3 }}>Row ceiling per load</div>
           <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: '0 0 8px' }}>
-            LeadSquared's own API caps every single request at 1,000 rows -- Quantum loops multiple requests to go well beyond that:
+            LeadSquared's own API caps every single request at 1,000 rows — Quantum loops multiple requests to go well beyond that:
           </p>
           <ul style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.7, margin: '0 0 12px', paddingLeft: 18 }}>
-            <li><strong style={{ color: C.text }}>Leads</strong> -- up to 10,000 rows per load (10 requests).</li>
-            <li><strong style={{ color: C.text }}>Opportunities</strong> -- up to 10,000 rows per load (10 requests). Deliberately not "load everything": LeadSquared's own Manage Opportunities screen was measured live at 4,870,025 total for this one Opportunity Type, account-wide, all-time -- narrow the date range for a load that actually captures the window you care about.</li>
-            <li><strong style={{ color: C.text }}>Activities</strong> -- up to 5,000 rows per load (5 requests). Deliberately lower still: one Activity Type on this account alone was measured at 15.8 million records account-wide, so looping until "done" isn't realistic or useful here -- narrow the Activity Type or date window instead, same as LeadSquared's own Manage Activities screen expects you to.</li>
+            <li><strong style={{ color: C.text }}>Leads</strong> — up to 10,000 rows per load (10 requests).</li>
+            <li><strong style={{ color: C.text }}>Opportunities</strong> — up to 10,000 rows per load (10 requests). Deliberately not "load everything": LeadSquared's own Manage Opportunities screen was measured live at 4,870,025 total for this one Opportunity Type, account-wide, all-time — narrow the date range for a load that actually captures the window you care about.</li>
+            <li><strong style={{ color: C.text }}>Activities</strong> — up to 5,000 rows per load (5 requests). Deliberately lower still: one Activity Type on this account alone was measured at 15.8 million records account-wide, so looping until "done" isn't realistic or useful here — narrow the Activity Type or date window instead, same as LeadSquared's own Manage Activities screen expects you to.</li>
           </ul>
           <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: '0 0 12px' }}>
-            Rows load newest-first, so if a window has more than the ceiling, it's the OLDEST rows in that window that get left out -- and a banner says so on-screen whenever it happens, rather than silently showing a partial set as if it were everything.
+            Rows load newest-first, so if a window has more than the ceiling, it's the OLDEST rows in that window that get left out — and a banner says so on-screen whenever it happens, rather than silently showing a partial set as if it were everything.
           </p>
 
           <div style={{ fontSize: 11.5, fontWeight: 700, color: C.text, marginBottom: 3 }}>Filtering happens on what's loaded</div>
           <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: '0 0 12px' }}>
-            Search, the column picker, and Advanced Search all run against the rows already fetched for the current window -- they don't trigger a fresh LeadSquared call per keystroke. Changing the date range, Activity Type, or hitting Refresh does.
+            Search, the column picker, and Advanced Search all run against the rows already fetched for the current window — they don't trigger a fresh LeadSquared call per keystroke. Changing the date range, Activity Type, or hitting Refresh does.
           </p>
 
           <div style={{ fontSize: 11.5, fontWeight: 700, color: C.text, marginBottom: 3 }}>Read-only, except Create Opportunity</div>
           <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: 0 }}>
-            Leads, Activities, and Opportunities are read-only views -- editing or deleting still has to happen in LeadSquared itself. Create Opportunity is the one exception: matching on Email/Phone/Mobile/Lead ID writes a real Opportunity (and, if no matching lead exists yet, a real new Lead too) via LeadSquared's Capture Opportunities API; matching on Opportunity ID instead updates one specific, already-existing Opportunity directly via LeadSquared's separate Update-an-Opportunity API, with no lead matching and nothing new ever created. Both write to production LeadSquared. Admin only.
+            Leads, Activities, and Opportunities are read-only views — editing or deleting still has to happen in LeadSquared itself. Create Opportunity is the one exception: matching on Email/Phone/Mobile/Lead ID writes a real Opportunity (and, if no matching lead exists yet, a real new Lead too) via LeadSquared's Capture Opportunities API; matching on Opportunity ID instead updates one specific, already-existing Opportunity directly via LeadSquared's separate Update-an-Opportunity API, with no lead matching and nothing new ever created. Both write to production LeadSquared. Admin only.
           </p>
         </div>
       )}
@@ -1889,12 +1889,15 @@ function PageInfoButton() {
 
 // Shown above the table whenever the current load hit its row ceiling -- the honest version
 // of "here's everything", instead of quietly presenting a partial set as complete.
+// Navy, not amber -- matches this app's own standing brand rule (never yellow/amber on
+// any UI element) and every other "heads up" banner on this same page (the History
+// "isn't set up yet" note a few hundred lines below already uses this exact navy tint).
 function TruncationNote({ shown, totalKnown, label }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10, background: '#FFFBEB', border: '0.5px solid #FDE68A', color: '#92400E', fontSize: 11.5, marginBottom: 12 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10, background: '#E8EFF9', border: '0.5px solid rgba(31,60,132,0.2)', color: '#1F3C84', fontSize: 11.5, marginBottom: 12 }}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M12 9v4M12 17h.01" /><circle cx="12" cy="12" r="10" /></svg>
       <span>
-        Showing the most recent <strong>{fmtN(shown)}</strong>{totalKnown ? <> of <strong>{fmtN(totalKnown)}</strong> total</> : null} {label} for this window -- there are more than this page loads at once. Narrow the date range{totalKnown ? ' or Activity Type' : ''} to see the rest.
+        Showing the most recent <strong>{fmtN(shown)}</strong>{totalKnown ? <> of <strong>{fmtN(totalKnown)}</strong> total</> : null} {label} for this window — there are more than this page loads at once. Narrow the date range{totalKnown ? ' or Activity Type' : ''} to see the rest.
       </span>
     </div>
   )
