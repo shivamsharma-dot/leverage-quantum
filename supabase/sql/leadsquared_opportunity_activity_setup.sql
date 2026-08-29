@@ -54,3 +54,14 @@ CREATE INDEX IF NOT EXISTS idx_lsq_opp_activity_target ON public.leadsquared_opp
 CREATE INDEX IF NOT EXISTS idx_lsq_opp_activity_batch ON public.leadsquared_opportunity_activity(batch_label);
 
 ALTER TABLE public.leadsquared_opportunity_activity DISABLE ROW LEVEL SECURITY;
+
+-- Added later: a real, collision-free batch identifier (one random id generated
+-- client-side per bulk-import run), alongside the existing batch_label string.
+-- batch_label embeds a human label + row count and was the only grouping key the
+-- History view had -- safe in practice but theoretically ambiguous if two different
+-- runs ever produced the identical label+count. batch_id removes that ambiguity;
+-- batch_label is kept as-is and stays the fallback grouping key for any row written
+-- before this column existed (e.g. a bulk run from before this migration). Safe to
+-- re-run.
+ALTER TABLE public.leadsquared_opportunity_activity ADD COLUMN IF NOT EXISTS batch_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_lsq_opp_activity_batch_id ON public.leadsquared_opportunity_activity(batch_id);

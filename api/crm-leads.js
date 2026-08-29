@@ -716,6 +716,7 @@ async function logOpportunityActivity(fields, me) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
   const payload = {
     batch_label: fields.batch_label || null,
+    batch_id: fields.batch_id || null,
     search_by_attr: fields.search_by_attr,
     target_value: fields.target_value,
     prospect_id: fields.prospect_id || null,
@@ -736,11 +737,40 @@ async function logOpportunityActivity(fields, me) {
   const saved = await r.json()
   return Array.isArray(saved) ? saved[0] : saved
 }
+// Was a flat `limit=200` -- silently dropped everything past the 200 most recent rows,
+// which a single 1000-row bulk import blows through on its own (confirmed live 2026-08-29:
+// a real 1000-row run left 800 of its own rows permanently invisible in History, with
+// nothing on screen saying anything was missing). PostgREST caps a single response at
+// 1000 rows no matter what `limit=` asks for (the same lesson this file already learned
+// for overall_bq_daily/leverage_careers_daily/team_mapping_ls_detail_cache), so this pages
+// through in batches of 1000 up to a bounded ceiling -- comfortably past any single bulk
+// run -- rather than trusting one request. `count=exact` on the first page also captures
+// the real total row count so the frontend can say honestly whether there's still more
+// beyond the ceiling, instead of a silent cap.
+const OPP_ACTIVITY_MAX_ROWS = 5000
 async function listOpportunityActivity() {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
-  const r = await supabaseAdmin('leadsquared_opportunity_activity?select=*&order=created_at.desc&limit=200')
-  if (!r.ok) throw new Error('leadsquared_opportunity_activity may not exist yet -- run supabase/sql/leadsquared_opportunity_activity_setup.sql')
-  return await r.json()
+  const rows = []
+  let total = null
+  for (let offset = 0; offset < OPP_ACTIVITY_MAX_ROWS; offset += 1000) {
+    const r = await supabaseAdmin('leadsquared_opportunity_activity?select=*&order=created_at.desc', {
+      headers: { Range: offset + '-' + (offset + 999), ...(offset === 0 ? { Prefer: 'count=exact' } : {}) },
+    })
+    if (!r.ok) {
+      if (offset === 0) throw new Error('leadsquared_opportunity_activity may not exist yet -- run supabase/sql/leadsquared_opportunity_activity_setup.sql')
+      break
+    }
+    if (offset === 0) {
+      const cr = r.headers.get('content-range') || ''
+      total = parseInt(cr.split('/')[1] || '', 10)
+      if (!Number.isFinite(total)) total = null
+    }
+    const page = await r.json()
+    if (!Array.isArray(page) || page.length === 0) break
+    rows.push(...page)
+    if (page.length < 1000) break
+  }
+  return { rows, total, truncated: total != null && total > rows.length }
 }
 
 // Powers the "Centre Name" field in Team Mapping's manual-mapping modal --
@@ -2116,7 +2146,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_detail_cache_list') return res.status(200).json(await getDetailCacheEmails())
     if (mode === 'team_detail_cache_save') return res.status(200).json(await saveDetailCacheBatch((req.body && req.body.details) || []))
     if (mode === 'team_cache_lookup') return res.status(200).json(await getTeamCacheLookup())
-    if (mode === 'opportunity_activity_list') return res.status(200).json({ rows: await listOpportunityActivity() })
+    if (mode === 'opportunity_activity_list') return res.status(200).json(await listOpportunityActivity())
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
   }
@@ -2187,6 +2217,7 @@ async function handleLeadSquared(req, res, me) {
       // live 2026-08-27: a real, successful direct-Update call produced zero History rows).
       await logOpportunityActivity({
         batch_label: body.batchLabel || null,
+        batch_id: body.batchId || null,
         search_by_attr: body.searchByAttr, target_value: body.searchByValue, prospect_id: body.prospectId || null,
         event_code: body.eventCode != null ? String(body.eventCode) : null, overwrite_fields: !!body.overwriteFields,
         status,
@@ -2212,6 +2243,7 @@ async function handleLeadSquared(req, res, me) {
       // the exact call that was silently dropping every row before this fix.
       await logOpportunityActivity({
         batch_label: body.batchLabel || null,
+        batch_id: body.batchId || null,
         search_by_attr: 'OpportunityID', target_value: body.opportunityId, prospect_id: null,
         event_code: body.eventCode != null ? String(body.eventCode) : null, overwrite_fields: false,
         status,

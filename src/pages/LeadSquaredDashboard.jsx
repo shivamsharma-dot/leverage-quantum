@@ -83,8 +83,11 @@ function SearchBox({ value, onChange, placeholder }) {
 
 function Toolbar({ children }) { return <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>{children}</div> }
 
+// Navy, not red -- matches this app's own standing brand rule (never red/amber on any
+// UI element) and the History tab's own OPP_STATUS_STYLE.failed, which already uses
+// navy for the identical "failed" state a couple hundred lines below this.
 function ErrorNote({ message }) {
-  return <div style={{ padding: '10px 14px', borderRadius: 10, background: '#FEF2F2', border: '0.5px solid #FECACA', color: '#B91C1C', fontSize: 12.5, marginBottom: 14 }}>✕ {message}</div>
+  return <div style={{ padding: '10px 14px', borderRadius: 10, background: '#E8EFF9', border: '0.5px solid rgba(31,60,132,0.22)', color: '#1F3C84', fontSize: 12.5, marginBottom: 14 }}>✕ {message}</div>
 }
 function SuccessNote({ children }) {
   return <div style={{ padding: '10px 14px', borderRadius: 10, background: '#F0FDF4', border: '0.5px solid #BBF7D0', color: '#15803D', fontSize: 12.5, marginBottom: 14 }}>✓ {children}</div>
@@ -1119,7 +1122,7 @@ function LsqFileOrPasteInput({ onParsed }) {
       <div style={{ display: 'flex', gap: 4, marginBottom: 12, padding: 3, borderRadius: 10, background: 'var(--bg3)', width: 'fit-content' }}>
         {[['file', 'Upload file'], ['paste', 'Paste rows']].map(([m, lbl]) => (
           <button key={m} type="button" onClick={() => setSrcMode(m)} style={{
-            padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: FONT,
+            padding: '7px 16px', borderRadius: 9, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: FONT,
             background: srcMode === m ? 'var(--card)' : 'transparent', color: srcMode === m ? '#1F3C84' : C.muted,
             boxShadow: srcMode === m ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
           }}>{lbl}</button>
@@ -1140,7 +1143,7 @@ function LsqFileOrPasteInput({ onParsed }) {
       ) : (
         <div>
           <textarea value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="Paste tab- or comma-separated rows here, including the header row…"
-            style={{ ...inputStyle, height: 140, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical', width: '100%' }} />
+            style={{ ...oppCtl, height: 140, fontFamily: 'monospace', fontSize: 11.5, resize: 'vertical', width: '100%' }} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
             <Button size="sm" onClick={() => onParsed(lsqParseRawTable(pasteText), 'pasted rows')} disabled={!pasteText.trim()}>Parse pasted rows</Button>
           </div>
@@ -1149,6 +1152,14 @@ function LsqFileOrPasteInput({ onParsed }) {
     </div>
   )
 }
+
+// Create Opportunity's own control metrics -- matches the shared Button/Dropdown
+// standard (7px/12px padding, radius 11, 13.5px/700) instead of this file's older,
+// visibly thinner/smaller `inputStyle` (fontSize 12, padding 6px 10px, radius 8) --
+// which is why every text input on this tab looked out of place next to its own
+// Dropdowns and Buttons. Scoped to Create Opportunity only; the read-only tabs'
+// date/search inputs keep the original `inputStyle`.
+const oppCtl = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '0.5px solid ' + C.border, borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
 
 // Background bulk-create store -- a plain module-level object (same pattern as Team
 // Mapping's createUsersStore) so the run survives switching tabs/pages within this
@@ -1164,9 +1175,12 @@ const oppImportStore = {
 async function runOppImportInBackground(rows, label, skippedCount, opts) {
   if (oppImportStore.running) return
   const failures = []
-  // Ties every row this run creates back together in History without forcing a grouped
-  // view -- each row is still logged individually server-side (see logOpportunityActivity),
-  // this is purely a display label.
+  // Ties every row this run creates back together in History as one collapsible batch --
+  // each row is still logged individually server-side (see logOpportunityActivity), batchId
+  // is purely a grouping key so History can show "1 batch of 1,000" instead of 1,000 flat
+  // rows. Real random id, not just the label -- two different runs with the same row count
+  // and default label would otherwise share an ambiguous grouping key.
+  const batchId = (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '-' + Math.random().toString(36).slice(2))
   const batchLabel = `${label} (${rows.length} row${rows.length === 1 ? '' : 's'})`
   oppImportStore.set({ running: true, progress: { done: 0, total: rows.length, failed: 0, skipped: skippedCount, label, failures, finished: false } })
   let done = 0, failed = 0
@@ -1183,11 +1197,11 @@ async function runOppImportInBackground(rows, label, skippedCount, opts) {
       const d = opts.directOppUpdate
         ? await fetchJson(`${API}&mode=update_opportunity_by_id`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ opportunityId: row.searchByValue, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, batchLabel }),
+            body: JSON.stringify({ opportunityId: row.searchByValue, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, batchLabel, batchId }),
           })
         : await fetchJson(`${API}&mode=create_opportunity`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ searchByAttr: opts.searchByAttr, searchByValue: row.searchByValue, prospectId: row.prospectId || undefined, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, overwriteFields: opts.overwriteFields, batchLabel }),
+            body: JSON.stringify({ searchByAttr: opts.searchByAttr, searchByValue: row.searchByValue, prospectId: row.prospectId || undefined, eventCode: opts.eventCode, note: row.note || undefined, fields: row.fields, overwriteFields: opts.overwriteFields, batchLabel, batchId }),
           })
       const rowRejected = opts.directOppUpdate ? !(d && d.Status === 'Success') : lsqRejected(d)
       if (rowRejected) {
@@ -1316,9 +1330,9 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
           {progress?.failed || 0} failed · {progress?.skipped || 0} skipped (no match value){!finished && <> · currently: {progress?.currentRow || '—'}</>}
         </div>
         {progress?.failures?.length > 0 && (
-          <div style={{ border: '0.5px solid #FECACA', borderRadius: 10, maxHeight: 200, overflowY: 'auto', padding: '8px 10px', background: '#FEF2F2', marginBottom: finished ? 12 : 0 }}>
+          <div style={{ border: '0.5px solid rgba(31,60,132,0.22)', borderRadius: 10, maxHeight: 200, overflowY: 'auto', padding: '8px 10px', background: '#E8EFF9', marginBottom: finished ? 12 : 0 }}>
             {progress.failures.map((f, i) => (
-              <div key={i} style={{ fontSize: 11.5, color: '#B91C1C', marginBottom: 4 }}><b>{f.label}</b> — {f.message}</div>
+              <div key={i} style={{ fontSize: 11.5, color: '#1F3C84', marginBottom: 4 }}><b>{f.label}</b> — {f.message}</div>
             ))}
           </div>
         )}
@@ -1383,14 +1397,14 @@ const OPP_STATUS_STYLE = {
   failed: { color: '#1F3C84', bg: '#E8EFF9', label: 'Failed' },
 }
 
-function OpportunityActivityRow({ row }) {
+function OpportunityActivityRow({ row, nested }) {
   const [open, setOpen] = useState(false)
   const st = OPP_STATUS_STYLE[row.status] || OPP_STATUS_STYLE.failed
   let response = null, request = null
   try { response = row.response_json ? JSON.parse(row.response_json) : null } catch (_) { /* stored malformed, show raw string instead */ }
   try { request = row.request_json ? JSON.parse(row.request_json) : null } catch (_) { /* same */ }
   return (
-    <div style={{ padding: '14px 18px', borderTop: '0.5px solid ' + C.border }}>
+    <div style={{ padding: nested ? '12px 18px 12px 44px' : '14px 18px', borderTop: '0.5px solid ' + C.border }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
@@ -1430,14 +1444,86 @@ function OpportunityActivityRow({ row }) {
   )
 }
 
+// Groups the flat, newest-first activity list into one collapsed card per bulk-import
+// run, plus every single-form submit as its own row (unchanged from before). Grouping
+// key is batch_id when present (a real random id, collision-free) falling back to
+// batch_label for any row written before that column existed -- so today's already-run
+// bulk imports (batch_id null, batch_label set) still group correctly retroactively.
+// Preserves the newest-first order: a batch's card sits wherever its most recent row
+// falls in the list, since that's the first occurrence of its key in a desc-sorted feed.
+function groupOpportunityRows(rows) {
+  const groups = new Map()
+  const items = []
+  rows.forEach(r => {
+    const key = r.batch_id || r.batch_label || null
+    if (!key) { items.push({ type: 'single', row: r }); return }
+    let g = groups.get(key)
+    if (!g) {
+      g = { key, label: r.batch_label || 'Bulk import', rows: [] }
+      groups.set(key, g)
+      items.push({ type: 'batch', key })
+    }
+    g.rows.push(r)
+  })
+  return items.map(it => it.type === 'single' ? it : { type: 'batch', group: groups.get(it.key) })
+}
+
+// One collapsed card per bulk run -- was previously 1,000 flat rows dumped straight into
+// the list with no way to see the batch as a whole, which is what this whole tab exists
+// to answer (per explicit ask: "history should have one detailed click and there it opens
+// the details of every single opp"). Collapsed by default; expanding renders every row
+// via the exact same OpportunityActivityRow single submits use.
+function OpportunityBatchGroup({ group }) {
+  const [open, setOpen] = useState(false)
+  const stats = useMemo(() => ({
+    total: group.rows.length,
+    success: group.rows.filter(r => r.status === 'success').length,
+    duplicate: group.rows.filter(r => r.status === 'duplicate').length,
+    failed: group.rows.filter(r => r.status === 'failed').length,
+  }), [group.rows])
+  const latest = group.rows[0]
+  return (
+    <div style={{ borderTop: '0.5px solid ' + C.border }}>
+      <button type="button" onClick={() => setOpen(v => !v)} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px',
+        background: open ? 'var(--bg3)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: FONT,
+      }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s', flexShrink: 0 }}><path d="M9 18l6-6-6-6" /></svg>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 3 }}>{group.label}</div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 11, color: C.muted }}>
+            <span>{fmtN(stats.total)} opportunit{stats.total === 1 ? 'y' : 'ies'}</span>
+            {stats.success > 0 && <span style={{ color: '#178A54', fontWeight: 700 }}>{fmtN(stats.success)} success</span>}
+            {stats.duplicate > 0 && <span style={{ color: '#1C9FD4', fontWeight: 700 }}>{fmtN(stats.duplicate)} duplicate</span>}
+            {stats.failed > 0 && <span style={{ color: '#1F3C84', fontWeight: 700 }}>{fmtN(stats.failed)} failed</span>}
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', fontSize: 11, color: C.muted, flexShrink: 0 }}>
+          <div style={{ fontWeight: 700, color: C.text }}>{latest.created_by || 'unknown'}</div>
+          <div>{latest.created_at ? new Date(latest.created_at).toLocaleString() : ''}</div>
+        </div>
+      </button>
+      {open && (
+        <div style={{ background: 'var(--bg3)' }}>
+          {group.rows.map(r => <OpportunityActivityRow key={r.id} row={r} nested />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function OpportunityHistoryTab() {
   const [rows, setRows] = useState(null)
+  const [meta, setMeta] = useState({ total: null, truncated: false })
   const [error, setError] = useState('')
   const { running } = useOppImportProgress()
   const wasRunning = useRef(false)
 
   const load = useCallback(() => {
-    fetchJson(`${API}&mode=opportunity_activity_list`).then(d => { setRows(d.rows || []); setError('') }).catch(e => setError(String(e.message || e)))
+    fetchJson(`${API}&mode=opportunity_activity_list`)
+      .then(d => { setRows(d.rows || []); setMeta({ total: d.total ?? null, truncated: !!d.truncated }); setError('') })
+      .catch(e => setError(String(e.message || e)))
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -1457,13 +1543,16 @@ function OpportunityHistoryTab() {
   const notSetUp = !!error
   const stats = useMemo(() => {
     const list = rows || []
+    const batchKeys = new Set(list.map(r => r.batch_id || r.batch_label).filter(Boolean))
     return {
       total: list.length,
       success: list.filter(r => r.status === 'success').length,
       duplicate: list.filter(r => r.status === 'duplicate').length,
       failed: list.filter(r => r.status === 'failed').length,
+      batches: batchKeys.size,
     }
   }, [rows])
+  const grouped = useMemo(() => groupOpportunityRows(rows || []), [rows])
 
   return (
     <div>
@@ -1476,7 +1565,7 @@ function OpportunityHistoryTab() {
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
-          {[['Total attempts', stats.total], ['Success', stats.success], ['Duplicate', stats.duplicate], ['Failed', stats.failed]].map(([lbl, v]) => (
+          {[['Total attempts', stats.total], ['Success', stats.success], ['Duplicate', stats.duplicate], ['Failed', stats.failed], ...(stats.batches > 0 ? [['Bulk batches', stats.batches]] : [])].map(([lbl, v]) => (
             <div key={lbl}>
               <div style={{ fontSize: 19, fontWeight: 800, color: C.text }}>{fmtN(v)}</div>
               <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{lbl}</div>
@@ -1490,9 +1579,16 @@ function OpportunityHistoryTab() {
       ) : notSetUp ? null : rows.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 0', color: C.muted, fontSize: 13.5 }}>Nothing yet -- every Create/Update attempt, single or bulk, will show up here.</div>
       ) : (
-        <div style={{ border: '0.5px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
-          {rows.map(r => <OpportunityActivityRow key={r.id} row={r} />)}
-        </div>
+        <>
+          {meta.truncated && (
+            <TruncationNote shown={rows.length} totalKnown={meta.total} label="attempts" />
+          )}
+          <div style={{ border: '0.5px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
+            {grouped.map(it => it.type === 'batch'
+              ? <OpportunityBatchGroup key={it.group.key} group={it.group} />
+              : <OpportunityActivityRow key={it.row.id} row={it.row} />)}
+          </div>
+        </>
       )}
     </div>
   )
@@ -1584,7 +1680,7 @@ function CreateOpportunityTab() {
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, padding: 3, borderRadius: 10, background: 'var(--bg3)', width: 'fit-content' }}>
         {[['single', 'Single'], ['bulk', 'Bulk import'], ['history', 'History']].map(([m, lbl]) => (
           <button key={m} type="button" onClick={() => setMode(m)} style={{
-            padding: '6px 16px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: FONT,
+            padding: '7px 18px', borderRadius: 9, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', fontFamily: FONT,
             background: mode === m ? 'var(--card)' : 'transparent', color: mode === m ? '#1F3C84' : C.muted,
             boxShadow: mode === m ? '0 1px 4px rgba(15,23,42,0.10)' : 'none',
           }}>{lbl}</button>
@@ -1607,15 +1703,15 @@ function CreateOpportunityTab() {
               Lead ID (ProspectID) <span style={{ fontWeight: 500 }}>-- optional, doesn't change which field is matched on below</span>
             </label>
             {mode === 'single'
-              ? <input value={prospectId} onChange={e => setProspectId(e.target.value)} placeholder="e.g. 4d03f397-49e7-4e4e-8168-5f51d591c592" style={{ ...inputStyle, width: '100%', maxWidth: 420 }} />
+              ? <input value={prospectId} onChange={e => setProspectId(e.target.value)} placeholder="e.g. 4d03f397-49e7-4e4e-8168-5f51d591c592" style={{ ...oppCtl, width: '100%', maxWidth: 420 }} />
               : <p style={{ fontSize: 11, color: C.muted, margin: 0 }}>Mapped per row from your file in step 4 below, if you have it.</p>}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <Dropdown value={SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l} onChange={l => setSearchByAttr(SEARCH_BY_OPTIONS.find(o => o.l === l)?.v || searchByAttr)}
             options={SEARCH_BY_OPTIONS.map(o => o.l)} minWidth={200} />
-          {mode === 'single' && <input value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder={isDirect ? 'e.g. 7c8901ce-ddc2-423b-b7d8-c6eca200c360' : 'e.g. jane@example.com'} style={{ ...inputStyle, flex: 1, minWidth: 200 }} />}
+          {mode === 'single' && <input value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder={isDirect ? 'e.g. 7c8901ce-ddc2-423b-b7d8-c6eca200c360' : 'e.g. jane@example.com'} style={{ ...oppCtl, flex: 1, minWidth: 220 }} />}
         </div>
         {mode === 'bulk' && <p style={{ fontSize: 11, color: C.muted, margin: '8px 0 0' }}>Each row's {isDirect ? 'Opportunity ID' : 'match value'} comes from your file, mapped in step 4 below.</p>}
       </div>
@@ -1625,8 +1721,8 @@ function CreateOpportunityTab() {
         <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
           The event code for this opportunity type -- find it at LeadSquared &rarr; My Profile &rarr; Settings &rarr; Opportunities &rarr; Opportunity Types.
         </p>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input value={eventCode} onChange={e => setEventCode(e.target.value.replace(/[^0-9]/g, ''))} style={{ ...inputStyle, width: 120 }} />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <input value={eventCode} onChange={e => setEventCode(e.target.value.replace(/[^0-9]/g, ''))} style={{ ...oppCtl, width: 130 }} />
           <Button size="sm" variant="secondary" onClick={loadSchema} disabled={schemaLoading}>{schemaLoading ? 'Loading fields…' : 'Load fields'}</Button>
           {schema && schema.displayName && <span style={{ fontSize: 11.5, color: C.muted }}>{schema.displayName}</span>}
         </div>
@@ -1649,13 +1745,13 @@ function CreateOpportunityTab() {
                 {fields.map(f => (
                   <div key={f.schemaName}>
                     <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: C.muted, marginBottom: 4 }}>
-                      {f.displayName}{f.isMandatory ? <span style={{ color: '#B91C1C' }}> *</span> : null}
+                      {f.displayName}{f.isMandatory ? <span style={{ color: '#1F3C84' }}> *</span> : null}
                     </label>
                     {Array.isArray(f.inlineOptions) && f.inlineOptions.length > 0 ? (
                       <Dropdown value={fieldValues[f.schemaName] || ''} onChange={v => set1(f.schemaName, v)}
                         options={['', ...f.inlineOptions]} minWidth={140} />
                     ) : (
-                      <input value={fieldValues[f.schemaName] || ''} onChange={e => set1(f.schemaName, e.target.value)} style={{ ...inputStyle, width: '100%' }} />
+                      <input value={fieldValues[f.schemaName] || ''} onChange={e => set1(f.schemaName, e.target.value)} style={{ ...oppCtl, width: '100%' }} />
                     )}
                   </div>
                 ))}
@@ -1665,7 +1761,7 @@ function CreateOpportunityTab() {
 
           <div style={{ marginBottom: 18 }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>Note <span style={{ fontWeight: 500, color: C.muted, fontSize: 11.5 }}>(optional)</span></div>
-            <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} style={{ ...inputStyle, width: '100%', resize: 'vertical', fontFamily: FONT }} />
+            <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} style={{ ...oppCtl, width: '100%', resize: 'vertical', fontFamily: FONT, lineHeight: 1.5 }} />
           </div>
 
           {isDirect ? (
