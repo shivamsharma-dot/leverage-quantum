@@ -3189,6 +3189,34 @@ async function handleB2C(req, res, me) {
   }
 }
 
+// YouTube -- admin-only for now (no dedicated dashboard page exists yet; this
+// is the first of the 4 planned Organic/Social Analytics sources, being wired
+// up and independently verified before any UI is built on top of it).
+async function handleYoutube(req, res, me) {
+  const { canAccessDashboard } = await import('../lib/auth.mjs');
+  if (!canAccessDashboard(me.role, 'settings')) return res.status(403).json({ error: 'Forbidden' });
+  const { youtubeCreds, youtubeConfigured, fetchYoutubeChannelStats, fetchYoutubeAnalyticsRange } = await import('../lib/youtube.mjs');
+  const creds = youtubeCreds();
+  if (!youtubeConfigured(creds)) return res.status(200).json({ configured: false });
+  const mode = (req.query && req.query.mode) || 'stats';
+  try {
+    if (mode === 'stats') {
+      const stats = await fetchYoutubeChannelStats(creds);
+      return res.status(200).json({ configured: true, stats });
+    }
+    if (mode === 'range') {
+      const since = (req.query && req.query.since) || null;
+      const until = (req.query && req.query.until) || null;
+      if (!since || !until) return res.status(400).json({ error: 'since and until (YYYY-MM-DD) are required' });
+      const range = await fetchYoutubeAnalyticsRange(creds, since, until);
+      return res.status(200).json({ configured: true, range });
+    }
+    return res.status(400).json({ error: 'unknown mode' });
+  } catch (e) {
+    return res.status(502).json({ error: 'youtube fetch failed', detail: String((e && e.message) || e) });
+  }
+}
+
 export default async function handler(req, res) {
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
@@ -3216,6 +3244,7 @@ export default async function handler(req, res) {
   if ((req.query && req.query.source) === 'leadsquared') return handleLeadSquared(req, res, me)
   if ((req.query && req.query.source) === 'bigquery') return handleBigQuery(req, res, me)
   if ((req.query && req.query.source) === 'b2c') return handleB2C(req, res, me)
+  if ((req.query && req.query.source) === 'youtube') return handleYoutube(req, res, me)
 
   if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
     return res.status(403).json({ error: 'Forbidden' })
