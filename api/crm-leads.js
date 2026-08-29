@@ -3194,7 +3194,7 @@ async function handleB2C(req, res, me) {
 // up and independently verified before any UI is built on top of it).
 async function handleYoutube(req, res, me) {
   const { canAccessDashboard } = await import('../lib/auth.mjs');
-  if (!canAccessDashboard(me.role, 'settings')) return res.status(403).json({ error: 'Forbidden' });
+  if (!canAccessDashboard(me.role, 'organic_social')) return res.status(403).json({ error: 'Forbidden' });
   const { youtubeCreds, youtubeConfigured, fetchYoutubeChannelStats, fetchYoutubeAnalyticsRange } = await import('../lib/youtube.mjs');
   const creds = youtubeCreds();
   if (!youtubeConfigured(creds)) return res.status(200).json({ configured: false });
@@ -3217,12 +3217,10 @@ async function handleYoutube(req, res, me) {
   }
 }
 
-// Instagram -- admin-only for now (no dedicated dashboard page exists yet; second
-// of the 4 planned Organic/Social Analytics sources, being wired up and
-// independently verified before any UI is built on top of it).
+// Instagram -- gated on the Organic & Social dashboard page's own access grant.
 async function handleInstagram(req, res, me) {
   const { canAccessDashboard } = await import('../lib/auth.mjs');
-  if (!canAccessDashboard(me.role, 'settings')) return res.status(403).json({ error: 'Forbidden' });
+  if (!canAccessDashboard(me.role, 'organic_social')) return res.status(403).json({ error: 'Forbidden' });
   const { instagramCreds, instagramConfigured, fetchInstagramProfile, fetchInstagramInsights, exchangeForLongLivedToken, refreshLongLivedToken } = await import('../lib/instagram.mjs');
   const creds = instagramCreds();
   if (!instagramConfigured(creds)) return res.status(200).json({ configured: false });
@@ -3255,6 +3253,31 @@ async function handleInstagram(req, res, me) {
   }
 }
 
+// GA4 -- gated the same way as Instagram/YouTube above. Currently BLOCKED
+// (see lib/ga4.mjs's header comment) -- configured:true but every real call
+// 403s until the service account is granted GA4 property access. Written now
+// so the dashboard starts working the moment that's granted.
+async function handleGA4(req, res, me) {
+  const { canAccessDashboard } = await import('../lib/auth.mjs');
+  if (!canAccessDashboard(me.role, 'organic_social')) return res.status(403).json({ error: 'Forbidden' });
+  const { ga4Creds, ga4Configured, fetchGA4WebsiteUsers } = await import('../lib/ga4.mjs');
+  const creds = ga4Creds();
+  if (!ga4Configured(creds)) return res.status(200).json({ configured: false });
+  const mode = (req.query && req.query.mode) || 'range';
+  try {
+    if (mode === 'range') {
+      const since = req.query && req.query.since;
+      const until = req.query && req.query.until;
+      if (!since || !until) return res.status(400).json({ error: 'since and until (YYYY-MM-DD) are required' });
+      const range = await fetchGA4WebsiteUsers(creds, since, until);
+      return res.status(200).json({ configured: true, range });
+    }
+    return res.status(400).json({ error: 'unknown mode' });
+  } catch (e) {
+    return res.status(502).json({ error: 'ga4 fetch failed', detail: String((e && e.message) || e) });
+  }
+}
+
 export default async function handler(req, res) {
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
@@ -3284,6 +3307,7 @@ export default async function handler(req, res) {
   if ((req.query && req.query.source) === 'b2c') return handleB2C(req, res, me)
   if ((req.query && req.query.source) === 'youtube') return handleYoutube(req, res, me)
   if ((req.query && req.query.source) === 'instagram') return handleInstagram(req, res, me)
+  if ((req.query && req.query.source) === 'ga4') return handleGA4(req, res, me)
 
   if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
     return res.status(403).json({ error: 'Forbidden' })

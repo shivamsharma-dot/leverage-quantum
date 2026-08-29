@@ -13,6 +13,7 @@ const ROASDashboard = lazy(COMPONENT_IMPORTS.ROASDashboard)
 const LeadQualityDashboard = lazy(COMPONENT_IMPORTS.LeadQualityDashboard)
 const ChannelMixDashboard = lazy(COMPONENT_IMPORTS.ChannelMixDashboard)
 const RevenueDashboard = lazy(COMPONENT_IMPORTS.RevenueDashboard)
+const OrganicSocialDashboard = lazy(COMPONENT_IMPORTS.OrganicSocialDashboard)
 const LeadQualificationDashboard = lazy(COMPONENT_IMPORTS.LeadQualificationDashboard)
 const HumanQLDetailDashboard = lazy(COMPONENT_IMPORTS.HumanQLDetailDashboard)
 const AIQLDetailDashboard = lazy(COMPONENT_IMPORTS.AIQLDetailDashboard)
@@ -56,6 +57,7 @@ const PAGE_TITLES = {
   '/dashboard/lead-quality': 'Lead Quality',
   '/dashboard/channel-mix': 'Channel Mix',
   '/dashboard/revenue': 'Revenue',
+  '/dashboard/organic-social': 'Organic & Social',
   '/dashboard/lq-ops': 'Daily QLs',
   '/dashboard/lq-ops-monthly': 'Monthly QLs',
   '/dashboard/lq-ops-detail': 'Human QL Detail',
@@ -279,6 +281,7 @@ export default function App() {
           <Route path="/dashboard/lead-quality" element={<ProtectedRoute dashboardId="lead_quality"><LeadQualityDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/channel-mix" element={<ProtectedRoute dashboardId="channel_mix"><ChannelMixDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/revenue" element={<ProtectedRoute dashboardId="revenue"> <RevenueDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/organic-social" element={<ProtectedRoute dashboardId="organic_social"><OrganicSocialDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/lq-ops" element={<ProtectedRoute dashboardId="lq_ops"> <LeadQualificationDashboard forcedView="daily" /></ProtectedRoute>} />
           <Route path="/dashboard/lq-ops-monthly" element={<ProtectedRoute dashboardId="lq_ops_monthly"> <LeadQualificationDashboard forcedView="monthly" /></ProtectedRoute>} />
           <Route path="/dashboard/lq-ops-detail" element={<ProtectedRoute dashboardId="lq_ops_detail"> <HumanQLDetailDashboard /></ProtectedRoute>} />

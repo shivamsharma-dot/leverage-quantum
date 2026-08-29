@@ -106,6 +106,7 @@ export const NAV = [
       { to: '/dashboard/lead-quality', icon: <FunnelIcon />,   label: 'Lead Quality', end: false },
       { to: '/dashboard/channel-mix',  icon: <MixIcon />,      label: 'Channel Mix',  end: false },
       { to: '/dashboard/revenue',      icon: <RevenueIcon />,  label: 'Revenue',      end: false },
+      { to: '/dashboard/organic-social', icon: <OrganicSocialIcon />, label: 'Organic & Social', end: false },
       {
         to: '/dashboard/lq-ops',
         navKey: 'ql_ops',
@@ -165,6 +166,7 @@ export const PAGE_LIST = [
   { id:'lead_quality', label:'Lead Quality', path:'/dashboard/lead-quality',adminOnly:false },
   { id:'channel_mix',  label:'Channel Mix',  path:'/dashboard/channel-mix', adminOnly:false },
   { id:'revenue',      label:'Revenue',      path:'/dashboard/revenue',     adminOnly:false },
+  { id:'organic_social', label:'Organic & Social', path:'/dashboard/organic-social', adminOnly:false },
   { id:'lq_ops',         label:'Daily QLs',    path:'/dashboard/lq-ops',          adminOnly:false },
   { id:'lq_ops_monthly', label:'Monthly QLs',  path:'/dashboard/lq-ops-monthly',  adminOnly:false },
   { id:'lq_ops_detail', label:'Human QL Detail', path:'/dashboard/lq-ops-detail', adminOnly:false },
@@ -204,6 +206,7 @@ function LeadsAssignedIcon(){ return <svg width="14" height="14" viewBox="0 0 24
 function PeopleIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> }
 // Rupee, not dollar -- every figure behind Revenue and the B2C page is INR.
 function RevenueIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg> }
+function OrganicSocialIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5 15.4 6.5"/><path d="M8.6 13.5 15.4 17.5"/></svg> }
 function MetaIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg> }
 // Leverage Careers -- a briefcase, distinct from the generic MetaIcon glyph
 // used for the main Meta Ads account since this is a separate ad account.
