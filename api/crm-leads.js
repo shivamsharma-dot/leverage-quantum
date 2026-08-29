@@ -3217,6 +3217,43 @@ async function handleYoutube(req, res, me) {
   }
 }
 
+// Instagram -- admin-only for now (no dedicated dashboard page exists yet; second
+// of the 4 planned Organic/Social Analytics sources, being wired up and
+// independently verified before any UI is built on top of it).
+async function handleInstagram(req, res, me) {
+  const { canAccessDashboard } = await import('../lib/auth.mjs');
+  if (!canAccessDashboard(me.role, 'settings')) return res.status(403).json({ error: 'Forbidden' });
+  const { instagramCreds, instagramConfigured, fetchInstagramProfile, fetchInstagramInsights, exchangeForLongLivedToken, refreshLongLivedToken } = await import('../lib/instagram.mjs');
+  const creds = instagramCreds();
+  if (!instagramConfigured(creds)) return res.status(200).json({ configured: false });
+  const mode = (req.query && req.query.mode) || 'profile';
+  try {
+    if (mode === 'profile') {
+      const profile = await fetchInstagramProfile(creds);
+      return res.status(200).json({ configured: true, profile });
+    }
+    if (mode === 'insights') {
+      const metrics = (req.query && req.query.metrics) || 'reach,accounts_engaged,total_interactions,profile_views';
+      const since = req.query && req.query.since;
+      const until = req.query && req.query.until;
+      if (!since || !until) return res.status(400).json({ error: 'since and until (unix timestamps) are required' });
+      const insights = await fetchInstagramInsights(creds, metrics, since, until);
+      return res.status(200).json({ configured: true, insights });
+    }
+    if (mode === 'exchange_token') {
+      const result = await exchangeForLongLivedToken(creds);
+      return res.status(200).json({ configured: true, result });
+    }
+    if (mode === 'refresh_token') {
+      const result = await refreshLongLivedToken(creds);
+      return res.status(200).json({ configured: true, result });
+    }
+    return res.status(400).json({ error: 'unknown mode' });
+  } catch (e) {
+    return res.status(502).json({ error: 'instagram fetch failed', detail: String((e && e.message) || e) });
+  }
+}
+
 export default async function handler(req, res) {
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
@@ -3245,6 +3282,7 @@ export default async function handler(req, res) {
   if ((req.query && req.query.source) === 'bigquery') return handleBigQuery(req, res, me)
   if ((req.query && req.query.source) === 'b2c') return handleB2C(req, res, me)
   if ((req.query && req.query.source) === 'youtube') return handleYoutube(req, res, me)
+  if ((req.query && req.query.source) === 'instagram') return handleInstagram(req, res, me)
 
   if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
     return res.status(403).json({ error: 'Forbidden' })
