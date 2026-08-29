@@ -64,7 +64,7 @@ async function fetchJson(url, opts) {
 // against this page's white control fill measured ~1.14:1 (WCAG 1.4.11 non-text contrast
 // needs >=3:1), so you genuinely could not see where an input box started or ended. Scoped
 // to this file rather than changing the shared token everywhere it's used.
-const inputStyle = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '1px solid rgba(15,23,42,0.45)', borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
+const inputStyle = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '1px solid rgba(15,23,42,0.5)', borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
 
 const pillStyle = (active) => ({
   padding: '6px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
@@ -1206,7 +1206,7 @@ function LsqFileOrPasteInput({ onParsed }) {
 // which is why every text input on this tab looked out of place next to its own
 // Dropdowns and Buttons. Scoped to Create Opportunity only; the read-only tabs'
 // date/search inputs keep the original `inputStyle`.
-const oppCtl = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '1px solid rgba(15,23,42,0.45)', borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
+const oppCtl = { fontFamily: FONT, fontSize: 13.5, color: C.text, border: '1px solid rgba(15,23,42,0.5)', borderRadius: 11, padding: '7px 12px', background: 'var(--card)', outline: 'none' }
 
 // Background bulk-create store -- a plain module-level object (same pattern as Team
 // Mapping's createUsersStore) so the run survives switching tabs/pages within this
