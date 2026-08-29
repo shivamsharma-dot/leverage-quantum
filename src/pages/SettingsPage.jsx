@@ -372,6 +372,60 @@ function sourceCategory(s) {
 
 
 // Mini SVG icon renderer for KPI icon picker
+// Shared render for the LinkedIn / X weekly manual-entry cards -- state and
+// save/add/remove handlers live in SettingsPage itself (two explicit copies,
+// since there are exactly two of these sources), but the markup is identical
+// so it's factored out here rather than duplicated twice.
+function SocialManualCard({ title, description, fields, weekValue, onWeekChange, fieldValues, onFieldChange, onAdd, saving, msg, entries, onEdit, onRemove }) {
+  return (
+    <div className={styles.card} style={{ marginTop: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
+        <div>
+          <h3 className={styles.cardTitle} style={{ marginBottom: 4 }}>{title}</h3>
+          <p className={styles.cardDesc} style={{ margin: 0 }}>{description}</p>
+        </div>
+        {msg && (
+          <span style={{ fontSize: 11, fontWeight: 600, color: msg.type === 'ok' ? '#16A34A' : '#DC2626', background: msg.type === 'ok' ? '#F0FDF4' : 'var(--bg3)', border: '0.5px solid ' + (msg.type === 'ok' ? '#BBF7D0' : '#FECACA'), borderRadius: 6, padding: '3px 10px', whiteSpace: 'nowrap', flexShrink: 0 }}>{msg.text}</span>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        <input type="week" value={weekValue} onChange={e => onWeekChange(e.target.value)}
+          className={styles.input} style={{ width: 150 }} />
+        {fields.map(f => (
+          <input key={f.key} type="number" min="0" step="any" placeholder={f.placeholder}
+            value={fieldValues[f.key] ?? ''} onChange={e => onFieldChange(f.key, e.target.value)}
+            className={styles.input} style={{ width: 150 }} />
+        ))}
+        <Button size="sm" onClick={onAdd} disabled={saving}>{saving ? 'Saving…' : (entries[weekValue] ? 'Update week' : 'Add week')}</Button>
+      </div>
+
+      {Object.keys(entries).length === 0 ? (
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>No weeks entered yet.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {Object.entries(entries).sort((a, b) => b[0].localeCompare(a[0])).map(([wk, vals]) => (
+            <div key={wk} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--bg3)', border: '0.5px solid var(--border)', flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 90, fontSize: 12.5, fontWeight: 700, color: 'var(--text)' }}>{wk}</div>
+              {fields.map(f => (
+                <div key={f.key} style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--brand-ink)' }}>{Number(vals[f.key] || 0).toLocaleString('en-IN')}</span> {f.label}
+                </div>
+              ))}
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+                <button type="button" onClick={() => onEdit(wk, vals)}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--brand-ink)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                <button type="button" onClick={() => onRemove(wk)}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--text-3)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Remove</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function KpiIconPreview({ name, color = 'var(--text-3)' }) {
   const s = { width:16, height:16, viewBox:'0 0 24 24', fill:'none', stroke: color, strokeWidth:2, strokeLinecap:'round', strokeLinejoin:'round' }
   const icons = {
@@ -799,6 +853,87 @@ export default function SettingsPage() {
       const next = { ...affiliateSpend }; delete next[ym]
       saveAffiliateSpend(next, 'Removed')
     }
+    // LinkedIn and X have no free API access for this data (LinkedIn's Marketing
+    // Developer Platform needs a multi-month partner approval; X's API is
+    // pay-per-use with no free tier -- confirmed live, a bearer-token call
+    // returned "credits depleted" even for a basic public-metrics read). Both are
+    // entered here weekly instead, same shape, same pattern as affiliate spend
+    // above -- kept as two explicit blocks rather than one shared abstraction
+    // since there are exactly two of them.
+    const SOCIAL_MANUAL_FIELDS = [
+      { key: 'followers', label: 'Followers', placeholder: 'Followers' },
+      { key: 'views', label: 'Views / impressions', placeholder: 'Views / impressions' },
+      { key: 'reach', label: 'Reach', placeholder: 'Reach' },
+      { key: 'interactions', label: 'Interactions', placeholder: 'Interactions' },
+      { key: 'engagementRate', label: 'Engagement rate %', placeholder: 'Engagement rate %' },
+    ]
+    const [linkedinManual, setLinkedinManual] = useState({}) // { 'YYYY-Www': { followers, views, reach, interactions, engagementRate } }
+    const [linkedinWeek, setLinkedinWeek] = useState('')
+    const [linkedinFields, setLinkedinFields] = useState({})
+    const [linkedinSaving, setLinkedinSaving] = useState(false)
+    const [linkedinMsg, setLinkedinMsg] = useState(null)
+    const saveLinkedinManual = async (next, successMsg) => {
+      const prev = linkedinManual
+      setLinkedinManual(next)
+      setLinkedinSaving(true); setLinkedinMsg(null)
+      try {
+        const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'linkedin_manual', value: next }) })
+        if (!r.ok) throw new Error('Save failed')
+        setLinkedinMsg({ type: 'ok', text: successMsg || 'Saved' })
+      } catch (e) {
+        setLinkedinManual(prev)
+        setLinkedinMsg({ type: 'err', text: e.message })
+      } finally {
+        setLinkedinSaving(false)
+        setTimeout(() => setLinkedinMsg(null), 4000)
+      }
+    }
+    const addLinkedinWeek = () => {
+      if (!linkedinWeek) { setLinkedinMsg({ type: 'err', text: 'Pick a week' }); return }
+      const parsed = {}
+      for (const f of SOCIAL_MANUAL_FIELDS) parsed[f.key] = Number(linkedinFields[f.key]) || 0
+      const next = { ...linkedinManual, [linkedinWeek]: parsed }
+      saveLinkedinManual(next, 'Saved')
+      setLinkedinWeek(''); setLinkedinFields({})
+    }
+    const removeLinkedinWeek = (wk) => {
+      const next = { ...linkedinManual }; delete next[wk]
+      saveLinkedinManual(next, 'Removed')
+    }
+
+    const [xManual, setXManual] = useState({})
+    const [xWeek, setXWeek] = useState('')
+    const [xFields, setXFields] = useState({})
+    const [xSaving, setXSaving] = useState(false)
+    const [xMsg, setXMsg] = useState(null)
+    const saveXManual = async (next, successMsg) => {
+      const prev = xManual
+      setXManual(next)
+      setXSaving(true); setXMsg(null)
+      try {
+        const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'x_manual', value: next }) })
+        if (!r.ok) throw new Error('Save failed')
+        setXMsg({ type: 'ok', text: successMsg || 'Saved' })
+      } catch (e) {
+        setXManual(prev)
+        setXMsg({ type: 'err', text: e.message })
+      } finally {
+        setXSaving(false)
+        setTimeout(() => setXMsg(null), 4000)
+      }
+    }
+    const addXWeek = () => {
+      if (!xWeek) { setXMsg({ type: 'err', text: 'Pick a week' }); return }
+      const parsed = {}
+      for (const f of SOCIAL_MANUAL_FIELDS) parsed[f.key] = Number(xFields[f.key]) || 0
+      const next = { ...xManual, [xWeek]: parsed }
+      saveXManual(next, 'Saved')
+      setXWeek(''); setXFields({})
+    }
+    const removeXWeek = (wk) => {
+      const next = { ...xManual }; delete next[wk]
+      saveXManual(next, 'Removed')
+    }
     const disconnectMeta = async () => {
       if (!window.confirm('Disconnect the shared Meta Ads token? Meta Ads, Ask AI, and email reports will stop showing live data for everyone until an admin reconnects.')) return
       setMetaDisconnecting(true); setMetaDisconnectMsg(null)
@@ -963,6 +1098,8 @@ export default function SettingsPage() {
                     setBizFields(prev => ({ ...prev, ...pf.business_context }))
                   }
                   if (pf.affiliate_spend_manual && typeof pf.affiliate_spend_manual === 'object') setAffiliateSpend(pf.affiliate_spend_manual)
+                  if (pf.linkedin_manual && typeof pf.linkedin_manual === 'object') setLinkedinManual(pf.linkedin_manual)
+                  if (pf.x_manual && typeof pf.x_manual === 'object') setXManual(pf.x_manual)
       })
       .catch(() => {})
       .finally(() => setPrefLoading(false))
@@ -2431,6 +2568,43 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                   </div>
                 )}
               </div>
+
+              {/* ── LINKEDIN / X (MANUAL) ── Neither has free API access: LinkedIn's
+                  Marketing Developer Platform needs a multi-month partner approval;
+                  X's API is pay-per-use with no free tier (confirmed live -- a real
+                  bearer-token call returned "credits depleted"). Entered here weekly
+                  instead, same shape as affiliate spend above. */}
+              <SocialManualCard
+                title="LinkedIn — manual entry"
+                description="LinkedIn has no free API access for this data (requires a multi-month Marketing Developer Platform partner approval). Enter it here weekly."
+                fields={SOCIAL_MANUAL_FIELDS}
+                weekValue={linkedinWeek}
+                onWeekChange={setLinkedinWeek}
+                fieldValues={linkedinFields}
+                onFieldChange={(k, v) => setLinkedinFields(prev => ({ ...prev, [k]: v }))}
+                onAdd={addLinkedinWeek}
+                saving={linkedinSaving}
+                msg={linkedinMsg}
+                entries={linkedinManual}
+                onEdit={(wk, vals) => { setLinkedinWeek(wk); setLinkedinFields(vals) }}
+                onRemove={removeLinkedinWeek}
+              />
+
+              <SocialManualCard
+                title="X (Twitter) — manual entry"
+                description="X's API is pay-per-use with no free tier — confirmed live, even a basic read failed with 'credits depleted'. Enter it here weekly instead."
+                fields={SOCIAL_MANUAL_FIELDS}
+                weekValue={xWeek}
+                onWeekChange={setXWeek}
+                fieldValues={xFields}
+                onFieldChange={(k, v) => setXFields(prev => ({ ...prev, [k]: v }))}
+                onAdd={addXWeek}
+                saving={xSaving}
+                msg={xMsg}
+                entries={xManual}
+                onEdit={(wk, vals) => { setXWeek(wk); setXFields(vals) }}
+                onRemove={removeXWeek}
+              />
 
             </>
           )}

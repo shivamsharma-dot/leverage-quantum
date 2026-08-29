@@ -99,7 +99,7 @@ export default async function handler(req, res) {
     // on the Daily P&L / Daily Cash Flow pages themselves (both viewable by
     // non-admins) -- plain explanatory copy, not a credential, and the same
     // value both Slack report versions read via ctx.revVsCashflowNote.
-    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note'])
+    const PUBLIC_KEYS = new Set(['hidden_pages', 'lq_button_style', 'lq_kpi_style', 'affiliate_spend_manual', 'slack_test_channels', 'b2c_rev_vs_cashflow_note', 'linkedin_manual', 'x_manual'])
     const visibleRows = me.role === 'admin' ? rows : rows.filter(row => PUBLIC_KEYS.has(row.key))
     const prefs = Object.fromEntries(visibleRows.map(row => [row.key, row.value]))
     const meta = Object.fromEntries(visibleRows.map(row => [row.key, row.updated_at]))
