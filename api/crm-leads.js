@@ -3236,8 +3236,9 @@ async function handleInstagram(req, res, me) {
       const metrics = (req.query && req.query.metrics) || 'reach,accounts_engaged,total_interactions,profile_views';
       const since = req.query && req.query.since;
       const until = req.query && req.query.until;
+      const metricType = (req.query && req.query.metric_type) || 'time_series';
       if (!since || !until) return res.status(400).json({ error: 'since and until (unix timestamps) are required' });
-      const insights = await fetchInstagramInsights(creds, metrics, since, until);
+      const insights = await fetchInstagramInsights(creds, metrics, since, until, metricType);
       return res.status(200).json({ configured: true, insights });
     }
     if (mode === 'exchange_token') {
