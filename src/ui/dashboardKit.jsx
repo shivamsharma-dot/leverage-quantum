@@ -7,6 +7,7 @@
 import React from 'react';
 import { useDesignStyle } from '../lib/designSettings';
 import { renderKpiVariant } from './kpiVariants.jsx';
+import { usePresentation } from '../lib/presentationContext.jsx';
 
 /* ===== Tokens ===== */
 
@@ -84,25 +85,77 @@ export function pct(a, b) { return b > 0 ? ((a / b) * 100).toFixed(1) + '%' : 'â
 // hardcoded #FFFFFF card, ~1.1:1 contrast, functionally invisible. Every fallback below
 // is the exact previous hardcoded value, so light mode (where the real CSS variable
 // happens to resolve to an almost-identical shade already) is visually unchanged.
-export const Card = ({ title, sub, children, action, noPad }) => (
-  <div style={{
-    background: 'var(--card,#fff)', border: '1px solid var(--card-border,#EEF1F6)', borderRadius: 16, overflow: 'hidden',
-    boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 12px 28px -16px rgba(16,24,40,0.16)',
-    display: 'flex', flexDirection: 'column',
-  }}>
-    <div style={{
-      padding: '15px 20px 13px', borderBottom: '1px solid var(--card-border,#F1F4F9)',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-    }}>
-      <div>
-        <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '-0.2px', color: 'var(--text,#0F1B33)', fontFamily: FONT }}>{title}</div>
-        {sub && <div style={{ fontSize: 12.5, color: 'var(--text3,#94A3B8)', marginTop: 3, fontFamily: FONT }}>{sub}</div>}
-      </div>
-      {action && <div style={{ flexShrink: 0 }}>{action}</div>}
-    </div>
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', ...(noPad ? {} : { padding: '16px 20px' }) }}>{children}</div>
-  </div>
+// title-less cards (e.g. a bare KPI strip) don't register as a presentation
+// slide -- there's nothing meaningful to show alone in a slideshow, and two
+// cards with no title would be indistinguishable in the slide list anyway.
+const FullscreenIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+  </svg>
 )
+const ExitFullscreenIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" /><path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+  </svg>
+)
+
+export const Card = ({ title, sub, children, action, noPad }) => {
+  const { register, updateNode, unregister, presenting, slides, index } = usePresentation()
+  const rootRef = React.useRef(null)
+  const idRef = React.useRef(null)
+  const [isFs, setIsFs] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!title) return undefined
+    idRef.current = register(title, rootRef.current)
+    return () => { if (idRef.current) unregister(idRef.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title])
+  React.useEffect(() => { if (idRef.current) updateNode(idRef.current, rootRef.current) })
+
+  React.useEffect(() => {
+    const onFsChange = () => setIsFs(document.fullscreenElement === rootRef.current)
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement === rootRef.current) document.exitFullscreen()
+    else rootRef.current && rootRef.current.requestFullscreen && rootRef.current.requestFullscreen()
+  }
+
+  const isCurrentSlide = presenting && title && slides[index] && slides[index].id === idRef.current
+  const isHiddenSlide = presenting && title && !isCurrentSlide && slides.some(s => s.id === idRef.current)
+
+  return (
+    <div ref={rootRef} style={{
+      background: 'var(--card,#fff)', border: '1px solid var(--card-border,#EEF1F6)', borderRadius: isFs ? 0 : 16, overflow: isFs ? 'auto' : 'hidden',
+      boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 12px 28px -16px rgba(16,24,40,0.16)',
+      display: isHiddenSlide ? 'none' : 'flex', flexDirection: 'column',
+      ...(isFs ? { position: 'fixed', inset: 0, zIndex: 9999, height: '100vh', width: '100vw' } : {}),
+      ...(isCurrentSlide && !isFs ? { position: 'fixed', inset: '5vh 6vw', zIndex: 9998, boxShadow: '0 30px 80px rgba(15,23,42,0.35)' } : {}),
+    }}>
+      <div style={{
+        padding: '15px 20px 13px', borderBottom: '1px solid var(--card-border,#F1F4F9)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+      }}>
+        <div>
+          <div style={{ fontSize: isCurrentSlide ? 22 : 15, fontWeight: 800, letterSpacing: '-0.2px', color: 'var(--text,#0F1B33)', fontFamily: FONT, transition: 'font-size .15s' }}>{title}</div>
+          {sub && <div style={{ fontSize: isCurrentSlide ? 14 : 12.5, color: 'var(--text3,#94A3B8)', marginTop: 3, fontFamily: FONT }}>{sub}</div>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {action}
+          <button
+            type="button" onClick={toggleFullscreen} title={isFs ? 'Exit full screen' : 'Full screen'}
+            style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--card-border,#E5E7EB)', background: 'var(--bg3,#F8FAFC)', color: 'var(--text3,#94A3B8)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+          >
+            {isFs ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+          </button>
+        </div>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', ...(noPad ? {} : { padding: isCurrentSlide ? '24px 32px' : '16px 20px' }) }}>{children}</div>
+    </div>
+  )
+}
 
 /* ===== KPI icons (monochrome SVG set) ===== */
 export const KPI_ICONS = {

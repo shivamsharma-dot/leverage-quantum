@@ -7,6 +7,7 @@ import { logActivity, pageLabel, installActivityTracker } from './components/Act
 import LoginPage from './pages/LoginPage'; import { prefetchSummaryAnalysis } from './lib/summaryData'
 import { COMPONENT_IMPORTS, prefetchAllRoutes } from './lib/routePrefetch'
 import { canAccessDashboard } from '../shared/access.mjs'
+import { PresentationProvider } from './lib/presentationContext.jsx'
 const DashboardHome = lazy(COMPONENT_IMPORTS.DashboardHome)
 const OverallDashboard = lazy(COMPONENT_IMPORTS.OverallDashboard)
 const ROASDashboard = lazy(COMPONENT_IMPORTS.ROASDashboard)
@@ -267,6 +268,7 @@ export default function App() {
       <style>{FADE_STYLE}</style>
       <CommandPalette />
       <ToastHost />
+      <PresentationProvider>
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -315,6 +317,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      </PresentationProvider>
     </ErrorBoundary>
   )
     }

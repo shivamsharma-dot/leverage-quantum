@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import styles from './Sidebar.module.css'
 import SnapshotTool from './SnapshotTool'
+import PresentationTool from './PresentationTool'
 import { prefetchRoute } from '../lib/routePrefetch'
 import { BRAND_LOGO_BARS, BRAND_LOGO_VIEWBOX, BRAND_LOGO_BASELINE } from '../../shared/brandLogo.mjs'
 import { canAccessDashboard } from '../../shared/access.mjs'
@@ -992,12 +993,14 @@ export default function Sidebar() {
           )}
         </div>
         <SnapshotTool/>
+        <PresentationTool/>
       </aside>
       {railExpanded && (
         <div className={styles.railExpandPanel} role="navigation" aria-label="Expanded sidebar"
           onMouseEnter={cancelCloseRailExpand} onMouseLeave={scheduleCloseRailExpand}>
           {renderNavBody()}
           <SnapshotTool/>
+        <PresentationTool/>
         </div>
       )}
       {hideMenuPopup}
@@ -1009,6 +1012,7 @@ export default function Sidebar() {
     <aside className={styles.sidebar}>
       {renderNavBody()}
       <SnapshotTool/>
+        <PresentationTool/>
       {hideMenuPopup}
     </aside>
   )
