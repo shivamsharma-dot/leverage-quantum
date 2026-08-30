@@ -107,15 +107,23 @@ function repeatsInCard(card, el) {
 function leafTitle(card) {
   const all = card.querySelectorAll('*')
   const lim = all.length < 150 ? all.length : 150
-  for (let i = 0; i < lim; i++) {
+  // Cheap test first. Running the structural guards on every leaf meant a
+  // 480-row table paid for inRepeatedRow, a repeated-class querySelectorAll
+  // and a same-baseline sweep on each of its numeric cells -- 60ms of the
+  // Present click. Only real title candidates are worth interrogating, and
+  // eight of them is enough to conclude a card has no usable title.
+  let tries = 0
+  for (let i = 0; i < lim && tries < 8; i++) {
     const el = all[i]
     if (el.children.length) continue
+    const t = (el.textContent || '').replace(/\s+/g, ' ').trim()
+    if (!isTitleish(t)) continue
+    tries++
     if (el.closest(TABLEISH)) continue
     if (inRepeatedRow(card, el)) continue
     if (repeatsInCard(card, el)) continue
     if (sharesRowWith(card, el)) continue
-    const t = (el.textContent || '').replace(/\s+/g, ' ').trim()
-    if (isTitleish(t)) return t
+    return t
   }
   return ''
 }
