@@ -112,6 +112,7 @@ function leafTitle(card) {
     if (el.children.length) continue
     if (el.closest(TABLEISH)) continue
     if (repeatsInCard(card, el)) continue
+    if (sharesRowWith(card, el)) continue
     const t = (el.textContent || '').replace(/\s+/g, ' ').trim()
     if (isTitleish(t)) return t
   }
@@ -121,13 +122,37 @@ function leafTitle(card) {
 // A KPI/metric strip is ONE section, not N, and naming it after its first
 // tile ("Total People") actively misdescribes the other four.
 function isMetricStrip(node, rect) {
+  // Layout, not content: an earlier content test (every tile must contain a
+  // digit) silently failed whenever the scan ran before the KPI values had
+  // loaded, and Google Ads' 8-tile band wraps onto two rows.
   const kids = node.children
-  if (kids.length < 3 || rect.height > 200) return false
-  for (let i = 0; i < kids.length; i++) {
-    const t = kids[i].textContent || ''
-    if (!/\d/.test(t) || !/[A-Za-z]/.test(t)) return false
+  if (kids.length < 3 || rect.height > 220) return false
+  const w0 = kids[0].getBoundingClientRect().width
+  if (!w0 || w0 > rect.width * 0.45) return false
+  for (let i = 1; i < kids.length; i++) {
+    if (Math.abs(kids[i].getBoundingClientRect().width - w0) > 2) return false
   }
   return true
+}
+
+// A card title sits alone, or above a subtitle; a table's column header row
+// has many texts sharing one baseline. Meta Ads' grid is built from divs with
+// no <th> and no class on the header cells, so neither the tableish selector
+// nor the repeated-class check catches it -- this is what stops that card
+// from titling itself "Campaign".
+function sharesRowWith(card, el) {
+  const top = el.getBoundingClientRect().top
+  const all = card.querySelectorAll('*')
+  const lim = all.length < 300 ? all.length : 300
+  let n = 0
+  for (let i = 0; i < lim; i++) {
+    const o = all[i]
+    if (o === el || o.children.length) continue
+    if (!(o.textContent || '').trim()) continue
+    if (Math.abs(o.getBoundingClientRect().top - top) <= 6) n++
+    if (n >= 4) return true
+  }
+  return false
 }
 
 // 0 = not a card, walk into it. 1 = card, present it and never look inside.
@@ -197,6 +222,7 @@ function scanAutoSlides(excludeNodes) {
   // entire band was absent from the deck; Summary's 4-tile band is the same
   // shape. Team Mapping's band already clears the floor on its own.
   const tried = []
+  const promoted = []
   for (let i = 0; i < small.length; i++) {
     const p = small[i].parentElement
     if (!p || tried.indexOf(p) !== -1) continue
@@ -209,6 +235,7 @@ function scanAutoSlides(excludeNodes) {
     if (matches.some(m => m === p || m.contains(p) || p.contains(m))) continue
     const pr = p.getBoundingClientRect()
     if (pr.width < 280 || pr.height < 80) continue
+    promoted.push(p)
     matches.push(p)
   }
   // promoted parents are appended out of order, so sort before numbering
@@ -219,7 +246,7 @@ function scanAutoSlides(excludeNodes) {
     const headingEl = node.querySelector('h1,h2,h3,h4,h5,h6,[role="heading"]')
     const heading = headingEl && headingEl.textContent ? headingEl.textContent.trim() : ''
     let title = heading
-    if (!title && isMetricStrip(node, rect)) title = 'Key metrics'
+    if (!title && (promoted.indexOf(node) !== -1 || isMetricStrip(node, rect))) title = 'Key metrics'
     if (!title) title = leafTitle(node)
     // an honest placeholder still beats a confident-looking wrong answer
     return { id: 'auto-' + i, title: title ? humanizeTitle(title) : ('Section ' + (i + 1)), node }
