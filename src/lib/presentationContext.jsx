@@ -142,7 +142,16 @@ export function neutralizeContainingBlockAncestors(node) {
       || (cs.willChange && /transform|filter|perspective/.test(cs.willChange))
       || (cs.contain && /layout|paint|strict|content/.test(cs.contain))
     if (makesContainingBlock) {
-      touched.push({ el, transform: el.style.transform, filter: el.style.filter, willChange: el.style.willChange, contain: el.style.contain })
+      // Confirmed live: on the app's home page the offending ancestor's
+      // transform was still a live, moving value (a translateY mid-flight),
+      // not an inert leftover -- its page-enter @keyframes animation was
+      // STILL RUNNING, and a running CSS animation overrides an inline
+      // style on the exact property it's animating every single frame, so
+      // "el.style.transform = 'none'" alone was being silently clobbered
+      // 60 times a second. Cancelling the animation itself is what actually
+      // stops it from fighting back.
+      touched.push({ el, transform: el.style.transform, filter: el.style.filter, willChange: el.style.willChange, contain: el.style.contain, animation: el.style.animation })
+      el.style.animation = 'none'
       el.style.transform = 'none'
       el.style.filter = 'none'
       el.style.willChange = 'auto'
@@ -152,6 +161,7 @@ export function neutralizeContainingBlockAncestors(node) {
   }
   return () => {
     touched.forEach(t => {
+      t.el.style.animation = t.animation
       t.el.style.transform = t.transform
       t.el.style.filter = t.filter
       t.el.style.willChange = t.willChange

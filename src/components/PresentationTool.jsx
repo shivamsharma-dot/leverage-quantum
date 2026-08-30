@@ -55,6 +55,13 @@ function elevateAutoNode(node) {
   node.style.right = '6vw'
   node.style.width = 'auto'
   node.style.maxWidth = 'none'
+  // setting top+bottom is only enough to stretch the box's height when
+  // nothing else pins a height -- confirmed live on the app's own home page,
+  // where the matched card's own authored height (45px, meant for its
+  // normal in-page size) survived right through the fixed positioning and
+  // left the "elevated" slide a 45px-tall sliver despite correct insets.
+  node.style.height = 'auto'
+  node.style.maxHeight = 'none'
   node.style.margin = '0'
   node.style.zIndex = '9998'
   node.style.overflow = 'auto'
@@ -63,7 +70,7 @@ function elevateAutoNode(node) {
   node.style.animation = 'presentSlideIn .38s cubic-bezier(.22,1,.36,1)'
 }
 function resetAutoNode(node) {
-  ['display', 'position', 'top', 'bottom', 'left', 'right', 'width', 'maxWidth', 'margin', 'zIndex', 'overflow', 'boxShadow', 'animation']
+  ['display', 'position', 'top', 'bottom', 'left', 'right', 'width', 'maxWidth', 'height', 'maxHeight', 'margin', 'zIndex', 'overflow', 'boxShadow', 'animation']
     .forEach(prop => { node.style[prop] = '' })
   delete node.dataset.presentAuto
 }

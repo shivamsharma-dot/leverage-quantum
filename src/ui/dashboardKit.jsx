@@ -150,7 +150,7 @@ export const Card = ({ title, sub, children, action, noPad }) => {
       display: isHiddenSlide ? 'none' : 'flex', flexDirection: 'column',
       ...(isFs ? { position: 'fixed', inset: 0, zIndex: 9999, height: '100vh', width: '100vw' } : {}),
       ...(isCurrentSlide && !isFs ? {
-        position: 'fixed', top: 92, bottom: 96, left: '6vw', right: '6vw', width: 'auto', maxWidth: 'none', margin: 0, zIndex: 9998, borderRadius: 20,
+        position: 'fixed', top: 92, bottom: 96, left: '6vw', right: '6vw', width: 'auto', maxWidth: 'none', height: 'auto', maxHeight: 'none', margin: 0, zIndex: 9998, borderRadius: 20,
         boxShadow: '0 2px 0 rgba(28,159,212,0.35), 0 40px 100px -20px rgba(8,13,28,0.55), 0 0 0 1px rgba(28,159,212,0.18)',
         animation: 'presentSlideIn .38s cubic-bezier(.22,1,.36,1)',
       } : {}),
