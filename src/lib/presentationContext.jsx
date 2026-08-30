@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 
 // Backs two things asked for on every page: a per-card "expand to full screen"
 // button (real Fullscreen API, scoped to that one card's DOM node -- built
@@ -9,10 +10,10 @@ import React, { createContext, useCallback, useContext, useMemo, useRef, useStat
 // Deliberately zero per-page wiring: every Card (src/ui/dashboardKit.jsx)
 // registers itself here automatically on mount, in the order it renders, and
 // unregisters on unmount. A page that renders 6 Cards gets a 6-slide deck for
-// free; a page with no Cards (or one not wrapped in the Provider) just never
-// shows the Present button. Adding a new dashboard page needs no changes here
-// at all as long as it's built from the shared Card component, which is
-// already the house convention.
+// free. Pages that don't build every section from Card fall back to a DOM
+// scan (below) for whatever it misses, so the two sources are MERGED, not
+// mutually exclusive -- a page with 3 registered Cards and 2 more plain
+// sections gets a 5-slide deck, in real document order.
 //
 // Not a slide EDITOR -- nothing is reordered/hidden/annotated for
 // presentation specifically. It presents the real, live cards exactly as
@@ -21,15 +22,21 @@ import React, { createContext, useCallback, useContext, useMemo, useRef, useStat
 
 const PresentationContext = createContext(null)
 
-// Fallback for the ~half of pages that don't build their sections from the
-// shared Card yet: finds the scrollable content area the same way
-// SnapshotTool.jsx already does (widest*tallest scrollable region, which
-// naturally excludes the narrow sidebar with no extra exclusion list needed),
-// then keeps only the OUTERMOST elements that already carry this app's own
-// card signature -- rounded corners + a shadow, the exact DESIGN_SYSTEM.md
-// spec every page's local Card clone already uses. So this needs no
-// per-page code at all: a page presents whatever it already visually
-// renders as a "card", Card-based or not.
+// Routes where "present whatever looks like a card" makes no sense at all --
+// Settings is a page of editable forms with Save buttons, and Ask AI's only
+// "card"-shaped thing is its own conversation-history rail, not the chat
+// itself. Neither builds from the shared Card, so without this the DOM scan
+// would happily turn a settings form or someone's chat history into a slide.
+const AUTO_SCAN_DENYLIST = ['/settings', '/ask-ai']
+
+// Finds the scrollable content area the same way SnapshotTool.jsx already
+// does, ranked by the VISIBLE viewport area of the candidate (clientWidth *
+// clientHeight), not by how much off-screen content it happens to hold --
+// a large virtualized/off-screen scroll buffer (seen for real on Meta Ads,
+// ~980x21361px of scrollHeight) can dwarf the real on-screen content pane on
+// a scrollHeight-based score despite never being what a person is looking
+// at. Still requires genuine overflow (scrollHeight strictly greater than
+// clientHeight) so a non-scrolling container can never win.
 function findContentRoot() {
   let best = null, bestScore = 0
   const all = document.querySelectorAll('body *')
@@ -37,14 +44,33 @@ function findContentRoot() {
     const el = all[i]
     const cs = getComputedStyle(el)
     if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') && el.clientWidth > 480 && el.scrollHeight > el.clientHeight) {
-      const score = el.scrollHeight * el.clientWidth
+      const score = el.clientWidth * el.clientHeight
       if (score > bestScore) { bestScore = score; best = el }
     }
   }
   return best || document.body
 }
 
-function scanAutoSlides() {
+// A concatenated "MetaAdsSpend, leads..." heading+subtitle run-on (the scan
+// grabs the first heading-ish element's full textContent, which can include
+// a nested subtitle span with no separating space) reads as one garbled
+// word. This can't tell a real run-on from a single CamelCase word, so it
+// only inserts a separator at an unambiguous case transition adjacent to a
+// word boundary-ish letter run, and only ever RUNS ONCE per candidate --
+// good enough to de-garble the common "Heading" + "Subtitle" concatenation
+// without mangling a genuine word.
+function humanizeTitle(raw) {
+  let t = raw.replace(/([a-z0-9])([A-Z][a-z])/g, '$1 — $2').trim()
+  if (t.length > 70) {
+    const cut = t.slice(0, 70)
+    const lastSpace = cut.lastIndexOf(' ')
+    t = (lastSpace > 40 ? cut.slice(0, lastSpace) : cut) + '…'
+  }
+  return t
+}
+
+function scanAutoSlides(excludeNodes) {
+  if (AUTO_SCAN_DENYLIST.some(p => window.location.pathname.startsWith(p))) return []
   const root = findContentRoot()
   if (!root) return []
   const all = root.querySelectorAll('div,section,article')
@@ -52,9 +78,14 @@ function scanAutoSlides() {
   for (let i = 0; i < all.length && matches.length < 80; i++) {
     const el = all[i]
     if (el.closest('[data-presentation-ignore]')) continue
+    // never re-wrap something that's already a registered Card, or a floating
+    // popover/menu/dropdown/toast sitting open on top of the page (position:
+    // fixed content isn't part of the page's own content flow)
+    if (excludeNodes && excludeNodes.some(n => n === el || (n && n.contains && n.contains(el)))) continue
     const rect = el.getBoundingClientRect()
     if (rect.width < 280 || rect.height < 110) continue
     const cs = getComputedStyle(el)
+    if (cs.position === 'fixed' || cs.position === 'absolute') continue
     const radius = parseFloat(cs.borderRadius) || 0
     if (radius < 8 || !cs.boxShadow || cs.boxShadow === 'none') continue
     matches.push(el)
@@ -63,17 +94,66 @@ function scanAutoSlides() {
   // slideshow can reasonably hold
   const top = matches.filter(el => !matches.some(other => other !== el && other.contains(el)))
   return top.slice(0, 30).map((node, i) => {
-    const headingEl = node.querySelector('h1,h2,h3,h4,[class*="title" i]')
-    let title = headingEl && headingEl.textContent ? headingEl.textContent.trim().slice(0, 80) : ''
+    const headingEl = node.querySelector('h1,h2,h3,h4') || node.querySelector('[class*="title" i]')
+    let title = headingEl && headingEl.textContent ? headingEl.textContent.trim() : ''
     if (!title) {
       const firstText = node.querySelector('div,span,p')
-      title = ((firstText && firstText.textContent) || '').trim().slice(0, 60)
+      title = ((firstText && firstText.textContent) || '').trim()
     }
-    return { id: 'auto-' + i, title: title || ('Section ' + (i + 1)), node }
+    return { id: 'auto-' + i, title: title ? humanizeTitle(title) : ('Section ' + (i + 1)), node }
   })
 }
 
+function byDocumentOrder(a, b) {
+  if (!a.node || !b.node || a.node === b.node) return 0
+  const pos = a.node.compareDocumentPosition(b.node)
+  if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1
+  if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1
+  return 0
+}
+
+// position:fixed is supposed to escape any ancestor and cover the viewport,
+// but per spec ANY ancestor with a transform/filter/perspective/will-change
+// (even an inert identity transform left behind by a finished page-enter
+// animation -- confirmed live on the app's own route-transition wrapper)
+// becomes the containing block instead, so "inset: 6vh 7vw" resolves against
+// that ancestor's box, not the viewport -- the elevated slide collapses to a
+// sliver wherever it sits. Rather than migrate to a React portal (which
+// would unmount/remount the slide's own children every time presenting
+// starts/stops, losing e.g. a table's live sort/filter state), this walks up
+// and neutralizes whichever ancestor is doing it for as long as we're
+// presenting, restoring the exact inline value it had before.
+export function neutralizeContainingBlockAncestors(node) {
+  const touched = []
+  let el = node && node.parentElement
+  while (el && el !== document.body) {
+    const cs = getComputedStyle(el)
+    const makesContainingBlock = (cs.transform && cs.transform !== 'none')
+      || (cs.filter && cs.filter !== 'none')
+      || (cs.perspective && cs.perspective !== 'none')
+      || (cs.willChange && /transform|filter|perspective/.test(cs.willChange))
+      || (cs.contain && /layout|paint|strict|content/.test(cs.contain))
+    if (makesContainingBlock) {
+      touched.push({ el, transform: el.style.transform, filter: el.style.filter, willChange: el.style.willChange, contain: el.style.contain })
+      el.style.transform = 'none'
+      el.style.filter = 'none'
+      el.style.willChange = 'auto'
+      el.style.contain = 'none'
+    }
+    el = el.parentElement
+  }
+  return () => {
+    touched.forEach(t => {
+      t.el.style.transform = t.transform
+      t.el.style.filter = t.filter
+      t.el.style.willChange = t.willChange
+      t.el.style.contain = t.contain
+    })
+  }
+}
+
 export function PresentationProvider({ children }) {
+  const location = useLocation()
   const slidesRef = useRef([]) // [{id, title, node}], ordered by registration
   const [slideVersion, setSlideVersion] = useState(0) // bump to force a re-render when the registry changes
   const [autoSlides, setAutoSlides] = useState([])
@@ -98,27 +178,51 @@ export function PresentationProvider({ children }) {
 
   // Re-checks whether there's anything to present right now and returns the
   // count synchronously, so a click handler can decide what to show without
-  // waiting a render -- registered (Card) slides always win over the DOM scan.
+  // waiting a render. Registered (Card) slides are always kept; the DOM scan
+  // only fills in whatever ISN'T already a registered Card, and the two are
+  // merged back into real document order rather than "all Cards, then
+  // whatever else" -- so a page that mixes both reads top-to-bottom.
   const refreshAuto = useCallback(() => {
-    if (slidesRef.current.length) return slidesRef.current.length
-    const found = scanAutoSlides()
+    const registeredNodes = slidesRef.current.map(s => s.node).filter(Boolean)
+    const found = scanAutoSlides(registeredNodes)
     setAutoSlides(found)
-    return found.length
+    return slidesRef.current.length + found.length
   }, [])
 
-  const slides = slidesRef.current.length ? slidesRef.current : autoSlides
-  const usingAuto = !slidesRef.current.length && autoSlides.length > 0
+  const registeredCount = slidesRef.current.length
+  const slides = useMemo(() => {
+    if (!autoSlides.length) return slidesRef.current
+    return [...slidesRef.current, ...autoSlides].sort(byDocumentOrder)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slideVersion, autoSlides])
+  const usingAuto = autoSlides.length > 0
+  const usingMixed = usingAuto && registeredCount > 0
 
   const start = useCallback(() => { setIndex(0); setPresenting(true) }, [])
   const stop = useCallback(() => { setPresenting(false); setAutoSlides([]) }, [])
-  const next = useCallback(() => setIndex(i => Math.min(i + 1, Math.max(0, (slidesRef.current.length ? slidesRef.current : autoSlides).length - 1))), [autoSlides])
+  const next = useCallback(() => setIndex(i => Math.min(i + 1, Math.max(0, slides.length - 1))), [slides.length])
   const prev = useCallback(() => setIndex(i => Math.max(i - 1, 0)), [])
   const goTo = useCallback((i) => setIndex(i), [])
 
+  // A page navigation (sidebar click, back/forward, a route-level redirect)
+  // never used to stop an active presentation -- the overlay just kept
+  // floating over whatever page loaded next, still holding the OLD page's
+  // slide list with no way to reach it (the backdrop didn't block clicks
+  // either, which is its own fix below, but this is the real fix: a deck
+  // this page's node references can never make sense of on another route).
+  const pathKey = location.pathname + location.search
+  const firstPathKey = useRef(pathKey)
+  useEffect(() => {
+    if (pathKey === firstPathKey.current) return
+    firstPathKey.current = pathKey
+    setPresenting(false)
+    setAutoSlides([])
+  }, [pathKey])
+
   const value = useMemo(() => ({
-    slides, slideVersion, usingAuto, register, updateNode, unregister, refreshAuto,
+    slides, slideVersion, usingAuto, usingMixed, registeredCount, register, updateNode, unregister, refreshAuto,
     presenting, start, stop, index, next, prev, goTo,
-  }), [slides, slideVersion, usingAuto, register, updateNode, unregister, refreshAuto, presenting, start, stop, index, next, prev, goTo])
+  }), [slides, slideVersion, usingAuto, usingMixed, registeredCount, register, updateNode, unregister, refreshAuto, presenting, start, stop, index, next, prev, goTo])
 
   return <PresentationContext.Provider value={value}>{children}</PresentationContext.Provider>
 }
@@ -128,7 +232,8 @@ export function PresentationProvider({ children }) {
 // should crash if there is) just never registers, rather than throwing.
 export function usePresentation() {
   return useContext(PresentationContext) || {
-    slides: [], slideVersion: 0, usingAuto: false, register: () => null, updateNode: () => {}, unregister: () => {}, refreshAuto: () => 0,
+    slides: [], slideVersion: 0, usingAuto: false, usingMixed: false, registeredCount: 0,
+    register: () => null, updateNode: () => {}, unregister: () => {}, refreshAuto: () => 0,
     presenting: false, start: () => {}, stop: () => {}, index: 0, next: () => {}, prev: () => {}, goTo: () => {},
   }
 }

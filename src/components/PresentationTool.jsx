@@ -1,17 +1,21 @@
 import React from 'react'
-import { usePresentation } from '../lib/presentationContext.jsx'
+import { usePresentation, neutralizeContainingBlockAncestors } from '../lib/presentationContext.jsx'
 
 // Floating "Present" control, mounted from Sidebar.jsx the same way
 // SnapshotTool.jsx is -- appears on every page with zero per-page wiring.
 // Slides come from whatever Cards (src/ui/dashboardKit.jsx) are currently
-// registered on the page; if a page has none (it isn't built on the shared
-// Card yet), presentationContext.jsx's DOM scan finds this app's own
-// rounded-corner/shadow "card" visual signature and presents those instead,
-// so every page works without per-page code.
+// registered on the page, merged in real document order with anything found
+// by presentationContext.jsx's DOM-scan fallback (this app's own rounded-
+// corner/shadow "card" visual signature), so every page works with zero
+// per-page code -- even a page that's only PARTLY built from Card.
 const FONT = "'Plus Jakarta Sans','Inter',sans-serif"
 const NAVY = '#1F3C84'
 const BLUE = '#1C9FD4'
 const CYAN = '#29B9C3'
+
+const isEditableTarget = el => !!el && (
+  el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable
+)
 
 const PresentIcon = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -37,18 +41,69 @@ const KEYFRAMES = `
 @keyframes presentBarGlow { 0%,100% { opacity: .9; } 50% { opacity: 1; } }
 `
 
+// Auto-elevated slides land 8-12px off from run to run if we let the node's
+// own authored margin/width survive underneath the position:fixed override
+// -- confirmed live on Settings (an 18px jump mid-deck) and Ask AI (a
+// fixed-width rail staying narrow inside a much wider frame). Zeroed out
+// every time, alongside the same top/bottom clearance Card uses so this
+// chrome (title label above, toolbar below) can never overlap the slide.
+function elevateAutoNode(node) {
+  node.style.position = 'fixed'
+  node.style.top = '92px'
+  node.style.bottom = '96px'
+  node.style.left = '6vw'
+  node.style.right = '6vw'
+  node.style.width = 'auto'
+  node.style.maxWidth = 'none'
+  node.style.margin = '0'
+  node.style.zIndex = '9998'
+  node.style.overflow = 'auto'
+  node.style.borderRadius = node.style.borderRadius || '20px'
+  node.style.boxShadow = '0 2px 0 rgba(28,159,212,0.35), 0 40px 100px -20px rgba(8,13,28,0.55), 0 0 0 1px rgba(28,159,212,0.18)'
+  node.style.animation = 'presentSlideIn .38s cubic-bezier(.22,1,.36,1)'
+}
+function resetAutoNode(node) {
+  ['display', 'position', 'top', 'bottom', 'left', 'right', 'width', 'maxWidth', 'margin', 'zIndex', 'overflow', 'boxShadow', 'animation']
+    .forEach(prop => { node.style[prop] = '' })
+  delete node.dataset.presentAuto
+}
+
 export default function PresentationTool() {
-  const { slides, presenting, usingAuto, start, stop, index, next, prev, goTo, refreshAuto } = usePresentation()
+  const { slides, presenting, usingAuto, usingMixed, registeredCount, start, stop, index, next, prev, goTo, refreshAuto } = usePresentation()
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [noSlidesHint, setNoSlidesHint] = React.useState(false)
   const [showKeyHint, setShowKeyHint] = React.useState(false)
+  const overlayRef = React.useRef(null)
+  const exitBtnRef = React.useRef(null)
+  const autoCount = slides.length - registeredCount
 
   React.useEffect(() => {
     if (!presenting) return undefined
     const onKey = e => {
-      if (e.key === 'Escape') stop()
-      else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') next()
-      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') prev()
+      // A deck-navigation key fired while someone is typing in a field would
+      // otherwise both hijack the deck AND (for Space) still type into the
+      // field at the same time -- ignore every shortcut while focus is on
+      // anything editable and let the page handle the keystroke normally.
+      if (isEditableTarget(document.activeElement)) return
+      if (e.key === 'Escape') {
+        // Escape used to only ever stop() -- if a card's own real Fullscreen
+        // was ALSO active (independent state, its own API), the key was
+        // consumed by this handler first and the person was left stranded
+        // in fullscreen on a bare card with the deck silently dead.
+        if (document.fullscreenElement) document.exitFullscreen()
+        stop()
+      } else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); next() }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev() }
+      else if (e.key === 'Tab' && overlayRef.current) {
+        // Minimal focus containment: while presenting, only the overlay's
+        // own controls (toolbar buttons, dot rail) are reachable by Tab --
+        // nothing usable exists behind the backdrop anyway.
+        const focusable = Array.from(overlayRef.current.querySelectorAll('button:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        if (!focusable.length) return
+        const first = focusable[0], last = focusable[focusable.length - 1]
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -58,66 +113,78 @@ export default function PresentationTool() {
     if (!presenting) return undefined
     setShowKeyHint(true)
     const t = setTimeout(() => setShowKeyHint(false), 3000)
+    // Moves keyboard focus into the deck's own controls the moment it opens,
+    // so Tab/Escape land somewhere sensible instead of wherever focus
+    // happened to be on the underlying page.
+    exitBtnRef.current && exitBtnRef.current.focus()
     return () => clearTimeout(t)
   }, [presenting])
 
   // For slides discovered via the DOM-scan fallback (no Card wrapper to do
   // this itself): elevate the current one into a full presentation card and
-  // hide the rest, imperatively, mirroring exactly what Card does for its
-  // own registered slides.
+  // hide the rest, imperatively, mirroring what Card does for its own
+  // registered slides. Every managed node is marked with data-presentAuto
+  // EVERY run (not only the current one) so cleanup can find and restore
+  // every node it has ever touched -- previously only the node that
+  // happened to be current at the moment presenting stopped got its inline
+  // styles cleared, permanently leaving every other visited slide hidden.
   React.useEffect(() => {
     if (!presenting) return undefined
-    slides.forEach((s, i) => {
-      if (!s.id.startsWith('auto-') || !s.node) return
+    const autoSlides = slides.filter(s => s.id.startsWith('auto-') && s.node)
+    const restores = []
+    autoSlides.forEach((s, i) => {
       const isCurrent = i === index
+      s.node.dataset.presentAuto = '1'
       s.node.style.display = isCurrent ? '' : 'none'
       if (isCurrent) {
-        s.node.dataset.presentAuto = '1'
-        s.node.style.position = 'fixed'
-        s.node.style.inset = '6vh 7vw'
-        s.node.style.zIndex = '9998'
-        s.node.style.overflow = 'auto'
-        s.node.style.boxShadow = '0 2px 0 rgba(28,159,212,0.35), 0 40px 100px -20px rgba(8,13,28,0.55), 0 0 0 1px rgba(28,159,212,0.18)'
-        s.node.style.animation = 'presentSlideIn .38s cubic-bezier(.22,1,.36,1)'
+        elevateAutoNode(s.node)
+        restores.push(neutralizeContainingBlockAncestors(s.node))
+      } else {
+        resetAutoNode(s.node)
+        s.node.style.display = 'none'
       }
     })
+    const raf1 = requestAnimationFrame(() => requestAnimationFrame(() => window.dispatchEvent(new Event('resize'))))
     return () => {
-      slides.forEach(s => {
-        if (s.node && s.node.dataset && s.node.dataset.presentAuto) {
-          s.node.style.display = ''; s.node.style.position = ''; s.node.style.inset = ''
-          s.node.style.zIndex = ''; s.node.style.overflow = ''; s.node.style.boxShadow = ''; s.node.style.animation = ''
-          delete s.node.dataset.presentAuto
-        }
-      })
+      restores.forEach(r => r())
+      autoSlides.forEach(s => resetAutoNode(s.node))
+      cancelAnimationFrame(raf1)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presenting, index, slides.length])
+  }, [presenting, index, slides])
 
   if (presenting) {
     const current = slides[index]
+    const isCurrentAuto = !!current && current.id.startsWith('auto-')
     const pct = slides.length ? ((index + 1) / slides.length) * 100 : 0
     const showDots = slides.length > 1 && slides.length <= 10
     return (
-      <div data-presentation-ignore="true" style={{ position: 'fixed', inset: 0, zIndex: 9990, pointerEvents: 'none', fontFamily: FONT }}>
+      <div ref={overlayRef} role="dialog" aria-modal="true" aria-label={`Presenting${current ? ': ' + current.title : ''}`}
+        data-presentation-ignore="true" style={{ position: 'fixed', inset: 0, zIndex: 9990, fontFamily: FONT }}>
         <style>{KEYFRAMES}</style>
-        {/* layered backdrop: dark gradient + soft radial glow behind the active slide, not a flat scrim */}
+        {/* layered backdrop: dark gradient + soft radial glow behind the active slide.
+            pointerEvents:auto so it actually intercepts clicks -- it used to inherit
+            'none' from a parent that opted the rest of this tree back in, so a click
+            anywhere "dimmed" landed on the real page underneath, sidebar links
+            included, with no visible sign the deck was still open. */}
         <div style={{
-          position: 'absolute', inset: 0, animation: 'presentBackdropIn .3s ease-out',
+          position: 'absolute', inset: 0, animation: 'presentBackdropIn .3s ease-out', pointerEvents: 'auto',
           background: 'radial-gradient(120% 90% at 50% 8%, rgba(28,159,212,0.16), transparent 55%), linear-gradient(180deg, rgba(6,10,22,0.86) 0%, rgba(8,12,26,0.94) 100%)',
           backdropFilter: 'blur(3px)', WebkitBackdropFilter: 'blur(3px)',
         }} />
         {/* top progress rail */}
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, background: 'rgba(255,255,255,0.08)', zIndex: 9999 }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, background: 'rgba(255,255,255,0.08)', zIndex: 9999, pointerEvents: 'none' }}>
           <div style={{
             height: '100%', width: pct + '%', transition: 'width .3s cubic-bezier(.22,1,.36,1)',
             background: `linear-gradient(90deg, ${NAVY}, ${BLUE}, ${CYAN})`, animation: 'presentBarGlow 2.2s ease-in-out infinite',
           }} />
         </div>
-        {/* slide label, top-left */}
+        {/* slide label, top-left -- fixed at a height (92px of top clearance on the
+            slide itself, matching Card/elevateAutoNode) so it can never sit behind
+            the white slide regardless of viewport height */}
         {current && (
           <div style={{ position: 'fixed', top: 22, left: 28, zIndex: 9999, maxWidth: '46vw', pointerEvents: 'none' }}>
             <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 3 }}>
-              {usingAuto ? 'Auto-detected section' : 'Presenting'} &middot; {index + 1} of {slides.length}
+              {isCurrentAuto ? 'Auto-detected section' : 'Presenting'} &middot; {index + 1} of {slides.length}
             </div>
             <div style={{ fontSize: 19, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px', textShadow: '0 2px 12px rgba(0,0,0,0.4)' }}>
               {current.title}
@@ -126,7 +193,7 @@ export default function PresentationTool() {
         )}
         {/* keyboard hint toast */}
         <div style={{
-          position: 'fixed', top: 22, left: '50%', zIndex: 9999,
+          position: 'fixed', top: 22, left: '50%', zIndex: 9999, pointerEvents: 'none',
           animation: showKeyHint ? 'presentHintIn .3s ease-out both' : 'presentHintOut .35s ease-in both',
           display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(15,23,42,0.88)', border: '1px solid rgba(255,255,255,0.1)',
           borderRadius: 999, padding: '7px 14px', boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
@@ -164,7 +231,7 @@ export default function PresentationTool() {
           <button type="button" onClick={next} disabled={index >= slides.length - 1} title="Next (→)" style={navBtnStyle(index >= slides.length - 1)}>
             <ChevronR />
           </button>
-          <button type="button" onClick={stop} title="Exit (Esc)" style={{
+          <button ref={exitBtnRef} type="button" onClick={stop} title="Exit (Esc)" style={{
             marginLeft: 6, width: 32, height: 32, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.14)', background: 'rgba(255,255,255,0.06)',
             color: 'rgba(255,255,255,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontFamily: FONT,
           }}>
@@ -221,7 +288,9 @@ export default function PresentationTool() {
                 <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>Present this page</div>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text3,#94A3B8)', marginTop: 7, lineHeight: 1.4 }}>
-                {usingAuto
+                {usingMixed
+                  ? `${registeredCount} built-in + ${autoCount} more found automatically`
+                  : usingAuto
                   ? `${slides.length} section${slides.length === 1 ? '' : 's'} detected automatically`
                   : `${slides.length} section${slides.length === 1 ? '' : 's'} → ${slides.length} slide${slides.length === 1 ? '' : 's'}`}
               </div>

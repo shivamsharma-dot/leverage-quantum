@@ -7,7 +7,7 @@
 import React from 'react';
 import { useDesignStyle } from '../lib/designSettings';
 import { renderKpiVariant } from './kpiVariants.jsx';
-import { usePresentation } from '../lib/presentationContext.jsx';
+import { usePresentation, neutralizeContainingBlockAncestors } from '../lib/presentationContext.jsx';
 
 /* ===== Tokens ===== */
 
@@ -126,6 +126,23 @@ export const Card = ({ title, sub, children, action, noPad }) => {
   const isCurrentSlide = presenting && title && slides[index] && slides[index].id === idRef.current
   const isHiddenSlide = presenting && title && !isCurrentSlide && slides.some(s => s.id === idRef.current)
 
+  // Elevating via position:fixed only escapes to the viewport if NO ancestor
+  // has a transform/filter/perspective -- this app's own route-transition
+  // wrapper leaves one behind (confirmed live: an inert identity matrix from
+  // a finished page-enter animation), which silently makes THAT the
+  // containing block instead, collapsing the slide to a sliver wherever that
+  // ancestor happens to sit. Neutralized for exactly as long as this card is
+  // the presented slide, restored the moment it isn't.
+  React.useEffect(() => {
+    if (!isCurrentSlide || !rootRef.current) return undefined
+    const restore = neutralizeContainingBlockAncestors(rootRef.current)
+    // nudge any ResizeObserver-driven chart (Recharts' ResponsiveContainer)
+    // to recompute at the new, much larger size -- it usually catches up on
+    // its own within ~1s, this just gets it there sooner.
+    const raf1 = requestAnimationFrame(() => requestAnimationFrame(() => window.dispatchEvent(new Event('resize'))))
+    return () => { restore(); cancelAnimationFrame(raf1) }
+  }, [isCurrentSlide])
+
   return (
     <div ref={rootRef} style={{
       background: 'var(--card,#fff)', border: '1px solid var(--card-border,#EEF1F6)', borderRadius: isFs ? 0 : 16, overflow: isFs ? 'auto' : 'hidden',
@@ -133,7 +150,7 @@ export const Card = ({ title, sub, children, action, noPad }) => {
       display: isHiddenSlide ? 'none' : 'flex', flexDirection: 'column',
       ...(isFs ? { position: 'fixed', inset: 0, zIndex: 9999, height: '100vh', width: '100vw' } : {}),
       ...(isCurrentSlide && !isFs ? {
-        position: 'fixed', inset: '6vh 7vw', zIndex: 9998, borderRadius: 20,
+        position: 'fixed', top: 92, bottom: 96, left: '6vw', right: '6vw', width: 'auto', maxWidth: 'none', margin: 0, zIndex: 9998, borderRadius: 20,
         boxShadow: '0 2px 0 rgba(28,159,212,0.35), 0 40px 100px -20px rgba(8,13,28,0.55), 0 0 0 1px rgba(28,159,212,0.18)',
         animation: 'presentSlideIn .38s cubic-bezier(.22,1,.36,1)',
       } : {}),
@@ -148,12 +165,21 @@ export const Card = ({ title, sub, children, action, noPad }) => {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           {action}
-          <button
-            type="button" onClick={toggleFullscreen} title={isFs ? 'Exit full screen' : 'Full screen'}
-            style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--card-border,#E5E7EB)', background: 'var(--bg3,#F8FAFC)', color: 'var(--text3,#94A3B8)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
-          >
-            {isFs ? <ExitFullscreenIcon /> : <FullscreenIcon />}
-          </button>
+          {/* Real Fullscreen and Present mode can't coexist -- the browser's
+              Fullscreen API only ever renders the fullscreen element and its
+              descendants, so entering it on ANY card (not just the presented
+              one) while presenting silently hides all of Present's own
+              chrome (progress rail, toolbar, exit button) behind it, with
+              Escape only unwinding one of the two states. Hidden for every
+              card while presenting rather than letting the two fight. */}
+          {!presenting && (
+            <button
+              type="button" onClick={toggleFullscreen} title={isFs ? 'Exit full screen' : 'Full screen'}
+              style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid var(--card-border,#E5E7EB)', background: 'var(--bg3,#F8FAFC)', color: 'var(--text3,#94A3B8)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+            >
+              {isFs ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+            </button>
+          )}
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', ...(noPad ? {} : { padding: isCurrentSlide ? '24px 32px' : '16px 20px' }) }}>{children}</div>

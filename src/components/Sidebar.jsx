@@ -883,6 +883,17 @@ export default function Sidebar() {
           <div style={{flex:1,background:'rgba(0,0,0,0.3)'}}/>
         </div>
       )}
+      {/* PRES-3/4: SnapshotTool/PresentationTool used to be mounted only inside
+          .sidebarCollapsed below, which a media query sets display:none on at
+          mobile widths (the app switches to the hamburger+drawer pattern above
+          instead) -- so both floating tools were completely unreachable on a
+          phone. Mounted once here, as a sibling of that hideable aside rather
+          than inside it, so it survives regardless of which layout is active;
+          the two mounts formerly duplicated further down (the plain rail and
+          its hover-expand panel) were removed so exactly one instance renders
+          per breakpoint, never two stacked on top of each other. */}
+      <SnapshotTool/>
+      <PresentationTool/>
       <aside className={styles.sidebarCollapsed} onMouseEnter={openRailExpand} onMouseLeave={scheduleCloseRailExpand}>
         {/* Quantum logo mark — visible when collapsed. Centred 44px tile, matching
             the 40px nav tiles below it. */}
@@ -992,15 +1003,11 @@ export default function Sidebar() {
             </div>
           )}
         </div>
-        <SnapshotTool/>
-        <PresentationTool/>
       </aside>
       {railExpanded && (
         <div className={styles.railExpandPanel} role="navigation" aria-label="Expanded sidebar"
           onMouseEnter={cancelCloseRailExpand} onMouseLeave={scheduleCloseRailExpand}>
           {renderNavBody()}
-          <SnapshotTool/>
-        <PresentationTool/>
         </div>
       )}
       {hideMenuPopup}
