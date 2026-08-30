@@ -132,7 +132,11 @@ export const Card = ({ title, sub, children, action, noPad }) => {
       boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 12px 28px -16px rgba(16,24,40,0.16)',
       display: isHiddenSlide ? 'none' : 'flex', flexDirection: 'column',
       ...(isFs ? { position: 'fixed', inset: 0, zIndex: 9999, height: '100vh', width: '100vw' } : {}),
-      ...(isCurrentSlide && !isFs ? { position: 'fixed', inset: '5vh 6vw', zIndex: 9998, boxShadow: '0 30px 80px rgba(15,23,42,0.35)' } : {}),
+      ...(isCurrentSlide && !isFs ? {
+        position: 'fixed', inset: '6vh 7vw', zIndex: 9998, borderRadius: 20,
+        boxShadow: '0 2px 0 rgba(28,159,212,0.35), 0 40px 100px -20px rgba(8,13,28,0.55), 0 0 0 1px rgba(28,159,212,0.18)',
+        animation: 'presentSlideIn .38s cubic-bezier(.22,1,.36,1)',
+      } : {}),
     }}>
       <div style={{
         padding: '15px 20px 13px', borderBottom: '1px solid var(--card-border,#F1F4F9)',
