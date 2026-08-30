@@ -1,12 +1,11 @@
 name: Data Source Health Check
 
 on:
-  schedule:
-    # Fires hourly at :30 past the UTC hour, which lands exactly on-the-hour in IST
-    # (UTC+5:30) -- e.g. 03:30 UTC == 09:00 IST. The script below then only actually
-    # runs the checks when the current IST hour matches the schedule configured in
-    # Settings (source_health_schedule in app_preferences, default: daily at 9 AM IST).
-    - cron: '30 * * * *'
+  # Disabled 2026-08 -- the "Automated checks" UI that showed these results (and let
+  # an admin set the schedule) was removed from Settings > Data ("no one checks
+  # connections health daily"). "Check all sources" in Settings still runs the same
+  # checks on demand. Kept as workflow_dispatch only, not deleted, in case this is
+  # ever wanted again -- trigger manually from the Actions tab if so.
   workflow_dispatch:
 
 jobs:

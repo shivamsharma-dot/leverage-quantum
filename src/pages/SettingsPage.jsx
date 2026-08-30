@@ -7,6 +7,8 @@ import { toast } from '../components/ToastHost'
 import Button from '../components/Button'
 import Dropdown from '../components/Dropdown'
 import PinInput from '../components/PinInput'
+import MonthPicker from '../components/MonthPicker'
+import WeekPicker from '../components/WeekPicker'
 import { useDesignStyle, saveDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
 import styles from './SettingsPage.module.css'
@@ -121,21 +123,6 @@ async function getReportLogs(limit = 200) {
   try {
     const res = await fetch(
       `${RL_SB_URL}/rest/v1/report_logs?select=*&order=sent_at.desc&limit=${limit}`,
-      { headers: { apikey: RL_SB_KEY, Authorization: `Bearer ${RL_SB_KEY}` } }
-    )
-    if (!res.ok) return []
-    return await res.json()
-  } catch { return [] }
-}
-
-// Populated by .github/workflows/source-health-check.yml (runs every 30 min) --
-// requires the source_health table (see CLAUDE.md for the create-table SQL). Missing
-// table/network issues resolve to [] so this degrades gracefully to "no automated
-// check yet" rather than breaking the page.
-async function getSourceHealth() {
-  try {
-    const res = await fetch(
-      `${RL_SB_URL}/rest/v1/source_health?select=*`,
       { headers: { apikey: RL_SB_KEY, Authorization: `Bearer ${RL_SB_KEY}` } }
     )
     if (!res.ok) return []
@@ -451,8 +438,7 @@ function SocialManualCard({ title, description, fields, weekValue, onWeekChange,
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-        <input type="week" value={weekValue} onChange={e => onWeekChange(e.target.value)}
-          className={styles.input} style={{ width: 150 }} />
+        <WeekPicker value={weekValue} onChange={onWeekChange} placeholder="Pick a week" />
         {fields.map(f => (
           <input key={f.key} type="number" min="0" step="any" placeholder={f.placeholder}
             value={fieldValues[f.key] ?? ''} onChange={e => onFieldChange(f.key, e.target.value)}
@@ -806,7 +792,7 @@ export default function SettingsPage() {
       { key: 'funnelStages', label: 'Funnel stages', type: 'textarea', default: 'Lead -> QL (Qualified Lead, meets disposition criteria) -> Application -> Offer -> Deposit -> RAU (Registered At University). Total QL = Futwork Human QL + Futwork AI QL + Superbot AI QL combined -- Quantum\'s own authoritative figure, not Meta/Google\'s in-platform lead count.' },
       { key: 'keyMetrics', label: 'Conversion & key metrics', type: 'textarea', placeholder: 'Which metric actually gets optimized against (e.g. QL, not raw leads or CPA), and why.' },
       { key: 'goals', label: 'Goals (6-12 mo)', type: 'textarea', placeholder: 'What the business is trying to move in the next two quarters.' },
-      { key: 'revenueRoas', label: 'Revenue & ROAS', type: 'textarea', default: 'Est. SR Revenue = Deposits x 0.7 x SR Fee. Actual SR Revenue = Actual RAUs x SR Fee (no discount -- already realized). ROAS = SR Revenue / Spend. Caveat: the sales cycle is long, so true ROAS is only knowable months after lead-gen -- never present it as a same-day figure.' },
+      { key: 'revenueRoas', label: 'Revenue & ROAS', type: 'textarea', default: 'Est. SR Revenue = Deposits x Conversion% (Settings > Data > SR Revenue Assumptions) x SR Fee. Actual SR Revenue = Actual RAUs x SR Fee (no discount -- already realized). ROAS = SR Revenue / Spend. Caveat: the sales cycle is long, so true ROAS is only knowable months after lead-gen -- never present it as a same-day figure.' },
     ]},
     { title: 'Markets & competition', fields: [
       { key: 'sourceMarkets', label: 'Source markets', type: 'tags', placeholder: 'e.g. India — add and press Enter' },
@@ -870,12 +856,8 @@ export default function SettingsPage() {
     const [addSourceMsg, setAddSourceMsg] = useState(null)
     const [addSourceOpen, setAddSourceOpen] = useState(false)
     const [sourceCatFilter, setSourceCatFilter] = useState('api') // 'api' | 'sheets' -- which category card is selected
-    const [sourceHealth, setSourceHealth] = useState([]) // rows from the source_health table, written by the scheduled GitHub Action
     const [checkingAll, setCheckingAll] = useState(false)
     const [testDetailsOpen, setTestDetailsOpen] = useState({}) // per-source: whether columns/month-chips/sample-rows are expanded
-    const [healthSchedule, setHealthSchedule] = useState({ mode: 'daily', hour: 9 }) // read by .github/workflows/source-health-check.yml
-    const [savingSchedule, setSavingSchedule] = useState(false)
-    const [scheduleMsg, setScheduleMsg] = useState(null)
     const [metaDisconnecting, setMetaDisconnecting] = useState(false)
     const [metaDisconnectMsg, setMetaDisconnectMsg] = useState(null)
     // Affiliate spend has no automated feed (no ad platform, no sheet) -- an admin
@@ -1010,27 +992,6 @@ export default function SettingsPage() {
         setTimeout(() => setMetaDisconnectMsg(null), 5000)
       }
     }
-    const saveHealthSchedule = async (next) => {
-      const prev = healthSchedule
-      setHealthSchedule(next)
-      setSavingSchedule(true)
-      setScheduleMsg(null)
-      try {
-        const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'source_health_schedule', value: next }) })
-        if (!r.ok) throw new Error('Save failed')
-        setScheduleMsg({ type: 'ok', text: 'Saved' })
-      } catch (e) {
-        setHealthSchedule(prev) // revert -- otherwise the UI shows a schedule that was never actually persisted
-        setScheduleMsg({ type: 'err', text: e.message })
-      } finally {
-        setSavingSchedule(false)
-      }
-    }
-    const _shRef = useRef(false)
-    useEffect(() => {
-      if (activeTab === 'data' && userIsAdmin && !_shRef.current) { _shRef.current = true; getSourceHealth().then(setSourceHealth) }
-    }, [activeTab, userIsAdmin])
-
     // BigQuery Usage -- every real job Quantum has triggered (Leverage Careers page,
     // the Settings Console above, and the overall_bq_daily cron), with a job id.
     const _bqJobsRef = useRef(false)
@@ -1106,6 +1067,7 @@ export default function SettingsPage() {
   
   // SR Fee
   const [srFeeInput, setSrFeeInput] = useState(() => localStorage.getItem('lq_sr_fee') || '350000')
+  const [rauPctInput, setRauPctInput] = useState(() => localStorage.getItem('lq_rau_conversion_pct') || '75')
 
   // ── Appearance (admin only, server-backed) ────────────────────────────────
   // Server state (what's actually saved)
@@ -1512,6 +1474,17 @@ export default function SettingsPage() {
     localStorage.setItem('lq_sr_fee', String(v))
     setSrFeeSaved(true)
     setTimeout(() => setSrFeeSaved(false), 2000)
+  }
+  // Deposits -> Estimated RAU conversion %. Same per-device localStorage
+  // pattern as SR Fee above -- was a hardcoded 70% in OverallDashboard.jsx
+  // with no setting at all; now editable, default 75% (the real current rate).
+  const [rauPctSaved, setRauPctSaved] = useState(false)
+  const saveRauPct = () => {
+    const v = parseInt(rauPctInput)
+    if (isNaN(v) || v <= 0 || v > 100) return
+    localStorage.setItem('lq_rau_conversion_pct', String(v))
+    setRauPctSaved(true)
+    setTimeout(() => setRauPctSaved(false), 2000)
   }
 
   // Users
@@ -2396,7 +2369,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
             <>
               <div className={styles.card}>
                 <h3 className={styles.cardTitle}>SR Revenue Assumptions</h3>
-                <p className={styles.cardDesc}>SR fee per RAU (Registered At University) used in projected revenue. Estimated RAU = Deposits × 70%; Actual RAUs is the real count. Formula: Estimated/Actual RAUs × SR Fee</p>
+                <p className={styles.cardDesc}>SR fee per RAU (Registered At University) used in projected revenue. Estimated RAU = Deposits × Conversion %; Actual RAUs is the real count. Formula: Estimated/Actual RAUs × SR Fee</p>
                 <label className={styles.fieldLabel}>SR Fee per RAU</label>
                 <div className={styles.inputGroup}>
                   <span className={styles.prefix}>₹</span>
@@ -2404,7 +2377,15 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                     onChange={e => setSrFeeInput(e.target.value)} />
                   <Button size="sm" onClick={saveSrFee}>{srFeeSaved ? 'Saved' : 'Save'}</Button>
                 </div>
-                <p className={styles.note}>Current: ₹{parseInt(srFeeInput || 350000).toLocaleString('en-IN')} per RAU</p>
+                <p className={styles.note} style={{ marginBottom: 16 }}>Current: ₹{parseInt(srFeeInput || 350000).toLocaleString('en-IN')} per RAU</p>
+                <label className={styles.fieldLabel}>Deposits → RAU conversion %</label>
+                <div className={styles.inputGroup}>
+                  <input type="number" min="1" max="100" className={styles.input} style={{ maxWidth: 220 }} value={rauPctInput}
+                    onChange={e => setRauPctInput(e.target.value)} />
+                  <span className={styles.prefix}>%</span>
+                  <Button size="sm" onClick={saveRauPct}>{rauPctSaved ? 'Saved' : 'Save'}</Button>
+                </div>
+                <p className={styles.note}>Current: {parseInt(rauPctInput || 75)}% of Deposits counted as Estimated RAU on the Overall dashboard</p>
               </div>
 
               <div className={styles.card}>
@@ -2428,49 +2409,6 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                   <h3 className={styles.cardTitle} style={{ marginBottom: 0 }}>Connectors</h3>
                   <Button size="sm" onClick={checkAllSources} disabled={checkingAll}>{checkingAll ? 'Checking all...' : 'Check all sources'}</Button>
-                </div>
-                <div style={{ marginTop: 12, padding: '14px 16px', background: 'var(--bg3)', border: '0.5px solid var(--border)', borderRadius: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-                    <div style={{ minWidth: 200 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>Automated checks</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.4 }}>Runs via GitHub Actions — "Check all sources" above is still available anytime.</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
-                      <Dropdown
-                        value={healthSchedule.mode}
-                        disabled={savingSchedule}
-                        onChange={v => saveHealthSchedule({ ...healthSchedule, mode: v })}
-                        options={[{ value: 'off', label: 'Off' }, { value: 'daily', label: 'Once daily at' }, { value: 'hourly', label: 'Every hour' }]}
-                      />
-                      {healthSchedule.mode === 'daily' && (
-                        <Dropdown
-                          value={healthSchedule.hour}
-                          disabled={savingSchedule}
-                          onChange={v => saveHealthSchedule({ ...healthSchedule, hour: v })}
-                          options={Array.from({ length: 24 }, (_, h) => ({ value: h, label: (h === 0 ? '12 AM' : h < 12 ? h + ' AM' : h === 12 ? '12 PM' : (h - 12) + ' PM') + ' IST' }))}
-                        />
-                      )}
-                      {scheduleMsg && <span style={{ fontSize: 11, fontWeight: 700, color: scheduleMsg.type === 'err' ? 'var(--brand-ink)' : '#15803D', whiteSpace: 'nowrap' }}>{scheduleMsg.type === 'err' ? '✕ ' : '✓ '}{scheduleMsg.text}</span>}
-                    </div>
-                  </div>
-                  {sourceHealth.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '0.5px solid var(--border)' }}>
-                      {sourceHealth.map(h => {
-                        const color = h.status === 'warn' ? '#1C9FD4' : h.status === 'error' ? '#1F3C84' : '#4CAE6F'
-                        const mins = h.checked_at ? Math.round((Date.now() - new Date(h.checked_at).getTime()) / 60000) : null
-                        const rel = mins == null ? '' : mins < 60 ? mins + 'm ago' : mins < 1440 ? Math.round(mins / 60) + 'h ago' : Math.round(mins / 1440) + 'd ago'
-                        return (
-                          <div key={h.name} title={h.message || 'OK'} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--card)', border: '0.5px solid var(--border)', borderRadius: 10, transition: 'box-shadow .15s ease, border-color .15s ease' }}>
-                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: '0 0 0 3px ' + color + '1A' }} />
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontSize: 12, fontWeight: 650, color: 'var(--text)', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.name}</div>
-                              <div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 1 }}>{rel}</div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
                 </div>
                 {(() => {
                   const allSources = [...DATA_SOURCES, ...customSources]
@@ -2662,8 +2600,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-                  <input type="month" value={affSpendMonth} onChange={e => setAffSpendMonth(e.target.value)}
-                    className={styles.input} style={{ width: 160 }} />
+                  <MonthPicker value={affSpendMonth} onChange={setAffSpendMonth} placeholder="Pick a month" />
                   <div style={{ position: 'relative' }}>
                     <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)', fontSize: 13, fontWeight: 700, pointerEvents: 'none' }}>₹</span>
                     <input type="number" min="0" placeholder="Spend amount" value={affSpendAmount} onChange={e => setAffSpendAmount(e.target.value)}

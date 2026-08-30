@@ -591,7 +591,11 @@ const SUMMARY_SCHEMA_VERSION_KEY = 'lq_overall_summary_schema_version'
 // since real RAUs don't need a realization haircut.
 const SR_FEE_KEY = 'lq_sr_fee'
 const SR_FEE_DEFAULT = 350000
-const RAU_CONVERSION_FACTOR = 0.7
+// Deposits -> Estimated RAU conversion percentage. Was a hardcoded 70% with no
+// user control at all; now user-editable (Settings > Data > SR Revenue
+// Assumptions), same per-device localStorage pattern SR Fee already uses.
+const RAU_PCT_KEY = 'lq_rau_conversion_pct'
+const RAU_PCT_DEFAULT = 75
 
 // Full INR formatter — the exact figure, no Cr/L shorthand. Primary display value for
 // money in the summary table and the Compare/Trend modals. On the 5 money KPI cards
@@ -1162,6 +1166,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     try { const s = localStorage.getItem(SR_FEE_KEY); const n = s ? Number(s) : SR_FEE_DEFAULT; return isNaN(n) || n <= 0 ? SR_FEE_DEFAULT : n }
     catch { return SR_FEE_DEFAULT }
   })
+  const [rauPct] = useState(() => {
+    try { const s = localStorage.getItem(RAU_PCT_KEY); const n = s ? Number(s) : RAU_PCT_DEFAULT; return isNaN(n) || n <= 0 || n > 100 ? RAU_PCT_DEFAULT : n }
+    catch { return RAU_PCT_DEFAULT }
+  })
+  const rauConversionFactor = rauPct / 100
   const summarySchemaStale = (() => {
     try { return localStorage.getItem(SUMMARY_SCHEMA_VERSION_KEY) !== String(SUMMARY_SCHEMA_VERSION) }
     catch { return false }
@@ -1444,10 +1453,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const cpql = paidKpis.totalQL > 0 ? kpis.spend / paidKpis.totalQL : 0
   const cpa = paidKpis.apps > 0 ? kpis.spend / paidKpis.apps : 0
 
-  // SR revenue + ROAS — Estimated RAUs projects Deposits forward at a 70% conversion
+  // SR revenue + ROAS — Estimated RAUs projects Deposits forward at a user-configurable conversion %
   // rate (real RAUs haven't materialized yet); Actual RAUs is the real, already-realized
   // count, so it gets no discount. Both then multiply by the same shared SR Fee.
-  const estimatedRaus = kpis.deposits * RAU_CONVERSION_FACTOR
+  const estimatedRaus = kpis.deposits * rauConversionFactor
   const estSrRevenue = estimatedRaus * srFee
   const actSrRevenue = kpis.raus * srFee
   const actualRoas = kpis.spend > 0 ? actSrRevenue / kpis.spend : 0
@@ -1535,7 +1544,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const prevCpa = prevPaidKpis.apps > 0 ? prevKpis.spend / prevPaidKpis.apps : 0
   const prevTotalQueued = prevKpis.futworkHumanQ + prevKpis.futworkAiQ + prevKpis.superbotQ
   const prevTotalFutworkQ = prevKpis.futworkHumanQ + prevKpis.futworkAiQ
-  const prevEstimatedRaus = prevKpis.deposits * RAU_CONVERSION_FACTOR
+  const prevEstimatedRaus = prevKpis.deposits * rauConversionFactor
   const prevEstSrRevenue = prevEstimatedRaus * srFee
   const prevActSrRevenue = prevKpis.raus * srFee
   const prevActualRoas = prevKpis.spend > 0 ? prevActSrRevenue / prevKpis.spend : 0
@@ -2144,7 +2153,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // view's Sub Source/Campaign rows compute Est./Actual SR Revenue and ROAS by the exact
   // same formula as every top-level row -- one place, no risk of the two drifting apart.
   const withSrRevenue = useCallback((g) => {
-    const estimatedRaus = g.deposits * RAU_CONVERSION_FACTOR
+    const estimatedRaus = g.deposits * rauConversionFactor
     const estSrRevenue = estimatedRaus * srFee
     const actSrRevenue = g.raus * srFee
     return {
@@ -2152,7 +2161,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       roas: g.spend > 0 ? actSrRevenue / g.spend : 0,
       estimatedRoas: g.spend > 0 ? estSrRevenue / g.spend : 0,
     }
-  }, [srFee])
+  }, [srFee, rauConversionFactor])
 
   const groupedWithRevenue = useMemo(() => grouped.map(withSrRevenue), [grouped, withSrRevenue])
 
@@ -3537,7 +3546,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   <div style={{ fontSize:13, color:C.sub, lineHeight:1.7 }}>
                     <b>Leads Generated</b> is split into two paths: <b>Total Queued</b> (Futwork Human + Futwork AI + Superbot — sent to our third-party providers to get converted) and <b>Floor Queued</b> (handled directly). Futwork itself splits into <b>Queued on Futwork Human</b> and <b>Queued on Futwork AI</b> (added 2026-08-19, replacing the old single "Queued on Futwork" column) — <b>Total Queued on Futwork</b> is those two combined, excluding Superbot. From there it continues <b>Total QL</b> (Futwork Human QL + Futwork AI QL + Superbot AI QL combined) → <b>Applications</b> → <b>Offers</b> → <b>Deposits</b> → <b>RAUs</b> (Registered At University). Total Queued and Floor Queued are parallel branches of Leads Generated, not a single straight line.<br /><br />
                     <b>Lead to QL %</b> (and its Human/AI variants) is Futwork's own queued-to-QL conversion, distinct from the whole-funnel <b>QL %</b> below: <b>Lead to QL %</b> = (Futwork Human QL + Futwork AI QL) ÷ Total Queued on Futwork, <b>Lead to QL % (Human)</b> = Futwork Human QL ÷ Queued on Futwork Human, <b>Lead to QL % (AI)</b> = Futwork AI QL ÷ Queued on Futwork AI. None of these three include Superbot. The Human/AI split on the <i>queued</i> side didn't exist before 2026-08-19 and was never backfilled, while the QL <i>outcome</i> side has always been split correctly — so a period predating that split divides a real QL count by a near-zero queued figure. <b>Lead to QL % (Human/AI)</b> shows "—" rather than a four-digit artefact when that happens; the underlying Queued/QL counts themselves are shown as-is either way.<br /><br />
-                    <b>Estimated RAU</b> = Deposits × 70% (a projection of how many current Deposits will go on to register). <b>Actual RAUs</b> is the real, already-registered count — no discount applied. <b>Est./Actual SR Revenue</b> = Estimated/Actual RAUs × SR Fee.<br /><br />
+                    <b>Estimated RAU</b> = Deposits × {rauPct}% (a projection of how many current Deposits will go on to register — the {rauPct}% is set in Settings &gt; Data &gt; SR Revenue Assumptions). <b>Actual RAUs</b> is the real, already-registered count — no discount applied. <b>Est./Actual SR Revenue</b> = Estimated/Actual RAUs × SR Fee.<br /><br />
                     <b>CPL, CPQL and CPA count paid channels only.</b> A row shows a cost figure only if it carried spend, divided by its own leads / QLs / applications. The <b>TOTAL</b> divides all spend by the leads from <i>sources that spent</i> — so unpaid channels (Referral, Content+Brand, Offline, organic) don't dilute the blended figure, which otherwise made paid acquisition look materially cheaper than it is. "Paid" is judged per source rather than per row, because spend and leads frequently sit on different rows: manual affiliate spend arrives on rows carrying no leads, while Affiliate's actual leads sit on rows with no spend. That keeps the blended figure identical on every grouping tab. A row with no spend of its own shows "—" rather than ₹0.<br /><br />
                     In the summary table, the three whole-funnel conversion rates are each a single funnel step, not a share of all leads: <b>QL %</b> = Total QLs ÷ Total Queued, <b>App %</b> = Applications ÷ Total QLs, <b>Deposit %</b> = Deposits ÷ Offers. Because each stage is reported independently and a lead can reach a later stage in a different period from the one it was queued in, these can read above 100% on small or lagging rows. The <b>TOTAL</b> row re-derives every rate, cost and ROAS from the summed totals rather than averaging the rows, so it is weighted by volume.<br /><br />
                     <b>Executive insights</b> and <b>KPI deltas</b> compare the active period against the immediately preceding period of equal length (or the previous calendar month, in month view). <b>Biggest funnel leak</b> and campaign efficiency rankings use the real conversion path (Leads → Queued → Total QL → Apps → Offers → Deposits), skipping the parallel Floor Queued branch.<br /><br />
@@ -3696,9 +3705,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       <div onClick={() => setShowRatesPicker(false)} style={{ position:'fixed', inset:0, zIndex:399 }} />
                       <div ref={ratesPickerRef} role="dialog" aria-modal="true" aria-labelledby="sr-fee-popover-title" tabIndex={-1} style={{ position:'absolute', left:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:14, minWidth:270 }}>
                         <div id="sr-fee-popover-title" style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:10 }}>SR revenue formula</div>
-                        <div style={{ fontSize:20, fontWeight:800, color:C.navy, fontFamily:FONT, marginBottom:8 }}>₹{srFee.toLocaleString('en-IN')} <span style={{ fontSize:12.5, fontWeight:600, color:C.muted }}>per RAU (SR Fee)</span></div>
+                        <div style={{ fontSize:20, fontWeight:800, color:C.navy, fontFamily:FONT, marginBottom:2 }}>₹{srFee.toLocaleString('en-IN')} <span style={{ fontSize:12.5, fontWeight:600, color:C.muted }}>per RAU (SR Fee)</span></div>
+                        <div style={{ fontSize:13, fontWeight:700, color:C.navy, fontFamily:FONT, marginBottom:8 }}>{rauPct}% <span style={{ fontSize:11.5, fontWeight:600, color:C.muted }}>Deposits → RAU conversion</span></div>
                         <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.7 }}>
-                          <b>Estimated RAU</b> = Deposits × 70%<br />
+                          <b>Estimated RAU</b> = Deposits × {rauPct}%<br />
                           <b>Est. SR Revenue</b> = Estimated RAU × SR Fee<br />
                           <b>Actual SR Revenue</b> = Actual RAUs × SR Fee<br />
                           <b>ROAS</b> = Actual SR Revenue ÷ Spend (Est. ROAS uses Est. SR Revenue)
