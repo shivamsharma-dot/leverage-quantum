@@ -18,6 +18,7 @@ const PresentIcon = () => (
 export default function PresentationTool() {
   const { slides, presenting, start, stop, index, next, prev, goTo } = usePresentation()
   const [menuOpen, setMenuOpen] = React.useState(false)
+  const [noSlidesHint, setNoSlidesHint] = React.useState(false)
 
   React.useEffect(() => {
     if (!presenting) return undefined
@@ -64,17 +65,30 @@ export default function PresentationTool() {
     <div data-presentation-ignore="true" style={{ position: 'fixed', right: 0, bottom: 210, zIndex: 9998, fontFamily: FONT }}>
       <button
         type="button"
-        onClick={() => (slides.length ? setMenuOpen(v => !v) : null)}
-        title={slides.length ? 'Present this page' : 'No presentable sections on this page yet'}
+        onClick={() => {
+          if (slides.length) { setMenuOpen(v => !v); return }
+          setNoSlidesHint(true)
+          setTimeout(() => setNoSlidesHint(false), 3200)
+        }}
+        title={slides.length ? 'Present this page' : 'This page has no presentable sections yet'}
         style={{
           width: 24, height: 52, borderRadius: '14px 0 0 14px', border: '0.5px solid var(--card-border)', borderRight: 'none',
-          cursor: slides.length ? 'pointer' : 'default', background: 'var(--card)', boxShadow: '-6px 4px 18px -8px rgba(15,23,42,0.22)',
+          cursor: 'pointer', background: 'var(--card)', boxShadow: '-6px 4px 18px -8px rgba(15,23,42,0.22)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', color: slides.length ? NAVY : 'var(--text3,#94A3B8)',
           opacity: slides.length ? 1 : 0.55,
         }}
       >
         <PresentIcon />
       </button>
+      {noSlidesHint && (
+        <div style={{
+          position: 'absolute', right: 30, bottom: 4, width: 230, background: 'var(--card)', border: '1px solid var(--card-border)',
+          borderRadius: 12, boxShadow: '0 16px 40px rgba(15,31,75,0.20)', padding: '11px 14px', zIndex: 9998,
+        }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 3 }}>Nothing to present here yet</div>
+          <div style={{ fontSize: 11, color: 'var(--text3,#94A3B8)', lineHeight: 1.4 }}>This page hasn't been updated to support Present mode yet.</div>
+        </div>
+      )}
       {menuOpen && slides.length > 0 && (
         <>
           <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 9997 }} />
