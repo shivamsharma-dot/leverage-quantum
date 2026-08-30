@@ -52,34 +52,6 @@ const ICONS = {
   clock: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
 }
 
-const STATUS_STYLE = {
-  live:    { label: 'Live',    tint: C.greenBg, ink: '#15803D' },
-  partial: { label: 'Partial', tint: C.blueBg,  ink: C.blue },
-  manual:  { label: 'Manual entry', tint: C.navyBg, ink: C.navy },
-  pending: { label: 'Pending', tint: 'var(--bg3)', ink: C.muted },
-}
-
-function StatusChip({ status }) {
-  const s = STATUS_STYLE[status] || STATUS_STYLE.pending
-  return (
-    <span style={{ fontSize: 11, fontWeight: 700, color: s.ink, background: s.tint, padding: '3px 9px', borderRadius: 999, fontFamily: FONT, whiteSpace: 'nowrap' }}>
-      {s.label}
-    </span>
-  )
-}
-
-function SourceRow({ title, status, note }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--card-border)', gap: 10 }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, fontFamily: FONT }}>{title}</div>
-        {note && <div style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT, marginTop: 2 }}>{note}</div>}
-      </div>
-      <StatusChip status={status} />
-    </div>
-  )
-}
-
 function PendingCard({ title, sub, why }) {
   return (
     <Card title={title} sub={sub}>
@@ -186,10 +158,6 @@ export default function OrganicSocialDashboard() {
   const linkedinWeek = (prefs.linkedin_manual || {})[weekKey] || null
   const xWeek = (prefs.x_manual || {})[weekKey] || null
 
-  const igStatus = igErr === 'not_configured' ? 'pending' : (igErr ? 'pending' : 'live')
-  const ytStatus = yt ? 'partial' : 'pending'
-  const ga4Status = ga4 ? 'live' : 'pending'
-
   if (loading) {
     return (
       <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg }}>
@@ -230,17 +198,6 @@ export default function OrganicSocialDashboard() {
         </div>
 
         <div style={{ padding: '16px 14px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-          <Card title="Data sources" sub="What's live vs. still manual for the weekly organic/social tracker">
-            <SourceRow title="Website organic users (GA4)" status={ga4Status} note={ga4 ? null : 'Waiting on GA4 property access for the Quantum reader service account'} />
-            <SourceRow title="Instagram (followers, views, interactions, engagement)" status={igStatus} note={igErr && igErr !== 'not_configured' ? String(igErr).slice(0, 140) : null} />
-            <SourceRow title="YouTube subscribers / lifetime totals" status={yt ? 'live' : 'pending'} />
-            <SourceRow title="YouTube weekly views &amp; watch time" status="pending" note="Blocked on a Google Workspace admin trust grant" />
-            <div style={{ borderBottom: 'none' }}>
-              <SourceRow title="LinkedIn (weekly, entered in Settings)" status="manual" />
-            </div>
-            <SourceRow title="X / Twitter (weekly, entered in Settings)" status="manual" />
-          </Card>
 
           <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
