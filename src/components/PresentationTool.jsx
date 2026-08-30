@@ -196,7 +196,13 @@ export default function PresentationTool() {
             <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 3 }}>
               {isCurrentAuto ? 'Auto-detected section' : 'Presenting'} &middot; {index + 1} of {slides.length}
             </div>
-            <div style={{ fontSize: 19, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px', textShadow: '0 2px 12px rgba(0,0,0,0.4)' }}>
+            {/* the 92px top clearance on the slide is sized for exactly one
+                line of this -- a long title wrapping to two (confirmed live
+                on Summary) pushed its second line down into the clearance
+                gap and got clipped by the white slide starting right under
+                it. Clamped to one line with an ellipsis instead of trying to
+                measure and grow the clearance dynamically. */}
+            <div style={{ fontSize: 19, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px', textShadow: '0 2px 12px rgba(0,0,0,0.4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {current.title}
             </div>
           </div>

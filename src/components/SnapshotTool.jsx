@@ -1,6 +1,7 @@
 import React from 'react'
 import { toPng } from 'html-to-image'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { usePresentation } from '../lib/presentationContext.jsx'
 
 /*
   SnapshotTool — panel-wide screenshot capture.
@@ -280,6 +281,7 @@ async function runBatchGlobal() {
 }
 
 export default function SnapshotTool() {
+  const { presenting } = usePresentation()
   const [open, setOpen] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const [toast, setToast] = React.useState(null)
@@ -471,7 +473,15 @@ export default function SnapshotTool() {
       {/* Floating control -- collapsed into a small edge tab flush against the
           right edge of the viewport (was a fully-visible 52px round button
           sitting in the corner at all times). Peeks out a few px on hover for
-          affordance; click opens the exact same capture menu as before. */}
+          affordance; click opens the exact same capture menu as before.
+          Hidden entirely while Present mode's cinema backdrop is up -- its
+          own z-index (9999) sits ABOVE the backdrop's (9990), so it was
+          rendering right through the dimmed overlay in every presenting
+          screenshot, undercutting the whole point of a darkened stage.
+          Anything already mid-capture (crop overlay, progress, preview) is a
+          separate block above this one and is untouched -- only the idle
+          trigger + its menu/toast hide. */}
+      {!presenting && (
       <div data-snapshot-ignore="true" style={{ position: 'fixed', right: 0, bottom: 140, zIndex: 9999, fontFamily: FONT }}>
         {toast && (
           <div style={{ position: 'absolute', bottom: 30, right: 30, whiteSpace: 'nowrap', background: '#fff', border: '1px solid #E6EAF2', borderLeft: `3px solid ${toast.ok ? GREEN : NAVY}`, borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 600, color: INK, boxShadow: '0 10px 30px rgba(15,31,75,0.16)' }}>
@@ -516,6 +526,7 @@ export default function SnapshotTool() {
         </button>
         <style>{`@keyframes qspin{to{transform:rotate(360deg)}}`}</style>
       </div>
+      )}
     </>
   )
 }

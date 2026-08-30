@@ -107,12 +107,17 @@ function scanAutoSlides(excludeNodes) {
   // slideshow can reasonably hold
   const top = matches.filter(el => !matches.some(other => other !== el && other.contains(el)))
   return top.slice(0, 30).map((node, i) => {
-    const headingEl = node.querySelector('h1,h2,h3,h4') || node.querySelector('[class*="title" i]')
-    let title = headingEl && headingEl.textContent ? headingEl.textContent.trim() : ''
-    if (!title) {
-      const firstText = node.querySelector('div,span,p')
-      title = ((firstText && firstText.textContent) || '').trim()
-    }
+    // Real headings only -- the earlier loose `[class*="title" i]` fallback,
+    // and a bare "first text-bearing element" fallback below that, both
+    // produced garbage titles confirmed live: a sortable table with no real
+    // heading picked up its own header ROW ("Campaign — Corridor — Status —
+    // Signal — Spend↓Impressions↕Clicks↕C…", sort glyphs included) on Meta
+    // Ads, and a KPI band picked up label+value+subtitle all concatenated
+    // ("Total People3,397 — Lead — Squared, real-time") on Team Mapping.
+    // A section with no genuine heading gets a plain "Section N" instead --
+    // an honest placeholder beats a confident-looking wrong answer.
+    const headingEl = node.querySelector('h1,h2,h3,h4,h5,h6,[role="heading"]')
+    const title = headingEl && headingEl.textContent ? headingEl.textContent.trim() : ''
     return { id: 'auto-' + i, title: title ? humanizeTitle(title) : ('Section ' + (i + 1)), node }
   })
 }
