@@ -83,7 +83,12 @@ function scanAutoSlides(excludeNodes) {
     // fixed content isn't part of the page's own content flow)
     if (excludeNodes && excludeNodes.some(n => n === el || (n && n.contains && n.contains(el)))) continue
     const rect = el.getBoundingClientRect()
-    if (rect.width < 280 || rect.height < 110) continue
+    // 110px excluded a real KPI strip (confirmed live on Team Mapping: its
+    // whole 5-tile "Total People / Active / Sales Groups / ..." row is 102px
+    // tall) -- a strip that wide is exactly the kind of section worth its
+    // own slide, not the small pill/badge/button this threshold exists to
+    // filter out, so it comes down to a floor that still excludes those.
+    if (rect.width < 280 || rect.height < 80) continue
     const cs = getComputedStyle(el)
     if (cs.position === 'fixed' || cs.position === 'absolute') continue
     const radius = parseFloat(cs.borderRadius) || 0
