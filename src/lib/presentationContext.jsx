@@ -87,7 +87,15 @@ function scanAutoSlides(excludeNodes) {
     const cs = getComputedStyle(el)
     if (cs.position === 'fixed' || cs.position === 'absolute') continue
     const radius = parseFloat(cs.borderRadius) || 0
-    if (radius < 8 || !cs.boxShadow || cs.boxShadow === 'none') continue
+    if (radius < 8) continue
+    // most of this app's card treatments pair rounded corners with a real
+    // shadow, but several pages (confirmed live: Meta Ads) instead frame a
+    // section with just a border and no shadow at all -- either is accepted
+    // as this app's card signature; a rounded corner with NEITHER is too
+    // weak a signal on its own (could be a button, a pill, a badge).
+    const hasShadow = cs.boxShadow && cs.boxShadow !== 'none'
+    const hasBorder = parseFloat(cs.borderTopWidth) > 0 && cs.borderTopStyle !== 'none'
+    if (!hasShadow && !hasBorder) continue
     matches.push(el)
   }
   // keep only the outermost card in any nested chain, and cap what a
