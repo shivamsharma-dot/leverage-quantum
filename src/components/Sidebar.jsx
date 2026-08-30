@@ -1015,12 +1015,24 @@ export default function Sidebar() {
     )
   }
 
+  // PRES-3/4 follow-up: this is the OTHER sidebar branch (collapsed===false,
+  // the always-expanded layout), and it had the identical bug the collapsed
+  // branch above was fixed for -- SnapshotTool/PresentationTool were mounted
+  // INSIDE <aside className={styles.sidebar}>, and Sidebar.module.css hides
+  // BOTH .sidebarCollapsed AND .sidebar with the same `@media (max-width:
+  // 768px) { display:none !important }` rule. So on this branch the two
+  // floating tools were exactly as unreachable on a phone as they were
+  // before the first fix -- confirmed live (a real DOM capture showed the
+  // Present button as a descendant of aside.sidebar) rather than assumed.
+  // Moved to a sibling of the aside, same as the collapsed branch.
   return (
-    <aside className={styles.sidebar}>
-      {renderNavBody()}
+    <>
+      <aside className={styles.sidebar}>
+        {renderNavBody()}
+        {hideMenuPopup}
+      </aside>
       <SnapshotTool/>
-        <PresentationTool/>
-      {hideMenuPopup}
-    </aside>
+      <PresentationTool/>
+    </>
   )
 }
