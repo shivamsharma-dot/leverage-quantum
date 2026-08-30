@@ -280,6 +280,17 @@ const DATA_SOURCES = [
   // the authorising account holds viewer access, and lib/bigquery.mjs refuses
   // anything that is not a SELECT/WITH. Credentials are Vercel env only.
   { name: 'Google BigQuery', src: 'BigQuery REST API (env-configured)', rows: 'live', bqTest: true },
+  // Organic & Social connectors (2026-08). Each is a real backend integration
+  // (lib/instagram.mjs / lib/youtube.mjs / lib/ga4.mjs) reached through
+  // /api/crm-leads, plus the two manual-entry sources with no API at all.
+  // testKind drives both the icon (sourceIconClass) and the test button
+  // (testConnector) -- see those two functions below.
+  { name: 'Instagram', src: '@leverageedu (env-configured)', rows: 'live', testKind: 'instagram' },
+  { name: 'YouTube', src: 'Leverage Edu channel (env-configured)', rows: 'live', testKind: 'youtube', statusSt: 'custom', statusText: 'Partial' },
+  { name: 'Google Analytics 4', src: 'Property 313866309 (env-configured)', rows: 'live', testKind: 'ga4', statusSt: 'default', statusText: 'Pending' },
+  { name: 'Slack', src: 'Bot token (env-configured)', rows: 'live', testKind: 'slack' },
+  { name: 'LinkedIn', src: 'Entered manually in Settings', rows: 'weekly', testKind: 'linkedin_manual', statusSt: 'default', statusText: 'Manual' },
+  { name: 'X (Twitter)', src: 'Entered manually in Settings', rows: 'weekly', testKind: 'x_manual', statusSt: 'default', statusText: 'Manual' },
     ]
 
 // Official brand marks (Meta logo + 2026 Google Sheets icon), embedded verbatim from their
@@ -355,12 +366,62 @@ const BigQueryIcon = () => (
   </svg>
 )
 
+// Real (schematic, not vendor-exact -- same convention as BigQueryIcon above)
+// brand marks for the Organic & Social connectors. LinkedIn's real mark is used
+// verbatim; the rest are simplified but recognizable reconstructions.
+const InstagramIcon = () => (
+  <svg viewBox="0 0 48 48">
+    <defs>
+      <linearGradient id="dsIgGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#FFD600" /><stop offset="30%" stopColor="#FF7A00" />
+        <stop offset="60%" stopColor="#E1306C" /><stop offset="100%" stopColor="#833AB4" />
+      </linearGradient>
+    </defs>
+    <rect x="4" y="4" width="40" height="40" rx="11" fill="url(#dsIgGrad)" />
+    <rect x="13" y="13" width="22" height="22" rx="7" fill="none" stroke="#fff" strokeWidth="2.6" />
+    <circle cx="24" cy="24" r="6.4" fill="none" stroke="#fff" strokeWidth="2.6" />
+    <circle cx="33.2" cy="14.8" r="1.9" fill="#fff" />
+  </svg>
+)
+const YoutubeIcon = () => (
+  <svg viewBox="0 0 48 34">
+    <path fill="#FF0000" d="M47 5.3a6 6 0 0 0-4.2-4.2C39 0 24 0 24 0S9 0 5.2 1.1A6 6 0 0 0 1 5.3 62 62 0 0 0 0 17a62 62 0 0 0 1 11.7 6 6 0 0 0 4.2 4.2C9 34 24 34 24 34s15 0 18.8-1.1a6 6 0 0 0 4.2-4.2A62 62 0 0 0 48 17a62 62 0 0 0-1-11.7z" />
+    <path fill="#fff" d="M19 24.3 31.6 17 19 9.7z" />
+  </svg>
+)
+// Google Analytics 4 -- the real mark is 3 ascending bars, orange/amber tones.
+const GA4Icon = () => (
+  <svg viewBox="0 0 36 36">
+    <rect x="4" y="18" width="8" height="14" rx="2.4" fill="#F9AB00" />
+    <rect x="14" y="9" width="8" height="23" rx="2.4" fill="#F9AB00" opacity="0.75" />
+    <rect x="24" y="2" width="8" height="30" rx="2.4" fill="#E37400" />
+  </svg>
+)
+const LinkedInIcon = () => (
+  <svg viewBox="0 0 48 48">
+    <rect x="2" y="2" width="44" height="44" rx="7.5" fill="#0A66C2" />
+    <path fill="#fff" d="M17 19h5.2v18H17zM19.6 16.6a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM26.4 19h5v2.5h.1c.7-1.3 2.4-2.7 5-2.7 5.3 0 6.3 3.5 6.3 8.1V37h-5.2v-9.2c0-2.2 0-5-3.1-5s-3.5 2.3-3.5 4.8V37h-5.2z" />
+  </svg>
+)
+const XSocialIcon = () => (
+  <svg viewBox="0 0 48 48">
+    <rect x="2" y="2" width="44" height="44" rx="10" fill="#000" />
+    <path fill="#fff" d="M13 13l10.4 13.4L13 35h3.2l9-9.7 6.9 9.7H35L24 20.9 33.7 13h-3.1l-8.4 9-6.4-9z" />
+  </svg>
+)
+
 function sourceIconClass(s) {
   if (s.editKey) return { Icon: SheetsIcon, wrap: styles.dsIconWrapSheets }
   if (s.name === 'Meta Graph API') return { Icon: MetaIcon, wrap: styles.dsIconWrapBrand }
   if (s.name === 'Google Ads API') return { Icon: GoogleIcon, wrap: styles.dsIconWrapBrand }
   if (s.apiTestMode) return { Icon: LeadSquaredIcon, wrap: styles.dsIconWrapBrand }
   if (s.bqTest) return { Icon: BigQueryIcon, wrap: styles.dsIconWrapBrand }
+  if (s.testKind === 'instagram') return { Icon: InstagramIcon, wrap: styles.dsIconWrapBrand }
+  if (s.testKind === 'youtube') return { Icon: YoutubeIcon, wrap: styles.dsIconWrapBrand }
+  if (s.testKind === 'ga4') return { Icon: GA4Icon, wrap: styles.dsIconWrapBrand }
+  if (s.testKind === 'slack') return { Icon: SlackIcon, wrap: styles.dsIconWrapBrand }
+  if (s.testKind === 'linkedin_manual') return { Icon: LinkedInIcon, wrap: styles.dsIconWrapBrand }
+  if (s.testKind === 'x_manual') return { Icon: XSocialIcon, wrap: styles.dsIconWrapBrand }
   return { Icon: GenericSourceIcon, wrap: '' }
 }
 
@@ -1575,6 +1636,66 @@ export default function SettingsPage() {
     }
   }
 
+  // One shared test for every Organic & Social connector (testKind on the
+  // DATA_SOURCES entry) -- same {type:'ok'|'err', text} shape as bqMsg/lsqMsg
+  // above, keyed by testKind since there are six of these. Instagram/YouTube/
+  // GA4 hit the real /api/crm-leads endpoints built for the Organic & Social
+  // dashboard; Slack reuses the existing read-only conversations.list check
+  // (never posts a message, unlike the "Send test message" button on the
+  // Reports tab); LinkedIn/X have no API at all, so their "test" just reports
+  // what's actually stored in linkedin_manual/x_manual -- still a real check
+  // of real state, not a placeholder.
+  const [connTesting, setConnTesting] = useState(null)
+  const [connMsg, setConnMsg] = useState({})
+  const testConnector = async testKind => {
+    setConnTesting(testKind); setConnMsg(m => ({ ...m, [testKind]: null }))
+    try {
+      let text
+      if (testKind === 'instagram') {
+        const r = await fetchT('/api/crm-leads?source=instagram&mode=profile', { credentials: 'include' })
+        const d = await r.json()
+        if (d.configured === false) throw new Error('Not configured -- set INSTAGRAM_ACCESS_TOKEN in Vercel env')
+        if (!r.ok) throw new Error((d.detail || d.error || 'Failed').replace('Instagram Graph API error: ', ''))
+        text = `Connected -- @${d.profile.username}, ${d.profile.followersCount.toLocaleString('en-IN')} followers`
+      } else if (testKind === 'youtube') {
+        const r = await fetchT('/api/crm-leads?source=youtube&mode=stats', { credentials: 'include' })
+        const d = await r.json()
+        if (d.configured === false) throw new Error('Not configured -- set YOUTUBE_CLIENT_ID/SECRET/REFRESH_TOKEN in Vercel env')
+        if (!r.ok) throw new Error((d.detail || d.error || 'Failed').replace('YouTube Data API error: ', ''))
+        let weekly = 'not checked'
+        try {
+          const until = new Date().toISOString().slice(0, 10)
+          const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+          const r2 = await fetchT(`/api/crm-leads?source=youtube&mode=range&since=${since}&until=${until}`, { credentials: 'include' })
+          const d2 = await r2.json()
+          weekly = r2.ok && d2.range ? 'OK' : (d2.detail || d2.error || 'blocked').replace('YouTube Analytics API error: ', '')
+        } catch { weekly = 'could not check' }
+        text = `Connected -- ${d.stats.title}, ${d.stats.subscriberCount.toLocaleString('en-IN')} subscribers. Weekly analytics: ${weekly}`
+      } else if (testKind === 'ga4') {
+        const until = new Date().toISOString().slice(0, 10)
+        const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+        const r = await fetchT(`/api/crm-leads?source=ga4&mode=range&since=${since}&until=${until}`, { credentials: 'include' })
+        const d = await r.json()
+        if (d.configured === false) throw new Error('Not configured -- set GA4_CLIENT_EMAIL/GA4_PRIVATE_KEY/GA4_PROPERTY_ID in Vercel env')
+        if (!r.ok) throw new Error((d.detail || d.error || 'Failed').replace('GA4 Data API error: ', ''))
+        text = `Connected -- ${d.range.organicUsers.toLocaleString('en-IN')} organic users in the last 7 days`
+      } else if (testKind === 'slack') {
+        const r = await fetchT('/api/send-report', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'slack_channel_list' }) })
+        const d = await r.json()
+        if (!r.ok) throw new Error(d.error || 'Failed')
+        text = `Connected -- the bot can see ${d.channels.length} channel(s)`
+      } else if (testKind === 'linkedin_manual' || testKind === 'x_manual') {
+        const weeks = Object.keys((testKind === 'linkedin_manual' ? linkedinManual : xManual) || {})
+        text = weeks.length ? `${weeks.length} week(s) recorded -- most recent ${weeks.sort().slice(-1)[0]}` : 'No weeks entered yet -- add one below'
+      }
+      setConnMsg(m => ({ ...m, [testKind]: { type: 'ok', text } }))
+    } catch (e) {
+      setConnMsg(m => ({ ...m, [testKind]: { type: 'err', text: e.message } }))
+    } finally {
+      setConnTesting(null)
+    }
+  }
+
   // BigQuery console state. The real safety net is assertReadOnly() in
   // lib/bigquery.mjs -- anything that is not SELECT / WITH is refused
   // server-side, so nothing typed here can change a row. Every Run is
@@ -2239,7 +2360,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
   }
 
   const TABS = [
-    ...(userIsAdmin ? [{ id: 'data', label: 'Data', icon: 'layers' }] : []),
+    ...(userIsAdmin ? [{ id: 'data', label: 'Connectors', icon: 'layers' }] : []),
     ...(userIsAdmin ? [{ id: 'bigquery', label: 'BigQuery', icon: 'cube' }] : []),
     ...(userIsAdmin ? [{ id: 'users', label: 'User Access', icon: 'users' }, { id: 'activity', label: 'Activity Log', icon: 'activity' }] : []),
     ...(userIsAdmin ? [{ id: 'reports', label: 'Reports', icon: 'mail' }] : []),
@@ -2305,7 +2426,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 
               <div className={styles.card}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <h3 className={styles.cardTitle} style={{ marginBottom: 0 }}>Data Sources</h3>
+                  <h3 className={styles.cardTitle} style={{ marginBottom: 0 }}>Connectors</h3>
                   <Button size="sm" onClick={checkAllSources} disabled={checkingAll}>{checkingAll ? 'Checking all...' : 'Check all sources'}</Button>
                 </div>
                 <div style={{ marginTop: 12, padding: '14px 16px', background: 'var(--bg3)', border: '0.5px solid var(--border)', borderRadius: 12 }}>
@@ -2366,7 +2487,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           </span>
                         </div>
                         <div className={styles.dsCatName}>API Connections</div>
-                        <div className={styles.dsCatDesc}>Live server-side connections: Meta Graph API, Google Ads API.</div>
+                        <div className={styles.dsCatDesc}>Live server-side connections -- ads, CRM, warehouse, and organic/social.</div>
                       </button>
                       <button type="button" className={styles.dsCatCard + (sourceCatFilter === 'sheets' ? ' ' + styles.dsCatCardActive : '')} onClick={() => setSourceCatFilter('sheets')}>
                         <div className={styles.dsCatTop}>
@@ -2402,7 +2523,7 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       <div className={styles.dsName}>{s.name}</div>
                                             <div className={styles.dsMeta} title={s.editKey ? (sheetUrls[s.editKey] || s.defaultUrl || '') : ''} style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.editKey ? (() => { const u = sheetUrls[s.editKey] || s.defaultUrl; if (!u) return 'No default set'; const m = u.match(/[?&]sheet=([^&]+)/); return 'Google Sheet' + (m ? ' \u00b7 ' + decodeURIComponent(m[1].replace(/\+/g, ' ')) : ''); })() : (s.src + ' \u2014 ' + s.rows + ' rows')}</div>
                     </div>
-                    <span className={styles.dsStatus} data-st={s.editKey ? (sheetUrls[s.editKey] ? 'custom' : 'default') : 'live'}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : 'Live'}</span>{s.bqTest && userIsAdmin && (<Button size="sm" variant="secondary" onClick={() => testBigQuery()} disabled={bqTesting}>{bqTesting ? 'Testing...' : 'Test connection'}</Button>)}{s.bqTest && bqMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: bqMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{bqMsg.type === 'err' ? '\u2715 ' : '\u2713 '}{bqMsg.text}</p>)}{s.apiTestMode && (<Button size="sm" variant="secondary" onClick={() => testLeadSquared(s.apiTestMode)} disabled={lsqTesting === s.apiTestMode}>{lsqTesting === s.apiTestMode ? 'Testing...' : 'Test connection'}</Button>)}{s.apiTestMode && lsqMsg[s.apiTestMode] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: lsqMsg[s.apiTestMode].type === 'err' ? '#c0392b' : '#15803D' }}>{lsqMsg[s.apiTestMode].type === 'err' ? '✕ ' : '✓ '}{lsqMsg[s.apiTestMode].text}</p>)}{s.editKey && (<Button size="sm" variant="secondary" onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</Button>)}{s.editKey && userIsAdmin && (<Button size="sm" onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</Button>)}{s.custom && userIsAdmin && (<Button size="sm" danger onClick={() => removeCustomSource(s.editKey)}>Remove</Button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste the sheet link or a CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><Button size="sm" onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</Button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}{s.disconnectable && userIsAdmin && (<Button size="sm" danger onClick={disconnectMeta} disabled={metaDisconnecting}>{metaDisconnecting ? 'Disconnecting...' : 'Disconnect'}</Button>)}{s.disconnectable && metaDisconnectMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: metaDisconnectMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{metaDisconnectMsg.type === 'err' ? '✕ ' : '✓ '}{metaDisconnectMsg.text}</p>)}
+                    <span className={styles.dsStatus} data-st={s.editKey ? (sheetUrls[s.editKey] ? 'custom' : 'default') : (s.statusSt || 'live')}>{s.editKey ? (sheetUrls[s.editKey] ? 'Custom' : 'Default') : (s.statusText || 'Live')}</span>{s.bqTest && userIsAdmin && (<Button size="sm" variant="secondary" onClick={() => testBigQuery()} disabled={bqTesting}>{bqTesting ? 'Testing...' : 'Test connection'}</Button>)}{s.bqTest && bqMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: bqMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{bqMsg.type === 'err' ? '\u2715 ' : '\u2713 '}{bqMsg.text}</p>)}{s.apiTestMode && (<Button size="sm" variant="secondary" onClick={() => testLeadSquared(s.apiTestMode)} disabled={lsqTesting === s.apiTestMode}>{lsqTesting === s.apiTestMode ? 'Testing...' : 'Test connection'}</Button>)}{s.apiTestMode && lsqMsg[s.apiTestMode] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: lsqMsg[s.apiTestMode].type === 'err' ? '#c0392b' : '#15803D' }}>{lsqMsg[s.apiTestMode].type === 'err' ? '✕ ' : '✓ '}{lsqMsg[s.apiTestMode].text}</p>)}{s.testKind && userIsAdmin && (<Button size="sm" variant="secondary" onClick={() => testConnector(s.testKind)} disabled={connTesting === s.testKind}>{connTesting === s.testKind ? 'Testing...' : 'Test connection'}</Button>)}{s.testKind && connMsg[s.testKind] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: connMsg[s.testKind].type === 'err' ? '#c0392b' : '#15803D' }}>{connMsg[s.testKind].type === 'err' ? '✕ ' : '✓ '}{connMsg[s.testKind].text}</p>)}{s.editKey && (<Button size="sm" variant="secondary" onClick={() => testSheetConnection(s)} disabled={sheetTest[s.editKey] && sheetTest[s.editKey].loading}>{sheetTest[s.editKey] && sheetTest[s.editKey].loading ? 'Testing...' : 'Test connection'}</Button>)}{s.editKey && userIsAdmin && (<Button size="sm" onClick={() => { const next = editingSheet === s.editKey ? null : s.editKey; if (next && !sheetInputs[s.editKey]) setSheetInputs(prev => ({ ...prev, [s.editKey]: sheetUrls[s.editKey] || s.defaultUrl || '' })); setEditingSheet(next) }}>{editingSheet === s.editKey ? 'Close' : 'Edit'}</Button>)}{s.custom && userIsAdmin && (<Button size="sm" danger onClick={() => removeCustomSource(s.editKey)}>Remove</Button>)}{s.editKey && userIsAdmin && editingSheet === s.editKey && (<div className={styles.inputGroup} style={{ flexBasis: '100%', width: '100%', marginTop: 10 }}><input type="text" className={styles.input} placeholder="Paste the sheet link or a CSV URL" value={sheetInputs[s.editKey] || ''} onChange={e => setSheetInputs(prev => ({ ...prev, [s.editKey]: e.target.value }))} style={{ flex: 1, minWidth: 260 }} /><Button size="sm" onClick={() => saveSheetUrl(s.editKey)} disabled={sheetSaving[s.editKey]}>{sheetSaving[s.editKey] ? 'Saving...' : 'Save'}</Button></div>)}{s.editKey && sheetMsg[s.editKey] && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: sheetMsg[s.editKey].type === 'err' ? '#c0392b' : undefined }}>{sheetMsg[s.editKey].type === 'err' ? '✕ ' : '✓ '}{sheetMsg[s.editKey].text}</p>)}{s.disconnectable && userIsAdmin && (<Button size="sm" danger onClick={disconnectMeta} disabled={metaDisconnecting}>{metaDisconnecting ? 'Disconnecting...' : 'Disconnect'}</Button>)}{s.disconnectable && metaDisconnectMsg && (<p className={styles.note} style={{ flexBasis: '100%', width: '100%', margin: '4px 0 0', color: metaDisconnectMsg.type === 'err' ? '#c0392b' : '#15803D' }}>{metaDisconnectMsg.type === 'err' ? '✕ ' : '✓ '}{metaDisconnectMsg.text}</p>)}
                     {s.editKey && sheetTest[s.editKey] && !sheetTest[s.editKey].loading && (
                       <div style={{ position: 'relative', flexBasis: '100%', width: '100%', marginTop: 8, padding: '10px 36px 10px 12px', borderRadius: 8, border: '1px solid ' + (sheetTest[s.editKey].error ? '#FECACA' : '#DCFCE7'), background: sheetTest[s.editKey].error ? 'var(--bg3)' : '#F0FDF4' }}>
                         <button type="button" onClick={() => setSheetTest(prev => { const next = { ...prev }; delete next[s.editKey]; return next })} title="Close" style={{ position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 5, border: 'none', background: 'transparent', color: 'var(--text-2)', fontSize: 14, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
