@@ -106,11 +106,12 @@ function repeatsInCard(card, el) {
 
 function leafTitle(card) {
   const all = card.querySelectorAll('*')
-  const lim = all.length < 400 ? all.length : 400
+  const lim = all.length < 150 ? all.length : 150
   for (let i = 0; i < lim; i++) {
     const el = all[i]
     if (el.children.length) continue
     if (el.closest(TABLEISH)) continue
+    if (inRepeatedRow(card, el)) continue
     if (repeatsInCard(card, el)) continue
     if (sharesRowWith(card, el)) continue
     const t = (el.textContent || '').replace(/\s+/g, ' ').trim()
@@ -140,6 +141,33 @@ function isMetricStrip(node, rect) {
 // no <th> and no class on the header cells, so neither the tableish selector
 // nor the repeated-class check catches it -- this is what stops that card
 // from titling itself "Campaign".
+// The other half of the table problem: rejecting the header row only moved
+// the guess down to the first DATA row ("PMX_FB_Ger_NAS_08July2026"). A cell
+// in a repeating list has an ancestor, inside the card, whose siblings are all
+// the same height -- that is what a row list looks like structurally, with no
+// dependence on <table> markup, class names or text.
+function inRepeatedRow(card, el) {
+  let n = el
+  for (let d = 0; d < 5 && n && n !== card; d++) {
+    const p = n.parentElement
+    if (!p) break
+    const kids = p.children
+    if (kids.length >= 5) {
+      const h0 = kids[0].getBoundingClientRect().height
+      if (h0 >= 20) {
+        let same = 0
+        for (let j = 1; j < kids.length && j < 10; j++) {
+          if (Math.abs(kids[j].getBoundingClientRect().height - h0) <= 2) same++
+        }
+        if (same >= 4) return true
+      }
+    }
+    if (p === card) break
+    n = p
+  }
+  return false
+}
+
 function sharesRowWith(card, el) {
   const top = el.getBoundingClientRect().top
   const all = card.querySelectorAll('*')
