@@ -135,12 +135,15 @@ export default function PresentationTool() {
     autoSlides.forEach((s, i) => {
       const isCurrent = i === index
       s.node.dataset.presentAuto = '1'
-      s.node.style.display = isCurrent ? '' : 'none'
       if (isCurrent) {
         elevateAutoNode(s.node)
         restores.push(neutralizeContainingBlockAncestors(s.node))
       } else {
+        // clear any elevation left from when THIS node was current on a
+        // previous slide, then hide it -- clearing first, hiding last, so
+        // the dataset marker below survives for cleanup to find later
         resetAutoNode(s.node)
+        s.node.dataset.presentAuto = '1'
         s.node.style.display = 'none'
       }
     })
