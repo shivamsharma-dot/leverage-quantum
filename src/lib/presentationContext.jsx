@@ -153,11 +153,19 @@ function inRepeatedRow(card, el) {
     if (!p) break
     const kids = p.children
     if (kids.length >= 5) {
-      const h0 = kids[0].getBoundingClientRect().height
-      if (h0 >= 20) {
+      // Anchoring on kids[0] missed the real case: the first child of a row
+      // list is the HEADER row (55px on Meta Ads) and every data row (71px)
+      // was being compared against it. Take the largest equal-height group
+      // instead, so a header row cannot hide the rows behind it.
+      const hs = []
+      for (let j = 0; j < kids.length && j < 10; j++) {
+        hs.push(kids[j].getBoundingClientRect().height)
+      }
+      for (let a = 0; a < hs.length; a++) {
+        if (hs[a] < 20) continue
         let same = 0
-        for (let j = 1; j < kids.length && j < 10; j++) {
-          if (Math.abs(kids[j].getBoundingClientRect().height - h0) <= 2) same++
+        for (let b = 0; b < hs.length; b++) {
+          if (Math.abs(hs[b] - hs[a]) <= 2) same++
         }
         if (same >= 4) return true
       }
