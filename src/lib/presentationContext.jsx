@@ -69,55 +69,159 @@ function humanizeTitle(raw) {
   return t
 }
 
+// A leaf element's own text is the only safe fallback title. The earlier
+// "first text-bearing element" attempt produced run-ons like
+// "Total People3,397 - Lead - Squared, real-time" because it read a
+// CONTAINER's textContent, which glues a label, its value and its subtitle
+// together; a leaf has no children to glue, so the worst case degrades to a
+// single clean-but-wrong label instead of a garbled one. Restricting the
+// source to real headings instead (the previous attempt) cost every title on
+// Summary and 4 of 5 on Revenue, whose local cards render their titles as
+// plain divs -- 9 auto slides read "Section N" with a perfectly good name
+// sitting one element inside them.
+const TABLEISH = 'table,thead,tbody,tfoot,tr,th,td,[role="table"],[role="grid"],[role="row"],[role="columnheader"],[role="gridcell"]'
+const NOTICE_RE = /(warning|alert|notice|callout|banner|toast|snackbar|tooltip)/i
+
+// Rejects values, not labels: "1.65 Cr", "3,397", "-26.0%" are what a KPI
+// tile leads with, and none of them describe the section.
+function isTitleish(t) {
+  if (!t || t.length < 2 || t.length > 60) return false
+  if (!/[A-Za-z]{2}/.test(t)) return false
+  if (/^[\u20B9$\u20AC\u00A3]?\s*[\d.,]+\s*(cr|lac|lakh|k|m|bn?|%)?$/i.test(t)) return false
+  return true
+}
+
+// A column header repeats down its own column, so its class occurs once per
+// row inside the card -- which is how the Meta Ads table talked itself into
+// the title "Campaign - Corridor - Status - Signal - Spend...".
+function repeatsInCard(card, el) {
+  const cls = String(el.className || '').trim()
+  if (!cls) return false
+  try {
+    return card.querySelectorAll('.' + cls.split(/\s+/).join('.')).length >= 5
+  } catch (e) {
+    return false
+  }
+}
+
+function leafTitle(card) {
+  const all = card.querySelectorAll('*')
+  const lim = all.length < 400 ? all.length : 400
+  for (let i = 0; i < lim; i++) {
+    const el = all[i]
+    if (el.children.length) continue
+    if (el.closest(TABLEISH)) continue
+    if (repeatsInCard(card, el)) continue
+    const t = (el.textContent || '').replace(/\s+/g, ' ').trim()
+    if (isTitleish(t)) return t
+  }
+  return ''
+}
+
+// A KPI/metric strip is ONE section, not N, and naming it after its first
+// tile ("Total People") actively misdescribes the other four.
+function isMetricStrip(node, rect) {
+  const kids = node.children
+  if (kids.length < 3 || rect.height > 200) return false
+  for (let i = 0; i < kids.length; i++) {
+    const t = kids[i].textContent || ''
+    if (!/\d/.test(t) || !/[A-Za-z]/.test(t)) return false
+  }
+  return true
+}
+
+// 0 = not a card, walk into it. 1 = card, present it and never look inside.
+// 2 = not page content at all, skip the whole subtree.
+function classifyNode(el, excludeNodes, small) {
+  if (el.hasAttribute('data-presentation-ignore')) return 2
+  // never re-wrap something that's already a registered Card
+  if (excludeNodes && excludeNodes.some(n => n === el || (n && n.contains && n.contains(el)))) return 2
+  // an advisory strip is not a section: Revenue's "Unidentified Source
+  // Revenue" warning is 65px tall on desktop (under the floor) but wraps past
+  // it at phone widths, where it turned into a 90%-empty slide.
+  const role = el.getAttribute('role')
+  if (role === 'alert' || role === 'status') return 2
+  if (NOTICE_RE.test(String(el.className || ''))) return 2
+  const tag = el.tagName
+  if (tag !== 'DIV' && tag !== 'SECTION' && tag !== 'ARTICLE') return 0
+  const rect = el.getBoundingClientRect()
+  if (rect.width < 120 || rect.height < 70) return 0
+  const cs = getComputedStyle(el)
+  // a floating popover/menu/dropdown/toast is not part of the page's own
+  // content flow, and neither is anything inside it
+  if (cs.position === 'fixed') return 2
+  if (cs.position === 'absolute') {
+    const z = parseInt(cs.zIndex, 10)
+    if (z >= 100 || role === 'dialog' || role === 'menu' || role === 'listbox') return 2
+    return 0
+  }
+  if ((parseFloat(cs.borderRadius) || 0) < 8) return 0
+  // most of this app's card treatments pair rounded corners with a real
+  // shadow, but several pages (confirmed live: Meta Ads) instead frame a
+  // section with just a border and no shadow -- either is accepted as the
+  // card signature; a rounded corner with NEITHER is too weak a signal on its
+  // own (could be a button, a pill, a badge).
+  const hasShadow = cs.boxShadow && cs.boxShadow !== 'none'
+  const hasBorder = parseFloat(cs.borderTopWidth) > 0 && cs.borderTopStyle !== 'none'
+  if (!hasShadow && !hasBorder) return 0
+  // 280x80 is the floor for a section worth its own slide (Team Mapping's
+  // 5-tile KPI row is 951x120 and clears it). A tile that carries the card
+  // signature but sits under the floor is held back for strip promotion.
+  if (rect.width >= 280 && rect.height >= 80) return 1
+  small.push(el)
+  return 0
+}
+
 function scanAutoSlides(excludeNodes) {
   if (AUTO_SCAN_DENYLIST.some(p => window.location.pathname.startsWith(p))) return []
   const root = findContentRoot()
   if (!root) return []
-  const all = root.querySelectorAll('div,section,article')
   const matches = []
-  for (let i = 0; i < all.length && matches.length < 80; i++) {
-    const el = all[i]
-    if (el.closest('[data-presentation-ignore]')) continue
-    // never re-wrap something that's already a registered Card, or a floating
-    // popover/menu/dropdown/toast sitting open on top of the page (position:
-    // fixed content isn't part of the page's own content flow)
-    if (excludeNodes && excludeNodes.some(n => n === el || (n && n.contains && n.contains(el)))) continue
-    const rect = el.getBoundingClientRect()
-    // 110px excluded a real KPI strip (confirmed live on Team Mapping: its
-    // whole 5-tile "Total People / Active / Sales Groups / ..." row is 102px
-    // tall) -- a strip that wide is exactly the kind of section worth its
-    // own slide, not the small pill/badge/button this threshold exists to
-    // filter out, so it comes down to a floor that still excludes those.
-    if (rect.width < 280 || rect.height < 80) continue
-    const cs = getComputedStyle(el)
-    if (cs.position === 'fixed' || cs.position === 'absolute') continue
-    const radius = parseFloat(cs.borderRadius) || 0
-    if (radius < 8) continue
-    // most of this app's card treatments pair rounded corners with a real
-    // shadow, but several pages (confirmed live: Meta Ads) instead frame a
-    // section with just a border and no shadow at all -- either is accepted
-    // as this app's card signature; a rounded corner with NEITHER is too
-    // weak a signal on its own (could be a button, a pill, a badge).
-    const hasShadow = cs.boxShadow && cs.boxShadow !== 'none'
-    const hasBorder = parseFloat(cs.borderTopWidth) > 0 && cs.borderTopStyle !== 'none'
-    if (!hasShadow && !hasBorder) continue
-    matches.push(el)
+  const small = []
+  // Explicit DFS rather than querySelectorAll('div,section,article'): only the
+  // outermost card in a chain is ever presented, so there is no reason to walk
+  // into one once it matches -- and not walking in is what makes this cheap on
+  // Meta Ads, where the single matching card holds ~7,000 of the page's ~7,900
+  // elements and the flat scan cost 58ms of layout on every Present click.
+  const stack = []
+  for (let i = root.children.length - 1; i >= 0; i--) stack.push(root.children[i])
+  while (stack.length && matches.length < 80) {
+    const el = stack.pop()
+    const verdict = classifyNode(el, excludeNodes, small)
+    if (verdict === 1) { matches.push(el); continue }
+    if (verdict === 2) continue
+    for (let i = el.children.length - 1; i >= 0; i--) stack.push(el.children[i])
   }
-  // keep only the outermost card in any nested chain, and cap what a
-  // slideshow can reasonably hold
+  // Promote a ROW of under-floor tiles to one slide. Meta Ads' header band is
+  // 5 x 188px tiles inside a container carrying no card styling at all, so the
+  // entire band was absent from the deck; Summary's 4-tile band is the same
+  // shape. Team Mapping's band already clears the floor on its own.
+  const tried = []
+  for (let i = 0; i < small.length; i++) {
+    const p = small[i].parentElement
+    if (!p || tried.indexOf(p) !== -1) continue
+    tried.push(p)
+    let n = 0
+    for (let j = 0; j < p.children.length; j++) {
+      if (small.indexOf(p.children[j]) !== -1) n++
+    }
+    if (n < 3) continue
+    if (matches.some(m => m === p || m.contains(p) || p.contains(m))) continue
+    const pr = p.getBoundingClientRect()
+    if (pr.width < 280 || pr.height < 80) continue
+    matches.push(p)
+  }
+  // promoted parents are appended out of order, so sort before numbering
   const top = matches.filter(el => !matches.some(other => other !== el && other.contains(el)))
+  top.sort((a, b) => byDocumentOrder({ node: a }, { node: b }))
   return top.slice(0, 30).map((node, i) => {
-    // Real headings only -- the earlier loose `[class*="title" i]` fallback,
-    // and a bare "first text-bearing element" fallback below that, both
-    // produced garbage titles confirmed live: a sortable table with no real
-    // heading picked up its own header ROW ("Campaign — Corridor — Status —
-    // Signal — Spend↓Impressions↕Clicks↕C…", sort glyphs included) on Meta
-    // Ads, and a KPI band picked up label+value+subtitle all concatenated
-    // ("Total People3,397 — Lead — Squared, real-time") on Team Mapping.
-    // A section with no genuine heading gets a plain "Section N" instead --
-    // an honest placeholder beats a confident-looking wrong answer.
+    const rect = node.getBoundingClientRect()
     const headingEl = node.querySelector('h1,h2,h3,h4,h5,h6,[role="heading"]')
-    const title = headingEl && headingEl.textContent ? headingEl.textContent.trim() : ''
+    const heading = headingEl && headingEl.textContent ? headingEl.textContent.trim() : ''
+    let title = heading
+    if (!title && isMetricStrip(node, rect)) title = 'Key metrics'
+    if (!title) title = leafTitle(node)
+    // an honest placeholder still beats a confident-looking wrong answer
     return { id: 'auto-' + i, title: title ? humanizeTitle(title) : ('Section ' + (i + 1)), node }
   })
 }
