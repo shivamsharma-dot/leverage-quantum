@@ -4,7 +4,7 @@ import { DashboardSkeleton } from '../components/SkeletonLoader'
 import DateRangePicker from '../components/DateRangePicker'
 import Dropdown from '../components/Dropdown'
 import Button from '../components/Button'
-import { ResponsiveContainer, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
+import { ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts'
 import { C, FONT, Card, PremKPI, RankedBars, fmtN, BRAND_RAMP, sourceColor, BarGrad, barFill, gradId, GRID_STROKE, BAR_RADIUS, BAR_MAX, NEUTRAL_GREY, NEUTRAL_TRACK } from '../ui/dashboardKit'
 
 // ---------------------------------------------------------------------------
@@ -415,6 +415,55 @@ export default function OrganicSocialDashboard() {
     )
   }
 
+  // ---- Presentation-only derivations ------------------------------------
+  // Nothing below fetches anything or recomputes a delta. Every figure is a
+  // number loadIgAccount()/extractIgMetrics() already produced, either passed
+  // straight through or added up across the accounts already on screen.
+  const accountId = a => a.key || 'default'
+  const igLive = igAccounts.filter(a => a && a.ig)
+  const igBroken = igAccounts.filter(a => a && !a.ig)
+
+  // Stable per-account hue, keyed to the account's position in the configured
+  // list (which comes from the backend env var and never reorders) -- never to
+  // a sort position, so @leverageedu is the same colour in the comparison
+  // chart, in the switcher and on its own card whichever metric ranks first.
+  // DESIGN_SYSTEM.md: colour encodes identity, not position.
+  const igColor = {}
+  igLive.forEach((a, i) => { igColor[accountId(a)] = brandColor(i) })
+
+  // Derived rather than held in an effect, so a reload returning a different
+  // set of accounts can never leave a stale key selected.
+  const activeKey = (selectedIg && igLive.some(a => accountId(a) === selectedIg))
+    ? selectedIg
+    : (igLive.length ? accountId(igLive[0]) : null)
+  const activeAccount = igLive.find(a => accountId(a) === activeKey) || null
+
+  const igTotal = igLive.reduce((t, a) => ({
+    followers: t.followers + (a.ig.profile.followersCount || 0),
+    reach: t.reach + a.ig.cur.reach,
+    reachPrior: t.reachPrior + a.ig.prior.reach,
+    interactions: t.interactions + a.ig.cur.interactions,
+    interactionsPrior: t.interactionsPrior + a.ig.prior.interactions,
+    growth: t.growth + a.ig.cur.followerGrowth,
+    growthPrior: t.growthPrior + a.ig.prior.followerGrowth,
+  }), { followers: 0, reach: 0, reachPrior: 0, interactions: 0, interactionsPrior: 0, growth: 0, growthPrior: 0 })
+
+  const cmpDef = CMP_METRICS.find(m => m.key === cmpMetric) || CMP_METRICS[0]
+  const cmpRows = igLive.map(a => {
+    const d = pctDelta(cmpDef.get(a.ig.cur), cmpDef.get(a.ig.prior))
+    return {
+      id: accountId(a),
+      account: '@' + a.ig.profile.username,
+      short: shortHandle(a.ig.profile.username),
+      count: cmpDef.get(a.ig.cur),
+      delta: typeof d === 'number' ? d : null,
+      color: igColor[accountId(a)],
+    }
+  })
+  const cmpSorted = cmpRows.slice().sort((x, y) => y.count - x.count)
+  const cmpTotal = cmpRows.reduce((s, r) => s + r.count, 0)
+  const cmpMax = cmpSorted.length ? cmpSorted[0].count : 0
+
   return (
     <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg }}>
       <Sidebar />
@@ -429,12 +478,15 @@ export default function OrganicSocialDashboard() {
             <div style={{ fontSize: 18, fontWeight: 800, color: C.text, fontFamily: FONT, letterSpacing: '-0.3px' }}>Organic &amp; Social</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} className="lq-header-controls">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--bg3)', borderRadius: 10, padding: 4, position: 'relative' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 2, background: 'var(--bg3)', border: '1px solid var(--card-border)',
+              borderRadius: 12, padding: 4, position: 'relative',
+            }}>
               {GRANULARITY_OPTIONS.map(o => (
                 <GranPill key={o.key} active={granularity === o.key} onClick={() => setGranularity(o.key)}>{o.label}</GranPill>
               ))}
               <GranPill active={granularity === 'custom'} onClick={() => setCustomOpen(true)}>
-                {granularity === 'custom' && customFrom && customTo ? `${customFrom} → ${customTo}` : 'Custom'}
+                {granularity === 'custom' && customFrom && customTo ? `${customFrom} \u2192 ${customTo}` : 'Custom'}
               </GranPill>
               {customOpen && (
                 <>
@@ -453,36 +505,47 @@ export default function OrganicSocialDashboard() {
                 </>
               )}
             </div>
-            <button
-              onClick={load}
-              style={{ fontSize: 12.5, fontWeight: 700, color: C.text, background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontFamily: FONT }}
-            >
-              Refresh
-            </button>
+            <Button size="sm" variant="secondary" icon={REFRESH_ICON} onClick={load} title="Refetch every source">Refresh</Button>
           </div>
         </div>
-        <div style={{ margin: '6px 14px 0', fontSize: 11.5, color: C.muted, fontFamily: FONT }}>
-          {compareLabel} &middot; {fmtRange(period.curSince, period.curUntil)} vs {fmtRange(period.priorSince, period.priorUntil)}
+
+        <div style={{ margin: '9px 14px 0', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.navy, background: C.navyBg, borderRadius: 999, padding: '3px 9px', fontFamily: FONT }}>{compareLabel}</span>
+          <span style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT }}>
+            {fmtRange(period.curSince, period.curUntil)} vs {fmtRange(period.priorSince, period.priorUntil)}
+          </span>
         </div>
 
-        <div style={{ padding: '16px 14px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ padding: '14px 14px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          <Card title="Growth at a glance" sub={`Every connected channel \u00B7 ${compareLabel}`}>
+            <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 12 }}>
+              <PremKPI label="Website Organic Users" value={ga4 ? fmtN(ga4.cur.organicUsers) : '\u2014'} delta={ga4 && ga4.prior ? pctDelta(ga4.cur.organicUsers, ga4.prior.organicUsers) : null} sub={ga4 ? `vs ${period.priorLabel}` : 'pending access'} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
+              <PremKPI label="Instagram Reach" value={fmtN(igTotal.reach)} delta={pctDelta(igTotal.reach, igTotal.reachPrior)} sub={`${igLive.length} account${igLive.length === 1 ? '' : 's'} combined`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
+              <PremKPI label="Instagram Interactions" value={fmtN(igTotal.interactions)} delta={pctDelta(igTotal.interactions, igTotal.interactionsPrior)} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.cyan} accentBg={C.cyanBg} />
+              <PremKPI label="Instagram Followers" value={fmtN(igTotal.followers)} sub="all accounts, lifetime" icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
+              <PremKPI label="Net Follower Growth" value={(igTotal.growth >= 0 ? '+' : '') + fmtN(igTotal.growth)} delta={pctDelta(igTotal.growth, igTotal.growthPrior)} sub={`vs ${period.priorLabel}`} icon={ICONS.trendUp} accent={C.green} accentBg={C.greenBg} />
+              <PremKPI label="YouTube Subscribers" value={yt ? fmtN(yt.subscriberCount) : '\u2014'} sub={yt ? 'lifetime' : 'not connected'} icon={ICONS.play} accent={C.blue} accentBg={C.blueBg} />
+            </div>
+          </Card>
 
           <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
-            <Card title="Website" sub={ga4 ? `Organic Search channel · ${compareLabel}` : 'Google Analytics 4'}>
+            <Card title="Website" sub={ga4 ? `Organic Search channel \u00B7 ${compareLabel}` : 'Google Analytics 4'}>
               {ga4 ? (
-                <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
-                  <PremKPI label="Organic Users" value={fmtN(ga4.cur.organicUsers)} delta={ga4.prior ? pctDelta(ga4.cur.organicUsers, ga4.prior.organicUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
-                  <PremKPI label="Total Users" value={fmtN(ga4.cur.totalUsers)} delta={ga4.prior ? pctDelta(ga4.cur.totalUsers, ga4.prior.totalUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
-                  <PremKPI label="Organic %" value={ga4.cur.organicPct.toFixed(1) + '%'} delta={ga4.prior ? pctDelta(ga4.cur.organicPct, ga4.prior.organicPct) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.cyan} accentBg={C.cyanBg} />
-                </div>
-              ) : (
-                <div style={{ padding: '10px 4px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Pending</div>
-                  <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, marginTop: 4 }}>
-                    Waiting on GA4 property access to be granted to the Quantum reader service account.
+                <>
+                  <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+                    <PremKPI label="Organic Users" value={fmtN(ga4.cur.organicUsers)} delta={ga4.prior ? pctDelta(ga4.cur.organicUsers, ga4.prior.organicUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
+                    <PremKPI label="Total Users" value={fmtN(ga4.cur.totalUsers)} delta={ga4.prior ? pctDelta(ga4.cur.totalUsers, ga4.prior.totalUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
+                    <PremKPI label="Organic %" value={ga4.cur.organicPct.toFixed(1) + '%'} delta={ga4.prior ? pctDelta(ga4.cur.organicPct, ga4.prior.organicPct) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.cyan} accentBg={C.cyanBg} />
                   </div>
-                </div>
+                  <div style={{ marginTop: 18 }}>
+                    <SubHead right={`${fmtN(ga4.cur.organicUsers)} of ${fmtN(ga4.cur.totalUsers)}`}>Organic share of all traffic</SubHead>
+                    <SplitBar share={ga4.cur.organicPct} color={C.navy} label={`${ga4.cur.organicPct.toFixed(1)}% arrived from organic search; the remainder came from every other channel.`} />
+                  </div>
+                </>
+              ) : (
+                <PendingNote title="Pending" detail="Waiting on GA4 property access to be granted to the Quantum reader service account." />
               )}
             </Card>
 
@@ -499,129 +562,126 @@ export default function OrganicSocialDashboard() {
                       <PremKPI label={`Watch Time (hrs, ${period.curLabel})`} value={fmtN(ytRange.cur.totalMinutesWatched / 60)} delta={ytRange.prior ? pctDelta(ytRange.cur.totalMinutesWatched, ytRange.prior.totalMinutesWatched) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.clock} accent={C.blue} accentBg={C.blueBg} />
                     </>
                   ) : (
-                    <div style={{ gridColumn: 'span 3', padding: '8px 4px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Views &amp; watch time — pending</div>
-                      <div style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT, marginTop: 3 }}>Blocked on a Google Workspace admin trust grant for the Analytics API scope.</div>
+                    <div style={{ gridColumn: 'span 3' }}>
+                      <PendingNote title="Views &amp; watch time &mdash; pending" detail="Blocked on a Google Workspace admin trust grant for the Analytics API scope." />
                     </div>
                   )}
                 </div>
               ) : (
-                <div style={{ padding: '10px 4px', textAlign: 'center', fontSize: 13, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Not connected</div>
+                <PendingNote title="Not connected" />
               )}
             </Card>
 
           </div>
 
-          {/* One full-width card per connected Instagram account -- every
-              business account this app has a token for gets its own row,
-              not squeezed into the 2-col grid above. instagramAccounts() on
-              the backend is the only thing that changes when a new account
-              is connected; this loop needs no per-account code. */}
-          {igAccounts.map(({ key, ig, igErr }) => (
+          {/* The primary visual story. Absolute scale and growth rate sit
+              side by side on purpose: @leverageedu carries several hundred
+              times the reach of @leveragembbs, so an absolute chart alone
+              draws every smaller account as an invisible sliver and says
+              nothing at all about momentum. */}
+          {igLive.length > 0 && (
             <Card
-              key={key || 'default'}
-              title="Instagram"
-              sub={ig ? `@${ig.profile.username} · ${compareLabel}` : 'Live'}
+              title="Instagram account comparison"
+              sub={`${igLive.length} connected account${igLive.length === 1 ? '' : 's'} \u00B7 ${compareLabel}`}
+              action={
+                <Dropdown
+                  options={CMP_METRICS.map(m => ({ value: m.key, label: m.label }))}
+                  value={cmpDef.key}
+                  onChange={setCmpMetric}
+                  minWidth={158}
+                />
+              }
             >
-              {ig ? (
-                <>
-                  {(ig.profile.profilePictureUrl || ig.profile.biography) && (
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
-                      {ig.profile.profilePictureUrl && (
-                        <img src={ig.profile.profilePictureUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-                      )}
-                      {ig.profile.biography && (
-                        <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, whiteSpace: 'pre-line', paddingTop: 2 }}>
-                          {ig.profile.biography}
-                          {ig.profile.website && (
-                            <>{' '}·{' '}<a href={ig.profile.website} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none', fontWeight: 700 }}>{ig.profile.website.replace(/^https?:\/\//, '')}</a></>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
-                    <PremKPI label="Followers" value={fmtN(ig.profile.followersCount)} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
-                    <PremKPI label="Net Follower Growth" value={(ig.cur.followerGrowth >= 0 ? '+' : '') + fmtN(ig.cur.followerGrowth)} delta={pctDelta(ig.cur.followerGrowth, ig.prior.followerGrowth)} sub={`vs ${period.priorLabel}`} icon={ICONS.trendUp} accent={C.green} accentBg={C.greenBg} />
-                    <PremKPI label="Reach" value={fmtN(ig.cur.reach)} delta={pctDelta(ig.cur.reach, ig.prior.reach)} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
-                    <PremKPI label="Interactions" value={fmtN(ig.cur.interactions)} delta={pctDelta(ig.cur.interactions, ig.prior.interactions)} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.cyan} accentBg={C.cyanBg} />
-                    <PremKPI label="Profile Views" value={fmtN(ig.cur.profileViews)} delta={pctDelta(ig.cur.profileViews, ig.prior.profileViews)} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.green} accentBg={C.greenBg} />
-                    <PremKPI label="Accounts Engaged" value={fmtN(ig.cur.engaged)} delta={pctDelta(ig.cur.engaged, ig.prior.engaged)} sub={`vs ${period.priorLabel}`} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
-                    <PremKPI label="Engagement Rate" value={ig.cur.engagementRate.toFixed(2) + '%'} delta={pctDelta(ig.cur.engagementRate, ig.prior.engagementRate)} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.blue} accentBg={C.blueBg} />
-                    <PremKPI label="Content Views" value={fmtN(ig.cur.views)} delta={pctDelta(ig.cur.views, ig.prior.views)} sub={`vs ${period.priorLabel}`} icon={ICONS.play} accent={C.cyan} accentBg={C.cyanBg} />
-                    <PremKPI label="Likes" value={fmtN(ig.cur.likes)} delta={pctDelta(ig.cur.likes, ig.prior.likes)} sub={`vs ${period.priorLabel}`} icon={ICONS.heart} accent={C.navy} accentBg={C.navyBg} />
-                    <PremKPI label="Comments" value={fmtN(ig.cur.comments)} delta={pctDelta(ig.cur.comments, ig.prior.comments)} sub={`vs ${period.priorLabel}`} icon={ICONS.comment} accent={C.blue} accentBg={C.blueBg} />
-                    <PremKPI label="Shares" value={fmtN(ig.cur.shares)} delta={pctDelta(ig.cur.shares, ig.prior.shares)} sub={`vs ${period.priorLabel}`} icon={ICONS.share} accent={C.cyan} accentBg={C.cyanBg} />
-                    <PremKPI label="Saves" value={fmtN(ig.cur.saves)} delta={pctDelta(ig.cur.saves, ig.prior.saves)} sub={`vs ${period.priorLabel}`} icon={ICONS.bookmark} accent={C.green} accentBg={C.greenBg} />
-                    <PremKPI label="Replies" value={fmtN(ig.cur.replies)} delta={pctDelta(ig.cur.replies, ig.prior.replies)} sub={`vs ${period.priorLabel}`} icon={ICONS.reply} accent={C.navy} accentBg={C.navyBg} />
-                    <PremKPI label="Website Clicks" value={fmtN(ig.cur.websiteClicks)} delta={pctDelta(ig.cur.websiteClicks, ig.prior.websiteClicks)} sub={`vs ${period.priorLabel}`} icon={ICONS.link} accent={C.blue} accentBg={C.blueBg} />
-                    <PremKPI label="Profile Link Taps" value={fmtN(ig.cur.profileLinkTaps)} delta={pctDelta(ig.cur.profileLinkTaps, ig.prior.profileLinkTaps)} sub={`vs ${period.priorLabel}`} icon={ICONS.link} accent={C.cyan} accentBg={C.cyanBg} />
-                  </div>
-
-                  <AudienceSection demographics={ig.demographics} />
-                  <TopPostsSection posts={ig.topPosts} postsInPeriod={ig.postsInPeriod} curLabel={period.curLabel} />
-                </>
-              ) : (
-                <div style={{ padding: '10px 4px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, fontFamily: FONT }}>
-                    {igErr === 'not_configured' ? 'Not connected yet' : 'Temporarily unavailable'}
-                  </div>
-                  {igErr && igErr !== 'not_configured' && (
-                    <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, marginTop: 4 }}>{String(igErr).slice(0, 160)}</div>
-                  )}
+              <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                <div>
+                  <SubHead right={`${fmtN(cmpTotal)} combined`}>{cmpDef.label} by account</SubHead>
+                  <RankedBars
+                    data={cmpSorted}
+                    labelKey="account"
+                    max={cmpMax}
+                    total={cmpTotal}
+                    colorFn={i => (cmpSorted[i] ? cmpSorted[i].color : C.navy)}
+                    showRank
+                  />
                 </div>
-              )}
+                <div>
+                  <SubHead right={`vs ${period.priorLabel}`}>Growth in {cmpDef.label.toLowerCase()}</SubHead>
+                  <GrowthBars rows={cmpSorted} />
+                  <div style={{ fontSize: 11, color: C.muted, fontFamily: FONT, marginTop: 8, lineHeight: 1.45 }}>
+                    Percentage change per account on one shared scale, so a small account growing fast is as visible as a large one standing still. Bars above the line grew, bars below it shrank.
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* One account on screen at a time instead of four stacked
+              full-width repeats of the same fifteen tiles. Every account is
+              already loaded; this only chooses which one is shown. */}
+          {igLive.length > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: FONT, marginRight: 2 }}>Account</span>
+              {igLive.map(a => {
+                const id = accountId(a)
+                return (
+                  <Button
+                    key={id}
+                    size="sm"
+                    variant={id === activeKey ? 'primary' : 'secondary'}
+                    onClick={() => setSelectedIg(id)}
+                    title={`@${a.ig.profile.username} \u00B7 ${fmtN(a.ig.profile.followersCount)} followers`}
+                    icon={a.ig.profile.profilePictureUrl
+                      ? <img src={a.ig.profile.profilePictureUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                      : <span style={{ display: 'block', width: '100%', height: '100%', borderRadius: '50%', background: igColor[id] }} />}
+                  >
+                    @{a.ig.profile.username}
+                  </Button>
+                )
+              })}
+            </div>
+          )}
+
+          {activeAccount && (
+            <IgAccountCard
+              key={activeKey}
+              ig={activeAccount.ig}
+              hue={igColor[activeKey] || C.navy}
+              slug={String(activeKey)}
+              period={period}
+              compareLabel={compareLabel}
+            />
+          )}
+
+          {igBroken.map(({ key, igErr }) => (
+            <Card key={key || 'default'} title="Instagram" sub="Live">
+              <PendingNote
+                title={igErr === 'not_configured' ? 'Not connected yet' : 'Temporarily unavailable'}
+                detail={igErr && igErr !== 'not_configured' ? String(igErr).slice(0, 160) : null}
+              />
             </Card>
           ))}
 
           {/* LinkedIn/X: manual weekly entries, deliberately NOT driven by the
-              Day/Week/Month/Year toolbar above -- the underlying data only
-              ever exists at one-row-per-week granularity (typed into
-              Settings), so "Last day" or "YTD" has nothing real to show.
-              Kept in its own section with its own week browser instead of
-              silently breaking under a toolbar it can't answer to. */}
+              toolbar above -- the underlying data only ever exists at
+              one-row-per-week granularity (typed into Settings), so "Today"
+              or "YTD" has nothing real to show. Its own week browser instead
+              of silently breaking under a toolbar it cannot answer to. */}
           <Card
             title="LinkedIn &amp; X"
             sub="Manually entered, week by week"
             action={
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg3)', borderRadius: 10, padding: '4px 6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg3)', border: '1px solid var(--card-border)', borderRadius: 12, padding: '4px 6px' }}>
                 <WeekArrow dir={-1} onClick={() => setWeekStart(w => addDays(w, -7))} />
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.text, fontFamily: FONT, minWidth: 110, textAlign: 'center' }}>
-                  {fmtLabel(weekStart)} – {fmtLabel(weekEnd)} {isCurrentWeek && <span style={{ color: C.blue }}>(this week)</span>}
+                  {fmtLabel(weekStart)} &ndash; {fmtLabel(weekEnd)} {isCurrentWeek && <span style={{ color: C.blue }}>(this week)</span>}
                 </div>
                 <WeekArrow dir={1} onClick={() => setWeekStart(w => addDays(w, 7))} disabled={weekStart.getTime() >= thisMonday.getTime()} />
               </div>
             }
           >
-            <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 16 }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT, marginBottom: 8 }}>LinkedIn</div>
-                {linkedinWeek ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: FONT }}>
-                    <Row label="Followers" value={fmtN(linkedinWeek.followers)} />
-                    <Row label="Impressions" value={fmtN(linkedinWeek.views)} />
-                    <Row label="Unique visitors" value={fmtN(linkedinWeek.reach)} />
-                    <Row label="Interactions" value={fmtN(linkedinWeek.interactions)} />
-                    <Row label="Engagement rate" value={(linkedinWeek.engagementRate != null ? linkedinWeek.engagementRate + '%' : '—')} />
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>No entry for this week yet — add it in Settings &gt; Data.</div>
-                )}
-              </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT, marginBottom: 8 }}>X (Twitter)</div>
-                {xWeek ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: FONT }}>
-                    <Row label="Followers" value={fmtN(xWeek.followers)} />
-                    <Row label="Impressions" value={fmtN(xWeek.views)} />
-                    <Row label="Reach" value={fmtN(xWeek.reach)} />
-                    <Row label="Interactions" value={fmtN(xWeek.interactions)} />
-                    <Row label="Engagement rate" value={(xWeek.engagementRate != null ? xWeek.engagementRate + '%' : '—')} />
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>No entry for this week yet — add it in Settings &gt; Data.</div>
-                )}
-              </div>
+            <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+              <ManualPlatform name="LinkedIn" hue={C.navy} week={linkedinWeek} reachLabel="Unique visitors" />
+              <ManualPlatform name="X (Twitter)" hue={C.cyan} week={xWeek} reachLabel="Reach" />
             </div>
           </Card>
 
@@ -631,64 +691,334 @@ export default function OrganicSocialDashboard() {
   )
 }
 
-function Row({ label, value }) {
+const REFRESH_ICON = (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12a9 9 0 1 1-3.22-6.93" /><polyline points="21 3 21 9 15 9" />
+  </svg>
+)
+
+// Metrics the account-comparison card can plot. Volume metrics only, on
+// purpose: RankedBars states each account's share of a combined total, which
+// is meaningful for a count and meaningless for a rate, and every one of these
+// has a real prior-period figure so the growth chart beside it is never empty.
+// Engagement rate and follower totals still appear in full on each account's
+// own card, where no share-of-total reading is implied.
+const CMP_METRICS = [
+  { key: 'reach', label: 'Reach', get: m => m.reach },
+  { key: 'interactions', label: 'Interactions', get: m => m.interactions },
+  { key: 'engaged', label: 'Accounts engaged', get: m => m.engaged },
+  { key: 'profileViews', label: 'Profile views', get: m => m.profileViews },
+  { key: 'views', label: 'Content views', get: m => m.views },
+]
+
+const shortHandle = u => (String(u).length > 14 ? String(u).slice(0, 13) + '\u2026' : String(u))
+
+// Short axis ticks in the same en-IN units fmtN already uses for every full
+// number on this page, so an axis never disagrees with the KPI above it.
+function compactN(n) {
+  const v = Number(n || 0)
+  const a = Math.abs(v)
+  const trim = x => x.toFixed(1).replace(/\.0$/, '')
+  if (a >= 1e7) return trim(v / 1e7) + 'Cr'
+  if (a >= 1e5) return trim(v / 1e5) + 'L'
+  if (a >= 1000) return trim(v / 1000) + 'k'
+  return String(Math.round(v))
+}
+
+const SubHead = ({ children, right }) => (
+  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+    <div style={{ fontSize: 10.5, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: FONT }}>{children}</div>
+    {right && <div style={{ fontSize: 11, color: C.muted, fontFamily: FONT, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{right}</div>}
+  </div>
+)
+
+// Every "this source isn't reporting yet" state on the page in one shape --
+// they were four separately hand-styled blocks all saying the same kind of
+// thing in slightly different type sizes.
+const PendingNote = ({ title, detail }) => (
+  <div style={{ padding: '14px 4px', textAlign: 'center' }}>
+    <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, fontFamily: FONT }}>{title}</div>
+    {detail && <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, marginTop: 4, lineHeight: 1.5, maxWidth: 430, marginLeft: 'auto', marginRight: 'auto' }}>{detail}</div>}
+  </div>
+)
+
+// Green for up, navy for down. Deliberately not red for a fall: red and amber
+// are reserved for genuine error and warning states in this codebase, and a
+// metric being down is data, not a fault.
+const DeltaPill = ({ delta }) => {
+  if (delta == null) return null
+  if (delta === 'new') {
+    return <span style={{ fontSize: 10, fontWeight: 800, fontFamily: FONT, borderRadius: 999, padding: '2px 6px', color: C.green, background: C.greenBg }}>New</span>
+  }
+  const up = delta >= 0
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-      <span style={{ color: C.muted }}>{label}</span>
-      <span style={{ fontWeight: 700, color: C.text, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    <span style={{
+      fontSize: 10, fontWeight: 800, fontFamily: FONT, borderRadius: 999, padding: '2px 6px', whiteSpace: 'nowrap',
+      color: up ? C.green : C.navy, background: up ? C.greenBg : C.navyBg,
+    }}>
+      {up ? '\u25B2' : '\u25BC'} {Math.abs(delta).toFixed(1)}%
+    </span>
+  )
+}
+
+// The ten supporting Instagram metrics: same numbers, same deltas as before,
+// at a density that reads as a reference table rather than ten more headline
+// cards competing with the five that actually matter.
+const MiniMetric = ({ label, value, delta }) => (
+  <div style={{ border: '1px solid var(--card-border)', borderRadius: 12, background: 'var(--bg3)', padding: '9px 11px', minWidth: 0 }}>
+    <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, fontFamily: FONT, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 16, fontWeight: 800, color: C.text, fontFamily: FONT, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+      <DeltaPill delta={delta} />
+    </div>
+  </div>
+)
+
+// One share against its remainder. NEUTRAL_TRACK is the design system's
+// designated colour for the leftover part of a bar -- it is not a data series
+// of its own and must not take a brand hue.
+const SplitBar = ({ share, color, label }) => {
+  const w = Math.max(0, Math.min(100, Number(share) || 0))
+  return (
+    <div>
+      <div style={{ height: 9, borderRadius: 99, background: NEUTRAL_TRACK, overflow: 'hidden' }}>
+        <div style={{ width: w + '%', height: '100%', borderRadius: 99, background: `linear-gradient(90deg, ${color}, ${color}aa)`, transition: 'width .6s cubic-bezier(.4,0,.2,1)' }} />
+      </div>
+      {label && <div style={{ fontSize: 11, color: C.muted, fontFamily: FONT, marginTop: 6, lineHeight: 1.45 }}>{label}</div>}
     </div>
   )
 }
 
-// Lifetime snapshot (Instagram ignores the date range on these metrics) --
-// who follows this account, by country and by age/gender. Not comparable
-// period-over-period, so no delta -- just the current picture.
-function AudienceSection({ demographics }) {
-  const { countries, ages, genders } = demographics || {}
-  if (!countries || !countries.length) return null // below Instagram's own privacy threshold, or a brand-new account
-  const maxCountry = countries[0].value
-  const totalGender = genders.reduce((s, g) => s + g.value, 0)
-  const genderLabel = { M: 'Male', F: 'Female', U: 'Unspecified' }
-  const maxAge = ages.length ? Math.max(...ages.map(a => a.value)) : 0
+const ChartTip = ({ active, payload, label, suffix }) => {
+  if (!active || !payload || !payload.length) return null
+  const v = Number(payload[0].value)
   return (
-    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
-      <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT, marginBottom: 10 }}>Audience (lifetime snapshot)</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 20 }} className="lq-grid2">
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: FONT, marginBottom: 8 }}>Top countries</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-            {countries.map(c => (
-              <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 92, fontSize: 12, color: C.text, fontFamily: FONT, flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{countryNameOf(c.key)}</div>
-                <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--bg3)', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.max(3, (c.value / maxCountry) * 100)}%`, height: '100%', borderRadius: 4, background: `linear-gradient(90deg, ${C.navy}, ${C.blue})` }} />
-                </div>
-                <div style={{ width: 60, fontSize: 12, fontWeight: 700, color: C.text, fontFamily: FONT, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtN(c.value)}</div>
-              </div>
-            ))}
+    <div style={{ background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 10, padding: '7px 10px', boxShadow: '0 10px 28px rgba(15,23,42,0.14)', fontFamily: FONT }}>
+      <div style={{ fontSize: 11, color: C.muted, marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 13.5, fontWeight: 800, color: C.text, fontVariantNumeric: 'tabular-nums' }}>
+        {suffix === '%' ? (v >= 0 ? '+' : '') + v.toFixed(1) + '%' : fmtN(v)}
+      </div>
+    </div>
+  )
+}
+
+// Daily reach. One series, one hue, gradient fill -- the design system's
+// standard treatment. The values come from the same time_series response the
+// Reach KPI above already sums, so the line and the tile can never disagree.
+const ReachTrend = ({ series, color, slug }) => (
+  <ResponsiveContainer width="100%" height={112}>
+    <AreaChart data={series} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+      <defs><BarGrad id={gradId(slug, 'reach')} color={color} from={0.4} to={0.02} /></defs>
+      <CartesianGrid vertical={false} stroke={GRID_STROKE} />
+      <XAxis dataKey="d" axisLine={false} tickLine={false} minTickGap={20} interval="preserveStartEnd" tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} />
+      <YAxis axisLine={false} tickLine={false} width={40} tickFormatter={compactN} tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} />
+      <Tooltip content={<ChartTip />} />
+      <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={barFill(gradId(slug, 'reach'))} />
+    </AreaChart>
+  </ResponsiveContainer>
+)
+
+// Net follower change per day. A bar chart rather than an area because the
+// value is a signed daily delta, not a level -- days the account lost
+// followers belong below the zero line, not as a dip in a filled curve.
+const FollowerTrend = ({ series, slug }) => (
+  <ResponsiveContainer width="100%" height={112}>
+    <BarChart data={series} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+      <defs>
+        <BarGrad id={gradId(slug, 'fup')} color={C.green} />
+        <BarGrad id={gradId(slug, 'fdn')} color={C.navy} />
+      </defs>
+      <CartesianGrid vertical={false} stroke={GRID_STROKE} />
+      <XAxis dataKey="d" axisLine={false} tickLine={false} minTickGap={20} interval="preserveStartEnd" tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} />
+      <YAxis axisLine={false} tickLine={false} width={40} tickFormatter={compactN} tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} />
+      <Tooltip content={<ChartTip />} />
+      <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.45} />
+      <Bar dataKey="v" radius={BAR_RADIUS} maxBarSize={BAR_MAX}>
+        {series.map((p, i) => <Cell key={i} fill={barFill(gradId(slug, p.v >= 0 ? 'fup' : 'fdn'))} />)}
+      </Bar>
+    </BarChart>
+  </ResponsiveContainer>
+)
+
+// Period-over-period change per account. Two hues in one series is a
+// deliberate exception to "one series, one hue": here the hue encodes the
+// SIGN of the value, which is real information, not sort position -- and it
+// stays inside the brand palette (green up, navy down) rather than reaching
+// for the red reserved for error states.
+const GrowthBars = ({ rows }) => {
+  const data = rows.filter(r => typeof r.delta === 'number')
+  if (!data.length) {
+    return <PendingNote title="No comparison available" detail="The prior period has no figures for these accounts yet, so there is nothing to measure growth against." />
+  }
+  return (
+    <ResponsiveContainer width="100%" height={196}>
+      <BarChart data={data} margin={{ top: 8, right: 6, left: 0, bottom: 0 }}>
+        <defs>
+          <BarGrad id={gradId('oscmp', 'up')} color={C.green} />
+          <BarGrad id={gradId('oscmp', 'dn')} color={C.navy} />
+        </defs>
+        <CartesianGrid vertical={false} stroke={GRID_STROKE} />
+        <XAxis dataKey="short" axisLine={false} tickLine={false} interval={0} tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} />
+        <YAxis axisLine={false} tickLine={false} width={46} tickFormatter={v => Math.round(v) + '%'} tick={{ fontSize: 10, fill: C.muted, fontFamily: FONT }} />
+        <Tooltip content={<ChartTip suffix="%" />} />
+        <ReferenceLine y={0} stroke={C.muted} strokeOpacity={0.55} />
+        <Bar dataKey="delta" radius={BAR_RADIUS} maxBarSize={BAR_MAX}>
+          {data.map(r => <Cell key={r.id} fill={barFill(gradId('oscmp', r.delta >= 0 ? 'up' : 'dn'))} />)}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+// One Instagram account in full. Same fifteen metrics, same deltas, same
+// audience and top-post data as before -- re-tiered so the five that answer
+// "how is this account doing" lead, the daily trend that answers "which way
+// is it going" sits beside them, and the ten supporting counts read as a
+// reference strip underneath instead of fifteen equal-weight tiles.
+function IgAccountCard({ ig, hue, slug, period, compareLabel }) {
+  const p = ig.profile
+  const reachSeries = ig.cur.reachSeries || []
+  const followerSeries = ig.cur.followerSeries || []
+  const hasTrend = reachSeries.length > 1 || followerSeries.length > 1
+  const secondary = [
+    { label: 'Profile Views', v: ig.cur.profileViews, prior: ig.prior.profileViews },
+    { label: 'Accounts Engaged', v: ig.cur.engaged, prior: ig.prior.engaged },
+    { label: 'Content Views', v: ig.cur.views, prior: ig.prior.views },
+    { label: 'Likes', v: ig.cur.likes, prior: ig.prior.likes },
+    { label: 'Comments', v: ig.cur.comments, prior: ig.prior.comments },
+    { label: 'Shares', v: ig.cur.shares, prior: ig.prior.shares },
+    { label: 'Saves', v: ig.cur.saves, prior: ig.prior.saves },
+    { label: 'Replies', v: ig.cur.replies, prior: ig.prior.replies },
+    { label: 'Website Clicks', v: ig.cur.websiteClicks, prior: ig.prior.websiteClicks },
+    { label: 'Profile Link Taps', v: ig.cur.profileLinkTaps, prior: ig.prior.profileLinkTaps },
+  ]
+  return (
+    <Card title="Instagram" sub={`@${p.username} \u00B7 ${compareLabel}`}>
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, paddingBottom: 14, marginBottom: 16, borderBottom: '1px solid var(--card-border)' }}>
+        {p.profilePictureUrl && (
+          <img src={p.profilePictureUrl} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, boxShadow: `0 0 0 2px var(--card), 0 0 0 4px ${hue}` }} />
+        )}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 14.5, fontWeight: 800, color: C.text, fontFamily: FONT }}>@{p.username}</span>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: hue, flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>{fmtN(p.followersCount)} followers</span>
           </div>
+          {p.biography && (
+            <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, whiteSpace: 'pre-line', marginTop: 4, lineHeight: 1.5 }}>
+              {p.biography}
+              {p.website && (
+                <>{' '}&middot;{' '}<a href={p.website} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none', fontWeight: 700 }}>{p.website.replace(/^https?:\/\//, '')}</a></>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12 }}>
+        <PremKPI label="Followers" value={fmtN(p.followersCount)} sub="lifetime" icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
+        <PremKPI label="Net Follower Growth" value={(ig.cur.followerGrowth >= 0 ? '+' : '') + fmtN(ig.cur.followerGrowth)} delta={pctDelta(ig.cur.followerGrowth, ig.prior.followerGrowth)} sub={`vs ${period.priorLabel}`} icon={ICONS.trendUp} accent={C.green} accentBg={C.greenBg} />
+        <PremKPI label="Reach" value={fmtN(ig.cur.reach)} delta={pctDelta(ig.cur.reach, ig.prior.reach)} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
+        <PremKPI label="Interactions" value={fmtN(ig.cur.interactions)} delta={pctDelta(ig.cur.interactions, ig.prior.interactions)} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.cyan} accentBg={C.cyanBg} />
+        <PremKPI label="Engagement Rate" value={ig.cur.engagementRate.toFixed(2) + '%'} delta={pctDelta(ig.cur.engagementRate, ig.prior.engagementRate)} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.navy} accentBg={C.navyBg} />
+      </div>
+
+      {/* Trend, from the per-day values Instagram already returned inside the
+          very responses the Reach and Net Follower Growth tiles above are
+          sums of. No extra request is made to draw either chart. */}
+      <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
+        {hasTrend ? (
+          <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+            <div>
+              <SubHead right={`${fmtN(ig.cur.reach)} total`}>Reach per day</SubHead>
+              <ReachTrend series={reachSeries} color={hue} slug={slug} />
+            </div>
+            <div>
+              <SubHead right={`${ig.cur.followerGrowth >= 0 ? '+' : ''}${fmtN(ig.cur.followerGrowth)} net`}>Followers gained per day</SubHead>
+              <FollowerTrend series={followerSeries} slug={slug} />
+            </div>
+          </div>
+        ) : (
+          <PendingNote
+            title="Daily trend needs more than one day"
+            detail={`${period.curLabel} covers a single day, so there is no day-by-day shape to plot yet. Switch the range to Week, Month or a custom span to see reach and follower movement over time.`}
+          />
+        )}
+      </div>
+
+      <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
+        <SubHead right={`all vs ${period.priorLabel}`}>Everything else in this period</SubHead>
+        <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+          {secondary.map(s => (
+            <MiniMetric key={s.label} label={s.label} value={fmtN(s.v)} delta={pctDelta(s.v, s.prior)} />
+          ))}
+        </div>
+      </div>
+
+      <AudienceSection demographics={ig.demographics} hue={hue} />
+      <TopPostsSection posts={ig.topPosts} postsInPeriod={ig.postsInPeriod} curLabel={period.curLabel} />
+    </Card>
+  )
+}
+
+// Lifetime snapshot (Instagram ignores the date range on these metrics) --
+// who follows this account, by country and by age band. Not comparable
+// period-over-period, so no delta: just the current picture. Both lists are
+// now the shared RankedBars, which is what this page was reimplementing by
+// hand with raw flexbox rows before.
+function AudienceSection({ demographics, hue }) {
+  const { countries, ages, genders } = demographics || {}
+  const hasCountries = countries && countries.length > 0
+  const hasAges = ages && ages.length > 0
+  const hasGenders = genders && genders.length > 0
+  if (!hasCountries && !hasAges && !hasGenders) return null
+
+  const countryRows = hasCountries ? countries.map(c => ({ country: countryNameOf(c.key), count: c.value })) : []
+  const countryTotal = countryRows.reduce((s, r) => s + r.count, 0)
+  const ageRows = hasAges ? ages.slice().sort((a, b) => b.value - a.value).map(a => ({ band: a.key, count: a.value })) : []
+  const ageTotal = ageRows.reduce((s, r) => s + r.count, 0)
+  const genderTotal = hasGenders ? genders.reduce((s, g) => s + g.value, 0) : 0
+  const GENDER_LABEL = { M: 'Male', F: 'Female', U: 'Unspecified' }
+  // Unspecified is an unknown bucket, not a category of its own -- the design
+  // system reserves NEUTRAL_GREY for exactly that and keeps it out of the ramp.
+  const GENDER_HUE = { M: C.blue, F: C.cyan, U: NEUTRAL_GREY }
+
+  return (
+    <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
+      <SubHead right="lifetime snapshot, not period-bound">Audience</SubHead>
+      <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1.25fr 1fr', gap: 24 }}>
+        <div>
+          <SubHead right={hasCountries ? `${fmtN(countryTotal)} followers placed` : null}>Top countries</SubHead>
+          {hasCountries ? (
+            <RankedBars data={countryRows} labelKey="country" max={countryRows[0].count} total={countryTotal} color={hue} showRank />
+          ) : (
+            <PendingNote title="Not available" detail="Instagram withholds follower demographics for accounts below its own audience-size privacy threshold." />
+          )}
         </div>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: FONT, marginBottom: 8 }}>Age &amp; gender</div>
-          {genders.length > 0 && (
-            <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+          <SubHead>Age &amp; gender</SubHead>
+          {hasGenders && (
+            <div style={{ marginBottom: 14 }}>
               {genders.map(g => (
-                <div key={g.key} style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT }}>
-                  <span style={{ fontWeight: 800, color: C.text }}>{totalGender > 0 ? ((g.value / totalGender) * 100).toFixed(0) : 0}%</span> {genderLabel[g.key] || g.key}
+                <div key={g.key} style={{ marginBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, fontFamily: FONT, marginBottom: 4 }}>
+                    <span style={{ color: C.text, fontWeight: 600 }}>{GENDER_LABEL[g.key] || g.key}</span>
+                    <span style={{ color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{genderTotal > 0 ? ((g.value / genderTotal) * 100).toFixed(0) : 0}%</span>
+                  </div>
+                  <SplitBar share={genderTotal > 0 ? (g.value / genderTotal) * 100 : 0} color={GENDER_HUE[g.key] || NEUTRAL_GREY} />
                 </div>
               ))}
             </div>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {ages.map(a => (
-              <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 44, fontSize: 11.5, color: C.text, fontFamily: FONT, flexShrink: 0 }}>{a.key}</div>
-                <div style={{ flex: 1, height: 7, borderRadius: 4, background: 'var(--bg3)', overflow: 'hidden' }}>
-                  <div style={{ width: `${maxAge > 0 ? Math.max(3, (a.value / maxAge) * 100) : 0}%`, height: '100%', borderRadius: 4, background: C.cyan }} />
-                </div>
-              </div>
-            ))}
-          </div>
+          {hasAges ? (
+            <RankedBars data={ageRows} labelKey="band" max={ageRows[0].count} total={ageTotal} color={C.cyan} />
+          ) : (
+            // Previously this column rendered as a bare heading with nothing
+            // underneath it whenever Instagram withheld the breakdown, which
+            // looked like a broken card rather than a privacy floor.
+            <PendingNote title="Not available" detail="Instagram withholds the age and gender breakdown until an account's audience passes its privacy threshold." />
+          )}
         </div>
       </div>
     </div>
@@ -702,32 +1032,40 @@ const PostStat = ({ icon, value, title }) => (
   </span>
 )
 
-// The 5 posts (of whatever's in the current period) with the most likes+
-// comments, each with full insights fetched fresh -- this is the "what
-// actually drove the numbers above" answer the headline KPIs can't give.
+// The five posts (of whatever is in the current period) with the most likes +
+// comments, each with full insights fetched fresh -- the "what actually drove
+// the numbers above" answer the headline KPIs cannot give. Ranking logic
+// untouched; only the row treatment changed.
 function TopPostsSection({ posts, postsInPeriod, curLabel }) {
   if (!posts || !posts.length) {
     return (
-      <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT, marginBottom: 4 }}>Top posts</div>
+      <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
+        <SubHead>Top posts</SubHead>
         <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>No posts published in this period.</div>
       </div>
     )
   }
   return (
-    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT }}>Top posts ({curLabel})</div>
-        <div style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>{postsInPeriod} posted this period</div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {posts.map(p => (
-          <a key={p.id} href={p.permalink} target="_blank" rel="noreferrer" style={{ display: 'flex', gap: 10, textDecoration: 'none', alignItems: 'center' }}>
+    <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
+      <SubHead right={`${postsInPeriod} posted this period`}>Top posts ({curLabel})</SubHead>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {posts.map((p, i) => (
+          <a
+            key={p.id}
+            href={p.permalink}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'flex', gap: 11, textDecoration: 'none', alignItems: 'center',
+              border: '1px solid var(--card-border)', borderRadius: 12, padding: 8, background: 'var(--card)',
+            }}
+          >
+            <span style={{ width: 20, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#fff', background: brandColor(i), borderRadius: 6, padding: '2px 0', flexShrink: 0, fontFamily: FONT }}>{i + 1}</span>
             {p.thumbnailUrl && (
-              <img src={p.thumbnailUrl} alt="" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+              <img src={p.thumbnailUrl} alt="" style={{ width: 44, height: 44, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: C.text, fontFamily: FONT, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: 12.5, color: C.text, fontFamily: FONT, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {(p.caption || '(no caption)').split('\n')[0]}
               </div>
               <div style={{ fontSize: 11, color: C.muted, fontFamily: FONT, marginTop: 2 }}>
@@ -743,6 +1081,40 @@ function TopPostsSection({ posts, postsInPeriod, curLabel }) {
           </a>
         ))}
       </div>
+    </div>
+  )
+}
+
+// LinkedIn or X for one manually entered week.
+function ManualPlatform({ name, hue, week, reachLabel }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+        <span style={{ width: 8, height: 8, borderRadius: 3, background: hue, flexShrink: 0 }} />
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: C.text, fontFamily: FONT }}>{name}</span>
+      </div>
+      {week ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, fontFamily: FONT }}>
+          <Row label="Followers" value={fmtN(week.followers)} />
+          <Row label="Impressions" value={fmtN(week.views)} />
+          <Row label={reachLabel} value={fmtN(week.reach)} />
+          <Row label="Interactions" value={fmtN(week.interactions)} />
+          <Row label="Engagement rate" value={week.engagementRate != null ? week.engagementRate + '%' : '\u2014'} />
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, lineHeight: 1.5 }}>
+          No entry for this week yet &mdash; add it in Settings &gt; Data.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Row({ label, value }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, borderBottom: '1px dashed var(--card-border)', paddingBottom: 6 }}>
+      <span style={{ color: C.muted }}>{label}</span>
+      <span style={{ fontWeight: 700, color: C.text, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
     </div>
   )
 }
