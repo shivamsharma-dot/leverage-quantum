@@ -4,21 +4,25 @@ import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { C, FONT, Card, PremKPI, fmtN } from '../ui/dashboardKit'
 
 // ---------------------------------------------------------------------------
-// Organic & Social -- tracks the same weekly metrics the "IPO Tracker" sheet's
+// Organic & Social -- tracks the same metrics the "IPO Tracker" sheet's
 // CC01/CC03/CC05/CC06/CC07 rows ask data owners to type in by hand every
 // Monday (website organic users, followers/views/interactions/engagement rate
 // across Instagram/LinkedIn/YouTube/X, YouTube watch time) -- computed here
 // from live APIs instead, so nobody has to enter it manually.
 //
-// Four sources, four different states as of 2026-08-30:
-//   Website (GA4)  -- built, BLOCKED (service account has no GA4 property
-//                     access yet; see lib/ga4.mjs)
-//   Instagram      -- LIVE (own dedicated Meta App/token)
-//   YouTube        -- PARTIAL (channel totals live via Data API; weekly
-//                     views/watch-time BLOCKED on a Workspace-admin trust
-//                     grant; see lib/youtube.mjs)
-//   LinkedIn / X   -- MANUAL (no viable free API for either; entered weekly
-//                     in Settings > Data, read here via /api/preferences)
+// Two genuinely different kinds of source, split on purpose (per an explicit
+// "be strict" ask, not "organic vs social" -- that axis doesn't actually
+// separate anything, since Instagram is exactly as day-granular as GA4):
+//   API-driven, day-granular (Website/GA4, Instagram x N accounts, YouTube)
+//     -- these get the Day/Week/Month/Year comparison toolbar below, each
+//     preset showing the current partial period against the SAME elapsed
+//     portion of the prior period (matching this app's own MTD-vs-prev-month
+//     proration convention elsewhere), with a delta badge per metric.
+//   Manual weekly entry (LinkedIn, X) -- typed into Settings once a week.
+//     There is no "yesterday" for these to report on; the data itself only
+//     ever exists at week granularity, so they keep their own week-by-week
+//     browser instead of pretending to answer Day/Month/Year questions the
+//     underlying data can't support.
 // ---------------------------------------------------------------------------
 
 function mondayOf(d) {
@@ -42,6 +46,58 @@ function isoWeekKey(d) {
   return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
 }
 
+// Day/Week/Month/Year -> {curSince, curUntil, priorSince, priorUntil, curLabel, priorLabel}.
+// Every granularity compares the current period against the SAME ELAPSED
+// PORTION of the prior period (e.g. 3 days into this week vs the first 3 days
+// of last week), not the prior period's full length -- comparing a partial
+// current period against a complete prior one always shows a misleading
+// negative delta for volume metrics, exactly the trap this app's own MTD
+// dashboard already avoids for month-over-month deltas.
+function periodsForGranularity(g) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  if (g === 'day') {
+    const yesterday = addDays(today, -1)
+    return { curSince: today, curUntil: today, priorSince: yesterday, priorUntil: yesterday, curLabel: 'Today', priorLabel: 'yesterday' }
+  }
+  if (g === 'week') {
+    const curStart = mondayOf(today)
+    const elapsedDays = Math.round((today - curStart) / 86400000) // 0..6
+    const priorStart = addDays(curStart, -7)
+    const priorEnd = addDays(priorStart, elapsedDays)
+    return { curSince: curStart, curUntil: today, priorSince: priorStart, priorUntil: priorEnd, curLabel: 'This week', priorLabel: 'last week' }
+  }
+  if (g === 'month') {
+    const curStart = new Date(today.getFullYear(), today.getMonth(), 1)
+    const priorStart = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+    const priorMonthLength = new Date(today.getFullYear(), today.getMonth(), 0).getDate()
+    const priorEnd = new Date(today.getFullYear(), today.getMonth() - 1, Math.min(today.getDate(), priorMonthLength))
+    return { curSince: curStart, curUntil: today, priorSince: priorStart, priorUntil: priorEnd, curLabel: 'MTD', priorLabel: 'LMTD' }
+  }
+  // year
+  const curStart = new Date(today.getFullYear(), 0, 1)
+  const priorStart = new Date(today.getFullYear() - 1, 0, 1)
+  let priorEnd = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate())
+  if (priorEnd.getMonth() !== today.getMonth()) priorEnd = new Date(today.getFullYear() - 1, today.getMonth() + 1, 0) // Feb 29 -> Feb 28 style clamp
+  return { curSince: curStart, curUntil: today, priorSince: priorStart, priorUntil: priorEnd, curLabel: 'YTD', priorLabel: 'LYTD' }
+}
+
+// null when there's nothing to compare against (prior period genuinely zero,
+// or not loaded) rather than a misleading 0%/divide-by-zero delta.
+function pctDelta(cur, prior) {
+  if (cur == null || prior == null) return null
+  if (prior === 0) return cur > 0 ? 'new' : null
+  return ((cur - prior) / prior) * 100
+}
+
+const GRANULARITY_OPTIONS = [
+  { key: 'day', label: 'Day' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+  { key: 'year', label: 'Year' },
+]
+
 const ICONS = {
   followers: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
   eye: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
@@ -50,17 +106,6 @@ const ICONS = {
   globe: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>,
   play: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
   clock: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
-}
-
-function PendingCard({ title, sub, why }) {
-  return (
-    <Card title={title} sub={sub}>
-      <div style={{ padding: '18px 4px', textAlign: 'center' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Pending</div>
-        <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, marginTop: 4, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>{why}</div>
-      </div>
-    </Card>
-  )
 }
 
 const WeekArrow = ({ dir, onClick, disabled }) => (
@@ -80,7 +125,43 @@ const WeekArrow = ({ dir, onClick, disabled }) => (
   </button>
 )
 
+const GranPill = ({ active, onClick, children }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: '7px 14px', fontSize: 12.5, fontWeight: 700, borderRadius: 8, border: 'none', cursor: 'pointer', fontFamily: FONT,
+      background: active ? `linear-gradient(135deg, ${C.navy}, ${C.blue})` : 'transparent',
+      color: active ? '#fff' : C.text,
+      boxShadow: active ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
+      transition: 'background .12s, box-shadow .12s',
+    }}
+  >
+    {children}
+  </button>
+)
+
+// Pulls the two Instagram Insights numbers (a time-series reach total, and a
+// set of total_value aggregates) out of one period's raw API responses.
+function extractIgMetrics(reachRes, totalsRes) {
+  const reachRows = (reachRes && reachRes.insights && reachRes.insights.data && reachRes.insights.data[0] && reachRes.insights.data[0].values) || []
+  const totalReach = reachRows.reduce((s, v) => s + Number(v.value || 0), 0)
+  const totalsData = (totalsRes && totalsRes.insights && totalsRes.insights.data) || []
+  const findTotal = name => { const m = totalsData.find(d => d.name === name); return m && m.total_value ? Number(m.total_value.value || 0) : 0 }
+  return {
+    reach: totalReach,
+    engaged: findTotal('accounts_engaged'),
+    interactions: findTotal('total_interactions'),
+    profileViews: findTotal('profile_views'),
+  }
+}
+
 export default function OrganicSocialDashboard() {
+  const [granularity, setGranularity] = useState('day')
+
+  // LinkedIn/X are manual weekly entries -- keep their own independent
+  // week-by-week browser, defaulting to the last COMPLETE week (most likely
+  // to already have a real entry, vs. a partial current week that's probably
+  // still empty).
   const thisMonday = useMemo(() => mondayOf(new Date()), [])
   const lastCompleteMonday = useMemo(() => addDays(thisMonday, -7), [thisMonday])
   const [weekStart, setWeekStart] = useState(lastCompleteMonday)
@@ -89,89 +170,95 @@ export default function OrganicSocialDashboard() {
   const weekKey = useMemo(() => isoWeekKey(weekStart), [weekStart])
 
   const [loading, setLoading] = useState(true)
-  const [igAccounts, setIgAccounts] = useState([]) // [{ key, ig, igErr }]
+  const [igAccounts, setIgAccounts] = useState([]) // [{ key, ig: {profile, cur, prior} | null, igErr }]
   const [yt, setYt] = useState(null)
-  const [ytRange, setYtRange] = useState(null)
+  const [ytRange, setYtRange] = useState(null) // { cur, prior } | null
   const [ytRangeErr, setYtRangeErr] = useState(null)
-  const [ga4, setGa4] = useState(null)
+  const [ga4, setGa4] = useState(null) // { cur, prior } | null
   const [ga4Err, setGa4Err] = useState(null)
   const [prefs, setPrefs] = useState({})
 
-  // One Instagram account is a fetch-two-things (profile + insights) job;
-  // every configured account runs this same job in parallel. instagramAccounts()
-  // on the backend enumerates whatever's connected -- adding a new account is
-  // a config change there, never a frontend change.
-  const loadIgAccount = useCallback((key, sinceSec, untilSec) => {
+  // One Instagram account is a fetch-five-things job (profile once, then
+  // reach+totals for BOTH the current and prior period) -- every configured
+  // account runs this same job in parallel. instagramAccounts() on the
+  // backend is the only thing that changes when a new account is connected;
+  // this loop needs no per-account code.
+  const loadIgAccount = useCallback((key, periods) => {
     const qs = key ? `&account=${encodeURIComponent(key)}` : ''
+    const fetchInsights = (since, until, metrics, metricType) =>
+      fetch(`/api/crm-leads?source=instagram&mode=insights&metrics=${metrics}&since=${since}&until=${until}&metric_type=${metricType}${qs}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) }))
     return Promise.all([
       fetch(`/api/crm-leads?source=instagram&mode=profile${qs}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
-      fetch(`/api/crm-leads?source=instagram&mode=insights&metrics=reach&since=${sinceSec}&until=${untilSec}&metric_type=time_series${qs}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
-      fetch(`/api/crm-leads?source=instagram&mode=insights&metrics=accounts_engaged,total_interactions,profile_views&since=${sinceSec}&until=${untilSec}&metric_type=total_value${qs}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
-    ]).then(([profileRes, reachRes, totalsRes]) => {
-      if (profileRes && profileRes.configured && profileRes.profile) {
-        const reachRows = (reachRes && reachRes.insights && reachRes.insights.data && reachRes.insights.data[0] && reachRes.insights.data[0].values) || []
-        const totalReach = reachRows.reduce((s, v) => s + Number(v.value || 0), 0)
-        const totalsData = (totalsRes && totalsRes.insights && totalsRes.insights.data) || []
-        const findTotal = name => { const m = totalsData.find(d => d.name === name); return m && m.total_value ? Number(m.total_value.value || 0) : 0 }
-        const engaged = findTotal('accounts_engaged')
-        const interactions = findTotal('total_interactions')
-        const profileViews = findTotal('profile_views')
-        return {
-          key, igErr: null,
-          ig: {
-            profile: profileRes.profile,
-            reach: totalReach,
-            engaged,
-            interactions,
-            profileViews,
-            engagementRate: profileRes.profile.followersCount > 0 ? (interactions / profileRes.profile.followersCount) * 100 : 0,
-          },
-        }
+      fetchInsights(periods.curSinceSec, periods.curUntilSec, 'reach', 'time_series'),
+      fetchInsights(periods.curSinceSec, periods.curUntilSec, 'accounts_engaged,total_interactions,profile_views', 'total_value'),
+      fetchInsights(periods.priorSinceSec, periods.priorUntilSec, 'reach', 'time_series'),
+      fetchInsights(periods.priorSinceSec, periods.priorUntilSec, 'accounts_engaged,total_interactions,profile_views', 'total_value'),
+    ]).then(([profileRes, curReachRes, curTotalsRes, priorReachRes, priorTotalsRes]) => {
+      if (!(profileRes && profileRes.configured && profileRes.profile)) {
+        if (profileRes && profileRes.configured === false) return { key, ig: null, igErr: 'not_configured' }
+        return { key, ig: null, igErr: (profileRes && (profileRes.detail || profileRes.error)) || 'Unknown error' }
       }
-      if (profileRes && profileRes.configured === false) return { key, ig: null, igErr: 'not_configured' }
-      return { key, ig: null, igErr: (profileRes && (profileRes.detail || profileRes.error)) || 'Unknown error' }
+      const followers = profileRes.profile.followersCount
+      const cur = extractIgMetrics(curReachRes, curTotalsRes)
+      const prior = extractIgMetrics(priorReachRes, priorTotalsRes)
+      cur.engagementRate = followers > 0 ? (cur.interactions / followers) * 100 : 0
+      prior.engagementRate = followers > 0 ? (prior.interactions / followers) * 100 : 0
+      return { key, igErr: null, ig: { profile: profileRes.profile, cur, prior } }
     })
   }, [])
 
   const load = useCallback(() => {
     setLoading(true)
-    const sinceSec = Math.floor(weekStart.getTime() / 1000)
-    const untilSec = Math.floor((addDays(weekEnd, 1).getTime() - 1) / 1000)
-    const since = fmtISO(weekStart)
-    const until = fmtISO(weekEnd)
+    const p = periodsForGranularity(granularity)
+    const curSince = fmtISO(p.curSince), curUntil = fmtISO(p.curUntil)
+    const priorSince = fmtISO(p.priorSince), priorUntil = fmtISO(p.priorUntil)
+    const curSinceSec = Math.floor(p.curSince.getTime() / 1000)
+    const curUntilSec = Math.floor(addDays(p.curUntil, 1).getTime() / 1000) - 1
+    const priorSinceSec = Math.floor(p.priorSince.getTime() / 1000)
+    const priorUntilSec = Math.floor(addDays(p.priorUntil, 1).getTime() / 1000) - 1
+    const periods = { curSinceSec, curUntilSec, priorSinceSec, priorUntilSec }
 
     Promise.all([
       fetch('/api/crm-leads?source=instagram&mode=accounts', { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
       fetch('/api/crm-leads?source=youtube&mode=stats', { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
-      fetch(`/api/crm-leads?source=youtube&mode=range&since=${since}&until=${until}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
-      fetch(`/api/crm-leads?source=ga4&mode=range&since=${since}&until=${until}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
+      fetch(`/api/crm-leads?source=youtube&mode=range&since=${curSince}&until=${curUntil}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
+      fetch(`/api/crm-leads?source=youtube&mode=range&since=${priorSince}&until=${priorUntil}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
+      fetch(`/api/crm-leads?source=ga4&mode=range&since=${curSince}&until=${curUntil}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
+      fetch(`/api/crm-leads?source=ga4&mode=range&since=${priorSince}&until=${priorUntil}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
       fetch('/api/preferences', { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
-    ]).then(([accountsRes, ytStatsRes, ytRangeRes, ga4Res, prefsRes]) => {
+    ]).then(([accountsRes, ytStatsRes, ytCurRes, ytPriorRes, ga4CurRes, ga4PriorRes, prefsRes]) => {
       const keys = (accountsRes && Array.isArray(accountsRes.accounts) && accountsRes.accounts.length)
         ? accountsRes.accounts.map(a => a.key)
         : [null] // no accounts endpoint / none configured -- fall back to the single legacy account so "not connected" still renders one card, not zero
-      Promise.all(keys.map(k => loadIgAccount(k, sinceSec, untilSec))).then(setIgAccounts)
+      Promise.all(keys.map(k => loadIgAccount(k, periods))).then(setIgAccounts)
 
       if (ytStatsRes && ytStatsRes.configured && ytStatsRes.stats) setYt(ytStatsRes.stats)
       else setYt(null)
 
-      if (ytRangeRes && ytRangeRes.configured && ytRangeRes.range) { setYtRange(ytRangeRes.range); setYtRangeErr(null) }
-      else if (ytRangeRes && ytRangeRes.configured === false) { setYtRange(null); setYtRangeErr('not_configured') }
-      else { setYtRange(null); setYtRangeErr((ytRangeRes && ytRangeRes.detail) || 'Blocked') }
+      if (ytCurRes && ytCurRes.configured && ytCurRes.range) {
+        setYtRange({ cur: ytCurRes.range, prior: (ytPriorRes && ytPriorRes.configured && ytPriorRes.range) || null })
+        setYtRangeErr(null)
+      } else if (ytCurRes && ytCurRes.configured === false) { setYtRange(null); setYtRangeErr('not_configured') }
+      else { setYtRange(null); setYtRangeErr((ytCurRes && ytCurRes.detail) || 'Blocked') }
 
-      if (ga4Res && ga4Res.configured && ga4Res.range) { setGa4(ga4Res.range); setGa4Err(null) }
-      else if (ga4Res && ga4Res.configured === false) { setGa4(null); setGa4Err('not_configured') }
-      else { setGa4(null); setGa4Err((ga4Res && ga4Res.detail) || 'Blocked') }
+      if (ga4CurRes && ga4CurRes.configured && ga4CurRes.range) {
+        setGa4({ cur: ga4CurRes.range, prior: (ga4PriorRes && ga4PriorRes.configured && ga4PriorRes.range) || null })
+        setGa4Err(null)
+      } else if (ga4CurRes && ga4CurRes.configured === false) { setGa4(null); setGa4Err('not_configured') }
+      else { setGa4(null); setGa4Err((ga4CurRes && ga4CurRes.detail) || 'Blocked') }
 
       setPrefs((prefsRes && prefsRes.prefs) || {})
       setLoading(false)
     })
-  }, [weekStart, weekEnd, loadIgAccount])
+  }, [granularity, loadIgAccount])
 
   useEffect(() => { load() }, [load])
 
   const linkedinWeek = (prefs.linkedin_manual || {})[weekKey] || null
   const xWeek = (prefs.x_manual || {})[weekKey] || null
+
+  const period = useMemo(() => periodsForGranularity(granularity), [granularity])
+  const compareLabel = `${period.curLabel} vs ${period.priorLabel}`
 
   if (loading) {
     return (
@@ -196,12 +283,10 @@ export default function OrganicSocialDashboard() {
             <div style={{ fontSize: 18, fontWeight: 800, color: C.text, fontFamily: FONT, letterSpacing: '-0.3px' }}>Organic &amp; Social</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} className="lq-header-controls">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg3)', borderRadius: 10, padding: '4px 6px' }}>
-              <WeekArrow dir={-1} onClick={() => setWeekStart(w => addDays(w, -7))} />
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text, fontFamily: FONT, minWidth: 130, textAlign: 'center' }}>
-                {fmtLabel(weekStart)} – {fmtLabel(weekEnd)} {isCurrentWeek && <span style={{ color: C.blue }}>(this week)</span>}
-              </div>
-              <WeekArrow dir={1} onClick={() => setWeekStart(w => addDays(w, 7))} disabled={weekStart.getTime() >= thisMonday.getTime()} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--bg3)', borderRadius: 10, padding: 4 }}>
+              {GRANULARITY_OPTIONS.map(o => (
+                <GranPill key={o.key} active={granularity === o.key} onClick={() => setGranularity(o.key)}>{o.label}</GranPill>
+              ))}
             </div>
             <button
               onClick={load}
@@ -211,17 +296,20 @@ export default function OrganicSocialDashboard() {
             </button>
           </div>
         </div>
+        <div style={{ margin: '6px 14px 0', fontSize: 11.5, color: C.muted, fontFamily: FONT }}>
+          {compareLabel} &middot; {fmtLabel(period.curSince)}–{fmtLabel(period.curUntil)} vs {fmtLabel(period.priorSince)}–{fmtLabel(period.priorUntil)}
+        </div>
 
         <div style={{ padding: '16px 14px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
-            <Card title="Website" sub={ga4 ? `${fmtISO(weekStart)} – ${fmtISO(weekEnd)} · Organic Search channel` : 'Google Analytics 4'}>
+            <Card title="Website" sub={ga4 ? `Organic Search channel · ${compareLabel}` : 'Google Analytics 4'}>
               {ga4 ? (
                 <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
-                  <PremKPI label="Organic Users" value={fmtN(ga4.organicUsers)} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
-                  <PremKPI label="Total Users" value={fmtN(ga4.totalUsers)} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
-                  <PremKPI label="Organic %" value={ga4.organicPct.toFixed(1) + '%'} icon={ICONS.pct} accent={C.cyan} accentBg={C.cyanBg} />
+                  <PremKPI label="Organic Users" value={fmtN(ga4.cur.organicUsers)} delta={ga4.prior ? pctDelta(ga4.cur.organicUsers, ga4.prior.organicUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
+                  <PremKPI label="Total Users" value={fmtN(ga4.cur.totalUsers)} delta={ga4.prior ? pctDelta(ga4.cur.totalUsers, ga4.prior.totalUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
+                  <PremKPI label="Organic %" value={ga4.cur.organicPct.toFixed(1) + '%'} delta={ga4.prior ? pctDelta(ga4.cur.organicPct, ga4.prior.organicPct) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.cyan} accentBg={C.cyanBg} />
                 </div>
               ) : (
                 <div style={{ padding: '10px 4px', textAlign: 'center' }}>
@@ -241,13 +329,13 @@ export default function OrganicSocialDashboard() {
                   <PremKPI label="Videos" value={fmtN(yt.videoCount)} icon={ICONS.play} accent={C.cyan} accentBg={C.cyanBg} />
                   {ytRange ? (
                     <>
-                      <PremKPI label="Views (week)" value={fmtN(ytRange.totalViews)} icon={ICONS.eye} accent={C.green} accentBg={C.greenBg} />
-                      <PremKPI label="Organic Views (week)" value={fmtN(ytRange.organicViews)} icon={ICONS.eye} accent={C.navy} accentBg={C.navyBg} />
-                      <PremKPI label="Watch Time (hrs, week)" value={fmtN(ytRange.totalMinutesWatched / 60)} icon={ICONS.clock} accent={C.blue} accentBg={C.blueBg} />
+                      <PremKPI label={`Views (${period.curLabel})`} value={fmtN(ytRange.cur.totalViews)} delta={ytRange.prior ? pctDelta(ytRange.cur.totalViews, ytRange.prior.totalViews) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.green} accentBg={C.greenBg} />
+                      <PremKPI label={`Organic Views (${period.curLabel})`} value={fmtN(ytRange.cur.organicViews)} delta={ytRange.prior ? pctDelta(ytRange.cur.organicViews, ytRange.prior.organicViews) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.navy} accentBg={C.navyBg} />
+                      <PremKPI label={`Watch Time (hrs, ${period.curLabel})`} value={fmtN(ytRange.cur.totalMinutesWatched / 60)} delta={ytRange.prior ? pctDelta(ytRange.cur.totalMinutesWatched, ytRange.prior.totalMinutesWatched) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.clock} accent={C.blue} accentBg={C.blueBg} />
                     </>
                   ) : (
                     <div style={{ gridColumn: 'span 3', padding: '8px 4px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Weekly views &amp; watch time — pending</div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Views &amp; watch time — pending</div>
                       <div style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT, marginTop: 3 }}>Blocked on a Google Workspace admin trust grant for the Analytics API scope.</div>
                     </div>
                   )}
@@ -265,15 +353,15 @@ export default function OrganicSocialDashboard() {
               the backend is the only thing that changes when a new account
               is connected; this loop needs no per-account code. */}
           {igAccounts.map(({ key, ig, igErr }) => (
-            <Card key={key || 'default'} title="Instagram" sub={ig ? `@${ig.profile.username} · ${fmtISO(weekStart)} – ${fmtISO(weekEnd)}` : 'Live'}>
+            <Card key={key || 'default'} title="Instagram" sub={ig ? `@${ig.profile.username} · ${compareLabel}` : 'Live'}>
               {ig ? (
                 <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
                   <PremKPI label="Followers" value={fmtN(ig.profile.followersCount)} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
-                  <PremKPI label="Reach (week)" value={fmtN(ig.reach)} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
-                  <PremKPI label="Interactions" value={fmtN(ig.interactions)} icon={ICONS.spark} accent={C.cyan} accentBg={C.cyanBg} />
-                  <PremKPI label="Profile Views" value={fmtN(ig.profileViews)} icon={ICONS.eye} accent={C.green} accentBg={C.greenBg} />
-                  <PremKPI label="Accounts Engaged" value={fmtN(ig.engaged)} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
-                  <PremKPI label="Engagement Rate" value={ig.engagementRate.toFixed(2) + '%'} icon={ICONS.pct} accent={C.blue} accentBg={C.blueBg} />
+                  <PremKPI label="Reach" value={fmtN(ig.cur.reach)} delta={pctDelta(ig.cur.reach, ig.prior.reach)} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
+                  <PremKPI label="Interactions" value={fmtN(ig.cur.interactions)} delta={pctDelta(ig.cur.interactions, ig.prior.interactions)} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.cyan} accentBg={C.cyanBg} />
+                  <PremKPI label="Profile Views" value={fmtN(ig.cur.profileViews)} delta={pctDelta(ig.cur.profileViews, ig.prior.profileViews)} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.green} accentBg={C.greenBg} />
+                  <PremKPI label="Accounts Engaged" value={fmtN(ig.cur.engaged)} delta={pctDelta(ig.cur.engaged, ig.prior.engaged)} sub={`vs ${period.priorLabel}`} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
+                  <PremKPI label="Engagement Rate" value={ig.cur.engagementRate.toFixed(2) + '%'} delta={pctDelta(ig.cur.engagementRate, ig.prior.engagementRate)} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.blue} accentBg={C.blueBg} />
                 </div>
               ) : (
                 <div style={{ padding: '10px 4px', textAlign: 'center' }}>
@@ -288,7 +376,25 @@ export default function OrganicSocialDashboard() {
             </Card>
           ))}
 
-          <Card title="LinkedIn &amp; X" sub={`Manually entered · ${weekKey}`}>
+          {/* LinkedIn/X: manual weekly entries, deliberately NOT driven by the
+              Day/Week/Month/Year toolbar above -- the underlying data only
+              ever exists at one-row-per-week granularity (typed into
+              Settings), so "Last day" or "YTD" has nothing real to show.
+              Kept in its own section with its own week browser instead of
+              silently breaking under a toolbar it can't answer to. */}
+          <Card
+            title="LinkedIn &amp; X"
+            sub="Manually entered, week by week"
+            action={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg3)', borderRadius: 10, padding: '4px 6px' }}>
+                <WeekArrow dir={-1} onClick={() => setWeekStart(w => addDays(w, -7))} />
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.text, fontFamily: FONT, minWidth: 110, textAlign: 'center' }}>
+                  {fmtLabel(weekStart)} – {fmtLabel(weekEnd)} {isCurrentWeek && <span style={{ color: C.blue }}>(this week)</span>}
+                </div>
+                <WeekArrow dir={1} onClick={() => setWeekStart(w => addDays(w, 7))} disabled={weekStart.getTime() >= thisMonday.getTime()} />
+              </div>
+            }
+          >
             <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 16 }}>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT, marginBottom: 8 }}>LinkedIn</div>
