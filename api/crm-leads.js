@@ -3221,10 +3221,18 @@ async function handleYoutube(req, res, me) {
 async function handleInstagram(req, res, me) {
   const { canAccessDashboard } = await import('../lib/auth.mjs');
   if (!canAccessDashboard(me.role, 'organic_social')) return res.status(403).json({ error: 'Forbidden' });
-  const { instagramCreds, instagramConfigured, fetchInstagramProfile, fetchInstagramInsights, exchangeForLongLivedToken, refreshLongLivedToken } = await import('../lib/instagram.mjs');
-  const creds = instagramCreds();
-  if (!instagramConfigured(creds)) return res.status(200).json({ configured: false });
+  const { instagramCreds, instagramConfigured, instagramAccounts, fetchInstagramProfile, fetchInstagramInsights, exchangeForLongLivedToken, refreshLongLivedToken } = await import('../lib/instagram.mjs');
   const mode = (req.query && req.query.mode) || 'profile';
+  // Lists every connected account (key only, no tokens) so the dashboard knows
+  // how many cards to render before fetching any of them.
+  if (mode === 'accounts') {
+    return res.status(200).json({ accounts: instagramAccounts().map(a => ({ key: a.key })) });
+  }
+  const accountKey = req.query && req.query.account;
+  const creds = accountKey
+    ? (instagramAccounts().find(a => a.key === accountKey) || null)
+    : instagramCreds();
+  if (!creds || !instagramConfigured(creds)) return res.status(200).json({ configured: false });
   try {
     if (mode === 'profile') {
       const profile = await fetchInstagramProfile(creds);

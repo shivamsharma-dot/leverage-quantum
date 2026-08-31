@@ -89,14 +89,49 @@ export default function OrganicSocialDashboard() {
   const weekKey = useMemo(() => isoWeekKey(weekStart), [weekStart])
 
   const [loading, setLoading] = useState(true)
-  const [ig, setIg] = useState(null)
-  const [igErr, setIgErr] = useState(null)
+  const [igAccounts, setIgAccounts] = useState([]) // [{ key, ig, igErr }]
   const [yt, setYt] = useState(null)
   const [ytRange, setYtRange] = useState(null)
   const [ytRangeErr, setYtRangeErr] = useState(null)
   const [ga4, setGa4] = useState(null)
   const [ga4Err, setGa4Err] = useState(null)
   const [prefs, setPrefs] = useState({})
+
+  // One Instagram account is a fetch-two-things (profile + insights) job;
+  // every configured account runs this same job in parallel. instagramAccounts()
+  // on the backend enumerates whatever's connected -- adding a new account is
+  // a config change there, never a frontend change.
+  const loadIgAccount = useCallback((key, sinceSec, untilSec) => {
+    const qs = key ? `&account=${encodeURIComponent(key)}` : ''
+    return Promise.all([
+      fetch(`/api/crm-leads?source=instagram&mode=profile${qs}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
+      fetch(`/api/crm-leads?source=instagram&mode=insights&metrics=reach&since=${sinceSec}&until=${untilSec}&metric_type=time_series${qs}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
+      fetch(`/api/crm-leads?source=instagram&mode=insights&metrics=accounts_engaged,total_interactions,profile_views&since=${sinceSec}&until=${untilSec}&metric_type=total_value${qs}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
+    ]).then(([profileRes, reachRes, totalsRes]) => {
+      if (profileRes && profileRes.configured && profileRes.profile) {
+        const reachRows = (reachRes && reachRes.insights && reachRes.insights.data && reachRes.insights.data[0] && reachRes.insights.data[0].values) || []
+        const totalReach = reachRows.reduce((s, v) => s + Number(v.value || 0), 0)
+        const totalsData = (totalsRes && totalsRes.insights && totalsRes.insights.data) || []
+        const findTotal = name => { const m = totalsData.find(d => d.name === name); return m && m.total_value ? Number(m.total_value.value || 0) : 0 }
+        const engaged = findTotal('accounts_engaged')
+        const interactions = findTotal('total_interactions')
+        const profileViews = findTotal('profile_views')
+        return {
+          key, igErr: null,
+          ig: {
+            profile: profileRes.profile,
+            reach: totalReach,
+            engaged,
+            interactions,
+            profileViews,
+            engagementRate: profileRes.profile.followersCount > 0 ? (interactions / profileRes.profile.followersCount) * 100 : 0,
+          },
+        }
+      }
+      if (profileRes && profileRes.configured === false) return { key, ig: null, igErr: 'not_configured' }
+      return { key, ig: null, igErr: (profileRes && (profileRes.detail || profileRes.error)) || 'Unknown error' }
+    })
+  }, [])
 
   const load = useCallback(() => {
     setLoading(true)
@@ -106,36 +141,16 @@ export default function OrganicSocialDashboard() {
     const until = fmtISO(weekEnd)
 
     Promise.all([
-      fetch('/api/crm-leads?source=instagram&mode=profile', { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
-      fetch(`/api/crm-leads?source=instagram&mode=insights&metrics=reach&since=${sinceSec}&until=${untilSec}&metric_type=time_series`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
-      fetch(`/api/crm-leads?source=instagram&mode=insights&metrics=accounts_engaged,total_interactions,profile_views&since=${sinceSec}&until=${untilSec}&metric_type=total_value`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
+      fetch('/api/crm-leads?source=instagram&mode=accounts', { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
       fetch('/api/crm-leads?source=youtube&mode=stats', { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
       fetch(`/api/crm-leads?source=youtube&mode=range&since=${since}&until=${until}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
       fetch(`/api/crm-leads?source=ga4&mode=range&since=${since}&until=${until}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
       fetch('/api/preferences', { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
-    ]).then(([profileRes, reachRes, totalsRes, ytStatsRes, ytRangeRes, ga4Res, prefsRes]) => {
-      if (profileRes && profileRes.configured && profileRes.profile) {
-        const reachRows = (reachRes && reachRes.insights && reachRes.insights.data && reachRes.insights.data[0] && reachRes.insights.data[0].values) || []
-        const totalReach = reachRows.reduce((s, v) => s + Number(v.value || 0), 0)
-        const totalsData = (totalsRes && totalsRes.insights && totalsRes.insights.data) || []
-        const findTotal = name => { const m = totalsData.find(d => d.name === name); return m && m.total_value ? Number(m.total_value.value || 0) : 0 }
-        const engaged = findTotal('accounts_engaged')
-        const interactions = findTotal('total_interactions')
-        const profileViews = findTotal('profile_views')
-        setIg({
-          profile: profileRes.profile,
-          reach: totalReach,
-          engaged,
-          interactions,
-          profileViews,
-          engagementRate: profileRes.profile.followersCount > 0 ? (interactions / profileRes.profile.followersCount) * 100 : 0,
-        })
-        setIgErr(null)
-      } else if (profileRes && profileRes.configured === false) {
-        setIg(null); setIgErr('not_configured')
-      } else {
-        setIg(null); setIgErr((profileRes && (profileRes.detail || profileRes.error)) || 'Unknown error')
-      }
+    ]).then(([accountsRes, ytStatsRes, ytRangeRes, ga4Res, prefsRes]) => {
+      const keys = (accountsRes && Array.isArray(accountsRes.accounts) && accountsRes.accounts.length)
+        ? accountsRes.accounts.map(a => a.key)
+        : [null] // no accounts endpoint / none configured -- fall back to the single legacy account so "not connected" still renders one card, not zero
+      Promise.all(keys.map(k => loadIgAccount(k, sinceSec, untilSec))).then(setIgAccounts)
 
       if (ytStatsRes && ytStatsRes.configured && ytStatsRes.stats) setYt(ytStatsRes.stats)
       else setYt(null)
@@ -151,7 +166,7 @@ export default function OrganicSocialDashboard() {
       setPrefs((prefsRes && prefsRes.prefs) || {})
       setLoading(false)
     })
-  }, [weekStart, weekEnd])
+  }, [weekStart, weekEnd, loadIgAccount])
 
   useEffect(() => { load() }, [load])
 
@@ -218,28 +233,6 @@ export default function OrganicSocialDashboard() {
               )}
             </Card>
 
-            <Card title="Instagram" sub={ig ? `@${ig.profile.username} · ${fmtISO(weekStart)} – ${fmtISO(weekEnd)}` : 'Live'}>
-              {ig ? (
-                <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
-                  <PremKPI label="Followers" value={fmtN(ig.profile.followersCount)} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
-                  <PremKPI label="Reach (week)" value={fmtN(ig.reach)} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
-                  <PremKPI label="Interactions" value={fmtN(ig.interactions)} icon={ICONS.spark} accent={C.cyan} accentBg={C.cyanBg} />
-                  <PremKPI label="Profile Views" value={fmtN(ig.profileViews)} icon={ICONS.eye} accent={C.green} accentBg={C.greenBg} />
-                  <PremKPI label="Accounts Engaged" value={fmtN(ig.engaged)} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
-                  <PremKPI label="Engagement Rate" value={ig.engagementRate.toFixed(2) + '%'} icon={ICONS.pct} accent={C.blue} accentBg={C.blueBg} />
-                </div>
-              ) : (
-                <div style={{ padding: '10px 4px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, fontFamily: FONT }}>
-                    {igErr === 'not_configured' ? 'Not connected yet' : 'Temporarily unavailable'}
-                  </div>
-                  {igErr && igErr !== 'not_configured' && (
-                    <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, marginTop: 4 }}>{String(igErr).slice(0, 160)}</div>
-                  )}
-                </div>
-              )}
-            </Card>
-
             <Card title="YouTube" sub={yt ? yt.title : 'Data API + Analytics API'}>
               {yt ? (
                 <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
@@ -264,40 +257,70 @@ export default function OrganicSocialDashboard() {
               )}
             </Card>
 
-            <Card title="LinkedIn &amp; X" sub={`Manually entered · ${weekKey}`}>
-              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 16 }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT, marginBottom: 8 }}>LinkedIn</div>
-                  {linkedinWeek ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: FONT }}>
-                      <Row label="Followers" value={fmtN(linkedinWeek.followers)} />
-                      <Row label="Impressions" value={fmtN(linkedinWeek.views)} />
-                      <Row label="Unique visitors" value={fmtN(linkedinWeek.reach)} />
-                      <Row label="Interactions" value={fmtN(linkedinWeek.interactions)} />
-                      <Row label="Engagement rate" value={(linkedinWeek.engagementRate != null ? linkedinWeek.engagementRate + '%' : '—')} />
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>No entry for this week yet — add it in Settings &gt; Data.</div>
-                  )}
-                </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT, marginBottom: 8 }}>X (Twitter)</div>
-                  {xWeek ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: FONT }}>
-                      <Row label="Followers" value={fmtN(xWeek.followers)} />
-                      <Row label="Impressions" value={fmtN(xWeek.views)} />
-                      <Row label="Reach" value={fmtN(xWeek.reach)} />
-                      <Row label="Interactions" value={fmtN(xWeek.interactions)} />
-                      <Row label="Engagement rate" value={(xWeek.engagementRate != null ? xWeek.engagementRate + '%' : '—')} />
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>No entry for this week yet — add it in Settings &gt; Data.</div>
-                  )}
-                </div>
-              </div>
-            </Card>
-
           </div>
+
+          {/* One full-width card per connected Instagram account -- every
+              business account this app has a token for gets its own row,
+              not squeezed into the 2-col grid above. instagramAccounts() on
+              the backend is the only thing that changes when a new account
+              is connected; this loop needs no per-account code. */}
+          {igAccounts.map(({ key, ig, igErr }) => (
+            <Card key={key || 'default'} title="Instagram" sub={ig ? `@${ig.profile.username} · ${fmtISO(weekStart)} – ${fmtISO(weekEnd)}` : 'Live'}>
+              {ig ? (
+                <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+                  <PremKPI label="Followers" value={fmtN(ig.profile.followersCount)} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
+                  <PremKPI label="Reach (week)" value={fmtN(ig.reach)} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
+                  <PremKPI label="Interactions" value={fmtN(ig.interactions)} icon={ICONS.spark} accent={C.cyan} accentBg={C.cyanBg} />
+                  <PremKPI label="Profile Views" value={fmtN(ig.profileViews)} icon={ICONS.eye} accent={C.green} accentBg={C.greenBg} />
+                  <PremKPI label="Accounts Engaged" value={fmtN(ig.engaged)} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
+                  <PremKPI label="Engagement Rate" value={ig.engagementRate.toFixed(2) + '%'} icon={ICONS.pct} accent={C.blue} accentBg={C.blueBg} />
+                </div>
+              ) : (
+                <div style={{ padding: '10px 4px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, fontFamily: FONT }}>
+                    {igErr === 'not_configured' ? 'Not connected yet' : 'Temporarily unavailable'}
+                  </div>
+                  {igErr && igErr !== 'not_configured' && (
+                    <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, marginTop: 4 }}>{String(igErr).slice(0, 160)}</div>
+                  )}
+                </div>
+              )}
+            </Card>
+          ))}
+
+          <Card title="LinkedIn &amp; X" sub={`Manually entered · ${weekKey}`}>
+            <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT, marginBottom: 8 }}>LinkedIn</div>
+                {linkedinWeek ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: FONT }}>
+                    <Row label="Followers" value={fmtN(linkedinWeek.followers)} />
+                    <Row label="Impressions" value={fmtN(linkedinWeek.views)} />
+                    <Row label="Unique visitors" value={fmtN(linkedinWeek.reach)} />
+                    <Row label="Interactions" value={fmtN(linkedinWeek.interactions)} />
+                    <Row label="Engagement rate" value={(linkedinWeek.engagementRate != null ? linkedinWeek.engagementRate + '%' : '—')} />
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>No entry for this week yet — add it in Settings &gt; Data.</div>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT, marginBottom: 8 }}>X (Twitter)</div>
+                {xWeek ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: FONT }}>
+                    <Row label="Followers" value={fmtN(xWeek.followers)} />
+                    <Row label="Impressions" value={fmtN(xWeek.views)} />
+                    <Row label="Reach" value={fmtN(xWeek.reach)} />
+                    <Row label="Interactions" value={fmtN(xWeek.interactions)} />
+                    <Row label="Engagement rate" value={(xWeek.engagementRate != null ? xWeek.engagementRate + '%' : '—')} />
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>No entry for this week yet — add it in Settings &gt; Data.</div>
+                )}
+              </div>
+            </div>
+          </Card>
+
         </div>
       </div>
     </div>
