@@ -3221,7 +3221,7 @@ async function handleYoutube(req, res, me) {
 async function handleInstagram(req, res, me) {
   const { canAccessDashboard } = await import('../lib/auth.mjs');
   if (!canAccessDashboard(me.role, 'organic_social')) return res.status(403).json({ error: 'Forbidden' });
-  const { instagramCreds, instagramConfigured, instagramAccounts, fetchInstagramProfile, fetchInstagramInsights, exchangeForLongLivedToken, refreshLongLivedToken } = await import('../lib/instagram.mjs');
+  const { instagramCreds, instagramConfigured, instagramAccounts, fetchInstagramProfile, fetchInstagramInsights, fetchInstagramMedia, fetchInstagramMediaInsights, fetchInstagramBusinessDiscovery, exchangeForLongLivedToken, refreshLongLivedToken } = await import('../lib/instagram.mjs');
   const mode = (req.query && req.query.mode) || 'profile';
   // Lists every connected account (key only, no tokens) so the dashboard knows
   // how many cards to render before fetching any of them.
@@ -3243,9 +3243,36 @@ async function handleInstagram(req, res, me) {
       const since = req.query && req.query.since;
       const until = req.query && req.query.until;
       const metricType = (req.query && req.query.metric_type) || 'time_series';
+      const breakdown = (req.query && req.query.breakdown) || null;
       if (!since || !until) return res.status(400).json({ error: 'since and until (unix timestamps) are required' });
-      const insights = await fetchInstagramInsights(creds, metrics, since, until, metricType);
+      const insights = await fetchInstagramInsights(creds, metrics, since, until, metricType, breakdown);
       return res.status(200).json({ configured: true, insights });
+    }
+    // Recent posts/reels, most-recent-first -- NOT date-filtered by Instagram
+    // itself (its /media edge has no since/until), so the frontend filters by
+    // each item's own timestamp against whichever period is on screen.
+    if (mode === 'media') {
+      const media = await fetchInstagramMedia(creds, Number((req.query && req.query.limit) || 100));
+      return res.status(200).json({ configured: true, media });
+    }
+    // Per-post insights. metrics is a raw pass-through -- the valid set
+    // genuinely differs by media_type (image/carousel vs video/reels), so the
+    // frontend picks the right list per post rather than this guessing.
+    if (mode === 'media_insights') {
+      const mediaId = req.query && req.query.mediaId;
+      const metrics = req.query && req.query.metrics;
+      if (!mediaId || !metrics) return res.status(400).json({ error: 'mediaId and metrics are required' });
+      const insights = await fetchInstagramMediaInsights(creds, mediaId, metrics);
+      return res.status(200).json({ configured: true, insights });
+    }
+    // Public stats on another account (no token of theirs needed). Not yet
+    // confirmed to work under this app's Instagram-Login connection -- a real
+    // error here is expected evidence, not a bug, until tested.
+    if (mode === 'business_discovery') {
+      const username = req.query && req.query.username;
+      if (!username) return res.status(400).json({ error: 'username is required' });
+      const result = await fetchInstagramBusinessDiscovery(creds, username);
+      return res.status(200).json({ configured: true, result });
     }
     if (mode === 'exchange_token') {
       const result = await exchangeForLongLivedToken(creds);
