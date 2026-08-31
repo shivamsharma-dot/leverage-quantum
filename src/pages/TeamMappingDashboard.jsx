@@ -2455,7 +2455,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
               the table; top/bottom (not a fixed height) so it always spans
               whatever the wrapper's own current maxHeight-bounded height is. */}
           {edgeShadow.right && (
-            <div aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 28, pointerEvents: 'none', zIndex: 1, background: 'linear-gradient(to left, rgba(15,23,42,0.10), transparent)' }} />
+            <div aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 48, pointerEvents: 'none', zIndex: 1, background: 'linear-gradient(to left, rgba(15,23,42,0.05), transparent)' }} />
           )}
           {/* z-index:1 (not above 1) is deliberate for the left shadow: TBL-1's
               frozen checkbox+Name columns sit at z-index 2/3 with an opaque
@@ -2467,7 +2467,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
               body cells (z-index:auto) to their right, which is where the
               hint is actually meaningful. */}
           {edgeShadow.left && (
-            <div aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 28, pointerEvents: 'none', zIndex: 1, background: 'linear-gradient(to right, rgba(15,23,42,0.10), transparent)' }} />
+            <div aria-hidden="true" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 48, pointerEvents: 'none', zIndex: 1, background: 'linear-gradient(to right, rgba(15,23,42,0.05), transparent)' }} />
           )}
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1000 }}>
             <thead>
