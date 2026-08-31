@@ -123,6 +123,13 @@ const ICONS = {
   globe: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>,
   play: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
   clock: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  heart: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>,
+  comment: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>,
+  share: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>,
+  bookmark: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21 12 16l-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>,
+  reply: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>,
+  link: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.5-1.5"/></svg>,
+  trendUp: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
 }
 
 const WeekArrow = ({ dir, onClick, disabled }) => (
@@ -157,19 +164,69 @@ const GranPill = ({ active, onClick, children }) => (
   </button>
 )
 
-// Pulls the two Instagram Insights numbers (a time-series reach total, and a
-// set of total_value aggregates) out of one period's raw API responses.
-function extractIgMetrics(reachRes, totalsRes) {
-  const reachRows = (reachRes && reachRes.insights && reachRes.insights.data && reachRes.insights.data[0] && reachRes.insights.data[0].values) || []
-  const totalReach = reachRows.reduce((s, v) => s + Number(v.value || 0), 0)
+// Every account-level total_value metric this page shows, fetched in ONE
+// call (Instagram accepts a comma list) rather than one round-trip per
+// number. follower_count is deliberately NOT in this list -- it's the one
+// metric that only makes sense as a day-by-day time series (it's a net
+// CHANGE per day, not a running total), fetched separately below.
+const IG_TOTAL_METRICS = 'accounts_engaged,total_interactions,profile_views,likes,comments,shares,saves,replies,website_clicks,profile_links_taps,views'
+
+// Pulls the time-series reach + follower_count totals and the total_value
+// aggregates out of one period's raw API responses.
+function extractIgMetrics(reachRes, totalsRes, followerRes) {
+  const sumSeries = res => {
+    const rows = (res && res.insights && res.insights.data && res.insights.data[0] && res.insights.data[0].values) || []
+    return rows.reduce((s, v) => s + Number(v.value || 0), 0)
+  }
   const totalsData = (totalsRes && totalsRes.insights && totalsRes.insights.data) || []
   const findTotal = name => { const m = totalsData.find(d => d.name === name); return m && m.total_value ? Number(m.total_value.value || 0) : 0 }
   return {
-    reach: totalReach,
+    reach: sumSeries(reachRes),
+    followerGrowth: sumSeries(followerRes), // net new followers this period (can be negative)
     engaged: findTotal('accounts_engaged'),
     interactions: findTotal('total_interactions'),
     profileViews: findTotal('profile_views'),
+    likes: findTotal('likes'),
+    comments: findTotal('comments'),
+    shares: findTotal('shares'),
+    saves: findTotal('saves'),
+    replies: findTotal('replies'),
+    websiteClicks: findTotal('website_clicks'),
+    profileLinkTaps: findTotal('profile_links_taps'),
+    views: findTotal('views'),
   }
+}
+
+// Instagram returns ISO region codes (IN, NG, US...) for country demographics
+// -- Intl.DisplayNames turns them into real names without a hand-rolled map.
+let _countryNamer = null
+function countryNameOf(code) {
+  if (!_countryNamer) { try { _countryNamer = new Intl.DisplayNames(['en'], { type: 'region' }) } catch { return code } }
+  try { return _countryNamer.of(code) || code } catch { return code }
+}
+
+// A demographics response's total_value.breakdowns[0] is
+// { dimension_keys: ['age','gender'], results: [{dimension_values:['18-24','M'], value}, ...] }.
+// This collapses it down to one dimension (e.g. age alone, summing across
+// gender) since a full age*gender matrix is too dense for a compact card.
+function aggregateDemographics(res, dimIndex = 0) {
+  const bd = res && res.insights && res.insights.data && res.insights.data[0] && res.insights.data[0].total_value && res.insights.data[0].total_value.breakdowns && res.insights.data[0].total_value.breakdowns[0]
+  if (!bd || !Array.isArray(bd.results)) return []
+  const map = new Map()
+  for (const r of bd.results) {
+    const k = r.dimension_values[dimIndex]
+    map.set(k, (map.get(k) || 0) + Number(r.value || 0))
+  }
+  return Array.from(map.entries()).map(([key, value]) => ({ key, value })).sort((a, b) => b.value - a.value)
+}
+
+// Which insights metrics are valid for a post depends on its type -- video
+// content (Reels) supports `views`, image/carousel posts don't. Confirmed
+// live against a real Reel; the non-video set is the conservative common
+// core also confirmed live at the account level.
+function metricsForMedia(m) {
+  const base = 'reach,likes,comments,saved,shares,total_interactions'
+  return (m.mediaType === 'VIDEO' || m.mediaProductType === 'REELS') ? base + ',views' : base
 }
 
 export default function OrganicSocialDashboard() {
@@ -199,32 +256,77 @@ export default function OrganicSocialDashboard() {
   const [ga4Err, setGa4Err] = useState(null)
   const [prefs, setPrefs] = useState({})
 
-  // One Instagram account is a fetch-five-things job (profile once, then
-  // reach+totals for BOTH the current and prior period) -- every configured
-  // account runs this same job in parallel. instagramAccounts() on the
-  // backend is the only thing that changes when a new account is connected;
-  // this loop needs no per-account code.
+  // One Instagram account is a fetch-many-things job (profile, reach+totals+
+  // follower growth for BOTH periods, audience demographics, and -- once
+  // those come back -- per-post insights for the period's top 5 posts by
+  // engagement) -- every configured account runs this same job in parallel.
+  // instagramAccounts() on the backend is the only thing that changes when a
+  // new account is connected; this loop needs no per-account code.
   const loadIgAccount = useCallback((key, periods) => {
     const qs = key ? `&account=${encodeURIComponent(key)}` : ''
-    const fetchInsights = (since, until, metrics, metricType) =>
-      fetch(`/api/crm-leads?source=instagram&mode=insights&metrics=${metrics}&since=${since}&until=${until}&metric_type=${metricType}${qs}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) }))
+    const fetchInsights = (since, until, metrics, metricType, breakdown) =>
+      fetch(`/api/crm-leads?source=instagram&mode=insights&metrics=${metrics}&since=${since}&until=${until}&metric_type=${metricType}${breakdown ? `&breakdown=${breakdown}` : ''}${qs}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) }))
     return Promise.all([
       fetch(`/api/crm-leads?source=instagram&mode=profile${qs}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
       fetchInsights(periods.curSinceSec, periods.curUntilSec, 'reach', 'time_series'),
-      fetchInsights(periods.curSinceSec, periods.curUntilSec, 'accounts_engaged,total_interactions,profile_views', 'total_value'),
+      fetchInsights(periods.curSinceSec, periods.curUntilSec, IG_TOTAL_METRICS, 'total_value'),
+      fetchInsights(periods.curSinceSec, periods.curUntilSec, 'follower_count', 'time_series'),
       fetchInsights(periods.priorSinceSec, periods.priorUntilSec, 'reach', 'time_series'),
-      fetchInsights(periods.priorSinceSec, periods.priorUntilSec, 'accounts_engaged,total_interactions,profile_views', 'total_value'),
-    ]).then(([profileRes, curReachRes, curTotalsRes, priorReachRes, priorTotalsRes]) => {
+      fetchInsights(periods.priorSinceSec, periods.priorUntilSec, IG_TOTAL_METRICS, 'total_value'),
+      fetchInsights(periods.priorSinceSec, periods.priorUntilSec, 'follower_count', 'time_series'),
+      // Audience demographics are lifetime snapshots (Instagram ignores the
+      // date range for these) -- fetched once per load, not once per period.
+      fetchInsights(periods.curSinceSec, periods.curUntilSec, 'follower_demographics', 'total_value', 'country'),
+      fetchInsights(periods.curSinceSec, periods.curUntilSec, 'follower_demographics', 'total_value', 'age,gender'),
+      fetch(`/api/crm-leads?source=instagram&mode=media&limit=50${qs}`, { credentials: 'include' }).then(r => r.json()).catch(e => ({ error: String(e) })),
+    ]).then(([profileRes, curReachRes, curTotalsRes, curFollowerRes, priorReachRes, priorTotalsRes, priorFollowerRes, countryDemoRes, ageGenderDemoRes, mediaRes]) => {
       if (!(profileRes && profileRes.configured && profileRes.profile)) {
         if (profileRes && profileRes.configured === false) return { key, ig: null, igErr: 'not_configured' }
         return { key, ig: null, igErr: (profileRes && (profileRes.detail || profileRes.error)) || 'Unknown error' }
       }
       const followers = profileRes.profile.followersCount
-      const cur = extractIgMetrics(curReachRes, curTotalsRes)
-      const prior = extractIgMetrics(priorReachRes, priorTotalsRes)
+      const cur = extractIgMetrics(curReachRes, curTotalsRes, curFollowerRes)
+      const prior = extractIgMetrics(priorReachRes, priorTotalsRes, priorFollowerRes)
       cur.engagementRate = followers > 0 ? (cur.interactions / followers) * 100 : 0
       prior.engagementRate = followers > 0 ? (prior.interactions / followers) * 100 : 0
-      return { key, igErr: null, ig: { profile: profileRes.profile, cur, prior } }
+
+      const demographics = {
+        countries: aggregateDemographics(countryDemoRes, 0).slice(0, 8),
+        ages: aggregateDemographics(ageGenderDemoRes, 0),
+        genders: aggregateDemographics(ageGenderDemoRes, 1),
+      }
+
+      // Top posts for the selected period: media has no date filter on
+      // Instagram's own API, so filter client-side by each post's own
+      // timestamp, rank by the free like+comment counts already in the list
+      // response (no extra API calls), then fetch full insights for only
+      // the top 5 -- bounds the extra calls to 5 regardless of how wide the
+      // period is or how many posts the account made in it.
+      const allMedia = (mediaRes && mediaRes.media) || []
+      const curSinceMs = periods.curSinceSec * 1000, curUntilMs = (periods.curUntilSec + 1) * 1000
+      const inPeriod = allMedia.filter(m => {
+        const t = new Date(m.timestamp).getTime()
+        return t >= curSinceMs && t < curUntilMs
+      })
+      const topCandidates = inPeriod
+        .slice()
+        .sort((a, b) => (b.likeCount + b.commentsCount) - (a.likeCount + a.commentsCount))
+        .slice(0, 5)
+
+      const postsPromise = Promise.all(topCandidates.map(m =>
+        fetch(`/api/crm-leads?source=instagram&mode=media_insights&mediaId=${m.id}&metrics=${metricsForMedia(m)}${qs}`, { credentials: 'include' })
+          .then(r => r.json()).catch(e => ({ error: String(e) }))
+          .then(insRes => {
+            const data = (insRes && insRes.insights && insRes.insights.data) || []
+            const find = name => { const d = data.find(x => x.name === name); return d && d.values && d.values[0] ? Number(d.values[0].value || 0) : 0 }
+            return { ...m, reach: find('reach'), views: find('views'), savedCount: find('saved'), sharesCount: find('shares') }
+          })
+      ))
+
+      return postsPromise.then(topPosts => ({
+        key, igErr: null,
+        ig: { profile: profileRes.profile, cur, prior, demographics, topPosts, postsInPeriod: inPeriod.length },
+      }))
     })
   }, [])
 
@@ -393,16 +495,49 @@ export default function OrganicSocialDashboard() {
               the backend is the only thing that changes when a new account
               is connected; this loop needs no per-account code. */}
           {igAccounts.map(({ key, ig, igErr }) => (
-            <Card key={key || 'default'} title="Instagram" sub={ig ? `@${ig.profile.username} · ${compareLabel}` : 'Live'}>
+            <Card
+              key={key || 'default'}
+              title="Instagram"
+              sub={ig ? `@${ig.profile.username} · ${compareLabel}` : 'Live'}
+            >
               {ig ? (
-                <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
-                  <PremKPI label="Followers" value={fmtN(ig.profile.followersCount)} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
-                  <PremKPI label="Reach" value={fmtN(ig.cur.reach)} delta={pctDelta(ig.cur.reach, ig.prior.reach)} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
-                  <PremKPI label="Interactions" value={fmtN(ig.cur.interactions)} delta={pctDelta(ig.cur.interactions, ig.prior.interactions)} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.cyan} accentBg={C.cyanBg} />
-                  <PremKPI label="Profile Views" value={fmtN(ig.cur.profileViews)} delta={pctDelta(ig.cur.profileViews, ig.prior.profileViews)} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.green} accentBg={C.greenBg} />
-                  <PremKPI label="Accounts Engaged" value={fmtN(ig.cur.engaged)} delta={pctDelta(ig.cur.engaged, ig.prior.engaged)} sub={`vs ${period.priorLabel}`} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
-                  <PremKPI label="Engagement Rate" value={ig.cur.engagementRate.toFixed(2) + '%'} delta={pctDelta(ig.cur.engagementRate, ig.prior.engagementRate)} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.blue} accentBg={C.blueBg} />
-                </div>
+                <>
+                  {(ig.profile.profilePictureUrl || ig.profile.biography) && (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+                      {ig.profile.profilePictureUrl && (
+                        <img src={ig.profile.profilePictureUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                      )}
+                      {ig.profile.biography && (
+                        <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, whiteSpace: 'pre-line', paddingTop: 2 }}>
+                          {ig.profile.biography}
+                          {ig.profile.website && (
+                            <>{' '}·{' '}<a href={ig.profile.website} target="_blank" rel="noreferrer" style={{ color: C.blue, textDecoration: 'none', fontWeight: 700 }}>{ig.profile.website.replace(/^https?:\/\//, '')}</a></>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+                    <PremKPI label="Followers" value={fmtN(ig.profile.followersCount)} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
+                    <PremKPI label="Net Follower Growth" value={(ig.cur.followerGrowth >= 0 ? '+' : '') + fmtN(ig.cur.followerGrowth)} delta={pctDelta(ig.cur.followerGrowth, ig.prior.followerGrowth)} sub={`vs ${period.priorLabel}`} icon={ICONS.trendUp} accent={C.green} accentBg={C.greenBg} />
+                    <PremKPI label="Reach" value={fmtN(ig.cur.reach)} delta={pctDelta(ig.cur.reach, ig.prior.reach)} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
+                    <PremKPI label="Interactions" value={fmtN(ig.cur.interactions)} delta={pctDelta(ig.cur.interactions, ig.prior.interactions)} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.cyan} accentBg={C.cyanBg} />
+                    <PremKPI label="Profile Views" value={fmtN(ig.cur.profileViews)} delta={pctDelta(ig.cur.profileViews, ig.prior.profileViews)} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.green} accentBg={C.greenBg} />
+                    <PremKPI label="Accounts Engaged" value={fmtN(ig.cur.engaged)} delta={pctDelta(ig.cur.engaged, ig.prior.engaged)} sub={`vs ${period.priorLabel}`} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
+                    <PremKPI label="Engagement Rate" value={ig.cur.engagementRate.toFixed(2) + '%'} delta={pctDelta(ig.cur.engagementRate, ig.prior.engagementRate)} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.blue} accentBg={C.blueBg} />
+                    <PremKPI label="Content Views" value={fmtN(ig.cur.views)} delta={pctDelta(ig.cur.views, ig.prior.views)} sub={`vs ${period.priorLabel}`} icon={ICONS.play} accent={C.cyan} accentBg={C.cyanBg} />
+                    <PremKPI label="Likes" value={fmtN(ig.cur.likes)} delta={pctDelta(ig.cur.likes, ig.prior.likes)} sub={`vs ${period.priorLabel}`} icon={ICONS.heart} accent={C.navy} accentBg={C.navyBg} />
+                    <PremKPI label="Comments" value={fmtN(ig.cur.comments)} delta={pctDelta(ig.cur.comments, ig.prior.comments)} sub={`vs ${period.priorLabel}`} icon={ICONS.comment} accent={C.blue} accentBg={C.blueBg} />
+                    <PremKPI label="Shares" value={fmtN(ig.cur.shares)} delta={pctDelta(ig.cur.shares, ig.prior.shares)} sub={`vs ${period.priorLabel}`} icon={ICONS.share} accent={C.cyan} accentBg={C.cyanBg} />
+                    <PremKPI label="Saves" value={fmtN(ig.cur.saves)} delta={pctDelta(ig.cur.saves, ig.prior.saves)} sub={`vs ${period.priorLabel}`} icon={ICONS.bookmark} accent={C.green} accentBg={C.greenBg} />
+                    <PremKPI label="Replies" value={fmtN(ig.cur.replies)} delta={pctDelta(ig.cur.replies, ig.prior.replies)} sub={`vs ${period.priorLabel}`} icon={ICONS.reply} accent={C.navy} accentBg={C.navyBg} />
+                    <PremKPI label="Website Clicks" value={fmtN(ig.cur.websiteClicks)} delta={pctDelta(ig.cur.websiteClicks, ig.prior.websiteClicks)} sub={`vs ${period.priorLabel}`} icon={ICONS.link} accent={C.blue} accentBg={C.blueBg} />
+                    <PremKPI label="Profile Link Taps" value={fmtN(ig.cur.profileLinkTaps)} delta={pctDelta(ig.cur.profileLinkTaps, ig.prior.profileLinkTaps)} sub={`vs ${period.priorLabel}`} icon={ICONS.link} accent={C.cyan} accentBg={C.cyanBg} />
+                  </div>
+
+                  <AudienceSection demographics={ig.demographics} />
+                  <TopPostsSection posts={ig.topPosts} postsInPeriod={ig.postsInPeriod} curLabel={period.curLabel} />
+                </>
               ) : (
                 <div style={{ padding: '10px 4px', textAlign: 'center' }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.muted, fontFamily: FONT }}>
@@ -478,6 +613,113 @@ function Row({ label, value }) {
     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
       <span style={{ color: C.muted }}>{label}</span>
       <span style={{ fontWeight: 700, color: C.text, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+    </div>
+  )
+}
+
+// Lifetime snapshot (Instagram ignores the date range on these metrics) --
+// who follows this account, by country and by age/gender. Not comparable
+// period-over-period, so no delta -- just the current picture.
+function AudienceSection({ demographics }) {
+  const { countries, ages, genders } = demographics || {}
+  if (!countries || !countries.length) return null // below Instagram's own privacy threshold, or a brand-new account
+  const maxCountry = countries[0].value
+  const totalGender = genders.reduce((s, g) => s + g.value, 0)
+  const genderLabel = { M: 'Male', F: 'Female', U: 'Unspecified' }
+  const maxAge = ages.length ? Math.max(...ages.map(a => a.value)) : 0
+  return (
+    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT, marginBottom: 10 }}>Audience (lifetime snapshot)</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 20 }} className="lq-grid2">
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: FONT, marginBottom: 8 }}>Top countries</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {countries.map(c => (
+              <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 92, fontSize: 12, color: C.text, fontFamily: FONT, flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{countryNameOf(c.key)}</div>
+                <div style={{ flex: 1, height: 8, borderRadius: 4, background: 'var(--bg3)', overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.max(3, (c.value / maxCountry) * 100)}%`, height: '100%', borderRadius: 4, background: `linear-gradient(90deg, ${C.navy}, ${C.blue})` }} />
+                </div>
+                <div style={{ width: 60, fontSize: 12, fontWeight: 700, color: C.text, fontFamily: FONT, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtN(c.value)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', fontFamily: FONT, marginBottom: 8 }}>Age &amp; gender</div>
+          {genders.length > 0 && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+              {genders.map(g => (
+                <div key={g.key} style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT }}>
+                  <span style={{ fontWeight: 800, color: C.text }}>{totalGender > 0 ? ((g.value / totalGender) * 100).toFixed(0) : 0}%</span> {genderLabel[g.key] || g.key}
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {ages.map(a => (
+              <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 44, fontSize: 11.5, color: C.text, fontFamily: FONT, flexShrink: 0 }}>{a.key}</div>
+                <div style={{ flex: 1, height: 7, borderRadius: 4, background: 'var(--bg3)', overflow: 'hidden' }}>
+                  <div style={{ width: `${maxAge > 0 ? Math.max(3, (a.value / maxAge) * 100) : 0}%`, height: '100%', borderRadius: 4, background: C.cyan }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const PostStat = ({ icon, value, title }) => (
+  <span title={title} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+    <span style={{ display: 'flex', width: 12, height: 12, opacity: 0.65 }}>{icon}</span>
+    {fmtN(value)}
+  </span>
+)
+
+// The 5 posts (of whatever's in the current period) with the most likes+
+// comments, each with full insights fetched fresh -- this is the "what
+// actually drove the numbers above" answer the headline KPIs can't give.
+function TopPostsSection({ posts, postsInPeriod, curLabel }) {
+  if (!posts || !posts.length) {
+    return (
+      <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT, marginBottom: 4 }}>Top posts</div>
+        <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT }}>No posts published in this period.</div>
+      </div>
+    )
+  }
+  return (
+    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: C.text, fontFamily: FONT }}>Top posts ({curLabel})</div>
+        <div style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>{postsInPeriod} posted this period</div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {posts.map(p => (
+          <a key={p.id} href={p.permalink} target="_blank" rel="noreferrer" style={{ display: 'flex', gap: 10, textDecoration: 'none', alignItems: 'center' }}>
+            {p.thumbnailUrl && (
+              <img src={p.thumbnailUrl} alt="" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: C.text, fontFamily: FONT, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {(p.caption || '(no caption)').split('\n')[0]}
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, fontFamily: FONT, marginTop: 2 }}>
+                {new Date(p.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} &middot; {p.mediaProductType || p.mediaType}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 14, flexShrink: 0, fontSize: 11.5, fontFamily: FONT, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+              <PostStat icon={ICONS.eye} value={p.reach} title="Reach" />
+              {p.views > 0 && <PostStat icon={ICONS.play} value={p.views} title="Views" />}
+              <PostStat icon={ICONS.heart} value={p.likeCount} title="Likes" />
+              <PostStat icon={ICONS.comment} value={p.commentsCount} title="Comments" />
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
   )
 }
