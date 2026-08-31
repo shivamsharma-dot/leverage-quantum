@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
+import DateRangePicker from '../components/DateRangePicker'
 import { C, FONT, Card, PremKPI, fmtN } from '../ui/dashboardKit'
 
 // ---------------------------------------------------------------------------
@@ -36,6 +37,12 @@ function mondayOf(d) {
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x }
 function fmtISO(d) { return d.toISOString().slice(0, 10) }
 function fmtLabel(d) { return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) }
+// Collapses a same-day range to one label instead of "31 Aug–31 Aug", which
+// reads as a rendering bug rather than "the period has only run one day so far".
+function fmtRange(since, until) {
+  const a = fmtLabel(since), b = fmtLabel(until)
+  return a === b ? a : `${a}–${b}`
+}
 // ISO-8601 week key, matching the shape linkedin_manual/x_manual store entries under.
 function isoWeekKey(d) {
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
@@ -53,10 +60,20 @@ function isoWeekKey(d) {
 // current period against a complete prior one always shows a misleading
 // negative delta for volume metrics, exactly the trap this app's own MTD
 // dashboard already avoids for month-over-month deltas.
-function periodsForGranularity(g) {
+function periodsForGranularity(g, customFrom, customTo) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
+  if (g === 'custom' && customFrom && customTo) {
+    const [y1, m1, d1] = customFrom.split('-').map(Number)
+    const [y2, m2, d2] = customTo.split('-').map(Number)
+    const curStart = new Date(y1, m1 - 1, d1)
+    const curEnd = new Date(y2, m2 - 1, d2)
+    const lengthDays = Math.round((curEnd - curStart) / 86400000) + 1
+    const priorEnd = addDays(curStart, -1)
+    const priorStart = addDays(priorEnd, -(lengthDays - 1))
+    return { curSince: curStart, curUntil: curEnd, priorSince: priorStart, priorUntil: priorEnd, curLabel: 'Selected range', priorLabel: 'previous period' }
+  }
   if (g === 'day') {
     const yesterday = addDays(today, -1)
     return { curSince: today, curUntil: today, priorSince: yesterday, priorUntil: yesterday, curLabel: 'Today', priorLabel: 'yesterday' }
@@ -169,6 +186,10 @@ export default function OrganicSocialDashboard() {
   const isCurrentWeek = weekStart.getTime() === thisMonday.getTime()
   const weekKey = useMemo(() => isoWeekKey(weekStart), [weekStart])
 
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+
   const [loading, setLoading] = useState(true)
   const [igAccounts, setIgAccounts] = useState([]) // [{ key, ig: {profile, cur, prior} | null, igErr }]
   const [yt, setYt] = useState(null)
@@ -209,7 +230,7 @@ export default function OrganicSocialDashboard() {
 
   const load = useCallback(() => {
     setLoading(true)
-    const p = periodsForGranularity(granularity)
+    const p = periodsForGranularity(granularity, customFrom, customTo)
     const curSince = fmtISO(p.curSince), curUntil = fmtISO(p.curUntil)
     const priorSince = fmtISO(p.priorSince), priorUntil = fmtISO(p.priorUntil)
     const curSinceSec = Math.floor(p.curSince.getTime() / 1000)
@@ -250,14 +271,14 @@ export default function OrganicSocialDashboard() {
       setPrefs((prefsRes && prefsRes.prefs) || {})
       setLoading(false)
     })
-  }, [granularity, loadIgAccount])
+  }, [granularity, customFrom, customTo, loadIgAccount])
 
   useEffect(() => { load() }, [load])
 
   const linkedinWeek = (prefs.linkedin_manual || {})[weekKey] || null
   const xWeek = (prefs.x_manual || {})[weekKey] || null
 
-  const period = useMemo(() => periodsForGranularity(granularity), [granularity])
+  const period = useMemo(() => periodsForGranularity(granularity, customFrom, customTo), [granularity, customFrom, customTo])
   const compareLabel = `${period.curLabel} vs ${period.priorLabel}`
 
   if (loading) {
@@ -283,10 +304,29 @@ export default function OrganicSocialDashboard() {
             <div style={{ fontSize: 18, fontWeight: 800, color: C.text, fontFamily: FONT, letterSpacing: '-0.3px' }}>Organic &amp; Social</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} className="lq-header-controls">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--bg3)', borderRadius: 10, padding: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--bg3)', borderRadius: 10, padding: 4, position: 'relative' }}>
               {GRANULARITY_OPTIONS.map(o => (
                 <GranPill key={o.key} active={granularity === o.key} onClick={() => setGranularity(o.key)}>{o.label}</GranPill>
               ))}
+              <GranPill active={granularity === 'custom'} onClick={() => setCustomOpen(true)}>
+                {granularity === 'custom' && customFrom && customTo ? `${customFrom} → ${customTo}` : 'Custom'}
+              </GranPill>
+              {customOpen && (
+                <>
+                  <div onClick={() => setCustomOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
+                  <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400, background: 'var(--card)', border: '0.5px solid var(--card-border)', borderRadius: 14, boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', overflow: 'hidden' }}>
+                    <DateRangePicker
+                      from={customFrom ? (() => { const [y, m, d] = customFrom.split('-').map(Number); return new Date(y, m - 1, d) })() : null}
+                      to={customTo ? (() => { const [y, m, d] = customTo.split('-').map(Number); return new Date(y, m - 1, d) })() : null}
+                      onChange={(f, t) => {
+                        setCustomOpen(false)
+                        if (f && t) { setCustomFrom(f); setCustomTo(t); setGranularity('custom') }
+                      }}
+                      onClose={() => setCustomOpen(false)}
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <button
               onClick={load}
@@ -297,7 +337,7 @@ export default function OrganicSocialDashboard() {
           </div>
         </div>
         <div style={{ margin: '6px 14px 0', fontSize: 11.5, color: C.muted, fontFamily: FONT }}>
-          {compareLabel} &middot; {fmtLabel(period.curSince)}–{fmtLabel(period.curUntil)} vs {fmtLabel(period.priorSince)}–{fmtLabel(period.priorUntil)}
+          {compareLabel} &middot; {fmtRange(period.curSince, period.curUntil)} vs {fmtRange(period.priorSince, period.priorUntil)}
         </div>
 
         <div style={{ padding: '16px 14px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
