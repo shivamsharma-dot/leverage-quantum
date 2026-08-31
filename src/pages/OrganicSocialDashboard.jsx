@@ -2,7 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import DateRangePicker from '../components/DateRangePicker'
-import { C, FONT, Card, PremKPI, fmtN } from '../ui/dashboardKit'
+import Dropdown from '../components/Dropdown'
+import Button from '../components/Button'
+import { ResponsiveContainer, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
+import { C, FONT, Card, PremKPI, RankedBars, fmtN, BRAND_RAMP, sourceColor, BarGrad, barFill, gradId, GRID_STROKE, BAR_RADIUS, BAR_MAX, NEUTRAL_GREY, NEUTRAL_TRACK } from '../ui/dashboardKit'
 
 // ---------------------------------------------------------------------------
 // Organic & Social -- tracks the same metrics the "IPO Tracker" sheet's
@@ -173,6 +176,18 @@ const IG_TOTAL_METRICS = 'accounts_engaged,total_interactions,profile_views,like
 
 // Pulls the time-series reach + follower_count totals and the total_value
 // aggregates out of one period's raw API responses.
+// The same time_series responses extractIgMetrics() sums below also carry the
+// per-day values Instagram returned. Keeping them lets this page draw a real
+// trend without a single extra API call -- nothing new is fetched, the
+// day-by-day detail was always in the payload and was only being thrown away.
+function toDaySeries(res) {
+  const rows = (res && res.insights && res.insights.data && res.insights.data[0] && res.insights.data[0].values) || []
+  return rows.map(v => ({
+    d: v.end_time ? new Date(v.end_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '',
+    v: Number(v.value || 0),
+  }))
+}
+
 function extractIgMetrics(reachRes, totalsRes, followerRes) {
   const sumSeries = res => {
     const rows = (res && res.insights && res.insights.data && res.insights.data[0] && res.insights.data[0].values) || []
@@ -182,6 +197,8 @@ function extractIgMetrics(reachRes, totalsRes, followerRes) {
   const findTotal = name => { const m = totalsData.find(d => d.name === name); return m && m.total_value ? Number(m.total_value.value || 0) : 0 }
   return {
     reach: sumSeries(reachRes),
+    reachSeries: toDaySeries(reachRes),
+    followerSeries: toDaySeries(followerRes),
     followerGrowth: sumSeries(followerRes), // net new followers this period (can be negative)
     engaged: findTotal('accounts_engaged'),
     interactions: findTotal('total_interactions'),
@@ -255,6 +272,12 @@ export default function OrganicSocialDashboard() {
   const [ga4, setGa4] = useState(null) // { cur, prior } | null
   const [ga4Err, setGa4Err] = useState(null)
   const [prefs, setPrefs] = useState({})
+
+  // Which Instagram account's detail card is open, and which metric the
+  // cross-account comparison chart plots. Declared above the loading
+  // early-return below so neither is ever a conditional hook.
+  const [selectedIg, setSelectedIg] = useState(null)
+  const [cmpMetric, setCmpMetric] = useState('reach')
 
   // One Instagram account is a fetch-many-things job (profile, reach+totals+
   // follower growth for BOTH periods, audience demographics, and -- once
