@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage'; import { prefetchSummaryAnalysis } fr
 import { COMPONENT_IMPORTS, prefetchAllRoutes } from './lib/routePrefetch'
 import { canAccessDashboard } from '../shared/access.mjs'
 import { PresentationProvider } from './lib/presentationContext.jsx'
+import { PAGE_LIST } from './lib/pageList'
 const DashboardHome = lazy(COMPONENT_IMPORTS.DashboardHome)
 const OverallDashboard = lazy(COMPONENT_IMPORTS.OverallDashboard)
 const ROASDashboard = lazy(COMPONENT_IMPORTS.ROASDashboard)
@@ -123,11 +124,20 @@ function PageLoader() {
 // direct URL access in the client.
 const canAccess = canAccessDashboard
 
-// Ordered fallback for a denied route — first entry the role can actually access
+// Ordered fallback for a denied route — first entry the role can actually access.
+// Preferred picks first (the app's most common landing pages), then EVERY other
+// real page from PAGE_LIST as a safety net. The old 3-entry list (home/roas/
+// meta_ads only) meant a custom-role account whose grants sit entirely outside
+// those three -- e.g. QL-Ops-only -- had NO valid fallback at all: `/` denied ->
+// redirect to `/login` -> LoginPage sees a real session and immediately
+// navigates back to `/` -> denied again -> ... an infinite redirect loop that
+// never lets either page paint, rendering as a permanently blank white screen.
+// Confirmed live 2026-09-01 for exactly such an account (sneha@futwork.com,
+// granted only the Lead Qualification / QL Ops pages).
+const PREFERRED_FALLBACKS = ['home', 'roas', 'meta_ads']
 const DASHBOARD_FALLBACK_ORDER = [
-  { id: 'home', path: '/' },
-  { id: 'roas', path: '/dashboard/roas' },
-  { id: 'meta_ads', path: '/dashboard/meta-ads' },
+  ...PREFERRED_FALLBACKS.map(id => PAGE_LIST.find(p => p.id === id)).filter(Boolean),
+  ...PAGE_LIST.filter(p => !PREFERRED_FALLBACKS.includes(p.id)),
 ]
 
 function ProtectedRoute({ children, dashboardId }) {
