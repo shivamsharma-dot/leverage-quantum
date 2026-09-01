@@ -896,6 +896,44 @@ export default function SettingsPage() {
       const next = { ...affiliateSpend }; delete next[ym]
       saveAffiliateSpend(next, 'Removed')
     }
+    // Cost-metric exclusions -- any campaign whose name contains one of these
+    // patterns is left out of CPL/CPQL/CPA on the Overall dashboard (both the
+    // Sheet and BigQuery routes share this one component). See
+    // src/lib/costExclusions.js for the matching rule and exactly where it's
+    // applied; app_preferences key 'cost_excluded_campaign_patterns'.
+    const [costExclusions, setCostExclusions] = useState([]) // [{ pattern, note }]
+    const [ceNewPattern, setCeNewPattern] = useState('')
+    const [ceNewNote, setCeNewNote] = useState('')
+    const [ceSaving, setCeSaving] = useState(false)
+    const [ceMsg, setCeMsg] = useState(null)
+    const saveCostExclusions = async (next, successMsg) => {
+      const prev = costExclusions
+      setCostExclusions(next)
+      setCeSaving(true); setCeMsg(null)
+      try {
+        const r = await fetchT('/api/preferences', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'cost_excluded_campaign_patterns', value: next }) })
+        if (!r.ok) throw new Error('Save failed')
+        setCeMsg({ type: 'ok', text: successMsg || 'Saved' })
+      } catch (e) {
+        setCostExclusions(prev) // revert -- otherwise it looks saved but vanishes on next reload
+        setCeMsg({ type: 'err', text: e.message })
+      } finally {
+        setCeSaving(false)
+        setTimeout(() => setCeMsg(null), 4000)
+      }
+    }
+    const addCostExclusion = () => {
+      const pattern = ceNewPattern.trim()
+      if (!pattern) { setCeMsg({ type: 'err', text: 'Enter a campaign-name pattern' }); return }
+      if (costExclusions.some(p => p.pattern.toLowerCase() === pattern.toLowerCase())) { setCeMsg({ type: 'err', text: 'That pattern is already in the list' }); return }
+      const next = [...costExclusions, { pattern, note: ceNewNote.trim() }]
+      saveCostExclusions(next, 'Saved')
+      setCeNewPattern(''); setCeNewNote('')
+    }
+    const removeCostExclusion = (pattern) => {
+      const next = costExclusions.filter(p => p.pattern !== pattern)
+      saveCostExclusions(next, 'Removed')
+    }
     // LinkedIn and X have no free API access for this data (LinkedIn's Marketing
     // Developer Platform needs a multi-month partner approval; X's API is
     // pay-per-use with no free tier -- confirmed live, a bearer-token call
@@ -1121,6 +1159,7 @@ export default function SettingsPage() {
                     setBizFields(prev => ({ ...prev, ...pf.business_context }))
                   }
                   if (pf.affiliate_spend_manual && typeof pf.affiliate_spend_manual === 'object') setAffiliateSpend(pf.affiliate_spend_manual)
+                  if (Array.isArray(pf.cost_excluded_campaign_patterns)) setCostExclusions(pf.cost_excluded_campaign_patterns)
                   if (pf.linkedin_manual && typeof pf.linkedin_manual === 'object') setLinkedinManual(pf.linkedin_manual)
                   if (pf.x_manual && typeof pf.x_manual === 'object') setXManual(pf.x_manual)
       })
@@ -2621,6 +2660,47 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                           style={{ border: 'none', background: 'transparent', color: 'var(--brand-ink)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
                         <button type="button" onClick={() => removeAffiliateSpendMonth(ym)}
                           style={{ border: 'none', background: 'transparent', color: 'var(--text-3)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ── COST-METRIC EXCLUSIONS ── Any campaign whose name contains one of
+                  these patterns is left out of CPL/CPQL/CPA everywhere those ratios are
+                  computed on the Overall dashboard (Sheet and BigQuery routes both share
+                  this logic) -- its Spend/Leads/QLs still count in every volume total;
+                  only the blended cost figures pretend it was never spent. See
+                  src/lib/costExclusions.js for exactly where this is applied. */}
+              <div className={styles.card} style={{ marginTop: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14, gap: 10 }}>
+                  <div>
+                    <h3 className={styles.cardTitle} style={{ marginBottom: 4 }}>Cost-metric exclusions</h3>
+                    <p className={styles.cardDesc} style={{ margin: 0 }}>A campaign whose name contains one of these patterns is left out of CPL/CPQL/CPA on the Overall dashboard — its Spend, Leads and QLs still count everywhere else on the page; only the blended cost-per-X figures ignore it. For campaigns that were never meant to be judged on cost per lead (e.g. brand-awareness video buys).</p>
+                  </div>
+                  {ceMsg && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: ceMsg.type === 'ok' ? '#16A34A' : '#DC2626', background: ceMsg.type === 'ok' ? '#F0FDF4' : 'var(--bg3)', border: '0.5px solid ' + (ceMsg.type === 'ok' ? '#BBF7D0' : '#FECACA'), borderRadius: 6, padding: '3px 10px', whiteSpace: 'nowrap', flexShrink: 0 }}>{ceMsg.text}</span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                  <input type="text" placeholder="Campaign name contains…" value={ceNewPattern} onChange={e => setCeNewPattern(e.target.value)}
+                    className={styles.input} style={{ width: 220 }} />
+                  <input type="text" placeholder="Why (optional)" value={ceNewNote} onChange={e => setCeNewNote(e.target.value)}
+                    className={styles.input} style={{ width: 220 }} />
+                  <Button size="sm" onClick={addCostExclusion} disabled={ceSaving}>{ceSaving ? 'Saving…' : 'Add pattern'}</Button>
+                </div>
+
+                {costExclusions.length === 0 ? (
+                  <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>No exclusions configured — every campaign counts toward CPL/CPQL/CPA on the Overall dashboard.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {costExclusions.map(p => (
+                      <div key={p.pattern} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--bg3)', border: '0.5px solid var(--border)' }}>
+                        <div style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: 'var(--text)' }}>{p.pattern}</div>
+                        {p.note && <div style={{ fontSize: 11.5, color: 'var(--text-3)', flexShrink: 0, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.note}>{p.note}</div>}
+                        <button type="button" onClick={() => removeCostExclusion(p.pattern)}
+                          style={{ border: 'none', background: 'transparent', color: 'var(--text-3)', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>Remove</button>
                       </div>
                     ))}
                   </div>

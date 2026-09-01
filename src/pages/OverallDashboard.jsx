@@ -18,6 +18,7 @@ import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import Button from '../components/Button'
 import { getSession, setSession, hasLoaded, getPersisted } from '../lib/sessionLoad'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
+import { isCostExcludedCampaign } from '../lib/costExclusions'
 import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, BarGrad, barFill, BAR_RADIUS_H } from '../ui/dashboardKit'
 // Data source: BigQuery -- see src/lib/overallBqCache.js for the why. Which
 // source this page instance reads is now fixed by the `dataSource` prop (two
@@ -658,9 +659,14 @@ function summaryValue(g, key) {
   // Cost metrics divide by PAID denominators only (leads/QLs/apps from rows that carried
   // spend). null -- rendered as "—" -- when a row had no paid activity, since a flat ₹0
   // reads like "free and excellent" when it actually means "no spend here at all".
-  if (key === 'cpl') return (g.spend > 0 && g.paidLeads > 0) ? g.spend / g.paidLeads : null
-  if (key === 'cpql') return (g.spend > 0 && g.paidQL > 0) ? g.spend / g.paidQL : null
-  if (key === 'cpa') return (g.spend > 0 && g.paidApps > 0) ? g.spend / g.paidApps : null
+  // The numerator is `costSpend`, not `spend` -- see src/lib/costExclusions.js: any
+  // campaign matching a configured pattern (Settings > Data > Cost-metric exclusions)
+  // contributes zero to both this numerator and to paidLeads/paidQL/paidApps below, so
+  // its spend and leads never distort a blended CPL/CPQL/CPA, while `spend` itself (the
+  // real total, used everywhere else on this row) is completely unaffected.
+  if (key === 'cpl') return (g.costSpend > 0 && g.paidLeads > 0) ? g.costSpend / g.paidLeads : null
+  if (key === 'cpql') return (g.costSpend > 0 && g.paidQL > 0) ? g.costSpend / g.paidQL : null
+  if (key === 'cpa') return (g.costSpend > 0 && g.paidApps > 0) ? g.costSpend / g.paidApps : null
   return g[key]
 }
 function summaryFmt(key, v) {
@@ -938,6 +944,9 @@ function buildSyntheticAffiliateRows(map) {
 export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [rawRows, setRawRows] = useState([])
   const [affiliateManual, setAffiliateManual] = useState(null)
+  // Campaign-name patterns excluded from CPL/CPQL/CPA math -- see
+  // src/lib/costExclusions.js and Settings > Data > Cost-metric exclusions.
+  const [costExclusions, setCostExclusions] = useState([])
   // ── Data source: BigQuery ─────────────────────────────────────────────
   // dataSource='bigquery' (bqMode true): this page reads public.overall_bq_daily
   // straight from Supabase with the anon key, already narrowed SERVER-SIDE to the
@@ -989,9 +998,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   useEffect(() => {
     fetch('/api/preferences', { credentials: 'include' })
       .then(r => r.ok ? r.json() : { prefs: {} })
-      .then(data => setAffiliateManual(data.prefs?.affiliate_spend_manual || {}))
-      .catch(() => setAffiliateManual({}))
+      .then(data => {
+        setAffiliateManual(data.prefs?.affiliate_spend_manual || {})
+        setCostExclusions(Array.isArray(data.prefs?.cost_excluded_campaign_patterns) ? data.prefs.cost_excluded_campaign_patterns : [])
+      })
+      .catch(() => { setAffiliateManual({}); setCostExclusions([]) })
   }, [])
+  // A campaign matching any pattern above is treated as if it never spent
+  // anything, for CPL/CPQL/CPA purposes only -- see src/lib/costExclusions.js
+  // for the full reasoning. `r` is a raw row (always carries `.campaign`).
+  const isCostExcluded = useCallback(r => isCostExcludedCampaign(r.campaign, costExclusions), [costExclusions])
   // The current day is never a complete day, so it is dropped here, once,
   // before anything reads the data. Every card, chart, table and report on
   // this page therefore runs to D-1 and no further.
@@ -1414,9 +1430,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       humanQL: sum('humanQL'), futworkAiQl: sum('futworkAiQl'), superbotAiQl: sum('superbotAiQl'),
       totalQL: sum('totalQL'), apps: sum('apps'), offers: sum('offers'),
       deposits: sum('deposits'), raus: sum('raus'), spend: sum('spend'),
+      // Spend with every cost-excluded campaign's contribution zeroed out --
+      // the numerator every blended CPL/CPQL/CPA below actually divides by.
+      // `spend` above (the real, full number) is untouched and still feeds
+      // the "Total Spend" KPI and every volume total on the page.
+      costSpend: list.reduce((t, r) => t + (isCostExcluded(r) ? 0 : r.spend), 0),
     }
   }
-  const kpis = useMemo(() => sumKpis(filtered), [filtered])
+  const kpis = useMemo(() => sumKpis(filtered), [filtered, isCostExcluded])
   // Total Queued -- all 3 third-party channels combined (Futwork Human + Futwork AI +
   // Superbot), excluding Floor (handled directly, a parallel branch, see the info
   // tooltip). Distinct from totalFutworkQ below, which is Futwork's own subtotal only.
@@ -1448,10 +1469,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     filtered.forEach(r => { if (r.spend > 0) s.add(r.source) })
     return s
   }, [filtered])
-  const paidKpis = useMemo(() => sumKpis(filtered.filter(r => paidSources.has(r.source))), [filtered, paidSources])
-  const cpl = paidKpis.leads > 0 ? kpis.spend / paidKpis.leads : 0
-  const cpql = paidKpis.totalQL > 0 ? kpis.spend / paidKpis.totalQL : 0
-  const cpa = paidKpis.apps > 0 ? kpis.spend / paidKpis.apps : 0
+  const paidKpis = useMemo(() => sumKpis(filtered.filter(r => paidSources.has(r.source) && !isCostExcluded(r))), [filtered, paidSources, isCostExcluded])
+  const cpl = paidKpis.leads > 0 ? kpis.costSpend / paidKpis.leads : 0
+  const cpql = paidKpis.totalQL > 0 ? kpis.costSpend / paidKpis.totalQL : 0
+  const cpa = paidKpis.apps > 0 ? kpis.costSpend / paidKpis.apps : 0
 
   // SR revenue + ROAS — Estimated RAUs projects Deposits forward at a user-configurable conversion %
   // rate (real RAUs haven't materialized yet); Actual RAUs is the real, already-realized
@@ -1812,15 +1833,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // looking at". But in custom mode BOTH sides need to be independently pickable
   // (see state comment above), so period A switches to its own custom range there.
   const periodARows = compareMode === 'custom' ? (filterRowsByDateStr(compareCustomFromA, compareCustomToA) || []) : filtered
-  const periodAKpis = useMemo(() => sumKpis(periodARows), [periodARows])
+  const periodAKpis = useMemo(() => sumKpis(periodARows), [periodARows, isCostExcluded])
   // CPL/CPQL/CPA everywhere else on this page divide TOTAL spend by PAID-only
   // leads/QLs/apps (see the paidKpis note above cpl/cpql/cpa) -- this modal's own
   // copy used periodAKpis.leads/totalQL (every row, free channels included), which
   // read a materially cheaper, wrong CPL/CPQL right next to the correct KPI cards
   // on the same screen. Paid-only denominators, same as the cards.
-  const periodAPaidKpis = useMemo(() => sumKpis(periodARows.filter(r => paidSources.has(r.source))), [periodARows, paidSources])
-  const periodACpl = periodAPaidKpis.leads > 0 ? periodAKpis.spend / periodAPaidKpis.leads : 0
-  const periodACpql = periodAPaidKpis.totalQL > 0 ? periodAKpis.spend / periodAPaidKpis.totalQL : 0
+  const periodAPaidKpis = useMemo(() => sumKpis(periodARows.filter(r => paidSources.has(r.source) && !isCostExcluded(r))), [periodARows, paidSources, isCostExcluded])
+  const periodACpl = periodAPaidKpis.leads > 0 ? periodAKpis.costSpend / periodAPaidKpis.leads : 0
+  const periodACpql = periodAPaidKpis.totalQL > 0 ? periodAKpis.costSpend / periodAPaidKpis.totalQL : 0
 
   const compareLabel = useMemo(() => {
     if (compareMode === 'prev') return prevWindow ? (prevWindow.type === 'month' ? monthLabel(prevWindow.mk) : 'previous period') : '—'
@@ -1833,11 +1854,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     ? ((compareCustomFromA && compareCustomToA) ? `${compareCustomFromA} -> ${compareCustomToA}` : 'pick a range')
     : (activeFilter === 'month' ? (selMonth || 'this period') : (dateWindow ? dateWindow.label : 'this period'))
 
-  const compareKpis = useMemo(() => sumKpis(compareRows), [compareRows])
-  const comparePaidKpis = useMemo(() => sumKpis(compareRows.filter(r => paidSources.has(r.source))), [compareRows, paidSources])
-  const compareCpl = comparePaidKpis.leads > 0 ? compareKpis.spend / comparePaidKpis.leads : 0
-  const compareCpql = comparePaidKpis.totalQL > 0 ? compareKpis.spend / comparePaidKpis.totalQL : 0
-  const compareCpa = comparePaidKpis.apps > 0 ? compareKpis.spend / comparePaidKpis.apps : 0
+  const compareKpis = useMemo(() => sumKpis(compareRows), [compareRows, isCostExcluded])
+  const comparePaidKpis = useMemo(() => sumKpis(compareRows.filter(r => paidSources.has(r.source) && !isCostExcluded(r))), [compareRows, paidSources, isCostExcluded])
+  const compareCpl = comparePaidKpis.leads > 0 ? compareKpis.costSpend / comparePaidKpis.leads : 0
+  const compareCpql = comparePaidKpis.totalQL > 0 ? compareKpis.costSpend / comparePaidKpis.totalQL : 0
+  const compareCpa = comparePaidKpis.apps > 0 ? compareKpis.costSpend / comparePaidKpis.apps : 0
 
   const fmtDateInput = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   // Prefill both custom ranges the first time Custom is opened, so the modal
@@ -1974,18 +1995,20 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const bySource = useMemo(() => {
     const m = new Map()
     filtered.forEach(r => {
-      const e = m.get(r.source) || { source:r.source, paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(r.source) || { source:r.source, paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, costSpend:0 }
       e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.humanQL += r.humanQL
       e.floorQueued += r.floorQueued; e.futworkHumanQ += r.futworkHumanQ; e.futworkAiQ += r.futworkAiQ; e.superbotQ += r.superbotQ
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      const costEligible = !isCostExcluded(r)
+      if (costEligible) e.costSpend += r.spend
       // paid-only denominators for CPL/CPQL/CPA -- keyed on the row's SOURCE, since spend
       // and leads often sit on different rows (see the paidSources note above)
-      if (paidSources.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      if (paidSources.has(r.source) && costEligible) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(r.source, e)
     })
     return [...m.values()].sort((a, b) => b.leads - a.leads)
-  }, [filtered, paidSources])
+  }, [filtered, paidSources, isCostExcluded])
 
   const bySourceEfficiency = useMemo(() => (
     bySource.filter(s => s.queued >= 10).map(s => ({ ...s, qlRate: s.queued > 0 ? (s.totalQL / s.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 8)
@@ -2024,16 +2047,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       if (!r.campaign) return
       let e = m.get(r.campaign)
       if (!e) {
-        e = { campaign:r.campaign, corridor:corridorLabel(classifyCorridor(r.campaign)), paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, _srcLeads: new Map(), _subLeads: new Map() }
+        e = { campaign:r.campaign, corridor:corridorLabel(classifyCorridor(r.campaign)), paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, costSpend:0, _srcLeads: new Map(), _subLeads: new Map() }
         m.set(r.campaign, e)
       }
       e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.humanQL += r.humanQL
       e.floorQueued += r.floorQueued; e.futworkHumanQ += r.futworkHumanQ; e.futworkAiQ += r.futworkAiQ; e.superbotQ += r.superbotQ
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      const costEligible = !isCostExcluded(r)
+      if (costEligible) e.costSpend += r.spend
       // paid-only denominators for CPL/CPQL/CPA -- keyed on the row's SOURCE, since spend
       // and leads often sit on different rows (see the paidSources note above)
-      if (paidSources.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      if (paidSources.has(r.source) && costEligible) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       // A campaign name is expected to sit under one Source/Sub Source pair throughout the
       // sheet, but tally by leads rather than just taking the first row seen, so a genuine
       // edge case (the same campaign name reused under a different source) still resolves
@@ -2046,25 +2071,27 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       const { _srcLeads, _subLeads, ...rest } = e
       return { ...rest, source: topOf(_srcLeads), subSource: topOf(_subLeads) }
     }).sort((a, b) => b.leads - a.leads)
-  }, [filtered, paidSources])
+  }, [filtered, paidSources, isCostExcluded])
 
   const byCorridor = useMemo(() => {
     const m = new Map()
     filtered.forEach(r => {
       const id = classifyCorridor(r.campaign)
       const label = corridorLabel(id)
-      const e = m.get(id) || { corridor:label, paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(id) || { corridor:label, paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, costSpend:0 }
       e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.humanQL += r.humanQL
       e.floorQueued += r.floorQueued; e.futworkHumanQ += r.futworkHumanQ; e.futworkAiQ += r.futworkAiQ; e.superbotQ += r.superbotQ
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      const costEligible = !isCostExcluded(r)
+      if (costEligible) e.costSpend += r.spend
       // paid-only denominators for CPL/CPQL/CPA -- keyed on the row's SOURCE, since spend
       // and leads often sit on different rows (see the paidSources note above)
-      if (paidSources.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      if (paidSources.has(r.source) && costEligible) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(id, e)
     })
     return [...m.values()].sort((a, b) => b.leads - a.leads)
-  }, [filtered, paidSources])
+  }, [filtered, paidSources, isCostExcluded])
 
   // Full day-level breakdown (all metrics, no 30-day cap) for the summary table's Day
   // grouping — distinct from `byDay` above, which is the chart's lighter/capped version.
@@ -2073,18 +2100,20 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     filtered.forEach(r => {
       if (!r.date) return
       const key = dayKey(r.date)
-      const e = m.get(key) || { key, date:r.date, label:dayLabel(r.date), paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 }
+      const e = m.get(key) || { key, date:r.date, label:dayLabel(r.date), paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, costSpend:0 }
       e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.humanQL += r.humanQL
       e.floorQueued += r.floorQueued; e.futworkHumanQ += r.futworkHumanQ; e.futworkAiQ += r.futworkAiQ; e.superbotQ += r.superbotQ
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
+      const costEligible = !isCostExcluded(r)
+      if (costEligible) e.costSpend += r.spend
       // paid-only denominators for CPL/CPQL/CPA -- keyed on the row's SOURCE, since spend
       // and leads often sit on different rows (see the paidSources note above)
-      if (paidSources.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      if (paidSources.has(r.source) && costEligible) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(key, e)
     })
     return [...m.values()].sort((a, b) => b.key.localeCompare(a.key))
-  }, [filtered, paidSources])
+  }, [filtered, paidSources, isCostExcluded])
 
   const topCampaignsByLeads = useMemo(() => byCampaign.slice(0, 5), [byCampaign])
   const topCampaignsByEfficiency = useMemo(() => (
@@ -2119,16 +2148,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
   const grouped = useMemo(() => {
     if (grpBy === 'source') return bySource.map(s => ({
-      label:s.source, paidLeads:s.paidLeads, paidQL:s.paidQL, paidApps:s.paidApps, leads:s.leads, queued:s.queued, floorQueued:s.floorQueued, futworkHumanQ:s.futworkHumanQ, futworkAiQ:s.futworkAiQ, superbotQ:s.superbotQ, humanQL:s.humanQL, futworkAiQl:s.futworkAiQl, superbotAiQl:s.superbotAiQl, totalQL:s.totalQL, apps:s.apps, offers:s.offers, deposits:s.deposits, raus:s.raus, spend:s.spend,
+      label:s.source, paidLeads:s.paidLeads, paidQL:s.paidQL, paidApps:s.paidApps, leads:s.leads, queued:s.queued, floorQueued:s.floorQueued, futworkHumanQ:s.futworkHumanQ, futworkAiQ:s.futworkAiQ, superbotQ:s.superbotQ, humanQL:s.humanQL, futworkAiQl:s.futworkAiQl, superbotAiQl:s.superbotAiQl, totalQL:s.totalQL, apps:s.apps, offers:s.offers, deposits:s.deposits, raus:s.raus, spend:s.spend, costSpend:s.costSpend,
     }))
     if (grpBy === 'campaign') return byCampaign.map(c => ({
-      label:c.campaign, corridor:c.corridor, source:c.source, subSource:c.subSource, paidLeads:c.paidLeads, paidQL:c.paidQL, paidApps:c.paidApps, leads:c.leads, queued:c.queued, floorQueued:c.floorQueued, futworkHumanQ:c.futworkHumanQ, futworkAiQ:c.futworkAiQ, superbotQ:c.superbotQ, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
+      label:c.campaign, corridor:c.corridor, source:c.source, subSource:c.subSource, paidLeads:c.paidLeads, paidQL:c.paidQL, paidApps:c.paidApps, leads:c.leads, queued:c.queued, floorQueued:c.floorQueued, futworkHumanQ:c.futworkHumanQ, futworkAiQ:c.futworkAiQ, superbotQ:c.superbotQ, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend, costSpend:c.costSpend,
     }))
     if (grpBy === 'corridor') return byCorridor.map(c => ({
-      label:c.corridor, paidLeads:c.paidLeads, paidQL:c.paidQL, paidApps:c.paidApps, leads:c.leads, queued:c.queued, floorQueued:c.floorQueued, futworkHumanQ:c.futworkHumanQ, futworkAiQ:c.futworkAiQ, superbotQ:c.superbotQ, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend,
+      label:c.corridor, paidLeads:c.paidLeads, paidQL:c.paidQL, paidApps:c.paidApps, leads:c.leads, queued:c.queued, floorQueued:c.floorQueued, futworkHumanQ:c.futworkHumanQ, futworkAiQ:c.futworkAiQ, superbotQ:c.superbotQ, humanQL:c.humanQL, futworkAiQl:c.futworkAiQl, superbotAiQl:c.superbotAiQl, totalQL:c.totalQL, apps:c.apps, offers:c.offers, deposits:c.deposits, raus:c.raus, spend:c.spend, costSpend:c.costSpend,
     }))
     if (grpBy === 'day') return byDayFull.map(d => ({
-      label:d.label, dateKey:d.key, paidLeads:d.paidLeads, paidQL:d.paidQL, paidApps:d.paidApps, leads:d.leads, queued:d.queued, floorQueued:d.floorQueued, futworkHumanQ:d.futworkHumanQ, futworkAiQ:d.futworkAiQ, superbotQ:d.superbotQ, humanQL:d.humanQL, futworkAiQl:d.futworkAiQl, superbotAiQl:d.superbotAiQl, totalQL:d.totalQL, apps:d.apps, offers:d.offers, deposits:d.deposits, raus:d.raus, spend:d.spend,
+      label:d.label, dateKey:d.key, paidLeads:d.paidLeads, paidQL:d.paidQL, paidApps:d.paidApps, leads:d.leads, queued:d.queued, floorQueued:d.floorQueued, futworkHumanQ:d.futworkHumanQ, futworkAiQ:d.futworkAiQ, superbotQ:d.superbotQ, humanQL:d.humanQL, futworkAiQl:d.futworkAiQl, superbotAiQl:d.superbotAiQl, totalQL:d.totalQL, apps:d.apps, offers:d.offers, deposits:d.deposits, raus:d.raus, spend:d.spend, costSpend:d.costSpend,
     }))
     return byMonth.map(m => {
       const full = filtered.filter(r => r.mk === m.mk)
@@ -2137,13 +2166,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         apps: full.reduce((t, r) => t + r.apps, 0), offers: full.reduce((t, r) => t + r.offers, 0),
         deposits:m.deposits, raus: full.reduce((t, r) => t + r.raus, 0),
         spend: full.reduce((t, r) => t + r.spend, 0),
+        // Same numerator as `costSpend` everywhere else on this page -- see summaryValue()
+        costSpend: full.reduce((t, r) => t + (isCostExcluded(r) ? 0 : r.spend), 0),
         // paid-only denominators for CPL/CPQL/CPA -- see the paidKpis note above
-        paidLeads: full.reduce((t, r) => t + (paidSources.has(r.source) ? r.leads : 0), 0),
-        paidQL: full.reduce((t, r) => t + (paidSources.has(r.source) ? r.totalQL : 0), 0),
-        paidApps: full.reduce((t, r) => t + (paidSources.has(r.source) ? r.apps : 0), 0),
+        paidLeads: full.reduce((t, r) => t + (paidSources.has(r.source) && !isCostExcluded(r) ? r.leads : 0), 0),
+        paidQL: full.reduce((t, r) => t + (paidSources.has(r.source) && !isCostExcluded(r) ? r.totalQL : 0), 0),
+        paidApps: full.reduce((t, r) => t + (paidSources.has(r.source) && !isCostExcluded(r) ? r.apps : 0), 0),
       }
     })
-  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, filtered, paidSources])
+  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, filtered, paidSources, isCostExcluded])
 
   const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'corridor' ? 'Corridor' : grpBy === 'day' ? 'Date' : 'Month'
 
@@ -2175,13 +2206,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // expand/collapse rows rendered inside the Source view's table body.
   const sourceSubBreakdown = useMemo(() => {
     if (grpBy !== 'source') return null
-    const blank = () => ({ paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0 })
+    const blank = () => ({ paidLeads:0, paidQL:0, paidApps:0, leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, costSpend:0 })
     const add = (e, r) => {
       e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.humanQL += r.humanQL
       e.floorQueued += r.floorQueued; e.futworkHumanQ += r.futworkHumanQ; e.futworkAiQ += r.futworkAiQ; e.superbotQ += r.superbotQ
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
-      if (paidSources.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      const costEligible = !isCostExcluded(r)
+      if (costEligible) e.costSpend += r.spend
+      if (paidSources.has(r.source) && costEligible) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
     }
     const bySrc = new Map()
     filtered.forEach(r => {
@@ -2203,7 +2236,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       })).sort((a, b) => b.leads - a.leads))
     })
     return out
-  }, [grpBy, filtered, paidSources, withSrRevenue])
+  }, [grpBy, filtered, paidSources, withSrRevenue, isCostExcluded])
 
   const displayCols = useMemo(() => (
     colOrder.filter(k => visibleCols.includes(k))
@@ -2275,7 +2308,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     'totalQL', 'apps', 'offers', 'deposits', 'raus', 'spend', 'estimatedRaus',
     'estSrRevenue', 'actSrRevenue',
     // summed so the TOTAL row's CPL/CPQL/CPA derive off paid activity, matching the KPI cards
-    'paidLeads', 'paidQL', 'paidApps']
+    // (paidLeads/paidQL/paidApps) and off cost-eligible spend (costSpend, see
+    // src/lib/costExclusions.js) rather than raw `spend`, which stays a pure volume total
+    'paidLeads', 'paidQL', 'paidApps', 'costSpend']
   const aggregateRows = useCallback((rows, label) => {
     const t = { label, corridor: null }
     SUMMARY_ADDITIVE_KEYS.forEach(k => {
@@ -2493,19 +2528,21 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     list.forEach(r => {
       const k = keyFn(r)
       if (k == null || k === '') return
-      const e = m.get(k) || { label:k, leads:0, queued:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, paidLeads:0, paidQL:0, paidApps:0 }
+      const e = m.get(k) || { label:k, leads:0, queued:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, costSpend:0, paidLeads:0, paidQL:0, paidApps:0 }
       e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
-      if (paidSet.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      const costEligible = !isCostExcluded(r)
+      if (costEligible) e.costSpend += r.spend
+      if (paidSet.has(r.source) && costEligible) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(k, e)
     })
     return [...m.values()].map(e => ({
       ...e,
-      cpl: e.paidLeads > 0 ? e.spend / e.paidLeads : null,
-      cpql: e.paidQL > 0 ? e.spend / e.paidQL : null,
-      cpa: e.paidApps > 0 ? e.spend / e.paidApps : null,
+      cpl: e.paidLeads > 0 ? e.costSpend / e.paidLeads : null,
+      cpql: e.paidQL > 0 ? e.costSpend / e.paidQL : null,
+      cpa: e.paidApps > 0 ? e.costSpend / e.paidApps : null,
     }))
-  }, [])
+  }, [isCostExcluded])
 
   // A row with no match in the previous period carries prev:null, which the report
   // prints as "new" rather than inventing a movement against zero.
@@ -2619,21 +2656,23 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         key: k, label: labelFn(k),
         corridor: dim === 'campaign' ? corridorLabel(classifyCorridor(r.campaign)) : null,
         leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0,
-        apps:0, offers:0, deposits:0, raus:0, spend:0, paidLeads:0, paidQL:0, paidApps:0,
+        apps:0, offers:0, deposits:0, raus:0, spend:0, costSpend:0, paidLeads:0, paidQL:0, paidApps:0,
       }
       e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.humanQL += r.humanQL
       e.futworkAiQl += r.futworkAiQl; e.superbotAiQl += r.superbotAiQl; e.totalQL += r.totalQL
       e.apps += r.apps; e.offers += r.offers; e.deposits += r.deposits; e.raus += r.raus; e.spend += r.spend
-      if (paidSet.has(r.source)) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
+      const costEligible = !isCostExcluded(r)
+      if (costEligible) e.costSpend += r.spend
+      if (paidSet.has(r.source) && costEligible) { e.paidLeads += r.leads; e.paidQL += r.totalQL; e.paidApps += r.apps }
       m.set(k, e)
     })
     return [...m.values()]
-  }, [])
+  }, [isCostExcluded])
   // Every additive field summed across a list of aggReportByDim-shaped entries --
   // used for bucket totals (Trend, month/day dimension) where there is no further
   // breakdown, just one grand total per period.
   const sumDeepEntries = list => {
-    const t = { leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, paidLeads:0, paidQL:0, paidApps:0 }
+    const t = { leads:0, queued:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, apps:0, offers:0, deposits:0, raus:0, spend:0, costSpend:0, paidLeads:0, paidQL:0, paidApps:0 }
     list.forEach(e => { Object.keys(t).forEach(k => { t[k] += e[k] || 0 }) })
     return t
   }
@@ -3023,8 +3062,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       .sort((a, b) => a.key.localeCompare(b.key))
       .map(d => ({
         label: d.label,
-        cpql: d.paidQL > 0 ? Math.round(d.spend / d.paidQL) : null,
-        cpl: d.paidLeads > 0 ? Math.round(d.spend / d.paidLeads) : null
+        cpql: d.paidQL > 0 ? Math.round(d.costSpend / d.paidQL) : null,
+        cpl: d.paidLeads > 0 ? Math.round(d.costSpend / d.paidLeads) : null
       }))
   }, [byDayFull])
   
