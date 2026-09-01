@@ -539,7 +539,7 @@ export default function OrganicSocialDashboard() {
                     <PremKPI label="Total Users" value={fmtN(ga4.cur.totalUsers)} delta={ga4.prior ? pctDelta(ga4.cur.totalUsers, ga4.prior.totalUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
                     <PremKPI label="Organic %" value={ga4.cur.organicPct.toFixed(1) + '%'} delta={ga4.prior ? pctDelta(ga4.cur.organicPct, ga4.prior.organicPct) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.cyan} accentBg={C.cyanBg} />
                     <PremKPI label="Conversions" value={fmtN(ga4.cur.conversions)} delta={ga4.prior ? pctDelta(ga4.cur.conversions, ga4.prior.conversions) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.green} accentBg={C.greenBg} />
-                    <PremKPI label="Conv. Rate" value={ga4.cur.conversionRate.toFixed(2) + '%'} delta={ga4.prior ? pctDelta(ga4.cur.conversionRate, ga4.prior.conversionRate) : null} sub="of total users" icon={ICONS.pct} accent={C.navy} accentBg={C.navyBg} />
+                    <PremKPI label="Conversions / User" value={ga4.cur.conversionsPerUser.toFixed(2)} delta={ga4.prior ? pctDelta(ga4.cur.conversionsPerUser, ga4.prior.conversionsPerUser) : null} sub="events per user, can exceed 1" icon={ICONS.pct} accent={C.navy} accentBg={C.navyBg} />
                   </div>
                   {ga4.cur.conversions === 0 && (
                     <p style={{ fontSize: 11, color: C.muted, fontFamily: FONT, margin: '8px 0 0' }}>
@@ -550,18 +550,27 @@ export default function OrganicSocialDashboard() {
                     <SubHead right={`${fmtN(ga4.cur.organicUsers)} of ${fmtN(ga4.cur.totalUsers)}`}>Organic share of all traffic</SubHead>
                     <SplitBar share={ga4.cur.organicPct} color={C.navy} label={`${ga4.cur.organicPct.toFixed(1)}% arrived from organic search; the remainder came from every other channel.`} />
                   </div>
-                  {ga4.cur.byChannel && ga4.cur.byChannel.length > 0 && (
-                    <div style={{ marginTop: 18 }}>
-                      <SubHead right={`${ga4.cur.byChannel.length} channels`}>Users by channel</SubHead>
-                      <RankedBars
-                        data={ga4.cur.byChannel}
-                        labelKey="channel"
-                        max={ga4.cur.byChannel[0].users}
-                        total={ga4.cur.totalUsers}
-                        colorFn={i => sourceColor(ga4.cur.byChannel[i]?.channel)}
-                      />
-                    </div>
-                  )}
+                  {ga4.cur.byChannel && ga4.cur.byChannel.length > 0 && (() => {
+                    // RankedBars reads a hardcoded row.count field (for both the
+                    // bar width and the value it prints) -- ga4.cur.byChannel's
+                    // rows carry `users`, not `count`, so this maps rather than
+                    // renaming the source field (other RankedBars consumers on
+                    // this same page use `count` directly; this is the one row
+                    // shape that doesn't).
+                    const channelRows = ga4.cur.byChannel.map(c => ({ ...c, count: c.users }))
+                    return (
+                      <div style={{ marginTop: 18 }}>
+                        <SubHead right={`${channelRows.length} channels`}>Users by channel</SubHead>
+                        <RankedBars
+                          data={channelRows}
+                          labelKey="channel"
+                          max={channelRows[0].count}
+                          total={ga4.cur.totalUsers}
+                          colorFn={i => sourceColor(channelRows[i]?.channel)}
+                        />
+                      </div>
+                    )
+                  })()}
                 </>
               ) : (
                 <PendingNote title="Pending" detail="Waiting on GA4 property access to be granted to the Quantum reader service account." />
