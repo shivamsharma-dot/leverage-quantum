@@ -4,8 +4,8 @@ import { DashboardSkeleton } from '../components/SkeletonLoader'
 import DateRangePicker from '../components/DateRangePicker'
 import Dropdown from '../components/Dropdown'
 import Button from '../components/Button'
-import { ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts'
-import { C, FONT, Card, PremKPI, RankedBars, fmtN, brandColor, sourceColor, BarGrad, barFill, gradId, GRID_STROKE, BAR_RADIUS, BAR_MAX, NEUTRAL_GREY, NEUTRAL_TRACK } from '../ui/dashboardKit'
+import { ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList } from 'recharts'
+import { C, FONT, Card, PremKPI, RankedBars, fmtN, brandColor, sourceColor, BarGrad, barFill, gradId, GRID_STROKE, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
 
 // ---------------------------------------------------------------------------
 // Organic & Social -- tracks the same metrics the "IPO Tracker" sheet's
@@ -404,7 +404,14 @@ export default function OrganicSocialDashboard() {
   const xWeek = (prefs.x_manual || {})[weekKey] || null
 
   const period = useMemo(() => periodsForGranularity(granularity, customFrom, customTo), [granularity, customFrom, customTo])
-  const compareLabel = `${period.curLabel} vs ${period.priorLabel}`
+  // Every card's own sub-header uses compareLabel -- it used to be
+  // `${period.curLabel} vs ${period.priorLabel}` (e.g. "Today vs yesterday",
+  // or "Selected range vs previous period" for Custom, which tells you
+  // nothing about what range was actually picked). Real dates now, always --
+  // periodPresetLabel keeps the short preset name for the one spot (the
+  // toolbar pill) that still wants it.
+  const periodPresetLabel = `${period.curLabel} vs ${period.priorLabel}`
+  const compareLabel = `${fmtRange(period.curSince, period.curUntil)} vs ${fmtRange(period.priorSince, period.priorUntil)}`
 
   if (loading) {
     return (
@@ -510,10 +517,8 @@ export default function OrganicSocialDashboard() {
         </div>
 
         <div style={{ margin: '9px 14px 0', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.navy, background: C.navyBg, borderRadius: 999, padding: '3px 9px', fontFamily: FONT }}>{compareLabel}</span>
-          <span style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT }}>
-            {fmtRange(period.curSince, period.curUntil)} vs {fmtRange(period.priorSince, period.priorUntil)}
-          </span>
+          <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: C.navy, background: C.navyBg, borderRadius: 999, padding: '3px 9px', fontFamily: FONT }}>{periodPresetLabel}</span>
+          <span style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT }}>{compareLabel}</span>
         </div>
 
         <div style={{ padding: '14px 14px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -985,33 +990,63 @@ function IgAccountCard({ ig, hue, slug, period, compareLabel }) {
         </div>
       </div>
 
-      <AudienceSection demographics={ig.demographics} hue={hue} />
+      <AudienceSection demographics={ig.demographics} hue={hue} slug={slug} />
       <TopPostsSection posts={ig.topPosts} postsInPeriod={ig.postsInPeriod} curLabel={period.curLabel} />
     </Card>
   )
 }
 
+// A real horizontal bar chart (Recharts, not styled flexbox rows) for a
+// ranked breakdown -- one hue per chart, gradient-filled, matching this app's
+// own established "good chart" treatment (see MarketingPerformanceReport.jsx
+// / QualitySections.jsx). `gradId` is keyed on `slug` (the caller's own
+// unique id, e.g. the Instagram account's slug) -- an SVG gradient id is
+// global to the page's DOM, so with up to 4 connected Instagram accounts
+// each rendering their own copy of this chart, a slug-less id would collide
+// and every account's chart would silently render in whichever account's
+// gradient definition happened to land first in the DOM.
+function RankedBarChart({ data, labelKey, valueKey, hue, slug, chartKey }) {
+  if (!data || data.length === 0) return null
+  const gid = gradId(slug, chartKey)
+  const rowH = 30
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(70, data.length * rowH + 10)}>
+      <BarChart data={data} layout="vertical" margin={{ top: 2, right: 34, left: 0, bottom: 2 }}>
+        <defs><BarGrad id={gid} color={hue} dir="h" /></defs>
+        <CartesianGrid horizontal={false} stroke={GRID_STROKE} />
+        <XAxis type="number" hide />
+        <YAxis type="category" dataKey={labelKey} width={110} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: C.text, fontFamily: FONT }} />
+        <Tooltip content={<ChartTip />} cursor={{ fill: 'rgba(15,23,42,0.04)' }} />
+        <Bar dataKey={valueKey} fill={barFill(gid)} radius={BAR_RADIUS_H} maxBarSize={20}>
+          <LabelList dataKey={valueKey} position="right" formatter={fmtN} style={{ fontSize: 11.5, fontWeight: 700, fill: C.text, fontFamily: FONT }} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
 // Lifetime snapshot (Instagram ignores the date range on these metrics) --
-// who follows this account, by country and by age band. Not comparable
-// period-over-period, so no delta: just the current picture. Both lists are
-// now the shared RankedBars, which is what this page was reimplementing by
-// hand with raw flexbox rows before.
-function AudienceSection({ demographics, hue }) {
+// who follows this account, by country, age band and gender. Not comparable
+// period-over-period, so no delta: just the current picture. Real charts
+// throughout, one hue (the account's own, same as its other charts on this
+// card) rather than a different colour per row or per category -- the
+// distinction between rows is the bar length and the label, not the colour.
+function AudienceSection({ demographics, hue, slug }) {
   const { countries, ages, genders } = demographics || {}
   const hasCountries = countries && countries.length > 0
   const hasAges = ages && ages.length > 0
   const hasGenders = genders && genders.length > 0
   if (!hasCountries && !hasAges && !hasGenders) return null
 
-  const countryRows = hasCountries ? countries.map(c => ({ country: countryNameOf(c.key), count: c.value })) : []
+  const countryRows = hasCountries
+    ? countries.slice().sort((a, b) => b.value - a.value).map(c => ({ country: countryNameOf(c.key), count: c.value }))
+    : []
   const countryTotal = countryRows.reduce((s, r) => s + r.count, 0)
   const ageRows = hasAges ? ages.slice().sort((a, b) => b.value - a.value).map(a => ({ band: a.key, count: a.value })) : []
-  const ageTotal = ageRows.reduce((s, r) => s + r.count, 0)
-  const genderTotal = hasGenders ? genders.reduce((s, g) => s + g.value, 0) : 0
   const GENDER_LABEL = { M: 'Male', F: 'Female', U: 'Unspecified' }
-  // Unspecified is an unknown bucket, not a category of its own -- the design
-  // system reserves NEUTRAL_GREY for exactly that and keeps it out of the ramp.
-  const GENDER_HUE = { M: C.blue, F: C.cyan, U: NEUTRAL_GREY }
+  const genderRows = hasGenders
+    ? genders.slice().sort((a, b) => b.value - a.value).map(g => ({ band: GENDER_LABEL[g.key] || g.key, count: g.value }))
+    : []
 
   return (
     <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--card-border)' }}>
@@ -1020,28 +1055,23 @@ function AudienceSection({ demographics, hue }) {
         <div>
           <SubHead right={hasCountries ? `${fmtN(countryTotal)} followers placed` : null}>Top countries</SubHead>
           {hasCountries ? (
-            <RankedBars data={countryRows} labelKey="country" max={countryRows[0].count} total={countryTotal} color={hue} showRank />
+            <RankedBarChart data={countryRows} labelKey="country" valueKey="count" hue={hue} slug={slug} chartKey="aud-country" />
           ) : (
             <PendingNote title="Not available" detail="Instagram withholds follower demographics for accounts below its own audience-size privacy threshold." />
           )}
         </div>
         <div>
-          <SubHead>Age &amp; gender</SubHead>
-          {hasGenders && (
+          <SubHead>Gender</SubHead>
+          {hasGenders ? (
             <div style={{ marginBottom: 14 }}>
-              {genders.map(g => (
-                <div key={g.key} style={{ marginBottom: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, fontFamily: FONT, marginBottom: 4 }}>
-                    <span style={{ color: C.text, fontWeight: 600 }}>{GENDER_LABEL[g.key] || g.key}</span>
-                    <span style={{ color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{genderTotal > 0 ? ((g.value / genderTotal) * 100).toFixed(0) : 0}%</span>
-                  </div>
-                  <SplitBar share={genderTotal > 0 ? (g.value / genderTotal) * 100 : 0} color={GENDER_HUE[g.key] || NEUTRAL_GREY} />
-                </div>
-              ))}
+              <RankedBarChart data={genderRows} labelKey="band" valueKey="count" hue={hue} slug={slug} chartKey="aud-gender" />
             </div>
+          ) : (
+            <PendingNote title="Not available" detail="Instagram withholds the age and gender breakdown until an account's audience passes its privacy threshold." />
           )}
+          <SubHead>Age</SubHead>
           {hasAges ? (
-            <RankedBars data={ageRows} labelKey="band" max={ageRows[0].count} total={ageTotal} color={C.cyan} />
+            <RankedBarChart data={ageRows} labelKey="band" valueKey="count" hue={hue} slug={slug} chartKey="aud-age" />
           ) : (
             // Previously this column rendered as a bare heading with nothing
             // underneath it whenever Instagram withheld the breakdown, which
@@ -1089,7 +1119,11 @@ function TopPostsSection({ posts, postsInPeriod, curLabel }) {
               border: '1px solid var(--card-border)', borderRadius: 12, padding: 8, background: 'var(--card)',
             }}
           >
-            <span style={{ width: 20, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#fff', background: brandColor(i), borderRadius: 6, padding: '2px 0', flexShrink: 0, fontFamily: FONT }}>{i + 1}</span>
+            {/* One brand colour (navy), not a different hue per rank -- weight
+                carries the ranking instead: opacity steps down from #1 to
+                #5, so the order still reads at a glance without a rainbow
+                of badge colours. */}
+            <span style={{ width: 22, textAlign: 'center', fontSize: 17, fontWeight: 800, color: C.navy, opacity: Math.max(0.35, 1 - i * 0.16), flexShrink: 0, fontFamily: FONT, fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
             {p.thumbnailUrl && (
               <img src={p.thumbnailUrl} alt="" style={{ width: 44, height: 44, borderRadius: 9, objectFit: 'cover', flexShrink: 0 }} />
             )}
