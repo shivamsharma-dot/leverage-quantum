@@ -840,7 +840,7 @@ export default function AIQLDetailDashboard() {
                     <CartesianGrid vertical={false} stroke="#EEF1F5" />
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} interval={dailyTrendMonth.length > 10 ? 1 : 0} />
                     <YAxis hide />
-                    <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: '0.5px solid ' + C.border }} />
+                    <Tooltip cursor={false} contentStyle={{ fontSize: 11, borderRadius: 10, border: '0.5px solid ' + C.border }} />
                     <Bar dataKey="count" fill={barFill('g-b0-1')} radius={BAR_RADIUS} maxBarSize={22} />
                   </BarChart>
                 </ResponsiveContainer>
