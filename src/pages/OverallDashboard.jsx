@@ -1270,11 +1270,28 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const hasSetInitial = useRef(false)
   const CACHE_KEY = 'overall'
 
-  const applyCsv = useCallback((txt) => {
-    const mapped = parseCSV(txt).map(mapRow)
+  // Split from applyCsv so loadData's fresh-fetch path (which already has to parse the
+  // full CSV once for the completeness check below) can hand the SAME parsed array
+  // straight in, instead of applyCsv silently re-parsing the same ~2.5-lakh-row/43MB
+  // text a second time -- confirmed live as a real, multi-minute-adding cost at this
+  // sheet's size, not a theoretical one.
+  const applyMapped = useCallback((mapped) => {
     setRawRows(mapped)
     if (!hasSetInitial.current) {
-      const ms = [...new Set(mapped.filter(r => r.mk != null).map(r => r.mk))].sort((a, b) => a - b)
+      // The current day is never a complete day, so `rows` (below) always excludes it --
+      // and `months`/`monthKeyByLabel`, which the actual date filtering reads, are always
+      // derived from `rows`, never from `mapped` directly. Confirmed live as a real bug on
+      // 1 Sept: the sheet already had a handful of same-day September rows, so `mapped`
+      // (checked here, unfiltered) contained September and this picked it as the default
+      // month -- but `rows` correctly excludes today, so September had ZERO rows there,
+      // `monthKeyByLabel.get("Sep'26")` came back undefined, and dateFilteredRows's own
+      // `mk == null` fallback silently returned every row ever loaded instead -- the exact
+      // "month selected, but showing some other (much bigger) number" bug this whole fix
+      // pass exists for, just triggered by today's date rather than a truncated fetch. This
+      // mirrors the same cutoff so the default month can never be one `rows` empties back out.
+      const cut = new Date(); cut.setHours(0, 0, 0, 0)
+      const t = cut.getTime()
+      const ms = [...new Set(mapped.filter(r => r.mk != null && !(r.date && +r.date >= t)).map(r => r.mk))].sort((a, b) => a - b)
       if (ms.length) {
         const curKey = monthKey(new Date())
         const defMk = ms.includes(curKey) ? curKey : ms[ms.length - 1]
@@ -1287,6 +1304,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       }
     }
   }, [])
+  // Thin wrapper for the one caller that only has a raw string (the in-tab
+  // hasLoaded/getSession fast-path below -- already-validated data from earlier in
+  // this same tab's session, so no completeness check needed here).
+  const applyCsv = useCallback((txt) => applyMapped(parseCSV(txt).map(mapRow)), [applyMapped])
 
   // Fetch-once-per-session (mirrors QL Ops/WhatsApp/Referral): if this tab already
   // loaded Overall this session, reuse it instantly instead of re-fetching+re-parsing
@@ -1339,9 +1360,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // spans at least 2 distinct calendar months -- narrower than that is rejected here,
       // the same way an HTML-instead-of-CSV response already is above, rather than being
       // trusted and cached as the truth for up to a day.
-      const distinctMonths = new Set(parseCSV(txt).map(mapRow).filter(r => r.mk != null).map(r => r.mk)).size
+      const mapped = parseCSV(txt).map(mapRow)
+      const distinctMonths = new Set(mapped.filter(r => r.mk != null).map(r => r.mk)).size
       if (distinctMonths < 2) throw new Error('Sheet response looked incomplete (' + distinctMonths + ' month(s) of data found) -- likely a truncated download, not real data. Try Refresh again.')
-      applyCsv(txt)
+      applyMapped(mapped)
       setSession(CACHE_KEY, txt)
       setLastSync(new Date())
       setError(null)
@@ -1349,7 +1371,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       setError('Failed to load: ' + e.message)
     }
     finally { setLoading(false) }
-  }, [applyCsv])
+  }, [applyCsv, applyMapped])
   // The CSV download is skipped entirely while the toggle is on -- that is the point of
   // it. Toggling back off calls loadData(), which finds this session's already-parsed
   // CSV in the session cache and repaints from it instantly.
