@@ -1328,6 +1328,21 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // the existing catch block below, which already has a real error-banner path.
       if (!res.ok) throw new Error('Sheet fetch failed (HTTP ' + res.status + ')')
       if (txt.trim().startsWith('<')) throw new Error('Got a webpage instead of the sheet CSV -- it may no longer be shared publicly, or the link needs re-authenticating')
+      // Completeness guard -- confirmed live as a real failure mode, not a hypothetical
+      // one: this sheet is ~2.5 lakh rows and can take 30s+ to download, and a fetch that
+      // gets cut short mid-stream (a competing navigation, a backgrounded/throttled tab)
+      // resolves with whatever partial text arrived rather than throwing -- fetch() has
+      // no built-in way to tell "the connection closed early" apart from "that's the
+      // whole response". One such truncated response (818 rows, a single day, one month)
+      // got written to setSession's 24h localStorage-persisted cache below with no check
+      // at all, and was then silently instant-painted as a trustworthy "Synced <time>" on
+      // every subsequent cold load of this page until a manual Refresh happened to land a
+      // clean fetch. This sheet has run for many months straight, so any genuine response
+      // spans at least 2 distinct calendar months -- narrower than that is rejected here,
+      // the same way an HTML-instead-of-CSV response already is above, rather than being
+      // trusted and cached as the truth for up to a day.
+      const distinctMonths = new Set(parseCSV(txt).map(mapRow).filter(r => r.mk != null).map(r => r.mk)).size
+      if (distinctMonths < 2) throw new Error('Sheet response looked incomplete (' + distinctMonths + ' month(s) of data found) -- likely a truncated download, not real data. Try Refresh again.')
       applyCsv(txt)
       setSession(CACHE_KEY, txt)
       setLastSync(new Date())
