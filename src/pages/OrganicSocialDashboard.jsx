@@ -5,7 +5,7 @@ import DateRangePicker from '../components/DateRangePicker'
 import Dropdown from '../components/Dropdown'
 import Button from '../components/Button'
 import { ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts'
-import { C, FONT, Card, PremKPI, RankedBars, fmtN, brandColor, BarGrad, barFill, gradId, GRID_STROKE, BAR_RADIUS, BAR_MAX, NEUTRAL_GREY, NEUTRAL_TRACK } from '../ui/dashboardKit'
+import { C, FONT, Card, PremKPI, RankedBars, fmtN, brandColor, sourceColor, BarGrad, barFill, gradId, GRID_STROKE, BAR_RADIUS, BAR_MAX, NEUTRAL_GREY, NEUTRAL_TRACK } from '../ui/dashboardKit'
 
 // ---------------------------------------------------------------------------
 // Organic & Social -- tracks the same metrics the "IPO Tracker" sheet's
@@ -538,11 +538,30 @@ export default function OrganicSocialDashboard() {
                     <PremKPI label="Organic Users" value={fmtN(ga4.cur.organicUsers)} delta={ga4.prior ? pctDelta(ga4.cur.organicUsers, ga4.prior.organicUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
                     <PremKPI label="Total Users" value={fmtN(ga4.cur.totalUsers)} delta={ga4.prior ? pctDelta(ga4.cur.totalUsers, ga4.prior.totalUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
                     <PremKPI label="Organic %" value={ga4.cur.organicPct.toFixed(1) + '%'} delta={ga4.prior ? pctDelta(ga4.cur.organicPct, ga4.prior.organicPct) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.cyan} accentBg={C.cyanBg} />
+                    <PremKPI label="Conversions" value={fmtN(ga4.cur.conversions)} delta={ga4.prior ? pctDelta(ga4.cur.conversions, ga4.prior.conversions) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.green} accentBg={C.greenBg} />
+                    <PremKPI label="Conv. Rate" value={ga4.cur.conversionRate.toFixed(2) + '%'} delta={ga4.prior ? pctDelta(ga4.cur.conversionRate, ga4.prior.conversionRate) : null} sub="of total users" icon={ICONS.pct} accent={C.navy} accentBg={C.navyBg} />
                   </div>
+                  {ga4.cur.conversions === 0 && (
+                    <p style={{ fontSize: 11, color: C.muted, fontFamily: FONT, margin: '8px 0 0' }}>
+                      No GA4 key events (conversions) are configured on this property yet -- this is a real 0, not a fetch error.
+                    </p>
+                  )}
                   <div style={{ marginTop: 18 }}>
                     <SubHead right={`${fmtN(ga4.cur.organicUsers)} of ${fmtN(ga4.cur.totalUsers)}`}>Organic share of all traffic</SubHead>
                     <SplitBar share={ga4.cur.organicPct} color={C.navy} label={`${ga4.cur.organicPct.toFixed(1)}% arrived from organic search; the remainder came from every other channel.`} />
                   </div>
+                  {ga4.cur.byChannel && ga4.cur.byChannel.length > 0 && (
+                    <div style={{ marginTop: 18 }}>
+                      <SubHead right={`${ga4.cur.byChannel.length} channels`}>Users by channel</SubHead>
+                      <RankedBars
+                        data={ga4.cur.byChannel}
+                        labelKey="channel"
+                        max={ga4.cur.byChannel[0].users}
+                        total={ga4.cur.totalUsers}
+                        colorFn={i => sourceColor(ga4.cur.byChannel[i]?.channel)}
+                      />
+                    </div>
+                  )}
                 </>
               ) : (
                 <PendingNote title="Pending" detail="Waiting on GA4 property access to be granted to the Quantum reader service account." />

@@ -3288,10 +3288,8 @@ async function handleInstagram(req, res, me) {
   }
 }
 
-// GA4 -- gated the same way as Instagram/YouTube above. Currently BLOCKED
-// (see lib/ga4.mjs's header comment) -- configured:true but every real call
-// 403s until the service account is granted GA4 property access. Written now
-// so the dashboard starts working the moment that's granted.
+// GA4 -- gated the same way as Instagram/YouTube above. Live as of 2026-09-01
+// (see lib/ga4.mjs's header comment).
 async function handleGA4(req, res, me) {
   const { canAccessDashboard } = await import('../lib/auth.mjs');
   if (!canAccessDashboard(me.role, 'organic_social')) return res.status(403).json({ error: 'Forbidden' });
