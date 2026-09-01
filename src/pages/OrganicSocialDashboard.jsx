@@ -5,7 +5,7 @@ import DateRangePicker from '../components/DateRangePicker'
 import Dropdown from '../components/Dropdown'
 import Button from '../components/Button'
 import { ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, LabelList } from 'recharts'
-import { C, FONT, Card, PremKPI, RankedBars, fmtN, brandColor, sourceColor, BarGrad, barFill, gradId, GRID_STROKE, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
+import { C, FONT, Card, PremKPI, fmtN, pct, brandColor, BarGrad, barFill, gradId, GRID_STROKE, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
 
 // ---------------------------------------------------------------------------
 // Organic & Social -- tracks the same metrics the "IPO Tracker" sheet's
@@ -534,7 +534,11 @@ export default function OrganicSocialDashboard() {
             </div>
           </Card>
 
-          <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {/* alignItems:'start' -- without it, grid stretches the shorter
+              YouTube card to match Website's taller one, leaving a large
+              empty gap under its "pending" note. Each card now sizes to its
+              own content instead of being forced to match its sibling. */}
+          <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
 
             <Card title="Website" sub={ga4 ? `Organic Search channel \u00B7 ${compareLabel}` : 'Google Analytics 4'}>
               {ga4 ? (
@@ -556,23 +560,11 @@ export default function OrganicSocialDashboard() {
                     <SplitBar share={ga4.cur.organicPct} color={C.navy} label={`${ga4.cur.organicPct.toFixed(1)}% arrived from organic search; the remainder came from every other channel.`} />
                   </div>
                   {ga4.cur.byChannel && ga4.cur.byChannel.length > 0 && (() => {
-                    // RankedBars reads a hardcoded row.count field (for both the
-                    // bar width and the value it prints) -- ga4.cur.byChannel's
-                    // rows carry `users`, not `count`, so this maps rather than
-                    // renaming the source field (other RankedBars consumers on
-                    // this same page use `count` directly; this is the one row
-                    // shape that doesn't).
-                    const channelRows = ga4.cur.byChannel.map(c => ({ ...c, count: c.users }))
+                    const channelRows = ga4.cur.byChannel.map(c => ({ channel: c.channel, count: c.users }))
                     return (
                       <div style={{ marginTop: 18 }}>
                         <SubHead right={`${channelRows.length} channels`}>Users by channel</SubHead>
-                        <RankedBars
-                          data={channelRows}
-                          labelKey="channel"
-                          max={channelRows[0].count}
-                          total={ga4.cur.totalUsers}
-                          colorFn={i => sourceColor(channelRows[i]?.channel)}
-                        />
+                        <RankedBarChart data={channelRows} labelKey="channel" valueKey="count" hue={C.navy} slug="website" chartKey="channels" total={ga4.cur.totalUsers} />
                       </div>
                     )
                   })()}
@@ -625,17 +617,10 @@ export default function OrganicSocialDashboard() {
                 />
               }
             >
-              <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+              <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
                 <div>
                   <SubHead right={`${fmtN(cmpTotal)} combined`}>{cmpDef.label} by account</SubHead>
-                  <RankedBars
-                    data={cmpSorted}
-                    labelKey="account"
-                    max={cmpMax}
-                    total={cmpTotal}
-                    colorFn={i => (cmpSorted[i] ? cmpSorted[i].color : C.navy)}
-                    showRank
-                  />
+                  <AccountRankList data={cmpSorted} labelKey="account" max={cmpMax} total={cmpTotal} />
                 </div>
                 <div>
                   <SubHead right={`vs ${period.priorLabel}`}>Growth in {cmpDef.label.toLowerCase()}</SubHead>
@@ -732,8 +717,8 @@ const REFRESH_ICON = (
 )
 
 // Metrics the account-comparison card can plot. Volume metrics only, on
-// purpose: RankedBars states each account's share of a combined total, which
-// is meaningful for a count and meaningless for a rate, and every one of these
+// purpose: AccountRankList states each account's share of a combined total,
+// which is meaningful for a count and meaningless for a rate, and every one of these
 // has a real prior-period figure so the growth chart beside it is never empty.
 // Engagement rate and follower totals still appear in full on each account's
 // own card, where no share-of-total reading is implied.
@@ -823,7 +808,7 @@ const SplitBar = ({ share, color, label }) => {
   )
 }
 
-const ChartTip = ({ active, payload, label, suffix }) => {
+const ChartTip = ({ active, payload, label, suffix, total }) => {
   if (!active || !payload || !payload.length) return null
   const v = Number(payload[0].value)
   return (
@@ -832,6 +817,9 @@ const ChartTip = ({ active, payload, label, suffix }) => {
       <div style={{ fontSize: 13.5, fontWeight: 800, color: C.text, fontVariantNumeric: 'tabular-nums' }}>
         {suffix === '%' ? (v >= 0 ? '+' : '') + v.toFixed(1) + '%' : fmtN(v)}
       </div>
+      {suffix !== '%' && total > 0 && (
+        <div style={{ fontSize: 10.5, color: C.muted, marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>{pct(v, total)} of total</div>
+      )}
     </div>
   )
 }
@@ -901,6 +889,47 @@ const GrowthBars = ({ rows }) => {
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+  )
+}
+
+// "Reach by account" -- deliberately its own component, not the shared
+// RankedBars used elsewhere in the app: every account's bar is now ONE hue
+// (this page's own navy->blue gradient) instead of a different colour per
+// account, and the rank badge is a larger gradient disc with a soft shadow --
+// the exact navy->blue gradient + shadow already used for the active-account
+// switcher button just below this card -- rather than a flat single-tone
+// square, so the ranking reads as a genuine visual upgrade, not a recolour.
+function AccountRankList({ data, labelKey, max, total }) {
+  if (!data || data.length === 0) return <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No data</div>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 13, padding: '2px 0' }}>
+      {data.map((r, i) => {
+        const w = max > 0 ? (r.count / max * 100) : 0
+        return (
+          <div key={r[labelKey] + i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+              background: `linear-gradient(135deg, ${C.navy}, ${C.blue})`,
+              boxShadow: '0 3px 9px -2px rgba(31,60,132,0.55)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, fontWeight: 800, color: '#fff', fontFamily: FONT,
+            }}>{i + 1}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, alignItems: 'baseline' }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                  {r[labelKey]}
+                </span>
+                <span style={{ fontSize: 14.5, fontWeight: 800, color: C.navy, fontFamily: FONT, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.count)}</span>
+              </div>
+              <div style={{ height: 7, borderRadius: 99, background: NEUTRAL_TRACK, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: `linear-gradient(90deg, ${C.navy}, ${C.blue})`, transition: 'width .6s cubic-bezier(.4,0,.2,1)' }} />
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, width: 36, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{pct(r.count, total)}</div>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -1005,7 +1034,7 @@ function IgAccountCard({ ig, hue, slug, period, compareLabel }) {
 // each rendering their own copy of this chart, a slug-less id would collide
 // and every account's chart would silently render in whichever account's
 // gradient definition happened to land first in the DOM.
-function RankedBarChart({ data, labelKey, valueKey, hue, slug, chartKey }) {
+function RankedBarChart({ data, labelKey, valueKey, hue, slug, chartKey, total }) {
   if (!data || data.length === 0) return null
   const gid = gradId(slug, chartKey)
   const rowH = 30
@@ -1016,7 +1045,7 @@ function RankedBarChart({ data, labelKey, valueKey, hue, slug, chartKey }) {
         <CartesianGrid horizontal={false} stroke={GRID_STROKE} />
         <XAxis type="number" hide />
         <YAxis type="category" dataKey={labelKey} width={110} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: C.text, fontFamily: FONT }} />
-        <Tooltip content={<ChartTip />} cursor={{ fill: 'rgba(15,23,42,0.04)' }} />
+        <Tooltip content={<ChartTip total={total} />} cursor={{ fill: 'rgba(15,23,42,0.04)' }} />
         <Bar dataKey={valueKey} fill={barFill(gid)} radius={BAR_RADIUS_H} maxBarSize={20}>
           <LabelList dataKey={valueKey} position="right" formatter={fmtN} style={{ fontSize: 11.5, fontWeight: 700, fill: C.text, fontFamily: FONT }} />
         </Bar>
@@ -1055,7 +1084,7 @@ function AudienceSection({ demographics, hue, slug }) {
         <div>
           <SubHead right={hasCountries ? `${fmtN(countryTotal)} followers placed` : null}>Top countries</SubHead>
           {hasCountries ? (
-            <RankedBarChart data={countryRows} labelKey="country" valueKey="count" hue={hue} slug={slug} chartKey="aud-country" />
+            <RankedBarChart data={countryRows} labelKey="country" valueKey="count" hue={hue} slug={slug} chartKey="aud-country" total={countryTotal} />
           ) : (
             <PendingNote title="Not available" detail="Instagram withholds follower demographics for accounts below its own audience-size privacy threshold." />
           )}
