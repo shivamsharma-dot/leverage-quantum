@@ -534,7 +534,7 @@ export default function OrganicSocialDashboard() {
             <Card title="Website" sub={ga4 ? `Organic Search channel \u00B7 ${compareLabel}` : 'Google Analytics 4'}>
               {ga4 ? (
                 <>
-                  <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+                  <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
                     <PremKPI label="Organic Users" value={fmtN(ga4.cur.organicUsers)} delta={ga4.prior ? pctDelta(ga4.cur.organicUsers, ga4.prior.organicUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
                     <PremKPI label="Total Users" value={fmtN(ga4.cur.totalUsers)} delta={ga4.prior ? pctDelta(ga4.cur.totalUsers, ga4.prior.totalUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
                     <PremKPI label="Organic %" value={ga4.cur.organicPct.toFixed(1) + '%'} delta={ga4.prior ? pctDelta(ga4.cur.organicPct, ga4.prior.organicPct) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.cyan} accentBg={C.cyanBg} />
@@ -917,7 +917,7 @@ function IgAccountCard({ ig, hue, slug, period, compareLabel }) {
         </div>
       </div>
 
-      <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+      <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
         <PremKPI label="Followers" value={fmtN(p.followersCount)} sub="lifetime" icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
         <PremKPI label="Follower Growth" value={(ig.cur.followerGrowth >= 0 ? '+' : '') + fmtN(ig.cur.followerGrowth)} delta={pctDelta(ig.cur.followerGrowth, ig.prior.followerGrowth)} sub={`vs ${period.priorLabel}`} icon={ICONS.trendUp} accent={C.green} accentBg={C.greenBg} />
         <PremKPI label="Reach" value={fmtN(ig.cur.reach)} delta={pctDelta(ig.cur.reach, ig.prior.reach)} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
