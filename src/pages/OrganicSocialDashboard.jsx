@@ -519,7 +519,7 @@ export default function OrganicSocialDashboard() {
         <div style={{ padding: '14px 14px 28px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           <Card title="Growth at a glance" sub={`Every connected channel \u00B7 ${compareLabel}`}>
-            <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 12 }}>
+            <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
               <PremKPI label="Website Organic Users" value={ga4 ? fmtN(ga4.cur.organicUsers) : '\u2014'} delta={ga4 && ga4.prior ? pctDelta(ga4.cur.organicUsers, ga4.prior.organicUsers) : null} sub={ga4 ? `vs ${period.priorLabel}` : 'pending access'} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
               <PremKPI label="Instagram Reach" value={fmtN(igTotal.reach)} delta={pctDelta(igTotal.reach, igTotal.reachPrior)} sub={`${igLive.length} account${igLive.length === 1 ? '' : 's'} combined`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
               <PremKPI label="Instagram Interactions" value={fmtN(igTotal.interactions)} delta={pctDelta(igTotal.interactions, igTotal.interactionsPrior)} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.cyan} accentBg={C.cyanBg} />
