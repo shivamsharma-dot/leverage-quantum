@@ -16,7 +16,7 @@ import {
 } from '../components/QualitySections'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import Button from '../components/Button'
-import { getSession, setSession, hasLoaded, getPersisted } from '../lib/sessionLoad'
+import { getSession, setSession, hasLoaded } from '../lib/sessionLoad'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
 import { isCostExcludedCampaign } from '../lib/costExclusions'
 import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, BarGrad, barFill, BAR_RADIUS_H } from '../ui/dashboardKit'
@@ -1290,11 +1290,19 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
   // Fetch-once-per-session (mirrors QL Ops/WhatsApp/Referral): if this tab already
   // loaded Overall this session, reuse it instantly instead of re-fetching+re-parsing
-  // the full sheet on every SPA navigation back to this page. On a genuinely cold
-  // load (fresh tab, nothing loaded yet this session) paint instantly from the last
-  // known-good snapshot persisted in localStorage -- if one exists -- while a real
-  // fetch runs in the background, so the page never sits on a blank spinner for as
-  // long as the CSV takes to download when we already have something to show.
+  // the full sheet on every SPA navigation back to this page.
+  //
+  // Deliberately NOT using sessionLoad.js's "paint instantly from localStorage,
+  // revalidate in the background" optimization on a genuinely cold load, unlike
+  // QL Ops/WhatsApp/Referral -- confirmed live this sheet's real CSV is ~43MB, and
+  // this browser's localStorage quota rejects a write above single-digit MB
+  // (confirmed live: a 6MB probe write threw immediately). setSession()'s
+  // localStorage.setItem call therefore ALWAYS throws for a genuine full fetch here
+  // and is silently swallowed (see sessionLoad.js) -- the persisted cache can only
+  // ever hold an accidentally-small/truncated response, never the real data, so
+  // painting from it is worse than useless for this page: it confidently shows
+  // wrong numbers instead of a loading state. A cold load always blocks on a real,
+  // validated fetch instead.
   const loadData = useCallback(async (bust = false) => {
     if (!bust && hasLoaded(CACHE_KEY)) {
       applyCsv(getSession(CACHE_KEY).data)
@@ -1302,17 +1310,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       setLoading(false)
       return
     }
-    let paintedFromCache = false
-    if (!bust) {
-      const persisted = getPersisted(CACHE_KEY)
-      if (persisted) {
-        applyCsv(persisted.data)
-        setLastSync(new Date(persisted.ts))
-        setLoading(false)
-        paintedFromCache = true
-      }
-    }
-    if (!paintedFromCache) setLoading(true)
+    setLoading(true)
     try {
       const base = await resolveOverallUrlFast()
       const u = bust ? base + (base.includes('?') ? '&' : '?') + '_=' + Date.now() : base
@@ -1348,7 +1346,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       setLastSync(new Date())
       setError(null)
     } catch (e) {
-      if (!paintedFromCache) setError('Failed to load: ' + e.message)
+      setError('Failed to load: ' + e.message)
     }
     finally { setLoading(false) }
   }, [applyCsv])
