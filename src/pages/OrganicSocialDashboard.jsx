@@ -534,70 +534,70 @@ export default function OrganicSocialDashboard() {
             </div>
           </Card>
 
-          {/* alignItems:'start' -- without it, grid stretches the shorter
-              YouTube card to match Website's taller one, leaving a large
-              empty gap under its "pending" note. Each card now sizes to its
-              own content instead of being forced to match its sibling. */}
-          <div className="lq-grid2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
-
-            <Card title="Website" sub={ga4 ? `Organic Search channel \u00B7 ${compareLabel}` : 'Google Analytics 4'}>
-              {ga4 ? (
-                <>
-                  <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                    <PremKPI label="Organic Users" value={fmtN(ga4.cur.organicUsers)} delta={ga4.prior ? pctDelta(ga4.cur.organicUsers, ga4.prior.organicUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
-                    <PremKPI label="Total Users" value={fmtN(ga4.cur.totalUsers)} delta={ga4.prior ? pctDelta(ga4.cur.totalUsers, ga4.prior.totalUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
-                    <PremKPI label="Organic %" value={ga4.cur.organicPct.toFixed(1) + '%'} delta={ga4.prior ? pctDelta(ga4.cur.organicPct, ga4.prior.organicPct) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.cyan} accentBg={C.cyanBg} />
-                    <PremKPI label="Conversions" value={fmtN(ga4.cur.conversions)} delta={ga4.prior ? pctDelta(ga4.cur.conversions, ga4.prior.conversions) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.green} accentBg={C.greenBg} />
-                    <PremKPI label="Conversions / User" value={ga4.cur.conversionsPerUser.toFixed(2)} delta={ga4.prior ? pctDelta(ga4.cur.conversionsPerUser, ga4.prior.conversionsPerUser) : null} sub="events per user, can exceed 1" icon={ICONS.pct} accent={C.navy} accentBg={C.navyBg} />
-                  </div>
-                  {ga4.cur.conversions === 0 && (
-                    <p style={{ fontSize: 11, color: C.muted, fontFamily: FONT, margin: '8px 0 0' }}>
-                      No GA4 key events (conversions) are configured on this property yet -- this is a real 0, not a fetch error.
-                    </p>
-                  )}
-                  <div style={{ marginTop: 18 }}>
-                    <SubHead right={`${fmtN(ga4.cur.organicUsers)} of ${fmtN(ga4.cur.totalUsers)}`}>Organic share of all traffic</SubHead>
-                    <SplitBar share={ga4.cur.organicPct} color={C.navy} label={`${ga4.cur.organicPct.toFixed(1)}% arrived from organic search; the remainder came from every other channel.`} />
-                  </div>
-                  {ga4.cur.byChannel && ga4.cur.byChannel.length > 0 && (() => {
-                    const channelRows = ga4.cur.byChannel.map(c => ({ channel: c.channel, count: c.users }))
-                    return (
-                      <div style={{ marginTop: 18 }}>
-                        <SubHead right={`${channelRows.length} channels`}>Users by channel</SubHead>
-                        <RankedBarChart data={channelRows} labelKey="channel" valueKey="count" hue={C.navy} slug="website" chartKey="channels" total={ga4.cur.totalUsers} />
-                      </div>
-                    )
-                  })()}
-                </>
-              ) : (
-                <PendingNote title="Pending" detail="Waiting on GA4 property access to be granted to the Quantum reader service account." />
-              )}
-            </Card>
-
-            <Card title="YouTube" sub={yt ? yt.title : 'Data API + Analytics API'}>
-              {yt ? (
-                <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', gap: 12 }}>
-                  <PremKPI label="Subscribers" value={fmtN(yt.subscriberCount)} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
-                  <PremKPI label="Lifetime Views" value={fmtN(yt.viewCount)} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
-                  <PremKPI label="Videos" value={fmtN(yt.videoCount)} icon={ICONS.play} accent={C.cyan} accentBg={C.cyanBg} />
-                  {ytRange ? (
-                    <>
-                      <PremKPI label={`Views (${period.curLabel})`} value={fmtN(ytRange.cur.totalViews)} delta={ytRange.prior ? pctDelta(ytRange.cur.totalViews, ytRange.prior.totalViews) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.green} accentBg={C.greenBg} />
-                      <PremKPI label={`Organic Views (${period.curLabel})`} value={fmtN(ytRange.cur.organicViews)} delta={ytRange.prior ? pctDelta(ytRange.cur.organicViews, ytRange.prior.organicViews) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.navy} accentBg={C.navyBg} />
-                      <PremKPI label={`Watch Time (hrs, ${period.curLabel})`} value={fmtN(ytRange.cur.totalMinutesWatched / 60)} delta={ytRange.prior ? pctDelta(ytRange.cur.totalMinutesWatched, ytRange.prior.totalMinutesWatched) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.clock} accent={C.blue} accentBg={C.blueBg} />
-                    </>
-                  ) : (
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <PendingNote title="Views &amp; watch time &mdash; pending" detail="Blocked on a Google Workspace admin trust grant for the Analytics API scope." />
-                    </div>
-                  )}
+          {/* Website and YouTube are two independent full-width cards, NOT a
+              2-up grid row. A CSS Grid row is always as tall as its tallest
+              cell, so pairing Website (14-row channel breakdown) against
+              YouTube (three lifetime tiles plus a pending note) sized the row
+              to Website and left a tall band of bare page showing through
+              below YouTube's card. alignItems:'start' only stopped the short
+              card stretching; it cannot shrink the row. Stacking removes the
+              shared row, so each card is exactly as tall as its own content. */}
+          <Card title="Website" sub={ga4 ? `Organic Search channel \u00B7 ${compareLabel}` : 'Google Analytics 4'}>
+            {ga4 ? (
+              <>
+                <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                  <PremKPI label="Organic Users" value={fmtN(ga4.cur.organicUsers)} delta={ga4.prior ? pctDelta(ga4.cur.organicUsers, ga4.prior.organicUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.globe} accent={C.navy} accentBg={C.navyBg} />
+                  <PremKPI label="Total Users" value={fmtN(ga4.cur.totalUsers)} delta={ga4.prior ? pctDelta(ga4.cur.totalUsers, ga4.prior.totalUsers) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
+                  <PremKPI label="Organic %" value={ga4.cur.organicPct.toFixed(1) + '%'} delta={ga4.prior ? pctDelta(ga4.cur.organicPct, ga4.prior.organicPct) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.pct} accent={C.cyan} accentBg={C.cyanBg} />
+                  <PremKPI label="Conversions" value={fmtN(ga4.cur.conversions)} delta={ga4.prior ? pctDelta(ga4.cur.conversions, ga4.prior.conversions) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.spark} accent={C.green} accentBg={C.greenBg} />
+                  <PremKPI label="Conversions / User" value={ga4.cur.conversionsPerUser.toFixed(2)} delta={ga4.prior ? pctDelta(ga4.cur.conversionsPerUser, ga4.prior.conversionsPerUser) : null} sub="events per user, can exceed 1" icon={ICONS.pct} accent={C.navy} accentBg={C.navyBg} />
                 </div>
-              ) : (
-                <PendingNote title="Not connected" />
-              )}
-            </Card>
+                {ga4.cur.conversions === 0 && (
+                  <p style={{ fontSize: 11, color: C.muted, fontFamily: FONT, margin: '8px 0 0' }}>
+                    No GA4 key events (conversions) are configured on this property yet -- this is a real 0, not a fetch error.
+                  </p>
+                )}
+                <div style={{ marginTop: 18 }}>
+                  <SubHead right={`${fmtN(ga4.cur.organicUsers)} of ${fmtN(ga4.cur.totalUsers)}`}>Organic share of all traffic</SubHead>
+                  <SplitBar share={ga4.cur.organicPct} color={C.navy} label={`${ga4.cur.organicPct.toFixed(1)}% arrived from organic search; the remainder came from every other channel.`} />
+                </div>
+                {ga4.cur.byChannel && ga4.cur.byChannel.length > 0 && (() => {
+                  const channelRows = ga4.cur.byChannel.map(c => ({ channel: c.channel, count: c.users }))
+                  return (
+                    <div style={{ marginTop: 18 }}>
+                      <SubHead right={`${channelRows.length} channels`}>Users by channel</SubHead>
+                      <RankedBarChart data={channelRows} labelKey="channel" valueKey="count" hue={C.navy} slug="website" chartKey="channels" total={ga4.cur.totalUsers} />
+                    </div>
+                  )
+                })()}
+              </>
+            ) : (
+              <PendingNote title="Pending" detail="Waiting on GA4 property access to be granted to the Quantum reader service account." />
+            )}
+          </Card>
 
-          </div>
+          <Card title="YouTube" sub={yt ? yt.title : 'Data API + Analytics API'}>
+            {yt ? (
+              <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(165px, 1fr))', gap: 12 }}>
+                <PremKPI label="Subscribers" value={fmtN(yt.subscriberCount)} icon={ICONS.followers} accent={C.navy} accentBg={C.navyBg} />
+                <PremKPI label="Lifetime Views" value={fmtN(yt.viewCount)} icon={ICONS.eye} accent={C.blue} accentBg={C.blueBg} />
+                <PremKPI label="Videos" value={fmtN(yt.videoCount)} icon={ICONS.play} accent={C.cyan} accentBg={C.cyanBg} />
+                {ytRange ? (
+                  <>
+                    <PremKPI label={`Views (${period.curLabel})`} value={fmtN(ytRange.cur.totalViews)} delta={ytRange.prior ? pctDelta(ytRange.cur.totalViews, ytRange.prior.totalViews) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.green} accentBg={C.greenBg} />
+                    <PremKPI label={`Organic Views (${period.curLabel})`} value={fmtN(ytRange.cur.organicViews)} delta={ytRange.prior ? pctDelta(ytRange.cur.organicViews, ytRange.prior.organicViews) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.eye} accent={C.navy} accentBg={C.navyBg} />
+                    <PremKPI label={`Watch Time (hrs, ${period.curLabel})`} value={fmtN(ytRange.cur.totalMinutesWatched / 60)} delta={ytRange.prior ? pctDelta(ytRange.cur.totalMinutesWatched, ytRange.prior.totalMinutesWatched) : null} sub={`vs ${period.priorLabel}`} icon={ICONS.clock} accent={C.blue} accentBg={C.blueBg} />
+                  </>
+                ) : (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <PendingNote title="Views &amp; watch time &mdash; pending" detail="Blocked on a Google Workspace admin trust grant for the Analytics API scope." />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <PendingNote title="Not connected" />
+            )}
+          </Card>
 
           {/* The primary visual story. Absolute scale and growth rate sit
               side by side on purpose: @leverageedu carries several hundred
@@ -893,12 +893,11 @@ const GrowthBars = ({ rows }) => {
 }
 
 // "Reach by account" -- deliberately its own component, not the shared
-// RankedBars used elsewhere in the app: every account's bar is now ONE hue
-// (this page's own navy->blue gradient) instead of a different colour per
-// account, and the rank badge is a larger gradient disc with a soft shadow --
-// the exact navy->blue gradient + shadow already used for the active-account
-// switcher button just below this card -- rather than a flat single-tone
-// square, so the ranking reads as a genuine visual upgrade, not a recolour.
+// RankedBars used elsewhere in the app: every bar is ONE hue (this
+// page's own navy->blue gradient) rather than a different colour per
+// account, and the rows are deliberately unnumbered -- the list is
+// already sorted high to low and each row prints its own value and
+// share of total, so a rank badge only restated the ordering.
 function AccountRankList({ data, labelKey, max, total }) {
   if (!data || data.length === 0) return <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No data</div>
   return (
@@ -907,13 +906,6 @@ function AccountRankList({ data, labelKey, max, total }) {
         const w = max > 0 ? (r.count / max * 100) : 0
         return (
           <div key={r[labelKey] + i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-              background: `linear-gradient(135deg, ${C.navy}, ${C.blue})`,
-              boxShadow: '0 3px 9px -2px rgba(31,60,132,0.55)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 800, color: '#fff', fontFamily: FONT,
-            }}>{i + 1}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, alignItems: 'baseline' }}>
                 <span style={{ fontSize: 14, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
