@@ -667,6 +667,18 @@ with urllib.request.urlopen(req2) as r:
 
 ---
 
+## 2026-09-01 — Human/AI QL Detail: stuck grey rectangle on Daily Trend after using Custom range (commit `c531277`)
+
+User: "custom range of Human QL is not working, can you check once." Live-reproduced rather than guessed. The actual filtering was never broken — applying a Custom range (2026-08-01 → 2026-08-15) correctly updated Total QLs (2,768), country/disposition breakdowns, and the table (2,768 of 82,087 records), every time.
+
+**What was actually broken, and what the user genuinely saw:** right after clicking through the Custom Range date-picker (open popover → click a start day → click an end day → Apply), the separate "Daily Trend" mini-chart (a small bar chart explicitly scoped to the current calendar month regardless of any filter, per its own subtitle) would render with a large solid grey rectangle covering roughly its left half, in place of its normal empty/blank state. Traced via `document.elementsFromPoint` + walking the Recharts SVG tree (a naive click-to-inspect kept missing it because this browser environment's screenshot pixels don't map 1:1 to CSS pixels -- had to use the chart's own `getBoundingClientRect()` to find a genuinely-inside test point) to a `recharts-rectangle recharts-tooltip-cursor` `<path>` with `fill="#ccc"`, positioned at a bogus off-axis coordinate (`x=-201.5`, width 403 on a ~389px-wide chart). This is Recharts' own hover-highlight rectangle for a `<BarChart>`, stuck permanently rendered.
+
+**Root cause:** the date-picker popover sits close enough to the Daily Trend chart underneath that clicking through it (open → pick day → pick day → Apply, 4 quick clicks in that region) causes a stray pointer event to reach the chart's SVG without a matching mouse-leave following it, so Recharts' internal tooltip-cursor state never resets. Confirmed directly: a **real** hover onto the chart followed by a hover away cleared the stuck rectangle completely on its own -- proving it really is just a missed mouse-leave, not a data or filtering bug. September has zero data in either the Human or AI QL sheets yet (established in the immediately preceding conversation turn), so the chart's *correct* empty state is genuinely blank -- the grey rectangle was the only thing wrong with it.
+
+**Fix:** since this chart is a small always-current-month sparkline with no real need for a hover-highlight band (the per-bar tooltip *values* on hover are unaffected), added `cursor={false}` to its `<Tooltip>` in both `HumanQLDetailDashboard.jsx` and `AIQLDetailDashboard.jsx` (identical duplicated chart code in both -- confirmed via `grep` this is the only pair of files with this pattern) -- removes the highlight rectangle entirely, so the whole bug class can't recur, rather than trying to patch the mouse-leave timing.
+
+**Live-verified**: rebuilt, pushed (rebased once over a concurrent commit), waited for the Vercel redeploy (confirmed via a changed served bundle hash), then re-ran the *exact* repro sequence (Custom range → click Aug 1 → click Aug 15 → Apply) on the live site -- Total QLs/breakdowns/table all populated correctly as before, and Daily Trend now renders its clean empty state with no grey rectangle. `npm run build` passed clean before pushing.
+
 *Update this file after every significant session.*
 
 
