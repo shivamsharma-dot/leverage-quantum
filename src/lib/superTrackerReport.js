@@ -8,23 +8,36 @@
 //
 // The report is the ACTUAL TRACKED FIGURES, not a compliance/completion read
 // on them -- every table below is real values straight out of the sheet
-// (Last week / This week, exactly as the sheet displays them), split into
-// sections by the sheet's own S.No. grouping code (e.g. "CC01", "CC03", "R01")
-// rather than shown as one flat per-metric list. Nothing here hardcodes a
-// metric name or a group code -- both the groups and the figures come from
-// whatever the sheet actually contains right now.
+// (exactly as the sheet displays them), split into sections by the sheet's
+// own S.No. grouping code (e.g. "CC01", "CC03", "R01") rather than shown as
+// one flat per-metric list. Nothing here hardcodes a metric name or a group
+// code -- both the groups and the figures come from whatever the sheet
+// actually contains right now.
 
 function weekValue(row, label) {
   const w = (row.weeks || []).find(x => x.label === label)
   return w ? w.value : ''
 }
 
-// The last two week columns IN SHEET ORDER -- not every section shares the
-// same week set (a newer tab can start mid-quarter, one already carries 14
-// weeks of history), so this is computed per section, never globally.
-function latestTwoWeeks(section) {
+// The literal LAST column is very often still blank -- a weekly tracker's
+// current week fills in as the week actually happens, so "the last column"
+// is frequently the one column guaranteed to have nothing in it yet (real,
+// live example: 19-25 Oct and 12-18 Oct were both entirely blank across
+// every B2C metric, while 24-30 Aug -- several columns earlier -- was fully
+// populated). Walk backward from the last column to the first one that has
+// AT LEAST ONE real value anywhere in the section, and report against THAT,
+// so "this week" always means "the most recent week with real figures",
+// never a guaranteed-empty one. Falls back to the literal last column only
+// if truly nothing in the section has ever been filled in.
+function latestPopulatedWeek(section) {
   const labels = section.weekLabels || []
-  return { cur: labels[labels.length - 1] || null, prev: labels.length > 1 ? labels[labels.length - 2] : null }
+  const rows = section.rows || []
+  for (let i = labels.length - 1; i >= 0; i--) {
+    if (rows.some(r => weekValue(r, labels[i]).trim() !== '')) {
+      return { cur: labels[i], prev: i > 0 ? labels[i - 1] : null, curIsLatestColumn: i === labels.length - 1 }
+    }
+  }
+  return { cur: labels[labels.length - 1] || null, prev: labels.length > 1 ? labels[labels.length - 2] : null, curIsLatestColumn: true }
 }
 
 // Rows re-ordered so every S.No. group's rows sit next to each other, in the
@@ -43,10 +56,19 @@ function groupSortedRows(rows) {
   return { rows: out, groupCount: order.length }
 }
 
-// -- native Slack table cells (max 20 cells/row, and a message's table rows
-// together are kept under Slack's own real ~100-row / ~10,000-table-character
-// ceiling -- both discovered empirically building the Overall reports; see
-// SECTION_ROW_BUDGET below) ---------------------------------------------
+// A REAL section/metric name can contain _, *, ~ or ` (confirmed live:
+// "B2C Metrics_v2" and "30_Targets" are genuine tab names) -- and Slack's
+// mrkdwn parses single underscores/asterisks/tildes as formatting delimiters
+// wherever a block's text has type:'mrkdwn'. Left unescaped, "Metrics_v2"
+// renders as "Metrics" + italic "v2", garbling the title. Escaping backslash-
+// prefixes those four characters so they print literally. NOT needed inside
+// table CELLS below -- those use type:'raw_text', which Slack never parses
+// as mrkdwn in the first place.
+function escMrkdwn(s) {
+  return String(s == null ? '' : s).replace(/[_*~`]/g, c => '\\' + c)
+}
+
+// -- native Slack table cells (raw_text is literal, never mrkdwn-parsed) ----
 const cellText = v => ({ type: 'raw_text', text: v == null || v === '' ? '—' : String(v) })
 const cellBold = v => ({ type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: v == null || v === '' ? '—' : String(v), style: { bold: true } }] }] })
 const cellPlain = c => {
@@ -66,38 +88,32 @@ const SECTION_ROW_BUDGET = 85
 // regardless of how many tabs the workbook grows to.
 const MAX_INDIVIDUAL_SECTIONS = 5
 
-function tableRowsFor(section, budget) {
-  const { cur, prev } = latestTwoWeeks(section)
+function rowsFor(section, budget) {
+  const { cur, prev, curIsLatestColumn } = latestPopulatedWeek(section)
   const { rows, groupCount } = groupSortedRows(section.rows || [])
   const shown = rows.slice(0, budget)
-  const head = ['Group', 'Metric', 'Business Line', 'Owner']
-  if (prev) head.push('Last week (' + prev + ')')
-  head.push('This week (' + (cur || '—') + ')')
-  const body = shown.map(r => {
-    const row = [r.__group, r.metric, r.businessLine || '—', r.owner || '—']
-    if (prev) row.push(weekValue(r, prev))
-    row.push(weekValue(r, cur))
-    return row
-  })
-  return { head, body, total: rows.length, shown: shown.length, groupCount, cur, prev }
-}
-
-function tableBlock(blockId, head, body) {
-  const cols = head.map((_, i) => (i < 4 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
-  const tableRows = [head.map(cellBold), ...body.map(r => r.map(cellText))]
-  return {
-    blocks: [{ type: 'table', block_id: blockId, column_settings: cols, rows: tableRows }],
-    table: { columns: tableRows[0].map(cellPlain), rows: tableRows.slice(1).map(r => r.map(cellPlain)) },
-  }
+  return { shown, total: rows.length, groupCount, cur, prev, curIsLatestColumn }
 }
 
 // -- one message per section: the real figures, grouped by S.No. ------------
 function buildSectionMessage(section, idx) {
-  const t = tableRowsFor(section, SECTION_ROW_BUDGET)
-  const title = ':ledger: *' + section.label + '*'
-  const sub = '_' + t.total.toLocaleString('en-IN') + ' metric(s) across ' + t.groupCount + ' group(s), split by S.No. code' + (t.prev ? ', comparing ' + t.prev + ' to ' + t.cur : ', week of ' + (t.cur || '—')) + '._'
-  const built = tableBlock('st_sec_' + idx, t.head, t.body)
-  const overflow = t.total - t.shown
+  const t = rowsFor(section, SECTION_ROW_BUDGET)
+  const title = ':ledger: *' + escMrkdwn(section.label) + '*'
+  const staleNote = t.curIsLatestColumn ? '' : ' (the most recent column with any real value -- newer columns exist but are not yet filled in)'
+  const sub = '_' + t.total.toLocaleString('en-IN') + ' metric(s) across ' + t.groupCount + ' group(s), split by S.No. code'
+    + (t.prev ? ', comparing ' + t.prev + ' to ' + t.cur : ', week of ' + (t.cur || '—')) + staleNote + '._'
+  const head = ['Group', 'Metric', 'Business Line', 'Owner']
+  if (t.prev) head.push('Last week (' + t.prev + ')')
+  head.push('This week (' + (t.cur || '—') + ')')
+  const body = t.shown.map(r => {
+    const row = [r.__group, r.metric, r.businessLine || '—', r.owner || '—']
+    if (t.prev) row.push(weekValue(r, t.prev))
+    row.push(weekValue(r, t.cur))
+    return row
+  })
+  const cols = head.map((_, i) => (i < 4 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
+  const tableRows = [head.map(cellBold), ...body.map(r => r.map(cellText))]
+  const overflow = t.total - t.shown.length
   const overflowLine = overflow > 0 ? '_...and ' + overflow.toLocaleString('en-IN') + ' more metric(s) in this section — full detail is in the CSV attached to this report._' : null
   return {
     key: 'section_' + idx,
@@ -106,45 +122,50 @@ function buildSectionMessage(section, idx) {
     blocks: [
       { type: 'section', text: { type: 'mrkdwn', text: title } },
       { type: 'context', elements: [{ type: 'mrkdwn', text: sub }] },
-      ...built.blocks,
+      { type: 'table', block_id: 'st_sec_' + idx, column_settings: cols, rows: tableRows },
       ...(overflowLine ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: overflowLine }] }] : []),
     ],
-    table: built.table,
+    table: { columns: tableRows[0].map(cellPlain), rows: tableRows.slice(1).map(r => r.map(cellPlain)) },
   }
 }
 
-// -- closing message: whatever sections didn't get their own message above,
-// each still shown as its own real-figures table -- just a smaller slice of
-// each, since several of them are sharing one message's row/character budget.
+// -- closing message: every remaining section, ONE combined native table ----
+// (a Section column identifies which tab each row is from) rather than one
+// table block per section -- Slack only reliably renders a single table
+// block per message; a second table block in the same message silently fell
+// back to a plain-text render in production (confirmed live -- see the
+// commit this replaces). One table, many sections, is the fix.
 function buildCombinedMessage(sections) {
-  const title = ':ledger: *' + sections.map(s => s.label).join(' · ') + '*'
-  const L = [title, '_' + sections.length + ' more section(s), each split by S.No. code. Shown here at a smaller depth per section — the full detail for all of them is in the CSV attached to this report._']
-  const blocks = [
-    { type: 'section', text: { type: 'mrkdwn', text: title } },
-    { type: 'context', elements: [{ type: 'mrkdwn', text: L[1] }] },
-  ]
-  let tablePreview = null
-  const perSectionBudget = Math.max(10, Math.floor(SECTION_ROW_BUDGET / sections.length))
-  sections.forEach((section, i) => {
-    const t = tableRowsFor(section, perSectionBudget)
-    const subTitle = '*' + section.label + '*' + ' — ' + t.total.toLocaleString('en-IN') + ' metric(s), ' + t.groupCount + ' group(s)' + (t.prev ? ', ' + t.prev + ' vs ' + t.cur : ', week of ' + (t.cur || '—'))
-    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: subTitle }] })
-    const built = tableBlock('st_comb_' + i, t.head, t.body)
-    blocks.push(...built.blocks)
-    if (!tablePreview) tablePreview = built.table // the in-app preview only ever mirrors the FIRST table -- see note below
-    L.push(subTitle, ...built.table.rows.map(r => r.join(' | ')))
+  const title = ':ledger: *' + sections.map(s => escMrkdwn(s.label)).join(' · ') + '*'
+  const sub = '_' + sections.length + ' more section(s), each still split by S.No. code, in one shared table. Full detail for all of them is in the CSV attached to this report._'
+  const perSectionBudget = Math.max(8, Math.floor(SECTION_ROW_BUDGET / sections.length))
+  const head = ['Section', 'Group', 'Metric', 'Business Line', 'Owner', 'Last week', 'This week']
+  const body = []
+  const overflowNotes = []
+  sections.forEach(section => {
+    const t = rowsFor(section, perSectionBudget)
+    t.shown.forEach(r => body.push([
+      section.label, r.__group, r.metric, r.businessLine || '—', r.owner || '—',
+      t.prev ? weekValue(r, t.prev) + ' (' + t.prev + ')' : '—',
+      weekValue(r, t.cur) + ' (' + (t.cur || '—') + ')',
+    ]))
+    const overflow = t.total - t.shown.length
+    if (overflow > 0) overflowNotes.push(section.label + ': +' + overflow.toLocaleString('en-IN') + ' more')
   })
+  const cols = head.map((_, i) => (i < 5 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
+  const tableRows = [head.map(cellBold), ...body.map(r => r.map(cellText))]
+  const overflowLine = overflowNotes.length ? '_Truncated per section — ' + overflowNotes.join(', ') + '. Full detail is in the CSV attached to this report._' : null
   return {
     key: 'combined',
     label: 'More sections',
-    text: L.join('\n'),
-    blocks,
-    // The Quantum in-app preview (TablePreview) only knows how to render one
-    // {columns,rows} table per message, so a combined message with several
-    // sub-tables previews as text (L above, already built) rather than a
-    // single mis-matched table -- the REAL Slack send still gets every one
-    // of the per-section table blocks pushed above, in full.
-    table: null,
+    text: [title, sub].join('\n') + (overflowLine ? '\n\n' + overflowLine : ''),
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: title } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: sub }] },
+      { type: 'table', block_id: 'st_combined', column_settings: cols, rows: tableRows },
+      ...(overflowLine ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: overflowLine }] }] : []),
+    ],
+    table: { columns: tableRows[0].map(cellPlain), rows: tableRows.slice(1).map(r => r.map(cellPlain)) },
   }
 }
 
@@ -166,10 +187,10 @@ export const SUPER_TRACKER_REPORT_VERSIONS = [{
   name: 'Super Tracker — actual figures by section',
   tagline: 'Every real tracked value, split into sections by the sheet’s own S.No. grouping code.',
   what: [
-    'One message per real workbook section (B2C, B2B, Fly Finance, Fly Homes, ...), each a native Slack table',
+    'One message per real workbook section (B2C, B2B, Fly Finance, Fly Homes, ...), each ONE native Slack table',
     'Every table split into sections by the sheet’s own S.No. code (e.g. CC01, CC03, R01) — not one flat metric list',
-    'The actual Last week / This week value for every metric, exactly as the sheet shows it — no percentages, no derived scores',
-    'A section over the row budget is truncated with a stated count; sections beyond the first 5 share one closing message',
+    'The actual value for the most recent week that has real data (not a guaranteed-blank "latest column") — no percentages, no derived scores',
+    'A section over the row budget is truncated with a stated count; sections beyond the first 5 share one closing message, still split by S.No. within one table',
     'The full flattened sheet (every section/metric/week) attached as a CSV',
   ],
   build: buildSuperTracker,
