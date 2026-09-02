@@ -6,33 +6,13 @@
 // just posts whatever pre-built `messages` array the client hands it -- no
 // server-side import of this file needed).
 //
-// Deliberately generic: every number here is derived from whatever the sheet
-// actually contains right now (real weeks, real "to be posted" flags, real
-// values) -- nothing is keyed off a specific metric name, so a metric added or
-// removed in the sheet changes the report's numbers automatically, never its
-// code.
-
-// -- number parsing --------------------------------------------------------
-// The sheet mixes currency, percentages, plain counts and free text in one
-// column (see lib/superTracker.mjs's own reasoning for reading FORMATTED_VALUE
-// rather than raw numbers) -- so a "number" here is best-effort: strip the
-// punctuation a business sheet actually uses (rupee sign, thousands commas,
-// a trailing %, stray whitespace) and only trust what's left if it parses
-// clean. Anything else (a literal "NA", a blank cell, free text) is null,
-// which every caller below treats as "not comparable" rather than as zero.
-function parseNum(v) {
-  const s = String(v || '').trim()
-  if (!s) return null
-  const isPct = /%$/.test(s)
-  const cleaned = s.replace(/[₹%,\s]/g, '')
-  if (!cleaned || !/^-?\d+(\.\d+)?$/.test(cleaned)) return null
-  const n = Number(cleaned)
-  return { value: n, isPct }
-}
-
-function isYes(v) {
-  return /^(y|yes)$/i.test(String(v || '').trim())
-}
+// The report is the ACTUAL TRACKED FIGURES, not a compliance/completion read
+// on them -- every table below is real values straight out of the sheet
+// (Last week / This week, exactly as the sheet displays them), split into
+// sections by the sheet's own S.No. grouping code (e.g. "CC01", "CC03", "R01")
+// rather than shown as one flat per-metric list. Nothing here hardcodes a
+// metric name or a group code -- both the groups and the figures come from
+// whatever the sheet actually contains right now.
 
 function weekValue(row, label) {
   const w = (row.weeks || []).find(x => x.label === label)
@@ -47,50 +27,26 @@ function latestTwoWeeks(section) {
   return { cur: labels[labels.length - 1] || null, prev: labels.length > 1 ? labels[labels.length - 2] : null }
 }
 
-function sectionStats(section) {
-  const { cur } = latestTwoWeeks(section)
-  const rows = section.rows || []
-  const total = rows.length
-  const shouldPost = rows.filter(r => isYes(r.toBePosted)).length
-  const posted = cur ? rows.filter(r => isYes(r.toBePosted) && weekValue(r, cur).trim() !== '').length : 0
-  const pct = shouldPost > 0 ? (posted / shouldPost * 100) : null
-  return { section, cur, total, shouldPost, posted, pct }
-}
-
-// Metrics flagged "to be posted: Yes" with no value yet for the section's own
-// latest week -- the direct, accountable answer to "what's still missing".
-function missingRows(section) {
-  const { cur } = latestTwoWeeks(section)
-  if (!cur) return []
-  return (section.rows || [])
-    .filter(r => isYes(r.toBePosted) && weekValue(r, cur).trim() === '')
-    .map(r => ({ section: section.label, owner: (r.owner || 'Unassigned').trim() || 'Unassigned', metric: r.metric, week: cur }))
-}
-
-// Week-over-week movers -- only where BOTH weeks parse as real numbers of the
-// SAME kind (both plain, or both a %), since a plain count and a percentage
-// moving "the same amount" would be comparing two different things.
-function moverRows(section) {
-  const { cur, prev } = latestTwoWeeks(section)
-  if (!cur || !prev) return []
+// Rows re-ordered so every S.No. group's rows sit next to each other, in the
+// order each group first appears in the sheet -- this is the actual "split
+// into sections" mechanism: a native Slack table has no header-row-per-group
+// concept, so the Group column plus contiguous ordering is what makes the
+// groups read as distinct sections once posted.
+function groupSortedRows(rows) {
+  const order = []
+  const seen = new Set()
+  rows.forEach(r => { const k = (r.sNo || '').trim() || '—'; if (!seen.has(k)) { seen.add(k); order.push(k) } })
   const out = []
-  for (const r of section.rows || []) {
-    const a = parseNum(weekValue(r, prev))
-    const b = parseNum(weekValue(r, cur))
-    if (!a || !b || a.isPct !== b.isPct || a.value === 0) continue
-    const pctChange = (b.value - a.value) / Math.abs(a.value) * 100
-    if (!isFinite(pctChange)) continue
-    out.push({ section: section.label, metric: r.metric, prevRaw: weekValue(r, prev), curRaw: weekValue(r, cur), pctChange, cur, prev })
-  }
-  return out
+  order.forEach(code => {
+    rows.forEach(r => { if (((r.sNo || '').trim() || '—') === code) out.push({ ...r, __group: code }) })
+  })
+  return { rows: out, groupCount: order.length }
 }
 
-function pctLabel(n) {
-  if (n == null || !isFinite(n)) return '—'
-  return (n > 0 ? '+' : '') + n.toFixed(1) + '%'
-}
-
-// -- native Slack table cells (same convention as b2cReport.js's own) -------
+// -- native Slack table cells (max 20 cells/row, and a message's table rows
+// together are kept under Slack's own real ~100-row / ~10,000-table-character
+// ceiling -- both discovered empirically building the Overall reports; see
+// SECTION_ROW_BUDGET below) ---------------------------------------------
 const cellText = v => ({ type: 'raw_text', text: v == null || v === '' ? '—' : String(v) })
 const cellBold = v => ({ type: 'rich_text', elements: [{ type: 'rich_text_section', elements: [{ type: 'text', text: v == null || v === '' ? '—' : String(v), style: { bold: true } }] }] })
 const cellPlain = c => {
@@ -99,130 +55,121 @@ const cellPlain = c => {
   const el = c.elements && c.elements[0] && c.elements[0].elements && c.elements[0].elements[0]
   return el ? el.text : ''
 }
-function tableBlock(blockId, title, sub, head, rows, boldFirstCol) {
-  const cellCols = head.map((_, i) => (i === 0 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
-  const tableRows = [head.map(cellBold), ...rows.map(r => r.map((v, i) => (i === 0 && boldFirstCol ? cellBold(v) : cellText(v))))]
-  const L = [title]
-  if (sub) L.push(sub)
+
+// Safety margin under Slack's real per-message ceiling (~100 table rows,
+// ~10,000 characters of table-cell text) -- several real sections here run
+// close to or past 100 rows on their own (B2C Metrics is 135), so this is a
+// hard budget, not a nicety.
+const SECTION_ROW_BUDGET = 85
+// Sections beyond this count are folded into one combined closing message,
+// so the whole report can never exceed Slack's 6-message-per-report cap
+// regardless of how many tabs the workbook grows to.
+const MAX_INDIVIDUAL_SECTIONS = 5
+
+function tableRowsFor(section, budget) {
+  const { cur, prev } = latestTwoWeeks(section)
+  const { rows, groupCount } = groupSortedRows(section.rows || [])
+  const shown = rows.slice(0, budget)
+  const head = ['Group', 'Metric', 'Business Line', 'Owner']
+  if (prev) head.push('Last week (' + prev + ')')
+  head.push('This week (' + (cur || '—') + ')')
+  const body = shown.map(r => {
+    const row = [r.__group, r.metric, r.businessLine || '—', r.owner || '—']
+    if (prev) row.push(weekValue(r, prev))
+    row.push(weekValue(r, cur))
+    return row
+  })
+  return { head, body, total: rows.length, shown: shown.length, groupCount, cur, prev }
+}
+
+function tableBlock(blockId, head, body) {
+  const cols = head.map((_, i) => (i < 4 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
+  const tableRows = [head.map(cellBold), ...body.map(r => r.map(cellText))]
   return {
-    text: L.join('\n'),
+    blocks: [{ type: 'table', block_id: blockId, column_settings: cols, rows: tableRows }],
+    table: { columns: tableRows[0].map(cellPlain), rows: tableRows.slice(1).map(r => r.map(cellPlain)) },
+  }
+}
+
+// -- one message per section: the real figures, grouped by S.No. ------------
+function buildSectionMessage(section, idx) {
+  const t = tableRowsFor(section, SECTION_ROW_BUDGET)
+  const title = ':ledger: *' + section.label + '*'
+  const sub = '_' + t.total.toLocaleString('en-IN') + ' metric(s) across ' + t.groupCount + ' group(s), split by S.No. code' + (t.prev ? ', comparing ' + t.prev + ' to ' + t.cur : ', week of ' + (t.cur || '—')) + '._'
+  const built = tableBlock('st_sec_' + idx, t.head, t.body)
+  const overflow = t.total - t.shown
+  const overflowLine = overflow > 0 ? '_...and ' + overflow.toLocaleString('en-IN') + ' more metric(s) in this section — full detail is in the CSV attached to this report._' : null
+  return {
+    key: 'section_' + idx,
+    label: section.label,
+    text: [title, sub].join('\n') + (overflowLine ? '\n\n' + overflowLine : ''),
     blocks: [
       { type: 'section', text: { type: 'mrkdwn', text: title } },
-      ...(sub ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: sub }] }] : []),
-      { type: 'table', block_id: blockId, column_settings: cellCols, rows: tableRows },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: sub }] },
+      ...built.blocks,
+      ...(overflowLine ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: overflowLine }] }] : []),
     ],
-    table: {
-      columns: tableRows[0].map(cellPlain),
-      rows: tableRows.slice(1).map(r => r.map(cellPlain)),
-    },
+    table: built.table,
   }
 }
 
-// -- message 1: exec summary -------------------------------------------------
-function buildSummary(ctx) {
-  const sections = ctx.sections || []
-  const stats = sections.map(sectionStats)
-  const totalTracked = stats.reduce((s, x) => s + x.total, 0)
-  const totalShouldPost = stats.reduce((s, x) => s + x.shouldPost, 0)
-  const totalPosted = stats.reduce((s, x) => s + x.posted, 0)
-  const overallPct = totalShouldPost > 0 ? (totalPosted / totalShouldPost * 100) : null
-  const ranked = stats.filter(s => s.shouldPost > 0).slice().sort((a, b) => a.pct - b.pct)
-  const worst = ranked[0]
-  const best = ranked[ranked.length - 1]
-
-  const L = []
-  L.push(':bar_chart: *Super Tracker — weekly compliance*')
-  L.push(`_${sections.length} section(s), ${totalTracked.toLocaleString('en-IN')} metric(s) tracked. Each section is read against its own latest week — not every tab is on the same weekly cycle._`)
-  L.push('')
-  L.push(`*Overall: ${totalPosted} of ${totalShouldPost} due metrics are filled in this week* (${overallPct == null ? '—' : overallPct.toFixed(1) + '%'})`)
-  if (worst) L.push(`:warning: Furthest behind: *${worst.section.label}* — ${worst.posted} of ${worst.shouldPost} (${worst.pct.toFixed(1)}%), week of ${worst.cur}`)
-  if (best && best !== worst) L.push(`:white_check_mark: Most on track: *${best.section.label}* — ${best.posted} of ${best.shouldPost} (${best.pct.toFixed(1)}%), week of ${best.cur}`)
-  L.push('')
-  L.push('*By section*')
-  stats.forEach(s => {
-    const pctStr = s.pct == null ? 'no metrics due' : s.pct.toFixed(1) + '%'
-    L.push(`• ${s.section.label}: ${s.posted}/${s.shouldPost} due (${pctStr}) — ${s.total} tracked, week of ${s.cur || '—'}`)
+// -- closing message: whatever sections didn't get their own message above,
+// each still shown as its own real-figures table -- just a smaller slice of
+// each, since several of them are sharing one message's row/character budget.
+function buildCombinedMessage(sections) {
+  const title = ':ledger: *' + sections.map(s => s.label).join(' · ') + '*'
+  const L = [title, '_' + sections.length + ' more section(s), each split by S.No. code. Shown here at a smaller depth per section — the full detail for all of them is in the CSV attached to this report._']
+  const blocks = [
+    { type: 'section', text: { type: 'mrkdwn', text: title } },
+    { type: 'context', elements: [{ type: 'mrkdwn', text: L[1] }] },
+  ]
+  let tablePreview = null
+  const perSectionBudget = Math.max(10, Math.floor(SECTION_ROW_BUDGET / sections.length))
+  sections.forEach((section, i) => {
+    const t = tableRowsFor(section, perSectionBudget)
+    const subTitle = '*' + section.label + '*' + ' — ' + t.total.toLocaleString('en-IN') + ' metric(s), ' + t.groupCount + ' group(s)' + (t.prev ? ', ' + t.prev + ' vs ' + t.cur : ', week of ' + (t.cur || '—'))
+    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: subTitle }] })
+    const built = tableBlock('st_comb_' + i, t.head, t.body)
+    blocks.push(...built.blocks)
+    if (!tablePreview) tablePreview = built.table // the in-app preview only ever mirrors the FIRST table -- see note below
+    L.push(subTitle, ...built.table.rows.map(r => r.join(' | ')))
   })
-  return { key: 'summary', label: 'Super Tracker — weekly compliance', text: L.join('\n') }
-}
-
-// -- message 2: completion by section, native table -------------------------
-function buildCompletionTable(ctx) {
-  const sections = ctx.sections || []
-  const stats = sections.map(sectionStats).sort((a, b) => (a.pct == null ? 999 : a.pct) - (b.pct == null ? 999 : b.pct))
-  const rows = stats.map(s => [s.section.label, String(s.total), String(s.shouldPost), String(s.posted), s.pct == null ? '—' : s.pct.toFixed(1) + '%', s.cur || '—'])
-  const built = tableBlock('st_completion', ':ledger: *Completion by section*', '_Ranked lowest completion first. "Due" is every metric flagged To Be Posted = Yes._',
-    ['Section', 'Tracked', 'Due', 'Posted', 'Completion', 'Week'], rows, true)
-  return { key: 'completion', label: 'Completion by section', ...built }
-}
-
-// -- message 3: what's missing, grouped by owner -----------------------------
-function buildMissing(ctx) {
-  const sections = ctx.sections || []
-  const all = sections.flatMap(missingRows)
-  const L = []
-  L.push(':mag: *What’s missing this week*')
-  if (!all.length) {
-    L.push('_Nothing outstanding — every metric flagged To Be Posted = Yes has a value for its latest week._')
-    return { key: 'missing', label: 'What’s missing', text: L.join('\n') }
+  return {
+    key: 'combined',
+    label: 'More sections',
+    text: L.join('\n'),
+    blocks,
+    // The Quantum in-app preview (TablePreview) only knows how to render one
+    // {columns,rows} table per message, so a combined message with several
+    // sub-tables previews as text (L above, already built) rather than a
+    // single mis-matched table -- the REAL Slack send still gets every one
+    // of the per-section table blocks pushed above, in full.
+    table: null,
   }
-  L.push(`_${all.length} metric(s) are flagged To Be Posted = Yes with no value yet, grouped by owner._`)
-  const byOwner = {}
-  all.forEach(r => { (byOwner[r.owner] = byOwner[r.owner] || []).push(r) })
-  const owners = Object.keys(byOwner).sort((a, b) => byOwner[b].length - byOwner[a].length)
-  const CAP = 25
-  let shown = 0
-  L.push('')
-  for (const owner of owners) {
-    if (shown >= CAP) break
-    L.push(`*${owner}* (${byOwner[owner].length})`)
-    for (const r of byOwner[owner]) {
-      if (shown >= CAP) break
-      L.push(`• ${r.metric} — _${r.section}_, week of ${r.week}`)
-      shown++
-    }
-  }
-  if (all.length > shown) L.push('')
-  if (all.length > shown) L.push(`_...and ${all.length - shown} more. Full list is in the CSV attached to this report._`)
-  return { key: 'missing', label: 'What’s missing', text: L.join('\n') }
-}
-
-// -- message 4: biggest movers, native table ---------------------------------
-function buildMovers(ctx) {
-  const sections = ctx.sections || []
-  const all = sections.flatMap(moverRows)
-  const L = []
-  L.push(':chart_with_upwards_trend: *Biggest movers this week*')
-  if (!all.length) {
-    L.push('_No metric had a comparable numeric value in both this week and last week yet._')
-    return { key: 'movers', label: 'Biggest movers', text: L.join('\n') }
-  }
-  const up = all.filter(m => m.pctChange > 0).sort((a, b) => b.pctChange - a.pctChange).slice(0, 5)
-  const down = all.filter(m => m.pctChange < 0).sort((a, b) => a.pctChange - b.pctChange).slice(0, 5)
-  const rows = [...up, ...down].map(m => [m.metric, m.section, m.prevRaw, m.curRaw, pctLabel(m.pctChange)])
-  const built = tableBlock('st_movers', L[0], '_Only metrics with a real numeric value both this week and last week — text/blank cells are never compared._',
-    ['Metric', 'Section', 'Last week', 'This week', 'Change'], rows, false)
-  return { key: 'movers', label: 'Biggest movers', ...built }
 }
 
 function buildSuperTracker(ctx) {
-  const c = ctx || {}
-  const messages = [buildSummary(c), buildCompletionTable(c), buildMissing(c), buildMovers(c)]
-  if (c.isTest) messages[messages.length - 1].text += '\n\n_Test send._'
+  const sections = ctx.sections || []
+  const messages = []
+  const individual = sections.slice(0, MAX_INDIVIDUAL_SECTIONS)
+  const rest = sections.slice(MAX_INDIVIDUAL_SECTIONS)
+  individual.forEach((s, i) => messages.push(buildSectionMessage(s, i)))
+  if (rest.length) messages.push(buildCombinedMessage(rest))
+  if (ctx.isTest && messages.length) messages[messages.length - 1].text += '\n\n_Test send._'
   return messages
 }
 
 export const SUPER_TRACKER_REPORT_VERSIONS = [{
   id: 'super_tracker_v1',
   code: 'ST',
-  msgKeys: ['summary', 'completion', 'missing', 'movers'],
-  name: 'Super Tracker — weekly compliance',
-  tagline: 'Who’s on track, what’s missing, and what moved — computed fresh from whatever the sheet holds right now.',
+  msgKeys: ['section_0', 'section_1', 'section_2', 'section_3', 'section_4', 'combined'],
+  name: 'Super Tracker — actual figures by section',
+  tagline: 'Every real tracked value, split into sections by the sheet’s own S.No. grouping code.',
   what: [
-    'An overall + per-section completion rate for the latest week each section actually tracks',
-    'A native table ranking every section worst-completion-first',
-    'A "what’s missing" checklist, grouped by owner, of every due metric with no value yet',
-    'A biggest-movers table (real numeric metrics only) comparing this week to last',
+    'One message per real workbook section (B2C, B2B, Fly Finance, Fly Homes, ...), each a native Slack table',
+    'Every table split into sections by the sheet’s own S.No. code (e.g. CC01, CC03, R01) — not one flat metric list',
+    'The actual Last week / This week value for every metric, exactly as the sheet shows it — no percentages, no derived scores',
+    'A section over the row budget is truncated with a stated count; sections beyond the first 5 share one closing message',
     'The full flattened sheet (every section/metric/week) attached as a CSV',
   ],
   build: buildSuperTracker,
