@@ -2192,20 +2192,6 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_detail_cache_save') return res.status(200).json(await saveDetailCacheBatch((req.body && req.body.details) || []))
     if (mode === 'team_cache_lookup') return res.status(200).json(await getTeamCacheLookup())
     if (mode === 'opportunity_activity_list') return res.status(200).json(await listOpportunityActivity())
-    if (mode === 'opportunity_activity_diag') {
-      const { supabaseAdmin } = await import('../lib/auth.mjs')
-      const oldest = await supabaseAdmin('leadsquared_opportunity_activity?select=id,batch_id,batch_label,status,created_at&order=created_at.asc', { headers: { Range: '0-49' } })
-      const newest = await supabaseAdmin('leadsquared_opportunity_activity?select=id,batch_id,batch_label,status,created_at&order=created_at.desc', { headers: { Range: '0-49' } })
-      const oldestRows = oldest.ok ? await oldest.json() : []
-      const newestRows = newest.ok ? await newest.json() : []
-      const batchesSeenOld = [...new Set(oldestRows.map(r => r.batch_label || r.batch_id).filter(Boolean))]
-      const batchesSeenNew = [...new Set(newestRows.map(r => r.batch_label || r.batch_id).filter(Boolean))]
-      return res.status(200).json({
-        oldest50: oldestRows.map(r => ({ batch: r.batch_label || r.batch_id || null, status: r.status, created_at: r.created_at })),
-        newest50: newestRows.map(r => ({ batch: r.batch_label || r.batch_id || null, status: r.status, created_at: r.created_at })),
-        batchesSeenOld, batchesSeenNew,
-      })
-    }
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
   }
