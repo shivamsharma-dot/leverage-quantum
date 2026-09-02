@@ -1,10 +1,14 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import Sidebar from '../components/Sidebar'
 import Button from '../components/Button'
 import Dropdown from '../components/Dropdown'
 import ExportButton from '../components/ExportButton'
+import SlackReportPanel from '../components/SlackReportPanel'
+import { SlackIcon } from '../components/icons/BrandIcons'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { C, FONT, Card } from '../ui/dashboardKit'
+import { SUPER_TRACKER_REPORT_VERSIONS } from '../lib/superTrackerReport'
+import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 
 // Super Tracker -- a real PRIVATE Google Sheet (company-wide B2C/B2B/Fly
 // Finance/Fly Homes metrics), read server-side via lib/superTracker.mjs (a
@@ -163,6 +167,34 @@ export default function SuperTrackerDashboard() {
     return rows
   }, [sections, allWeekLabels])
 
+  const exportCols = useMemo(
+    () => ['Section', 'S.No.', 'Metric', 'Definition', 'Business Line', 'Owner', 'To Be Posted?', ...allWeekLabels],
+    [allWeekLabels]
+  )
+  const totalRowCount = useMemo(() => sections.reduce((s, sec) => s + sec.rows.length, 0), [sections])
+
+  const [slackOpen, setSlackOpen] = useState(false)
+  const tableRef = useRef(null)
+
+  // Ctx for the advanced Slack report (src/lib/superTrackerReport.js) -- the
+  // FULL, unfiltered section list (every real metric section, every row,
+  // every week), never whatever the on-screen Section/Business Line/Owner/
+  // search filters currently narrow the table to -- a compliance report has
+  // to reflect the true state of the whole tracker, not one filtered slice.
+  const buildSlackContext = useCallback(() => ({ sections }), [sections])
+
+  // Screenshots whatever table is actually on screen (current section, current
+  // view mode) for the report's own visual attachment, and attaches the FULL
+  // flattened CSV (every section/metric/week) regardless -- so a reader who
+  // wants the whole picture always has it, even if the image only shows one
+  // section's snapshot.
+  const captureSlackFiles = useCallback(async () => {
+    await nextPaint()
+    const node = tableRef.current
+    const shot = node ? await captureNodePng(node) : null
+    return { pngBase64: shot ? shot.base64 : null, pixelRatio: shot ? shot.pixelRatio : null, csv: rowsToCsv(exportCols, exportRows) }
+  }, [exportCols, exportRows])
+
   if (loading) {
     return (
       <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
@@ -244,9 +276,20 @@ export default function SuperTrackerDashboard() {
             />
             {lastSync && <span style={{ fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>Synced {lastSync.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}{refreshing ? '…' : ''}</span>}
             <Button onClick={refresh} disabled={refreshing} size="sm">{refreshing ? 'Refreshing' : 'Refresh'}</Button>
-            <ExportButton data={exportRows} filename="super_tracker" dashboardId="super_tracker" />
+            <Button size="sm" variant="secondary" onClick={() => setSlackOpen(true)} icon={<SlackIcon size={13} />}>Send to Slack</Button>
+            <ExportButton data={exportRows} filename="super_tracker" dashboardId="super_tracker" hideSlack />
           </div>
         </div>
+        <SlackReportPanel
+          open={slackOpen}
+          onClose={() => setSlackOpen(false)}
+          versions={SUPER_TRACKER_REPORT_VERSIONS}
+          buildContext={buildSlackContext}
+          captureFiles={captureSlackFiles}
+          dashboardId="super_tracker"
+          filename="super-tracker"
+          rowCount={totalRowCount}
+        />
 
         <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
           {!activeSection ? (
@@ -256,6 +299,7 @@ export default function SuperTrackerDashboard() {
               ✕ Couldn't find a header row (a row with "Metric" + "S. No." or "Owner") in the "{activeSection.label}" tab -- check the sheet hasn't been reformatted in a way this page can't recognise.
             </div>
           ) : (
+            <div ref={tableRef}>
             <Card
               title={activeSection.label}
               sub={filteredRows.length.toLocaleString('en-IN') + ' of ' + activeSection.rows.length.toLocaleString('en-IN') + ' metric row(s)' + (activeSection.weekLabels.length ? ' · ' + activeSection.weekLabels.length + ' week(s) tracked' : '')}
@@ -298,6 +342,7 @@ export default function SuperTrackerDashboard() {
                 </table>
               </div>
             </Card>
+            </div>
           )}
         </div>
       </div>
