@@ -76,7 +76,14 @@ function weekValue(row, label) {
 
 export default function SuperTrackerDashboard() {
   const { data, loading, refreshing, error, lastSync, refresh } = useSuperTracker()
-  const sections = (data && data.sections) || []
+  // The real workbook has a genuine mix of metric-tracker tabs (a real header
+  // row, real weekly data) and planning/reference tabs (README, a metric
+  // glossary, a dashboard spec, ...) that this page has no business listing as
+  // a trackable "section" -- they carry zero rows and would just be clutter in
+  // the Section picker. Filtering here (rather than in the backend) keeps
+  // lib/superTracker.mjs's own response complete/debuggable while the page
+  // only ever shows tabs that are actually real metric data.
+  const sections = ((data && data.sections) || []).filter(s => !s.unrecognized && s.rows.length > 0)
 
   const [sectionKey, setSectionKey] = useState(null)
   const [viewMode, setViewMode] = useState('latest') // 'latest' | 'all'
