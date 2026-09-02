@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Card } from '../ui/dashboardKit'
+import { Card, RankedBars } from '../ui/dashboardKit'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend, Cell, PieChart, Pie, CartesianGrid} from 'recharts'
@@ -136,9 +136,6 @@ const Sparkline = ({ data, color='#1C9FD4', height=28, width=72 }) => {
 }
 
 
-/* Brand color ramp - ONLY brand colors, used for multi-series breakdowns */
-const RAMP = ['#1F3C84', '#1C9FD4', '#29B9C3', '#4CAE6F']
-
 /* KPI icons - crisp monochrome SVGs, brand-coloured */
 const KPI_ICONS = {
   total: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>,
@@ -173,36 +170,6 @@ const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon }) => {
         )}
         {sub && <span style={{ fontSize: 11.5, color: '#8A94A6', fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</span>}
       </div>
-    </div>
-  )
-}
-
-/* Horizontal ranked bar list - premium look for category breakdowns */
-const RankedBars = ({ data, labelKey, max, total, colorFn, showRank }) => {
-  if (!data || data.length === 0) return <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No data</div>
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '2px 0' }}>
-      {data.map((r, i) => {
-        const w = max > 0 ? (r.count / max * 100) : 0
-        const col = colorFn ? colorFn(i) : RAMP[i % RAMP.length]
-        return (
-          <div key={r[labelKey] + i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {showRank && <div style={{ width: 20, textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#fff', background: col, borderRadius: 6, padding: '2px 0', flexShrink: 0, fontFamily: FONT }}>{i + 1}</div>}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, alignItems: 'baseline' }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-                  {r[labelKey]}
-                </span>
-                <span style={{ fontSize: 12.5, fontWeight: 800, color: col, fontFamily: FONT, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.count)}</span>
-              </div>
-              <div style={{ height: 7, borderRadius: 99, background: '#F1F5F9', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: `linear-gradient(90deg,${col},${col}cc)`, transition: 'width .6s cubic-bezier(.4,0,.2,1)' }} />
-              </div>
-            </div>
-            <div style={{ fontSize: 10.5, color: C.muted, fontFamily: FONT, width: 36, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{pct(r.count, total)}</div>
-          </div>
-        )
-      })}
     </div>
   )
 }

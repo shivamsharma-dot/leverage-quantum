@@ -220,28 +220,31 @@ export const PremKPI = ({ label, value, sub, delta, accent, accentBg, icon, inve
 }
 
 /* ===== Ranked horizontal bar list ===== */
+// Flat, single-line, single-hue -- label | thin bar | value | share, no gradient,
+// no rank badge. Picked over three earlier rounds (premium gradient chips, then a
+// pure-typography/segmented-meter/table/ring set) as the one that reads as "one
+// widget" instead of two stacked rows, and stays legible with several of these
+// stacked on one page. Track uses the theme-aware --bg3 token (was a hardcoded
+// #F1F5F9) so it actually themes in dark/navy/stone instead of staying light-mode.
 export const RankedBars = ({ data, labelKey, max, total, colorFn, color, showRank }) => {
   if (!data || data.length === 0) return <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13, fontFamily: FONT }}>No data</div>
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '2px 0' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '2px 0' }}>
       {data.map((r, i) => {
-        const w = max > 0 ? (r.count / max * 100) : 0
+        const raw = max > 0 ? (r.count / max * 100) : 0
+        const w = r.count > 0 ? Math.max(2, raw) : 0
         const col = colorFn ? colorFn(i) : (color || C.navy)
         return (
-          <div key={r[labelKey] + i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {showRank && <div style={{ width: 20, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#fff', background: col, borderRadius: 6, padding: '2px 0', flexShrink: 0, fontFamily: FONT }}>{i + 1}</div>}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, alignItems: 'baseline' }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-                  {r[labelKey]}
-                </span>
-                <span style={{ fontSize: 14.5, fontWeight: 800, color: col, fontFamily: FONT, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.count)}</span>
-              </div>
-              <div style={{ height: 7, borderRadius: 99, background: '#F1F5F9', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: w + '%', borderRadius: 99, background: `linear-gradient(90deg,${col},${col}cc)`, transition: 'width .6s cubic-bezier(.4,0,.2,1)' }} />
-              </div>
+          <div key={r[labelKey] + i} style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+            {showRank && <span style={{ width: 16, flexShrink: 0, fontSize: 11.5, fontWeight: 700, color: C.muted, fontFamily: FONT, textAlign: 'right' }}>{i + 1}</span>}
+            <span style={{ flex: '0 1 auto', maxWidth: '38%', minWidth: 0, fontSize: 13.5, fontWeight: 700, color: C.text, fontFamily: FONT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {r[labelKey]}
+            </span>
+            <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--bg3)', overflow: 'hidden', minWidth: 24 }}>
+              <div style={{ height: '100%', width: w + '%', borderRadius: 2, background: col, transition: 'width .6s cubic-bezier(.4,0,.2,1)' }} />
             </div>
-            <div style={{ fontSize: 12, color: C.muted, fontFamily: FONT, width: 36, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{pct(r.count, total)}</div>
+            <span style={{ fontSize: 13.5, fontWeight: 800, color: C.text, fontFamily: FONT, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.count)}</span>
+            <span style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT, width: 36, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{pct(r.count, total)}</span>
           </div>
         )
       })}
