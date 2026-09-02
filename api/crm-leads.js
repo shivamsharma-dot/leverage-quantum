@@ -2882,8 +2882,13 @@ async function handleBigQuery(req, res, me) {
     if (mode === 'apps_sync') {
       const { supabaseAdmin } = await import('../lib/auth.mjs')
       const crypto = await import('crypto')
+      // Real cost: BigQuery reported needing 36.35GB billed for this join
+      // (source_attribution_v3's dedup window function scans the whole
+      // table) -- well above careers_sync's 20GB cap, so this gets its own
+      // higher ceiling with headroom, still far under the server-side
+      // BQ_BYTES_CEILING safety valve in lib/bigquery.mjs.
       const out = await bq.bigQuerySelectAll(APPS_SQL, {
-        maxBytes: 20_000_000_000, mode: 'apps_sync', dashboardId: 'apps', userEmail: me.email,
+        maxBytes: 60_000_000_000, mode: 'apps_sync', dashboardId: 'apps', userEmail: me.email,
       })
       const rows = out.rows || []
       const syncId = crypto.randomUUID()
