@@ -19,25 +19,34 @@ function weekValue(row, label) {
   return w ? w.value : ''
 }
 
-// The literal LAST column is very often still blank -- a weekly tracker's
-// current week fills in as the week actually happens, so "the last column"
-// is frequently the one column guaranteed to have nothing in it yet (real,
-// live example: 19-25 Oct and 12-18 Oct were both entirely blank across
-// every B2C metric, while 24-30 Aug -- several columns earlier -- was fully
-// populated). Walk backward from the last column to the first one that has
-// AT LEAST ONE real value anywhere in the section, and report against THAT,
-// so "this week" always means "the most recent week with real figures",
-// never a guaranteed-empty one. Falls back to the literal last column only
-// if truly nothing in the section has ever been filled in.
+// The literal LAST column is very often still blank, or only just starting
+// to fill in -- a weekly tracker's current week fills in AS the week
+// happens, so picking "any row has a value" as the bar is too low: a column
+// with only 1 of 135 rows filled still passes that test and still reads as
+// empty to a reader. Real, live example: 19-25 Oct had a genuine handful of
+// values scattered through B2C Metrics (so "any row" picked it), but only
+// 41% of its due metrics were actually filled in -- while 24-30 Aug, several
+// columns earlier, was essentially fully populated. Walk backward from the
+// last column to the most recent one where at least HALF the section's rows
+// have a real value, so "this week" means a column that's actually
+// informative to read, not merely non-empty. Falls back to whichever single
+// column has the HIGHEST population if none clears that bar (so a genuinely
+// sparse section still reports its best available column rather than the
+// guaranteed-blank last one).
+const POPULATED_THRESHOLD = 0.5
 function latestPopulatedWeek(section) {
   const labels = section.weekLabels || []
   const rows = section.rows || []
+  if (!labels.length || !rows.length) return { cur: labels[labels.length - 1] || null, prev: null, curIsLatestColumn: true }
+  const fractionFor = i => rows.filter(r => weekValue(r, labels[i]).trim() !== '').length / rows.length
   for (let i = labels.length - 1; i >= 0; i--) {
-    if (rows.some(r => weekValue(r, labels[i]).trim() !== '')) {
+    if (fractionFor(i) >= POPULATED_THRESHOLD) {
       return { cur: labels[i], prev: i > 0 ? labels[i - 1] : null, curIsLatestColumn: i === labels.length - 1 }
     }
   }
-  return { cur: labels[labels.length - 1] || null, prev: labels.length > 1 ? labels[labels.length - 2] : null, curIsLatestColumn: true }
+  let best = labels.length - 1
+  for (let i = labels.length - 2; i >= 0; i--) if (fractionFor(i) > fractionFor(best)) best = i
+  return { cur: labels[best] || null, prev: best > 0 ? labels[best - 1] : null, curIsLatestColumn: best === labels.length - 1 }
 }
 
 // Rows re-ordered so every S.No. group's rows sit next to each other, in the
@@ -99,7 +108,7 @@ function rowsFor(section, budget) {
 function buildSectionMessage(section, idx) {
   const t = rowsFor(section, SECTION_ROW_BUDGET)
   const title = ':ledger: *' + escMrkdwn(section.label) + '*'
-  const staleNote = t.curIsLatestColumn ? '' : ' (the most recent column with any real value -- newer columns exist but are not yet filled in)'
+  const staleNote = t.curIsLatestColumn ? '' : ' (the most recent column that’s actually filled in — newer columns exist but are still mostly blank)'
   const sub = '_' + t.total.toLocaleString('en-IN') + ' metric(s) across ' + t.groupCount + ' group(s), split by S.No. code'
     + (t.prev ? ', comparing ' + t.prev + ' to ' + t.cur : ', week of ' + (t.cur || '—')) + staleNote + '._'
   const head = ['Group', 'Metric', 'Business Line', 'Owner']
