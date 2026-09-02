@@ -1567,14 +1567,14 @@ function OpportunityBatchGroup({ group }) {
 
 function OpportunityHistoryTab() {
   const [rows, setRows] = useState(null)
-  const [meta, setMeta] = useState({ total: null, truncated: false })
+  const [meta, setMeta] = useState({ total: null, truncated: false, counts: null })
   const [error, setError] = useState('')
   const { running } = useOppImportProgress()
   const wasRunning = useRef(false)
 
   const load = useCallback(() => {
     fetchJson(`${API}&mode=opportunity_activity_list`)
-      .then(d => { setRows(d.rows || []); setMeta({ total: d.total ?? null, truncated: !!d.truncated }); setError('') })
+      .then(d => { setRows(d.rows || []); setMeta({ total: d.total ?? null, truncated: !!d.truncated, counts: d.counts || null }); setError('') })
       .catch(e => setError(String(e.message || e)))
   }, [])
 
@@ -1593,17 +1593,24 @@ function OpportunityHistoryTab() {
   }, [running, load])
 
   const notSetUp = !!error
+  // Prefers the backend's authoritative counts (real Content-Range totals, one
+  // per status -- see countOpportunityActivity) over recomputing from `rows`,
+  // which is capped at 5,000 and would silently undercount once the account
+  // has pushed more than that. Falls back to the client count only when the
+  // list isn't truncated (in which case `rows` genuinely IS everything, or
+  // when the count queries themselves didn't come back for some reason).
   const stats = useMemo(() => {
     const list = rows || []
     const batchKeys = new Set(list.map(r => r.batch_id || r.batch_label).filter(Boolean))
+    const c = meta.counts
     return {
-      total: list.length,
-      success: list.filter(r => r.status === 'success').length,
-      duplicate: list.filter(r => r.status === 'duplicate').length,
-      failed: list.filter(r => r.status === 'failed').length,
+      total: c ? c.total : list.length,
+      success: c && c.success != null ? c.success : list.filter(r => r.status === 'success').length,
+      duplicate: c && c.duplicate != null ? c.duplicate : list.filter(r => r.status === 'duplicate').length,
+      failed: c && c.failed != null ? c.failed : list.filter(r => r.status === 'failed').length,
       batches: batchKeys.size,
     }
-  }, [rows])
+  }, [rows, meta])
   const grouped = useMemo(() => groupOpportunityRows(rows || []), [rows])
 
   return (
@@ -1616,14 +1623,21 @@ function OpportunityHistoryTab() {
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
-          {[['Total attempts', stats.total], ['Success', stats.success], ['Duplicate', stats.duplicate], ['Failed', stats.failed], ...(stats.batches > 0 ? [['Bulk batches', stats.batches]] : [])].map(([lbl, v]) => (
-            <div key={lbl}>
-              <div style={{ fontSize: 19, fontWeight: 800, color: C.text }}>{fmtN(v)}</div>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{lbl}</div>
-            </div>
-          ))}
-        </div>
+        <>
+          <div style={{ display: 'flex', gap: 20, marginBottom: meta.truncated ? 6 : 16, flexWrap: 'wrap' }}>
+            {[['Total attempts', stats.total], ['Success', stats.success], ['Duplicate', stats.duplicate], ['Failed', stats.failed], ...(stats.batches > 0 ? [['Bulk batches' + (meta.truncated ? '*' : ''), stats.batches]] : [])].map(([lbl, v]) => (
+              <div key={lbl}>
+                <div style={{ fontSize: 19, fontWeight: 800, color: C.text }}>{fmtN(v)}</div>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{lbl}</div>
+              </div>
+            ))}
+          </div>
+          {meta.truncated && (
+            <p style={{ fontSize: 11, color: C.muted, margin: '0 0 16px' }}>
+              Total/Success/Duplicate/Failed above are the real counts across everything ever logged, not just what's shown below.{stats.batches > 0 && ' *Bulk batches is a lower bound -- an older batch entirely outside the 5,000 rows shown wouldn’t be counted.'}
+            </p>
+          )}
+        </>
       )}
 
       {!rows && !notSetUp ? (
@@ -1688,6 +1702,15 @@ function CreateOpportunityTab() {
   // Direct-by-OpportunityID is a genuinely different LeadSquared API (Update an Opportunity,
   // not Capture Opportunities) -- see the SEARCH_BY_OPTIONS comment above.
   const isDirect = searchByAttr === 'OpportunityID'
+
+  // Bulk import is locked to Opportunity ID, always -- real usage here has
+  // consistently been "I have a file of known Opportunity IDs to update", and
+  // Capture Opportunities' lead-matching/create-a-new-lead behavior is the
+  // wrong tool for a bulk file (a typo'd match value would silently create a
+  // brand-new lead+opportunity instead of failing loudly). Single mode keeps
+  // the full 5-way choice -- this only forces the switch when entering bulk,
+  // it doesn't touch single mode's own selection.
+  useEffect(() => { if (mode === 'bulk') setSearchByAttr('OpportunityID') }, [mode])
 
   const submit = async () => {
     setResult(null); setSubmitError(null)
@@ -1772,8 +1795,15 @@ function CreateOpportunityTab() {
         )}
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <Dropdown value={SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l} onChange={l => setSearchByAttr(SEARCH_BY_OPTIONS.find(o => o.l === l)?.v || searchByAttr)}
-            options={SEARCH_BY_OPTIONS.map(o => o.l)} minWidth={200} borderColor={CTL_BORDER} />
+          {mode === 'bulk' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10, background: '#E8EFF9', border: '1px solid rgba(31,60,132,0.2)' }} title="Bulk import always updates by Opportunity ID -- lead-matching would risk silently creating a new lead for a typo'd value instead of failing loudly on a whole file.">
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#1F3C84' }}>Opportunity ID (direct update — no lead matching)</span>
+              <span style={{ fontSize: 10.5, fontWeight: 800, color: '#1F3C84', background: 'rgba(31,60,132,0.12)', padding: '2px 7px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.03em' }}>Fixed for bulk</span>
+            </div>
+          ) : (
+            <Dropdown value={SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l} onChange={l => setSearchByAttr(SEARCH_BY_OPTIONS.find(o => o.l === l)?.v || searchByAttr)}
+              options={SEARCH_BY_OPTIONS.map(o => o.l)} minWidth={200} borderColor={CTL_BORDER} />
+          )}
           {mode === 'single' && <input type={searchByAttr === 'EmailAddress' ? 'email' : searchByAttr === 'Phone' || searchByAttr === 'Mobile' ? 'tel' : 'text'} value={searchByValue} onChange={e => setSearchByValue(e.target.value)} placeholder={isDirect ? 'e.g. 7c8901ce-ddc2-423b-b7d8-c6eca200c360' : 'e.g. jane@example.com'} aria-label={isDirect ? 'Opportunity ID to update' : 'Lead match value'} aria-required="true" className={styles.ctl} style={{ ...oppCtl, flex: 1, minWidth: 220 }} />}
         </div>
         {mode === 'bulk' && <p style={{ fontSize: 11, color: C.muted, margin: '8px 0 0' }}>Each row's {isDirect ? 'Opportunity ID' : 'match value'} comes from your file, mapped in step 4 below.</p>}

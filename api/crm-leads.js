@@ -764,6 +764,22 @@ async function logOpportunityActivity(fields, me) {
 // the real total row count so the frontend can say honestly whether there's still more
 // beyond the ceiling, instead of a silent cap.
 const OPP_ACTIVITY_MAX_ROWS = 5000
+// Count-only query: Range:0-0 asks for a single row, but the real total for
+// the WHOLE filtered set (not just what's returned) still comes back on the
+// Content-Range header -- same trick the `total` above already relies on.
+// This is what makes it possible to report an honest Total/Success/Duplicate/
+// Failed even once the 5,000-row display cap has been hit -- those counts are
+// NOT derived from the (possibly truncated) `rows` array.
+async function countOpportunityActivity(supabaseAdmin, statusFilter) {
+  const qs = statusFilter ? '&status=eq.' + statusFilter : ''
+  const r = await supabaseAdmin('leadsquared_opportunity_activity?select=id' + qs, {
+    headers: { Range: '0-0', Prefer: 'count=exact' },
+  })
+  if (!r.ok) return null
+  const cr = r.headers.get('content-range') || ''
+  const n = parseInt(cr.split('/')[1] || '', 10)
+  return Number.isFinite(n) ? n : null
+}
 async function listOpportunityActivity() {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
   const rows = []
@@ -786,7 +802,20 @@ async function listOpportunityActivity() {
     rows.push(...page)
     if (page.length < 1000) break
   }
-  return { rows, total, truncated: total != null && total > rows.length }
+  const truncated = total != null && total > rows.length
+  // Only worth the 3 extra round-trips when the display list is actually
+  // truncated -- otherwise `rows` already IS the complete set and the
+  // frontend's own client-side filter/count is exact.
+  let counts = null
+  if (truncated) {
+    const [success, duplicate, failed] = await Promise.all([
+      countOpportunityActivity(supabaseAdmin, 'success'),
+      countOpportunityActivity(supabaseAdmin, 'duplicate'),
+      countOpportunityActivity(supabaseAdmin, 'failed'),
+    ])
+    counts = { total, success, duplicate, failed }
+  }
+  return { rows, total, truncated, counts }
 }
 
 // Powers the "Centre Name" field in Team Mapping's manual-mapping modal --
