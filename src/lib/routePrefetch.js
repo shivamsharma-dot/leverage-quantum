@@ -23,6 +23,7 @@ export const COMPONENT_IMPORTS = {
   MetaAdsDashboard: () => import('../pages/MetaAdsDashboard'),
   CreativeDownloaderDashboard: () => import('../pages/CreativeDownloaderDashboard'),
   LeverageCareersDashboard: () => import('../pages/LeverageCareersDashboard'),
+  AppsDashboard: () => import('../pages/AppsDashboard'),
   GoogleAdsDashboard: () => import('../pages/GoogleAdsDashboard'),
   BingAdsDashboard: () => import('../pages/BingAdsDashboard'),
   ReferralDashboard: () => import('../pages/ReferralDashboard'),

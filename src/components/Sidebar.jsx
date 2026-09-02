@@ -81,6 +81,7 @@ export const NAV = [
       },
       { to: '/dashboard/creative-downloader', icon: <CreativeDownloaderIcon />, label: 'Creative Downloader', end: false },
       { to: '/dashboard/leverage-careers', icon: <CareersIcon />, label: 'Leverage Careers', end: false },
+      { to: '/dashboard/apps', icon: <AppsIcon />, label: 'Apps', end: false },
       {
         to: '/dashboard/google-ads',
         navKey: 'google_ads',
@@ -183,6 +184,9 @@ function MetaIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fil
 // Leverage Careers -- a briefcase, distinct from the generic MetaIcon glyph
 // used for the main Meta Ads account since this is a separate ad account.
 function CareersIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><line x1="2" y1="13" x2="22" y2="13"/></svg> }
+// Apps -- a filled-in application form, distinct from the plain document
+// glyphs used elsewhere (e.g. Field Schema).
+function AppsIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg> }
 function CreativeDownloaderIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> }
 function SettingsIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg> }
 function AskAIIcon() { return (<svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ animation: 'askAiPulse 2.6s ease-in-out infinite', transformOrigin: 'center' }}><defs><linearGradient id="askAiGrad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0%" stopColor="#1F3C84"/><stop offset="45%" stopColor="#1C9FD4"/><stop offset="75%" stopColor="#29B9C3"/><stop offset="100%" stopColor="#4CAE6F"/></linearGradient></defs><path d="M12 2.2c.5 3.7 2.1 5.3 5.8 5.8-3.7.5-5.3 2.1-5.8 5.8-.5-3.7-2.1-5.3-5.8-5.8C9.9 7.5 11.5 5.9 12 2.2Z" fill="url(#askAiGrad)"/><path d="M18.5 14c.25 1.85 1.05 2.65 2.9 2.9-1.85.25-2.65 1.05-2.9 2.9-.25-1.85-1.05-2.65-2.9-2.9 1.85-.25 2.65-1.05 2.9-2.9Z" fill="#29B9C3" style={{ animation: 'askAiTwinkle 1.8s ease-in-out infinite', transformOrigin: '18.5px 16.9px' }}/></svg>); }
@@ -238,7 +242,7 @@ function FieldSchemaIcon(){ return <svg width="14" height="14" viewBox="0 0 24 2
 const ICON_MAP = {
   'Summary': <HomeIcon/>, 'Overall': <OverallIcon/>, 'Overall (BigQuery)': <OverallBigQueryIcon/>, 'ROAS': <ChartIcon/>, 'MTD': <MTDIcon/>,
   'Lead Quality': <FunnelIcon/>, 'Channel Mix': <MixIcon/>,
-  'Revenue': <RevenueIcon/>, 'B2C': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>, 'Leverage Careers': <CareersIcon/>,
+  'Revenue': <RevenueIcon/>, 'B2C': <RevenueIcon/>, 'Meta Ads': <MetaIcon/>, 'Leverage Careers': <CareersIcon/>, 'Apps': <AppsIcon/>,
   'Google Ads': <GoogleAdsIcon/>, 'Lead Qualification': <PeopleIcon/>, 'Daily QLs': <PeopleIcon/>, 'Monthly QLs': <MTDIcon/>,
   'Human QL Detail': <FunnelIcon/>,
   'AI QL Detail': <BotIcon/>,

@@ -2700,9 +2700,52 @@ GROUP BY 1, 2, 3, 4
 ORDER BY lead_date, campaign`
 }
 
+// Verbatim from Settings > Data > BigQuery Console's "Apps" saved query
+// (added 2026-09-02) -- no since/until parameterization at all, the query's
+// own WHERE floor is fixed at opportunity_created_date > '2025-12-31'. One
+// row per application (not date-bucketed like Overall/Careers), joining
+// direct_monthly_apps against the enrolled-students funnel and a
+// dedup'd-to-latest-opportunity slice of source_attribution_v3.
+const APPS_SQL = `WITH v1 AS (
+ SELECT *,
+ ROW_NUMBER() OVER (PARTITION BY prospectid ORDER BY opportunity_created_date DESC) AS r_num
+ FROM \`leverage_direct.source_attribution_v3\`
+),
+v3 AS (
+
+ SELECT * FROM v1 WHERE r_num = 1
+)
+SELECT
+ dma.user_id_uuid,
+ dma.destination_country,
+ dma.destination_country_group,
+ dma.destination_country_original,
+ dma.intake_category,
+ dma.intake_date,
+ dma.school_name,
+ dma.course_name,
+ FORMAT_DATE("%b'%y", DATE(dma.first_app_submitted_at)) AS First_App_Month,
+ FORMAT_DATE('%d-%b-%y', DATE(dma.first_app_submitted_at)) AS First_App_Date,
+ v2.prospect_id,
+ v3.opportunity_id,
+ v3.source,
+ case when v3.last_disposition_from_futwork is not null then 'Human_QL' else 'Floor' END as Futwork_Human,
+ case when v3.last_disposition_ai_futwork is not null then 'AI_QL' else 'Floor' END as Futwork_AI,
+ v3.opp_first_campaign_name,
+FROM
+ \`leverage_direct.direct_monthly_apps\` dma
+LEFT JOIN
+ \`leverage_direct.enrolled_students_funnel_v2\` v2 ON dma.user_id_uuid = v2.user_id_uuid
+LEFT JOIN
+ v3 ON v2.prospect_id = v3.prospectid
+LEFT JOIN
+ \`leverage_direct.coach_referral_intake_funnel\` ref ON dma.user_id_uuid = ref.user_id_uuid
+WHERE
+ v3. opportunity_created_date > '2025-12-31' ;`
+
 // BigQuery lives behind this handler rather than its own file because the
 // Vercel Hobby plan is pinned at 12/12 serverless functions. Reached via
-// ?source=bigquery&mode=ping|datasets|query|careers_leads|careers_sync.
+// ?source=bigquery&mode=ping|datasets|query|careers_leads|careers_sync|apps_sync.
 // ping/datasets/query run arbitrary read-only SQL and stay admin-only
 // (configured from the Settings page). careers_leads is a special case -- as of
 // 2026-08-24 it runs no SQL at all and reads only the Supabase cache, so it
@@ -2829,6 +2872,59 @@ async function handleBigQuery(req, res, me) {
       // Prune rows this run didn't touch (e.g. a campaign/day/source/channel
       // combination that no longer appears in BigQuery at all).
       await supabaseAdmin(`leverage_careers_daily?sync_id=neq.${syncId}`, { method: 'DELETE' })
+      return res.status(200).json({ configured: true, ok: true, rowCount: rows.length, syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed })
+    }
+    // Once/day (see .github/workflows/apps-sync.yml, 9am IST) -- the user's
+    // own explicit ask was "no real time refresh". APPS_SQL has no
+    // since/until to narrow with, so every run pulls the current full table
+    // and this wholesale-replaces apps_feed (delete-anything-not-touched,
+    // same pattern as careers_sync above), rather than only ever appending.
+    if (mode === 'apps_sync') {
+      const { supabaseAdmin } = await import('../lib/auth.mjs')
+      const crypto = await import('crypto')
+      const out = await bq.bigQuerySelectAll(APPS_SQL, {
+        maxBytes: 20_000_000_000, mode: 'apps_sync', dashboardId: 'apps', userEmail: me.email,
+      })
+      const rows = out.rows || []
+      const syncId = crypto.randomUUID()
+      const syncedAt = new Date().toISOString()
+      const payload = rows.map((r, i) => {
+        const key = [r.user_id_uuid || '', r.opportunity_id || '', r.prospect_id || '', i].join('|')
+        return {
+          row_key: crypto.createHash('md5').update(key).digest('hex'),
+          user_id_uuid: r.user_id_uuid || null,
+          destination_country: r.destination_country || null,
+          destination_country_group: r.destination_country_group || null,
+          destination_country_original: r.destination_country_original || null,
+          intake_category: r.intake_category || null,
+          intake_date: r.intake_date || null,
+          school_name: r.school_name || null,
+          course_name: r.course_name || null,
+          first_app_month: r.First_App_Month || null,
+          first_app_date: r.First_App_Date || null,
+          prospect_id: r.prospect_id || null,
+          opportunity_id: r.opportunity_id || null,
+          source: r.source || null,
+          futwork_human: r.Futwork_Human || null,
+          futwork_ai: r.Futwork_AI || null,
+          opp_first_campaign_name: r.opp_first_campaign_name || null,
+          sync_id: syncId,
+          synced_at: syncedAt,
+        }
+      })
+      for (let i = 0; i < payload.length; i += 500) {
+        const batch = payload.slice(i, i + 500)
+        const r = await supabaseAdmin('apps_feed', {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify(batch),
+        })
+        if (!r.ok) {
+          const detail = await r.text()
+          return res.status(502).json({ configured: true, ok: false, error: 'Supabase upsert failed: ' + detail, batchIndex: i / 500, rowCount: rows.length })
+        }
+      }
+      await supabaseAdmin(`apps_feed?sync_id=neq.${syncId}`, { method: 'DELETE' })
       return res.status(200).json({ configured: true, ok: true, rowCount: rows.length, syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed })
     }
     if (mode === 'datasets') {
@@ -3433,6 +3529,15 @@ export default async function handler(req, res) {
   if (
     (req.query && req.query.source) === 'bigquery' &&
     (req.query && req.query.mode) === 'careers_sync' &&
+    process.env.CRON_SECRET &&
+    req.headers['x-cron-secret'] === process.env.CRON_SECRET
+  ) {
+    return handleBigQuery(req, res, { role: 'admin', email: 'cron' })
+  }
+  // Same reasoning, for the once-daily Apps BigQuery sync.
+  if (
+    (req.query && req.query.source) === 'bigquery' &&
+    (req.query && req.query.mode) === 'apps_sync' &&
     process.env.CRON_SECRET &&
     req.headers['x-cron-secret'] === process.env.CRON_SECRET
   ) {

@@ -28,6 +28,7 @@ const MTDDashboard = lazy(COMPONENT_IMPORTS.MTDDashboard)
 const MetaAdsDashboard = lazy(COMPONENT_IMPORTS.MetaAdsDashboard)
 const CreativeDownloaderDashboard = lazy(COMPONENT_IMPORTS.CreativeDownloaderDashboard)
 const LeverageCareersDashboard = lazy(COMPONENT_IMPORTS.LeverageCareersDashboard)
+const AppsDashboard = lazy(COMPONENT_IMPORTS.AppsDashboard)
 const GoogleAdsDashboard = lazy(COMPONENT_IMPORTS.GoogleAdsDashboard)
 const BingAdsDashboard = lazy(COMPONENT_IMPORTS.BingAdsDashboard)
 const ReferralDashboard = lazy(COMPONENT_IMPORTS.ReferralDashboard)
@@ -53,6 +54,7 @@ const PAGE_TITLES = {
   '/dashboard/meta-ads': 'Meta Ads',
   '/dashboard/creative-downloader': 'Creative Downloader',
   '/dashboard/leverage-careers': 'Leverage Careers',
+  '/dashboard/apps': 'Apps',
   '/dashboard/google-ads': 'Google Ads',
   '/dashboard/bing-ads': 'Bing Ads',
   '/dashboard/roas': 'ROAS',
@@ -313,6 +315,7 @@ export default function App() {
           <Route path="/dashboard/meta-ads" element={<ProtectedRoute dashboardId="meta_ads"> <MetaAdsDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/creative-downloader" element={<ProtectedRoute dashboardId="creative_downloader"> <CreativeDownloaderDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/leverage-careers" element={<ProtectedRoute dashboardId="leverage_careers"> <LeverageCareersDashboard /></ProtectedRoute>} />
+          <Route path="/dashboard/apps" element={<ProtectedRoute dashboardId="apps"> <AppsDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/google-ads" element={<ProtectedRoute dashboardId="google_ads"> <GoogleAdsDashboard /></ProtectedRoute>} />
           <Route path="/dashboard/bing-ads" element={<ProtectedRoute dashboardId="bing_ads"> <BingAdsDashboard /></ProtectedRoute>} />
           <Route path="/ask-ai" element={<ProtectedRoute dashboardId="ask_ai"> <AskAI /></ProtectedRoute>} />

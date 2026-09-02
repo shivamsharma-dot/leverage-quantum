@@ -1,0 +1,39 @@
+name: Apps BigQuery Cache Sync
+
+# Refreshes public.apps_feed (see supabase/sql/apps_feed_setup.sql) by calling
+# the apps_sync mode on api/crm-leads.js -- that endpoint owns the BigQuery
+# query (APPS_SQL, mirroring Settings > Data > BigQuery Console's "Apps"
+# saved query verbatim), the Supabase upsert, and the prune step, so this
+# workflow is just the scheduled trigger. Every run lands in bigquery_jobs
+# automatically the same way any other BigQuery call does.
+#
+# Once/day only, per explicit instruction ("no real time refresh") -- not
+# 3x/day like Leverage Careers. 9:00 AM IST = 3:30 UTC.
+#
+# Requires the CRON_SECRET repository Actions secret (already used by the
+# report workflows and the Leverage Careers sync) and the BIGQUERY_*/
+# SUPABASE_* env vars already set in Vercel -- nothing new to configure there.
+
+on:
+  schedule:
+    - cron: '30 3 * * *'   # 9:00 AM IST
+  workflow_dispatch:
+
+concurrency:
+  group: apps-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger the Apps cache sync
+        run: |
+          BODY=$(curl -s -w "\n%{http_code}" -X GET "https://quantum.leverageedu.com/api/crm-leads?source=bigquery&mode=apps_sync" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}")
+          STATUS=$(echo "$BODY" | tail -n1)
+          JSON=$(echo "$BODY" | sed '$d')
+          echo "HTTP Status: $STATUS"
+          echo "Response: $JSON"
+          if [ "$STATUS" != "200" ]; then echo "Failed with status $STATUS"; exit 1; fi
+          echo "Apps cache synced."

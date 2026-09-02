@@ -15,6 +15,7 @@ export const PAGE_LIST = [
   { id:'meta_ads',     label:'Meta Ads',     path:'/dashboard/meta-ads',    adminOnly:false },
   { id:'creative_downloader', label:'Creative Downloader', path:'/dashboard/creative-downloader', adminOnly:false },
   { id:'leverage_careers', label:'Leverage Careers', path:'/dashboard/leverage-careers', adminOnly:false },
+  { id:'apps',         label:'Apps',         path:'/dashboard/apps',        adminOnly:false },
   { id:'google_ads',   label:'Google Ads',   path:'/dashboard/google-ads',  adminOnly:false },
   { id:'bing_ads',     label:'Bing Ads',     path:'/dashboard/bing-ads',   adminOnly:false },
   { id:'roas',         label:'ROAS',         path:'/dashboard/roas',        adminOnly:false },
