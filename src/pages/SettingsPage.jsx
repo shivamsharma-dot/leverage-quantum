@@ -267,6 +267,14 @@ const DATA_SOURCES = [
   // the authorising account holds viewer access, and lib/bigquery.mjs refuses
   // anything that is not a SELECT/WITH. Credentials are Vercel env only.
   { name: 'Google BigQuery', src: 'BigQuery REST API (env-configured)', rows: 'live', bqTest: true },
+  // Super Tracker -- a PRIVATE cross-vertical workbook (B2C/B2B/Fly Finance/Fly
+  // Homes), read via the Sheets API + a service-account Viewer share rather
+  // than the public gviz/tq CSV every other sheet source uses, since this one
+  // was explicitly not allowed to be made public. Which spreadsheet to read is
+  // admin-editable at app_preferences.super_tracker_sheet_id (see
+  // lib/superTracker.mjs) -- no Settings field for it yet, change it directly
+  // in Supabase or add one here if that becomes a real need.
+  { name: 'Super Tracker Sheet', src: 'Private workbook (service-account share)', rows: 'live', testKind: 'super_tracker' },
   // Organic & Social connectors (2026-08). Each is a real backend integration
   // (lib/instagram.mjs / lib/youtube.mjs / lib/ga4.mjs) reached through
   // /api/crm-leads, plus the two manual-entry sources with no API at all.
@@ -409,6 +417,7 @@ function sourceIconClass(s) {
   if (s.testKind === 'slack') return { Icon: SlackIcon, wrap: styles.dsIconWrapBrand }
   if (s.testKind === 'linkedin_manual') return { Icon: LinkedInIcon, wrap: styles.dsIconWrapBrand }
   if (s.testKind === 'x_manual') return { Icon: XSocialIcon, wrap: styles.dsIconWrapBrand }
+  if (s.testKind === 'super_tracker') return { Icon: SheetsIcon, wrap: styles.dsIconWrapSheets }
   return { Icon: GenericSourceIcon, wrap: '' }
 }
 
@@ -1691,6 +1700,14 @@ export default function SettingsPage() {
         if (d.configured === false) throw new Error('Not configured -- set GA4_CLIENT_EMAIL/GA4_PRIVATE_KEY/GA4_PROPERTY_ID in Vercel env')
         if (!r.ok) throw new Error((d.detail || d.error || 'Failed').replace('GA4 Data API error: ', ''))
         text = `Connected -- ${d.range.organicUsers.toLocaleString('en-IN')} organic users in the last 7 days`
+      } else if (testKind === 'super_tracker') {
+        const r = await fetchT('/api/crm-leads?source=super_tracker', { credentials: 'include' })
+        const d = await r.json()
+        if (d.configured === false) throw new Error('Not configured -- set GOOGLE_SHEETS_CLIENT_EMAIL/GOOGLE_SHEETS_PRIVATE_KEY in Vercel env')
+        if (!r.ok) throw new Error(d.detail || d.error || 'Failed')
+        const sections = d.sections || []
+        const rowCount = sections.reduce((s, sec) => s + (sec.rows || []).length, 0)
+        text = `Connected -- "${d.workbookTitle}", ${sections.length} section(s), ${rowCount.toLocaleString('en-IN')} metric row(s)`
       } else if (testKind === 'slack') {
         const r = await fetchT('/api/send-report', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'slack_channel_list' }) })
         const d = await r.json()

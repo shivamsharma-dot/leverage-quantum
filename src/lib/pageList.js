@@ -36,6 +36,7 @@ export const PAGE_LIST = [
   { id:'leads_assigned', label:'Leads Assigned', path:'/dashboard/leads-assigned', adminOnly:false },
   { id:'leadsquared', label:'LeadSquared', path:'/dashboard/leadsquared', adminOnly:false },
   { id:'team_mapping', label:'Team Mapping', path:'/dashboard/team-mapping', adminOnly:true },
+  { id:'super_tracker', label:'Super Tracker', path:'/dashboard/super-tracker', adminOnly:true },
   { id:'ask_ai',         label:'Ask AI',      path:'/ask-ai',                  adminOnly:true  },
   { id:'agents',         label:'Agent Runs',  path:'/dashboard/agents',        adminOnly:true  },
   { id:'marketing_performance', label:'Marketing Performance', path:'/dashboard/marketing-performance', adminOnly:true },

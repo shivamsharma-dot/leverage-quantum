@@ -144,6 +144,7 @@ export const NAV = [
         ]
       },
       { to: '/dashboard/team-mapping', icon: <TeamMappingIcon />, label: 'Team Mapping', end: false },
+      { to: '/dashboard/super-tracker', icon: <SuperTrackerIcon />, label: 'Super Tracker', end: false },
     ]
   },
 ]
@@ -215,6 +216,10 @@ function LeadSquaredIcon() { return <svg width="14" height="14" viewBox="0 0 136
 // from LeadSquaredIcon's brand mark since this page is Quantum's own manual
 // mapping layer, not another LeadSquared-native view.
 function TeamMappingIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="2.4"/><path d="M12 7.4V12"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M12 12 6 15.8M12 12l6 3.8"/></svg> }
+// A radar/tracker sweep -- concentric rings with a moving blip, distinct from
+// every other glyph in this list since Super Tracker is the one page reading a
+// single cross-vertical workbook rather than one specific product/channel.
+function SuperTrackerIcon() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/><path d="M12 3v2M21 12h-2M12 21v-2M3 12h2"/></svg> }
 function OpportunityIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg> }
 function CreateOpportunityIcon(){ return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg> }
 // Daily P&L -- a statement (document with ruled lines), distinct from the plain
@@ -252,7 +257,7 @@ const ICON_MAP = {
   'Conversions': <CheckCircleIcon/>, 'Devices': <DeviceIcon/>, 'Locations': <PinIcon/>,
   'Audiences': <PeopleIcon/>, 'Schedule': <ClockIcon/>, 'Assets': <FolderIcon/>,
   'Month on Month': <ChartIcon/>, 'Day on Day': <DayIcon/>,
-  'LeadSquared': <LeadSquaredIcon/>, 'Team Mapping': <TeamMappingIcon/>,
+  'LeadSquared': <LeadSquaredIcon/>, 'Team Mapping': <TeamMappingIcon/>, 'Super Tracker': <SuperTrackerIcon/>,
   'Leads': <PeopleIcon/>, 'Activities': <ClockIcon/>, 'Opportunities': <OpportunityIcon/>, 'Create Opportunity': <CreateOpportunityIcon/>,
   'Daily P&L': <PnLIcon/>, 'Daily Cash Flow': <CashFlowIcon/>,
 }

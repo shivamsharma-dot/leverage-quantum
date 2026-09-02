@@ -3311,6 +3311,29 @@ async function handleGA4(req, res, me) {
   }
 }
 
+// Super Tracker -- reads a PRIVATE Google Sheet (real cross-vertical B2C/B2B/
+// Fly Finance/Fly Homes business numbers) via the Sheets API + a service-
+// account share, never the public gviz/tq CSV export every other Quantum sheet
+// uses -- the owner explicitly declined to make this one public. Config (which
+// spreadsheet to read) lives in app_preferences under 'super_tracker_sheet_id',
+// so a future workbook swap needs zero code change, same convention as every
+// other admin-editable sheet-URL override in this app.
+async function handleSuperTracker(req, res, me) {
+  const { canAccessDashboard, supabaseAdmin } = await import('../lib/auth.mjs');
+  if (!canAccessDashboard(me.role, 'super_tracker')) return res.status(403).json({ error: 'Forbidden' });
+  const { superTrackerConfigured, fetchSuperTracker } = await import('../lib/superTracker.mjs');
+  if (!superTrackerConfigured()) return res.status(200).json({ configured: false });
+  try {
+    const idRow = await supabaseAdmin('app_preferences?select=value&key=eq.super_tracker_sheet_id');
+    const idRows = idRow.ok ? await idRow.json() : [];
+    const sheetId = (idRows[0] && idRows[0].value) || undefined; // undefined -> fetchSuperTracker's own default
+    const data = await fetchSuperTracker(sheetId);
+    return res.status(200).json({ configured: true, ...data });
+  } catch (e) {
+    return res.status(502).json({ error: 'super tracker fetch failed', detail: String((e && e.message) || e) });
+  }
+}
+
 export default async function handler(req, res) {
   // The one endpoint on this route an external, unauthenticated-to-Quantum
   // script is meant to reach -- the Team Mapping "read-only API" connector.
@@ -3341,6 +3364,7 @@ export default async function handler(req, res) {
   if ((req.query && req.query.source) === 'youtube') return handleYoutube(req, res, me)
   if ((req.query && req.query.source) === 'instagram') return handleInstagram(req, res, me)
   if ((req.query && req.query.source) === 'ga4') return handleGA4(req, res, me)
+  if ((req.query && req.query.source) === 'super_tracker') return handleSuperTracker(req, res, me)
 
   if (!canAccessDashboard(me.role, 'meta_ads') && !canAccessDashboard(me.role, 'google_ads')) {
     return res.status(403).json({ error: 'Forbidden' })
