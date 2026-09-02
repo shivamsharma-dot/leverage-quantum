@@ -32,6 +32,7 @@ const AI_QL_COLS = [
   { key: 'date', label: 'Date', width: 90 },
   { key: 'prospectId', label: 'Prospect ID', width: 300, mono: true },
   { key: 'opportunityId', label: 'Opportunity ID', width: 300, mono: true },
+  { key: 'vertical', label: 'Vertical', width: 100 },
   { key: 'country', label: 'Country', width: 130 },
   { key: 'degree', label: 'Degree', width: 110 },
   { key: 'course', label: 'Course', width: 170, ellipsis: true },
@@ -159,7 +160,7 @@ async function downloadRecording(url, filename) {
 // is deliberately skipped (not "known", not auto-surfaced either) since it's just a
 // text restatement of activity_date, which already has its own Date column.
 const KNOWN_KEYS = new Set([
-  'prospect_id', 'opportunity_id', 'activity_date', 'activity_month', 'country_preference',
+  'prospect_id', 'opportunity_id', 'activity_date', 'activity_month', 'vertical', 'country_preference',
   'preferred_degree', 'preferred_course', 'intake_preference', 'disposition', 'disposition_status',
   'budget', 'opp_first_campaign_name', 'opp_first_channel_source', 'do_you_have_a_valid_passport',
   'highest_qualification', 'call_duration', 'call_recording_url', 'futwork_project',
@@ -188,6 +189,7 @@ async function fetchRows() {
       prospectId: r[h('prospect_id')] || '',
       opportunityId: r[h('opportunity_id')] || '',
       date: parseDate(r[h('activity_date')]),
+      vertical: (r[h('vertical')] || '').trim(),
       country: (r[h('country_preference')] || '').trim() || 'Unknown',
       degree: (r[h('preferred_degree')] || '').trim() || 'Unknown',
       course: (r[h('preferred_course')] || '').trim(),
@@ -628,12 +630,14 @@ export default function AIQLDetailDashboard() {
     const total = filtered.length
     const countByCountry = {}
     const countByDisposition = {}
-    let durSum = 0, durN = 0
+    let durSum = 0, durN = 0, srCount = 0, acCount = 0
     filtered.forEach(r => {
       countByCountry[r.country] = (countByCountry[r.country] || 0) + 1
       countByDisposition[r.disposition] = (countByDisposition[r.disposition] || 0) + 1
       const d = parseInt(r.callDuration, 10)
       if (d > 0) { durSum += d; durN++ }
+      if (r.vertical === 'SR') srCount++
+      else if (r.vertical === 'AC') acCount++
     })
     const topCountry = Object.entries(countByCountry).sort((a, b) => b[1] - a[1])[0]
     const topDisposition = Object.entries(countByDisposition).sort((a, b) => b[1] - a[1])[0]
@@ -642,6 +646,7 @@ export default function AIQLDetailDashboard() {
       topDisposition: topDisposition ? topDisposition[0] : '—',
       avgDur: durN ? Math.round(durSum / durN) : 0,
       distinctDays: [...new Set(filtered.map(r => r.date))].length,
+      srCount, acCount,
     }
   }, [filtered])
 
@@ -655,6 +660,15 @@ export default function AIQLDetailDashboard() {
     const counts = {}
     filtered.forEach(r => { counts[r.disposition] = (counts[r.disposition] || 0) + 1 })
     return Object.entries(counts).map(([disposition, count]) => ({ disposition, count })).sort((a, b) => b.count - a.count)
+  }, [filtered])
+
+  // SR/AC vertical split -- called out as important, so it gets both a headline KPI
+  // card and its own breakdown, same as Country/Disposition (and matching Human QL
+  // Detail's treatment of the same field).
+  const byVertical = useMemo(() => {
+    const counts = {}
+    filtered.forEach(r => { const v = r.vertical || 'Unknown'; counts[v] = (counts[v] || 0) + 1 })
+    return Object.entries(counts).map(([vertical, count]) => ({ vertical, count })).sort((a, b) => b.count - a.count)
   }, [filtered])
 
   // Always the current calendar month, regardless of the date-preset/filter/search
@@ -675,7 +689,7 @@ export default function AIQLDetailDashboard() {
 
   const exportRows = useMemo(() => sorted.map(r => {
     const base = {
-      Date: fmtDateLabel(r.date), Country: r.country, Degree: r.degree, Course: r.course, Intake: r.intake,
+      Date: fmtDateLabel(r.date), Vertical: r.vertical, Country: r.country, Degree: r.degree, Course: r.course, Intake: r.intake,
       Disposition: r.disposition, Status: r.status, Budget: r.budget, Campaign: r.campaign, 'Futwork Project': r.futworkProject, Channel: r.channel,
       Passport: r.passport, 'Degree Status': r.degreeStatus,
       'Duration (sec)': r.callDuration, 'Recording URL': r.recordingUrl,
@@ -702,6 +716,7 @@ export default function AIQLDetailDashboard() {
   function cell(r, key) {
     switch (key) {
       case 'date': return fmtDateLabel(r.date)
+      case 'vertical': return r.vertical || '—'
       case 'country': return r.country
       case 'degree': return r.degree
       case 'course': return <span title={r.course}>{r.course || '—'}</span>
@@ -872,14 +887,18 @@ export default function AIQLDetailDashboard() {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
-          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
+          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
             <PremKPI label="Total QLs" value={fmtN(kpi.total)} sub={(monthDay !== 'all' ? 'On ' + fmtDateLabel(monthDay) : fmtScopeLabel(datePreset, selMonth, customFrom, customTo)) + ' — AI-qualified leads'} accent={C.navy} icon={KPI_ICONS.total} />
+            <PremKPI label="SR vs AC" value={fmtN(kpi.srCount) + ' / ' + fmtN(kpi.acCount)} sub="Vertical split (SR / AC)" accent={C.navy} icon={KPI_ICONS.agent} />
             <PremKPI label="Top Country" value={kpi.topCountry} sub={fmtN(kpi.topCountryN) + ' leads'} accent={C.blue} icon={KPI_ICONS.globe} />
             <PremKPI label="Top Disposition" value={kpi.topDisposition} sub="Most common outcome" accent={C.cyan} icon={KPI_ICONS.ai} />
             <PremKPI label="Avg Call Duration" value={fmtDur(kpi.avgDur)} sub={kpi.distinctDays + ' days covered'} accent={C.green} icon={KPI_ICONS.bot} />
           </div>
 
-          <div className="lq-grid3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+          <div className="lq-grid3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+            <Card title="By Vertical" sub="SR / AC split">
+              <RankedBars data={byVertical} labelKey="vertical" max={byVertical[0]?.count || 0} total={kpi.total} showRank />
+            </Card>
             <Card title="By Country" sub="Top destination countries">
               <RankedBars data={byCountry} labelKey="country" max={byCountry[0]?.count || 0} total={kpi.total} showRank />
             </Card>
