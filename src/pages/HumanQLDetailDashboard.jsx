@@ -633,12 +633,14 @@ export default function HumanQLDetailDashboard() {
     const total = filtered.length
     const countByCountry = {}
     const countByDisposition = {}
-    let durSum = 0, durN = 0
+    let durSum = 0, durN = 0, srCount = 0, acCount = 0
     filtered.forEach(r => {
       countByCountry[r.country] = (countByCountry[r.country] || 0) + 1
       countByDisposition[r.disposition] = (countByDisposition[r.disposition] || 0) + 1
       const d = parseInt(r.callDuration, 10)
       if (d > 0) { durSum += d; durN++ }
+      if (r.vertical === 'SR') srCount++
+      else if (r.vertical === 'AC') acCount++
     })
     const topCountry = Object.entries(countByCountry).sort((a, b) => b[1] - a[1])[0]
     const topDisposition = Object.entries(countByDisposition).sort((a, b) => b[1] - a[1])[0]
@@ -647,6 +649,7 @@ export default function HumanQLDetailDashboard() {
       topDisposition: topDisposition ? topDisposition[0] : '—',
       avgDur: durN ? Math.round(durSum / durN) : 0,
       distinctDays: [...new Set(filtered.map(r => r.date))].length,
+      srCount, acCount,
     }
   }, [filtered])
 
@@ -660,6 +663,14 @@ export default function HumanQLDetailDashboard() {
     const counts = {}
     filtered.forEach(r => { counts[r.disposition] = (counts[r.disposition] || 0) + 1 })
     return Object.entries(counts).map(([disposition, count]) => ({ disposition, count })).sort((a, b) => b.count - a.count)
+  }, [filtered])
+
+  // SR/AC vertical split -- called out as important, so it gets both a headline KPI
+  // card and its own breakdown, same as Country/Disposition.
+  const byVertical = useMemo(() => {
+    const counts = {}
+    filtered.forEach(r => { const v = r.vertical || 'Unknown'; counts[v] = (counts[v] || 0) + 1 })
+    return Object.entries(counts).map(([vertical, count]) => ({ vertical, count })).sort((a, b) => b.count - a.count)
   }, [filtered])
 
   // Always the current calendar month, regardless of the date-preset/filter/search
@@ -877,14 +888,18 @@ export default function HumanQLDetailDashboard() {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
-          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
+          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
             <PremKPI label="Total QLs" value={fmtN(kpi.total)} sub={(monthDay !== 'all' ? 'On ' + fmtDateLabel(monthDay) : fmtScopeLabel(datePreset, selMonth, customFrom, customTo)) + ' — human-qualified leads'} accent={C.navy} icon={KPI_ICONS.total} />
+            <PremKPI label="SR vs AC" value={fmtN(kpi.srCount) + ' / ' + fmtN(kpi.acCount)} sub="Vertical split (SR / AC)" accent={C.navy} icon={KPI_ICONS.ai} />
             <PremKPI label="Top Country" value={kpi.topCountry} sub={fmtN(kpi.topCountryN) + ' leads'} accent={C.blue} icon={KPI_ICONS.globe} />
             <PremKPI label="Top Disposition" value={kpi.topDisposition} sub="Most common outcome" accent={C.cyan} icon={KPI_ICONS.agent} />
             <PremKPI label="Avg Call Duration" value={fmtDur(kpi.avgDur)} sub={kpi.distinctDays + ' days covered'} accent={C.green} icon={KPI_ICONS.bot} />
           </div>
 
-          <div className="lq-grid3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+          <div className="lq-grid3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
+            <Card title="By Vertical" sub="SR / AC split">
+              <RankedBars data={byVertical} labelKey="vertical" max={byVertical[0]?.count || 0} total={kpi.total} showRank />
+            </Card>
             <Card title="By Country" sub="Top destination countries">
               <RankedBars data={byCountry} labelKey="country" max={byCountry[0]?.count || 0} total={kpi.total} showRank />
             </Card>
