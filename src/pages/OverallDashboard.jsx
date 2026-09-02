@@ -26,7 +26,7 @@ import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, B
 // source this page instance reads is now fixed by the `dataSource` prop (two
 // separate routes/pages -- see App.jsx), not a per-device Settings toggle.
 import {
-  fetchOverallBqRows, fetchOverallBqBounds, fetchOverallBqSyncedAt,
+  fetchOverallBqRows, fetchOverallBqAggRows, fetchOverallBqBounds, fetchOverallBqSyncedAt,
 } from '../lib/overallBqCache'
 
 // "Overall PM" — added by the admin as a custom Data Source (Settings > Data > Google Sheets).
@@ -1009,6 +1009,23 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     obs.observe(el)
     return () => obs.disconnect()
   }, [monthTrendVisible])
+  // Sidecar fetch for the previous-period KPI-delta cards ONLY (prevKpis/prevPaidKpis
+  // below) -- reads the pre-aggregated overall_bq_daily_agg table (see the big comment
+  // right above the main bqRows fetch effect for why that table is unsafe for bqRows
+  // itself: no campaign_name, so anything needing corridor/campaign grouping cannot use
+  // it). The KPI delta cards only ever SUM numeric fields across the whole previous
+  // window -- genuinely Source/Month/Day-level, no campaign_name dependency -- so this
+  // is the one place on the page that CAN safely use the fast table. Deliberately a
+  // separate, independent fetch (same pattern as monthTrendBqRows above) rather than
+  // folded into bqRange's union: prevWindow is already unioned into the main fetch for
+  // reportCmp's campaign/corridor-level previous-period comparisons (which genuinely do
+  // need per-campaign rows and must keep reading prevFiltered/rows), so this fetch is
+  // pure upside -- it lets the delta arrows resolve from a much smaller query instead of
+  // waiting on that big campaign-level union to finish. Consumption side (prevKpis/
+  // prevPaidKpis) still falls back to the slow-but-always-correct prevFiltered whenever
+  // corridor/campaign-search/cost-exclusions are active, since none of those can be
+  // expressed against a table with no campaign_name.
+  const [prevAggRows, setPrevAggRows] = useState([])
   // A failed cache read must never leave this page dead, so it falls back to the sheet
   // rather than replacing it: every derivation below reverts to rawRows while bqError
   // is set. bqLive is the single test for "BQ data is what we are showing".
@@ -1643,14 +1660,23 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return rs
   }, [rows, prevWindow, selectedSources, corridorFilter, campaignQueryDebounced])
 
-  const prevKpis = useMemo(() => sumKpis(prevFiltered), [prevFiltered])
+  // prevAggRows has no campaign_name (see its own state comment above), so it can ONLY
+  // stand in for prevFiltered when nothing on screen is asking to slice the previous
+  // period by campaign/corridor, and when there's no cost-exclusion list that a real
+  // campaign name would need to match against (isCostExcludedCampaign('', ...) can
+  // never correctly apply an exclusion). Any one of those active falls straight back
+  // to the always-correct, campaign-level prevFiltered -- exactly today's behaviour.
+  const canUseAggPrev = bqActive && corridorFilter === 'All' && !campaignQueryDebounced.trim() && costExclusions.length === 0 && prevAggRows.length > 0
+  const prevAggFiltered = useMemo(() => (sourceIsAll ? prevAggRows : prevAggRows.filter(matchesSource)), [prevAggRows, sourceIsAll, matchesSource])
+  const prevKpis = useMemo(() => sumKpis(canUseAggPrev ? prevAggFiltered : prevFiltered), [canUseAggPrev, prevAggFiltered, prevFiltered])
   // Same paid-only basis as the current period -- otherwise the delta arrows would be
   // comparing two different definitions of CPL/CPQL/CPA against each other.
   const prevPaidKpis = useMemo(() => {
+    const base = canUseAggPrev ? prevAggFiltered : prevFiltered
     const s = new Set()
-    prevFiltered.forEach(r => { if (r.spend > 0) s.add(r.source) })
-    return sumKpis(prevFiltered.filter(r => s.has(r.source)))
-  }, [prevFiltered])
+    base.forEach(r => { if (r.spend > 0) s.add(r.source) })
+    return sumKpis(base.filter(r => s.has(r.source)))
+  }, [canUseAggPrev, prevAggFiltered, prevFiltered])
   const prevCpl = prevPaidKpis.leads > 0 ? prevKpis.spend / prevPaidKpis.leads : 0
   const prevCpql = prevPaidKpis.totalQL > 0 ? prevKpis.spend / prevPaidKpis.totalQL : 0
   const prevCpa = prevPaidKpis.apps > 0 ? prevKpis.spend / prevPaidKpis.apps : 0
@@ -1918,6 +1944,26 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       .finally(() => { if (!dead) setMonthTrendBqBusy(false) })
     return () => { dead = true }
   }, [bqActive, monthTrendVisible, monthTrendBqSince, monthTrendBqUntil, bqNonce])
+
+  // prevWindow (declared above) resolves to either {type:'month', mk} or {type:'range',
+  // from, to} -- normalised to plain since/until day-key strings here, same "read on
+  // primitives, not the window object" rule as bqSince/monthTrendBqSince above, so a
+  // prevWindow recompute that lands on the exact same dates doesn't refetch forever.
+  const prevWindowSince = prevWindow ? dayKey(prevWindow.type === 'month' ? monthStartDate(prevWindow.mk) : prevWindow.from) : null
+  const prevWindowUntil = prevWindow ? dayKey(prevWindow.type === 'month' ? monthEndDate(prevWindow.mk) : prevWindow.to) : null
+
+  // See the prevAggRows state comment above for the full reasoning -- this is a small,
+  // independent, Source/Month/Day-level fetch for JUST the previous-period window, so
+  // the KPI delta cards can resolve without waiting on the much bigger campaign-level
+  // union fetch that reportCmp/the grouped table still need.
+  useEffect(() => {
+    if (!bqActive || !prevWindowSince || !prevWindowUntil) { setPrevAggRows([]); return }
+    let dead = false
+    retryFetch(() => fetchOverallBqAggRows({ since: prevWindowSince, until: prevWindowUntil, sources: sourceIsAll ? [] : selectedSources }))
+      .then(raw => { if (!dead) setPrevAggRows(raw.map(mapRow)) })
+      .catch(() => { if (!dead) setPrevAggRows([]) }) // consumption side falls back to the slower, always-correct prevFiltered on empty
+    return () => { dead = true }
+  }, [bqActive, prevWindowSince, prevWindowUntil, sourceIsAll, selectedSources, bqNonce])
 
   // Period A (the "current" side) is normally whatever the main page filter is --
   // correct for 'prev'/'yoy' modes, since those are explicitly "vs the period I'm
