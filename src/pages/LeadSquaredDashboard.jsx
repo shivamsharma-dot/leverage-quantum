@@ -1569,6 +1569,9 @@ function OpportunityHistoryTab() {
   const [rows, setRows] = useState(null)
   const [meta, setMeta] = useState({ total: null, truncated: false, counts: null })
   const [error, setError] = useState('')
+  const [batches, setBatches] = useState(null) // null = loading, [] = none, else the full list
+  const [batchesError, setBatchesError] = useState('')
+  const [openBatchKey, setOpenBatchKey] = useState(null)
   const { running } = useOppImportProgress()
   const wasRunning = useRef(false)
 
@@ -1576,6 +1579,9 @@ function OpportunityHistoryTab() {
     fetchJson(`${API}&mode=opportunity_activity_list`)
       .then(d => { setRows(d.rows || []); setMeta({ total: d.total ?? null, truncated: !!d.truncated, counts: d.counts || null }); setError('') })
       .catch(e => setError(String(e.message || e)))
+    fetchJson(`${API}&mode=opportunity_batches_list`)
+      .then(d => { setBatches(d.batches || []); setBatchesError('') })
+      .catch(e => setBatchesError(String(e.message || e)))
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -1599,19 +1605,35 @@ function OpportunityHistoryTab() {
   // has pushed more than that. Falls back to the client count only when the
   // list isn't truncated (in which case `rows` genuinely IS everything, or
   // when the count queries themselves didn't come back for some reason).
+  // Bulk batches now comes from the SAME authoritative source as the "All
+  // bulk imports" section below (listOpportunityBatches -- confirmed live
+  // 2026-09-02 to find batches the 5,000-row-capped `rows` had aged out
+  // entirely), so this is an exact count too, not the old lower bound.
   const stats = useMemo(() => {
     const list = rows || []
-    const batchKeys = new Set(list.map(r => r.batch_id || r.batch_label).filter(Boolean))
     const c = meta.counts
     return {
       total: c ? c.total : list.length,
       success: c && c.success != null ? c.success : list.filter(r => r.status === 'success').length,
       duplicate: c && c.duplicate != null ? c.duplicate : list.filter(r => r.status === 'duplicate').length,
       failed: c && c.failed != null ? c.failed : list.filter(r => r.status === 'failed').length,
-      batches: batchKeys.size,
+      batches: Array.isArray(batches) ? batches.length : null,
     }
-  }, [rows, meta])
+  }, [rows, meta, batches])
   const grouped = useMemo(() => groupOpportunityRows(rows || []), [rows])
+  // A batch's own rows are only individually browsable if they're still
+  // inside the 5,000-row window `rows` fetched -- otherwise its aggregate
+  // counts (from listOpportunityBatches, always exact) are all there is.
+  const rowsByBatchKey = useMemo(() => {
+    const m = new Map()
+    for (const r of (rows || [])) {
+      const key = r.batch_id || r.batch_label
+      if (!key) continue
+      if (!m.has(key)) m.set(key, [])
+      m.get(key).push(r)
+    }
+    return m
+  }, [rows])
 
   return (
     <div>
@@ -1625,7 +1647,7 @@ function OpportunityHistoryTab() {
       ) : (
         <>
           <div style={{ display: 'flex', gap: 20, marginBottom: meta.truncated ? 6 : 16, flexWrap: 'wrap' }}>
-            {[['Total attempts', stats.total], ['Success', stats.success], ['Duplicate', stats.duplicate], ['Failed', stats.failed], ...(stats.batches > 0 ? [['Bulk batches' + (meta.truncated ? '*' : ''), stats.batches]] : [])].map(([lbl, v]) => (
+            {[['Total attempts', stats.total], ['Success', stats.success], ['Duplicate', stats.duplicate], ['Failed', stats.failed], ...(stats.batches > 0 ? [['Bulk batches', stats.batches]] : [])].map(([lbl, v]) => (
               <div key={lbl}>
                 <div style={{ fontSize: 19, fontWeight: 800, color: C.text }}>{fmtN(v)}</div>
                 <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{lbl}</div>
@@ -1634,10 +1656,62 @@ function OpportunityHistoryTab() {
           </div>
           {meta.truncated && (
             <p style={{ fontSize: 11, color: C.muted, margin: '0 0 16px' }}>
-              Total/Success/Duplicate/Failed above are the real counts across everything ever logged, not just what's shown below.{stats.batches > 0 && ' *Bulk batches is a lower bound -- an older batch entirely outside the 5,000 rows shown wouldn’t be counted.'}
+              Every number above is exact across everything ever logged (via count-only queries), not just what's shown below.
             </p>
           )}
         </>
+      )}
+
+      {!notSetUp && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 }}>All bulk imports</div>
+          <p style={{ fontSize: 11.5, color: C.muted, margin: '0 0 10px', lineHeight: 1.5 }}>
+            Every bulk batch ever run, however old -- these counts stay exact even once a batch's individual rows have aged out of the list below.
+          </p>
+          {batchesError ? (
+            <ErrorNote message={batchesError} />
+          ) : !batches ? (
+            <InlineLoader label="Loading batches" height={60} />
+          ) : batches.length === 0 ? (
+            <div style={{ fontSize: 12, color: C.muted }}>No bulk imports yet.</div>
+          ) : (
+            <div style={{ border: '0.5px solid ' + C.border, borderRadius: 12, overflow: 'hidden' }}>
+              {batches.map(b => {
+                const rowsAvailable = rowsByBatchKey.get(b.key) || null
+                const open = openBatchKey === b.key
+                return (
+                  <div key={b.key} style={{ borderTop: '0.5px solid ' + C.border }}>
+                    <div
+                      onClick={rowsAvailable ? () => setOpenBatchKey(open ? null : b.key) : undefined}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: rowsAvailable ? 'pointer' : 'default' }}
+                    >
+                      {rowsAvailable ? (
+                        <span style={{ fontSize: 11, color: C.muted, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .12s', flexShrink: 0 }}>&#9656;</span>
+                      ) : <span style={{ width: 11, flexShrink: 0 }} />}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.label}</div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                          {new Date(b.lastCreatedAt).toLocaleString()}{!rowsAvailable && <> &middot; individual rows have aged out of the list below -- counts here are still exact</>}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 14, flexShrink: 0, fontSize: 11.5, fontFamily: FONT }}>
+                        <span style={{ color: C.text, fontWeight: 700 }}>{fmtN(b.total)} total</span>
+                        <span style={{ color: OPP_STATUS_STYLE.success.color, fontWeight: 700 }}>{fmtN(b.success)} success</span>
+                        {b.duplicate > 0 && <span style={{ color: OPP_STATUS_STYLE.duplicate.color, fontWeight: 700 }}>{fmtN(b.duplicate)} duplicate</span>}
+                        {b.failed > 0 && <span style={{ color: OPP_STATUS_STYLE.failed.color, fontWeight: 700 }}>{fmtN(b.failed)} failed</span>}
+                      </div>
+                    </div>
+                    {open && rowsAvailable && (
+                      <div style={{ background: 'var(--bg3)' }}>
+                        {rowsAvailable.map(r => <OpportunityActivityRow key={r.id} row={r} nested />)}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {!rows && !notSetUp ? (

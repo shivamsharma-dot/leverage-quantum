@@ -770,8 +770,9 @@ const OPP_ACTIVITY_MAX_ROWS = 5000
 // This is what makes it possible to report an honest Total/Success/Duplicate/
 // Failed even once the 5,000-row display cap has been hit -- those counts are
 // NOT derived from the (possibly truncated) `rows` array.
-async function countOpportunityActivity(supabaseAdmin, statusFilter) {
-  const qs = statusFilter ? '&status=eq.' + statusFilter : ''
+async function countOpportunityActivity(supabaseAdmin, statusFilter, extraFilter) {
+  let qs = statusFilter ? '&status=eq.' + statusFilter : ''
+  if (extraFilter) qs += '&' + extraFilter
   const r = await supabaseAdmin('leadsquared_opportunity_activity?select=id' + qs, {
     headers: { Range: '0-0', Prefer: 'count=exact' },
   })
@@ -779,6 +780,59 @@ async function countOpportunityActivity(supabaseAdmin, statusFilter) {
   const cr = r.headers.get('content-range') || ''
   const n = parseInt(cr.split('/')[1] || '', 10)
   return Number.isFinite(n) ? n : null
+}
+// Enumerates EVERY bulk-import batch ever run, independent of the 5,000-row
+// display cap on listOpportunityActivity()'s row list -- confirmed live
+// 2026-09-02 that a batch old enough (or a big-enough newer batch) pushes
+// older ones out of that list ENTIRELY, with no way to see they ever
+// happened. Two passes: (1) a narrow scan (batch_id/batch_label/created_at
+// only -- no full row payload) across every batch-tagged row, paged past the
+// 1000-row PostgREST ceiling, just to find every distinct batch and its date
+// range; (2) 4 cheap count-only queries per batch (same Range:0-0 trick as
+// countOpportunityActivity, filtered to that one batch) run in parallel, for
+// its real total/success/duplicate/failed -- these stay exact regardless of
+// the batch's age or the row-list cap. Keys on batch_id (a real random id)
+// when present, falling back to batch_label for older rows predating that
+// column -- mirrors groupOpportunityRows' own `r.batch_id || r.batch_label`
+// grouping on the frontend, so the two never disagree about what a "batch" is.
+async function listOpportunityBatches() {
+  const { supabaseAdmin } = await import('../lib/auth.mjs')
+  const scan = new Map()
+  for (let offset = 0; ; offset += 1000) {
+    const r = await supabaseAdmin(
+      'leadsquared_opportunity_activity?select=batch_id,batch_label,created_at&or=(batch_id.not.is.null,batch_label.not.is.null)&order=created_at.asc',
+      { headers: { Range: offset + '-' + (offset + 999) } },
+    )
+    if (!r.ok) {
+      if (offset === 0) throw new Error('leadsquared_opportunity_activity may not exist yet -- run supabase/sql/leadsquared_opportunity_activity_setup.sql')
+      break
+    }
+    const page = await r.json()
+    if (!Array.isArray(page) || page.length === 0) break
+    for (const row of page) {
+      const key = row.batch_id || row.batch_label
+      if (!key) continue
+      const cur = scan.get(key)
+      if (!cur) scan.set(key, { key, keyType: row.batch_id ? 'batch_id' : 'batch_label', label: row.batch_label || row.batch_id, first: row.created_at, last: row.created_at })
+      else cur.last = row.created_at
+    }
+    if (page.length < 1000) break
+    if (scan.size > 500) break // sanity ceiling -- a real account will never have hundreds of distinct bulk batches
+  }
+
+  const entries = [...scan.values()]
+  const batches = await Promise.all(entries.map(async e => {
+    const filter = (e.keyType === 'batch_id' ? 'batch_id=eq.' : 'batch_label=eq.') + encodeURIComponent(e.key)
+    const [total, success, duplicate, failed] = await Promise.all([
+      countOpportunityActivity(supabaseAdmin, null, filter),
+      countOpportunityActivity(supabaseAdmin, 'success', filter),
+      countOpportunityActivity(supabaseAdmin, 'duplicate', filter),
+      countOpportunityActivity(supabaseAdmin, 'failed', filter),
+    ])
+    return { key: e.key, label: e.label, firstCreatedAt: e.first, lastCreatedAt: e.last, total, success, duplicate, failed }
+  }))
+  batches.sort((a, b) => new Date(b.lastCreatedAt) - new Date(a.lastCreatedAt))
+  return { batches }
 }
 async function listOpportunityActivity() {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
@@ -2192,6 +2246,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_detail_cache_save') return res.status(200).json(await saveDetailCacheBatch((req.body && req.body.details) || []))
     if (mode === 'team_cache_lookup') return res.status(200).json(await getTeamCacheLookup())
     if (mode === 'opportunity_activity_list') return res.status(200).json(await listOpportunityActivity())
+    if (mode === 'opportunity_batches_list') return res.status(200).json(await listOpportunityBatches())
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
   }
