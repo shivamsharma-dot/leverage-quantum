@@ -90,7 +90,7 @@ i % 2 ? '<div style="' + PRE + '">' + trimEdge(part) + '</div>' : inline(trimEdg
 )).join('')
 }
 
-export default function SlackReportPanel({ open, onClose, buildContext, captureFiles, dashboardId, filename, rowCount, versions }) {
+export default function SlackReportPanel({ open, onClose, buildContext, captureFiles, dashboardId, filename, rowCount, versions, extraHeader }) {
   // A page may hand in its own report library; Overall keeps the shared one.
   const VERSIONS = versions && versions.length ? versions : REPORT_VERSIONS
   const [versionId, setVersionId] = useState(versions && versions.length ? versions[0].id : DEFAULT_VERSION_ID)
@@ -276,17 +276,24 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
         display:'flex', flexDirection:'column', overflow:'hidden',
       }}>
 
-        <div style={{ padding:'15px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', alignItems:'center', gap:12 }}>
-          <div style={{ width:32, height:32, borderRadius:9, background:'rgba(31,60,132,0.07)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-            <SlackIcon size={17} />
+        <div style={{ padding:'15px 18px', borderBottom:`1px solid ${C.border}`, display:'flex', flexDirection:'column', gap: extraHeader ? 12 : 0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ width:32, height:32, borderRadius:9, background:'rgba(31,60,132,0.07)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <SlackIcon size={17} />
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:15, fontWeight:800, color:C.ink, letterSpacing:'-0.01em' }}>Send to Slack</div>
+              <div style={{ fontSize:11.5, color:C.muted, marginTop:2 }}>Pick a version, read the preview, then send. The library lives here in Quantum, never in Slack.</div>
+            </div>
+            <button onClick={onClose} title="Close" style={{ border:'none', background:'none', cursor:'pointer', padding:6, borderRadius:7, color:C.muted, lineHeight:0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
           </div>
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:15, fontWeight:800, color:C.ink, letterSpacing:'-0.01em' }}>Send to Slack</div>
-            <div style={{ fontSize:11.5, color:C.muted, marginTop:2 }}>Pick a version, read the preview, then send. The library lives here in Quantum, never in Slack.</div>
-          </div>
-          <button onClick={onClose} title="Close" style={{ border:'none', background:'none', cursor:'pointer', padding:6, borderRadius:7, color:C.muted, lineHeight:0 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-          </button>
+          {/* Optional page-specific controls (e.g. Super Tracker's "which week"
+              picker) -- rendered here so a page can put a real control at the
+              head of the modal without this shared component knowing anything
+              about what that control does. */}
+          {extraHeader}
         </div>
 
         <div style={{ flex:1, minHeight:0, display:'flex', flexDirection: narrow ? 'column' : 'row' }}>

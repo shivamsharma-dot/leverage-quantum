@@ -78,6 +78,22 @@ function weekValue(row, label) {
   return w ? w.value : ''
 }
 
+// Category (bigger grouping layer, e.g. "Content & Community") -> the rows
+// carrying it, in the sheet's own "Reference Categories" order rather than
+// "whichever category this section's rows happen to mention first" -- so a
+// category always renders in the same position across every section. A
+// category present in the data but missing from that canonical list (a new
+// S.No. prefix not yet added, or a genuinely uncategorised row) still shows,
+// appended after the known ones instead of being dropped. Mirrors the same
+// logic in src/lib/superTrackerReport.js so the page and the Slack report
+// can never disagree about how metrics are grouped.
+function groupRowsByCategory(rows, categoryOrder) {
+  const catSeen = new Set(rows.map(r => r.category || 'Uncategorized'))
+  const ordered = (categoryOrder || []).filter(c => catSeen.has(c))
+  rows.forEach(r => { const c = r.category || 'Uncategorized'; if (!ordered.includes(c)) ordered.push(c) })
+  return ordered.map(cat => ({ category: cat, rows: rows.filter(r => (r.category || 'Uncategorized') === cat) }))
+}
+
 export default function SuperTrackerDashboard() {
   const { data, loading, refreshing, error, lastSync, refresh } = useSuperTracker()
   // The real workbook has a genuine mix of metric-tracker tabs (a real header
@@ -86,8 +102,15 @@ export default function SuperTrackerDashboard() {
   // a trackable "section" -- they carry zero rows and would just be clutter in
   // the Section picker. Filtering here (rather than in the backend) keeps
   // lib/superTracker.mjs's own response complete/debuggable while the page
-  // only ever shows tabs that are actually real metric data.
+  // only ever shows tabs that are actually real metric data. A few REAL tabs
+  // with real rows (older/duplicate B2C layouts, a targets-only sheet) are
+  // excluded server-side already (see EXCLUDED_SECTIONS in
+  // lib/superTracker.mjs) -- confirmed with the sheet owner, not this page's
+  // own guess.
   const sections = ((data && data.sections) || []).filter(s => !s.unrecognized && s.rows.length > 0)
+  // The sheet's own canonical category order (from "Reference Categories"),
+  // so a category always renders in the same position everywhere it's used.
+  const categoryOrder = (data && data.categoryOrder) || []
 
   const [sectionKey, setSectionKey] = useState(null)
   const [viewMode, setViewMode] = useState('latest') // 'latest' | 'all'
@@ -136,6 +159,12 @@ export default function SuperTrackerDashboard() {
     })
   }, [activeSection, query, blFilter, ownerFilter])
 
+  // The bigger grouping layer requested on top of the existing S.No. "#"
+  // column -- one category header per cluster, in the sheet's own canonical
+  // order, applied AFTER the existing filters so an empty category (nothing
+  // left in it once filtered) just doesn't render at all.
+  const groupedFilteredRows = useMemo(() => groupRowsByCategory(filteredRows, categoryOrder), [filteredRows, categoryOrder])
+
   // "Export everything" -- every section, every metric, every week, in one
   // wide table (Section + metadata columns, then one column per week label).
   // Week columns are unioned across sections in first-seen order so a metric
@@ -175,13 +204,23 @@ export default function SuperTrackerDashboard() {
 
   const [slackOpen, setSlackOpen] = useState(false)
   const tableRef = useRef(null)
+  // Which week the Slack report shows -- 'auto' means "let the report pick
+  // the most recent column that's actually filled in" (see
+  // src/lib/superTrackerReport.js). Explicitly the user's own call, not just
+  // whatever this page's own "Latest week" picker happens to be showing --
+  // that picker is scoped to ONE section at a time, while the Slack report
+  // covers every section, which may not all share the same week set.
+  const [slackWeekOverride, setSlackWeekOverride] = useState('auto')
 
   // Ctx for the advanced Slack report (src/lib/superTrackerReport.js) -- the
   // FULL, unfiltered section list (every real metric section, every row,
   // every week), never whatever the on-screen Section/Business Line/Owner/
   // search filters currently narrow the table to -- a compliance report has
   // to reflect the true state of the whole tracker, not one filtered slice.
-  const buildSlackContext = useCallback(() => ({ sections }), [sections])
+  const buildSlackContext = useCallback(
+    () => ({ sections, categoryOrder, weekOverride: slackWeekOverride === 'auto' ? null : slackWeekOverride }),
+    [sections, categoryOrder, slackWeekOverride]
+  )
 
   // Screenshots whatever table is actually on screen (current section, current
   // view mode) for the report's own visual attachment, and attaches the FULL
@@ -289,6 +328,17 @@ export default function SuperTrackerDashboard() {
           dashboardId="super_tracker"
           filename="super-tracker"
           rowCount={totalRowCount}
+          extraHeader={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11.5, color: C.muted, fontWeight: 600 }}>Week to report on:</span>
+              <Dropdown
+                value={slackWeekOverride}
+                onChange={setSlackWeekOverride}
+                minWidth={220}
+                options={[{ value: 'auto', label: 'Auto — most recent filled-in week' }, ...allWeekLabels.map(w => ({ value: w, label: w }))]}
+              />
+            </div>
+          }
         />
 
         <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
@@ -305,7 +355,12 @@ export default function SuperTrackerDashboard() {
               sub={filteredRows.length.toLocaleString('en-IN') + ' of ' + activeSection.rows.length.toLocaleString('en-IN') + ' metric row(s)' + (activeSection.weekLabels.length ? ' · ' + activeSection.weekLabels.length + ' week(s) tracked' : '')}
               noPad
             >
-              <div style={{ overflowX: 'auto' }}>
+              {/* Card's own title/sub sit OUTSIDE this box entirely, so they can
+                  never scroll away -- only this table body (bounded height,
+                  its own scrollbar) moves. The column header row is ALSO
+                  sticky within that same bounded box, so it stays visible
+                  the whole time you're scrolling through a long section. */}
+              <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 260px)' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: viewMode === 'all' ? (600 + activeSection.weekLabels.length * 110) : 700 }}>
                   <thead>
                     <tr style={{ background: 'var(--bg2)' }}>
@@ -324,19 +379,31 @@ export default function SuperTrackerDashboard() {
                   <tbody>
                     {filteredRows.length === 0 ? (
                       <tr><td colSpan={5 + (viewMode === 'latest' ? 1 : Math.max(activeSection.weekLabels.length, 1))} style={{ padding: 24, textAlign: 'center', color: C.muted }}>No metrics match this filter.</td></tr>
-                    ) : filteredRows.map((r, i) => (
-                      <tr key={i} style={{ borderTop: '0.5px solid ' + C.border }}>
-                        <Td>{r.sNo}</Td>
-                        <Td sticky title={r.definition || undefined} style={{ fontWeight: 600, color: C.text, cursor: r.definition ? 'help' : 'default' }}>{r.metric}</Td>
-                        <Td muted>{r.businessLine}</Td>
-                        <Td muted>{r.owner}</Td>
-                        <Td muted>{r.toBePosted}</Td>
-                        {viewMode === 'latest' ? (
-                          <Td style={{ fontWeight: 600, color: C.navy }}>{weekValue(r, selectedWeek) || '—'}</Td>
-                        ) : (
-                          activeSection.weekLabels.map(w => <Td key={w}>{weekValue(r, w) || '—'}</Td>)
-                        )}
-                      </tr>
+                    ) : groupedFilteredRows.map(group => (
+                      <React.Fragment key={group.category}>
+                        <tr>
+                          <td colSpan={5 + (viewMode === 'latest' ? 1 : Math.max(activeSection.weekLabels.length, 1))} style={{
+                            padding: '8px 12px', background: C.navyBg, color: C.navy, fontWeight: 800, fontSize: 11.5,
+                            textTransform: 'uppercase', letterSpacing: '0.04em', borderTop: '1px solid ' + C.border,
+                          }}>
+                            {group.category} <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, opacity: 0.75 }}>&middot; {group.rows.length.toLocaleString('en-IN')}</span>
+                          </td>
+                        </tr>
+                        {group.rows.map((r, i) => (
+                          <tr key={i} style={{ borderTop: '0.5px solid ' + C.border }}>
+                            <Td>{r.sNo}</Td>
+                            <Td sticky title={r.definition || undefined} style={{ fontWeight: 600, color: C.text, cursor: r.definition ? 'help' : 'default' }}>{r.metric}</Td>
+                            <Td muted>{r.businessLine}</Td>
+                            <Td muted>{r.owner}</Td>
+                            <Td muted>{r.toBePosted}</Td>
+                            {viewMode === 'latest' ? (
+                              <Td style={{ fontWeight: 600, color: C.navy }}>{weekValue(r, selectedWeek) || '—'}</Td>
+                            ) : (
+                              activeSection.weekLabels.map(w => <Td key={w}>{weekValue(r, w) || '—'}</Td>)
+                            )}
+                          </tr>
+                        ))}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -350,13 +417,19 @@ export default function SuperTrackerDashboard() {
   )
 }
 
+// Every header cell is vertically sticky (top:0) so the whole column-header
+// row stays visible while the table body scrolls beneath it -- `sticky` here
+// now only controls the ADDITIONAL horizontal stickiness (left:0) the Metric
+// column needs so it also stays visible while scrolling sideways through the
+// week columns. The Metric header needs a higher z-index than a plain
+// vertically-sticky header since it sits at the intersection of both.
 function Th({ children, sticky, style }) {
   return (
     <th style={{
       textAlign: 'left', padding: '9px 12px', fontSize: 10.5, fontWeight: 700, color: C.muted,
       textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap',
-      position: sticky ? 'sticky' : undefined, left: sticky ? 0 : undefined,
-      background: sticky ? 'var(--bg2)' : undefined, zIndex: sticky ? 2 : undefined,
+      position: 'sticky', top: 0, left: sticky ? 0 : undefined,
+      background: 'var(--bg2)', zIndex: sticky ? 3 : 2,
       ...style,
     }}>{children}</th>
   )
