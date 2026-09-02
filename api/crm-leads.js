@@ -3405,19 +3405,12 @@ async function handleGA4(req, res, me) {
 async function handleSuperTracker(req, res, me) {
   const { canAccessDashboard, supabaseAdmin } = await import('../lib/auth.mjs');
   if (!canAccessDashboard(me.role, 'super_tracker')) return res.status(403).json({ error: 'Forbidden' });
-  const { superTrackerConfigured, fetchSuperTracker, fetchSuperTrackerRawTab } = await import('../lib/superTracker.mjs');
+  const { superTrackerConfigured, fetchSuperTracker } = await import('../lib/superTracker.mjs');
   if (!superTrackerConfigured()) return res.status(200).json({ configured: false });
   try {
     const idRow = await supabaseAdmin('app_preferences?select=value&key=eq.super_tracker_sheet_id');
     const idRows = idRow.ok ? await idRow.json() : [];
     const sheetId = (idRows[0] && idRows[0].value) || undefined; // undefined -> fetchSuperTracker's own default
-    // TEMPORARY diagnostic -- inspecting one unrecognized tab's raw content
-    // (e.g. a newly-added "Reference Categories" tab) before building real
-    // parsing logic for it. Remove once no longer needed.
-    if (req.query && req.query.raw_tab) {
-      const rows = await fetchSuperTrackerRawTab(sheetId, req.query.raw_tab);
-      return res.status(200).json({ configured: true, tab: req.query.raw_tab, rows });
-    }
     const data = await fetchSuperTracker(sheetId);
     return res.status(200).json({ configured: true, ...data });
   } catch (e) {
