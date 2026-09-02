@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
@@ -665,12 +665,6 @@ export default function AIQLDetailDashboard() {
   // SR/AC vertical split -- called out as important, so it gets both a headline KPI
   // card and its own breakdown, same as Country/Disposition (and matching Human QL
   // Detail's treatment of the same field).
-  const byVertical = useMemo(() => {
-    const counts = {}
-    filtered.forEach(r => { const v = r.vertical || 'Unknown'; counts[v] = (counts[v] || 0) + 1 })
-    return Object.entries(counts).map(([vertical, count]) => ({ vertical, count })).sort((a, b) => b.count - a.count)
-  }, [filtered])
-
   // Always the current calendar month, regardless of the date-preset/filter/search
   // controls active elsewhere on the page -- reads from the raw `rows`, not `scoped`/
   // `filtered`, per explicit request that this one chart never collapse to whatever
@@ -682,10 +676,26 @@ export default function AIQLDetailDashboard() {
     rows.forEach(r => {
       if (!r.date) return
       const [ry, rm] = r.date.split('-').map(Number)
-      if (ry === y && rm === m) counts[r.date] = (counts[r.date] || 0) + 1
+      if (ry === y && rm === m) {
+        const c = counts[r.date] || (counts[r.date] = { sr: 0, ac: 0 })
+        if (r.vertical === 'SR') c.sr++
+        else if (r.vertical === 'AC') c.ac++
+      }
     })
-    return Object.keys(counts).sort().map(d => ({ date: d, label: fmtDateLabel(d), count: counts[d] }))
+    return Object.keys(counts).sort().map(d => ({ date: d, label: fmtDateLabel(d), sr: counts[d].sr, ac: counts[d].ac }))
   }, [rows])
+
+  // Clicking the SR or AC KPI card below scopes the whole page to that vertical --
+  // reuses the same activeFilters.vertical the Filter picker already drives, so the
+  // filter chip bar and the KPI click stay in sync (clicking again clears it).
+  const toggleVerticalFocus = value => setActiveFilters(prev => {
+    const cur = prev.vertical || []
+    const copy = { ...prev }
+    if (cur.length === 1 && cur[0] === value) delete copy.vertical
+    else copy.vertical = [value]
+    return copy
+  })
+  const verticalFocus = (activeFilters.vertical && activeFilters.vertical.length === 1) ? activeFilters.vertical[0] : null
 
   const exportRows = useMemo(() => sorted.map(r => {
     const base = {
@@ -887,34 +897,49 @@ export default function AIQLDetailDashboard() {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
-          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
+          <div className="lq-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 14, marginBottom: 20 }}>
             <PremKPI label="Total QLs" value={fmtN(kpi.total)} sub={(monthDay !== 'all' ? 'On ' + fmtDateLabel(monthDay) : fmtScopeLabel(datePreset, selMonth, customFrom, customTo)) + ' — AI-qualified leads'} accent={C.navy} icon={KPI_ICONS.total} />
-            <PremKPI label="SR vs AC" value={fmtN(kpi.srCount) + ' / ' + fmtN(kpi.acCount)} sub="Vertical split (SR / AC)" accent={C.navy} icon={KPI_ICONS.agent} />
+            <div onClick={() => toggleVerticalFocus('SR')} role="button" tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleVerticalFocus('SR') } }}
+              title="Click to scope this page to Student Recruitment (SR) leads"
+              style={{ cursor: 'pointer', borderRadius: 16, outline: verticalFocus === 'SR' ? '2px solid ' + C.blue : 'none', outlineOffset: 2 }}>
+              <PremKPI label="Student Recruitment (SR)" value={fmtN(kpi.srCount)} sub="Commission-based — paid after admission" accent={C.blue} icon={KPI_ICONS.agent} />
+            </div>
+            <div onClick={() => toggleVerticalFocus('AC')} role="button" tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleVerticalFocus('AC') } }}
+              title="Click to scope this page to Admission Consultation (AC) leads"
+              style={{ cursor: 'pointer', borderRadius: 16, outline: verticalFocus === 'AC' ? '2px solid ' + C.green : 'none', outlineOffset: 2 }}>
+              <PremKPI label="Admission Consultation (AC)" value={fmtN(kpi.acCount)} sub="Upfront payment — direct cash flow" accent={C.green} icon={KPI_ICONS.bot} />
+            </div>
             <PremKPI label="Top Country" value={kpi.topCountry} sub={fmtN(kpi.topCountryN) + ' leads'} accent={C.blue} icon={KPI_ICONS.globe} />
             <PremKPI label="Top Disposition" value={kpi.topDisposition} sub="Most common outcome" accent={C.cyan} icon={KPI_ICONS.ai} />
-            <PremKPI label="Avg Call Duration" value={fmtDur(kpi.avgDur)} sub={kpi.distinctDays + ' days covered'} accent={C.green} icon={KPI_ICONS.bot} />
+            <PremKPI label="Avg Call Duration" value={fmtDur(kpi.avgDur)} sub={kpi.distinctDays + ' days covered'} accent={C.navy} icon={KPI_ICONS.total} />
           </div>
+          {verticalFocus && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: -12, marginBottom: 20, fontSize: 12, color: C.muted, fontFamily: FONT }}>
+              Scoped to <b style={{ color: verticalFocus === 'AC' ? C.green : C.blue }}>{verticalFocus}</b> — click the card again to clear.
+            </div>
+          )}
 
-          <div className="lq-grid3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
-            <Card title="By Vertical" sub="SR / AC split">
-              <RankedBars data={byVertical} labelKey="vertical" max={byVertical[0]?.count || 0} total={kpi.total} showRank />
-            </Card>
+          <div className="lq-grid3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
             <Card title="By Country" sub="Top destination countries">
               <RankedBars data={byCountry} labelKey="country" max={byCountry[0]?.count || 0} total={kpi.total} showRank />
             </Card>
             <Card title="By Disposition" sub="Call outcome breakdown">
               <RankedBars data={byDisposition} labelKey="disposition" max={byDisposition[0]?.count || 0} total={kpi.total} colorFn={i => DISPOSITION_COLOR[byDisposition[i]?.disposition] || C.navy} />
             </Card>
-            <Card title="Daily Trend" sub="QLs per day, current month -- not affected by any filter above" noPad>
+            <Card title="Daily Trend — SR vs AC" sub="Qualified leads per day this month, by vertical -- not affected by any filter above" noPad>
               <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', padding: '12px 12px 4px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={dailyTrendMonth} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
-                <defs><BarGrad id="g-b0-1" color={C.navy}/></defs>
+                <defs><BarGrad id="g-b0-sr" color={C.blue}/><BarGrad id="g-b0-ac" color={C.green}/></defs>
                     <CartesianGrid vertical={false} stroke="#EEF1F5" />
                     <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.muted }} axisLine={false} tickLine={false} interval={dailyTrendMonth.length > 10 ? 1 : 0} />
                     <YAxis hide />
                     <Tooltip cursor={false} contentStyle={{ fontSize: 11, borderRadius: 10, border: '0.5px solid ' + C.border }} />
-                    <Bar dataKey="count" fill={barFill('g-b0-1')} radius={BAR_RADIUS} maxBarSize={22} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => v === 'sr' ? 'SR' : 'AC'} />
+                    <Bar dataKey="sr" name="sr" stackId="v" fill={barFill('g-b0-sr')} maxBarSize={22} />
+                    <Bar dataKey="ac" name="ac" stackId="v" fill={barFill('g-b0-ac')} radius={BAR_RADIUS} maxBarSize={22} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
