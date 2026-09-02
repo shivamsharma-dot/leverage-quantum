@@ -17,6 +17,8 @@ import {
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import Button from '../components/Button'
 import { getSession, setSession, hasLoaded } from '../lib/sessionLoad'
+import { idbGet, idbSet } from '../lib/idbCache'
+import { consumePrefetchedOverallCsv } from '../lib/overallPrefetch'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
 import { isCostExcludedCampaign } from '../lib/costExclusions'
 import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, BarGrad, barFill, BAR_RADIUS_H } from '../ui/dashboardKit'
@@ -990,6 +992,23 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // once it lands, mirroring how the Trend modal itself behaves on open.
   const [monthTrendBqRows, setMonthTrendBqRows] = useState([])
   const [monthTrendBqBusy, setMonthTrendBqBusy] = useState(false)
+  // Already deliberately off the main page's critical path (see the comment
+  // above) -- but it still fired this real, multi-month BigQuery cursor
+  // fetch on EVERY load with BQ mode on, whether or not this specific card
+  // ever scrolls into view. Gated on real visibility (below) so a session
+  // that never scrolls this far never pays for it at all.
+  const [monthTrendVisible, setMonthTrendVisible] = useState(false)
+  const monthTrendCardRef = useRef(null)
+  useEffect(() => {
+    const el = monthTrendCardRef.current
+    if (!el || monthTrendVisible) return
+    if (typeof IntersectionObserver === 'undefined') { setMonthTrendVisible(true); return }
+    const obs = new IntersectionObserver(entries => {
+      if (entries.some(e => e.isIntersecting)) { setMonthTrendVisible(true); obs.disconnect() }
+    }, { rootMargin: '200px' })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [monthTrendVisible])
   // A failed cache read must never leave this page dead, so it falls back to the sheet
   // rather than replacing it: every derivation below reverts to rawRows while bqError
   // is set. bqLive is the single test for "BQ data is what we are showing".
@@ -1027,6 +1046,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastSync, setLastSync] = useState(null)
+  // True for the window between "painted an IndexedDB-cached snapshot" and
+  // "the real, validated fetch behind it landed" -- see loadData below.
+  const [bgRefreshing, setBgRefreshing] = useState(false)
   const [bqSyncUnknown, setBqSyncUnknown] = useState(false)
   // Multi-select Source filter -- ['All'] is the sentinel meaning "no filter, every
   // source". Any other array means "only these specific sources". Never store both
@@ -1313,17 +1335,22 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // loaded Overall this session, reuse it instantly instead of re-fetching+re-parsing
   // the full sheet on every SPA navigation back to this page.
   //
-  // Deliberately NOT using sessionLoad.js's "paint instantly from localStorage,
-  // revalidate in the background" optimization on a genuinely cold load, unlike
-  // QL Ops/WhatsApp/Referral -- confirmed live this sheet's real CSV is ~43MB, and
-  // this browser's localStorage quota rejects a write above single-digit MB
-  // (confirmed live: a 6MB probe write threw immediately). setSession()'s
-  // localStorage.setItem call therefore ALWAYS throws for a genuine full fetch here
-  // and is silently swallowed (see sessionLoad.js) -- the persisted cache can only
-  // ever hold an accidentally-small/truncated response, never the real data, so
-  // painting from it is worse than useless for this page: it confidently shows
-  // wrong numbers instead of a loading state. A cold load always blocks on a real,
-  // validated fetch instead.
+  // sessionLoad.js's own "paint instantly from localStorage, revalidate in the
+  // background" optimization does NOT work here -- confirmed live this sheet's
+  // real CSV is ~43MB, and this browser's localStorage quota rejects a write
+  // above single-digit MB (confirmed live: a 6MB probe write threw immediately).
+  // IndexedDB has no such practical ceiling for this size, so a COLD load (a
+  // fresh tab, or the very first visit after a hard reload) now checks an
+  // IndexedDB-backed cache instead: if a real, previously-VALIDATED snapshot
+  // exists and isn't too old, it paints instantly (marked "may be stale" via
+  // bgRefreshing) while the exact same real, validated fetch below still runs
+  // in the background and replaces it -- rather than either a blank spinner
+  // every single cold load, or (the actually-dangerous alternative) trusting
+  // an unvalidated cached blob as if it were current. Only ever written to
+  // AFTER the same completeness guard below has already passed, same as
+  // setSession() -- never speculatively.
+  const IDB_CSV_KEY = 'overall_csv_v1'
+  const IDB_CSV_TTL = 24 * 60 * 60 * 1000
   const loadData = useCallback(async (bust = false) => {
     if (!bust && hasLoaded(CACHE_KEY)) {
       applyCsv(getSession(CACHE_KEY).data)
@@ -1331,12 +1358,37 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       setLoading(false)
       return
     }
-    setLoading(true)
+    let paintedFromIdb = false
+    if (!bust) {
+      const cached = await idbGet(IDB_CSV_KEY)
+      if (cached && cached.text && (Date.now() - cached.ts) < IDB_CSV_TTL) {
+        try {
+          applyCsv(cached.text)
+          setLastSync(new Date(cached.ts))
+          setLoading(false)
+          setBgRefreshing(true)
+          paintedFromIdb = true
+        } catch (_) { /* fall through to a normal blocking load */ }
+      }
+    }
+    if (!paintedFromIdb) setLoading(true)
     try {
       const base = await resolveOverallUrlFast()
       const u = bust ? base + (base.includes('?') ? '&' : '?') + '_=' + Date.now() : base
-      const res = await fetch(u)
-      const txt = await res.text()
+      // A sidebar hover on this nav link may already have this exact fetch
+      // in flight (or finished) -- see lib/overallPrefetch.js. Only ever
+      // considered for a plain (non-bust) load, since a forced Refresh must
+      // always be a genuinely fresh request.
+      let txt, resOk
+      const prefetched = bust ? null : await consumePrefetchedOverallCsv(base)
+      if (prefetched) {
+        txt = prefetched.text
+        resOk = prefetched.ok
+      } else {
+        const res = await fetch(u)
+        txt = await res.text()
+        resOk = res.ok
+      }
       // A2 fix: an auth/sign-in redirect or a sheet that's stopped being publicly
       // shared responds 200 with an HTML page, not the CSV -- fetch() doesn't throw on
       // that, and parseCSV() on HTML yields rows whose dates never parse, so every row
@@ -1345,7 +1397,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       // of CSV" case documented in CLAUDE.md; overall-funnel-sync.yml already guards
       // for it server-side, this path didn't). Throwing here routes both cases through
       // the existing catch block below, which already has a real error-banner path.
-      if (!res.ok) throw new Error('Sheet fetch failed (HTTP ' + res.status + ')')
+      if (!resOk) throw new Error('Sheet fetch failed')
       if (txt.trim().startsWith('<')) throw new Error('Got a webpage instead of the sheet CSV -- it may no longer be shared publicly, or the link needs re-authenticating')
       // Completeness guard -- confirmed live as a real failure mode, not a hypothetical
       // one: this sheet is ~2.5 lakh rows and can take 30s+ to download, and a fetch that
@@ -1365,12 +1417,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       if (distinctMonths < 2) throw new Error('Sheet response looked incomplete (' + distinctMonths + ' month(s) of data found) -- likely a truncated download, not real data. Try Refresh again.')
       applyMapped(mapped)
       setSession(CACHE_KEY, txt)
+      idbSet(IDB_CSV_KEY, { text: txt, ts: Date.now() })
       setLastSync(new Date())
       setError(null)
     } catch (e) {
-      setError('Failed to load: ' + e.message)
+      // A stale-but-real cached snapshot is still more useful than an error banner --
+      // keep showing it rather than blanking the page over a failed background
+      // revalidation. A cold load with nothing cached still surfaces the error as before.
+      if (!paintedFromIdb) setError('Failed to load: ' + e.message)
     }
-    finally { setLoading(false) }
+    finally { setLoading(false); setBgRefreshing(false) }
   }, [applyCsv, applyMapped])
   // The CSV download is skipped entirely while the toggle is on -- that is the point of
   // it. Toggling back off calls loadData(), which finds this session's already-parsed
@@ -1850,7 +1906,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // page's critical path. One fetch per 5-month window; the page's own filters recompute
   // on the client for free from there.
   useEffect(() => {
-    if (!bqActive || !monthTrendBqSince || !monthTrendBqUntil) return
+    if (!bqActive || !monthTrendVisible || !monthTrendBqSince || !monthTrendBqUntil) return
     let dead = false
     setMonthTrendBqBusy(true)
     retryFetch(() => fetchOverallBqRows({ since: monthTrendBqSince, until: monthTrendBqUntil, sources: [] }))
@@ -1861,7 +1917,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                         twice for the same underlying failure. */ })
       .finally(() => { if (!dead) setMonthTrendBqBusy(false) })
     return () => { dead = true }
-  }, [bqActive, monthTrendBqSince, monthTrendBqUntil, bqNonce])
+  }, [bqActive, monthTrendVisible, monthTrendBqSince, monthTrendBqUntil, bqNonce])
 
   // Period A (the "current" side) is normally whatever the main page filter is --
   // correct for 'prev'/'yoy' modes, since those are explicitly "vs the period I'm
@@ -3599,6 +3655,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               </span>
             )}
             {lastSync && <span style={{ fontSize:12.5, color:C.muted, fontFamily:FONT }}>Synced {syncFmt.format(lastSync)}</span>}
+            {bgRefreshing && <span title="Showing a cached snapshot from your last visit while a fresh copy loads in the background" style={{ fontSize:11.5, fontWeight:700, color:C.blue, fontFamily:FONT, whiteSpace:'nowrap' }}>Refreshing…</span>}
             {!lastSync && bqMode && bqSyncUnknown && <span style={{ fontSize:12.5, color:C.muted, fontFamily:FONT }}>Sync time unknown</span>}
             <Button
               onClick={() => { if (bqMode) { setBqError(null); setBqNonce(n => n + 1) } else loadData(true) }}
@@ -4005,8 +4062,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
           {/* MONTH TREND + DAILY TREND */}
           <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
+            <div ref={monthTrendCardRef}>
             <Card>
-              {sectionTitle('Month-on-month trend', bqActive && monthTrendBqBusy
+              {sectionTitle('Month-on-month trend', bqActive && !monthTrendVisible
+                ? 'last 5 months, including the current month — will fetch from BigQuery once this card is actually in view'
+                : bqActive && monthTrendBqBusy
                 ? 'last 5 months, including the current month — fetching the trailing months from BigQuery in the background, chart fills in as it lands'
                 : 'last 5 months, including the current month — not affected by the date filter above')}
               <ResponsiveContainer width="100%" height={260}>
@@ -4023,6 +4083,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 </LineChart>
               </ResponsiveContainer>
             </Card>
+            </div>
             <Card>
               {sectionTitle('Daily pulse', 'last 30 days of lead volume in the active selection')}
               <ResponsiveContainer width="100%" height={260}>

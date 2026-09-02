@@ -3,6 +3,7 @@
 // Keeping one source of truth means a hover-prefetch and the route's own
 // lazy() import resolve to the exact same chunk (browser module cache dedupes
 // the network fetch either way).
+import { prefetchOverallCsv } from './overallPrefetch'
 export const COMPONENT_IMPORTS = {
   DashboardHome: () => import('../pages/DashboardHome'),
   OverallDashboard: () => import('../pages/OverallDashboard'),
@@ -88,6 +89,12 @@ export function prefetchRoute(path) {
   if (!key || warmed.has(key)) return
   warmed.add(key)
   COMPONENT_IMPORTS[key]().catch(() => { warmed.delete(key) })
+  // Overall's Sheet-mode CSV is a real, ~43MB, network-bound cost that only
+  // starts once the page actually mounts -- warming the JS chunk alone (above)
+  // does not touch it. Deliberately scoped to the plain Sheet route only, not
+  // '/dashboard/overall-bigquery' (a different data source entirely, reading
+  // from a Supabase-cached BigQuery table, not this sheet).
+  if (base === '/dashboard/overall') prefetchOverallCsv()
 }
 
 let allWarmed = false
