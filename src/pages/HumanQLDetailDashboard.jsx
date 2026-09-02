@@ -35,6 +35,7 @@ const HUMAN_QL_COLS = [
   { key: 'date', label: 'Date', width: 90 },
   { key: 'prospectId', label: 'Prospect ID', width: 300, mono: true },
   { key: 'opportunityId', label: 'Opportunity ID', width: 300, mono: true },
+  { key: 'vertical', label: 'Vertical', width: 100 },
   { key: 'country', label: 'Country', width: 130 },
   { key: 'degree', label: 'Degree', width: 110 },
   { key: 'course', label: 'Course', width: 170, ellipsis: true },
@@ -57,7 +58,6 @@ const HUMAN_QL_COLS = [
 // other column becomes filterable automatically -- add a column above and it appears
 // here too, per the standing request that every column be filterable.
 const FILTER_EXCLUDE_KEYS = ['date', 'prospectId', 'opportunityId', 'callDuration', 'recordingUrl', 'questionsForCounselor']
-const FILTERABLE_FIELDS = HUMAN_QL_COLS.filter(c => !FILTER_EXCLUDE_KEYS.includes(c.key))
 
 const DISPOSITION_COLOR = {
   'Call Transferred To Counsellor': C.green,
@@ -157,6 +157,19 @@ async function downloadRecording(url, filename) {
   }
 }
 
+// Every raw sheet header this page already gives a proper, named column to below.
+// Anything in the sheet NOT in this set is picked up automatically as a generic
+// "extra" column instead (see autoCols below) -- so a column added to the sheet in
+// future shows up on the page on its own, with no code change needed. activity_month
+// is deliberately skipped (not "known", not auto-surfaced either) since it's just a
+// text restatement of activity_date, which already has its own Date column.
+const KNOWN_KEYS = new Set([
+  'prospect_id', 'opportunity_id_futwork', 'activity_date', 'activity_month', 'vertical',
+  'country_interested', 'degree_type', 'preferred_course', 'preferred_intake', 'disposition',
+  'budget', 'opp_first_campaign_name', 'valid_passport', 'student_current_degree_status',
+  'questions_for_counselor', 'call_duration', 'call_recording_url', 'futwork_project',
+])
+
 async function fetchRows() {
   const url = await resolveSheetUrl('humanQlDetail', DEFAULT_CSV)
   const res = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' })
@@ -165,24 +178,40 @@ async function fetchRows() {
   const [hdr, ...data] = rows
   const low = hdr.map(x => x.toLowerCase().trim())
   const h = k => low.indexOf(k)
-  return data.filter(r => r.length > 1 && (r[h('prospect_id')] || '').trim()).map(r => ({
-    prospectId: r[h('prospect_id')] || '',
-    opportunityId: r[h('opportunity_id_futwork')] || '',
-    date: parseDate(r[h('activity_date')]),
-    country: (r[h('country_interested')] || '').trim() || 'Unknown',
-    degree: (r[h('degree_type')] || '').trim() || 'Unknown',
-    course: (r[h('preferred_course')] || '').trim(),
-    intake: (r[h('preferred_intake')] || '').trim(),
-    disposition: (r[h('disposition')] || '').trim() || 'Unknown',
-    budget: (r[h('budget')] || '').trim(),
-    campaign: (r[h('opp_first_campaign_name')] || '').trim(),
-    passport: (r[h('valid_passport')] || '').trim(),
-    degreeStatus: (r[h('student_current_degree_status')] || '').trim(),
-    questionsForCounselor: (r[h('questions_for_counselor')] || '').trim(),
-    callDuration: r[h('call_duration')] || '0',
-    recordingUrl: (r[h('call_recording_url')] || '').trim(),
-    futworkProject: (r[h('futwork_project')] || '').trim(),
-  })).filter(r => r.date)
+  // Any real (non-blank) header not in KNOWN_KEYS above -- a column added to the
+  // sheet since this list was last touched. Auto_-prefixed key so it can never
+  // collide with a hand-named field like "campaign" or "date".
+  const autoCols = []
+  const seenAuto = new Set()
+  low.forEach((k, idx) => {
+    if (!k || KNOWN_KEYS.has(k) || seenAuto.has(k)) return
+    seenAuto.add(k)
+    autoCols.push({ key: 'auto_' + k.replace(/[^a-z0-9]+/g, '_'), label: hdr[idx].replace(/_/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase()), rawIdx: idx })
+  })
+  const mapped = data.filter(r => r.length > 1 && (r[h('prospect_id')] || '').trim()).map(r => {
+    const row = {
+      prospectId: r[h('prospect_id')] || '',
+      opportunityId: r[h('opportunity_id_futwork')] || '',
+      date: parseDate(r[h('activity_date')]),
+      vertical: (r[h('vertical')] || '').trim(),
+      country: (r[h('country_interested')] || '').trim() || 'Unknown',
+      degree: (r[h('degree_type')] || '').trim() || 'Unknown',
+      course: (r[h('preferred_course')] || '').trim(),
+      intake: (r[h('preferred_intake')] || '').trim(),
+      disposition: (r[h('disposition')] || '').trim() || 'Unknown',
+      budget: (r[h('budget')] || '').trim(),
+      campaign: (r[h('opp_first_campaign_name')] || '').trim(),
+      passport: (r[h('valid_passport')] || '').trim(),
+      degreeStatus: (r[h('student_current_degree_status')] || '').trim(),
+      questionsForCounselor: (r[h('questions_for_counselor')] || '').trim(),
+      callDuration: r[h('call_duration')] || '0',
+      recordingUrl: (r[h('call_recording_url')] || '').trim(),
+      futworkProject: (r[h('futwork_project')] || '').trim(),
+    }
+    autoCols.forEach(c => { row[c.key] = (r[c.rawIdx] || '').trim() })
+    return row
+  }).filter(r => r.date)
+  return { rows: mapped, autoCols }
 }
 
 function FilterDropdown({ label, value, options, open, onToggle, onSelect }) {
@@ -428,6 +457,9 @@ function RecordingPlayer({ row, onClose }) {
 
 export default function HumanQLDetailDashboard() {
   const [rows, setRows] = useState([])
+  const [autoCols, setAutoCols] = useState([]) // columns discovered from the sheet that aren't hand-named above
+  const ALL_COLS = useMemo(() => [...HUMAN_QL_COLS, ...autoCols], [autoCols])
+  const FILTERABLE_FIELDS = useMemo(() => ALL_COLS.filter(c => !FILTER_EXCLUDE_KEYS.includes(c.key)), [ALL_COLS])
   const [loading, setLoading] = useState(true)
   const [monthDay, setMonthDay] = useState('all')
   const [datePreset, setDatePreset] = useState('MTD')
@@ -467,8 +499,21 @@ export default function HumanQLDetailDashboard() {
   const [colOrder, setColOrder] = useState(() => {
     const saved = lsGet(COL_ORDER_KEY, null)
     const keys = HUMAN_QL_COLS.map(c => c.key)
-    return (Array.isArray(saved) && saved.length === keys.length && saved.every(k => keys.includes(k))) ? saved : keys
+    if (!Array.isArray(saved) || !saved.length) return keys
+    // Keep the saved order for keys still recognized, and append any known column
+    // (e.g. vertical, added after some users already had a saved order) that
+    // predates it -- so adding a column never silently wipes a saved custom order.
+    const kept = saved.filter(k => keys.includes(k))
+    const missing = keys.filter(k => !kept.includes(k))
+    return kept.length ? [...kept, ...missing] : keys
   })
+  // Sheet columns discovered at runtime (autoCols) can't be known at the lazy-init
+  // above, since they only resolve once fetchRows() completes -- append any that
+  // aren't already in the saved order the moment they're known, same reasoning.
+  useEffect(() => {
+    if (!autoCols.length) return
+    setColOrder(prev => { const have = new Set(prev); const missing = autoCols.map(c => c.key).filter(k => !have.has(k)); return missing.length ? [...prev, ...missing] : prev })
+  }, [autoCols])
   const [pinnedCols, setPinnedCols] = useState(() => lsGet(COL_PINNED_KEY, []))
   const [hiddenCols, setHiddenCols] = useState(() => lsGet(COL_HIDDEN_KEY, []))
   const [colsOpen, setColsOpen] = useState(false)
@@ -485,7 +530,7 @@ export default function HumanQLDetailDashboard() {
   })
   const togglePin = key => setPinnedCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   const toggleHidden = key => setHiddenCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
-  const resetCols = () => { setColOrder(HUMAN_QL_COLS.map(c => c.key)); setPinnedCols([]); setHiddenCols([]) }
+  const resetCols = () => { setColOrder(ALL_COLS.map(c => c.key)); setPinnedCols([]); setHiddenCols([]) }
 
   const [views, setViews] = useState(() => lsGet(VIEWS_KEY, {}))
   useEffect(() => { try { localStorage.setItem(VIEWS_KEY, JSON.stringify(views)) } catch {} }, [views])
@@ -514,7 +559,7 @@ export default function HumanQLDetailDashboard() {
   const deleteView = name => setViews(prev => { const next = { ...prev }; delete next[name]; return next })
   const visibleOrder = colOrder.filter(k => !hiddenCols.includes(k))
   const displayOrder = [...visibleOrder.filter(k => pinnedCols.includes(k)), ...visibleOrder.filter(k => !pinnedCols.includes(k))]
-  const colWidthOf = k => (HUMAN_QL_COLS.find(c => c.key === k) || {}).width || 120
+  const colWidthOf = k => (ALL_COLS.find(c => c.key === k) || {}).width || 120
   const pinnedLeftMap = (() => {
     let acc = 0
     const map = {}
@@ -525,13 +570,13 @@ export default function HumanQLDetailDashboard() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    fetchRows().then(r => { if (!cancelled) { setRows(r); setLoading(false); setLastSync(new Date()) } }).catch(() => { if (!cancelled) setLoading(false) })
+    fetchRows().then(r => { if (!cancelled) { setRows(r.rows); setAutoCols(r.autoCols); setLoading(false); setLastSync(new Date()) } }).catch(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [])
 
   const reload = () => {
     setLoading(true)
-    fetchRows().then(r => { setRows(r); setLoading(false); setLastSync(new Date()) }).catch(() => setLoading(false))
+    fetchRows().then(r => { setRows(r.rows); setAutoCols(r.autoCols); setLoading(false); setLastSync(new Date()) }).catch(() => setLoading(false))
   }
 
   const monthOptions = useMemo(() => {
@@ -567,7 +612,7 @@ export default function HumanQLDetailDashboard() {
   }, [scoped, activeFilters, search])
 
   const sorted = useMemo(() => {
-    const col = HUMAN_QL_COLS.find(c => c.key === sortKey)
+    const col = ALL_COLS.find(c => c.key === sortKey)
     const arr = [...filtered]
     arr.sort((a, b) => {
       let av = a[sortKey], bv = b[sortKey]
@@ -633,20 +678,25 @@ export default function HumanQLDetailDashboard() {
     return Object.keys(counts).sort().map(d => ({ date: d, label: fmtDateLabel(d), count: counts[d] }))
   }, [rows])
 
-  const exportRows = useMemo(() => sorted.map(r => ({
-    Date: fmtDateLabel(r.date), Country: r.country, Degree: r.degree, Course: r.course, Intake: r.intake,
-    Disposition: r.disposition, Budget: r.budget, Campaign: r.campaign, 'Futwork Project': r.futworkProject,
-    Passport: r.passport, 'Degree Status': r.degreeStatus, Questions: r.questionsForCounselor,
-    'Duration (sec)': r.callDuration, 'Recording URL': r.recordingUrl,
-    'Prospect ID': r.prospectId, 'Opportunity ID': r.opportunityId,
-  })), [sorted])
+  const exportRows = useMemo(() => sorted.map(r => {
+    const base = {
+      Date: fmtDateLabel(r.date), Vertical: r.vertical, Country: r.country, Degree: r.degree, Course: r.course, Intake: r.intake,
+      Disposition: r.disposition, Budget: r.budget, Campaign: r.campaign, 'Futwork Project': r.futworkProject,
+      Passport: r.passport, 'Degree Status': r.degreeStatus, Questions: r.questionsForCounselor,
+      'Duration (sec)': r.callDuration, 'Recording URL': r.recordingUrl,
+      'Prospect ID': r.prospectId, 'Opportunity ID': r.opportunityId,
+    }
+    // Sheet-discovered columns (see autoCols in fetchRows()) ride along in export too.
+    autoCols.forEach(c => { base[c.label] = r[c.key] || '' })
+    return base
+  }), [sorted, autoCols])
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE))
   const safePage = Math.min(page, pageCount)
   const pageItems = sorted.slice((safePage - 1) * PAGE, safePage * PAGE)
 
   const toggleSort = key => {
-    const col = HUMAN_QL_COLS.find(c => c.key === key)
+    const col = ALL_COLS.find(c => c.key === key)
     if (col && col.sortable === false) return
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
@@ -657,6 +707,7 @@ export default function HumanQLDetailDashboard() {
   function cell(r, key) {
     switch (key) {
       case 'date': return fmtDateLabel(r.date)
+      case 'vertical': return r.vertical || '—'
       case 'country': return r.country
       case 'degree': return r.degree
       case 'course': return <span title={r.course}>{r.course || '—'}</span>
@@ -699,7 +750,10 @@ export default function HumanQLDetailDashboard() {
           </button>
         </span>
       ) : '—'
-      default: return '—'
+      // Any sheet-discovered column not given its own case above (see autoCols in
+      // fetchRows()) renders here generically, so a newly-added sheet column shows
+      // real values immediately rather than a blank dash.
+      default: return <span title={r[key] || ''}>{r[key] || '—'}</span>
     }
   }
 
@@ -879,7 +933,7 @@ export default function HumanQLDetailDashboard() {
                       </div>
                       <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 10px 8px', borderTop: '0.5px solid #F3F4F6' }}>Columns (drag to reorder)</div>
                       {colOrder.map(key => {
-                        const c = HUMAN_QL_COLS.find(cc => cc.key === key)
+                        const c = ALL_COLS.find(cc => cc.key === key)
                         const isPinned = pinnedCols.includes(key)
                         const isHidden = hiddenCols.includes(key)
                         return (
@@ -914,7 +968,7 @@ export default function HumanQLDetailDashboard() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
                   {displayOrder.map(key => {
-                    const c = HUMAN_QL_COLS.find(cc => cc.key === key)
+                    const c = ALL_COLS.find(cc => cc.key === key)
                     const sortable = !c || c.sortable !== false
                     const isPinned = pinnedCols.includes(key)
                     const thStyle = { ...th, ...(isPinned ? { position: 'sticky', left: pinnedLeftMap[key], zIndex: 3, background: '#F9FAFB', borderRight: pinnedCols[pinnedCols.length - 1] === key ? '1px solid #E5E7EB' : 'none' } : {}) }

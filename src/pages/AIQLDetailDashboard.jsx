@@ -40,6 +40,7 @@ const AI_QL_COLS = [
   { key: 'status', label: 'Status', width: 100 },
   { key: 'budget', label: 'Budget', width: 90 },
   { key: 'campaign', label: 'Campaign', width: 190, ellipsis: true },
+  { key: 'futworkProject', label: 'Futwork Project', width: 130 },
   { key: 'channel', label: 'Channel', width: 120 },
   { key: 'passport', label: 'Passport', width: 90 },
   { key: 'degreeStatus', label: 'Degree Status', width: 110 },
@@ -53,7 +54,6 @@ const AI_QL_COLS = [
 // to filter by. Every other column becomes filterable automatically -- add a column above
 // and it appears here too, per the standing request that every column be filterable.
 const FILTER_EXCLUDE_KEYS = ['date', 'prospectId', 'opportunityId', 'callDuration', 'recordingUrl']
-const FILTERABLE_FIELDS = AI_QL_COLS.filter(c => !FILTER_EXCLUDE_KEYS.includes(c.key))
 
 const DISPOSITION_COLOR = {
   'Interested in Callback': C.green,
@@ -152,6 +152,19 @@ async function downloadRecording(url, filename) {
   }
 }
 
+// Every raw sheet header this page already gives a proper, named column to below.
+// Anything in the sheet NOT in this set is picked up automatically as a generic
+// "extra" column instead (see autoCols below) -- so a column added to the sheet in
+// future shows up on the page on its own, with no code change needed. activity_month
+// is deliberately skipped (not "known", not auto-surfaced either) since it's just a
+// text restatement of activity_date, which already has its own Date column.
+const KNOWN_KEYS = new Set([
+  'prospect_id', 'opportunity_id', 'activity_date', 'activity_month', 'country_preference',
+  'preferred_degree', 'preferred_course', 'intake_preference', 'disposition', 'disposition_status',
+  'budget', 'opp_first_campaign_name', 'opp_first_channel_source', 'do_you_have_a_valid_passport',
+  'highest_qualification', 'call_duration', 'call_recording_url', 'futwork_project',
+])
+
 async function fetchRows() {
   const url = await resolveSheetUrl('aiQlDetail', DEFAULT_CSV)
   const res = await fetch(url + (url.includes('?') ? '&' : '?') + '_=' + Date.now(), { cache: 'no-store' })
@@ -160,24 +173,40 @@ async function fetchRows() {
   const [hdr, ...data] = rows
   const low = hdr.map(x => x.toLowerCase().trim())
   const h = k => low.indexOf(k)
-  return data.filter(r => r.length > 1 && (r[h('prospect_id')] || '').trim()).map(r => ({
-    prospectId: r[h('prospect_id')] || '',
-    opportunityId: r[h('opportunity_id')] || '',
-    date: parseDate(r[h('activity_date')]),
-    country: (r[h('country_preference')] || '').trim() || 'Unknown',
-    degree: (r[h('preferred_degree')] || '').trim() || 'Unknown',
-    course: (r[h('preferred_course')] || '').trim(),
-    intake: (r[h('intake_preference')] || '').trim(),
-    disposition: (r[h('disposition')] || '').trim() || 'Unknown',
-    status: (r[h('disposition_status')] || '').trim(),
-    budget: (r[h('budget')] || '').trim(),
-    campaign: (r[h('opp_first_campaign_name')] || '').trim(),
-    channel: (r[h('opp_first_channel_source')] || '').trim(),
-    passport: (r[h('do_you_have_a_valid_passport')] || '').trim(),
-    degreeStatus: (r[h('highest_qualification')] || '').trim(),
-    callDuration: r[h('call_duration')] || '0',
-    recordingUrl: (r[h('call_recording_url')] || '').trim(),
-  })).filter(r => r.date)
+  // Any real (non-blank) header not in KNOWN_KEYS above -- a column added to the
+  // sheet since this list was last touched. Auto_-prefixed key so it can never
+  // collide with a hand-named field like "campaign" or "date".
+  const autoCols = []
+  const seenAuto = new Set()
+  low.forEach((k, idx) => {
+    if (!k || KNOWN_KEYS.has(k) || seenAuto.has(k)) return
+    seenAuto.add(k)
+    autoCols.push({ key: 'auto_' + k.replace(/[^a-z0-9]+/g, '_'), label: hdr[idx].replace(/_/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase()), rawIdx: idx })
+  })
+  const mapped = data.filter(r => r.length > 1 && (r[h('prospect_id')] || '').trim()).map(r => {
+    const row = {
+      prospectId: r[h('prospect_id')] || '',
+      opportunityId: r[h('opportunity_id')] || '',
+      date: parseDate(r[h('activity_date')]),
+      country: (r[h('country_preference')] || '').trim() || 'Unknown',
+      degree: (r[h('preferred_degree')] || '').trim() || 'Unknown',
+      course: (r[h('preferred_course')] || '').trim(),
+      intake: (r[h('intake_preference')] || '').trim(),
+      disposition: (r[h('disposition')] || '').trim() || 'Unknown',
+      status: (r[h('disposition_status')] || '').trim(),
+      budget: (r[h('budget')] || '').trim(),
+      campaign: (r[h('opp_first_campaign_name')] || '').trim(),
+      channel: (r[h('opp_first_channel_source')] || '').trim(),
+      passport: (r[h('do_you_have_a_valid_passport')] || '').trim(),
+      degreeStatus: (r[h('highest_qualification')] || '').trim(),
+      callDuration: r[h('call_duration')] || '0',
+      recordingUrl: (r[h('call_recording_url')] || '').trim(),
+      futworkProject: (r[h('futwork_project')] || '').trim(),
+    }
+    autoCols.forEach(c => { row[c.key] = (r[c.rawIdx] || '').trim() })
+    return row
+  }).filter(r => r.date)
+  return { rows: mapped, autoCols }
 }
 
 function FilterDropdown({ label, value, options, open, onToggle, onSelect }) {
@@ -422,6 +451,9 @@ function RecordingPlayer({ row, onClose }) {
 
 export default function AIQLDetailDashboard() {
   const [rows, setRows] = useState([])
+  const [autoCols, setAutoCols] = useState([]) // columns discovered from the sheet that aren't hand-named above
+  const ALL_COLS = useMemo(() => [...AI_QL_COLS, ...autoCols], [autoCols])
+  const FILTERABLE_FIELDS = useMemo(() => ALL_COLS.filter(c => !FILTER_EXCLUDE_KEYS.includes(c.key)), [ALL_COLS])
   const [loading, setLoading] = useState(true)
   const [monthDay, setMonthDay] = useState('all')
   const [datePreset, setDatePreset] = useState('MTD')
@@ -461,8 +493,21 @@ export default function AIQLDetailDashboard() {
   const [colOrder, setColOrder] = useState(() => {
     const saved = lsGet(COL_ORDER_KEY, null)
     const keys = AI_QL_COLS.map(c => c.key)
-    return (Array.isArray(saved) && saved.length === keys.length && saved.every(k => keys.includes(k))) ? saved : keys
+    if (!Array.isArray(saved) || !saved.length) return keys
+    // Keep the saved order for keys still recognized, and append any known column
+    // (e.g. futworkProject, added after some users already had a saved order) that
+    // predates it -- so adding a column never silently wipes a saved custom order.
+    const kept = saved.filter(k => keys.includes(k))
+    const missing = keys.filter(k => !kept.includes(k))
+    return kept.length ? [...kept, ...missing] : keys
   })
+  // Sheet columns discovered at runtime (autoCols) can't be known at the lazy-init
+  // above, since they only resolve once fetchRows() completes -- append any that
+  // aren't already in the saved order the moment they're known, same reasoning.
+  useEffect(() => {
+    if (!autoCols.length) return
+    setColOrder(prev => { const have = new Set(prev); const missing = autoCols.map(c => c.key).filter(k => !have.has(k)); return missing.length ? [...prev, ...missing] : prev })
+  }, [autoCols])
   const [pinnedCols, setPinnedCols] = useState(() => lsGet(COL_PINNED_KEY, []))
   const [hiddenCols, setHiddenCols] = useState(() => lsGet(COL_HIDDEN_KEY, []))
   const [colsOpen, setColsOpen] = useState(false)
@@ -479,7 +524,7 @@ export default function AIQLDetailDashboard() {
   })
   const togglePin = key => setPinnedCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   const toggleHidden = key => setHiddenCols(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
-  const resetCols = () => { setColOrder(AI_QL_COLS.map(c => c.key)); setPinnedCols([]); setHiddenCols([]) }
+  const resetCols = () => { setColOrder(ALL_COLS.map(c => c.key)); setPinnedCols([]); setHiddenCols([]) }
 
   const [views, setViews] = useState(() => lsGet(VIEWS_KEY, {}))
   useEffect(() => { try { localStorage.setItem(VIEWS_KEY, JSON.stringify(views)) } catch {} }, [views])
@@ -509,7 +554,7 @@ export default function AIQLDetailDashboard() {
   const deleteView = name => setViews(prev => { const next = { ...prev }; delete next[name]; return next })
   const visibleOrder = colOrder.filter(k => !hiddenCols.includes(k))
   const displayOrder = [...visibleOrder.filter(k => pinnedCols.includes(k)), ...visibleOrder.filter(k => !pinnedCols.includes(k))]
-  const colWidthOf = k => (AI_QL_COLS.find(c => c.key === k) || {}).width || 120
+  const colWidthOf = k => (ALL_COLS.find(c => c.key === k) || {}).width || 120
   const pinnedLeftMap = (() => {
     let acc = 0
     const map = {}
@@ -520,13 +565,13 @@ export default function AIQLDetailDashboard() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    fetchRows().then(r => { if (!cancelled) { setRows(r); setLoading(false); setLastSync(new Date()) } }).catch(() => { if (!cancelled) setLoading(false) })
+    fetchRows().then(r => { if (!cancelled) { setRows(r.rows); setAutoCols(r.autoCols); setLoading(false); setLastSync(new Date()) } }).catch(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [])
 
   const reload = () => {
     setLoading(true)
-    fetchRows().then(r => { setRows(r); setLoading(false); setLastSync(new Date()) }).catch(() => setLoading(false))
+    fetchRows().then(r => { setRows(r.rows); setAutoCols(r.autoCols); setLoading(false); setLastSync(new Date()) }).catch(() => setLoading(false))
   }
 
   const monthOptions = useMemo(() => {
@@ -562,7 +607,7 @@ export default function AIQLDetailDashboard() {
   }, [scoped, activeFilters, search])
 
   const sorted = useMemo(() => {
-    const col = AI_QL_COLS.find(c => c.key === sortKey)
+    const col = ALL_COLS.find(c => c.key === sortKey)
     const arr = [...filtered]
     arr.sort((a, b) => {
       let av = a[sortKey], bv = b[sortKey]
@@ -628,20 +673,25 @@ export default function AIQLDetailDashboard() {
     return Object.keys(counts).sort().map(d => ({ date: d, label: fmtDateLabel(d), count: counts[d] }))
   }, [rows])
 
-  const exportRows = useMemo(() => sorted.map(r => ({
-    Date: fmtDateLabel(r.date), Country: r.country, Degree: r.degree, Course: r.course, Intake: r.intake,
-    Disposition: r.disposition, Status: r.status, Budget: r.budget, Campaign: r.campaign, Channel: r.channel,
-    Passport: r.passport, 'Degree Status': r.degreeStatus,
-    'Duration (sec)': r.callDuration, 'Recording URL': r.recordingUrl,
-    'Prospect ID': r.prospectId, 'Opportunity ID': r.opportunityId,
-  })), [sorted])
+  const exportRows = useMemo(() => sorted.map(r => {
+    const base = {
+      Date: fmtDateLabel(r.date), Country: r.country, Degree: r.degree, Course: r.course, Intake: r.intake,
+      Disposition: r.disposition, Status: r.status, Budget: r.budget, Campaign: r.campaign, 'Futwork Project': r.futworkProject, Channel: r.channel,
+      Passport: r.passport, 'Degree Status': r.degreeStatus,
+      'Duration (sec)': r.callDuration, 'Recording URL': r.recordingUrl,
+      'Prospect ID': r.prospectId, 'Opportunity ID': r.opportunityId,
+    }
+    // Sheet-discovered columns (see autoCols in fetchRows()) ride along in export too.
+    autoCols.forEach(c => { base[c.label] = r[c.key] || '' })
+    return base
+  }), [sorted, autoCols])
 
   const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE))
   const safePage = Math.min(page, pageCount)
   const pageItems = sorted.slice((safePage - 1) * PAGE, safePage * PAGE)
 
   const toggleSort = key => {
-    const col = AI_QL_COLS.find(c => c.key === key)
+    const col = ALL_COLS.find(c => c.key === key)
     if (col && col.sortable === false) return
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
@@ -660,6 +710,7 @@ export default function AIQLDetailDashboard() {
       case 'status': return r.status || '—'
       case 'budget': return r.budget || '—'
       case 'campaign': return <span title={r.campaign}>{r.campaign || '—'}</span>
+      case 'futworkProject': return r.futworkProject || '—'
       case 'channel': return r.channel || '—'
       case 'passport': return r.passport || '—'
       case 'degreeStatus': return r.degreeStatus || '—'
@@ -694,7 +745,10 @@ export default function AIQLDetailDashboard() {
           </button>
         </span>
       ) : '—'
-      default: return '—'
+      // Any sheet-discovered column not given its own case above (see autoCols in
+      // fetchRows()) renders here generically, so a newly-added sheet column shows
+      // real values immediately rather than a blank dash.
+      default: return <span title={r[key] || ''}>{r[key] || '—'}</span>
     }
   }
 
@@ -874,7 +928,7 @@ export default function AIQLDetailDashboard() {
                       </div>
                       <div style={{ fontSize: 10.5, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.05em', padding: '6px 10px 8px', borderTop: '0.5px solid #F3F4F6' }}>Columns (drag to reorder)</div>
                       {colOrder.map(key => {
-                        const c = AI_QL_COLS.find(cc => cc.key === key)
+                        const c = ALL_COLS.find(cc => cc.key === key)
                         const isPinned = pinnedCols.includes(key)
                         const isHidden = hiddenCols.includes(key)
                         return (
@@ -909,7 +963,7 @@ export default function AIQLDetailDashboard() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr>
                   {displayOrder.map(key => {
-                    const c = AI_QL_COLS.find(cc => cc.key === key)
+                    const c = ALL_COLS.find(cc => cc.key === key)
                     const sortable = !c || c.sortable !== false
                     const isPinned = pinnedCols.includes(key)
                     const thStyle = { ...th, ...(isPinned ? { position: 'sticky', left: pinnedLeftMap[key], zIndex: 3, background: '#F9FAFB', borderRight: pinnedCols[pinnedCols.length - 1] === key ? '1px solid #E5E7EB' : 'none' } : {}) }
