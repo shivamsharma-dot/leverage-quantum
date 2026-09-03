@@ -2291,7 +2291,7 @@ async function handleLeadSquared(req, res, me) {
   // existing lead, a real new Lead too) into production LeadSquared -- same admin-only
   // treatment as team_create_user, for the same reason. update_opportunity_by_id is the
   // same treatment for the direct-by-OpportunityId endpoint (see updateLeadSquaredOpportunity).
-  const LEADSQUARED_WRITE_MODES = ['create_opportunity', 'update_opportunity_by_id', 'update_opportunity_bulk_async_submit', 'opportunity_async_check_results', 'update_user_reporting_manager']
+  const LEADSQUARED_WRITE_MODES = ['create_opportunity', 'update_opportunity_by_id', 'update_opportunity_bulk_async_submit', 'opportunity_async_check_results', 'update_user_reporting_manager', 'update_user_reporting_manager_bulk']
   // team_cache_lookup is deliberately its own read, NOT part of TEAM_FRAPP_MODES
   // (which is admin-only, gated below) -- the Roster tab's advanced filter needs
   // it for Region/Call Transfer, and that tab is readable by anyone with
@@ -2619,6 +2619,62 @@ async function handleLeadSquared(req, res, me) {
       const ok = !threw && data && data.Status === 'Success'
       if (threw) return res.status(502).json({ error: threw, user, manager })
       return res.status(200).json({ ok, user, manager, response: data })
+    }
+    // CSV/bulk sibling of the single-pair mode above. Every UNIQUE email across both
+    // columns is resolved exactly once (a CSV commonly repeats the same manager email
+    // dozens of times), paced in small concurrent chunks well under LeadSquared's own
+    // documented rate ceiling for this account (25 calls/5sec on a different endpoint,
+    // same account -- staying conservative here since this is a plain v2 read, not the
+    // Async API). dryRun:true does the full resolve pass and reports exactly which
+    // emails would fail BEFORE any write happens -- always run this first on a new CSV.
+    // Real writes batch at LeadSquared's own documented cap of 100 UserId/ManagerId
+    // pairs per UpdateReportingManagerInBulk call, and only ever include pairs that
+    // resolved cleanly on both sides -- an unresolved row is skipped, not guessed at.
+    if (mode === 'update_user_reporting_manager_bulk') {
+      const body = req.body || {}
+      const pairs = Array.isArray(body.pairs) ? body.pairs : []
+      const dryRun = !!body.dryRun
+      if (!pairs.length) return res.status(400).json({ error: 'pairs[] is required -- each {userEmail, managerEmail}.' })
+      if (pairs.length > 500) return res.status(400).json({ error: 'Max 500 pairs per call.' })
+
+      const uniqueEmails = Array.from(new Set(pairs.flatMap(p => [String(p.userEmail || '').trim(), String(p.managerEmail || '').trim()]).filter(Boolean)))
+      const resolved = new Map() // lowercased email -> {id,name,email,active} | null
+      const CHUNK = 8
+      for (let i = 0; i < uniqueEmails.length; i += CHUNK) {
+        const chunk = uniqueEmails.slice(i, i + CHUNK)
+        const results = await Promise.all(chunk.map(async email => {
+          try { return [email, await findLeadSquaredUserByEmail(creds, email)] }
+          catch { return [email, null] }
+        }))
+        for (const [email, u] of results) resolved.set(email.toLowerCase(), u)
+        if (i + CHUNK < uniqueEmails.length) await new Promise(r => setTimeout(r, 250))
+      }
+
+      const rows = pairs.map(p => {
+        const userEmail = String(p.userEmail || '').trim()
+        const managerEmail = String(p.managerEmail || '').trim()
+        const user = resolved.get(userEmail.toLowerCase()) || null
+        const manager = resolved.get(managerEmail.toLowerCase()) || null
+        return { userEmail, managerEmail, user, manager, ok: !!(user && manager) }
+      })
+      const unresolved = rows.filter(r => !r.ok)
+
+      if (dryRun) {
+        return res.status(200).json({ dryRun: true, total: rows.length, uniqueEmails: uniqueEmails.length, resolvedCount: rows.length - unresolved.length, unresolvedCount: unresolved.length, unresolved })
+      }
+
+      const toWrite = rows.filter(r => r.ok)
+      const batches = []
+      for (let i = 0; i < toWrite.length; i += 100) {
+        const batch = toWrite.slice(i, i + 100)
+        let data = null, threw = null
+        try {
+          data = await leadsquaredPost('/v2/UserManagement.svc/UpdateReportingManagerInBulk', creds,
+            batch.map(r => ({ UserId: r.user.id, ManagerId: r.manager.id })))
+        } catch (e) { threw = String((e && e.message) || e) }
+        batches.push({ size: batch.length, threw, response: data, ok: !threw && data && data.Status === 'Success' })
+      }
+      return res.status(200).json({ dryRun: false, total: rows.length, written: toWrite.length, skipped: unresolved.length, unresolved, batches })
     }
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
