@@ -66,7 +66,7 @@ const MANUAL_FIELDS = [
   { key: 'asm_sm_email', label: 'ASM/SM Email', suggest: 'roster_email' },
   { key: 'ssm', label: 'SSM', suggest: 'roster' },
   { key: 'ssm_email', label: 'SSM Email', suggest: 'roster_email' },
-  { key: 'country', label: 'Country' },
+  { key: 'country', label: 'Country', suggest: 'country' },
   { key: 'centre_name', label: 'Centre Name', suggest: 'centre' },
 ]
 
@@ -427,6 +427,80 @@ function mainPhoneRegionHint(phoneMain) {
   if (!raw.startsWith('+')) return 'Indian'
   return raw.replace(/[\s-]/g, '').startsWith('+91') ? 'Indian' : 'International'
 }
+
+// Futwork Project -- a person's real, LeadSquared-sourced Sales Group
+// membership rolled up into one of 4 coarse buckets. Replaces the earlier
+// Team+Role-based Call Transfer condition entirely (2026-09 -- explicit
+// instruction: "remove the team condition fully, remove role"). Exact-string
+// match against the group name, case-insensitive. Admission Consulting and
+// Student Recruitment collapse into ONE bucket here ("Online Team") -- they're
+// still distinguished separately for the Country suggestion list below, where
+// their valid country sets genuinely differ.
+const FW_ONLINE_GROUPS = new Set(['online team - admission consulting', 'online team - student recruitment'])
+const FW_OFFLINE_GROUPS = new Set([
+  'offline - assam guwahati', 'offline - delhi nehru place', 'offline - noida 126 + 18',
+  'offline - delhi model town', 'offline - delhi nsp', 'offline - indore mp',
+  'offline - mumbai nashik center', 'offline - punjab chandigarh sector -34',
+  'offline - delhi rajouri garden', 'offline - mumbai churchgate center',
+  'offline - rajasthan jaipur center', 'offline - gurgaon - galleria',
+  'offline - west bengal kolkata', 'offline - bengaluru centre',
+  'offline - kerala thiruvananthapuram', 'offline - maharasthra - pune',
+  'offline - mumbai andheri (distribution)', 'offline - gujarat ahmedabad',
+  'offline - gujarat surat',
+])
+const FW_DUBAI_GROUP = 'online team - dubai'
+const FW_MBBS_GROUP = 'online team - mbbs'
+
+// Returns { project, conflict }. `project` is one of 'Online Team' /
+// 'Offline Team' / 'Online Team MBBS' / 'Online Team Dubai', or null if
+// nobody matched OR more than one bucket matched at once -- an overlap across
+// buckets is treated as a real data problem to go fix in LeadSquared (explicit
+// choice), never silently resolved to one winner.
+function classifyFutworkProject(groups) {
+  const norm = (groups || []).map(g => String(g || '').trim().toLowerCase())
+  const hits = []
+  if (norm.some(g => FW_ONLINE_GROUPS.has(g))) hits.push('Online Team')
+  if (norm.some(g => FW_OFFLINE_GROUPS.has(g))) hits.push('Offline Team')
+  if (norm.includes(FW_MBBS_GROUP)) hits.push('Online Team MBBS')
+  if (norm.includes(FW_DUBAI_GROUP)) hits.push('Online Team Dubai')
+  if (hits.length === 1) return { project: hits[0], conflict: false }
+  if (hits.length > 1) return { project: null, conflict: true }
+  return { project: null, conflict: false }
+}
+
+// Country type-ahead suggestions, scoped to whichever Sales Group(s) a person
+// is actually in -- Admission Consulting and Student Recruitment have
+// genuinely different valid country lists despite both rolling up into the
+// same "Online Team" Futwork Project bucket above, so this checks group
+// membership directly rather than reusing classifyFutworkProject's coarser
+// result. In both AC+SR at once (possible, not the common case) -- union of
+// both lists. Offline has no defined list (never specified) -- falls through
+// to plain free-typing, same as before this feature existed.
+const COUNTRY_LIST_AC = ['Thailand', 'Malaysia', 'Vietnam', 'France', 'France (Public)', 'Germany', 'Germany (Public)', 'Netherlands', 'Poland', 'Finland', 'Spain', 'Cyprus', 'Hungary', 'Italy', 'Italy (Public)', 'Lithuania', 'Luxembourg', 'Singapore', 'South Africa', 'Sweden', 'Switzerland', 'Denmark', 'Latvia', 'Russia', 'Georgia', 'Uzbekistan', 'Kazakhstan', 'Philippines', 'China', 'Nepal', 'Belgium', 'Kyrgyzstan', 'Slovakia', 'Others', 'Not yet decided', 'NA']
+const COUNTRY_LIST_SR = ['UK', 'Canada', 'USA', 'Australia', 'New Zealand', 'Dubai', 'France (Private)', 'Germany (Private)', 'Ireland', 'Nigeria', 'Italy (Private)', 'Malta']
+function countrySuggestionsFor(groups) {
+  const norm = (groups || []).map(g => String(g || '').trim().toLowerCase())
+  if (norm.includes(FW_DUBAI_GROUP)) return ['Dubai']
+  if (norm.includes(FW_MBBS_GROUP)) return ['mbbs']
+  const inAc = norm.includes('online team - admission consulting')
+  const inSr = norm.includes('online team - student recruitment')
+  if (inAc && inSr) return Array.from(new Set([...COUNTRY_LIST_AC, ...COUNTRY_LIST_SR]))
+  if (inAc) return COUNTRY_LIST_AC
+  if (inSr) return COUNTRY_LIST_SR
+  return []
+}
+// The one auto-fill exception on this page (every other manual field starts
+// as whatever's already on file) -- Dubai/MBBS have exactly one valid country
+// each, so pre-fill it the moment the edit modal opens, but only into a
+// genuinely EMPTY Country field. Never overwrites something already on file.
+function autoFillCountry(groups, currentValue) {
+  if (String(currentValue || '').trim()) return currentValue
+  const norm = (groups || []).map(g => String(g || '').trim().toLowerCase())
+  if (norm.includes(FW_DUBAI_GROUP)) return 'Dubai'
+  if (norm.includes(FW_MBBS_GROUP)) return 'mbbs'
+  return currentValue
+}
+
 function staleDays(manual) {
   if (!manual || !manual.updated_at) return null
   const ms = Date.now() - new Date(manual.updated_at).getTime()
@@ -679,6 +753,9 @@ function EditManualModal({ user, rosterNames, rosterEmails, centreOptions, onClo
   const [form, setForm] = useState(() => {
     const base = {}
     MANUAL_FIELDS.forEach(f => { base[f.key] = (user.manual && user.manual[f.key]) || '' })
+    // Dubai/MBBS have exactly one valid country -- pre-fill it if Country is
+    // still blank (never overwrites an existing value). See autoFillCountry.
+    base.country = autoFillCountry(user.groups, base.country)
     return base
   })
   const [saving, setSaving] = useState(false)
@@ -730,6 +807,8 @@ function EditManualModal({ user, rosterNames, rosterEmails, centreOptions, onClo
               <SuggestInput value={form[f.key]} onChange={v => setForm(p => ({ ...p, [f.key]: v }))} suggestions={rosterEmails || []} placeholder="Start typing an email…" />
             ) : f.suggest === 'centre' ? (
               <SuggestInput value={form[f.key]} onChange={v => setForm(p => ({ ...p, [f.key]: v }))} suggestions={centreOptions || []} placeholder="Start typing a centre…" />
+            ) : f.suggest === 'country' ? (
+              <SuggestInput value={form[f.key]} onChange={v => setForm(p => ({ ...p, [f.key]: v }))} suggestions={countrySuggestionsFor(user.groups)} placeholder="Start typing a country…" />
             ) : (
               <input style={inputStyle} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
             )}
@@ -817,6 +896,11 @@ function BulkEditModal({ users, rosterNames, rosterEmails, centreOptions, onClos
                   <SuggestInput value={fields[f.key].value} onChange={setVal} suggestions={rosterEmails || []} placeholder="Value to apply to everyone selected…" />
                 ) : f.suggest === 'centre' ? (
                   <SuggestInput value={fields[f.key].value} onChange={setVal} suggestions={centreOptions || []} placeholder="Value to apply to everyone selected…" />
+                ) : f.suggest === 'country' ? (
+                  // Bulk edit applies one value to many people who may span different
+                  // Futwork Project buckets, so this can't be scoped to one person --
+                  // shows the full merged list (AC + SR + Dubai + MBBS) as a convenience.
+                  <SuggestInput value={fields[f.key].value} onChange={setVal} suggestions={Array.from(new Set([...COUNTRY_LIST_AC, ...COUNTRY_LIST_SR, 'Dubai', 'mbbs']))} placeholder="Value to apply to everyone selected…" />
                 ) : (
                   <input style={inputStyle} value={fields[f.key].value} onChange={e => setVal(e.target.value)} placeholder="Value to apply to everyone selected…" />
                 )}
@@ -1921,21 +2005,24 @@ function HistoryTab({ onBack }) {
 // standalone dropdown (explicit request: "only leave status dropdown", since
 // it's the one filter almost every view starts from). `get` returns either a
 // single string or an array of strings (Group -- one person can be in several);
-// the filter engine below handles both the same way. `region`/`callTransfer`
-// read off `_region`/`_callTransfer`, two fields RosterTab computes itself from
-// the whole-roster coach-directory cache (see getTeamCacheLookup in
-// api/crm-leads.js) -- NOT the live per-page detailCache the table cells use,
-// because Virtual DID has no bulk LeadSquared source, so there is no way to
-// know Region/Call Transfer for someone whose page hasn't been opened without
-// a cache. Only ever 'Indian'/'International' and 'Yes' are exposed as values
-// (never a spelled-out "No") to match exactly what the table's own Region/Call
-// Transfer cells show -- a dash there always means "not applicable or
-// unknown", never a real "No".
+// the filter engine below handles both the same way. `region` reads off
+// `_region`, computed from the whole-roster coach-directory cache (see
+// getTeamCacheLookup in api/crm-leads.js) -- NOT the live per-page detailCache
+// the table cells use, because Virtual DID has no bulk LeadSquared source, so
+// there is no way to know Region for someone whose page hasn't been opened
+// without a cache. `futworkProject`/`callTransfer` read off `_futworkProject`/
+// `_callTransfer` -- both derived purely from Sales Group membership
+// (classifyFutworkProject), no cache or Virtual DID needed, so they're
+// instant for the whole roster. Only ever 'Indian'/'International' and 'Yes'
+// are exposed as Region/Call Transfer values (never a spelled-out "No") to
+// match exactly what the table's own cells show -- a dash there always means
+// "not applicable or unknown", never a real "No".
 const TEAM_FILTERABLE_FIELDS = [
   { key: 'role', label: 'LS Role', get: r => (r.role || '').replace(/_/g, ' ') || null },
   { key: 'groups', label: 'Group', get: r => r.groups || [] },
   { key: 'teamName', label: 'Team', get: r => r.teamName || null },
   { key: 'region', label: 'Region', get: r => r._region || null },
+  { key: 'futworkProject', label: 'Futwork Project', get: r => r._futworkProject || (r._futworkConflict ? 'Conflict' : null) },
   { key: 'callTransfer', label: 'Call Transfer', get: r => r._callTransfer === 'Yes' ? 'Yes' : null },
   { key: 'managerName', label: 'LS Manager', get: r => r.managerName || null },
   { key: 'mapping', label: 'Mapping', get: r => r.manual ? (isStaleMapping(r.manual) ? 'Stale (90+ days)' : 'Mapped') : 'Unmapped' },
@@ -2167,18 +2254,19 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
 
   const rows = data?.rows || []
 
-  // Region/Call Transfer, computed once per row from the whole-roster cache
-  // (not the live per-page detailCache) so the advanced filter can see
-  // everyone, not just whoever's page has been opened. `_region`/`_callTransfer`
-  // are read by TEAM_FILTERABLE_FIELDS' own `get()`, and by nothing else --
-  // the table's on-screen cells keep using the live per-page fetch, unchanged.
+  // Region still needs the whole-roster coach-directory cache (Virtual DID has
+  // no bulk source). Futwork Project/Call Transfer no longer need it at all --
+  // both are derived purely from Sales Group membership (classifyFutworkProject),
+  // which is already bulk/instant on every row via `r.groups`. All four
+  // (`_region`/`_futworkProject`/`_futworkConflict`/`_callTransfer`) are read
+  // by TEAM_FILTERABLE_FIELDS' own `get()` AND directly by the table's
+  // on-screen cells below (pageRows is a slice of this same array), so there
+  // is exactly one computation to keep in sync, not two.
   const augmentedRows = useMemo(() => rows.map(r => {
     const onFrappTeam = r.teamName && String(r.teamName).trim().toLowerCase() === FRAPP_TEAM_NAME
-    if (!onFrappTeam) return { ...r, _region: null, _callTransfer: null }
-    const cached = cacheByEmail[(r.email || '').toLowerCase()]
-    const region = classifyDidRegion(r.teamName, cached?.airtel_number) || null
-    const isConsultant = (r.manual?.role || '').trim().toLowerCase() === 'consultant'
-    return { ...r, _region: region, _callTransfer: (region === 'Indian' && isConsultant) ? 'Yes' : null }
+    const region = onFrappTeam ? (classifyDidRegion(r.teamName, cacheByEmail[(r.email || '').toLowerCase()]?.airtel_number) || null) : null
+    const fw = classifyFutworkProject(r.groups)
+    return { ...r, _region: region, _futworkProject: fw.project, _futworkConflict: fw.conflict, _callTransfer: fw.project ? 'Yes' : null }
   }), [rows, cacheByEmail])
 
   // Live names, for the ASM/SM and SSM type-ahead in the edit/bulk-edit
@@ -2366,11 +2454,11 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
               Team: r.teamName || '',
               Phone: r.phoneMain || '', 'Virtual DID': d?.airtelNumber || '',
               'Region': classifyDidRegion(r.teamName, d?.airtelNumber) || '',
-              // Same rule as the on-screen column: Team = University Admission
-              // Opportunity, phone = Indian, Role = Consultant.
-              'Call Transfer': (r.teamName && String(r.teamName).trim().toLowerCase() === FRAPP_TEAM_NAME
-                && (r.manual?.role || '').trim().toLowerCase() === 'consultant'
-                && classifyDidRegion(r.teamName, d?.airtelNumber) === 'Indian') ? 'Yes' : '',
+              // Same rule as the on-screen columns -- both derived from Sales Group
+              // membership only (see classifyFutworkProject), already computed on
+              // this row by augmentedRows.
+              'Futwork Project': r._futworkConflict ? 'Conflict' : (r._futworkProject || ''),
+              'Call Transfer': r._callTransfer === 'Yes' ? 'Yes' : '',
               'Reporting Manager': r.managerName || '', 'Reporting Manager Email': r.managerEmail || '',
               'ASM/SM': r.manual?.asm_sm || '', 'ASM/SM Email': r.manual?.asm_sm_email || '',
               SSM: r.manual?.ssm || '', 'SSM Email': r.manual?.ssm_email || '',
@@ -2385,7 +2473,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
           {showInfo && (
             <>
               <div onClick={() => setShowInfo(false)} style={{ position: 'fixed', inset: 0, zIndex: 300 }} />
-              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400, width: 320, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14, fontSize: 11.5, color: C.text, lineHeight: 1.55 }}>
+              <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 400, width: 360, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 10, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 14, fontSize: 11.5, color: C.text, lineHeight: 1.55 }}>
                 <div style={{ fontWeight: 800, color: C.navy, marginBottom: 8 }}>How this roster works</div>
                 <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <li>Name/Email/LS Role/Status/Groups/Team/Phone/Reporting Manager — live from LeadSquared, one bulk call for the whole roster.</li>
@@ -2393,8 +2481,10 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                   <li>ASM/SM, SSM, Role, Country, Centre Name — the only manually entered fields.</li>
                   <li>Region — computed. "Indian"/"International" from Virtual DID, only on "University Admission Opportunity"; "—" elsewhere. Only "Indian" is ever pushed to Futwork (blocked server-side too).</li>
                   <li>No Virtual DID on that team? A muted "Main: Indian/International" hint from the Main Phone shows instead — informational only.</li>
-                  <li>Call Transfer — computed: "Yes" only when Team = University Admission Opportunity, phone is Indian, and Role is Consultant.</li>
-                  <li>+ Filter — filter by any column. Region/Call Transfer there read the same coach-directory cache the Frapp push uses{cacheSyncedAt ? ` (last synced ${new Date(cacheSyncedAt).toLocaleString()})` : ''} — resync via Connectors → "Sync coach directory" if it looks stale.</li>
+                  <li>Futwork Project — derived from Sales Group only: Online Team - Admission Consulting/Student Recruitment → "Online Team"; the 19 "Offline - …" groups → "Offline Team"; Online Team - MBBS → "Online Team MBBS"; Online Team - Dubai → "Online Team Dubai". "Conflict" if someone's groups span more than one bucket at once — a LeadSquared data issue to go fix, never auto-resolved.</li>
+                  <li>Call Transfer — "Yes" whenever Futwork Project resolves to one bucket above; "—" otherwise. No Team, Role, or phone check anymore.</li>
+                  <li>Country suggestions change by Sales Group: Admission Consulting and Student Recruitment each have their own list; Dubai/MBBS pre-fill to "Dubai"/"mbbs" automatically if the field is still blank. Still free text — the list is a suggestion, not a hard restriction.</li>
+                  <li>+ Filter — filter by any column, including Futwork Project. Region there reads the same coach-directory cache the Frapp push uses{cacheSyncedAt ? ` (last synced ${new Date(cacheSyncedAt).toLocaleString()})` : ''} — resync via Connectors → "Sync coach directory" if it looks stale. Futwork Project/Call Transfer are instant, no cache needed.</li>
                 </ul>
               </div>
             </>
@@ -2440,7 +2530,7 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                     </label>
                   </th>
                 )}
-                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Virtual DID', 'Region', 'Call Transfer', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map((h, hi) => (
+                {['Name', 'Email', 'LS Role', 'Status', 'Groups', 'Team', 'Phone', 'Virtual DID', 'Region', 'Futwork Project', 'Call Transfer', 'LS Manager', 'ASM/SM', 'SSM', 'Role', 'Country', 'Centre', 'Mapping'].map((h, hi) => (
                   <th key={h} style={{
                     padding: '9px 12px', fontSize: 12, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap',
                     position: 'sticky', top: 0, zIndex: 2, background: 'var(--card)',
@@ -2456,13 +2546,9 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                 const d = detailCache[r.id]
                 const pendingDid = !d
                 const onFrappTeam = r.teamName && String(r.teamName).trim().toLowerCase() === FRAPP_TEAM_NAME
-                // Call Transfer: Team is University Admission Opportunity, phone is
-                // Indian, and the (manual) business Role is Consultant -- Team/Role are
-                // known immediately, so only the Indian/International check (which needs
-                // Virtual DID) ever waits, and only for people who already clear the
-                // other two.
-                const isConsultant = (r.manual?.role || '').trim().toLowerCase() === 'consultant'
-                const callTransferCandidate = onFrappTeam && isConsultant
+                // Futwork Project/Call Transfer are already computed on this row by
+                // augmentedRows (r._futworkProject/_futworkConflict/_callTransfer) --
+                // purely Sales-Group-based now, no Virtual DID wait, ever.
                 const stale = isStaleMapping(r.manual)
                 // A frozen (position:sticky) cell needs a genuinely opaque
                 // background -- 'transparent' let the row underneath show through
@@ -2503,12 +2589,17 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                         return <span style={{ color: C.muted, fontSize: 11.5 }} title="No Virtual DID on file -- this reflects the Main Phone number instead, not the enforced Frapp region">Main: {hint}</span>
                       })()}
                     </td>
-                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }} title="Team is University Admission Opportunity, phone is Indian, and Role is Consultant">
-                      {!callTransferCandidate ? <span style={{ color: C.muted }}>—</span>
-                        : pendingDid ? '…'
-                        : classifyDidRegion(r.teamName, d.airtelNumber) === 'Indian'
-                          ? <span style={{ fontWeight: 700, color: C.green }}>Yes</span>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }} title="Derived from Sales Group: Online Team - Admission Consulting/Student Recruitment -> Online Team; the 19 Offline - ... groups -> Offline Team; Online Team - MBBS -> Online Team MBBS; Online Team - Dubai -> Online Team Dubai">
+                      {r._futworkConflict
+                        ? <span style={{ fontWeight: 700, color: C.navy }} title={'In more than one Futwork Project group at once -- fix in LeadSquared: ' + (r.groups || []).join(', ')}>Conflict</span>
+                        : r._futworkProject
+                          ? <span style={{ color: C.text }}>{r._futworkProject}</span>
                           : <span style={{ color: C.muted }}>—</span>}
+                    </td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }} title="Yes whenever Futwork Project resolves to one bucket above -- no Team, Role, or phone check anymore">
+                      {r._callTransfer === 'Yes'
+                        ? <span style={{ fontWeight: 700, color: C.green }}>Yes</span>
+                        : <span style={{ color: C.muted }}>—</span>}
                     </td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }} title={r.managerEmail || ''}>{r.managerName || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.asm_sm || '—'}</td>
