@@ -1132,6 +1132,23 @@ async function fetchLeadSquaredTeamUsers(creds) {
   })
 }
 
+// Same endpoint/request shape as fetchLeadSquaredTeamUsers above, narrowed to one
+// exact email via Operator:'eq' (proven live elsewhere in this file, see the
+// RowCondition usage a few hundred lines up) instead of paging the whole ~3,400-user
+// roster for a single lookup. PageSize small since an email should resolve to at
+// most one account.
+async function findLeadSquaredUserByEmail(creds, email) {
+  const data = await leadsquaredPost('/v2/UserManagement.svc/User/AdvancedSearch', creds, {
+    Columns: { Include_CSV: 'UserId,FirstName,LastName,EmailAddress,StatusCode' },
+    GroupConditions: [{ Condition: [{ LookupName: 'EmailAddress', Operator: 'eq', LookupValue: email, ConditionOperator: null }], GroupOperator: null }],
+    GroupOperator: null,
+    Paging: { PageIndex: 1, PageSize: 5 },
+  })
+  const u = (Array.isArray(data?.Users) ? data.Users : [])[0]
+  if (!u) return null
+  return { id: u.UserId, name: [u.FirstName, u.LastName].filter(Boolean).join(' ').trim() || u.EmailAddress || email, email: u.EmailAddress || email, active: String(u.StatusCode) === '0' }
+}
+
 // TeamId has no name attached anywhere in User/AdvancedSearch's response (see
 // the comment above) -- but this account only has a small, bounded number of
 // distinct teams (in the tens, not the thousands), so rather than a per-PERSON
@@ -2274,7 +2291,7 @@ async function handleLeadSquared(req, res, me) {
   // existing lead, a real new Lead too) into production LeadSquared -- same admin-only
   // treatment as team_create_user, for the same reason. update_opportunity_by_id is the
   // same treatment for the direct-by-OpportunityId endpoint (see updateLeadSquaredOpportunity).
-  const LEADSQUARED_WRITE_MODES = ['create_opportunity', 'update_opportunity_by_id', 'update_opportunity_bulk_async_submit', 'opportunity_async_check_results']
+  const LEADSQUARED_WRITE_MODES = ['create_opportunity', 'update_opportunity_by_id', 'update_opportunity_bulk_async_submit', 'opportunity_async_check_results', 'update_user_reporting_manager']
   // team_cache_lookup is deliberately its own read, NOT part of TEAM_FRAPP_MODES
   // (which is admin-only, gated below) -- the Roster tab's advanced filter needs
   // it for Region/Call Transfer, and that tab is readable by anyone with
@@ -2576,6 +2593,32 @@ async function handleLeadSquared(req, res, me) {
       }, me).catch(() => {})
       if (threw) return res.status(502).json({ error: threw })
       return res.status(200).json(data)
+    }
+    // Real LeadSquared USER-management field (org-chart reporting line), not one of
+    // Quantum's own manual ASM/SM/SSM hierarchy fields on Team Mapping -- explicitly
+    // asked to be a direct LeadSquared write, not a manual updation. Endpoint confirmed
+    // against LeadSquared's own docs (UpdateReportingManagerInBulk, up to 100 users per
+    // call) -- this call only ever sends one.
+    if (mode === 'update_user_reporting_manager') {
+      const body = req.body || {}
+      const userEmail = String(body.userEmail || '').trim()
+      const managerEmail = String(body.managerEmail || '').trim()
+      if (!userEmail || !managerEmail) return res.status(400).json({ error: 'userEmail and managerEmail are both required.' })
+      let user = null, manager = null, data = null, threw = null
+      try {
+        ;[user, manager] = await Promise.all([
+          findLeadSquaredUserByEmail(creds, userEmail),
+          findLeadSquaredUserByEmail(creds, managerEmail),
+        ])
+        if (!user) throw new Error(`No LeadSquared user found with email ${userEmail}`)
+        if (!manager) throw new Error(`No LeadSquared user found with email ${managerEmail}`)
+        data = await leadsquaredPost('/v2/UserManagement.svc/UpdateReportingManagerInBulk', creds, [
+          { UserId: user.id, ManagerId: manager.id },
+        ])
+      } catch (e) { threw = String((e && e.message) || e) }
+      const ok = !threw && data && data.Status === 'Success'
+      if (threw) return res.status(502).json({ error: threw, user, manager })
+      return res.status(200).json({ ok, user, manager, response: data })
     }
     return res.status(200).json(await fetchLeadSquaredLeads(creds, p)) // default: leads
   } catch (e) {
