@@ -51,6 +51,7 @@ const EMOJI = {
   ':rocket:':'\uD83D\uDE80', ':information_source:':'\u2139\uFE0F',
   ':mag:':'\uD83D\uDD0D', ':bulb:':'\uD83D\uDCA1', ':ledger:':'\uD83D\uDCD2', ':pushpin:':'\uD83D\uDCCC',
   ':white_check_mark:':'\u2705', ':warning:':'\u26A0\uFE0F', ':small_blue_diamond:':'\uD83D\uDD39',
+  ':bust_in_silhouette:':'\uD83D\uDC64', ':robot_face:':'\uD83E\uDD16',
 }
 
 const readLastSent = () => { try { return JSON.parse(localStorage.getItem(LAST_KEY) || '{}') } catch (_) { return {} } }

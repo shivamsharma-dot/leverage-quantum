@@ -75,8 +75,11 @@ export function buildV7(ctx) {
     '*' + emoji + ' ' + label + '*\n' + value + '\n'
     + chip(pctOf(numOf(now), numOf(was)), was == null ? null : wasLabel)
 
-  const qlRateNow = rateOf(numOf(g.totalQL), numOf(g.leads))
-  const qlRateWas = rateOf(numOf(p.totalQL), numOf(p.leads))
+  // Queued -> QL, not Leads -> QL: most leads never reach Futwork/Superbot at all, so
+  // dividing by all leads understates the real conversion rate (matches the dashboard's
+  // own qlPct / "TOTAL QLs ... % of queued", see the same fix + comment in pmReport.js).
+  const qlRateNow = rateOf(numOf(g.totalQL), numOf(g.queued))
+  const qlRateWas = rateOf(numOf(p.totalQL), numOf(p.queued))
 
   const basis = 'Yesterday is ' + d.label + (d.prevLabel ? ', read against ' + d.prevLabel : '')
     + (trail.length ? ' and against the mean of the ' + trail.length + ' complete days before it' : '')
@@ -92,7 +95,7 @@ export function buildV7(ctx) {
       fld(':dart:', 'TOTAL QLs', cnt(g.totalQL), g.totalQL, p.totalQL, cnt(p.totalQL)),
       fld(':pushpin:', 'CPL', inr(g.cpl), g.cpl, p.cpl, inr(p.cpl)),
       fld(':zap:', 'CPQL', inr(g.cpql), g.cpql, p.cpql, inr(p.cpql)),
-      '*:chart_with_upwards_trend: LEAD ' + ARROW + ' QL*\n' + pctText(qlRateNow) + '\n'
+      '*:chart_with_upwards_trend: QUEUED ' + ARROW + ' QL*\n' + pctText(qlRateNow) + '\n'
         + (qlRateNow == null || qlRateWas == null ? 'no comparable day'
           : (Math.abs(qlRateNow - qlRateWas) < 0.05 ? '\u2013 flat' : ppText(qlRateNow - qlRateWas))
             + ' vs ' + pctText(qlRateWas)),

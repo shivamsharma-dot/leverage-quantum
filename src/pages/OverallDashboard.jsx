@@ -2687,7 +2687,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const m = new Map(prev.map(x => [x.label, x]))
     return cur.map(c => {
       const x = m.get(c.label)
-      return { ...c, prev: x ? { spend:x.spend, leads:x.leads, totalQL:x.totalQL, apps:x.apps, cpl:x.cpl, cpql:x.cpql, cpa:x.cpa } : null }
+      return { ...c, prev: x ? { spend:x.spend, leads:x.leads, queued:x.queued, totalQL:x.totalQL, apps:x.apps, cpl:x.cpl, cpql:x.cpql, cpa:x.cpa } : null }
     })
   }, [])
 
@@ -3451,6 +3451,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         offers: deltaPct(kpis.offers, prevKpis.offers), deposits: deltaPct(kpis.deposits, prevKpis.deposits),
         raus: deltaPct(kpis.raus, prevKpis.raus),
         cpl: deltaPct(cpl, prevCpl), cpql: deltaPct(cpql, prevCpql), cpa: deltaPct(cpa, prevCpa),
+        humanQL: deltaPct(kpis.humanQL, prevKpis.humanQL), futworkAiQl: deltaPct(kpis.futworkAiQl, prevKpis.futworkAiQl),
       },
       chain: conversionChain.map((s, i) => ({ ...s, prevRate: prevChain[i] })),
       prevLabel,
@@ -3458,6 +3459,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         spend: prevKpis.spend, leads: prevKpis.leads, totalQL: prevKpis.totalQL, apps: prevKpis.apps,
         offers: prevKpis.offers, deposits: prevKpis.deposits, raus: prevKpis.raus,
         cpl: prevCpl, cpql: prevCpql, cpa: prevCpa,
+        // queued = Futwork Human + Futwork AI + Superbot (matches totalQueued/qlPct's own
+        // denominator elsewhere on this page) -- the previous-period side of the report's
+        // "Lead -> QL rate", which is really Total Queued -> Total QL, not Leads -> Total QL.
+        queued: prevQueued, humanQL: prevKpis.humanQL, futworkAiQl: prevKpis.futworkAiQl,
       },
       v5: v5Report,
       v6: v6Report,

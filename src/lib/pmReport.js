@@ -440,24 +440,29 @@ function deltaNote(ctx) {
     + ', on the same Source and Corridor filters. CPL and CPQL divide spend by PAID leads and PAID QLs only, so free channels never make acquisition look cheaper than it was.'
 }
 
-// The KPI grid: two columns, eight cells, every one carrying its own previous-period
+// The KPI grid: two columns, ten cells, every one carrying its own previous-period
 // figure. Deposits are out -- that is a sales outcome, and month on month it is not a
-// like-for-like number. The Lead -> QL rate takes the slot, because it is the one
-// figure that says whether the leads we bought were worth buying.
+// like-for-like number. The Queued -> QL rate takes a slot, because it is the one
+// figure that says whether the leads we bought were worth buying -- it is Total
+// Queued -> Total QL (matches the dashboard's own qlPct/"TOTAL QLs ... % of queued"),
+// NOT Leads -> Total QL: most leads never reach Futwork/Superbot in the first place
+// (see the funnel's own Leads -> Queued stage), so dividing QLs by all leads understates
+// the real conversion rate and doesn't match what this page calls "QL %" anywhere else.
 function kpiFields(ctx) {
   const p = ctx.prev || {}
   const d = ctx.d
   const was = v => (ctx.hasPrev ? v : null)
-  const rate = (ql, l) => (l > 0 ? (ql / l) * 100 : null)
-  const qlNow = rate(ctx.num('totalQL'), ctx.num('leads'))
-  const qlWas = ctx.hasPrev ? rate(p.totalQL, p.leads) : null
+  const qlNow = ctx.num('qlPct')
+  const qlWas = ctx.hasPrev && p.queued > 0 ? (p.totalQL / p.queued) * 100 : null
   return [
     fld(':moneybag:', 'Spend', money(ctx.num('spend')), d.spend, was(money(p.spend))),
     fld(':chart_with_upwards_trend:', 'Leads', ctx.stat('leads'), d.leads, was(nfmt(p.leads))),
     fld(':dart:', 'Total QLs', ctx.stat('totalQL'), d.totalQL, was(nfmt(p.totalQL))),
+    fld(':bust_in_silhouette:', 'Human QLs', ctx.stat('humanQL'), d.humanQL, was(nfmt(p.humanQL))),
+    fld(':robot_face:', 'AI QLs', ctx.stat('futworkAiQl'), d.futworkAiQl, was(nfmt(p.futworkAiQl))),
     fld(':zap:', 'CPL', ctx.stat('cpl'), d.cpl, was(ctx.fmtINR(p.cpl))),
     fld(':zap:', 'CPQL', ctx.stat('cpql'), d.cpql, was(ctx.fmtINR(p.cpql))),
-    fldPP(':mag:', 'Lead ' + TO + ' QL rate', qlNow, qlWas),
+    fldPP(':mag:', 'Queued ' + TO + ' QL rate', qlNow, qlWas),
   ]
 }
 
@@ -1070,7 +1075,7 @@ export const REPORT_VERSIONS = [
     recommended: false,
     what: [
       'Built for a daily send. The headline is the last complete day rather than the month, so the figures are genuinely different every morning without a word being reworded.',
-      'Message 1 - yesterday: spend, leads, QLs, CPL, CPQL and the Lead to QL rate, each against the day before. Then the verdict - the 10 L daily budget, the bonus-day test, the 550-600 QL target - and the same day against its own trailing 7 days.',
+      'Message 1 - yesterday: spend, leads, QLs, CPL, CPQL and the Queued to QL rate, each against the day before. Then the verdict - the 10 L daily budget, the bonus-day test, the 550-600 QL target - and the same day against its own trailing 7 days.',
       'Message 2 - what moved yesterday, by channel: the source table for that one day, then the three movers picked on money at stake multiplied by the size of the move, so the names change as the data changes.',
       'Message 3 - the month, demoted to context: the channel table, the run-rate to month end and the two positions that matter. Table image and the all-columns CSV land in this thread.',
       'No applications and no CPA anywhere. No corridor or ad detail either - the dashboard only builds those month to date, so they would repeat every morning. The current day is always excluded.',
@@ -1118,7 +1123,7 @@ id: 'v4',
     tagline: 'Marketing-only KPI grid, share of spend inside the table, Facebook + Google corridors, ad winners and losers.',
     recommended: true,
     what: [
-      'Message 1 — executive summary as a two-column KPI grid: spend, leads, QLs, CPL, CPQL, and the Lead to QL rate, each carrying the number it moved from, plus the projected spend to month end at the current run-rate',
+      'Message 1 — executive summary as a two-column KPI grid: spend, leads, Total QLs (split into Human and AI), CPL, CPQL, and the Queued to QL rate, each carrying the number it moved from, plus the projected spend to month end at the current run-rate',
       'Message 2 — Paid vs Non-Paid channel table with its own % of spend column, then key findings and recommendations. No pie chart, no Offers or RAUs columns',
       'Message 3 — corridors on Facebook + Google campaigns only, split into a cheapest and a dearest band, as a native table and a CPQL chart',
       'Message 4 — the cheapest and the dearest ads on CPQL, as a native table',
