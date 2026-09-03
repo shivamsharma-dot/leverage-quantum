@@ -908,13 +908,14 @@ async function listOpportunityBatches() {
   const entries = [...scan.values()]
   const batches = await Promise.all(entries.map(async e => {
     const filter = (e.keyType === 'batch_id' ? 'batch_id=eq.' : 'batch_label=eq.') + encodeURIComponent(e.key)
-    const [total, success, duplicate, failed] = await Promise.all([
+    const [total, success, duplicate, failed, pending] = await Promise.all([
       countOpportunityActivity(supabaseAdmin, null, filter),
       countOpportunityActivity(supabaseAdmin, 'success', filter),
       countOpportunityActivity(supabaseAdmin, 'duplicate', filter),
       countOpportunityActivity(supabaseAdmin, 'failed', filter),
+      countOpportunityActivity(supabaseAdmin, 'pending', filter),
     ])
-    return { key: e.key, label: e.label, firstCreatedAt: e.first, lastCreatedAt: e.last, total, success, duplicate, failed }
+    return { key: e.key, label: e.label, firstCreatedAt: e.first, lastCreatedAt: e.last, total, success, duplicate, failed, pending }
   }))
   batches.sort((a, b) => new Date(b.lastCreatedAt) - new Date(a.lastCreatedAt))
   return { batches }
@@ -947,12 +948,13 @@ async function listOpportunityActivity() {
   // frontend's own client-side filter/count is exact.
   let counts = null
   if (truncated) {
-    const [success, duplicate, failed] = await Promise.all([
+    const [success, duplicate, failed, pending] = await Promise.all([
       countOpportunityActivity(supabaseAdmin, 'success'),
       countOpportunityActivity(supabaseAdmin, 'duplicate'),
       countOpportunityActivity(supabaseAdmin, 'failed'),
+      countOpportunityActivity(supabaseAdmin, 'pending'),
     ])
-    counts = { total, success, duplicate, failed }
+    counts = { total, success, duplicate, failed, pending }
   }
   return { rows, total, truncated, counts }
 }

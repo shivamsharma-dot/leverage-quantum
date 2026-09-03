@@ -1645,6 +1645,9 @@ function OpportunityHistoryTab() {
   const [openBatchKey, setOpenBatchKey] = useState(null)
   const { running } = useOppImportProgress()
   const wasRunning = useRef(false)
+  const [checking, setChecking] = useState(false)
+  const [checkResult, setCheckResult] = useState(null)
+  const [checkError, setCheckError] = useState('')
 
   const load = useCallback(() => {
     fetchJson(`${API}&mode=opportunity_activity_list`)
@@ -1654,6 +1657,19 @@ function OpportunityHistoryTab() {
       .then(d => { setBatches(d.batches || []); setBatchesError('') })
       .catch(e => setBatchesError(String(e.message || e)))
   }, [])
+
+  // Polls LeadSquared's Async Status API for whichever rows are still 'pending' (submitted
+  // but no confirmed outcome yet), up to 200 at a time server-side. Not automatic -- an
+  // explicit click, since a row's real outcome can land anywhere from seconds to a few
+  // hours later (LeadSquared's own Async retry window), so there's no single "right" time
+  // to auto-poll. Safe to click again immediately; it just picks up wherever it left off.
+  const checkResults = () => {
+    setChecking(true); setCheckError(''); setCheckResult(null)
+    fetchJson(`${API}&mode=opportunity_async_check_results`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      .then(d => { setCheckResult(d); load() })
+      .catch(e => setCheckError(String(e.message || e)))
+      .finally(() => setChecking(false))
+  }
 
   useEffect(() => { load() }, [load])
   useEffect(() => {
@@ -1688,6 +1704,7 @@ function OpportunityHistoryTab() {
       success: c && c.success != null ? c.success : list.filter(r => r.status === 'success').length,
       duplicate: c && c.duplicate != null ? c.duplicate : list.filter(r => r.status === 'duplicate').length,
       failed: c && c.failed != null ? c.failed : list.filter(r => r.status === 'failed').length,
+      pending: c && c.pending != null ? c.pending : list.filter(r => r.status === 'pending').length,
       batches: Array.isArray(batches) ? batches.length : null,
     }
   }, [rows, meta, batches])
@@ -1718,7 +1735,7 @@ function OpportunityHistoryTab() {
       ) : (
         <>
           <div style={{ display: 'flex', gap: 20, marginBottom: meta.truncated ? 6 : 16, flexWrap: 'wrap' }}>
-            {[['Total attempts', stats.total], ['Success', stats.success], ['Duplicate', stats.duplicate], ['Failed', stats.failed], ...(stats.batches > 0 ? [['Bulk batches', stats.batches]] : [])].map(([lbl, v]) => (
+            {[['Total attempts', stats.total], ['Success', stats.success], ['Duplicate', stats.duplicate], ['Failed', stats.failed], ...(stats.pending > 0 ? [['Pending', stats.pending]] : []), ...(stats.batches > 0 ? [['Bulk batches', stats.batches]] : [])].map(([lbl, v]) => (
               <div key={lbl}>
                 <div style={{ fontSize: 19, fontWeight: 800, color: C.text }}>{fmtN(v)}</div>
                 <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{lbl}</div>
@@ -1728,6 +1745,21 @@ function OpportunityHistoryTab() {
           {meta.truncated && (
             <p style={{ fontSize: 11, color: C.muted, margin: '0 0 16px' }}>
               Every number above is exact across everything ever logged (via count-only queries), not just what's shown below.
+            </p>
+          )}
+          {stats.pending > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+              <Button size="sm" onClick={checkResults} disabled={checking}>{checking ? 'Checking…' : 'Check results'}</Button>
+              <span style={{ fontSize: 11.5, color: C.muted }}>
+                Asks LeadSquared what actually happened to whichever rows are still pending. Safe to click again — it just picks up where it left off.
+              </span>
+            </div>
+          )}
+          {checkError && <ErrorNote message={checkError} />}
+          {checkResult && !checking && (
+            <p style={{ fontSize: 12, color: C.text, margin: '0 0 16px', lineHeight: 1.6 }}>
+              Checked <b>{fmtN(checkResult.checked)}</b> — <b style={{ color: OPP_STATUS_STYLE.success.color }}>{fmtN(checkResult.resolvedSuccess)} succeeded</b>, <b style={{ color: OPP_STATUS_STYLE.failed.color }}>{fmtN(checkResult.resolvedFailed)} failed</b>, {fmtN(checkResult.stillPendingTotal)} still pending overall.
+              {checkResult.stillPendingTotal > 0 && <> Click "Check results" again to keep going.</>}
             </p>
           )}
         </>
@@ -1770,6 +1802,7 @@ function OpportunityHistoryTab() {
                         <span style={{ color: OPP_STATUS_STYLE.success.color, fontWeight: 700 }}>{fmtN(b.success)} success</span>
                         {b.duplicate > 0 && <span style={{ color: OPP_STATUS_STYLE.duplicate.color, fontWeight: 700 }}>{fmtN(b.duplicate)} duplicate</span>}
                         {b.failed > 0 && <span style={{ color: OPP_STATUS_STYLE.failed.color, fontWeight: 700 }}>{fmtN(b.failed)} failed</span>}
+                        {b.pending > 0 && <span style={{ color: OPP_STATUS_STYLE.pending.color, fontWeight: 700 }}>{fmtN(b.pending)} pending</span>}
                       </div>
                     </div>
                     {open && rowsAvailable && (
