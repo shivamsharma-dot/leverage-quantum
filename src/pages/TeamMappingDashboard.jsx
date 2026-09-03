@@ -8,6 +8,7 @@ import Button from '../components/Button'
 import ExportButton from '../components/ExportButton'
 import { useAuth } from '../hooks/useAuth'
 import { classifyDidRegion, FRAPP_TEAM_NAME } from '../../shared/didRegion.mjs'
+import { classifyFutworkProject, countrySuggestionsFor, autoFillCountry, COUNTRY_LIST_AC, COUNTRY_LIST_SR } from '../../shared/futworkProject.mjs'
 
 // Real-time roster (LeadSquared UserManagement.svc/Users.Get, one call, no cache) +
 // group membership (reconstructed from that same roster -- LeadSquared has no
@@ -426,79 +427,6 @@ function mainPhoneRegionHint(phoneMain) {
   if (!raw) return null
   if (!raw.startsWith('+')) return 'Indian'
   return raw.replace(/[\s-]/g, '').startsWith('+91') ? 'Indian' : 'International'
-}
-
-// Futwork Project -- a person's real, LeadSquared-sourced Sales Group
-// membership rolled up into one of 4 coarse buckets. Replaces the earlier
-// Team+Role-based Call Transfer condition entirely (2026-09 -- explicit
-// instruction: "remove the team condition fully, remove role"). Exact-string
-// match against the group name, case-insensitive. Admission Consulting and
-// Student Recruitment collapse into ONE bucket here ("Online Team") -- they're
-// still distinguished separately for the Country suggestion list below, where
-// their valid country sets genuinely differ.
-const FW_ONLINE_GROUPS = new Set(['online team - admission consulting', 'online team - student recruitment'])
-const FW_OFFLINE_GROUPS = new Set([
-  'offline - assam guwahati', 'offline - delhi nehru place', 'offline - noida 126 + 18',
-  'offline - delhi model town', 'offline - delhi nsp', 'offline - indore mp',
-  'offline - mumbai nashik center', 'offline - punjab chandigarh sector -34',
-  'offline - delhi rajouri garden', 'offline - mumbai churchgate center',
-  'offline - rajasthan jaipur center', 'offline - gurgaon - galleria',
-  'offline - west bengal kolkata', 'offline - bengaluru centre',
-  'offline - kerala thiruvananthapuram', 'offline - maharasthra - pune',
-  'offline - mumbai andheri (distribution)', 'offline - gujarat ahmedabad',
-  'offline - gujarat surat',
-])
-const FW_DUBAI_GROUP = 'online team - dubai'
-const FW_MBBS_GROUP = 'online team - mbbs'
-
-// Returns { project, conflict }. `project` is one of 'Online Team' /
-// 'Offline Team' / 'Online Team MBBS' / 'Online Team Dubai', or null if
-// nobody matched OR more than one bucket matched at once -- an overlap across
-// buckets is treated as a real data problem to go fix in LeadSquared (explicit
-// choice), never silently resolved to one winner.
-function classifyFutworkProject(groups) {
-  const norm = (groups || []).map(g => String(g || '').trim().toLowerCase())
-  const hits = []
-  if (norm.some(g => FW_ONLINE_GROUPS.has(g))) hits.push('Online Team')
-  if (norm.some(g => FW_OFFLINE_GROUPS.has(g))) hits.push('Offline Team')
-  if (norm.includes(FW_MBBS_GROUP)) hits.push('Online Team MBBS')
-  if (norm.includes(FW_DUBAI_GROUP)) hits.push('Online Team Dubai')
-  if (hits.length === 1) return { project: hits[0], conflict: false }
-  if (hits.length > 1) return { project: null, conflict: true }
-  return { project: null, conflict: false }
-}
-
-// Country type-ahead suggestions, scoped to whichever Sales Group(s) a person
-// is actually in -- Admission Consulting and Student Recruitment have
-// genuinely different valid country lists despite both rolling up into the
-// same "Online Team" Futwork Project bucket above, so this checks group
-// membership directly rather than reusing classifyFutworkProject's coarser
-// result. In both AC+SR at once (possible, not the common case) -- union of
-// both lists. Offline has no defined list (never specified) -- falls through
-// to plain free-typing, same as before this feature existed.
-const COUNTRY_LIST_AC = ['Thailand', 'Malaysia', 'Vietnam', 'France', 'France (Public)', 'Germany', 'Germany (Public)', 'Netherlands', 'Poland', 'Finland', 'Spain', 'Cyprus', 'Hungary', 'Italy', 'Italy (Public)', 'Lithuania', 'Luxembourg', 'Singapore', 'South Africa', 'Sweden', 'Switzerland', 'Denmark', 'Latvia', 'Russia', 'Georgia', 'Uzbekistan', 'Kazakhstan', 'Philippines', 'China', 'Nepal', 'Belgium', 'Kyrgyzstan', 'Slovakia', 'Others', 'Not yet decided', 'NA']
-const COUNTRY_LIST_SR = ['UK', 'Canada', 'USA', 'Australia', 'New Zealand', 'Dubai', 'France (Private)', 'Germany (Private)', 'Ireland', 'Nigeria', 'Italy (Private)', 'Malta']
-function countrySuggestionsFor(groups) {
-  const norm = (groups || []).map(g => String(g || '').trim().toLowerCase())
-  if (norm.includes(FW_DUBAI_GROUP)) return ['Dubai']
-  if (norm.includes(FW_MBBS_GROUP)) return ['mbbs']
-  const inAc = norm.includes('online team - admission consulting')
-  const inSr = norm.includes('online team - student recruitment')
-  if (inAc && inSr) return Array.from(new Set([...COUNTRY_LIST_AC, ...COUNTRY_LIST_SR]))
-  if (inAc) return COUNTRY_LIST_AC
-  if (inSr) return COUNTRY_LIST_SR
-  return []
-}
-// The one auto-fill exception on this page (every other manual field starts
-// as whatever's already on file) -- Dubai/MBBS have exactly one valid country
-// each, so pre-fill it the moment the edit modal opens, but only into a
-// genuinely EMPTY Country field. Never overwrites something already on file.
-function autoFillCountry(groups, currentValue) {
-  if (String(currentValue || '').trim()) return currentValue
-  const norm = (groups || []).map(g => String(g || '').trim().toLowerCase())
-  if (norm.includes(FW_DUBAI_GROUP)) return 'Dubai'
-  if (norm.includes(FW_MBBS_GROUP)) return 'mbbs'
-  return currentValue
 }
 
 function staleDays(manual) {
@@ -2904,6 +2832,7 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
   const [preview, setPreview] = useState(null)
   const [previewing, setPreviewing] = useState(false)
   const [pushing, setPushing] = useState(false)
+  const [autofilling, setAutofilling] = useState(false)
   const [msg, setMsg] = useState('')
 
   const loadCacheStatus = useCallback(() => {
@@ -3011,6 +2940,29 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
     }
   }
 
+  // Only two of the four Futwork Project buckets (see shared/futworkProject.mjs)
+  // have exactly one correct Country -- Online Team Dubai/MBBS. Everyone else
+  // missing a Country (Admission Consulting, Student Recruitment, Offline, or
+  // no Sales Group match at all) has no single right answer this app can
+  // derive, so this only ever fills those two, never overwrites an existing
+  // value, and re-runs Preview afterward so the "ready to send" count reflects
+  // it immediately.
+  const runAutofillCountry = async () => {
+    if (!window.confirm('Fill Country as "Dubai"/"mbbs" for every Active person in those two Sales Groups who is currently missing one? Nothing else on their row changes, and an existing Country value is never overwritten.')) return
+    setAutofilling(true); setMsg('')
+    try {
+      const result = await fetchJson(API + '&mode=team_frapp_autofill_country', { method: 'POST' })
+      setMsg(result.filledCount > 0
+        ? `Filled Country for ${result.filledCount} coach(es) (Dubai/MBBS only). Everyone else still missing a Country needs a real destination assigned by hand -- there's no single correct value to derive for Admission Consulting/Student Recruitment/Offline.`
+        : 'Nothing to fill -- everyone in the Dubai/MBBS Sales Groups already has a Country on file.')
+      await runPreview()
+    } catch (e) {
+      setMsg('Auto-fill failed: ' + (e.message || e))
+    } finally {
+      setAutofilling(false)
+    }
+  }
+
   return (
     <Card
       title="Frapp coaches push"
@@ -3063,7 +3015,14 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
               <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
                 {preview.uncached > 0 && <div>{fmtN(preview.uncached)} active people still couldn't be looked up (more than 240 new at once -- run "Sync coach directory" to catch the rest).</div>}
                 {preview.skippedNoMobile?.length > 0 && <div>{preview.skippedNoMobile.length} on the team but missing a Virtual DID -- excluded: {preview.skippedNoMobile.slice(0, 5).join(', ')}{preview.skippedNoMobile.length > 5 ? '…' : ''}</div>}
-                {preview.skippedNoCountry?.length > 0 && <div>{preview.skippedNoCountry.length} on the team but missing a Country mapping -- excluded: {preview.skippedNoCountry.slice(0, 5).join(', ')}{preview.skippedNoCountry.length > 5 ? '…' : ''}</div>}
+                {preview.skippedNoCountry?.length > 0 && (
+                  <div>
+                    {preview.skippedNoCountry.length} on the team but missing a Country mapping -- excluded: {preview.skippedNoCountry.slice(0, 5).join(', ')}{preview.skippedNoCountry.length > 5 ? '…' : ''}
+                    <div style={{ marginTop: 6 }}>
+                      <Button variant="ghost" size="sm" onClick={runAutofillCountry} disabled={autofilling}>{autofilling ? 'Filling…' : 'Auto-fill known countries (Dubai/MBBS only)'}</Button>
+                    </div>
+                  </div>
+                )}
                 {preview.skippedInternational?.length > 0 && <div>{preview.skippedInternational.length} on the team with a non-Indian number -- blocked from Futwork: {preview.skippedInternational.slice(0, 5).join(', ')}{preview.skippedInternational.length > 5 ? '…' : ''}</div>}
               </div>
             )}
