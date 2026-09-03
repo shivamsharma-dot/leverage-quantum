@@ -1677,9 +1677,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     base.forEach(r => { if (r.spend > 0) s.add(r.source) })
     return sumKpis(base.filter(r => s.has(r.source)))
   }, [canUseAggPrev, prevAggFiltered, prevFiltered])
-  const prevCpl = prevPaidKpis.leads > 0 ? prevKpis.spend / prevPaidKpis.leads : 0
-  const prevCpql = prevPaidKpis.totalQL > 0 ? prevKpis.spend / prevPaidKpis.totalQL : 0
-  const prevCpa = prevPaidKpis.apps > 0 ? prevKpis.spend / prevPaidKpis.apps : 0
+  const prevCpl = prevPaidKpis.leads > 0 ? prevKpis.costSpend / prevPaidKpis.leads : 0
+  const prevCpql = prevPaidKpis.totalQL > 0 ? prevKpis.costSpend / prevPaidKpis.totalQL : 0
+  const prevCpa = prevPaidKpis.apps > 0 ? prevKpis.costSpend / prevPaidKpis.apps : 0
   const prevTotalQueued = prevKpis.futworkHumanQ + prevKpis.futworkAiQ + prevKpis.superbotQ
   const prevTotalFutworkQ = prevKpis.futworkHumanQ + prevKpis.futworkAiQ
   const prevEstimatedRaus = prevKpis.deposits * rauConversionFactor
@@ -2270,8 +2270,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   }
   const campaignEfficiencyMap = useMemo(() => {
     const withCpql = byCampaign
-      .filter(c => c.totalQL > 0 && c.spend > 0)
-      .map(c => ({ campaign:c.campaign, totalQL:c.totalQL, cpql:c.spend / c.totalQL, spend:c.spend }))
+      .filter(c => c.totalQL > 0 && c.costSpend > 0)
+      .map(c => ({ campaign:c.campaign, totalQL:c.totalQL, cpql:c.costSpend / c.totalQL, spend:c.spend }))
       .sort((a, b) => b.totalQL - a.totalQL)
       .slice(0, 30)
     const medCpql = median(withCpql.map(c => c.cpql))
@@ -3220,6 +3220,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const ZERO_QL_SPEND = 25000
     const SOURCES = new Set(['facebook', 'google'])
     const onPlatform = r => SOURCES.has(String(r.source || '').trim().toLowerCase())
+    // Admin-configured cost-metric exclusions (Settings > Data, src/lib/costExclusions.js)
+    // apply here too -- this report is entirely a cost-efficiency read (CPQL, budget
+    // allocation), so a campaign the admin has excluded from cost math is left out of it
+    // completely (not just its cost numerator, since this report has no separate volume
+    // metric the way the main KPI cards do).
+    const costEligible = r => onPlatform(r) && !isCostExcluded(r)
     const queuedOf = r => (r.futworkHumanQ || 0) + (r.futworkAiQ || 0) + (r.superbotQ || 0)
     const roll = rows => {
       let spend = 0, leads = 0, totalQL = 0, queued = 0
@@ -3229,7 +3235,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       }
       return { spend, leads, totalQL, queued, cpql: totalQL > 0 ? spend / totalQL : null }
     }
-    const rowsOf = src => src.reduce((acc, e) => acc.concat(e.rows.filter(onPlatform)), [])
+    const rowsOf = src => src.reduce((acc, e) => acc.concat(e.rows.filter(costEligible)), [])
     const groupBy = (rows, keyFn) => {
       const m = new Map()
       for (const r of rows) {
@@ -3242,7 +3248,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       }
       return [...m.values()].map(e => ({ ...e, cpql: e.totalQL > 0 ? e.spend / e.totalQL : null }))
     }
-    const days = daySeries.map(e => ({ key: e.key, date: e.date, label: dayLabelOf(e.date), ...roll(e.rows.filter(onPlatform)) }))
+    const days = daySeries.map(e => ({ key: e.key, date: e.date, label: dayLabelOf(e.date), ...roll(e.rows.filter(costEligible)) }))
     if (!days.length) return null
     const last = days[days.length - 1]
     const win = daySeries.slice(-WINDOW)
@@ -3328,7 +3334,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       excessTotal: breachCamp.reduce((s, c) => s + c.excess, 0),
       zeroQL: campaigns.filter(c => c.totalQL === 0 && c.spend >= ZERO_QL_SPEND).sort((a, b) => b.spend - a.spend),
     }
-  }, [daySeries])
+  }, [daySeries, isCostExcluded])
 
   // V6 report context. Capacity arithmetic, kept for observation rather than for the CEO: if
   // the 10 L a day went to the cheapest qualifying campaigns first, and no campaign were
@@ -3344,6 +3350,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const PCTL = 0.9
     const SOURCES = new Set(['facebook', 'google'])
     const onPlatform = r => SOURCES.has(String(r.source || '').trim().toLowerCase())
+    // See the matching comment in v5Report above -- same admin-configured cost exclusions,
+    // same reasoning (this report is pure cost-efficiency modelling, no separate volume metric).
+    const costEligible = r => onPlatform(r) && !isCostExcluded(r)
     const queuedOf = r => (r.futworkHumanQ || 0) + (r.futworkAiQ || 0) + (r.superbotQ || 0)
     const win = daySeries.slice(-WINDOW)
     if (!win.length) return null
@@ -3352,7 +3361,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const byCamp = new Map()
     for (const e of win) {
       for (const r of e.rows) {
-        if (!onPlatform(r)) continue
+        if (!costEligible(r)) continue
         const k = (r.campaign || '').trim()
         if (!k) continue
         const c = byCamp.get(k) || { label: k, spend: 0, totalQL: 0, queued: 0, days: new Map(), recent: false }
@@ -3394,7 +3403,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     let actSpend = 0, actQL = 0
     for (const e of daySeries.slice(-RECENT)) {
       for (const r of e.rows) {
-        if (!onPlatform(r)) continue
+        if (!costEligible(r)) continue
         actSpend += r.spend || 0
         actQL += r.totalQL || 0
       }
@@ -3413,7 +3422,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       actualCpql: actQL > 0 ? actSpend / actQL : null,
       headroomQL: modelQL - (actQL / RECENT),
     }
-  }, [daySeries])
+  }, [daySeries, isCostExcluded])
 
   const buildReportContext = useCallback(() => {
     const rate = (a, b) => (a > 0 ? (b / a) * 100 : null)
