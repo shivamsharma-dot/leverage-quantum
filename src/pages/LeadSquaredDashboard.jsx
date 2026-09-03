@@ -1685,6 +1685,22 @@ function OpportunityHistoryTab() {
     wasRunning.current = running
   }, [running, load])
 
+  // Both fetches fire together on mount/refresh; without this gate they resolved at
+  // slightly different times and rendered two separate, oddly-spaced spinners ("Loading
+  // batches" then "Loading history") stacked on the page. Wait for BOTH to settle
+  // (resolved OR errored) before rendering anything below -- one clean loading state,
+  // and every section (stats/error banners/lists) then paints its final correct
+  // content on the very first frame instead of flashing a wrong "0" in between.
+  const rowsSettled = rows !== null || !!error
+  const batchesSettled = batches !== null || !!batchesError
+  if (!rowsSettled || !batchesSettled) {
+    return (
+      <div style={{ padding: '64px 0' }}>
+        <InlineLoader label="Loading Create Opportunity history" height={160} />
+      </div>
+    )
+  }
+
   const notSetUp = !!error
   // Prefers the backend's authoritative counts (real Content-Range totals, one
   // per status -- see countOpportunityActivity) over recomputing from `rows`,
