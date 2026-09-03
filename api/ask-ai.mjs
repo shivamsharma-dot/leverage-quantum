@@ -1358,6 +1358,46 @@ async function generateGazetteProse(digest) {
   return { prose: toolUse.input, usage }
 }
 
+// V4's "What the numbers say" section, rewritten so it doesn't read the same on every
+// send -- same safety pattern as generateGazetteProse above: every fact given here is
+// already correct and pre-computed (pmReport.js's own deterministic qlTargetV4/
+// costDirectionV4/spendPace/spendVsQL sentences), and forced tool-use means the model
+// can only emit a rewritten bullets array, never freeform text carrying an invented
+// number. If this call fails for any reason, the caller (SlackReportPanel.jsx) keeps
+// the deterministic sentences it already has -- this is purely a wording upgrade.
+async function generateV4Insights(facts, meta) {
+  const schema = {
+    name: 'submit_v4_narrative',
+    description: 'Submit a short, varied rewrite of the given marketing facts for a CEO-facing Slack report.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        bullets: {
+          type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 4,
+          description: '2-4 short, standalone sentences synthesizing the given facts into a fresh "what the numbers say" narrative.',
+        },
+      },
+      required: ['bullets'],
+    },
+  }
+  const system = 'You write the short "What the numbers say" section of a CEO-facing daily marketing Slack report for Leverage Edu. You are given a JSON array of facts; every number and figure in them is already correct and pre-computed. Rules, all mandatory: (1) Never invent, round differently, or restate a number that is not present verbatim in the facts given -- if you cite a figure, copy it exactly as given, character for character. (2) You may reorder, combine, or rephrase the facts into fresh, varied prose, but you may never introduce a new number, comparison, or claim that is not already stated in the given facts. (3) Write 2-4 short, punchy sentences, one idea per sentence -- no filler, no generic corporate phrasing ("moving in the right direction", "continued momentum"). (4) Vary the sentence structure and opening words from what a template would produce -- this must not read like a fill-in-the-blank form. (5) Tone: direct, confident, a performance marketer talking to their CEO, not a report generator.'
+  const r = await fetch(ANTHROPIC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: MODEL, max_tokens: 1024, stream: false, system,
+      messages: [{ role: 'user', content: "Facts for today's report" + (meta && meta.periodLabel ? ' (' + meta.periodLabel + ')' : '') + ':\n\n' + JSON.stringify(facts, null, 1) }],
+      tools: [schema], tool_choice: { type: 'tool', name: 'submit_v4_narrative' },
+    }),
+  })
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e?.error?.message || `Anthropic API error ${r.status}`) }
+  const response = await r.json()
+  const usage = response.usage ? { inputTokens: response.usage.input_tokens || 0, outputTokens: response.usage.output_tokens || 0 } : { inputTokens: 0, outputTokens: 0 }
+  const toolUse = (response.content || []).find(b => b.type === 'tool_use' && b.name === 'submit_v4_narrative')
+  if (!toolUse) throw new Error('V4 insights call returned no structured output')
+  return { bullets: toolUse.input.bullets, usage }
+}
+
 // Assembles tonight's full edition: fetches the three desks' deterministic
 // data, gets the one short prose call, then wires everything through shared/
 // gazetteTemplate.mjs's pure render functions. Returns {html, usage}.
@@ -1583,6 +1623,23 @@ export default async function handler(req, res) {
     const result = await analyzeCampaignContribution(req.body || {})
     if (result.error) return res.status(400).json(result)
     return res.status(200).json(result)
+  }
+
+  // V4 Slack report only -- see generateV4Insights above. Gated on 'overall' access
+  // (not 'ask_ai') since this has nothing to do with the chat feature; it's the Overall
+  // dashboard's own report builder asking for a rewritten "What the numbers say" section.
+  if (req.body && req.body.mode === 'v4_insights') {
+    const dataMe = getSessionUser(req)
+    if (!dataMe) return res.status(401).json({ error: 'Not signed in' })
+    if (!canAccessDashboard(dataMe.role, 'overall')) return res.status(403).json({ error: 'Forbidden' })
+    const facts = Array.isArray(req.body.facts) ? req.body.facts.filter(f => typeof f === 'string' && f.trim()) : []
+    if (!facts.length) return res.status(400).json({ error: 'No facts provided' })
+    try {
+      const { bullets, usage } = await generateV4Insights(facts, { periodLabel: req.body.periodLabel })
+      return res.status(200).json({ bullets, usage })
+    } catch (e) {
+      return res.status(502).json({ error: e.message || 'Failed to generate insights' })
+    }
   }
 
   const me = getSessionUser(req)

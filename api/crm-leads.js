@@ -722,6 +722,90 @@ async function updateLeadSquaredOpportunity(creds, payload) {
   return { requestBody, data }
 }
 
+// ── LeadSquared Async API (apidocs.leadsquared.com/async-api/) ──────────────────────
+// A genuinely different host + auth shape from the sync API above: region-specific
+// async host, an x-api-key header, accessKey/secretKey still in the query string. Built
+// specifically to fix a real, repeated failure -- the bulk-import loop used to run
+// entirely in the browser tab, waiting on the FULL synchronous Update call per row.
+// Closing the laptop or letting the screen lock mid-run killed it, twice, with whatever
+// row it was on left as the last one that ran. Async flips this: submitting a row just
+// queues it (near-instant), and LeadSquared's own Async layer retries it up to 10 times
+// over 3 hours entirely on THEIR servers -- once a row is submitted, the browser closing
+// genuinely doesn't matter anymore, because nothing on our side is still waiting on it.
+//
+// NOT unlimited despite the general Async docs page's "free from rate limits" framing --
+// this specific endpoint's own docs list a real ceiling: 429 after 25 calls in 5 seconds
+// (5/sec). Paced under that in the bulk-submit dispatch below, not here.
+//
+// Credentials: reuses LEADSQUARED_ACCESS_KEY/SECRET_KEY (same LeadSquared account, same
+// keys) plus two NEW Vercel env vars -- LEADSQUARED_ASYNC_HOST and
+// LEADSQUARED_ASYNC_API_KEY -- obtained by a human enabling Async API in LeadSquared's
+// own UI (My Profile > Settings > API and Webhooks > Async API > toggle "Enable Async
+// API" to Yes), which then displays both. No default host: unlike the sync API's host,
+// which was already confirmed for this account, the async host is a genuinely separate
+// per-account setting with no fallback to guess at.
+function leadsquaredAsyncCreds() {
+  const accessKey = process.env.LEADSQUARED_ACCESS_KEY
+  const secretKey = process.env.LEADSQUARED_SECRET_KEY
+  const host = process.env.LEADSQUARED_ASYNC_HOST
+  const apiKey = process.env.LEADSQUARED_ASYNC_API_KEY
+  return { accessKey, secretKey, host, apiKey }
+}
+async function leadsquaredAsyncRequest(method, path, creds, body) {
+  const qs = new URLSearchParams({ accessKey: creds.accessKey, secretKey: creds.secretKey })
+  const url = creds.host.replace(/\/$/, '') + path + '?' + qs.toString()
+  const r = await fetch(url, method === 'GET' ? { headers: { 'x-api-key': creds.apiKey } } : {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': creds.apiKey },
+    body: JSON.stringify(body),
+  })
+  const text = await r.text()
+  let data
+  try { data = JSON.parse(text) } catch { data = text }
+  if (!r.ok) {
+    const msg = (data && (data.ExceptionMessage || data.Message)) || (typeof data === 'string' ? data.slice(0, 300) : JSON.stringify(data).slice(0, 300))
+    throw new Error(`LeadSquared Async ${r.status}: ${msg}`)
+  }
+  return data
+}
+
+// Same field-building rules as updateLeadSquaredOpportunity (direct-by-Id, no lead
+// matching) -- posts to the async host's /opportunity/update instead of the sync
+// /v2/OpportunityManagement.svc/Update. Response shape is a QUEUED ACCEPTANCE, not a
+// result: {Status, RequestID}, genuinely different from the sync endpoint's
+// {Status:"Success", Message:{Id}} -- the RequestID is what the Status API needs later
+// to find out what actually happened.
+async function updateLeadSquaredOpportunityAsync(creds, payload) {
+  const opportunityId = String((payload && payload.opportunityId) || '').trim()
+  if (!opportunityId) throw new Error('The real Opportunity ID is required.')
+  const fields = Array.isArray(payload && payload.fields)
+    ? payload.fields.filter(f => f && f.schemaName && String(f.value == null ? '' : f.value).trim() !== '')
+    : []
+  const requestBody = {
+    ProspectOpportunityId: opportunityId,
+    ...(payload && payload.note ? { OpportunityNote: String(payload.note) } : {}),
+    ...(fields.length ? { Fields: fields.map(f => ({ SchemaName: f.schemaName, Value: f.value })) } : {}),
+  }
+  const data = await leadsquaredAsyncRequest('POST', '/opportunity/update', creds, requestBody)
+  return { requestBody, data }
+}
+
+// The Status API doesn't take accessKey/secretKey at all (per LeadSquared's own docs) --
+// only x-api-key + RequestID. Response: {RequestID, TaskStatus:{TaskType, Status:
+// 'In-Queue'|'FAILURE'|'ERROR'|'Success', StatusReason, ...}}.
+async function getLeadSquaredOpportunityAsyncStatus(creds, requestId) {
+  const url = creds.host.replace(/\/$/, '') + '/opportunity/update/status?' + new URLSearchParams({ RequestID: requestId }).toString()
+  const r = await fetch(url, { headers: { 'x-api-key': creds.apiKey } })
+  const text = await r.text()
+  let data
+  try { data = JSON.parse(text) } catch { data = text }
+  if (!r.ok) {
+    const msg = (data && (data.ExceptionMessage || data.Message)) || (typeof data === 'string' ? data.slice(0, 300) : JSON.stringify(data).slice(0, 300))
+    throw new Error(`LeadSquared Async Status ${r.status}: ${msg}`)
+  }
+  return data
+}
+
 // Audit log for Create Opportunity -- one row per actual Capture-Opportunities call
 // (single-form submit OR a single row of a bulk import; bulk rows share a batch_label so
 // they can be grouped in the History view without forcing it). Own table, own dispatch
@@ -739,6 +823,7 @@ async function logOpportunityActivity(fields, me) {
     event_code: fields.event_code || null,
     overwrite_fields: !!fields.overwrite_fields,
     status: fields.status,
+    request_id: fields.request_id || null,
     created_opportunity_id: fields.created_opportunity_id || null,
     conflicted_opportunity_id: fields.conflicted_opportunity_id || null,
     exception_message: fields.exception_message || null,
@@ -2187,7 +2272,7 @@ async function handleLeadSquared(req, res, me) {
   // existing lead, a real new Lead too) into production LeadSquared -- same admin-only
   // treatment as team_create_user, for the same reason. update_opportunity_by_id is the
   // same treatment for the direct-by-OpportunityId endpoint (see updateLeadSquaredOpportunity).
-  const LEADSQUARED_WRITE_MODES = ['create_opportunity', 'update_opportunity_by_id']
+  const LEADSQUARED_WRITE_MODES = ['create_opportunity', 'update_opportunity_by_id', 'update_opportunity_bulk_async_submit', 'opportunity_async_check_results']
   // team_cache_lookup is deliberately its own read, NOT part of TEAM_FRAPP_MODES
   // (which is admin-only, gated below) -- the Roster tab's advanced filter needs
   // it for Region/Call Transfer, and that tab is readable by anyone with
@@ -2247,6 +2332,141 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'team_cache_lookup') return res.status(200).json(await getTeamCacheLookup())
     if (mode === 'opportunity_activity_list') return res.status(200).json(await listOpportunityActivity())
     if (mode === 'opportunity_batches_list') return res.status(200).json(await listOpportunityBatches())
+    // Own credential check -- this is a genuinely different LeadSquared host/auth (Async
+    // API), not the sync accessKey/secretKey pair `creds` below is built from, so it can't
+    // wait on that check further down.
+    if (mode === 'update_opportunity_bulk_async_submit' || mode === 'opportunity_async_check_results') {
+      const asyncCreds = leadsquaredAsyncCreds()
+      if (!asyncCreds.host || !asyncCreds.apiKey) {
+        return res.status(500).json({ error: 'LeadSquared Async API is not configured -- enable it in LeadSquared (My Profile > Settings > API and Webhooks > Async API), then set LEADSQUARED_ASYNC_HOST and LEADSQUARED_ASYNC_API_KEY in Vercel env.' })
+      }
+      if (!asyncCreds.accessKey || !asyncCreds.secretKey) {
+        return res.status(500).json({ error: 'LeadSquared is not configured -- set LEADSQUARED_ACCESS_KEY and LEADSQUARED_SECRET_KEY in Vercel env.' })
+      }
+
+      if (mode === 'update_opportunity_bulk_async_submit') {
+        const body = req.body || {}
+        const rows = Array.isArray(body.rows) ? body.rows : []
+        if (!rows.length) return res.status(200).json({ submitted: 0, total: 0, remaining: 0, batchId: body.batchId || null, continued: false })
+        const batchId = body.batchId || (Date.now() + '-' + Math.random().toString(36).slice(2))
+        const batchLabel = body.batchLabel || null
+        const eventCode = body.eventCode != null ? String(body.eventCode) : null
+
+        // A resumed/continued chunk skips any row already logged for this batch, so a
+        // manual "resume" can never double-submit a row that already went out -- the
+        // existing activity table IS the durable "have we done this one yet" record, no
+        // separate job-state table needed. The internal chain call below already knows
+        // exactly which rows are left (it sliced them itself) and skips this query via
+        // skipAlreadyLogged:false.
+        const { supabaseAdmin } = await import('../lib/auth.mjs')
+        let toProcess = rows
+        if (body.skipAlreadyLogged !== false) {
+          const seen = new Set()
+          for (let offset = 0; ; offset += 1000) {
+            const r = await supabaseAdmin(
+              'leadsquared_opportunity_activity?select=target_value&batch_id=eq.' + encodeURIComponent(batchId),
+              { headers: { Range: offset + '-' + (offset + 999) } },
+            )
+            if (!r.ok) break
+            const page = await r.json()
+            if (!Array.isArray(page) || page.length === 0) break
+            page.forEach(p => seen.add(p.target_value))
+            if (page.length < 1000) break
+          }
+          if (seen.size) toProcess = rows.filter(r => !seen.has(String(r.opportunityId)))
+        }
+
+        // maxDuration on this file is 60s (see export const maxDuration below) -- 45s
+        // leaves real margin for the continuation dispatch + response overhead rather than
+        // racing the ceiling. 230ms between submits is ~4.3/sec, safely under this
+        // endpoint's documented 25-per-5-second (5/sec) limit.
+        const START = Date.now()
+        const TIME_BUDGET_MS = 45000
+        const PACE_MS = 230
+        let submitted = 0
+        for (; submitted < toProcess.length; submitted++) {
+          if (Date.now() - START > TIME_BUDGET_MS) break
+          const row = toProcess[submitted]
+          let result = null, threw = null
+          try { result = await updateLeadSquaredOpportunityAsync(asyncCreds, row) }
+          catch (e) { threw = String((e && e.message) || e) }
+          const data = result && result.data
+          const accepted = data && data.RequestID
+          await logOpportunityActivity({
+            batch_label: batchLabel, batch_id: batchId,
+            search_by_attr: 'OpportunityID', target_value: row.opportunityId, prospect_id: null,
+            event_code: eventCode, overwrite_fields: false,
+            status: threw ? 'failed' : accepted ? 'pending' : 'failed',
+            request_id: accepted ? data.RequestID : null,
+            exception_message: threw || (data && (data.ExceptionMessage || data.Message)) || (!accepted ? 'LeadSquared did not return a RequestId.' : null),
+            request_json: result ? JSON.stringify(result.requestBody) : JSON.stringify(row),
+            response_json: data ? JSON.stringify(data) : null,
+          }, me).catch(() => {})
+          if (submitted < toProcess.length - 1) await sleepMs(PACE_MS)
+        }
+
+        const remaining = toProcess.length - submitted
+        let continued = false
+        if (remaining > 0 && process.env.CRON_SECRET) {
+          // Server calls itself with exactly the rows not yet submitted -- the browser that
+          // made the ORIGINAL request is not involved in this call at all and may already be
+          // closed. Dispatched (not awaited to full completion) so this invocation can return
+          // promptly, but given a brief moment to actually leave the process first -- Vercel
+          // can freeze a function immediately after it responds, so firing this as truly
+          // fire-and-forget risked it never being sent at all.
+          try {
+            const proto = req.headers['x-forwarded-proto'] || 'https'
+            const selfUrl = proto + '://' + req.headers.host + '/api/crm-leads?source=leadsquared&mode=update_opportunity_bulk_async_submit'
+            fetch(selfUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.CRON_SECRET },
+              body: JSON.stringify({ rows: toProcess.slice(submitted), batchId, batchLabel, eventCode, skipAlreadyLogged: false }),
+            }).catch(() => {})
+            await sleepMs(300)
+            continued = true
+          } catch (_) { /* best-effort -- a stalled chain can always be resumed manually from the UI by resubmitting the same file with the same batch */ }
+        }
+        return res.status(200).json({ submitted, total: rows.length, remaining, batchId, continued })
+      }
+
+      if (mode === 'opportunity_async_check_results') {
+        const { supabaseAdmin } = await import('../lib/auth.mjs')
+        const batchId = (req.body && req.body.batchId) || req.query.batchId || null
+        const batchFilter = batchId ? ('batch_id=eq.' + encodeURIComponent(batchId)) : null
+        let qs = 'leadsquared_opportunity_activity?select=id,request_id&status=eq.pending&request_id=not.is.null&order=created_at.asc'
+        if (batchFilter) qs += '&' + batchFilter
+        // Bounded to 200 per click -- keeps this fast and inside maxDuration; the button
+        // says how many are still pending afterward, so checking again just continues.
+        const r = await supabaseAdmin(qs, { headers: { Range: '0-199' } })
+        if (!r.ok) return res.status(502).json({ error: 'Could not read pending rows.' })
+        const pending = await r.json()
+        let resolvedSuccess = 0, resolvedFailed = 0, stillPending = 0, checked = 0
+        for (const row of pending) {
+          checked++
+          let statusData = null, threw = null
+          try { statusData = await getLeadSquaredOpportunityAsyncStatus(asyncCreds, row.request_id) }
+          catch (e) { threw = String((e && e.message) || e) }
+          const ts = statusData && statusData.TaskStatus
+          if (threw || !ts || ts.Status === 'In-Queue') { stillPending++ }
+          else if (ts.Status === 'Success') {
+            await supabaseAdmin('leadsquared_opportunity_activity?id=eq.' + row.id, {
+              method: 'PATCH', headers: { Prefer: 'return=minimal' },
+              body: JSON.stringify({ status: 'success', response_json: JSON.stringify(statusData) }),
+            })
+            resolvedSuccess++
+          } else {
+            await supabaseAdmin('leadsquared_opportunity_activity?id=eq.' + row.id, {
+              method: 'PATCH', headers: { Prefer: 'return=minimal' },
+              body: JSON.stringify({ status: 'failed', exception_message: (ts && ts.StatusReason) || 'LeadSquared reported a failure.', response_json: JSON.stringify(statusData) }),
+            })
+            resolvedFailed++
+          }
+          if (checked < pending.length) await sleepMs(230)
+        }
+        const stillPendingTotal = await countOpportunityActivity(supabaseAdmin, 'pending', batchFilter)
+        return res.status(200).json({ checked, resolvedSuccess, resolvedFailed, stillPendingTotal: stillPendingTotal == null ? stillPending : stillPendingTotal })
+      }
+    }
   } catch (e) {
     return res.status(502).json({ error: String((e && e.message) || e) })
   }
@@ -3547,6 +3767,19 @@ export default async function handler(req, res) {
     req.headers['x-cron-secret'] === process.env.CRON_SECRET
   ) {
     return handleBigQuery(req, res, { role: 'admin', email: 'cron' })
+  }
+  // Same reasoning again, for the bulk Opportunity-update chain's own continuation
+  // call -- it's the server calling itself to keep draining a large batch, and the
+  // browser that started the original import may already be closed by the time this
+  // fires. email:'system:opp-chain' (not 'cron') so a continued row's created_by in
+  // History reads differently from the admin who actually kicked the batch off.
+  if (
+    (req.query && req.query.source) === 'leadsquared' &&
+    (req.query && req.query.mode) === 'update_opportunity_bulk_async_submit' &&
+    process.env.CRON_SECRET &&
+    req.headers['x-cron-secret'] === process.env.CRON_SECRET
+  ) {
+    return handleLeadSquared(req, res, { role: 'admin', email: 'system:opp-chain' })
   }
   const { getSessionUser, canAccessDashboard } = await import('../lib/auth.mjs')
   const me = getSessionUser(req)

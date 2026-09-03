@@ -984,7 +984,12 @@ function buildV4(ctx) {
     text: [testLine(ctx), '*:bar_chart: ' + title(ctx) + '*', ctx.filterLine].filter(Boolean).join('\n'),
     fields: kpiFields(ctx), context: note,
   }
+  // The deterministic "What the numbers say" facts -- exposed raw on m1.aiDigest too,
+  // so an optional AI rewrite (see withV4AiNumbers below) has exactly these facts, and
+  // only these facts, to synthesize into fresher-sounding prose. m1.after below is the
+  // safe, always-correct fallback if that rewrite is skipped or fails.
   const ins1 = [qlTargetV4(ctx), costDirectionV4(ctx), spendPace(ctx), spendVsQL(ctx)].filter(Boolean)
+  m1.aiDigest = ins1
   if (ins1.length) m1.after = '*What the numbers say*\n' + list(ins1)
   const fresh1 = [dayPulse(ctx), cpqlStreak(ctx), dayExtreme(ctx)].filter(Boolean)
   if (fresh1.length) m1.after = (m1.after ? m1.after + '\n\n' : '') + '*:calendar: What moved since the last report*\n' + list(fresh1)
@@ -1197,4 +1202,22 @@ export function buildReportMessages(versionId, ctx, list) {
     const slot = order.indexOf(m.key)
     return { ...m, id: (v.code || String(v.id).toUpperCase()) + '-M' + (slot >= 0 ? slot + 1 : i + 1), viewCode: v.code || String(v.id).toUpperCase(), text: trim(m.text), after: trim(m.after) }
   })
+}
+
+// Splices an AI-rewritten "What the numbers say" section into message 1's after-text --
+// only ever the WORDING changes, since aiBullets is expected to be a synthesis of the
+// exact same facts already sitting on m1.aiDigest (see buildV4's own comment). The
+// "What moved since the last report" freshness section, if present, is kept byte-for-
+// byte -- this only ever touches the one block it's meant to. A safe no-op whenever
+// message 1 has no aiDigest (i.e. every version except V4) or aiBullets is empty, so a
+// skipped/failed AI call always leaves the original, always-correct messages untouched.
+export function withV4AiNumbers(messages, aiBullets) {
+  if (!Array.isArray(messages) || !messages.length) return messages
+  const m1 = messages[0]
+  if (!m1 || !Array.isArray(m1.aiDigest) || !m1.aiDigest.length) return messages
+  if (!Array.isArray(aiBullets) || !aiBullets.length) return messages
+  const freshMatch = /\*:calendar: What moved since the last report\*[\s\S]*/.exec(m1.after || '')
+  const freshnessText = freshMatch ? freshMatch[0] : ''
+  const newAfter = ['*What the numbers say*\n' + list(aiBullets), freshnessText].filter(Boolean).join('\n\n')
+  return [{ ...m1, after: newAfter }, ...messages.slice(1)]
 }

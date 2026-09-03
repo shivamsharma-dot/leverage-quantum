@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { chartPng, chartPngUrl } from '../lib/chartPng'
 import { toast } from './ToastHost'
 import PinInput from './PinInput'
-import { REPORT_VERSIONS, DEFAULT_VERSION_ID, buildReportMessages } from '../lib/pmReport'
+import { REPORT_VERSIONS, DEFAULT_VERSION_ID, buildReportMessages, withV4AiNumbers } from '../lib/pmReport'
 import { SLACK_CHANNELS, channelHandle, confirmPhrase, phraseMatches } from '../../shared/slackChannels.mjs'
 import { SlackIcon } from './icons/BrandIcons'
 
@@ -180,11 +180,42 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
 
   // Preview is built from the same builders the send uses -- there is no second
   // code path that could drift from what actually gets posted.
-  const messages = useMemo(() => {
+  const rawMessages = useMemo(() => {
     if (!open) return []
     try { return buildReportMessages(versionId, { ...buildContext(), isTest: !!DEST(target).isTest }, VERSIONS) }
     catch (e) { return [{ key:'error', label:'Preview failed', text: e.message || 'Could not build this version' }] }
   }, [open, versionId, target, buildContext])
+
+  // V4 only (rawMessages[0].aiDigest is only ever set there): asks the server to
+  // rewrite "What the numbers say" into fresher-sounding prose, off exactly the same
+  // facts already sitting on screen. Fires once per rawMessages identity (i.e. once
+  // per version/data change), never on a re-render alone. A failure leaves aiBullets
+  // null, so `messages` below just stays the deterministic, always-correct original --
+  // this is purely a wording enhancement, never a requirement to send.
+  const [aiBullets, setAiBullets] = useState(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  useEffect(() => {
+    setAiBullets(null)
+    const digest = rawMessages[0] && rawMessages[0].aiDigest
+    if (!open || !Array.isArray(digest) || !digest.length) return
+    let cancelled = false
+    setAiLoading(true)
+    fetch('/api/ask-ai', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'v4_insights', facts: digest }),
+    })
+      .then(r => (r.ok ? r.json() : Promise.reject(r)))
+      .then(d => { if (!cancelled && Array.isArray(d.bullets) && d.bullets.length) setAiBullets(d.bullets) })
+      .catch(() => { /* silent -- the deterministic sentences are already on screen */ })
+      .finally(() => { if (!cancelled) setAiLoading(false) })
+    return () => { cancelled = true }
+  }, [open, rawMessages])
+
+  // What actually renders in the preview AND what actually gets sent -- always the
+  // same array, so "read the preview, then send" stays a real guarantee even once AI
+  // rewrites message 1.
+  const messages = useMemo(() => withV4AiNumbers(rawMessages, aiBullets), [rawMessages, aiBullets])
 
   const send = async () => {
     // An ordinary channel keeps the plain two-step. A guarded one needs that
@@ -352,6 +383,9 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
                 <div style={{ fontSize:12.5, lineHeight:1.8, color:C.ink, wordBreak:'break-word' }} dangerouslySetInnerHTML={{ __html: mrkdwn(m.text) }} />
                 {Array.isArray(m.fields) && m.fields.length > 0 && <FieldGrid fields={m.fields} />}
                 {m.after && <div style={{ fontSize:12.5, lineHeight:1.8, color:C.ink, wordBreak:'break-word', marginTop:11 }} dangerouslySetInnerHTML={{ __html: mrkdwn(m.after) }} />}
+                {i === 0 && aiLoading && (
+                  <div style={{ fontSize:10.5, color:C.muted, fontStyle:'italic', marginTop:8 }}>Rewriting "What the numbers say" with AI…</div>
+                )}
                 {m.table && <TablePreview table={m.table} />}
                 {m.chart && <ChartImage chart={m.chart} />}
                 {m.context && (

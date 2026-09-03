@@ -1327,6 +1327,13 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
   const [label, setLabel] = useState('')
   const [mapping, setMapping] = useState({})
   const { running, progress } = useOppImportProgress()
+  // Direct-update (isDirect) bulk runs no longer loop row-by-row in the browser -- see
+  // submitAsync below. Own, independent state from oppImportStore's running/progress
+  // above, which stays exactly as it was for the (still-used, unchanged) Capture-based
+  // path when isDirect is false.
+  const [asyncSubmitting, setAsyncSubmitting] = useState(false)
+  const [asyncResult, setAsyncResult] = useState(null) // {submitted,total,remaining,batchId,continued}
+  const [asyncError, setAsyncError] = useState('')
 
   const searchLabel = SEARCH_BY_OPTIONS.find(o => o.v === searchByAttr)?.l || searchByAttr
   // ProspectID gets its own always-first column whenever it ISN'T already the primary match
@@ -1358,13 +1365,74 @@ function BulkOpportunityImport({ searchByAttr, eventCode, fields, overwriteField
     return { rows, skipped }
   }, [table, mapping, fields])
 
+  // Submits the whole batch to LeadSquared's Async queue in one request (or resumes one
+  // already in progress, passing the SAME batchId -- the server skips any row already
+  // logged for it, so resending the full row list again is safe, no client-side tracking
+  // of "which rows are left" needed). Once LeadSquared accepts a row it owns retrying and
+  // completing it on its own servers, so closing this tab after submitting genuinely
+  // doesn't matter anymore -- unlike the old per-row loop this replaces for direct-update
+  // (isDirect) bulk runs, which died if the screen went off mid-way.
+  const submitAsync = async existingBatchId => {
+    const batchId = existingBatchId || (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '-' + Math.random().toString(36).slice(2))
+    const batchLabel = `${label || 'pasted rows'} (${resolved.rows.length} row${resolved.rows.length === 1 ? '' : 's'})`
+    setAsyncSubmitting(true); setAsyncError('')
+    try {
+      const payloadRows = resolved.rows.map(r => ({ opportunityId: r.searchByValue, note: r.note || undefined, fields: r.fields }))
+      const d = await fetchJson(`${API}&mode=update_opportunity_bulk_async_submit`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: payloadRows, eventCode: Number(eventCode) || 12003, batchLabel, batchId }),
+      })
+      setAsyncResult(d)
+    } catch (e) {
+      setAsyncError(String(e.message || e))
+    } finally {
+      setAsyncSubmitting(false)
+    }
+  }
+
   const start = () => {
     if (!resolved.rows.length) return
     const confirmMsg = isDirect
-      ? `Update ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} directly in production LeadSquared, by Opportunity ID? No lead matching happens in this mode — any row whose id doesn't already exist will simply fail. This runs in the background and cannot be undone.`
+      ? `Submit ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} to LeadSquared for updating, by Opportunity ID? No lead matching happens in this mode — any row whose id doesn't already exist will simply fail. LeadSquared queues and completes these on its own servers once submitted, so this is safe even if you close this tab right after. This cannot be undone.`
       : `${overwriteFields ? 'Create or update' : 'Create'} ${resolved.rows.length} real Opportunit${resolved.rows.length === 1 ? 'y' : 'ies'} in production LeadSquared${overwriteFields ? ' (updating any that already exist)' : ''}? This runs in the background and cannot be undone.`
     if (!window.confirm(confirmMsg)) return
-    runOppImportInBackground(resolved.rows, label || 'pasted rows', resolved.skipped, { searchByAttr, eventCode: Number(eventCode) || 12003, overwriteFields, directOppUpdate: isDirect })
+    if (isDirect) submitAsync()
+    else runOppImportInBackground(resolved.rows, label || 'pasted rows', resolved.skipped, { searchByAttr, eventCode: Number(eventCode) || 12003, overwriteFields, directOppUpdate: isDirect })
+  }
+
+  if (asyncSubmitting || asyncResult || asyncError) {
+    return (
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 8 }}>
+          {asyncSubmitting ? 'Submitting to LeadSquared…' : asyncError ? 'Could not submit' : 'Submitted'}
+        </div>
+        {asyncSubmitting && <InlineLoader label="Submitting" height={60} />}
+        {asyncError && <ErrorNote message={asyncError} />}
+        {asyncResult && !asyncSubmitting && (
+          <>
+            <p style={{ fontSize: 12.5, color: C.text, lineHeight: 1.6, margin: '0 0 10px' }}>
+              <b>{fmtN(asyncResult.submitted)}</b> of <b>{fmtN(asyncResult.total)}</b> queued with LeadSquared just now.
+              {asyncResult.remaining > 0 && (
+                asyncResult.continued
+                  ? <> The remaining <b>{fmtN(asyncResult.remaining)}</b> will keep submitting on the server automatically — you can close this tab, there's nothing more to do here.</>
+                  : <> <b>{fmtN(asyncResult.remaining)}</b> row{asyncResult.remaining === 1 ? ' is' : 's are'} still left to submit — click "Resume this batch" below to continue (rows already submitted won't be sent twice).</>
+              )}
+            </p>
+            <p style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.6, margin: '0 0 14px' }}>
+              LeadSquared is now responsible for actually completing each update, retrying on its own if anything transient fails. Open the History tab above and click "Check results" whenever you want to see what's succeeded or failed — no need to keep watching this page.
+            </p>
+          </>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {asyncResult && !asyncSubmitting && asyncResult.remaining > 0 && !asyncResult.continued && (
+            <Button size="sm" onClick={() => submitAsync(asyncResult.batchId)}>Resume this batch</Button>
+          )}
+          {!asyncSubmitting && (asyncResult || asyncError) && (
+            <Button size="sm" variant={asyncResult && asyncResult.remaining > 0 && !asyncResult.continued ? 'secondary' : 'primary'} onClick={() => { setAsyncResult(null); setAsyncError(''); setTable(null); setMapping({}); setLabel('') }}>Start a new import</Button>
+          )}
+        </div>
+      </div>
+    )
   }
 
   if (running || progress) {
@@ -1447,6 +1515,9 @@ const OPP_STATUS_STYLE = {
   success: { color: '#178A54', bg: '#E9F8EF', label: 'Success' },
   duplicate: { color: '#1C9FD4', bg: '#E8F6FA', label: 'Duplicate' },
   failed: { color: '#1F3C84', bg: '#E8EFF9', label: 'Failed' },
+  // Async-submitted, no confirmed outcome yet -- neutral, not good or bad, so it gets its
+  // own slate tone rather than reusing green/blue/navy's real semantic meanings.
+  pending: { color: '#64748B', bg: '#F1F5F9', label: 'Pending' },
 }
 
 function OpportunityActivityRow({ row, nested }) {

@@ -65,3 +65,15 @@ ALTER TABLE public.leadsquared_opportunity_activity DISABLE ROW LEVEL SECURITY;
 -- re-run.
 ALTER TABLE public.leadsquared_opportunity_activity ADD COLUMN IF NOT EXISTS batch_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_lsq_opp_activity_batch_id ON public.leadsquared_opportunity_activity(batch_id);
+
+-- Added for the Async-submit redesign of bulk Opportunity updates (fixes the bulk import
+-- dying when the screen goes off / the tab becomes inactive -- the old design ran the
+-- whole loop in the browser, waiting on each row's full synchronous update). A row is now
+-- logged the moment it's SUBMITTED to LeadSquared's Async queue (status:'pending',
+-- request_id: the RequestID LeadSquared handed back), and later flipped to 'success' or
+-- 'failed' once "Check results" polls LeadSquared's own Status API for that request_id --
+-- so `status` now has FOUR real values: 'success' | 'duplicate' | 'failed' | 'pending'.
+-- No CHECK constraint on status (never had one), so this needed no column change beyond
+-- request_id itself. Safe to re-run.
+ALTER TABLE public.leadsquared_opportunity_activity ADD COLUMN IF NOT EXISTS request_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_lsq_opp_activity_request_id ON public.leadsquared_opportunity_activity(request_id) WHERE request_id IS NOT NULL;
