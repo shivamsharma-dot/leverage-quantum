@@ -207,19 +207,123 @@ function buildSuperTracker(ctx) {
   return messages
 }
 
-export const SUPER_TRACKER_REPORT_VERSIONS = [{
-  id: 'super_tracker_v1',
-  code: 'ST',
-  msgKeys: ['section_0', 'section_1', 'section_2', 'section_3', 'section_4', 'combined'],
-  name: 'Super Tracker — actual figures by section',
-  tagline: 'Every real tracked value, grouped by category and then by S.No. code.',
-  what: [
-    'One message per real workbook section (B2C, B2B, Fly Finance, Fly Homes), each ONE native Slack table',
-    'Grouped by category (the sheet’s own Reference Categories — Content & Community, Revenue, ...) and then by the finer S.No. code (CC01, R02, ...) within it',
-    'Only metrics flagged To be posted? = Yes',
-    'The actual value for the week you pick — defaults to the most recent one that’s genuinely filled in, not a guaranteed-blank "latest column"',
-    'A section over the row budget is truncated with a stated count; sections beyond the first 5 share one closing message',
-    'The full flattened sheet (every section/metric/week) attached as a CSV',
-  ],
-  build: buildSuperTracker,
-}]
+// ---------------------------------------------------------------------------
+// v2 -- explicit request: "for every section I need only 4 columns:
+// category, metric, business line, the week." Same one-message-per-section
+// structure, same category/S.No.-code sort order internally, same CSV
+// attachment, same overflow/truncation handling as v1 -- only the table
+// itself narrows. Dropped: the S.No. code as its own column, Owner, and the
+// week-over-week comparison entirely -- one week's real value, nothing else.
+function buildSectionMessageV2(section, idx, weekOverride, categoryOrder) {
+  const t = messageRowsFor(section, SECTION_ROW_BUDGET, weekOverride, categoryOrder)
+  const title = ':ledger: *' + escMrkdwn(section.label) + '*'
+  const staleNote = t.manual ? '' : (t.curIsLatestColumn ? '' : ' (the most recent column that’s actually filled in — newer columns exist but are still mostly blank)')
+  const sub = '_' + t.total.toLocaleString('en-IN') + ' metric(s) across ' + t.categoryCount + ' categor' + (t.categoryCount === 1 ? 'y' : 'ies')
+    + ', week of ' + (t.cur || '—') + staleNote + '._'
+  const head = ['Category', 'Metric', 'Business Line', t.cur || 'This week']
+  const body = t.shown.map(r => [r.__category, r.metric, r.businessLine || '—', weekValue(r, t.cur)])
+  const cols = head.map((_, i) => (i < 3 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
+  const tableRows = [head.map(cellBold), ...body.map(r => r.map(cellText))]
+  const overflow = t.total - t.shown.length
+  const overflowLine = overflow > 0 ? '_...and ' + overflow.toLocaleString('en-IN') + ' more metric(s) in this section — full detail is in the CSV attached to this report._' : null
+  return {
+    key: 'section_' + idx,
+    label: section.label,
+    text: [title, sub].join('\n') + (overflowLine ? '\n\n' + overflowLine : ''),
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: title } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: sub }] },
+      { type: 'table', block_id: 'st2_sec_' + idx, column_settings: cols, rows: tableRows },
+      ...(overflowLine ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: overflowLine }] }] : []),
+    ],
+    table: { columns: tableRows[0].map(cellPlain), rows: tableRows.slice(1).map(r => r.map(cellPlain)) },
+  }
+}
+
+// v2's combined closing message (sections 6+, same MAX_INDIVIDUAL_SECTIONS
+// cap as v1): rows from several different sections land in ONE shared
+// table, so a 5th column -- Section -- is kept here even though every
+// individual section message above only has 4. Without it, once Group/
+// Owner/Last-week are gone, there'd be no way left to tell a "Revenue"
+// row from B2B apart from a "Revenue" row from Fly Homes. Flagged to the
+// user as a default worth revisiting once actually seen, not a final call.
+function buildCombinedMessageV2(sections, weekOverride, categoryOrder) {
+  const title = ':ledger: *' + sections.map(s => escMrkdwn(s.label)).join(' · ') + '*'
+  const sub = '_' + sections.length + ' more section(s), each still grouped by category, in one shared table. Full detail for all of them is in the CSV attached to this report._'
+  const perSectionBudget = Math.max(8, Math.floor(SECTION_ROW_BUDGET / sections.length))
+  const head = ['Section', 'Category', 'Metric', 'Business Line', 'Week']
+  const body = []
+  const overflowNotes = []
+  sections.forEach(section => {
+    const t = messageRowsFor(section, perSectionBudget, weekOverride, categoryOrder)
+    t.shown.forEach(r => body.push([
+      section.label, r.__category, r.metric, r.businessLine || '—',
+      weekValue(r, t.cur) + ' (' + (t.cur || '—') + ')',
+    ]))
+    const overflow = t.total - t.shown.length
+    if (overflow > 0) overflowNotes.push(section.label + ': +' + overflow.toLocaleString('en-IN') + ' more')
+  })
+  const cols = head.map((_, i) => (i < 4 ? { is_wrapped: true, align: 'left' } : { align: 'right' }))
+  const tableRows = [head.map(cellBold), ...body.map(r => r.map(cellText))]
+  const overflowLine = overflowNotes.length ? '_Truncated per section — ' + overflowNotes.join(', ') + '. Full detail is in the CSV attached to this report._' : null
+  return {
+    key: 'combined',
+    label: 'More sections',
+    text: [title, sub].join('\n') + (overflowLine ? '\n\n' + overflowLine : ''),
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: title } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: sub }] },
+      { type: 'table', block_id: 'st2_combined', column_settings: cols, rows: tableRows },
+      ...(overflowLine ? [{ type: 'context', elements: [{ type: 'mrkdwn', text: overflowLine }] }] : []),
+    ],
+    table: { columns: tableRows[0].map(cellPlain), rows: tableRows.slice(1).map(r => r.map(cellPlain)) },
+  }
+}
+
+function buildSuperTrackerV2(ctx) {
+  const sections = ctx.sections || []
+  const weekOverride = ctx.weekOverride || null
+  const categoryOrder = ctx.categoryOrder || []
+  const messages = []
+  const individual = sections.slice(0, MAX_INDIVIDUAL_SECTIONS)
+  const rest = sections.slice(MAX_INDIVIDUAL_SECTIONS)
+  individual.forEach((s, i) => messages.push(buildSectionMessageV2(s, i, weekOverride, categoryOrder)))
+  if (rest.length) messages.push(buildCombinedMessageV2(rest, weekOverride, categoryOrder))
+  if (ctx.isTest && messages.length) messages[messages.length - 1].text += '\n\n_Test send._'
+  return messages
+}
+
+export const SUPER_TRACKER_REPORT_VERSIONS = [
+  {
+    id: 'super_tracker_v1',
+    code: 'ST',
+    msgKeys: ['section_0', 'section_1', 'section_2', 'section_3', 'section_4', 'combined'],
+    name: 'Super Tracker — actual figures by section',
+    tagline: 'Every real tracked value, grouped by category and then by S.No. code.',
+    what: [
+      'One message per real workbook section (B2C, B2B, Fly Finance, Fly Homes), each ONE native Slack table',
+      'Grouped by category (the sheet’s own Reference Categories — Content & Community, Revenue, ...) and then by the finer S.No. code (CC01, R02, ...) within it',
+      'Only metrics flagged To be posted? = Yes',
+      'The actual value for the week you pick — defaults to the most recent one that’s genuinely filled in, not a guaranteed-blank "latest column"',
+      'A section over the row budget is truncated with a stated count; sections beyond the first 5 share one closing message',
+      'The full flattened sheet (every section/metric/week) attached as a CSV',
+    ],
+    build: buildSuperTracker,
+  },
+  {
+    id: 'super_tracker_v2',
+    code: 'ST2',
+    msgKeys: ['section_0', 'section_1', 'section_2', 'section_3', 'section_4', 'combined'],
+    name: 'Super Tracker — condensed (4 columns)',
+    tagline: 'Category, Metric, Business Line, and this week’s value — nothing else.',
+    what: [
+      'Same one-message-per-section structure as the full version',
+      'Every table narrowed to exactly 4 columns: Category, Metric, Business Line, and the current week’s value',
+      'No S.No. code column, no Owner, no week-over-week comparison — one week’s real figure only',
+      'Only metrics flagged To be posted? = Yes, same as the full version',
+      'Sections beyond the first 5 share one closing message (adds a 5th Section column there, since rows from multiple sections are mixed into one table)',
+      'The full flattened sheet (every section/metric/week) attached as a CSV',
+    ],
+    build: buildSuperTrackerV2,
+  },
+]
