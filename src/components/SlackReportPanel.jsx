@@ -595,16 +595,24 @@ function SuperTrackerChannelPicker({
   const [tier, setTier] = useState(() => (sandboxDests.some(d => d.key === target) ? 'sandbox' : 'real'))
   useEffect(() => { if (tier === 'real' && !allChannels && !channelsLoading) loadChannels() }, [tier])
 
+  const [realOpen, setRealOpen] = useState(false)
+  // The real channels this account can post to are named once, in
+  // shared/slackChannels.mjs -- realDests already carries each one's `guarded`
+  // flag straight from there, so which channels need a PIN never has to be
+  // re-derived here; it just has to survive being collapsed into one control.
+  const realGuardedCount = realDests.filter(d => d.guarded).length
+  const selectedReal = target ? (realDests.find(d => d.key === target) || (rawDest && rawDest.key === target ? rawDest : null)) : null
+
   const accent = tier === 'sandbox' ? C.cyan : C.navy
   const tabStyle = on => ({
     flex:'1 1 0', padding:'7px 14px', fontSize:11.5, fontWeight:800, fontFamily:FONT,
     border:'none', borderRadius:8, cursor:'pointer', transition:'background .12s, color .12s',
     background: on ? accent : 'transparent', color: on ? '#fff' : C.muted,
   })
-  const card = (d, guarded) => {
+  const card = (d, guarded, afterPick) => {
     const on = target === d.key
     return (
-      <button key={d.key} onClick={() => setTarget(d.key)} style={{
+      <button key={d.key} onClick={() => { setTarget(d.key); if (afterPick) afterPick() }} style={{
         textAlign:'left', display:'flex', flexDirection:'column', gap:3, fontFamily:FONT,
         padding:'9px 11px', borderRadius:10, cursor:'pointer',
         border:`1.5px solid ${guarded ? C.navy : on ? accent : pickErr ? '#F1B5AC' : C.border}`,
@@ -625,6 +633,11 @@ function SuperTrackerChannelPicker({
     )
   }
   const grid = kids => <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:7 }}>{kids}</div>
+  const Chevron = ({ open }) => (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink:0, transform: open ? 'rotate(180deg)' : 'none', transition:'transform .15s' }} aria-hidden="true">
+      <path d="M2 3.5L5 6.5L8 3.5" stroke={C.muted} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
 
   return (
     <div>
@@ -640,38 +653,73 @@ function SuperTrackerChannelPicker({
 
       {tier === 'real' && (
         <>
-          {grid(realDests.map(d => card(d, d.guarded)))}
-          <div style={{ marginTop:10 }}>
-            <div style={{ fontSize:10, fontWeight:800, letterSpacing:'0.07em', textTransform:'uppercase', color:C.muted, marginBottom:5 }}>
-              Or search any channel the bot is in
-            </div>
-            <input
-              value={channelSearch} onChange={e => setChannelSearch(e.target.value)}
-              placeholder="Start typing a channel name…" autoComplete="off" spellCheck={false}
-              style={{ width:'100%', boxSizing:'border-box', border:`1px solid ${C.border}`, borderRadius:8, padding:'7px 10px', fontSize:12, fontFamily:FONT, outline:'none' }}
-            />
-            <div style={{ maxHeight:150, overflowY:'auto', marginTop:6 }}>
-              {channelsLoading && <div style={{ fontSize:11, color:C.muted, padding:'5px 4px' }}>Loading…</div>}
-              {channelsErr && (
-                <div style={{ fontSize:11, color:'#B42318', padding:'5px 4px' }}>
-                  {channelsErr} <button onClick={loadChannels} style={{ background:'none', border:'none', color:C.navy, cursor:'pointer', fontWeight:700, fontSize:11, fontFamily:FONT }}>Retry</button>
-                </div>
+          <button onClick={() => setRealOpen(o => !o)} style={{
+            display:'flex', alignItems:'center', gap:8, width:'100%', textAlign:'left', fontFamily:FONT,
+            padding:'10px 12px', borderRadius:10, cursor:'pointer',
+            border:`1.5px solid ${selectedReal ? accent : C.border}`,
+            background: selectedReal ? accent + '0D' : '#fff',
+          }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6, flex:1, minWidth:0, flexWrap:'wrap' }}>
+              {selectedReal ? (
+                <>
+                  {selectedReal.guarded && <Lock color={C.navy} />}
+                  <span style={{ fontSize:11.5, fontWeight:700, fontFamily:MONO, color:accent }}>{selectedReal.label}</span>
+                  <span style={{ fontSize:12, fontWeight:800, color:C.green }}>{'✓'}</span>
+                  {selectedReal.guarded && (
+                    <span style={{ fontSize:8.5, fontWeight:800, letterSpacing:'0.06em', textTransform:'uppercase', color:'#fff', background:C.navy, padding:'2px 6px', borderRadius:4 }}>
+                      Locked &middot; PIN
+                    </span>
+                  )}
+                  <span style={{ marginLeft:8, fontSize:11, fontWeight:700, color:C.blue }}>Change</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize:11.5, fontWeight:700, color:C.ink }}>Browse channels</span>
+                  <span style={{ fontSize:10.5, color:C.muted }}>
+                    {realDests.length} named{realGuardedCount ? ' — ' + realGuardedCount + ' locked with a PIN' : ''}, plus any the bot’s in
+                  </span>
+                </>
               )}
-              {allChannels && channelSearch.trim() && allChannels
-                .filter(c => c.name.toLowerCase().includes(channelSearch.trim().toLowerCase()))
-                .slice(0, 8)
-                .map(c => (
-                  <button key={c.id} onClick={() => pickRawChannel(c)} style={{ display:'flex', alignItems:'center', gap:7, width:'100%', textAlign:'left', padding:'6px 8px', border:'none', background:'none', cursor:'pointer', borderRadius:7, fontFamily:FONT }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#F1F5F9')} onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                    <span style={{ color:C.muted, fontWeight:700 }}>#</span>
-                    <span style={{ flex:1, fontSize:11.5, fontFamily:MONO, color:C.ink }}>{c.name}</span>
-                    {c.isPrivate && <span style={{ fontSize:9.5, fontWeight:700, color:C.muted }}>private</span>}
-                    {!c.isMember && <span style={{ fontSize:9.5, fontWeight:700, color:'#B42318' }}>not invited</span>}
-                  </button>
-                ))}
-              {rawDest && <div style={{ marginTop:5 }}>{card(rawDest, false)}</div>}
             </div>
-          </div>
+            <Chevron open={realOpen} />
+          </button>
+
+          {realOpen && (
+            <div style={{ marginTop:7, padding:'10px 11px', borderRadius:10, border:`1px solid ${C.border}`, background:'#FBFCFD' }}>
+              {grid(realDests.map(d => card(d, d.guarded, () => setRealOpen(false))))}
+              <div style={{ marginTop:10 }}>
+                <div style={{ fontSize:10, fontWeight:800, letterSpacing:'0.07em', textTransform:'uppercase', color:C.muted, marginBottom:5 }}>
+                  Or search any channel the bot is in
+                </div>
+                <input
+                  value={channelSearch} onChange={e => setChannelSearch(e.target.value)}
+                  placeholder="Start typing a channel name…" autoComplete="off" spellCheck={false}
+                  style={{ width:'100%', boxSizing:'border-box', border:`1px solid ${C.border}`, borderRadius:8, padding:'7px 10px', fontSize:12, fontFamily:FONT, outline:'none' }}
+                />
+                <div style={{ maxHeight:150, overflowY:'auto', marginTop:6 }}>
+                  {channelsLoading && <div style={{ fontSize:11, color:C.muted, padding:'5px 4px' }}>Loading…</div>}
+                  {channelsErr && (
+                    <div style={{ fontSize:11, color:'#B42318', padding:'5px 4px' }}>
+                      {channelsErr} <button onClick={loadChannels} style={{ background:'none', border:'none', color:C.navy, cursor:'pointer', fontWeight:700, fontSize:11, fontFamily:FONT }}>Retry</button>
+                    </div>
+                  )}
+                  {allChannels && channelSearch.trim() && allChannels
+                    .filter(c => c.name.toLowerCase().includes(channelSearch.trim().toLowerCase()))
+                    .slice(0, 8)
+                    .map(c => (
+                      <button key={c.id} onClick={() => { pickRawChannel(c); setRealOpen(false) }} style={{ display:'flex', alignItems:'center', gap:7, width:'100%', textAlign:'left', padding:'6px 8px', border:'none', background:'none', cursor:'pointer', borderRadius:7, fontFamily:FONT }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#F1F5F9')} onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                        <span style={{ color:C.muted, fontWeight:700 }}>#</span>
+                        <span style={{ flex:1, fontSize:11.5, fontFamily:MONO, color:C.ink }}>{c.name}</span>
+                        {c.isPrivate && <span style={{ fontSize:9.5, fontWeight:700, color:C.muted }}>private</span>}
+                        {!c.isMember && <span style={{ fontSize:9.5, fontWeight:700, color:'#B42318' }}>not invited</span>}
+                      </button>
+                    ))}
+                  {rawDest && <div style={{ marginTop:5 }}>{card(rawDest, false, () => setRealOpen(false))}</div>}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
