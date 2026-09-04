@@ -1,0 +1,49 @@
+name: Frapp Coaches Push
+
+# Keeps Futwork's call-routing list current automatically, on top of the
+# manual "Push to Frapp" button on Team Mapping > Connectors (which keeps
+# working exactly as before -- explicit instruction: "apart from manual
+# button, it should work automatically"). Calls the exact same team_frapp_push
+# mode buildFrappCoachList/frappPush in api/crm-leads.js already back, so a
+# scheduled run and a manual click produce byte-identical eligibility/Country
+# logic -- nothing new to keep in sync.
+#
+# Every 3 hours -- frequent enough that someone newly Active/eligible or
+# someone who went inactive shows up in Futwork's real routing list the same
+# day, without hammering LeadSquared. The push itself is a full-list
+# overwrite (see the panel's own note: a departed coach is simply absent from
+# the next payload, no separate removal signal needed), so re-running it on a
+# schedule is always safe -- it can never "double push" or leave a stale
+# partial state.
+#
+# "Sync coach directory" (the 6-8 minute full Virtual DID re-sweep, for the
+# one edge case self-heal can't see -- someone switching teams while staying
+# Active) stays manual on purpose -- not run here, deliberately out of scope
+# for this automation.
+#
+# Requires the CRON_SECRET repository Actions secret (already used by every
+# other scheduled sync/report in this repo) -- nothing new to configure.
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'   # every 3 hours
+  workflow_dispatch:
+
+concurrency:
+  group: frapp-coaches-push
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Push current coaches to Frapp
+        run: |
+          BODY=$(curl -s -w "\n%{http_code}" -X GET "https://quantum.leverageedu.com/api/crm-leads?source=leadsquared&mode=team_frapp_push" -H "x-cron-secret: ${{ secrets.CRON_SECRET }}")
+          STATUS=$(echo "$BODY" | tail -n1)
+          JSON=$(echo "$BODY" | sed '$d')
+          echo "HTTP Status: $STATUS"
+          echo "Response: $JSON"
+          if [ "$STATUS" != "200" ]; then echo "Failed with status $STATUS"; exit 1; fi
+          echo "Frapp coaches push complete."

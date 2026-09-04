@@ -3896,6 +3896,19 @@ export default async function handler(req, res) {
   ) {
     return handleBigQuery(req, res, { role: 'admin', email: 'cron' })
   }
+  // Same reasoning, for the scheduled Frapp coaches push -- explicit
+  // instruction: "apart from manual button, it should work automatically."
+  // The manual "Push to Frapp" button on Connectors keeps working exactly as
+  // before; this just lets a GitHub Actions cron reach the identical
+  // frappPush() with no human logged in to send a cookie for.
+  if (
+    (req.query && req.query.source) === 'leadsquared' &&
+    (req.query && req.query.mode) === 'team_frapp_push' &&
+    process.env.CRON_SECRET &&
+    req.headers['x-cron-secret'] === process.env.CRON_SECRET
+  ) {
+    return handleLeadSquared(req, res, { role: 'admin', email: 'cron' })
+  }
   // Same reasoning again, for the bulk Opportunity-update chain's own continuation
   // call -- it's the server calling itself to keep draining a large batch, and the
   // browser that started the original import may already be closed by the time this
