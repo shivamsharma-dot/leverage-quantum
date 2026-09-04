@@ -8,13 +8,19 @@ name: Frapp Coaches Push
 # scheduled run and a manual click produce byte-identical eligibility/Country
 # logic -- nothing new to keep in sync.
 #
-# Every 3 hours -- frequent enough that someone newly Active/eligible or
-# someone who went inactive shows up in Futwork's real routing list the same
-# day, without hammering LeadSquared. The push itself is a full-list
-# overwrite (see the panel's own note: a departed coach is simply absent from
-# the next payload, no separate removal signal needed), so re-running it on a
-# schedule is always safe -- it can never "double push" or leave a stale
-# partial state.
+# Every 15 minutes -- explicit instruction: "keep it real-time... if someone
+# removed from here, should be removed from there." True real-time isn't
+# achievable regardless of mechanism: LeadSquared has no webhook, this app
+# only ever POLLS its current state, so the fastest a removal/change can
+# reach Frapp is bounded by how often we poll -- not by anything on our own
+# side. 15 minutes is the shortest interval GitHub Actions' `schedule`
+# trigger reliably honours (5-minute crons are documented to silently skip or
+# lag under GitHub's own load, especially on public runners); *:dispatch is
+# also here for an on-demand run from the Actions tab. The push itself is a
+# full-list overwrite (see the panel's own note: a departed coach is simply
+# absent from the next payload, no separate removal signal needed), so
+# re-running it this often is always safe -- it can never "double push" or
+# leave a stale partial state.
 #
 # "Sync coach directory" (the 6-8 minute full Virtual DID re-sweep, for the
 # one edge case self-heal can't see -- someone switching teams while staying
@@ -26,7 +32,7 @@ name: Frapp Coaches Push
 
 on:
   schedule:
-    - cron: '0 */3 * * *'   # every 3 hours
+    - cron: '*/15 * * * *'   # every 15 minutes
   workflow_dispatch:
 
 concurrency:
