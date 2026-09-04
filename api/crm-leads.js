@@ -2347,7 +2347,18 @@ async function handleLeadSquared(req, res, me) {
   // back the Frapp coaches push -- both admin-only end to end (see below),
   // same treatment as the connector config modes, since both involve either
   // writing to an external system or reading data scoped for that push.
-  const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_list', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push', 'team_centre_options']
+  // team_frapp_push_auto is the LeadSquared-side safety net (see the
+  // x-lq-webhook-secret bypass at the bottom of this file): LeadSquared's own
+  // User Automation has no event trigger for a User being created, deactivated,
+  // or moved between Sales Groups -- only clock triggers ("Start of a Workday",
+  // "End of a Workday") -- confirmed 2026-09-04 against their own docs
+  // (apidocs.leadsquared.com/create-a-webhook, help.leadsquared.com/triggers-user-automation).
+  // So a change made directly in LeadSquared, with no corresponding save on
+  // this page, can never be instant on either side. This mode is what a User
+  // Automation rule (configured once, in LeadSquared's own UI) calls twice a
+  // day to close that gap without anyone opening Quantum or editing anything --
+  // it runs the exact same frappPush() as the real-time and manual paths.
+  const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_list', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push', 'team_frapp_push_auto', 'team_centre_options']
   // Both admin-only, same reasoning as TEAM_FRAPP_MODES: team_create_user writes
   // a real user into production LeadSquared (plus, optionally, a permission
   // template) -- team_permission_templates is just a read, but has no legitimate
@@ -2574,7 +2585,11 @@ async function handleLeadSquared(req, res, me) {
       return res.status(200).json({ details: await fetchLeadSquaredUserDetails(creds, ids, byId) })
     }
     if (mode === 'team_frapp_preview') return res.status(200).json(await buildFrappCoachList(creds))
-    if (mode === 'team_frapp_push') return res.status(200).json(await frappPush(creds, me))
+    // team_frapp_push_auto is byte-identical to team_frapp_push -- same
+    // function, same logging -- only the AUTH path differs (see the
+    // x-lq-webhook-secret bypass below). Kept as one shared branch rather
+    // than two, so there is only ever one place that can drift.
+    if (mode === 'team_frapp_push' || mode === 'team_frapp_push_auto') return res.status(200).json(await frappPush(creds, me))
     if (mode === 'team_permission_templates') return res.status(200).json({ templates: await fetchLeadSquaredPermissionTemplates(creds) })
     if (mode === 'team_create_user') {
       const result = await createLeadSquaredUser(creds, req.body || {})
@@ -3959,6 +3974,29 @@ export default async function handler(req, res) {
   // there is no external scheduler left to authenticate here. The manual
   // "Push to Frapp" button on Connectors still goes through the normal
   // getSessionUser gate below, unchanged.
+  //
+  // What IS still let through, below: LeadSquared's own User Automation
+  // calling team_frapp_push_auto. This is not our scheduler -- LeadSquared has
+  // no event trigger for a User being created/deactivated/moved between Sales
+  // Groups (confirmed against their own docs: only "Start of a Workday" /
+  // "End of a Workday" clock triggers exist for User Automation), so a change
+  // made directly in LeadSquared, with no corresponding save on this page, can
+  // never be instant either way. Rather than build a poll of our own to catch
+  // that gap, LeadSquared's own Automation calls this endpoint twice a day and
+  // it runs the exact same frappPush() every other path already uses.
+  // Deliberately its own secret (LEADSQUARED_WEBHOOK_SECRET), not
+  // CRON_SECRET -- this is configured on LeadSquared's side, in a User
+  // Automation's Webhook action's own "Custom Headers" field, not in any of
+  // our own infrastructure, so it should be rotatable independently of every
+  // GitHub Actions workflow that still uses CRON_SECRET.
+  if (
+    (req.query && req.query.source) === 'leadsquared' &&
+    (req.query && req.query.mode) === 'team_frapp_push_auto' &&
+    process.env.LEADSQUARED_WEBHOOK_SECRET &&
+    req.headers['x-lq-webhook-secret'] === process.env.LEADSQUARED_WEBHOOK_SECRET
+  ) {
+    return handleLeadSquared(req, res, { role: 'admin', email: 'leadsquared-automation' })
+  }
   // Same reasoning again, for the bulk Opportunity-update chain's own continuation
   // call -- it's the server calling itself to keep draining a large batch, and the
   // browser that started the original import may already be closed by the time this

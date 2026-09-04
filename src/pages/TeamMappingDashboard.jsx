@@ -3162,6 +3162,19 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
         <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>
           A person who leaves the team or goes inactive is simply left out of the next push, not sent with a "removed" flag -- Frapp confirmed this API fully replaces their whole coach/call-routing list on every request, so leaving them out is the correct way to remove them.
         </div>
+
+        <div style={{ border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px', marginTop: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>3. Twice-daily safety net for LeadSquared-only changes</div>
+          <div style={{ fontSize: 12.5, color: C.text, marginBottom: 8 }}>
+            Everything above pushes the instant it happens -- but only for changes made <em>on this page</em>. If someone is added, deactivated, or moved between Sales Groups directly in LeadSquared, with no matching action here, nothing above can catch it (LeadSquared has no webhook for that -- confirmed against their own docs). This closes that one gap: set up a LeadSquared <strong>User Automation</strong> once, with a <strong>Webhook</strong> action, triggered on <strong>"Start of a Workday"</strong> and <strong>"End of a Workday"</strong> (the only two User-Automation triggers LeadSquared offers), pointed at the URL below. It runs the exact same push as everything else on this page -- no one has to open Quantum or edit anything for it to happen.
+          </div>
+          <ConnectorField label="Webhook URL (for the LeadSquared Automation's Webhook action)">
+            <input readOnly style={{ ...inputStyle, fontSize: 11 }} value={`${window.location.origin}/api/crm-leads?source=leadsquared&mode=team_frapp_push_auto`} onClick={e => e.target.select()} />
+          </ConnectorField>
+          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 8 }}>
+            In that same Webhook action, add a Custom Header named <code>x-lq-webhook-secret</code>, value = whatever is set as <code>LEADSQUARED_WEBHOOK_SECRET</code> in Vercel env (set that env var first if it isn't there yet -- generate any long random string). This isn't wired up until both the LeadSquared automation and the Vercel env var exist.
+          </div>
+        </div>
       </div>
     </Card>
   )
