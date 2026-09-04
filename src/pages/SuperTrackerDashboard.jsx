@@ -8,7 +8,6 @@ import { SlackIcon } from '../components/icons/BrandIcons'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
 import { C, FONT, Card } from '../ui/dashboardKit'
 import { SUPER_TRACKER_REPORT_VERSIONS } from '../lib/superTrackerReport'
-import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 
 // Super Tracker -- a real PRIVATE Google Sheet (company-wide B2C/B2B/Fly
 // Finance/Fly Homes metrics), read server-side via lib/superTracker.mjs (a
@@ -222,17 +221,15 @@ export default function SuperTrackerDashboard() {
     [sections, categoryOrder, slackWeekOverride]
   )
 
-  // Screenshots whatever table is actually on screen (current section, current
-  // view mode) for the report's own visual attachment, and attaches the FULL
-  // flattened CSV (every section/metric/week) regardless -- so a reader who
-  // wants the whole picture always has it, even if the image only shows one
-  // section's snapshot.
-  const captureSlackFiles = useCallback(async () => {
-    await nextPaint()
-    const node = tableRef.current
-    const shot = node ? await captureNodePng(node) : null
-    return { pngBase64: shot ? shot.base64 : null, pixelRatio: shot ? shot.pixelRatio : null, csv: rowsToCsv(exportCols, exportRows) }
-  }, [exportCols, exportRows])
+  // Deliberately a no-op -- explicit instruction: the extra "PM summary
+  // table" PNG (a screenshot of whatever section happens to be on screen)
+  // plus a "PM summary (full data)" CSV used to get uploaded as two trailing
+  // Slack files after every send, on top of the real per-section report
+  // messages superTrackerReport.js already builds. Removed for both report
+  // versions at once, since captureFiles is wired once at the panel level
+  // (SlackReportPanel calls this unconditionally, so it has to keep
+  // returning an object shape it accepts -- just with nothing to upload).
+  const captureSlackFiles = useCallback(async () => ({ pngBase64: null, pixelRatio: null, csv: null }), [])
 
   if (loading) {
     return (
