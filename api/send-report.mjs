@@ -229,13 +229,21 @@ function getTestChannels(cfg) {
   return list
 }
 
-// target is either a bare channel id from shared/slackChannels.mjs, or 'test',
-// or 'test:<id>' to pick a SPECIFIC configured test channel by id.
+// target is either a bare channel id from shared/slackChannels.mjs, 'test',
+// 'test:<id>' to pick a SPECIFIC configured test channel by id, or
+// 'raw:<channelId>' -- a channel picked ad hoc from Send to Slack's own
+// "Browse channels" list (backed by slack_channel_list -> conversations.list)
+// rather than one of the fixed named destinations above. 'raw:' keeps the
+// ORIGINAL casing for the id, unlike every other branch here -- a real Slack
+// channel id (e.g. C0B52AJS0TU) is case-sensitive.
 function normaliseTarget(target) {
-  const t = String(target || '').toLowerCase()
+  const raw = String(target || '')
+  const t = raw.toLowerCase()
   if (t === 'test') return { family: 'test', id: null }
   const m = t.match(/^test:(.+)$/)
   if (m) return { family: 'test', id: m[1] }
+  const rm = raw.match(/^raw:(.+)$/i)
+  if (rm) return { family: 'raw', id: rm[1] }
   if (SLACK_TARGETS[t]) return { family: t, id: null }
   return { family: DEFAULT_CHANNEL_ID, id: null }
 }
@@ -257,6 +265,27 @@ function resolveSlackTarget(cfg, target, opts) {
       mode: 'webhook', key: 'test', id: entry.id, url, label: entry.name, isTest: true,
       missing: url ? undefined : `Slack ${entry.name} is not connected -- add SLACK_BOT_TOKEN plus a channel, or a webhook URL, in Settings > Reports.`,
     }
+  }
+
+  if (family === 'raw') {
+    const botToken = process.env.SLACK_BOT_TOKEN
+    if (!botToken) return { mode: 'bot', key: 'raw', isTest: false, missing: 'Browse Channel needs SLACK_BOT_TOKEN -- an Incoming Webhook cannot post to an ad-hoc channel.' }
+    // A channel picked from Browse can never be one of the two CEO-guarded
+    // rooms in disguise -- resolve each guarded destination's REAL channel
+    // value the exact same way the guarded branch below does, and refuse if
+    // the raw id matches, so nobody skips the PIN gate just by picking the
+    // CEO channel out of the browse list instead of its own named chip.
+    const guardedHit = SLACK_CHANNELS.find(function (c) {
+      if (!c.guarded) return false
+      const real = cfg[c.pref] || process.env[c.env] || (c.altPref ? (cfg[c.altPref] || process.env[c.altEnv]) : '') || c.fallback || ''
+      const realId = String(real).replace(/^#/, '')
+      return realId && (realId === id || realId === c.name)
+    })
+    if (guardedHit) {
+      return { mode: 'bot', key: family, label: guardedHit.label, isTest: false, guarded: true, missing: '#' + guardedHit.name + ' is only reachable from its own chip, after the PIN check.' }
+    }
+    const rawLabel = '#' + ((opts && opts.rawLabel) || id)
+    return { mode: 'bot', key: 'raw:' + id, token: botToken, channel: id, label: rawLabel, isTest: false, guarded: false }
   }
 
   const spec = SLACK_TARGETS[family]
@@ -2412,7 +2441,7 @@ async function handleSlackReport(req, res) {
 
   // Same per-page gate as every other Slack path: a real PAGE_LIST id from the
   // caller, and admin-only when an older caller sends none.
-  const { dashboardId, slackTarget, filename, versionId, messages, pngBase64, csv, pixelRatio, rowCount, ceoPin, confirm } = req.body || {}
+  const { dashboardId, slackTarget, filename, versionId, messages, pngBase64, csv, pixelRatio, rowCount, ceoPin, confirm, rawChannelName } = req.body || {}
   if (!dashboardId ? me.role !== 'admin' : !canAccessDashboard(me.role, dashboardId)) {
     return res.status(403).json({ error: 'Forbidden' })
   }
@@ -2449,12 +2478,16 @@ async function handleSlackReport(req, res) {
   }
 
   const cfg = await getReportConfig()
-  const hook = resolveSlackTarget(cfg, slackTarget, { allowGuarded: wantsCeo })
+  const hook = resolveSlackTarget(cfg, slackTarget, { allowGuarded: wantsCeo, rawLabel: rawChannelName })
   if (hook.mode !== 'bot' || !hook.channel) {
     return res.status(400).json({ error: 'Posting a report needs SLACK_BOT_TOKEN plus a channel (files:write) -- an Incoming Webhook cannot upload files.' })
   }
 
-  const logType = 'slack pm report ' + (versionId || 'v7') + (hook.key === 'test' ? ' (test)' : ' (' + channelHandle(hook.key) + ')')
+  // channelHandle only knows the fixed shared/slackChannels.mjs list -- a
+  // 'raw:' key (Browse Channel) already carries its own real label straight
+  // off hook.label, so prefer that whenever it's actually a '#name'.
+  const targetLabel = hook.label && hook.label.startsWith('#') ? hook.label : channelHandle(hook.key)
+  const logType = 'slack pm report ' + (versionId || 'v7') + (hook.key === 'test' ? ' (test)' : ' (' + targetLabel + ')')
   try {
     // Sequential on purpose: Slack orders by arrival, so posting in parallel would
     // let message 3 land above message 1.

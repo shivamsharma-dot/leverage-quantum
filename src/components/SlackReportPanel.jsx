@@ -114,7 +114,40 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
   const [lastSent, setLastSent] = useState({})
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 940)
 
-  useEffect(() => { if (open) { setLastSent(readLastSent()); setArmed(false); setTarget('') } }, [open])
+  // Browse Channel -- any channel the bot is actually in, not just the fixed
+  // named destinations below. Same admin-only endpoint Settings > Reports >
+  // Slack already uses (slack_channel_list -> conversations.list). Picking
+  // one sets an AD-HOC target ('raw:<id>') -- never saved anywhere, just used
+  // for this one send -- and the server independently refuses it if it
+  // happens to resolve to one of the two CEO-guarded channels (see
+  // resolveSlackTarget's own check in api/send-report.mjs), so this can never
+  // be used to reach a locked room without the PIN.
+  const [browseOpen, setBrowseOpen] = useState(false)
+  const [allChannels, setAllChannels] = useState(null)
+  const [channelsErr, setChannelsErr] = useState('')
+  const [channelsLoading, setChannelsLoading] = useState(false)
+  const [channelSearch, setChannelSearch] = useState('')
+  const [rawDest, setRawDest] = useState(null)
+
+  const loadChannels = () => {
+    setChannelsLoading(true); setChannelsErr('')
+    fetch('/api/send-report?type=slack_channel_list', { credentials: 'include' })
+      .then(r => r.json().then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => { if (ok) setAllChannels(j.channels); else setChannelsErr(j.error || 'Could not load channels') })
+      .catch(e => setChannelsErr(e.message))
+      .finally(() => setChannelsLoading(false))
+  }
+  const openBrowse = () => { setBrowseOpen(true); if (!allChannels) loadChannels() }
+  const pickRawChannel = c => {
+    const key = 'raw:' + c.id
+    setRawDest({ key, label: '#' + c.name, name: c.name, guarded: false, isTest: false, reads: 'Picked from Browse channels — not saved, just for this send.' })
+    setTarget(key)
+    setBrowseOpen(false)
+  }
+
+  useEffect(() => {
+    if (open) { setLastSent(readLastSent()); setArmed(false); setTarget(''); setRawDest(null); setBrowseOpen(false); setChannelSearch('') }
+  }, [open])
   // Named test channels are admin-configured in Settings > Reports > Slack. Loaded
   // fresh each time the panel opens -- channel ids/names only, never a credential.
   useEffect(() => {
@@ -148,7 +181,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
     key: c.id, label: c.label, name: c.name, guarded: !!c.guarded, isTest: false, reads: c.reads,
   })), [])
   const DESTS = useMemo(() => sandboxDests.concat(realDests), [sandboxDests, realDests])
-  const DEST = k => DESTS.find(d => d.key === k) || NO_DEST
+  const DEST = k => (rawDest && rawDest.key === k) ? rawDest : (DESTS.find(d => d.key === k) || NO_DEST)
 
   // The PIN status is read fresh every time a locked channel is picked. It never
   // carries the PIN or the hash, only whether one is set and whether we are
@@ -243,6 +276,7 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'slack_report', dashboardId, slackTarget, filename, versionId, rowCount,
+          rawChannelName: rawDest ? rawDest.name : undefined,
         confirm: spec.guarded ? phrase.trim() : undefined,
         ceoPin: spec.guarded ? pin : undefined,
           messages: messages.map(x => ({
@@ -436,6 +470,50 @@ export default function SlackReportPanel({ open, onClose, buildContext, captureF
                   )
                 })}
               </div>
+            </div>
+            <div>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+                <div style={{ ...LABEL, marginBottom:0, color: pickErr ? '#B42318' : C.muted }}>Any channel the bot is in</div>
+                <button onClick={() => (browseOpen ? setBrowseOpen(false) : openBrowse())} style={{ border:'none', background:'none', cursor:'pointer', fontSize:11, fontWeight:800, color:C.blue, padding:0, fontFamily:FONT }}>
+                  {browseOpen ? 'Close' : 'Browse channels'}
+                </button>
+              </div>
+              {rawDest && !browseOpen && (
+                <button onClick={() => setTarget(rawDest.key)} style={chip(target === rawDest.key, false, pickErr)}>
+                  <span style={{ fontSize:11.5, fontWeight:700, fontFamily:MONO }}>{rawDest.label}</span>
+                </button>
+              )}
+              {browseOpen && (
+                <div style={{ border:`1px solid ${C.border}`, borderRadius:10, padding:'8px 9px', background:'#fff' }}>
+                  <input
+                    value={channelSearch} onChange={e => setChannelSearch(e.target.value)}
+                    placeholder="Search channels…" autoFocus autoComplete="off" spellCheck={false}
+                    style={{ width:'100%', boxSizing:'border-box', border:`1px solid ${C.border}`, borderRadius:7, padding:'6px 9px', fontSize:12, fontFamily:FONT, marginBottom:7, outline:'none' }}
+                  />
+                  <div style={{ maxHeight:200, overflowY:'auto' }}>
+                    {channelsLoading && <div style={{ fontSize:11.5, color:C.muted, padding:'6px 4px' }}>Loading…</div>}
+                    {channelsErr && (
+                      <div style={{ fontSize:11.5, color:'#B42318', padding:'6px 4px' }}>
+                        {channelsErr} <button onClick={loadChannels} style={{ background:'none', border:'none', color:C.navy, cursor:'pointer', fontWeight:700, fontSize:11.5, fontFamily:FONT }}>Retry</button>
+                      </div>
+                    )}
+                    {allChannels && allChannels
+                      .filter(c => c.name.toLowerCase().includes(channelSearch.trim().toLowerCase()))
+                      .map(c => (
+                        <button key={c.id} onClick={() => pickRawChannel(c)} style={{ display:'flex', alignItems:'center', gap:7, width:'100%', textAlign:'left', padding:'6px 8px', border:'none', background:'none', cursor:'pointer', borderRadius:7 }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#F1F5F9')} onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                          <span style={{ color:C.muted, fontWeight:700 }}>#</span>
+                          <span style={{ flex:1, fontSize:11.5, fontFamily:MONO, color:C.ink }}>{c.name}</span>
+                          {c.isPrivate && <span style={{ fontSize:9.5, fontWeight:700, color:C.muted }}>private</span>}
+                          {!c.isMember && <span style={{ fontSize:9.5, fontWeight:700, color:'#B42318' }}>not invited</span>}
+                        </button>
+                      ))}
+                    {allChannels && !allChannels.filter(c => c.name.toLowerCase().includes(channelSearch.trim().toLowerCase())).length && !channelsLoading && (
+                      <div style={{ fontSize:11.5, color:C.muted, padding:'6px 4px' }}>No match.</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{ display:'flex', alignItems:'baseline', gap:6, fontSize:11, lineHeight:1.5, flexWrap:'wrap' }}>
               <span style={{ color: pickErr ? '#B42318' : (DEST(target).guarded ? C.navy : C.muted), fontWeight: (pickErr || DEST(target).guarded) ? 700 : 500 }}>
