@@ -1734,7 +1734,7 @@ async function autoHealMissingCoaches(creds, users, missing) {
 async function buildFrappCoachList(creds) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
   const { classifyPhoneRegion } = await import('../shared/didRegion.mjs')
-  const { classifyFutworkProject, onlineSubBucket } = await import('../shared/futworkProject.mjs')
+  const { classifyFutworkProject, liveCountryFor } = await import('../shared/futworkProject.mjs')
   // fetchAllDetailCacheRows pages past PostgREST's 1000-row cap -- a plain,
   // unpaginated select here silently saw only the first ~1000 of 3,389 cached
   // people (whichever order Postgres happened to return), so most of the
@@ -1806,8 +1806,8 @@ async function buildFrappCoachList(creds) {
     if (!mobile) { skippedNoMobile.push(u.email); return }
     if (classifyPhoneRegion(mobile) !== 'Indian') { skippedInternational.push(u.email); return }
     if (!country) {
-      const sub = onlineSubBucket(u.groups)
-      if (sub) country = sub
+      const live = liveCountryFor(u.groups)
+      if (live) country = live
       else noCountry.push(u.email)
     }
     coaches.push({ name: u.name, mobile, email: u.email, country })
@@ -1821,67 +1821,6 @@ async function buildFrappCoachList(creds) {
     skippedInternational,
     totalActive: activeUsers.length,
   }
-}
-
-// "Auto-fill known countries" -- Country is informational on the Frapp push
-// now (see buildFrappCoachList's noCountry -- never excludes anyone), but a
-// correctly-filled value is still worth having on the roster in general, and
-// two Futwork Project buckets (see shared/futworkProject.mjs) have exactly
-// one deterministic answer: Online Team Dubai -> "Dubai", Online Team MBBS ->
-// "mbbs". Everyone else missing a Country (Online Team = Admission
-// Consulting or Student Recruitment, ~30 vs ~12 valid destinations; Offline
-// Team; or no Sales Group match at all) has NO single right answer this app
-// can derive -- which actual destination country a given consultant covers
-// is a real business fact nobody has given it a source for, so those are
-// deliberately left alone rather than guessed at (the admin fills them in via
-// the roster's own Country dropdown, scoped to the right list per person).
-// classifyFutworkProject is the exact same function TeamMappingDashboard.jsx
-// uses for its own Futwork Project column, imported from shared/ specifically
-// so this can never reach a different verdict than what a human sees on
-// screen for the same person.
-//
-// Scoped to ALL Active people in those two Sales Groups, not just whoever the
-// Frapp preview currently lists -- Country is a real roster field independent
-// of Frapp eligibility, so this reaches people beyond just who's in the push.
-// Routes every write through saveTeamManual (never overwrites an existing
-// Country, preserves every other manual field on the row untouched) so each
-// fill is individually diffed, logged, and restorable in History -- the same
-// "a bulk edit is N real edits, not one big opaque action" rule the rest of
-// this page's bulk actions already follow.
-async function autoFillFrappCountries(creds, me) {
-  const { supabaseAdmin } = await import('../lib/auth.mjs')
-  const { classifyFutworkProject } = await import('../shared/futworkProject.mjs')
-  const [users, manualRes] = await Promise.all([
-    fetchLeadSquaredTeamUsers(creds),
-    supabaseAdmin('team_mapping_manual?select=*'),
-  ])
-  const manualRows = manualRes.ok ? await manualRes.json() : []
-  const manualByEmail = {}
-  manualRows.forEach(r => { if (r.ls_email) manualByEmail[r.ls_email.toLowerCase()] = r })
-
-  const DETERMINISTIC_COUNTRY = { 'Online Team Dubai': 'Dubai', 'Online Team MBBS': 'mbbs' }
-  const activeUsers = users.filter(u => u.status === 'Active' && u.email)
-
-  const filled = []
-  for (const u of activeUsers) {
-    const key = u.email.toLowerCase()
-    const existing = manualByEmail[key]
-    if (existing && String(existing.country || '').trim()) continue // never overwrite a real value
-    const fw = classifyFutworkProject(u.groups)
-    const value = DETERMINISTIC_COUNTRY[fw.project]
-    if (!value) continue // ambiguous bucket, conflict, or no Sales Group match -- can't auto-determine
-    const body = {
-      ls_email: u.email, ls_name: u.name,
-      asm_sm: existing?.asm_sm || '', asm_sm_email: existing?.asm_sm_email || '',
-      ssm: existing?.ssm || '', ssm_email: existing?.ssm_email || '',
-      role: existing?.role || '', centre_name: existing?.centre_name || '',
-      country: value,
-      activityType: 'edit',
-    }
-    await saveTeamManual(body, me, creds)
-    filled.push({ email: u.email, name: u.name, country: value })
-  }
-  return { filled, filledCount: filled.length }
 }
 
 // Diffs the coaches about to be pushed against the emails in the last
@@ -2368,7 +2307,7 @@ async function handleLeadSquared(req, res, me) {
   // back the Frapp coaches push -- both admin-only end to end (see below),
   // same treatment as the connector config modes, since both involve either
   // writing to an external system or reading data scoped for that push.
-  const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_list', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push', 'team_frapp_autofill_country', 'team_centre_options']
+  const TEAM_FRAPP_MODES = ['team_detail_cache_status', 'team_detail_cache_list', 'team_detail_cache_save', 'team_frapp_preview', 'team_frapp_push', 'team_centre_options']
   // Both admin-only, same reasoning as TEAM_FRAPP_MODES: team_create_user writes
   // a real user into production LeadSquared (plus, optionally, a permission
   // template) -- team_permission_templates is just a read, but has no legitimate
@@ -2596,7 +2535,6 @@ async function handleLeadSquared(req, res, me) {
     }
     if (mode === 'team_frapp_preview') return res.status(200).json(await buildFrappCoachList(creds))
     if (mode === 'team_frapp_push') return res.status(200).json(await frappPush(creds, me))
-    if (mode === 'team_frapp_autofill_country') return res.status(200).json(await autoFillFrappCountries(creds, me))
     if (mode === 'team_permission_templates') return res.status(200).json({ templates: await fetchLeadSquaredPermissionTemplates(creds) })
     if (mode === 'team_create_user') {
       const result = await createLeadSquaredUser(creds, req.body || {})

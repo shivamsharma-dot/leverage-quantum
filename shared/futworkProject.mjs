@@ -1,23 +1,28 @@
 // Futwork Project -- a person's real, LeadSquared-sourced Sales Group
-// membership rolled up into one of 4 coarse buckets: 'Online Team' (Admission
-// Consulting or Student Recruitment), 'Offline Team', 'Online Team MBBS',
-// 'Online Team Dubai'. Replaced the earlier Team+Role-based Call Transfer
-// condition entirely (2026-09 -- explicit instruction: "remove the team
-// condition fully, remove role").
+// membership, shown at the SAME specificity the actual groups carry (2026-09
+// rewrite -- explicit instruction: "show admission consultation/student
+// recruitment also in the Futwork Project... Offline Centre Name not
+// mentioned... why not?"). Every matching group contributes its own label;
+// someone in more than one just gets all of them joined -- there is no
+// "Conflict" state anymore, since a real overlap (e.g. Admission Consulting
+// AND Student Recruitment) is a legitimate combination, not an error.
 //
 // Lives in shared/ (not lib/ or a page-local helper) so api/crm-leads.js
-// (server-side: the Frapp coach Country auto-fill, which has to reach the
-// exact same verdict a human is looking at) and
-// src/pages/TeamMappingDashboard.jsx (the roster table's own Futwork
-// Project/Call Transfer columns + Country suggestions) can never drift apart
-// -- same reasoning as shared/didRegion.mjs. Nothing in this file may import
-// anything -- it has to stay usable from both the Vercel function (dynamic
-// import, api/crm-leads.js is bundled CommonJS) and the Vite/browser bundle
-// (a normal static import).
+// (server-side: the Frapp coach push, which has to reach the exact same
+// verdict a human is looking at) and src/pages/TeamMappingDashboard.jsx (the
+// roster table's own Futwork Project/Call Transfer/Country columns) can
+// never drift apart -- same reasoning as shared/didRegion.mjs. Nothing in
+// this file may import anything -- it has to stay usable from both the
+// Vercel function (dynamic import, api/crm-leads.js is bundled CommonJS) and
+// the Vite/browser bundle (a normal static import).
 //
 // Group name match is case-insensitive; every constant here is lowercase to
 // make that explicit at every call site.
-export const FW_ONLINE_GROUPS = new Set(['online team - admission consulting', 'online team - student recruitment'])
+export const FW_AC_GROUP = 'online team - admission consulting'
+export const FW_SR_GROUP = 'online team - student recruitment'
+export const FW_DUBAI_GROUP = 'online team - dubai'
+export const FW_MBBS_GROUP = 'online team - mbbs'
+export const FW_CANADA_GROUP = 'online team - canada'
 export const FW_OFFLINE_GROUPS = new Set([
   'offline - assam guwahati', 'offline - delhi nehru place', 'offline - noida 126 + 18',
   'offline - delhi model town', 'offline - delhi nsp', 'offline - indore mp',
@@ -29,83 +34,110 @@ export const FW_OFFLINE_GROUPS = new Set([
   'offline - mumbai andheri (distribution)', 'offline - gujarat ahmedabad',
   'offline - gujarat surat',
 ])
-export const FW_DUBAI_GROUP = 'online team - dubai'
-export const FW_MBBS_GROUP = 'online team - mbbs'
 
-// Returns { project, conflict }. `project` is one of 'Online Team' /
-// 'Offline Team' / 'Online Team MBBS' / 'Online Team Dubai', or null if
-// nobody matched OR more than one bucket matched at once -- an overlap across
-// buckets is treated as a real data problem to go fix in LeadSquared (explicit
-// choice), never silently resolved to one winner.
-export function classifyFutworkProject(groups) {
-  const norm = (groups || []).map(g => String(g || '').trim().toLowerCase())
-  const hits = []
-  if (norm.some(g => FW_ONLINE_GROUPS.has(g))) hits.push('Online Team')
-  if (norm.some(g => FW_OFFLINE_GROUPS.has(g))) hits.push('Offline Team')
-  if (norm.includes(FW_MBBS_GROUP)) hits.push('Online Team MBBS')
-  if (norm.includes(FW_DUBAI_GROUP)) hits.push('Online Team Dubai')
-  if (hits.length === 1) return { project: hits[0], conflict: false }
-  if (hits.length > 1) return { project: null, conflict: true }
-  return { project: null, conflict: false }
+// The city/centre part of an Offline group's real name, e.g.
+// "Offline - Assam Guwahati" -> "Assam Guwahati" -- used for the Futwork
+// Project column specifically (explicit choice: "just the city/centre part"
+// over the full group name, so it reads short next to Admission
+// Consulting/Student Recruitment/etc). Country (liveCountryFor below) uses
+// the FULL exact group name instead -- a deliberate, different choice for
+// that column ("in Offline the Group Name Exactly").
+function offlineCentreLabel(rawGroup) {
+  return String(rawGroup || '').trim().replace(/^offline\s*-\s*/i, '').trim()
 }
 
-// Country type-ahead suggestions, scoped to whichever Sales Group(s) a person
-// is actually in -- Admission Consulting and Student Recruitment have
-// genuinely different valid country lists despite both rolling up into the
-// same "Online Team" Futwork Project bucket above, so this checks group
-// membership directly rather than reusing classifyFutworkProject's coarser
-// result. In both AC+SR at once (possible, not the common case) -- union of
-// both lists. Offline has no defined list (never specified) -- falls through
-// to plain free-typing, same as before this feature existed.
+// Returns { project }: every bucket this person's groups actually match,
+// each contributing its own label, joined with ", " when more than one.
+// null when nothing matched. No exclusivity, no conflict state.
+export function classifyFutworkProject(groups) {
+  const raw = groups || []
+  const norm = raw.map(g => String(g || '').trim().toLowerCase())
+  const parts = []
+  if (norm.includes(FW_AC_GROUP)) parts.push('Admission Consulting')
+  if (norm.includes(FW_SR_GROUP)) parts.push('Student Recruitment')
+  if (norm.includes(FW_MBBS_GROUP)) parts.push('Online Team MBBS')
+  if (norm.includes(FW_DUBAI_GROUP)) parts.push('Online Team Dubai')
+  if (norm.includes(FW_CANADA_GROUP)) parts.push('Online Team Canada')
+  norm.forEach((g, i) => {
+    if (FW_OFFLINE_GROUPS.has(g)) {
+      const centre = offlineCentreLabel(raw[i])
+      if (centre && !parts.includes(centre)) parts.push(centre)
+    }
+  })
+  if (!parts.length) return { project: null }
+  return { project: parts.join(', ') }
+}
+
+// Default AC/SR country lists -- used only as a fallback when nothing has
+// been saved yet in app_preferences (team_ac_countries/team_sr_countries).
+// The real, admin-editable lists live there now (Team Mapping > Sales Groups
+// > "Edit country lists"), read via /api/preferences same as every other
+// app-wide setting -- explicit instruction: "put a option somewhere to
+// update country list of AC and SR" instead of it being hardcoded in code.
 export const COUNTRY_LIST_AC = ['Thailand', 'Malaysia', 'Vietnam', 'France', 'France (Public)', 'Germany', 'Germany (Public)', 'Netherlands', 'Poland', 'Finland', 'Spain', 'Cyprus', 'Hungary', 'Italy', 'Italy (Public)', 'Lithuania', 'Luxembourg', 'Singapore', 'South Africa', 'Sweden', 'Switzerland', 'Denmark', 'Latvia', 'Russia', 'Georgia', 'Uzbekistan', 'Kazakhstan', 'Philippines', 'China', 'Nepal', 'Belgium', 'Kyrgyzstan', 'Slovakia', 'Others', 'Not yet decided', 'NA']
 export const COUNTRY_LIST_SR = ['UK', 'Canada', 'USA', 'Australia', 'New Zealand', 'Dubai', 'France (Private)', 'Germany (Private)', 'Ireland', 'Nigeria', 'Italy (Private)', 'Malta']
-export function countrySuggestionsFor(groups) {
+
+// Country type-ahead suggestions, scoped to whichever Sales Group(s) a
+// person is actually in. acList/srList are the CURRENT admin-edited lists
+// (fall back to the defaults above when not yet customized) -- passed in
+// rather than fetched here, since this file cannot import anything and has
+// no way to reach app_preferences itself. Still purely optional/manual: a
+// person's Country only ever needs picking here if the live default
+// (liveCountryFor below) genuinely isn't specific enough.
+export function countrySuggestionsFor(groups, acList, srList) {
+  const ac = (acList && acList.length) ? acList : COUNTRY_LIST_AC
+  const sr = (srList && srList.length) ? srList : COUNTRY_LIST_SR
   const norm = (groups || []).map(g => String(g || '').trim().toLowerCase())
-  if (norm.includes(FW_DUBAI_GROUP)) return ['Dubai']
-  if (norm.includes(FW_MBBS_GROUP)) return ['mbbs']
-  const inAc = norm.includes('online team - admission consulting')
-  const inSr = norm.includes('online team - student recruitment')
-  if (inAc && inSr) return Array.from(new Set([...COUNTRY_LIST_AC, ...COUNTRY_LIST_SR]))
-  if (inAc) return COUNTRY_LIST_AC
-  if (inSr) return COUNTRY_LIST_SR
+  if (norm.includes(FW_DUBAI_GROUP)) return ['DUBAI']
+  if (norm.includes(FW_MBBS_GROUP)) return ['MBBS']
+  if (norm.includes(FW_CANADA_GROUP)) return ['Canada']
+  const inAc = norm.includes(FW_AC_GROUP)
+  const inSr = norm.includes(FW_SR_GROUP)
+  if (inAc && inSr) return Array.from(new Set([...ac, ...sr]))
+  if (inAc) return ac
+  if (inSr) return sr
   return []
 }
 
-// Which of the two Online sub-groups a person is directly in -- AC and SR
-// collapse into ONE Futwork Project bucket ("Online Team") in
-// classifyFutworkProject above, but the Frapp push needs them distinguished:
-// when someone's real Country is still blank, it sends this label in place
-// of a country (2026-09, explicit instruction: "Send Admission Consultation,
-// Student Recruitment in the place of country... lets keep it simple") --
-// PUSH-TIME ONLY, never written back to team_mapping_manual.country, so the
-// real Country field/dropdown on the Roster stays exactly what it was, and
-// the moment someone picks a real country there the push automatically uses
-// it instead of this label on the very next Preview/Push.
-export function onlineSubBucket(groups) {
-  const norm = (groups || []).map(g => String(g || '').trim().toLowerCase())
-  const inAc = norm.includes('online team - admission consulting')
-  const inSr = norm.includes('online team - student recruitment')
+// The single source of truth for "what Country shows/gets pushed by
+// default, with nothing manually picked" -- used by BOTH the Roster table's
+// own Country column (so it behaves live, like Group/Team already do,
+// explicit instruction: "just live group, team behave on the page
+// currently") AND the Frapp push (buildFrappCoachList in api/crm-leads.js),
+// so the two can never show a different value for the same person.
+//   Online Team Dubai   -> "DUBAI"
+//   Online Team MBBS    -> "MBBS"
+//   Online Team Canada  -> "Canada"
+//   Offline - <centre>  -> the exact group name(s), e.g. "Offline - Assam Guwahati"
+//   Admission Consulting / Student Recruitment (or both) -> that label
+//   nothing matched -> null (still genuinely unknown, e.g. no Sales Group at all)
+export function liveCountryFor(groups) {
+  const raw = groups || []
+  const norm = raw.map(g => String(g || '').trim().toLowerCase())
+  if (norm.includes(FW_DUBAI_GROUP)) return 'DUBAI'
+  if (norm.includes(FW_MBBS_GROUP)) return 'MBBS'
+  if (norm.includes(FW_CANADA_GROUP)) return 'Canada'
+  const offlineExact = []
+  norm.forEach((g, i) => {
+    if (FW_OFFLINE_GROUPS.has(g)) {
+      const orig = String(raw[i] || '').trim()
+      if (orig && !offlineExact.includes(orig)) offlineExact.push(orig)
+    }
+  })
+  if (offlineExact.length) return offlineExact.join(', ')
+  const inAc = norm.includes(FW_AC_GROUP)
+  const inSr = norm.includes(FW_SR_GROUP)
   if (inAc && inSr) return 'Admission Consulting, Student Recruitment'
   if (inAc) return 'Admission Consulting'
   if (inSr) return 'Student Recruitment'
   return null
 }
 
-// The one auto-fill exception on this page (every other manual field starts
-// as whatever's already on file) -- Dubai/MBBS have exactly one valid country
-// each, so pre-fill it the moment the edit modal opens, but only into a
-// genuinely EMPTY Country field. Never overwrites something already on file.
-// The SAME rule (blank-only, Dubai/MBBS-only) drives the server-side bulk
-// "Auto-fill known countries" action on the Frapp coaches push panel -- deliberately
-// the only two buckets with a single deterministic answer. Admission
-// Consulting/Student Recruitment/Offline have no default: which of ~30 or
-// ~12 destination countries a given consultant actually handles is a real
-// business fact nobody has given this app a source for, so those stay
-// genuinely blank rather than being guessed at.
+// The one auto-fill exception on the edit form (every other manual field
+// starts as whatever's already on file) -- pre-fills Country to its live
+// default the moment the edit modal opens, but only into a genuinely EMPTY
+// field. Never overwrites something already on file.
 export function autoFillCountry(groups, currentValue) {
   if (String(currentValue || '').trim()) return currentValue
-  const norm = (groups || []).map(g => String(g || '').trim().toLowerCase())
-  if (norm.includes(FW_DUBAI_GROUP)) return 'Dubai'
-  if (norm.includes(FW_MBBS_GROUP)) return 'mbbs'
-  return currentValue
+  return liveCountryFor(groups) || currentValue
 }

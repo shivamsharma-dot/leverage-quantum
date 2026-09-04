@@ -8,7 +8,7 @@ import Button from '../components/Button'
 import ExportButton from '../components/ExportButton'
 import { useAuth } from '../hooks/useAuth'
 import { classifyDidRegion, FRAPP_TEAM_NAME } from '../../shared/didRegion.mjs'
-import { classifyFutworkProject, countrySuggestionsFor, autoFillCountry, COUNTRY_LIST_AC, COUNTRY_LIST_SR } from '../../shared/futworkProject.mjs'
+import { classifyFutworkProject, countrySuggestionsFor, autoFillCountry, liveCountryFor, COUNTRY_LIST_AC, COUNTRY_LIST_SR } from '../../shared/futworkProject.mjs'
 
 // Real-time roster (LeadSquared UserManagement.svc/Users.Get, one call, no cache) +
 // group membership (reconstructed from that same roster -- LeadSquared has no
@@ -677,12 +677,13 @@ function LiveDetailStrip({ userId }) {
   )
 }
 
-function EditManualModal({ user, rosterNames, rosterEmails, centreOptions, onClose, onSaved }) {
+function EditManualModal({ user, rosterNames, rosterEmails, centreOptions, acCountries, srCountries, onClose, onSaved }) {
   const [form, setForm] = useState(() => {
     const base = {}
     MANUAL_FIELDS.forEach(f => { base[f.key] = (user.manual && user.manual[f.key]) || '' })
-    // Dubai/MBBS have exactly one valid country -- pre-fill it if Country is
-    // still blank (never overwrites an existing value). See autoFillCountry.
+    // Country has a live default for every known bucket now -- pre-fill it if
+    // Country is still blank (never overwrites an existing value). See
+    // autoFillCountry/liveCountryFor in shared/futworkProject.mjs.
     base.country = autoFillCountry(user.groups, base.country)
     return base
   })
@@ -744,7 +745,7 @@ function EditManualModal({ user, rosterNames, rosterEmails, centreOptions, onClo
               // free-text input every other unrestricted field on this page already uses,
               // since there's genuinely nothing to restrict them to.
               (() => {
-                const opts = countrySuggestionsFor(user.groups)
+                const opts = countrySuggestionsFor(user.groups, acCountries, srCountries)
                 return opts.length
                   ? <Dropdown fullWidth options={['', ...opts]} value={form[f.key]} onChange={v => setForm(p => ({ ...p, [f.key]: v }))} />
                   : <input style={inputStyle} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder="Start typing a country…" />
@@ -778,7 +779,7 @@ function EditManualModal({ user, rosterNames, rosterEmails, centreOptions, onClo
 // endpoint a single edit uses, so every person's change is still individually
 // logged (with its own real before/after diff) and individually restorable
 // from History -- a bulk edit is N real edits, not one big opaque action.
-function BulkEditModal({ users, rosterNames, rosterEmails, centreOptions, onClose, onDone }) {
+function BulkEditModal({ users, rosterNames, rosterEmails, centreOptions, acCountries, srCountries, onClose, onDone }) {
   const [fields, setFields] = useState(() => {
     const base = {}
     MANUAL_FIELDS.forEach(f => { base[f.key] = { apply: false, value: '' } })
@@ -841,7 +842,7 @@ function BulkEditModal({ users, rosterNames, rosterEmails, centreOptions, onClos
                   // Futwork Project buckets, so this can't be scoped to one person --
                   // a closed dropdown of the full merged list (AC + SR + Dubai + MBBS),
                   // same "pick from the real list" treatment as the single-edit modal.
-                  <Dropdown fullWidth options={['', ...Array.from(new Set([...COUNTRY_LIST_AC, ...COUNTRY_LIST_SR, 'Dubai', 'mbbs']))]} value={fields[f.key].value} onChange={setVal} />
+                  <Dropdown fullWidth options={['', ...Array.from(new Set([...(acCountries || COUNTRY_LIST_AC), ...(srCountries || COUNTRY_LIST_SR), 'DUBAI', 'MBBS', 'Canada']))]} value={fields[f.key].value} onChange={setVal} />
                 ) : (
                   <input style={inputStyle} value={fields[f.key].value} onChange={e => setVal(e.target.value)} placeholder="Value to apply to everyone selected…" />
                 )}
@@ -1969,12 +1970,12 @@ const TEAM_FILTERABLE_FIELDS = [
   { key: 'groups', label: 'Group', get: r => r.groups || [] },
   { key: 'teamName', label: 'Team', get: r => r.teamName || null },
   { key: 'region', label: 'Region', get: r => r._region || null },
-  { key: 'futworkProject', label: 'Futwork Project', get: r => r._futworkProject || (r._futworkConflict ? 'Conflict' : null) },
+  { key: 'futworkProject', label: 'Futwork Project', get: r => r._futworkProject || null },
   { key: 'callTransfer', label: 'Call Transfer', get: r => r._callTransfer === 'Yes' ? 'Yes' : null },
   { key: 'managerName', label: 'LS Manager', get: r => r.managerName || null },
   { key: 'mapping', label: 'Mapping', get: r => r.manual ? (isStaleMapping(r.manual) ? 'Stale (90+ days)' : 'Mapped') : 'Unmapped' },
   { key: 'manualRole', label: 'Role', get: r => r.manual?.role || null },
-  { key: 'manualCountry', label: 'Country', get: r => r.manual?.country || null },
+  { key: 'manualCountry', label: 'Country', get: r => r.manual?.country || r._liveCountry || null },
   { key: 'manualCentre', label: 'Centre', get: r => r.manual?.centre_name || null },
   { key: 'asmSm', label: 'ASM/SM', get: r => r.manual?.asm_sm || null },
   { key: 'ssm', label: 'SSM', get: r => r.manual?.ssm || null },
@@ -2202,18 +2203,20 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
   const rows = data?.rows || []
 
   // Region still needs the whole-roster coach-directory cache (Virtual DID has
-  // no bulk source). Futwork Project/Call Transfer no longer need it at all --
-  // both are derived purely from Sales Group membership (classifyFutworkProject),
-  // which is already bulk/instant on every row via `r.groups`. All four
-  // (`_region`/`_futworkProject`/`_futworkConflict`/`_callTransfer`) are read
-  // by TEAM_FILTERABLE_FIELDS' own `get()` AND directly by the table's
-  // on-screen cells below (pageRows is a slice of this same array), so there
-  // is exactly one computation to keep in sync, not two.
+  // no bulk source). Futwork Project/Call Transfer/live Country default no
+  // longer need it at all -- all three are derived purely from Sales Group
+  // membership (classifyFutworkProject/liveCountryFor), already bulk/instant
+  // on every row via `r.groups`. All four (`_region`/`_futworkProject`/
+  // `_callTransfer`/`_liveCountry`) are read by TEAM_FILTERABLE_FIELDS' own
+  // `get()` AND directly by the table's on-screen cells below (pageRows is a
+  // slice of this same array), so there is exactly one computation to keep
+  // in sync, not two. No more "Conflict" state -- someone in more than one
+  // bucket just gets every matching label joined (see classifyFutworkProject).
   const augmentedRows = useMemo(() => rows.map(r => {
     const onFrappTeam = r.teamName && String(r.teamName).trim().toLowerCase() === FRAPP_TEAM_NAME
     const region = onFrappTeam ? (classifyDidRegion(r.teamName, cacheByEmail[(r.email || '').toLowerCase()]?.airtel_number) || null) : null
     const fw = classifyFutworkProject(r.groups)
-    return { ...r, _region: region, _futworkProject: fw.project, _futworkConflict: fw.conflict, _callTransfer: fw.project ? 'Yes' : null }
+    return { ...r, _region: region, _futworkProject: fw.project, _callTransfer: fw.project ? 'Yes' : null, _liveCountry: liveCountryFor(r.groups) }
   }), [rows, cacheByEmail])
 
   // Live names, for the ASM/SM and SSM type-ahead in the edit/bulk-edit
@@ -2229,6 +2232,26 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
   useEffect(() => {
     fetchJson(API + '&mode=team_centre_options').then(d => setCentreOptions(d.options || [])).catch(() => {})
   }, [])
+
+  // Admin-editable Country suggestion lists for Admission Consulting/Student
+  // Recruitment (see shared/futworkProject.mjs's countrySuggestionsFor) --
+  // read from app_preferences via the existing generic preferences endpoint
+  // (not crm-leads), falling back to the built-in defaults when nothing's
+  // been saved yet. Edited from GroupsTab's "Edit country lists" button.
+  const [acCountries, setAcCountries] = useState(COUNTRY_LIST_AC)
+  const [srCountries, setSrCountries] = useState(COUNTRY_LIST_SR)
+  const loadCountryLists = useCallback(() => {
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { prefs: {} })
+      .then(data => {
+        const ac = data.prefs?.team_ac_countries
+        const sr = data.prefs?.team_sr_countries
+        if (Array.isArray(ac) && ac.length) setAcCountries(ac)
+        if (Array.isArray(sr) && sr.length) setSrCountries(sr)
+      })
+      .catch(() => {})
+  }, [])
+  useEffect(() => { loadCountryLists() }, [loadCountryLists])
 
   // Distinct values per filterable field, derived from rows already narrowed by
   // Status (the one standalone dropdown) -- so picking "Inactive" first doesn't
@@ -2404,12 +2427,12 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
               // Same rule as the on-screen columns -- both derived from Sales Group
               // membership only (see classifyFutworkProject), already computed on
               // this row by augmentedRows.
-              'Futwork Project': r._futworkConflict ? 'Conflict' : (r._futworkProject || ''),
+              'Futwork Project': r._futworkProject || '',
               'Call Transfer': r._callTransfer === 'Yes' ? 'Yes' : '',
               'Reporting Manager': r.managerName || '', 'Reporting Manager Email': r.managerEmail || '',
               'ASM/SM': r.manual?.asm_sm || '', 'ASM/SM Email': r.manual?.asm_sm_email || '',
               SSM: r.manual?.ssm || '', 'SSM Email': r.manual?.ssm_email || '',
-              Role: r.manual?.role || '', Country: r.manual?.country || '',
+              Role: r.manual?.role || '', Country: r.manual?.country || r._liveCountry || '',
               'Centre Name': r.manual?.centre_name || '',
             }
           })}
@@ -2428,9 +2451,9 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                   <li>ASM/SM, SSM, Role, Country, Centre Name — the only manually entered fields.</li>
                   <li>Region — computed. "Indian"/"International" from Virtual DID, only on "University Admission Opportunity"; "—" elsewhere. Only "Indian" is ever pushed to Futwork (blocked server-side too).</li>
                   <li>No Virtual DID on that team? A muted "Main: Indian/International" hint from the Main Phone shows instead — informational only.</li>
-                  <li>Futwork Project — derived from Sales Group only: Online Team - Admission Consulting/Student Recruitment → "Online Team"; the 19 "Offline - …" groups → "Offline Team"; Online Team - MBBS → "Online Team MBBS"; Online Team - Dubai → "Online Team Dubai". "Conflict" if someone's groups span more than one bucket at once — a LeadSquared data issue to go fix, never auto-resolved.</li>
-                  <li>Call Transfer — "Yes" whenever Futwork Project resolves to one bucket above; "—" otherwise. No Team, Role, or phone check anymore.</li>
-                  <li>Country suggestions change by Sales Group: Admission Consulting and Student Recruitment each have their own list; Dubai/MBBS pre-fill to "Dubai"/"mbbs" automatically if the field is still blank. Still free text — the list is a suggestion, not a hard restriction.</li>
+                  <li>Futwork Project — every Sales Group this person is in that maps to a bucket, shown exactly: "Admission Consulting", "Student Recruitment", "Online Team MBBS", "Online Team Dubai", "Online Team Canada", or an Offline centre name (e.g. "Assam Guwahati"). In more than one at once — all of them, joined.</li>
+                  <li>Call Transfer — "Yes" whenever Futwork Project resolves to anything above; "—" otherwise.</li>
+                  <li>Country — live by default, same as Group/Team: Dubai → "DUBAI", MBBS → "MBBS", Canada → "Canada", Offline → the exact group name, Admission Consulting/Student Recruitment → that label. Shown in italic muted text until someone manually picks a real one from the dropdown (which still shows the full country list — "Edit country lists" on Sales Groups changes what that list contains). A manual pick always wins over the live default.</li>
                   <li>+ Filter — filter by any column, including Futwork Project. Region there reads the same coach-directory cache the Frapp push uses{cacheSyncedAt ? ` (last synced ${new Date(cacheSyncedAt).toLocaleString()})` : ''} — resync via Connectors → "Sync coach directory" if it looks stale. Futwork Project/Call Transfer are instant, no cache needed.</li>
                 </ul>
               </div>
@@ -2493,9 +2516,9 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                 const d = detailCache[r.id]
                 const pendingDid = !d
                 const onFrappTeam = r.teamName && String(r.teamName).trim().toLowerCase() === FRAPP_TEAM_NAME
-                // Futwork Project/Call Transfer are already computed on this row by
-                // augmentedRows (r._futworkProject/_futworkConflict/_callTransfer) --
-                // purely Sales-Group-based now, no Virtual DID wait, ever.
+                // Futwork Project/Call Transfer/live Country are already computed on
+                // this row by augmentedRows (r._futworkProject/_callTransfer/
+                // _liveCountry) -- purely Sales-Group-based, no Virtual DID wait, ever.
                 const stale = isStaleMapping(r.manual)
                 // A frozen (position:sticky) cell needs a genuinely opaque
                 // background -- 'transparent' let the row underneath show through
@@ -2536,12 +2559,10 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                         return <span style={{ color: C.muted, fontSize: 11.5 }} title="No Virtual DID on file -- this reflects the Main Phone number instead, not the enforced Frapp region">Main: {hint}</span>
                       })()}
                     </td>
-                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }} title="Derived from Sales Group: Online Team - Admission Consulting/Student Recruitment -> Online Team; the 19 Offline - ... groups -> Offline Team; Online Team - MBBS -> Online Team MBBS; Online Team - Dubai -> Online Team Dubai">
-                      {r._futworkConflict
-                        ? <span style={{ fontWeight: 700, color: C.navy }} title={'In more than one Futwork Project group at once -- fix in LeadSquared: ' + (r.groups || []).join(', ')}>Conflict</span>
-                        : r._futworkProject
-                          ? <span style={{ color: C.text }}>{r._futworkProject}</span>
-                          : <span style={{ color: C.muted }}>—</span>}
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }} title="Every Sales Group this person is actually in that maps to a bucket: Admission Consulting / Student Recruitment / Online Team MBBS / Online Team Dubai / Online Team Canada / an Offline centre name -- joined if more than one matches.">
+                      {r._futworkProject
+                        ? <span style={{ color: C.text }}>{r._futworkProject}</span>
+                        : <span style={{ color: C.muted }}>—</span>}
                     </td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }} title="Yes whenever Futwork Project resolves to one bucket above -- no Team, Role, or phone check anymore">
                       {r._callTransfer === 'Yes'
@@ -2552,7 +2573,13 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.asm_sm || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.ssm || '—'}</td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.role || '—'}</td>
-                    <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.country || '—'}</td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                      {r.manual?.country
+                        ? <span style={{ color: C.text }}>{r.manual.country}</span>
+                        : r._liveCountry
+                          ? <span style={{ color: C.muted, fontStyle: 'italic' }} title="Live default from Sales Group -- nobody's picked one manually">{r._liveCountry}</span>
+                          : <span style={{ color: C.muted }}>—</span>}
+                    </td>
                     <td style={{ padding: '9px 12px', color: C.text, whiteSpace: 'nowrap' }}>{r.manual?.centre_name || '—'}</td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2581,6 +2608,8 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
           rosterNames={rosterNames}
           rosterEmails={rosterEmails}
           centreOptions={centreOptions}
+          acCountries={acCountries}
+          srCountries={srCountries}
           onClose={() => setEditUser(null)}
           onSaved={saved => {
             setData(d => ({ ...d, rows: d.rows.map(r => r.email === editUser.email ? { ...r, manual: saved } : r) }))
@@ -2600,6 +2629,8 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
           rosterNames={rosterNames}
           rosterEmails={rosterEmails}
           centreOptions={centreOptions}
+          acCountries={acCountries}
+          srCountries={srCountries}
           onClose={() => setShowBulkEdit(false)}
           onDone={() => { setShowBulkEdit(false); setSelected(new Set()); load() }}
         />
@@ -2610,12 +2641,87 @@ function RosterTab({ isAdmin, onOpenHistory, onOpenAddUser, registerRefresh }) {
 
 // ---------------------------------------------------------------- Groups tab
 
-function GroupsTab({ registerRefresh }) {
+// Admin-only editor for the two Country dropdown lists (Admission
+// Consulting/Student Recruitment) -- explicit instruction: "put a option
+// somewhere to update country list of AC and SR" instead of it staying
+// hardcoded in code. Reuses the existing generic /api/preferences GET/POST
+// (no new backend endpoint) under keys team_ac_countries/team_sr_countries.
+// Dubai/MBBS/Canada/Offline have no list here -- they always resolve to one
+// exact live value (shared/futworkProject.mjs's liveCountryFor), nothing to edit.
+function CountryListsModal({ onClose }) {
+  const [ac, setAc] = useState('')
+  const [sr, setSr] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : { prefs: {} })
+      .then(data => {
+        const acList = Array.isArray(data.prefs?.team_ac_countries) && data.prefs.team_ac_countries.length ? data.prefs.team_ac_countries : COUNTRY_LIST_AC
+        const srList = Array.isArray(data.prefs?.team_sr_countries) && data.prefs.team_sr_countries.length ? data.prefs.team_sr_countries : COUNTRY_LIST_SR
+        setAc(acList.join(', ')); setSr(srList.join(', '))
+      })
+      .catch(() => { setAc(COUNTRY_LIST_AC.join(', ')); setSr(COUNTRY_LIST_SR.join(', ')) })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const save = async () => {
+    setSaving(true); setErr('')
+    try {
+      const acList = ac.split(',').map(s => s.trim()).filter(Boolean)
+      const srList = sr.split(',').map(s => s.trim()).filter(Boolean)
+      for (const [key, value] of [['team_ac_countries', acList], ['team_sr_countries', srList]]) {
+        const r = await fetch('/api/preferences', {
+          method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, value }),
+        })
+        if (!r.ok) throw new Error(await r.text())
+      }
+      onClose(true)
+    } catch (e) {
+      setErr('Could not save: ' + (e.message || e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal onClose={() => onClose(false)} title="Edit country lists">
+      <p style={{ fontSize: 12, color: C.muted, marginTop: 0, marginBottom: 14 }}>
+        Comma-separated. These are what the Country dropdown offers for Admission Consulting and
+        Student Recruitment on the Roster's Edit modal. Dubai/MBBS/Canada/Offline aren't listed
+        here — those always resolve to one exact value on their own, nothing to pick.
+      </p>
+      {loading ? <InlineLoader label="Loading" /> : (
+        <>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Admission Consulting</span>
+            <textarea value={ac} onChange={e => setAc(e.target.value)} rows={4} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Student Recruitment</span>
+            <textarea value={sr} onChange={e => setSr(e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }} />
+          </label>
+        </>
+      )}
+      {err && <div style={{ color: '#B91C1C', fontSize: 12.5, marginBottom: 12 }}>{err}</div>}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <Button variant="ghost" size="sm" onClick={() => onClose(false)} disabled={saving}>Cancel</Button>
+        <Button size="sm" onClick={save} disabled={saving || loading}>{saving ? 'Saving…' : 'Save'}</Button>
+      </div>
+    </Modal>
+  )
+}
+
+function GroupsTab({ isAdmin, registerRefresh }) {
   const [groups, setGroups] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [open, setOpen] = useState(null)
   const [search, setSearch] = useState('')
+  const [showCountryLists, setShowCountryLists] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true); setError('')
@@ -2646,6 +2752,7 @@ function GroupsTab({ registerRefresh }) {
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search groups…" style={{ ...inputStyle, width: 240 }} />
         <div style={{ flex: 1 }} />
+        {isAdmin && <Button variant="ghost" size="sm" onClick={() => setShowCountryLists(true)}>Edit country lists</Button>}
         <ExportButton
           hideSlack hideJson hideSheets
           filename="team-mapping-groups"
@@ -2653,6 +2760,7 @@ function GroupsTab({ registerRefresh }) {
           data={filtered.map(g => ({ Group: g.name, Members: g.memberCount }))}
         />
       </div>
+      {showCountryLists && <CountryListsModal onClose={() => setShowCountryLists(false)} />}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {filtered.map(g => {
           const isOpen = open === g.name
@@ -2851,7 +2959,6 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
   const [preview, setPreview] = useState(null)
   const [previewing, setPreviewing] = useState(false)
   const [pushing, setPushing] = useState(false)
-  const [autofilling, setAutofilling] = useState(false)
   const [msg, setMsg] = useState('')
 
   const loadCacheStatus = useCallback(() => {
@@ -2959,29 +3066,6 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
     }
   }
 
-  // Only two of the four Futwork Project buckets (see shared/futworkProject.mjs)
-  // have exactly one correct Country -- Online Team Dubai/MBBS. Everyone else
-  // missing a Country (Admission Consulting, Student Recruitment, Offline, or
-  // no Sales Group match at all) has no single right answer this app can
-  // derive, so this only ever fills those two, never overwrites an existing
-  // value, and re-runs Preview afterward so the "ready to send" count reflects
-  // it immediately.
-  const runAutofillCountry = async () => {
-    if (!window.confirm('Fill Country as "Dubai"/"mbbs" for every Active person in those two Sales Groups who is currently missing one? Nothing else on their row changes, and an existing Country value is never overwritten.')) return
-    setAutofilling(true); setMsg('')
-    try {
-      const result = await fetchJson(API + '&mode=team_frapp_autofill_country', { method: 'POST' })
-      setMsg(result.filledCount > 0
-        ? `Filled Country for ${result.filledCount} coach(es) (Dubai/MBBS only). Everyone else still missing a Country needs a real destination assigned by hand -- there's no single correct value to derive for Admission Consulting/Student Recruitment/Offline.`
-        : 'Nothing to fill -- everyone in the Dubai/MBBS Sales Groups already has a Country on file.')
-      await runPreview()
-    } catch (e) {
-      setMsg('Auto-fill failed: ' + (e.message || e))
-    } finally {
-      setAutofilling(false)
-    }
-  }
-
   return (
     <Card
       title="Frapp coaches push"
@@ -3037,14 +3121,13 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
                 {preview.skippedInternational?.length > 0 && <div>{preview.skippedInternational.length} eligible with a non-Indian number -- blocked from Futwork: {preview.skippedInternational.slice(0, 5).join(', ')}{preview.skippedInternational.length > 5 ? '…' : ''}</div>}
               </div>
             )}
-            {/* Country no longer gates anyone out of the push -- this is purely
-                informational, plus the optional "fill the obvious ones" shortcut. */}
+            {/* Country no longer gates anyone out of the push -- purely informational.
+                Every known bucket (Dubai/MBBS/Canada/Offline/AC/SR) now has a live
+                default (see shared/futworkProject.mjs's liveCountryFor), so anyone
+                left here genuinely matched no Sales Group at all. */}
             {preview.noCountry?.length > 0 && (
               <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
-                {preview.noCountry.length} of these {preview.noCountry.length === 1 ? 'coach doesn\'t' : 'coaches don\'t'} have a Country yet (sent anyway) -- e.g. {preview.noCountry.slice(0, 5).join(', ')}{preview.noCountry.length > 5 ? '…' : ''}
-                <div style={{ marginTop: 6 }}>
-                  <Button variant="ghost" size="sm" onClick={runAutofillCountry} disabled={autofilling}>{autofilling ? 'Filling…' : 'Auto-fill known countries (Dubai/MBBS only)'}</Button>
-                </div>
+                {preview.noCountry.length} of these {preview.noCountry.length === 1 ? 'coach doesn\'t' : 'coaches don\'t'} have a Country yet (sent anyway, no matching Sales Group to derive one from) -- e.g. {preview.noCountry.slice(0, 5).join(', ')}{preview.noCountry.length > 5 ? '…' : ''}
               </div>
             )}
             {preview.coaches.length > 0 && (
@@ -3404,7 +3487,7 @@ export default function TeamMappingDashboard() {
           aria-labelledby={activeTab !== 'history' && activeTab !== 'add-user' ? `tm-tab-${activeTab}` : undefined}
           style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
           {activeTab === 'roster' && <RosterTab isAdmin={isAdmin} onOpenHistory={() => setTab('history')} onOpenAddUser={() => setTab('add-user')} registerRefresh={registerRefresh} />}
-          {activeTab === 'groups' && <GroupsTab registerRefresh={registerRefresh} />}
+          {activeTab === 'groups' && <GroupsTab isAdmin={isAdmin} registerRefresh={registerRefresh} />}
           {activeTab === 'orgchart' && <OrgChartTab registerRefresh={registerRefresh} isAdmin={isAdmin} />}
           {activeTab === 'connectors' && (isAdmin ? <ConnectorsTab /> : <div style={{ color: C.muted, fontSize: 13 }}>Admin only.</div>)}
           {activeTab === 'history' && <HistoryTab onBack={() => setTab('roster')} />}
