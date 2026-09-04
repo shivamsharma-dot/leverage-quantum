@@ -1928,6 +1928,7 @@ function teamMappingSlackText(event) {
     const s = event.summary || {}
     return `Team Mapping: bulk create users "${event.label || 'create users'}" finished -- ${s.done || 0} created, ${s.failed || 0} failed, ${s.skipped || 0} skipped${who}`
   }
+  if (event.kind === 'create_user') return `Team Mapping: created a new LeadSquared user for ${event.label || event.target_email}${who}`
   const fields = Object.keys(event.changes || {})
   const changeText = fields.length
     ? fields.map(f => `${f}: ${(event.changes[f].from) || '(empty)'} -> ${(event.changes[f].to) || '(empty)'}`).join(', ')
@@ -2136,9 +2137,48 @@ async function notifyTeamMappingConnectors(event, creds) {
     try { const r = await syncTeamMappingSheet(cfg.sheet_id, creds); patch.sheet_last_status = `ok (${r.rows} rows)`; patch.sheet_last_at = now }
     catch (e) { patch.sheet_last_status = 'error: ' + String((e && e.message) || e).slice(0, 200); patch.sheet_last_at = now }
   }
-  // Independent of the three connector toggles above -- a subscribed manager
-  // gets DM'd regardless of whether the org has webhook/Slack-channel/Sheet
-  // connectors turned on at all.
+  // Real-time Frapp re-push -- explicit instruction: "I want it real time, no
+  // dependency on GitHub cron and etc... API is made for real time not for
+  // scheduled job." This function is the ONE place every real Team Mapping
+  // change already funnels through -- a single edit/delete/restore (from
+  // saveTeamManual/deleteTeamManual, one call each) and a finished bulk
+  // import/bulk create (from updateTeamActivity, once per whole batch, never
+  // once per row) -- so hooking the push in here means it fires the instant
+  // something changes on OUR side, with zero polling delay, and a bulk
+  // operation still only pushes once at the end rather than once per row.
+  // Frapp's own API is a full-list overwrite (confirmed directly by Futwork:
+  // "With every request, the updated payload will replace the existing DID
+  // list in our database") -- there is no per-person incremental endpoint on
+  // their side, so "push just the one person who changed" isn't a real
+  // option; frappPush() already re-sends the WHOLE current eligible list,
+  // which is the only correct way to reflect a single change (add, edit, or
+  // remove) on Frapp's end. Awaited, not fire-and-forget, for the same reason
+  // logOpportunityActivity is awaited elsewhere in this file: Vercel can
+  // freeze/terminate the function the instant the HTTP response is sent, and
+  // a background push that never actually runs would defeat the entire point
+  // of "real time". frappPush() logs its own success/failure (patchFrappStatus
+  // + logFrappPushActivity), so a failure here is swallowed rather than
+  // re-thrown -- one connector going down must never block a save or the
+  // other connectors. Gated on frapp_enabled (Connectors > Frapp coaches push
+  // > "Enabled") so an admin can pause auto-push without touching the page's
+  // manual Preview/Push button, which always works regardless of this flag.
+  //
+  // The one case this genuinely cannot cover: someone's Sales Group or Active
+  // status changing directly in LeadSquared itself, with no corresponding
+  // action taken on this page. LeadSquared has no outbound webhook for that,
+  // so nothing on our side can be notified the instant it happens -- the only
+  // way to catch it is to poll, which is exactly the cron-based mechanism
+  // just removed per this same instruction. That one gap is still closed by
+  // clicking "Push to Frapp" manually on Connectors, or by any OTHER real
+  // change on this page (which re-fetches everyone live, so it self-heals a
+  // stale entry as a side effect) -- just not instantly, on its own.
+  if (cfg.frapp_enabled && creds) {
+    try { await frappPush(creds, { email: (event && event.by) || 'auto' }) }
+    catch (e) { /* frappPush already logged its own failure -- nothing more to do here */ }
+  }
+  // Independent of the four connector toggles above -- a subscribed manager
+  // gets DM'd regardless of whether the org has webhook/Slack-channel/Sheet/
+  // Frapp connectors turned on at all.
   await notifyTeamWatchers(event)
   if (Object.keys(patch).length) {
     const { supabaseAdmin } = await import('../lib/auth.mjs')
@@ -2549,6 +2589,19 @@ async function handleLeadSquared(req, res, me) {
           detail: JSON.stringify({ id: result.id, role: req.body && req.body.role, templateApplied: result.templateApplied, templateError: result.templateError }),
           status: 'done', total: 1, done: 1,
         }, me).catch(() => {})
+        // A single "Add User" (not one row of a bulk create) is a real,
+        // immediate change -- explicit instruction: "user added -- should be
+        // sent to frapp with our additional details like country". This is
+        // the ONE case notifyTeamMappingConnectors was never wired into
+        // before (bulk create already gets it, once per finished batch, via
+        // updateTeamActivity). buildFrappCoachList reads LIVE from
+        // LeadSquared on every push, so a brand-new Active person in an
+        // eligible Sales Group is picked up in this exact push -- Virtual DID
+        // included, self-healed automatically the same way any other new
+        // joiner is (see buildFrappCoachList's autoHealMissingCoaches).
+        await notifyTeamMappingConnectors({
+          kind: 'create_user', label: (req.body && req.body.email) || result.id, target_email: (req.body && req.body.email) || null, by: me.email,
+        }, creds).catch(() => {})
       }
       return res.status(200).json(result)
     }
@@ -3896,19 +3949,16 @@ export default async function handler(req, res) {
   ) {
     return handleBigQuery(req, res, { role: 'admin', email: 'cron' })
   }
-  // Same reasoning, for the scheduled Frapp coaches push -- explicit
-  // instruction: "apart from manual button, it should work automatically."
-  // The manual "Push to Frapp" button on Connectors keeps working exactly as
-  // before; this just lets a GitHub Actions cron reach the identical
-  // frappPush() with no human logged in to send a cookie for.
-  if (
-    (req.query && req.query.source) === 'leadsquared' &&
-    (req.query && req.query.mode) === 'team_frapp_push' &&
-    process.env.CRON_SECRET &&
-    req.headers['x-cron-secret'] === process.env.CRON_SECRET
-  ) {
-    return handleLeadSquared(req, res, { role: 'admin', email: 'cron' })
-  }
+  // NOTE: the Frapp coaches push used to also have a cron-secret bypass here,
+  // for a GitHub Actions schedule that polled team_frapp_push every 15
+  // minutes. Removed -- explicit instruction: "I want it real time, no
+  // dependency on GitHub cron and etc... API is made for real time not for
+  // scheduled job." The push now fires synchronously from
+  // notifyTeamMappingConnectors (see its own comment) the instant a real
+  // change lands on this page -- add/edit/delete/restore/bulk-finish -- so
+  // there is no external scheduler left to authenticate here. The manual
+  // "Push to Frapp" button on Connectors still goes through the normal
+  // getSessionUser gate below, unchanged.
   // Same reasoning again, for the bulk Opportunity-update chain's own continuation
   // call -- it's the server calling itself to keep draining a large batch, and the
   // browser that started the original import may already be closed by the time this

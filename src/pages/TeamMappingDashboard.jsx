@@ -3077,8 +3077,11 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
 
         <label style={enableRowStyle}>
           <input type="checkbox" checked={!!form.frapp_enabled} onChange={e => save('frapp', { frapp_enabled: e.target.checked })} style={{ width: 15, height: 15 }} />
-          Enabled
+          Enabled -- push automatically, in real time
         </label>
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: -6, marginBottom: 14 }}>
+          When on, every real add/edit/remove on this page (Roster, Add User, bulk import, bulk edit) re-sends the full current coach list to Frapp the instant it happens -- no schedule, no delay. Turn it off to go back to only pushing when you click "Push to Frapp" below.
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 16, marginBottom: 14 }}>
           <div style={{ border: '1px solid ' + C.border, borderRadius: 10, padding: '12px 14px' }}>
