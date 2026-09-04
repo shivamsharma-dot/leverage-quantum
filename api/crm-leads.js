@@ -1662,16 +1662,18 @@ async function getTeamCacheLookup() {
 
 // ---------------------------------------------------------------------
 // Frapp "coaches" push -- see supabase/sql/team_mapping_connectors_add_frapp.sql.
-// Only ACTIVE people on the "University Admission Opportunity" LeadSquared
-// team are coaches, matched case-insensitively against the cache's team_name
-// (confirmed live 2026-08-24 by calling LeadSquared's own
-// User/Retrieve/ByUserId directly for 4 real accounts -- see the comment on
-// fetchLeadSquaredUserDetails). name/email/status come fresh from the cheap
-// bulk Users.Get call (1 request) rather than the cache, so status in
-// particular is never stale; mobile/team come from the cache (airtel_number
-// -- confirmed as the right "mobile" field directly by the person who
-// supplied this API spec, NOT PhoneMain); country comes from the existing
-// manual mapping.
+// Eligibility (2026-09, rewritten -- explicit instruction: "the conditions
+// ... sales group and active, call transfer") is Active + Call Transfer = Yes,
+// i.e. classifyFutworkProject(groups).project is truthy (shared/futworkProject.mjs)
+// -- the SAME Sales-Group-based rule the Roster table's own Futwork Project/
+// Call Transfer columns use, no longer tied to any specific LeadSquared Team.
+// name/email/status come fresh from the cheap bulk Users.Get call (1 request)
+// rather than the cache, so status in particular is never stale; mobile
+// comes from the cache (airtel_number -- confirmed as the right "mobile"
+// field directly by the person who supplied this API spec, NOT PhoneMain);
+// country comes from the existing manual mapping if set, informational only
+// -- never a gate on whether someone gets pushed (see buildFrappCoachList's
+// noCountry).
 //
 // How a person going inactive is handled: there is no per-record "remove" or
 // "inactive" field in Frapp's own update-coaches spec, only a full array of
@@ -1698,11 +1700,12 @@ async function getTeamCacheLookup() {
 // so an abnormally large gap (cache wiped, first run before any sync existed)
 // degrades to the old "N uncached, run a full sync" behavior instead of
 // risking this request's own time budget.
-// FRAPP_TEAM_NAME + classifyDidRegion live in shared/didRegion.mjs (not here)
-// so the "Indian vs International" call is made in exactly one place -- the
-// roster table's own "Virtual DID" column (TeamMappingDashboard.jsx) reads
-// the identical function, so what a human sees on screen can never disagree
-// with what this API actually enforces.
+// classifyPhoneRegion (the plain, team-agnostic version) and
+// classifyFutworkProject live in shared/ (not here) so the "Indian vs
+// International" call and the Sales-Group eligibility call are each made in
+// exactly one place -- TeamMappingDashboard.jsx's own Region/Futwork Project/
+// Call Transfer columns read the identical functions, so what a human sees
+// on screen can never disagree with what this API actually enforces.
 const FRAPP_COACHES_URL = 'https://asia-south1-frapp-prod.cloudfunctions.net/gcf-connector-leverage/update-coaches'
 const FRAPP_AUTO_FETCH_MAX = 240   // healed inline per preview/push call, at most
 const FRAPP_AUTO_FETCH_CHUNK = 60  // fetchLeadSquaredUserDetails' own per-call cap
@@ -1730,7 +1733,8 @@ async function autoHealMissingCoaches(creds, users, missing) {
 
 async function buildFrappCoachList(creds) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
-  const { FRAPP_TEAM_NAME, classifyDidRegion } = await import('../shared/didRegion.mjs')
+  const { classifyPhoneRegion } = await import('../shared/didRegion.mjs')
+  const { classifyFutworkProject } = await import('../shared/futworkProject.mjs')
   // fetchAllDetailCacheRows pages past PostgREST's 1000-row cap -- a plain,
   // unpaginated select here silently saw only the first ~1000 of 3,389 cached
   // people (whichever order Postgres happened to return), so most of the
@@ -1749,9 +1753,16 @@ async function buildFrappCoachList(creds) {
   const countryByEmail = {}
   manualRows.forEach(r => { if (r.ls_email) countryByEmail[r.ls_email.toLowerCase()] = r.country })
 
-  const activeUsers = users.filter(u => u.status === 'Active' && u.email)
+  // Eligibility is Sales-Group-based now (2026-09, explicit instruction:
+  // "the conditions ... sales group and active, call transfer") -- Active AND
+  // Call Transfer = Yes, i.e. classifyFutworkProject(groups).project is
+  // truthy. Byte-identical to the Roster table's own Futwork Project/Call
+  // Transfer columns, so a person marked "Call Transfer: Yes" on screen is
+  // guaranteed to also qualify here. No longer tied to LeadSquared Team
+  // membership at all -- that was the old (now-removed) condition.
+  const activeUsers = users.filter(u => u.status === 'Active' && u.email && classifyFutworkProject(u.groups).project)
 
-  // Self-heal: anyone Active right now but never swept for Team/Virtual DID gets
+  // Self-heal: anyone eligible right now but never swept for Virtual DID gets
   // fetched live, right here -- this is what makes a new joiner need zero
   // manual steps. Only runs at all when there's a real gap.
   let autoHealed = 0
@@ -1766,25 +1777,30 @@ async function buildFrappCoachList(creds) {
 
   let uncached = 0
   const skippedNoMobile = []
-  const skippedNoCountry = []
+  // Country is informational only now, never a gate -- someone with no
+  // Country on file still gets pushed (with country:''), they're just
+  // tracked here so the panel can say "N of these still need one filled in"
+  // without blocking anything on it. Explicit instruction: "you dont have to
+  // assign countries you have to update with dropdown and send further."
+  const noCountry = []
   // Enforced here, not just shown as a column: Frapp told us themselves their
   // API does "no validations on fields such as name, email, or other data
   // fields" -- so this app is the ONLY thing standing between a non-Indian
-  // number and their live call-routing system. classifyDidRegion is the exact
-  // same function the roster table's "Virtual DID" column uses, so a person
-  // marked "International" on screen is guaranteed to also be excluded here.
+  // number and their live call-routing system. classifyPhoneRegion is the
+  // same number-format rule the roster table's "Virtual DID" column relies
+  // on (via classifyDidRegion), used here WITHOUT the Team restriction that
+  // function also carries, since eligibility above is Sales-Group-based now.
   const skippedInternational = []
   const coaches = []
   activeUsers.forEach(u => {
     const key = u.email.toLowerCase()
     const cached = cacheByEmail[key]
     if (!cached) { uncached++; return }
-    if ((cached.team_name || '').trim().toLowerCase() !== FRAPP_TEAM_NAME) return
     const mobile = (cached.airtel_number || '').trim()
     const country = (countryByEmail[key] || '').trim()
     if (!mobile) { skippedNoMobile.push(u.email); return }
-    if (!country) { skippedNoCountry.push(u.email); return }
-    if (classifyDidRegion(cached.team_name, mobile) !== 'Indian') { skippedInternational.push(u.email); return }
+    if (classifyPhoneRegion(mobile) !== 'Indian') { skippedInternational.push(u.email); return }
+    if (!country) noCountry.push(u.email)
     coaches.push({ name: u.name, mobile, email: u.email, country })
   })
   return {
@@ -1792,31 +1808,32 @@ async function buildFrappCoachList(creds) {
     uncached,
     autoHealed,
     skippedNoMobile,
-    skippedNoCountry,
+    noCountry,
     skippedInternational,
     totalActive: activeUsers.length,
   }
 }
 
-// "Auto-fill known countries" -- the one deterministic slice of the
-// skippedNoCountry gap above. Of the people missing a Country, only two
-// Futwork Project buckets (see shared/futworkProject.mjs) have exactly one
-// correct value: Online Team Dubai -> "Dubai", Online Team MBBS -> "mbbs".
-// Everyone else missing a Country (Online Team = Admission Consulting or
-// Student Recruitment, ~30 vs ~12 valid destinations; Offline Team; or no
-// Sales Group match at all) has NO single right answer this app can derive --
-// which actual destination country a given consultant covers is a real
-// business fact nobody has given it a source for, so those are deliberately
-// left alone rather than guessed at. classifyFutworkProject is the exact same
-// function TeamMappingDashboard.jsx uses for its own Futwork Project column,
-// imported from shared/ specifically so this can never reach a different
-// verdict than what a human sees on screen for the same person.
+// "Auto-fill known countries" -- Country is informational on the Frapp push
+// now (see buildFrappCoachList's noCountry -- never excludes anyone), but a
+// correctly-filled value is still worth having on the roster in general, and
+// two Futwork Project buckets (see shared/futworkProject.mjs) have exactly
+// one deterministic answer: Online Team Dubai -> "Dubai", Online Team MBBS ->
+// "mbbs". Everyone else missing a Country (Online Team = Admission
+// Consulting or Student Recruitment, ~30 vs ~12 valid destinations; Offline
+// Team; or no Sales Group match at all) has NO single right answer this app
+// can derive -- which actual destination country a given consultant covers
+// is a real business fact nobody has given it a source for, so those are
+// deliberately left alone rather than guessed at (the admin fills them in via
+// the roster's own Country dropdown, scoped to the right list per person).
+// classifyFutworkProject is the exact same function TeamMappingDashboard.jsx
+// uses for its own Futwork Project column, imported from shared/ specifically
+// so this can never reach a different verdict than what a human sees on
+// screen for the same person.
 //
 // Scoped to ALL Active people in those two Sales Groups, not just whoever the
 // Frapp preview currently lists -- Country is a real roster field independent
-// of Frapp eligibility (Team/Region), so this is a strict superset of what's
-// needed to unblock the push, and correctly-filled Country matters even for
-// someone not on the "University Admission Opportunity" LeadSquared team.
+// of Frapp eligibility, so this reaches people beyond just who's in the push.
 // Routes every write through saveTeamManual (never overwrites an existing
 // Country, preserves every other manual field on the row untouched) so each
 // fill is individually diffed, logged, and restorable in History -- the same
@@ -1893,12 +1910,14 @@ async function logFrappPushActivity({ status, built, added, removed, error }, me
       total: built.coaches.length,
       done: status === 'done' ? built.coaches.length : 0,
       failed: status === 'done' ? 0 : 1,
-      skipped: (built.skippedNoMobile || []).length + (built.skippedNoCountry || []).length + (built.skippedInternational || []).length,
+      // noCountry no longer excludes anyone (see buildFrappCoachList) -- only
+      // skippedNoMobile/skippedInternational are genuine exclusions.
+      skipped: (built.skippedNoMobile || []).length + (built.skippedInternational || []).length,
       detail: JSON.stringify({
         emails: built.coaches.map(c => c.email),
         added: added || [], removed: removed || [],
         skippedNoMobile: built.skippedNoMobile || [],
-        skippedNoCountry: built.skippedNoCountry || [],
+        noCountry: built.noCountry || [],
         skippedInternational: built.skippedInternational || [],
         error: error || null,
       }),

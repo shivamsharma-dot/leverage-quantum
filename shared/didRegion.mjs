@@ -24,14 +24,28 @@ export const FRAPP_TEAM_NAME = 'university admission opportunity'
 // prefix at all, or a "+91" prefix -> Indian; any other "+" prefix ->
 // International.
 //
-// Returns null (not a real classification) when the person isn't on the
-// Frapp-eligible team at all, or has no number to classify -- the column/API
-// filter both treat null as "doesn't apply", distinct from a real
-// International exclusion.
-export function classifyDidRegion(teamName, rawNumber) {
-  if (!teamName || String(teamName).trim().toLowerCase() !== FRAPP_TEAM_NAME) return null
+// The pure number-format rule, with NO team restriction at all. Returns null
+// only when there's no number to classify. api/crm-leads.js's Frapp push
+// eligibility is Sales-Group-based now (see shared/futworkProject.mjs), not
+// tied to LeadSquared Team membership -- so its own Indian-only safety check
+// (no non-Indian number may ever reach Futwork) calls this directly, never
+// classifyDidRegion below, which would incorrectly return null for anyone
+// not on the "University Admission Opportunity" team regardless of Sales
+// Group.
+export function classifyPhoneRegion(rawNumber) {
   const raw = String(rawNumber || '').trim()
   if (!raw) return null
   if (!raw.startsWith('+')) return 'Indian'
   return raw.replace(/[\s-]/g, '').startsWith('+91') ? 'Indian' : 'International'
+}
+
+// Same rule, but ALSO restricted to the "University Admission Opportunity"
+// team -- this is what the Roster table's own "Region" column uses (a
+// deliberate, Team-scoped business choice for that one column). Returns null
+// (not a real classification) when the person isn't on that team at all, or
+// has no number to classify -- the column treats null as "doesn't apply",
+// distinct from a real International exclusion.
+export function classifyDidRegion(teamName, rawNumber) {
+  if (!teamName || String(teamName).trim().toLowerCase() !== FRAPP_TEAM_NAME) return null
+  return classifyPhoneRegion(rawNumber)
 }

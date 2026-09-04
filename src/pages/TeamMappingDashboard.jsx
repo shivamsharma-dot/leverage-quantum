@@ -1712,6 +1712,11 @@ function ActivityDetail({ row }) {
   // effect). added/removed are null (not empty arrays) on the very first
   // push ever logged, since there's nothing to diff against yet.
   if (row.type === 'frapp_push') {
+    // detail.skippedNoCountry only ever appears on OLD entries logged before
+    // Country stopped being a gate (2026-09) -- those people really were
+    // excluded at the time, so it stays under "Excluded:". Going forward,
+    // detail.noCountry is the field name, and it's informational, never an
+    // exclusion, so it renders as its own separate, neutral line instead.
     const skipped = [
       detail.skippedNoMobile?.length ? `${detail.skippedNoMobile.length} no Virtual DID` : null,
       detail.skippedNoCountry?.length ? `${detail.skippedNoCountry.length} no Country` : null,
@@ -1729,6 +1734,7 @@ function ActivityDetail({ row }) {
           </>
         )}
         {skipped.length > 0 && <div style={{ color: C.muted }}>Excluded: {skipped.join(' · ')}</div>}
+        {detail.noCountry?.length > 0 && <div style={{ color: C.muted }}>{detail.noCountry.length} sent without a Country yet (doesn't block the push).</div>}
         {detail.error && <div style={{ color: C.navy, fontWeight: 700 }}>{detail.error}</div>}
       </div>
     )
@@ -2979,7 +2985,7 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
   return (
     <Card
       title="Frapp coaches push"
-      sub={`Only Active people on the "University Admission Opportunity" LeadSquared team, with an Indian Virtual DID (see the "Region" column on Roster) -- name/email from LeadSquared, mobile from Virtual DID, country from the manual mapping`}
+      sub={`Only Active people whose Sales Group maps to a Futwork Project (see "Call Transfer" on Roster), with an Indian Virtual DID -- name/email from LeadSquared, mobile from Virtual DID, country from the manual mapping if it's set (not required)`}
       noPad
     >
       <div style={{ padding: '14px 18px' }}>
@@ -3024,19 +3030,21 @@ function FrappCoachesSection({ form, setForm, save, saving }) {
             {preview.autoHealed > 0 && (
               <div style={{ fontSize: 11.5, color: C.text, marginBottom: 8 }}>{fmtN(preview.autoHealed)} newly-active {preview.autoHealed === 1 ? 'person wasn\'t' : 'people weren\'t'} cached yet -- looked {preview.autoHealed === 1 ? 'them' : 'them all'} up just now automatically.</div>
             )}
-            {(preview.uncached > 0 || preview.skippedNoMobile?.length > 0 || preview.skippedNoCountry?.length > 0 || preview.skippedInternational?.length > 0) && (
+            {(preview.uncached > 0 || preview.skippedNoMobile?.length > 0 || preview.skippedInternational?.length > 0) && (
               <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
                 {preview.uncached > 0 && <div>{fmtN(preview.uncached)} active people still couldn't be looked up (more than 240 new at once -- run "Sync coach directory" to catch the rest).</div>}
-                {preview.skippedNoMobile?.length > 0 && <div>{preview.skippedNoMobile.length} on the team but missing a Virtual DID -- excluded: {preview.skippedNoMobile.slice(0, 5).join(', ')}{preview.skippedNoMobile.length > 5 ? '…' : ''}</div>}
-                {preview.skippedNoCountry?.length > 0 && (
-                  <div>
-                    {preview.skippedNoCountry.length} on the team but missing a Country mapping -- excluded: {preview.skippedNoCountry.slice(0, 5).join(', ')}{preview.skippedNoCountry.length > 5 ? '…' : ''}
-                    <div style={{ marginTop: 6 }}>
-                      <Button variant="ghost" size="sm" onClick={runAutofillCountry} disabled={autofilling}>{autofilling ? 'Filling…' : 'Auto-fill known countries (Dubai/MBBS only)'}</Button>
-                    </div>
-                  </div>
-                )}
-                {preview.skippedInternational?.length > 0 && <div>{preview.skippedInternational.length} on the team with a non-Indian number -- blocked from Futwork: {preview.skippedInternational.slice(0, 5).join(', ')}{preview.skippedInternational.length > 5 ? '…' : ''}</div>}
+                {preview.skippedNoMobile?.length > 0 && <div>{preview.skippedNoMobile.length} eligible but missing a Virtual DID -- excluded: {preview.skippedNoMobile.slice(0, 5).join(', ')}{preview.skippedNoMobile.length > 5 ? '…' : ''}</div>}
+                {preview.skippedInternational?.length > 0 && <div>{preview.skippedInternational.length} eligible with a non-Indian number -- blocked from Futwork: {preview.skippedInternational.slice(0, 5).join(', ')}{preview.skippedInternational.length > 5 ? '…' : ''}</div>}
+              </div>
+            )}
+            {/* Country no longer gates anyone out of the push -- this is purely
+                informational, plus the optional "fill the obvious ones" shortcut. */}
+            {preview.noCountry?.length > 0 && (
+              <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 8 }}>
+                {preview.noCountry.length} of these {preview.noCountry.length === 1 ? 'coach doesn\'t' : 'coaches don\'t'} have a Country yet (sent anyway) -- e.g. {preview.noCountry.slice(0, 5).join(', ')}{preview.noCountry.length > 5 ? '…' : ''}
+                <div style={{ marginTop: 6 }}>
+                  <Button variant="ghost" size="sm" onClick={runAutofillCountry} disabled={autofilling}>{autofilling ? 'Filling…' : 'Auto-fill known countries (Dubai/MBBS only)'}</Button>
+                </div>
               </div>
             )}
             {preview.coaches.length > 0 && (
