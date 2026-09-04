@@ -70,6 +70,27 @@ export function countrySuggestionsFor(groups) {
   if (inSr) return COUNTRY_LIST_SR
   return []
 }
+
+// Which of the two Online sub-groups a person is directly in -- AC and SR
+// collapse into ONE Futwork Project bucket ("Online Team") in
+// classifyFutworkProject above, but the Frapp push needs them distinguished:
+// when someone's real Country is still blank, it sends this label in place
+// of a country (2026-09, explicit instruction: "Send Admission Consultation,
+// Student Recruitment in the place of country... lets keep it simple") --
+// PUSH-TIME ONLY, never written back to team_mapping_manual.country, so the
+// real Country field/dropdown on the Roster stays exactly what it was, and
+// the moment someone picks a real country there the push automatically uses
+// it instead of this label on the very next Preview/Push.
+export function onlineSubBucket(groups) {
+  const norm = (groups || []).map(g => String(g || '').trim().toLowerCase())
+  const inAc = norm.includes('online team - admission consulting')
+  const inSr = norm.includes('online team - student recruitment')
+  if (inAc && inSr) return 'Admission Consulting, Student Recruitment'
+  if (inAc) return 'Admission Consulting'
+  if (inSr) return 'Student Recruitment'
+  return null
+}
+
 // The one auto-fill exception on this page (every other manual field starts
 // as whatever's already on file) -- Dubai/MBBS have exactly one valid country
 // each, so pre-fill it the moment the edit modal opens, but only into a

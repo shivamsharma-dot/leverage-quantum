@@ -1734,7 +1734,7 @@ async function autoHealMissingCoaches(creds, users, missing) {
 async function buildFrappCoachList(creds) {
   const { supabaseAdmin } = await import('../lib/auth.mjs')
   const { classifyPhoneRegion } = await import('../shared/didRegion.mjs')
-  const { classifyFutworkProject } = await import('../shared/futworkProject.mjs')
+  const { classifyFutworkProject, onlineSubBucket } = await import('../shared/futworkProject.mjs')
   // fetchAllDetailCacheRows pages past PostgREST's 1000-row cap -- a plain,
   // unpaginated select here silently saw only the first ~1000 of 3,389 cached
   // people (whichever order Postgres happened to return), so most of the
@@ -1777,11 +1777,16 @@ async function buildFrappCoachList(creds) {
 
   let uncached = 0
   const skippedNoMobile = []
-  // Country is informational only now, never a gate -- someone with no
-  // Country on file still gets pushed (with country:''), they're just
-  // tracked here so the panel can say "N of these still need one filled in"
-  // without blocking anything on it. Explicit instruction: "you dont have to
-  // assign countries you have to update with dropdown and send further."
+  // Country is informational only, never a gate -- someone with no real
+  // Country on file still gets pushed. If they're in the Admission
+  // Consulting or Student Recruitment Online sub-group, the bucket NAME
+  // itself goes in place of a country (2026-09, explicit instruction: "Send
+  // Admission Consultation, Student Recruitment in the place of country...
+  // lets keep it simple") -- push-time only, never written back to
+  // team_mapping_manual.country, so the real Country field/dropdown on the
+  // Roster is untouched and automatically takes over the moment someone
+  // picks a real value there. Offline Team / no-Sales-Group-match people have
+  // no such label to fall back to, so those are what's left in `noCountry`.
   const noCountry = []
   // Enforced here, not just shown as a column: Frapp told us themselves their
   // API does "no validations on fields such as name, email, or other data
@@ -1797,10 +1802,14 @@ async function buildFrappCoachList(creds) {
     const cached = cacheByEmail[key]
     if (!cached) { uncached++; return }
     const mobile = (cached.airtel_number || '').trim()
-    const country = (countryByEmail[key] || '').trim()
+    let country = (countryByEmail[key] || '').trim()
     if (!mobile) { skippedNoMobile.push(u.email); return }
     if (classifyPhoneRegion(mobile) !== 'Indian') { skippedInternational.push(u.email); return }
-    if (!country) noCountry.push(u.email)
+    if (!country) {
+      const sub = onlineSubBucket(u.groups)
+      if (sub) country = sub
+      else noCountry.push(u.email)
+    }
     coaches.push({ name: u.name, mobile, email: u.email, country })
   })
   return {
