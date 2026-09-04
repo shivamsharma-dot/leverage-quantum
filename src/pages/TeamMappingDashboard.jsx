@@ -736,7 +736,19 @@ function EditManualModal({ user, rosterNames, rosterEmails, centreOptions, onClo
             ) : f.suggest === 'centre' ? (
               <SuggestInput value={form[f.key]} onChange={v => setForm(p => ({ ...p, [f.key]: v }))} suggestions={centreOptions || []} placeholder="Start typing a centre…" />
             ) : f.suggest === 'country' ? (
-              <SuggestInput value={form[f.key]} onChange={v => setForm(p => ({ ...p, [f.key]: v }))} suggestions={countrySuggestionsFor(user.groups)} placeholder="Start typing a country…" />
+              // A real closed dropdown -- house rule is never a native <select>, and once
+              // a defined list exists for this person's Futwork Project bucket (Admission
+              // Consulting/Student Recruitment/Dubai/MBBS), picking from it beats free
+              // typing. Offline/no-bucket/conflict people have no defined list at all --
+              // countrySuggestionsFor returns [] for them -- so they fall back to the same
+              // free-text input every other unrestricted field on this page already uses,
+              // since there's genuinely nothing to restrict them to.
+              (() => {
+                const opts = countrySuggestionsFor(user.groups)
+                return opts.length
+                  ? <Dropdown fullWidth options={['', ...opts]} value={form[f.key]} onChange={v => setForm(p => ({ ...p, [f.key]: v }))} />
+                  : <input style={inputStyle} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder="Start typing a country…" />
+              })()
             ) : (
               <input style={inputStyle} value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} />
             )}
@@ -827,8 +839,9 @@ function BulkEditModal({ users, rosterNames, rosterEmails, centreOptions, onClos
                 ) : f.suggest === 'country' ? (
                   // Bulk edit applies one value to many people who may span different
                   // Futwork Project buckets, so this can't be scoped to one person --
-                  // shows the full merged list (AC + SR + Dubai + MBBS) as a convenience.
-                  <SuggestInput value={fields[f.key].value} onChange={setVal} suggestions={Array.from(new Set([...COUNTRY_LIST_AC, ...COUNTRY_LIST_SR, 'Dubai', 'mbbs']))} placeholder="Value to apply to everyone selected…" />
+                  // a closed dropdown of the full merged list (AC + SR + Dubai + MBBS),
+                  // same "pick from the real list" treatment as the single-edit modal.
+                  <Dropdown fullWidth options={['', ...Array.from(new Set([...COUNTRY_LIST_AC, ...COUNTRY_LIST_SR, 'Dubai', 'mbbs']))]} value={fields[f.key].value} onChange={setVal} />
                 ) : (
                   <input style={inputStyle} value={fields[f.key].value} onChange={e => setVal(e.target.value)} placeholder="Value to apply to everyone selected…" />
                 )}
