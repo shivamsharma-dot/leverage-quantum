@@ -3217,6 +3217,32 @@ function overallBqIsoDate(s) {
 // 2026-08-05) must not collide with the literal string 'None'/'null'.
 function overallBqKeypart(x) { return x == null ? '\x00NULL' : String(x) }
 
+// ~380k records at 500/batch is ~760 round trips -- one at a time, that alone
+// blew well past this function's 60s maxDuration (confirmed live 2026-09-05:
+// the request never got a response back, and something -- Vercel's own edge
+// layer, or the caller's transport -- silently retried it three times while
+// it was still mid-flight, each with its own sync_id, racing on the same
+// table). 16-at-a-time cuts ~760 sequential round trips to ~48 parallel
+// rounds, comfortably inside budget.
+async function upsertBatchesConcurrent(supabaseAdmin, table, records, batchSize, concurrency) {
+  const batches = []
+  for (let i = 0; i < records.length; i += batchSize) batches.push(records.slice(i, i + batchSize))
+  for (let i = 0; i < batches.length; i += concurrency) {
+    const slice = batches.slice(i, i + concurrency)
+    const results = await Promise.all(slice.map(batch => supabaseAdmin(table, {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(batch),
+    })))
+    for (let j = 0; j < results.length; j++) {
+      if (!results[j].ok) {
+        const detail = await results[j].text()
+        throw new Error('Supabase upsert failed (batch ' + (i + j) + ' of ' + batches.length + '): ' + detail)
+      }
+    }
+  }
+}
+
 // BigQuery lives behind this handler rather than its own file because the
 // Vercel Hobby plan is pinned at 12/12 serverless functions. Reached via
 // ?source=bigquery&mode=ping|datasets|query|careers_leads|careers_sync|apps_sync|overall_bq_sync.
@@ -3494,17 +3520,10 @@ async function handleBigQuery(req, res, me) {
         return res.status(502).json({ configured: true, ok: false, error: badDates + ' row(s) had a lead_date that did not parse as DD-Mon-YYYY. Refusing to write.' })
       }
 
-      for (let i = 0; i < records.length; i += 500) {
-        const batch = records.slice(i, i + 500)
-        const r = await supabaseAdmin('overall_bq_daily', {
-          method: 'POST',
-          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-          body: JSON.stringify(batch),
-        })
-        if (!r.ok) {
-          const detail = await r.text()
-          return res.status(502).json({ configured: true, ok: false, error: 'Supabase upsert failed (batch ' + i / 500 + '): ' + detail, rowCount: records.length })
-        }
+      try {
+        await upsertBatchesConcurrent(supabaseAdmin, 'overall_bq_daily', records, 500, 16)
+      } catch (e) {
+        return res.status(502).json({ configured: true, ok: false, error: String((e && e.message) || e), rowCount: records.length })
       }
       await supabaseAdmin(`overall_bq_daily?or=(sync_id.neq.${syncId},sync_id.is.null)`, { method: 'DELETE' })
 
@@ -3536,17 +3555,10 @@ async function handleBigQuery(req, res, me) {
         if (r.Total_Spends != null) a.Total_Spends += Number(r.Total_Spends) || 0
       }
       const aggRecords = Array.from(agg.values())
-      for (let i = 0; i < aggRecords.length; i += 500) {
-        const batch = aggRecords.slice(i, i + 500)
-        const r = await supabaseAdmin('overall_bq_daily_agg', {
-          method: 'POST',
-          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-          body: JSON.stringify(batch),
-        })
-        if (!r.ok) {
-          const detail = await r.text()
-          return res.status(502).json({ configured: true, ok: false, error: 'Supabase agg upsert failed (batch ' + i / 500 + '): ' + detail, rowCount: aggRecords.length })
-        }
+      try {
+        await upsertBatchesConcurrent(supabaseAdmin, 'overall_bq_daily_agg', aggRecords, 500, 8)
+      } catch (e) {
+        return res.status(502).json({ configured: true, ok: false, error: String((e && e.message) || e), rowCount: aggRecords.length })
       }
       await supabaseAdmin(`overall_bq_daily_agg?or=(sync_id.neq.${syncId},sync_id.is.null)`, { method: 'DELETE' })
 
