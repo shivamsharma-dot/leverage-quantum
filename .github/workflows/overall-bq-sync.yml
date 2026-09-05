@@ -22,11 +22,24 @@ name: Overall BigQuery Cache Sync
 # Schedule REMOVED 2026-09-05 -- confirmed live that GitHub Actions was
 # silently DROPPING the 9:00/10:00 AM IST runs entirely (not just running
 # them late): the bigquery_jobs log showed zero activity of any kind, from
-# any workflow, across that whole window. The exact same sync now also runs
-# as a real HTTP endpoint (api/crm-leads.js, mode=overall_bq_sync), triggered
-# 3x/day by cron-job.org -- a free, per-minute-precise external scheduler that
-# doesn't share GitHub's queue. This workflow is kept ONLY as a manual
-# (workflow_dispatch) fallback in case that endpoint is ever unreachable.
+# any workflow, across that whole window.
+#
+# UPDATED 2026-09-06 -- a Vercel HTTP endpoint (api/crm-leads.js,
+# mode=overall_bq_sync) was tried as the replacement trigger first, but real
+# testing showed Vercel's hard 60s function cap can't reliably absorb this
+# sync's own BigQuery-query-latency variance (sometimes seconds, sometimes
+# 100+s) even with self-continuation chunking -- so that endpoint is now a
+# manual/backup path only, not the scheduled trigger.
+#
+# The ACTUAL fix: this workflow is triggered by three cron-job.org jobs
+# ("Overall BQ sync 9am/10am/10pm", Asia/Kolkata timezone, POST with an
+# Authorization: Bearer <fine-grained GitHub PAT> header) calling GitHub's own
+# workflow_dispatch REST API directly -- a free, per-minute-precise external
+# scheduler that doesn't share GitHub's own flaky internal cron queue, paired
+# with this workflow's real 30-minute runner timeout (vs Vercel's 60s). This
+# workflow_dispatch trigger is therefore the PRIMARY path now, confirmed live
+# via a real cron-job.org test run (204 from GitHub, run picked up as
+# "Manually run by shivamsharma-dot").
 on:
   workflow_dispatch:
 
