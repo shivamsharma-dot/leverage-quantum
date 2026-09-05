@@ -3159,9 +3159,67 @@ LEFT JOIN
 WHERE
  v3. opportunity_created_date > '2025-12-31' ;`
 
+// The saved query named "Overall", copied verbatim from the BigQuery Console
+// (same text .github/workflows/overall-bq-sync.yml's standalone Python script
+// already used -- ported here so cron-job.org can trigger this by hitting a
+// URL instead of relying on GitHub Actions' own scheduler, which -- see that
+// workflow's own history -- silently drops scheduled runs on a repo without
+// constant traffic rather than just running them late). If the saved query is
+// ever edited again in the Console, edit this too; the schema guard below
+// fails loudly on a changed column list but cannot see a changed WHERE.
+const OVERALL_BQ_SQL = `
+SELECT
+    FORMAT_DATE('%d-%b-%Y', DATE(date_of_transaction)) AS lead_date,
+    FORMAT_DATE("%B'%Y", DATE(date_of_transaction)) AS month,
+    CASE
+        WHEN LOWER(source_1) IN ('affiliate partner') THEN 'Affiliate'
+        WHEN LOWER(source_1) IN ('content+brand', 'branding') THEN 'Organic'
+        WHEN LOWER(source_1) IN ('lead source na', 'others', 'offline') THEN 'Others'
+        ELSE source_1
+    END AS Source,
+    sub_source_updated AS Sub_Source,
+    campaign_name,
+    count_opps AS \`Total Leads Generated\`,
+    floor_queued,
+    fut_human_queued AS \`Queued on Futwork Human\`,
+    fut_ai_queued AS \`Queued on Futwork AI\`,
+    superbot_queued AS \`Queued on Superbot\`,
+    count_fut_ql_snapshot AS \`Futwork Human QL\`,
+    count_fut_ai_ql_snapshot AS \`Futwork AI QL\`,
+    count_sup_ql_snapshot AS \`Superbot AI QL\`,
+    total_spends AS \`Total_Spends\`,
+    count_stus_snapshot AS \`Total Apps\`,
+    count_offer_snapshot AS \`Total Offers\`,
+    count_deposit_snapshot AS \`Total Deposits\`,
+    count_rau_snapshot AS \`Total RAUs\`
+FROM \`chatbot_marketing.marketing_table_v1\`
+WHERE DATE(date_of_transaction) > '2024-12-31'
+`
+
+const OVERALL_BQ_EXPECTED_FIELDS = [
+  'lead_date', 'month', 'Source', 'Sub_Source', 'campaign_name',
+  'Total Leads Generated', 'floor_queued',
+  'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
+  'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
+  'Total_Spends',
+  'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
+]
+
+const OVERALL_BQ_MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }
+function overallBqIsoDate(s) {
+  const m = /^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/.exec(String(s || '').trim())
+  if (!m) return null
+  const mo = OVERALL_BQ_MONTHS[m[2].toLowerCase()]
+  if (!mo) return null
+  return m[3] + '-' + String(mo).padStart(2, '0') + '-' + m[1].padStart(2, '0')
+}
+// NULL-safe key part -- a real NULL campaign_name (673 observed on
+// 2026-08-05) must not collide with the literal string 'None'/'null'.
+function overallBqKeypart(x) { return x == null ? '\x00NULL' : String(x) }
+
 // BigQuery lives behind this handler rather than its own file because the
 // Vercel Hobby plan is pinned at 12/12 serverless functions. Reached via
-// ?source=bigquery&mode=ping|datasets|query|careers_leads|careers_sync|apps_sync.
+// ?source=bigquery&mode=ping|datasets|query|careers_leads|careers_sync|apps_sync|overall_bq_sync.
 // ping/datasets/query run arbitrary read-only SQL and stay admin-only
 // (configured from the Settings page). careers_leads is a special case -- as of
 // 2026-08-24 it runs no SQL at all and reads only the Supabase cache, so it
@@ -3347,6 +3405,155 @@ async function handleBigQuery(req, res, me) {
       }
       await supabaseAdmin(`apps_feed?sync_id=neq.${syncId}`, { method: 'DELETE' })
       return res.status(200).json({ configured: true, ok: true, rowCount: rows.length, syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed })
+    }
+    // Mirrors the "Overall" BigQuery saved query into overall_bq_daily (and its
+    // pre-aggregated companion overall_bq_daily_agg), row for row -- the exact
+    // same pipeline .github/workflows/overall-bq-sync.yml's standalone Python
+    // script already runs, ported here so cron-job.org (a real, per-minute-
+    // precise scheduler) can trigger it by hitting a URL, instead of relying on
+    // GitHub Actions' own scheduler -- which was confirmed, live, to silently
+    // DROP scheduled runs on this repo rather than merely run them late (see
+    // CLAUDE.md, 2026-09-05). The GitHub workflow itself is kept as a manual
+    // (workflow_dispatch-only) fallback, not deleted.
+    if (mode === 'overall_bq_sync') {
+      const { supabaseAdmin } = await import('../lib/auth.mjs')
+      const crypto = await import('crypto')
+      const out = await bq.bigQuerySelectAll(OVERALL_BQ_SQL, {
+        maxBytes: 5_000_000_000, mode: 'overall_bq_sync', dashboardId: 'overall_bigquery', userEmail: me.email,
+      })
+      const rows = out.rows || []
+      // Schema drift guard -- refuse to write mismatched data rather than
+      // silently feeding the dashboard columns it doesn't expect.
+      const gotFields = (out.fields || []).map(f => f.name)
+      if (JSON.stringify(gotFields) !== JSON.stringify(OVERALL_BQ_EXPECTED_FIELDS)) {
+        return res.status(502).json({
+          configured: true, ok: false,
+          error: 'Schema drift: BigQuery returned ' + JSON.stringify(gotFields) + ' but this sync and overall_bq_daily are built for ' + JSON.stringify(OVERALL_BQ_EXPECTED_FIELDS) + '. Refusing to write.',
+        })
+      }
+
+      // (lead_date, Source, campaign_name) is NOT unique -- the query's CASE
+      // collapses several source_1 values into one output Source (2,134 of
+      // 2,05,720 rows measured on 2026-08-05 shared a triple). Each row gets a
+      // surrogate key: md5 of the triple plus its ordinal within the duplicate
+      // group, the group sorted by its own remaining metric values so the same
+      // source row keeps the same key across syncs (merge-duplicates then does
+      // a real in-place UPDATE instead of orphaning+recreating rows).
+      const REMAINING_COLS = [
+        'Total Leads Generated', 'floor_queued',
+        'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
+        'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
+        'Total_Spends',
+        'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
+      ]
+      const groups = new Map()
+      for (const r of rows) {
+        const k = r.lead_date + '\x1f' + r.Source + '\x1f' + r.campaign_name
+        if (!groups.has(k)) groups.set(k, [])
+        groups.get(k).push(r)
+      }
+      const syncId = crypto.randomUUID()
+      const syncedAt = new Date().toISOString()
+      const records = []
+      for (const [k, bucket] of groups) {
+        const [lead_date, Source, campaign_name] = k.split('\x1f')
+        bucket.sort((a, b) => {
+          const sa = JSON.stringify(REMAINING_COLS.map(c => a[c]))
+          const sb = JSON.stringify(REMAINING_COLS.map(c => b[c]))
+          return sa < sb ? -1 : sa > sb ? 1 : 0
+        })
+        bucket.forEach((r, ordinal) => {
+          const seed = [overallBqKeypart(lead_date), overallBqKeypart(Source), overallBqKeypart(campaign_name), String(ordinal)].join('\x1f')
+          records.push({
+            row_key: crypto.createHash('md5').update(seed).digest('hex'),
+            lead_date: r.lead_date, month: r.month, Source: r.Source, Sub_Source: r.Sub_Source, campaign_name: r.campaign_name,
+            'Total Leads Generated': r['Total Leads Generated'],
+            floor_queued: r.floor_queued,
+            'Queued on Futwork Human': r['Queued on Futwork Human'],
+            'Queued on Futwork AI': r['Queued on Futwork AI'],
+            'Queued on Superbot': r['Queued on Superbot'],
+            'Futwork Human QL': r['Futwork Human QL'],
+            'Futwork AI QL': r['Futwork AI QL'],
+            'Superbot AI QL': r['Superbot AI QL'],
+            // Postgres NUMERIC -- a real value round-trips exactly through a JS
+            // double same as it did through BigQuery's own FLOAT64 (both IEEE754
+            // binary64); only NULL must stay NULL, never coerced to 0.
+            Total_Spends: r.Total_Spends == null ? null : String(r.Total_Spends),
+            'Total Apps': r['Total Apps'], 'Total Offers': r['Total Offers'],
+            'Total Deposits': r['Total Deposits'], 'Total RAUs': r['Total RAUs'],
+            lead_date_iso: overallBqIsoDate(r.lead_date),
+            sync_id: syncId, synced_at: syncedAt,
+          })
+        })
+      }
+      if (records.length !== rows.length) {
+        return res.status(502).json({ configured: true, ok: false, error: 'Built ' + records.length + ' records from ' + rows.length + ' rows. Refusing to write.' })
+      }
+      const badDates = records.filter(r => r.lead_date_iso == null).length
+      if (badDates) {
+        return res.status(502).json({ configured: true, ok: false, error: badDates + ' row(s) had a lead_date that did not parse as DD-Mon-YYYY. Refusing to write.' })
+      }
+
+      for (let i = 0; i < records.length; i += 500) {
+        const batch = records.slice(i, i + 500)
+        const r = await supabaseAdmin('overall_bq_daily', {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify(batch),
+        })
+        if (!r.ok) {
+          const detail = await r.text()
+          return res.status(502).json({ configured: true, ok: false, error: 'Supabase upsert failed (batch ' + i / 500 + '): ' + detail, rowCount: records.length })
+        }
+      }
+      await supabaseAdmin(`overall_bq_daily?or=(sync_id.neq.${syncId},sync_id.is.null)`, { method: 'DELETE' })
+
+      // Pre-aggregated day+source companion, built from the SAME records
+      // already read above -- no second BigQuery query. This is what makes
+      // the dashboard's fast path fast (a few thousand (date, Source) rows for
+      // the whole history, instead of one-row-per-campaign growth).
+      const SUM_FIELDS = [
+        'Total Leads Generated', 'floor_queued',
+        'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
+        'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
+        'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
+      ]
+      const agg = new Map()
+      for (const r of records) {
+        // BigQuery genuinely returns a NULL Source for a small number of rows.
+        // overall_bq_daily allows that; the aggregated table's Source is part
+        // of its key (NOT NULL), so it's normalised here to match the client's
+        // own fallback (mapRow() already turns a blank Source into 'Unknown').
+        const src = r.Source || 'Unknown'
+        const key = r.lead_date_iso + '|' + src
+        let a = agg.get(key)
+        if (!a) {
+          a = { row_key: (r.lead_date_iso || '') + '|' + src, lead_date_iso: r.lead_date_iso, Source: src, lead_date: r.lead_date, month: r.month, Total_Spends: 0, sync_id: syncId, synced_at: syncedAt }
+          for (const f of SUM_FIELDS) a[f] = 0
+          agg.set(key, a)
+        }
+        for (const f of SUM_FIELDS) a[f] += (r[f] || 0)
+        if (r.Total_Spends != null) a.Total_Spends += Number(r.Total_Spends) || 0
+      }
+      const aggRecords = Array.from(agg.values())
+      for (let i = 0; i < aggRecords.length; i += 500) {
+        const batch = aggRecords.slice(i, i + 500)
+        const r = await supabaseAdmin('overall_bq_daily_agg', {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify(batch),
+        })
+        if (!r.ok) {
+          const detail = await r.text()
+          return res.status(502).json({ configured: true, ok: false, error: 'Supabase agg upsert failed (batch ' + i / 500 + '): ' + detail, rowCount: aggRecords.length })
+        }
+      }
+      await supabaseAdmin(`overall_bq_daily_agg?or=(sync_id.neq.${syncId},sync_id.is.null)`, { method: 'DELETE' })
+
+      return res.status(200).json({
+        configured: true, ok: true, rowCount: records.length, aggRowCount: aggRecords.length,
+        syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed,
+      })
     }
     if (mode === 'datasets') {
       const d = await bq.bigQueryDatasets()
@@ -3959,6 +4166,17 @@ export default async function handler(req, res) {
   if (
     (req.query && req.query.source) === 'bigquery' &&
     (req.query && req.query.mode) === 'apps_sync' &&
+    process.env.CRON_SECRET &&
+    req.headers['x-cron-secret'] === process.env.CRON_SECRET
+  ) {
+    return handleBigQuery(req, res, { role: 'admin', email: 'cron' })
+  }
+  // Same reasoning, for the Overall BigQuery cache sync -- triggered by
+  // cron-job.org (3x/day, sharp) instead of GitHub Actions' own scheduler,
+  // which was confirmed live to silently drop scheduled runs on this repo.
+  if (
+    (req.query && req.query.source) === 'bigquery' &&
+    (req.query && req.query.mode) === 'overall_bq_sync' &&
     process.env.CRON_SECRET &&
     req.headers['x-cron-secret'] === process.env.CRON_SECRET
   ) {

@@ -19,16 +19,15 @@ name: Overall BigQuery Cache Sync
 #   BIGQUERY_REFRESH_TOKEN same value as Vercel env
 # THE REPO IS PUBLIC -- never inline any of these.
 
+# Schedule REMOVED 2026-09-05 -- confirmed live that GitHub Actions was
+# silently DROPPING the 9:00/10:00 AM IST runs entirely (not just running
+# them late): the bigquery_jobs log showed zero activity of any kind, from
+# any workflow, across that whole window. The exact same sync now also runs
+# as a real HTTP endpoint (api/crm-leads.js, mode=overall_bq_sync), triggered
+# 3x/day by cron-job.org -- a free, per-minute-precise external scheduler that
+# doesn't share GitHub's queue. This workflow is kept ONLY as a manual
+# (workflow_dispatch) fallback in case that endpoint is ever unreachable.
 on:
-  schedule:
-    # 3x/day IST (9:00, 10:00, 22:00), converted to UTC below (IST = UTC+5:30).
-    # This data isn't real-time, so a 30-min ask bought nothing -- GitHub
-    # throttles low-activity repos regardless of what interval you request,
-    # and 3 fixed times/day is a normal-enough cadence that it should actually
-    # run close to on time, unlike the old high-frequency ask.
-    - cron: '30 3 * * *'   # 9:00 AM IST
-    - cron: '30 4 * * *'   # 10:00 AM IST
-    - cron: '30 16 * * *'  # 10:00 PM IST
   workflow_dispatch:
 
 # One sync at a time. Two overlapping runs would interleave their sync_id stamps
