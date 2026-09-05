@@ -2097,6 +2097,14 @@ async function handleB2CDailyReport(req, res) {
     if (!me || me.role !== 'admin') return res.status(401).json({ error: 'Not signed in' })
   }
 
+  // Optional: an admin picking a specific "send through" date on the B2C
+  // dashboard's own Daily Report control, instead of always auto-picking
+  // yesterday. buildB2CServerContext ignores anything invalid or later than
+  // the real D-1, so a missing/bad value here just falls back to the old
+  // always-yesterday behavior -- the scheduled cron call never sends this
+  // field at all and is completely unaffected.
+  const throughDate = req.body && typeof req.body.throughDate === 'string' ? req.body.throughDate : null
+
   try {
     const data = await fetchB2CDataSafe()
     if (!data || data.configured === false) {
@@ -2130,7 +2138,7 @@ async function handleB2CDailyReport(req, res) {
     ]
     const posted = []
     for (const job of jobs) {
-      const ctx = buildB2CServerContext(job.days || [], job.statement)
+      const ctx = buildB2CServerContext(job.days || [], job.statement, throughDate)
       if (cfg.b2c_rev_vs_cashflow_note) ctx.revVsCashflowNote = cfg.b2c_rev_vs_cashflow_note
       const messages = job.version.build(ctx) // pristine -- this exact array is what gets stored AND what the real channel receives on approval
       const pendingId = await savePendingB2CReport(job.statement, messages)

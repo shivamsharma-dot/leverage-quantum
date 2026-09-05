@@ -12,7 +12,7 @@ import WeekPicker from '../components/WeekPicker'
 import { useDesignStyle, saveDesignStyle } from '../lib/designSettings'
 import { renderKpiVariant } from '../ui/kpiVariants.jsx'
 import styles from './SettingsPage.module.css'
-import { SLACK_CHANNELS, confirmPhrase, channelHandle } from '../../shared/slackChannels.mjs'
+import { SLACK_CHANNELS, confirmPhrase } from '../../shared/slackChannels.mjs'
 import { SlackIcon, GmailIcon } from '../components/icons/BrandIcons'
 import { DEFAULT_REV_VS_CASHFLOW_NOTE } from '../lib/b2cReport'
 import { canAccessDashboard } from '../../shared/access.mjs'
@@ -53,18 +53,10 @@ const SlackChannelIcon = () => (
   </svg>
 )
 
-// Same minimalist line style as SlackChannelIcon/SlackLock, for the B2C daily
-// report group -- a paper plane rather than an emoji, per the no-emoji rule.
-const SlackSendIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M21 3 3 10.5l7.5 3L13.5 21 21 3Z" /><path d="M10.5 13.5 21 3" />
-  </svg>
-)
-
 // A broken/two-piece link, for the webhook fallback -- kept deliberately
-// neutral (not a brand-tinted chip like the three groups above it) since this
+// neutral (not a brand-tinted chip like the groups above it) since this
 // is the de-emphasised, non-preferred path; giving it the same visual weight
-// as Channels/Locked channels/B2C daily report would undo that hierarchy.
+// as Channels/Locked channels would undo that hierarchy.
 const SlackWebhookIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true">
     <path d="M9 15 15 9" />
@@ -1146,7 +1138,6 @@ export default function SettingsPage() {
           setSlackTestChannels([{ id: 'legacy', name: 'Test channel', channel: pf.slack_channel_test }])
         }
         setGuardedChan(Object.fromEntries(GUARDED.map(c => [c.id, pf[c.pref] != null ? pf[c.pref] : ''])))
-        if (pf.b2c_approve_destination != null) setB2cApproveDest(pf.b2c_approve_destination)
         if (pf.slack_auto_reports_enabled != null) setSlackAuto(pf.slack_auto_reports_enabled !== false)
         setSavedHiddenPages(hp)
         setHiddenPages(hp)
@@ -1575,12 +1566,6 @@ export default function SettingsPage() {
   const [gazetteMsg, setGazetteMsg] = useState('')
   const [gazettePreviewOpen, setGazettePreviewOpen] = useState(false)
   const [gazettePreviewView, setGazettePreviewView] = useState('desktop')
-  // Manual test-fire of the daily B2C P&L / Cash Flow Slack approval flow --
-  // same endpoint the 3 PM IST Vercel cron hits, which always previews into
-  // the #dashboard-testing sandbox channel regardless of the approval
-  // destination picked above.
-  const [b2cReportSending, setB2cReportSending] = useState(false)
-  const [b2cReportMsg, setB2cReportMsg] = useState('')
   // --- Slack config (webhook + auto-post toggle) ---
   const [slackWebhook, setSlackWebhook] = useState('')
   // An Incoming Webhook is bound to one channel, so a test channel needs its own webhook --
@@ -1599,11 +1584,6 @@ export default function SettingsPage() {
   const [newTestChanValue, setNewTestChanValue] = useState('')
   const [slackTestPick, setSlackTestPick] = useState('')
   const [guardedChan, setGuardedChan] = useState({})
-  // Where the B2C daily report's Slack "Approve" button actually posts to.
-  // Defaults to the first configured test channel (never the real, guarded
-  // b2c_core channel) until an admin deliberately points it at production --
-  // deliberately safe-by-default while this is still being tried out.
-  const [b2cApproveDest, setB2cApproveDest] = useState('')
   // The CEO PIN is managed through its own endpoint, never through preferences,
   // so nothing about it is ever held in this page's state except its status.
   const [ceoPinInfo, setCeoPinInfo] = useState(null)
@@ -2250,7 +2230,6 @@ export default function SettingsPage() {
         ['slack_channel_main', slackChannelMain.trim()],
         ['slack_test_channels', slackTestChannels.filter(c => c.name.trim() && c.channel.trim())],
         ...GUARDED.map(c => [c.pref, String(guardedChan[c.id] || '').trim()]),
-        ['b2c_approve_destination', b2cApproveDest],
         ['slack_auto_reports_enabled', slackAuto],
       ]
       for (const [key, value] of entries) {
@@ -2326,21 +2305,6 @@ setRcMsg('Sent to ' + (d.recipients?.length || 0) + ' recipients')
 } catch (e) { setRcMsg('\u2715 ' + e.message) }
 finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
 }
-
-  const sendB2CDailyReportNow = async () => {
-    setB2cReportSending(true); setB2cReportMsg('')
-    try {
-      const r = await fetchT('/api/send-report?type=b2c_daily_report', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'b2c_daily_report', triggered_by: user?.email || 'manual' })
-      })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error || 'Failed')
-      setB2cReportMsg('Posted to #dashboard-testing \u2014 check Slack to Approve/Disapprove')
-    } catch (e) { setB2cReportMsg('\u2715 ' + e.message) }
-    finally { setB2cReportSending(false); setTimeout(() => setB2cReportMsg(''), 12000) }
-  }
 
   const loadGazette = async () => {
     setGazetteLoading(true)
@@ -4142,40 +4106,6 @@ finally { setRcSending(false); setTimeout(() => setRcMsg(''), 6000) }
                       </Button>
                       {ceoPinMsg && <span className={styles.rcFeedback + ' ' + (ceoPinMsg.charAt(0) === 'x' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{ceoPinMsg}</span>}
                     </div>
-                  </div>
-                </div>
-
-                {/* ---- B2C daily report: the routing control and its manual fire ----
-                    Both channels are spelled out in the dropdown's own option labels
-                    (see the comment on the options array), so the paragraph that used
-                    to sit here restated the trigger word for word and is gone. Every
-                    option string, the value, minWidth and onChange are unchanged, as is
-                    resolveApprovalDestination server-side. */}
-                <div className={styles.skGroup}>
-                  <span className={styles.skGroupHead}>
-                    <span className={styles.skGroupIconChip} data-accent="cyan"><SlackSendIcon /></span>
-                    <span className={styles.skGroupLabel}>B2C daily report</span>
-                  </span>
-                  <div className={styles.skField}>
-                    <label className={styles.fieldLabel}>Approval sends to</label>
-                    <Dropdown
-                      value={b2cApproveDest || (slackTestChannels[0] ? 'test:' + slackTestChannels[0].id : 'test')}
-                      onChange={setB2cApproveDest}
-                      minWidth={340}
-                      options={[
-                        ...slackTestChannels.map(c => ({ value: 'test:' + c.id, label: '#dashboard-testing  →  #' + c.name })),
-                        { value: 'b2c_core', label: '#dashboard-testing  →  ' + channelHandle('b2c_core') + '  (guarded)' },
-                      ]}
-                    />
-                  </div>
-                  <div className={styles.skField} style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <Button size="sm" variant="secondary" onClick={sendB2CDailyReportNow} disabled={b2cReportSending}>
-                      {b2cReportSending ? 'Sending…' : 'Send report now'}
-                    </Button>
-                    <span className={styles.skNote} style={{ margin: 0 }}>
-                      Fires that same pipeline immediately, instead of waiting for 3&nbsp;PM IST.
-                    </span>
-                    {b2cReportMsg && <span className={styles.rcFeedback + ' ' + (b2cReportMsg.charAt(0) === '✕' ? styles.rcFeedbackErr : styles.rcFeedbackOk)}>{b2cReportMsg}</span>}
                   </div>
                 </div>
 

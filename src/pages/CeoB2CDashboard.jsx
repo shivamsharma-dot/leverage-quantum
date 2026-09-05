@@ -13,6 +13,8 @@ import { CEO_BRIEF_VERSIONS } from '../lib/ceoBrief'
 import styles from './CeoB2CDashboard.module.css'
 import { BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H, BAR_MAX, NEUTRAL_TRACK } from '../ui/dashboardKit'
 import { SlackIcon } from '../components/icons/BrandIcons'
+import { channelHandle } from '../../shared/slackChannels.mjs'
+import { useAuth } from '../hooks/useAuth'
 
 // Line items exactly as the finance sheet names them, in sheet order. The
 // Daily P&L tab splits SR into Online/Offline (2026-08); Daily Cash Flow does
@@ -155,6 +157,7 @@ const STATEMENT_LABELS = {
 }
 
 export default function CeoB2CDashboard({ statement = 'pnl' }) {
+  const { user } = useAuth()
   const isCashFlow = statement === 'cashflow'
   const L = STATEMENT_LABELS[isCashFlow ? 'cashflow' : 'pnl']
   const REV = isCashFlow ? REV_CASHFLOW : REV_PNL
@@ -436,6 +439,62 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   // recomputed for the message, and the table image rides along in the thread.
   const tableRef = useRef(null)
   const [slackOpen, setSlackOpen] = useState(false)
+
+  // Daily Report -- the scheduled 3 PM IST approval pipeline (posts a native
+  // Slack table for BOTH P&L and Cash Flow, with Approve/Disapprove buttons,
+  // to the sandbox channel first), now triggerable from either dashboard
+  // page instead of only from Settings > Reports > Slack. Moved wholesale --
+  // Settings no longer has its own copy of this control.
+  const [dailyOpen, setDailyOpen] = useState(false)
+  const [dailyLoaded, setDailyLoaded] = useState(false)
+  const [dailyTestChannels, setDailyTestChannels] = useState([])
+  const [dailyApproveDest, setDailyApproveDest] = useState('')
+  // Defaults to D-1 (the real last complete day) every time the popover opens
+  // -- never carries a stale pick from a previous open, and can never be
+  // pushed later than d1 (see the max attribute on the input below), since
+  // today's row in the sheet is still filling in.
+  const [dailyThroughDate, setDailyThroughDate] = useState(d1)
+  const [dailySending, setDailySending] = useState(false)
+  const [dailyMsg, setDailyMsg] = useState('')
+
+  const openDaily = useCallback(function () {
+    setDailyOpen(true)
+    setDailyThroughDate(d1)
+    if (dailyLoaded) return
+    fetch('/api/preferences', { credentials: 'include' })
+      .then(function (r) { return r.ok ? r.json() : { prefs: {} } })
+      .then(function (d) {
+        const pf = d.prefs || {}
+        if (Array.isArray(pf.slack_test_channels)) setDailyTestChannels(pf.slack_test_channels)
+        if (pf.b2c_approve_destination != null) setDailyApproveDest(pf.b2c_approve_destination)
+        setDailyLoaded(true)
+      })
+      .catch(function () { setDailyLoaded(true) })
+  }, [dailyLoaded, d1])
+
+  const saveDailyApproveDest = useCallback(function (value) {
+    setDailyApproveDest(value)
+    fetch('/api/preferences', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: 'b2c_approve_destination', value }),
+    }).catch(function () {})
+  }, [])
+
+  const sendDailyReportNow = async function () {
+    setDailySending(true); setDailyMsg('')
+    try {
+      const r = await fetch('/api/send-report?type=b2c_daily_report', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'b2c_daily_report', triggered_by: (user && user.email) || 'manual', throughDate: dailyThroughDate }),
+      })
+      const dd = await r.json()
+      if (!r.ok) throw new Error(dd.error || 'Failed')
+      setDailyMsg('Posted to #dashboard-testing (through ' + dailyThroughDate + ') — check Slack to Approve/Disapprove')
+    } catch (e) { setDailyMsg('✕ ' + e.message) }
+    finally { setDailySending(false); setTimeout(function () { setDailyMsg('') }, 12000) }
+  }
   const peopleMonthly = useMemo(function () {
     const p = planRows.filter(function (r) { return r.label === 'People' })[0]
     return p ? p.actual : null
@@ -614,6 +673,62 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                 icon={<SlackIcon size={13} />}>
                 Send to Slack
               </Button>
+            ) : null}
+            {ready ? (
+              <div style={{ position: 'relative' }}>
+                <Button size="sm" variant="secondary" onClick={openDaily} icon={<SlackIcon size={13} />}>
+                  Daily Report
+                </Button>
+                {dailyOpen ? (
+                  <>
+                    <div onClick={function () { setDailyOpen(false) }} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
+                    <div style={{
+                      position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400, width: 340,
+                      background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 14,
+                      boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', padding: 14,
+                    }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
+                        Send the daily P&amp;L + Cash Flow report
+                      </div>
+                      <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+                        Send through
+                      </label>
+                      <input
+                        type="date" value={dailyThroughDate} max={d1}
+                        onChange={function (e) { setDailyThroughDate(e.target.value > d1 ? d1 : e.target.value) }}
+                        style={{
+                          width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: 8,
+                          border: '1px solid var(--card-border)', background: 'var(--bg2)', color: 'var(--text)',
+                          fontSize: 12.5, marginBottom: 10,
+                        }}
+                      />
+                      <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 10 }}>
+                        Can't go later than {d1} &mdash; today's row is still filling in.
+                      </div>
+                      <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+                        Approval sends to
+                      </label>
+                      <Dropdown
+                        value={dailyApproveDest || (dailyTestChannels[0] ? 'test:' + dailyTestChannels[0].id : 'test')}
+                        onChange={saveDailyApproveDest}
+                        minWidth={310}
+                        options={[
+                          ...dailyTestChannels.map(function (c) { return { value: 'test:' + c.id, label: '#dashboard-testing  →  #' + c.name } }),
+                          { value: 'b2c_core', label: '#dashboard-testing  →  ' + channelHandle('b2c_core') + '  (guarded)' },
+                        ]}
+                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                        <Button size="sm" variant="secondary" onClick={sendDailyReportNow} disabled={dailySending}>
+                          {dailySending ? 'Sending…' : 'Send report now'}
+                        </Button>
+                        {dailyMsg ? (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: dailyMsg.charAt(0) === '✕' ? '#B42318' : 'var(--green-ink, #2E7D4F)' }}>{dailyMsg}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </div>
             ) : null}
             <SlackReportPanel
               open={slackOpen}
