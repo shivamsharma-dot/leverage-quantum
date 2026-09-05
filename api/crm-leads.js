@@ -3444,6 +3444,27 @@ async function handleBigQuery(req, res, me) {
     if (mode === 'overall_bq_sync') {
       const { supabaseAdmin } = await import('../lib/auth.mjs')
       const crypto = await import('crypto')
+
+      // Self-continuation state. Absent on the very first call (from
+      // cron-job.org or a manual trigger) -- a fresh syncId/syncedAt get
+      // minted then. Present on a call this same endpoint made to itself,
+      // carrying exactly which raw-table batch to resume from so every
+      // invocation within one logical sync writes under the SAME sync_id
+      // (otherwise the eventual prune would delete the earlier chunks' own
+      // freshly-written rows).
+      //
+      // Why re-query BigQuery on every chunk instead of passing the
+      // remaining rows through the request body: ~380k records serialised as
+      // JSON would be tens of MB, real risk of exceeding Vercel's request
+      // body limit and slow to transmit either way. The query itself is
+      // cheap (~50MB, a few cents at most even run several times over) and
+      // 100% deterministic -- same query, same grouping/sort/dedup logic
+      // below -- so re-deriving the full `records` array each call and just
+      // resuming the WRITE loop from a small integer offset is far simpler
+      // and safer than trying to move the data itself between invocations.
+      const contSyncId = (req.body && req.body.syncId) || null
+      const contStartBatch = Number((req.body && req.body.startBatch) || 0)
+
       const out = await bq.bigQuerySelectAll(OVERALL_BQ_SQL, {
         maxBytes: 5_000_000_000, mode: 'overall_bq_sync', dashboardId: 'overall_bigquery', userEmail: me.email,
       })
@@ -3478,8 +3499,8 @@ async function handleBigQuery(req, res, me) {
         if (!groups.has(k)) groups.set(k, [])
         groups.get(k).push(r)
       }
-      const syncId = crypto.randomUUID()
-      const syncedAt = new Date().toISOString()
+      const syncId = contSyncId || crypto.randomUUID()
+      const syncedAt = (req.body && req.body.syncedAt) || new Date().toISOString()
       const records = []
       for (const [k, bucket] of groups) {
         const [lead_date, Source, campaign_name] = k.split('\x1f')
@@ -3520,17 +3541,72 @@ async function handleBigQuery(req, res, me) {
         return res.status(502).json({ configured: true, ok: false, error: badDates + ' row(s) had a lead_date that did not parse as DD-Mon-YYYY. Refusing to write.' })
       }
 
+      // Time-boxed write loop -- confirmed live 2026-09-05 that writing all
+      // ~760 batches (even at 16-way concurrency) can take well over Vercel's
+      // 60s maxDuration, and a request that runs that long risks being
+      // silently retried by something in front of it, racing itself on the
+      // same table. 40s leaves real margin for the continuation dispatch +
+      // response overhead, same budget-under-ceiling reasoning already used
+      // by the LeadSquared bulk-Opportunity-update chain elsewhere in this file.
+      const BATCH_SIZE = 500, CONCURRENCY = 16, TIME_BUDGET_MS = 40000
+      const totalBatches = Math.ceil(records.length / BATCH_SIZE)
+      const START = Date.now()
+      let batchIdx = contStartBatch
       try {
-        await upsertBatchesConcurrent(supabaseAdmin, 'overall_bq_daily', records, 500, 16)
+        while (batchIdx < totalBatches) {
+          if (Date.now() - START > TIME_BUDGET_MS) break
+          const groupEnd = Math.min(batchIdx + CONCURRENCY, totalBatches)
+          const slice = []
+          for (let b = batchIdx; b < groupEnd; b++) slice.push(records.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE))
+          const results = await Promise.all(slice.map(batch => supabaseAdmin('overall_bq_daily', {
+            method: 'POST',
+            headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify(batch),
+          })))
+          for (const r of results) {
+            if (!r.ok) throw new Error('Supabase upsert failed: ' + (await r.text()))
+          }
+          batchIdx = groupEnd
+        }
       } catch (e) {
-        return res.status(502).json({ configured: true, ok: false, error: String((e && e.message) || e), rowCount: records.length })
+        return res.status(502).json({ configured: true, ok: false, error: String((e && e.message) || e), syncId, batchesDone: batchIdx, batchesTotal: totalBatches })
       }
+
+      if (batchIdx < totalBatches) {
+        // Not done yet -- hand off the rest to a fresh invocation of this
+        // exact same endpoint. Dispatched (not awaited to completion) so this
+        // call can return promptly, but given a brief moment to actually
+        // leave the process first -- Vercel can freeze a function immediately
+        // after it responds, so firing this as truly fire-and-forget risked
+        // it never being sent at all.
+        let continued = false
+        if (process.env.CRON_SECRET) {
+          try {
+            const proto = req.headers['x-forwarded-proto'] || 'https'
+            const selfUrl = proto + '://' + req.headers.host + '/api/crm-leads?source=bigquery&mode=overall_bq_sync'
+            fetch(selfUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-cron-secret': process.env.CRON_SECRET },
+              body: JSON.stringify({ syncId, syncedAt, startBatch: batchIdx }),
+            }).catch(() => {})
+            await new Promise(r => setTimeout(r, 300))
+            continued = true
+          } catch (_) { /* best-effort -- a stalled chain can be resumed manually by POSTing the same {syncId, syncedAt, startBatch} */ }
+        }
+        return res.status(200).json({ configured: true, ok: true, phase: 'raw', syncId, syncedAt, batchesDone: batchIdx, batchesTotal: totalBatches, continued })
+      }
+
+      // Every raw-table batch is written -- safe to prune now (a chunk that
+      // got killed mid-way never reaches this line, so a half-written table
+      // never loses rows the way an unconditional prune-every-call would risk).
       await supabaseAdmin(`overall_bq_daily?or=(sync_id.neq.${syncId},sync_id.is.null)`, { method: 'DELETE' })
 
       // Pre-aggregated day+source companion, built from the SAME records
       // already read above -- no second BigQuery query. This is what makes
       // the dashboard's fast path fast (a few thousand (date, Source) rows for
-      // the whole history, instead of one-row-per-campaign growth).
+      // the whole history, instead of one-row-per-campaign growth). Small
+      // enough (a few thousand rows) to always fit in a single call's budget,
+      // so unlike the raw table above this never needs its own continuation.
       const SUM_FIELDS = [
         'Total Leads Generated', 'floor_queued',
         'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
@@ -3563,7 +3639,7 @@ async function handleBigQuery(req, res, me) {
       await supabaseAdmin(`overall_bq_daily_agg?or=(sync_id.neq.${syncId},sync_id.is.null)`, { method: 'DELETE' })
 
       return res.status(200).json({
-        configured: true, ok: true, rowCount: records.length, aggRowCount: aggRecords.length,
+        configured: true, ok: true, phase: 'done', rowCount: records.length, aggRowCount: aggRecords.length,
         syncId, syncedAt, totalBytesProcessed: out.totalBytesProcessed,
       })
     }
