@@ -3229,16 +3229,24 @@ async function upsertBatchesConcurrent(supabaseAdmin, table, records, batchSize,
   for (let i = 0; i < records.length; i += batchSize) batches.push(records.slice(i, i + batchSize))
   for (let i = 0; i < batches.length; i += concurrency) {
     const slice = batches.slice(i, i + concurrency)
-    const results = await Promise.all(slice.map(batch => supabaseAdmin(table, {
-      method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify(batch),
-    })))
-    for (let j = 0; j < results.length; j++) {
-      if (!results[j].ok) {
-        const detail = await results[j].text()
-        throw new Error('Supabase upsert failed (batch ' + (i + j) + ' of ' + batches.length + '): ' + detail)
+    // Each batch gets its own retry-with-backoff -- a transient Postgres
+    // statement-timeout under lock contention (confirmed live, see
+    // overall_bq_sync's own comment) shouldn't fail the whole sync on its
+    // first bad round.
+    const results = await Promise.all(slice.map(async (batch, j) => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const r = await supabaseAdmin(table, {
+          method: 'POST',
+          headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify(batch),
+        })
+        if (r.ok) return { ok: true }
+        if (attempt === 2) return { ok: false, detail: await r.text(), batchIndex: i + j }
+        await new Promise(res2 => setTimeout(res2, 1000 * (attempt + 1)))
       }
+    }))
+    for (const r of results) {
+      if (!r.ok) throw new Error('Supabase upsert failed (batch ' + r.batchIndex + ' of ' + batches.length + '): ' + r.detail)
     }
   }
 }
@@ -3548,28 +3556,51 @@ async function handleBigQuery(req, res, me) {
       // same table. 40s leaves real margin for the continuation dispatch +
       // response overhead, same budget-under-ceiling reasoning already used
       // by the LeadSquared bulk-Opportunity-update chain elsewhere in this file.
-      const BATCH_SIZE = 500, CONCURRENCY = 16, TIME_BUDGET_MS = 40000
+      // Concurrency confirmed live 2026-09-05 to be the WRONG lever: 16
+      // simultaneous upserts against the same table produced a real
+      // Supabase-side error -- "canceling statement due to statement
+      // timeout" (Postgres code 57014) -- on the very FIRST round, not a
+      // Vercel timeout at all. That's lock contention between concurrent
+      // ON CONFLICT upserts hitting the same table/index, not a data-volume
+      // problem, so more parallelism was making it worse, not faster. 3 at a
+      // time, each with its own retry-with-backoff, trades some raw speed
+      // for something that actually completes -- and since a slow individual
+      // round only means the SAME batch offset gets tried again next call
+      // (via the continuation below), being slow here is safe, unlike being
+      // wrong.
+      const BATCH_SIZE = 500, CONCURRENCY = 3, TIME_BUDGET_MS = 40000
       const totalBatches = Math.ceil(records.length / BATCH_SIZE)
       const START = Date.now()
       let batchIdx = contStartBatch
-      try {
-        while (batchIdx < totalBatches) {
-          if (Date.now() - START > TIME_BUDGET_MS) break
-          const groupEnd = Math.min(batchIdx + CONCURRENCY, totalBatches)
-          const slice = []
-          for (let b = batchIdx; b < groupEnd; b++) slice.push(records.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE))
-          const results = await Promise.all(slice.map(batch => supabaseAdmin('overall_bq_daily', {
-            method: 'POST',
-            headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-            body: JSON.stringify(batch),
-          })))
-          for (const r of results) {
-            if (!r.ok) throw new Error('Supabase upsert failed: ' + (await r.text()))
+      let stoppedOnFailure = false
+      while (batchIdx < totalBatches) {
+        if (Date.now() - START > TIME_BUDGET_MS) break
+        const groupEnd = Math.min(batchIdx + CONCURRENCY, totalBatches)
+        const slice = []
+        for (let b = batchIdx; b < groupEnd; b++) slice.push(records.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE))
+        const roundOk = await Promise.all(slice.map(async batch => {
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const r = await supabaseAdmin('overall_bq_daily', {
+              method: 'POST',
+              headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+              body: JSON.stringify(batch),
+            })
+            if (r.ok) return true
+            if (attempt === 2) return false
+            await new Promise(res2 => setTimeout(res2, 1000 * (attempt + 1)))
           }
+          return false
+        }))
+        if (roundOk.every(Boolean)) {
           batchIdx = groupEnd
+        } else {
+          // A batch in this round never succeeded even after retries --
+          // rather than fail the whole sync, stop right here (batchIdx NOT
+          // advanced) and let the continuation below try this exact same
+          // offset again from a fresh invocation/fresh connections.
+          stoppedOnFailure = true
+          break
         }
-      } catch (e) {
-        return res.status(502).json({ configured: true, ok: false, error: String((e && e.message) || e), syncId, batchesDone: batchIdx, batchesTotal: totalBatches })
       }
 
       if (batchIdx < totalBatches) {
@@ -3593,7 +3624,7 @@ async function handleBigQuery(req, res, me) {
             continued = true
           } catch (_) { /* best-effort -- a stalled chain can be resumed manually by POSTing the same {syncId, syncedAt, startBatch} */ }
         }
-        return res.status(200).json({ configured: true, ok: true, phase: 'raw', syncId, syncedAt, batchesDone: batchIdx, batchesTotal: totalBatches, continued })
+        return res.status(200).json({ configured: true, ok: true, phase: 'raw', syncId, syncedAt, batchesDone: batchIdx, batchesTotal: totalBatches, stoppedOnFailure, continued })
       }
 
       // Every raw-table batch is written -- safe to prune now (a chunk that
