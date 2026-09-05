@@ -144,6 +144,7 @@ export const NAV = [
           { to: '/dashboard/leadsquared?tab=create-opportunity', label: 'Create Opportunity', matchType: 'query', tabKey: 'create-opportunity' },
         ]
       },
+      { to: '/dashboard/live-qls', icon: <LiveQLsIcon />, label: 'Live QLs', end: false },
       { to: '/dashboard/team-mapping', icon: <TeamMappingIcon />, label: 'Team Mapping', end: false },
       { to: '/dashboard/super-tracker', icon: <SuperTrackerIcon />, label: 'Super Tracker', end: false },
     ]
@@ -216,6 +217,16 @@ function AgentsIcon() {
 // Real LeadSquared brand mark (two-tone step shape, from the user's own downloaded SVG) --
 // used as the sidebar nav icon for the new LeadSquared page.
 function LeadSquaredIcon() { return <svg width="14" height="14" viewBox="0 0 136.6 137.9"><polygon fill="#0C9AFC" points="0,0 0,68.5 68.6,68.5 68.6,137.9 136.6,137.9 136.6,0"/><polygon fill="#0C293D" points="68.6,137.9 0,137.9 0,68.5"/></svg> }
+// A pulsing dot -- deliberately distinct from the static "Field Schema"/"LeadSquared"
+// glyphs on this same page family, to read as "live" rather than a static report.
+function LiveQLsIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" opacity="0.35" />
+      <circle cx="12" cy="12" r="4.2" fill="currentColor" />
+    </svg>
+  )
+}
 // Org-chart glyph (three people, one linked above the other two) -- distinct
 // from LeadSquaredIcon's brand mark since this page is Quantum's own manual
 // mapping layer, not another LeadSquared-native view.
@@ -261,7 +272,7 @@ const ICON_MAP = {
   'Conversions': <CheckCircleIcon/>, 'Devices': <DeviceIcon/>, 'Locations': <PinIcon/>,
   'Audiences': <PeopleIcon/>, 'Schedule': <ClockIcon/>, 'Assets': <FolderIcon/>,
   'Month on Month': <ChartIcon/>, 'Day on Day': <DayIcon/>,
-  'LeadSquared': <LeadSquaredIcon/>, 'Team Mapping': <TeamMappingIcon/>, 'Super Tracker': <SuperTrackerIcon/>,
+  'LeadSquared': <LeadSquaredIcon/>, 'Live QLs': <LiveQLsIcon/>, 'Team Mapping': <TeamMappingIcon/>, 'Super Tracker': <SuperTrackerIcon/>,
   'Leads': <PeopleIcon/>, 'Activities': <ClockIcon/>, 'Opportunities': <OpportunityIcon/>, 'Create Opportunity': <CreateOpportunityIcon/>,
   'Daily P&L': <PnLIcon/>, 'Daily Cash Flow': <CashFlowIcon/>,
 }

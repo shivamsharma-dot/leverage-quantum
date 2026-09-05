@@ -541,6 +541,203 @@ async function fetchLeadSquaredActivities(creds, { leadId, since, until, eventCo
   }
 }
 
+// Live QLs -- a genuinely fast, correct "how many QLs today" for Manual Lead Qualification
+// (234) and Futwork AI Call Qualification (253), discovered 2026-09-06 by capturing
+// LeadSquared's own "Manage Activities" UI network call, NOT from documented behavior.
+//
+// Why this exists as a SEPARATE code path from fetchLeadSquaredActivities above:
+// CustomActivity/RetrieveByActivityEvent's FromDate/ToDate params (used above) do NOT
+// filter by date at all on this account -- confirmed live: a "today" request returned rows
+// going back to Oct 2024, sorted newest-first, silently ignoring the window. The only
+// reliable fix for THAT endpoint is paginating client-side until the date boundary is
+// crossed (1-2 minutes for a busy day). This endpoint -- Activity/Retrieve/BySearchParameter,
+// the "Activity Advanced Search" API -- is different and, used correctly, returns an exact
+// RecordCount instantly with no pagination.
+//
+// Two non-obvious things make it work, neither in LeadSquared's public docs:
+//  1. The CreatedOn condition's RSO must be one of LeadSquared's own preset keywords --
+//     "opt-today" / "opt-yesterday" / "opt-this-week" / "opt-last-month" / etc -- NOT a
+//     literal date or date range. A real "between 00:00:00 and 23:59:59" RSO is silently
+//     ignored (RecordCount stays at the unfiltered all-time total). Confirmed live for both
+//     "opt-today" (0, matching a real empty day) and "opt-yesterday" (10,729, exactly
+//     matching the slow paginated count for the same day).
+//  2. The AdvancedSearch JSON string must be byte-for-byte COMPACT -- no space after `:` or
+//     `,`. This backend does a naive string-level consistency check, not real JSON parsing;
+//     JSON.stringify(x, null, 2)-style spacing (or Python's default json.dumps) makes it
+//     reject with "AdvancedSearch criteria does not match ActivityEvent passed" -- a
+//     misleading error that has nothing to do with the real cause. Node's JSON.stringify
+//     with no indentation argument is already compact by default, which is why the object
+//     form below needs no special serializer (unlike the Python prototype this was
+//     developed against, which needed an explicit separators=(',',':') override).
+//
+// The qualifying-disposition rule itself (Note=Post, Status=Final, Disposition in a
+// specific 9-value list) was the FIRST thing tried and does not match LeadSquared's own UI
+// count -- verified live it gives 355 against a real UI count of 202 for the same day. The
+// UI's own real filter (captured from its ActivityGrid network call) checks ONLY
+// CreatedOn=today AND (Disposition is an exact value OR contains one of 4 substrings) --
+// no Note/Status condition at all. Empirically, on real data, every record matching those
+// disposition patterns already has Note=Post and Status=Final anyway, so the two rules
+// agree in practice -- but the UI's own rule is what's implemented here, since that's the
+// one confirmed to match LeadSquared's own reporting exactly (187/152 for Human/AI on a
+// real day, both exact matches).
+const LIVE_QL_DATE_KEYWORDS = {
+  today: 'opt-today', yesterday: 'opt-yesterday', this_week: 'opt-this-week',
+  last_week: 'opt-last-week', this_month: 'opt-this-month', last_month: 'opt-last-month',
+  last_seven_days: 'opt-last-seven-days', last_thirty_days: 'opt-last-thirty-days',
+}
+// "lik" is LeadSquared's own operator name for a substring/contains match (confirmed from
+// the captured payload) -- not "contains" or "like".
+const LIVE_QL_CONTAINS_WORDS = ['spoken', 'transferred', 'future', 'intent']
+
+// Field maps confirmed live via GetActivitySetting for each activity type -- custom field
+// NUMBERING is per-activity-type in LeadSquared, so Human and AI use entirely different
+// mx_Custom_N for the same concept (e.g. Budget is mx_Custom_34 on Human, mx_Custom_18 on
+// AI). Restricted to fields meaningful as a filter/breakdown dimension for University
+// Admission QLs -- excludes IDs, free-text notes, recording URLs, and other-vertical
+// fields (Homes_*/Loan_*/Careers_* on Human's schema, which belong to different products).
+const LIVE_QL_CHANNELS = {
+  human: {
+    code: 234,
+    dispositionField: 'mx_Custom_4',
+    dispositionExact: 'Interested in Call Back',
+    queuedNote: 'Call queued successfully at Futwork',
+    postNote: 'Post call response from Futwork',
+    fields: {
+      country: 'mx_Custom_1', preferredDegree: 'mx_Custom_2', intake: 'mx_Custom_3',
+      disposition: 'mx_Custom_4', callDuration: 'mx_Custom_9', dispositionReason: 'mx_Custom_11',
+      opportunityType: 'mx_Custom_14', opportunityCateredBy: 'mx_Custom_30',
+      budget: 'mx_Custom_34', highestQualification: 'mx_Custom_35',
+      firstCampaignName: 'mx_Custom_37', validPassport: 'mx_Custom_51',
+      currentDegreeStatus: 'mx_Custom_53', firstChannelSource: 'mx_Custom_63',
+      programPreference: 'mx_Custom_64',
+    },
+  },
+  ai: {
+    code: 253,
+    dispositionField: 'mx_Custom_9',
+    dispositionExact: 'Interested in Callback',
+    queuedNote: 'Call queued successfully at Futwork AI',
+    postNote: 'Post call response from Futwork AI',
+    fields: {
+      firstCampaignName: 'mx_Custom_1', firstChannelSource: 'mx_Custom_2',
+      firstContactChannel: 'mx_Custom_3', callStatus: 'mx_Custom_5', callDuration: 'mx_Custom_6',
+      disposition: 'mx_Custom_9', opportunityType: 'mx_Custom_12', country: 'mx_Custom_13',
+      validPassport: 'mx_Custom_14', intake: 'mx_Custom_15', currentCity: 'mx_Custom_16',
+      preferredMode: 'mx_Custom_17', budget: 'mx_Custom_18', highestQualification: 'mx_Custom_21',
+      preferredDegree: 'mx_Custom_22', preferredCourse: 'mx_Custom_23',
+      futworkProject: 'mx_Custom_24', dispositionReason: 'mx_Custom_26',
+      currentDegreeStatus: 'mx_Custom_28',
+    },
+  },
+}
+
+// extraAnd: optional array of {LSO, LSO_Type, Operator, RSO} appended into the SAME
+// AND'd RowCondition list that already carries ActivityEvent+CreatedOn -- used for a
+// single-value server-side narrow (not currently wired to the frontend; multi-select
+// advanced-filter chips are applied client-side instead, see fetchLiveQlChannel below,
+// since QL row counts are always small enough -- low hundreds -- for one unfiltered
+// fetch, and client-side filtering avoids re-deriving LeadSquared's own AND/OR precedence
+// rules for an arbitrary combination of multi-value chips).
+function buildQlAdvancedSearch(code, dispositionField, dateKeyword, exactVal, extraAnd) {
+  const dateBlockConditions = [
+    { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) },
+    { SubConOp: 'And', LSO: 'CreatedOn', LSO_Type: 'DateTime', Operator: 'eq', RSO: dateKeyword },
+  ]
+  ;(extraAnd || []).forEach(c => dateBlockConditions.push({ SubConOp: 'And', ...c }))
+  const conds = [{ Type: 'Activity', ConOp: 'and', RowCondition: dateBlockConditions, IsFilterCondition: true }]
+  if (exactVal) {
+    conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
+      { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) },
+      { SubConOp: 'And', LSO_Type: 'String', LSO: dispositionField, Operator: 'eq', RSO: exactVal, RSO_IsMailMerged: false },
+      { SubConOp: 'And', LSO_Type: 'DateTime', LSO: 'ActivityTime', Operator: 'eq', RSO: 'opt-all-time' },
+    ] })
+  }
+  LIVE_QL_CONTAINS_WORDS.forEach(w => {
+    conds.push({ Type: 'Activity', ConOp: 'or', RowCondition: [
+      { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) },
+      { SubConOp: 'And', LSO_Type: 'String', LSO: dispositionField, Operator: 'lik', RSO: w, RSO_IsMailMerged: false },
+      { SubConOp: 'And', LSO_Type: 'DateTime', LSO: 'ActivityTime', Operator: 'eq', RSO: 'opt-all-time' },
+    ] })
+  })
+  return JSON.stringify({ GrpConOp: 'And', Conditions: conds, QueryTimeZone: 'India Standard Time' })
+}
+
+// Queued is a much bigger, unfiltered set than QL (low thousands, not low hundreds) --
+// confirmed ActivityEvent_Note IS filterable as a plain RowCondition (unlike the broken
+// FromDate/ToDate path), so this stays a fast, single, count-only call (PageSize 1, we
+// only read RecordCount) rather than fetching and paginating through every queued row.
+function buildQueuedAdvancedSearch(code, dateKeyword, queuedNote) {
+  return JSON.stringify({
+    GrpConOp: 'And',
+    Conditions: [{
+      Type: 'Activity', ConOp: 'and', IsFilterCondition: true,
+      RowCondition: [
+        { SubConOp: 'And', LSO: 'ActivityEvent', LSO_Type: 'PAEvent', Operator: 'eq', RSO: String(code) },
+        { SubConOp: 'And', LSO: 'CreatedOn', LSO_Type: 'DateTime', Operator: 'eq', RSO: dateKeyword },
+        { SubConOp: 'And', LSO: 'ActivityEvent_Note', LSO_Type: 'String', Operator: 'eq', RSO: queuedNote },
+      ],
+    }],
+    QueryTimeZone: 'India Standard Time',
+  })
+}
+
+async function runActivityAdvancedSearch(creds, code, advancedSearchStr, includeCsv, pageSize) {
+  const data = await leadsquaredPost('/v2/ProspectActivity.svc/Activity/Retrieve/BySearchParameter', creds, {
+    ActivityEvent: code,
+    AdvancedSearch: advancedSearchStr,
+    Paging: { PageIndex: 1, PageSize: pageSize || 1000 },
+    Sorting: { ColumnName: 'CreatedOn', Direction: 1 },
+    ...(includeCsv ? { Columns: { Include_CSV: includeCsv } } : {}),
+  })
+  return { recordCount: (data && data.RecordCount) || 0, rows: (data && data.List) || [] }
+}
+
+async function fetchLiveQlChannel(creds, channelKey, dateKeyword) {
+  const ch = LIVE_QL_CHANNELS[channelKey]
+  if (!ch) throw new Error('Unknown channel: ' + channelKey)
+  const qlSearch = buildQlAdvancedSearch(ch.code, ch.dispositionField, dateKeyword, ch.dispositionExact, null)
+  const queuedSearch = buildQueuedAdvancedSearch(ch.code, dateKeyword, ch.queuedNote)
+  const includeCsv = ['ProspectActivityId', 'RelatedProspectId', 'CreatedOn', ...Object.values(ch.fields)].join(',')
+  const [qlResult, queuedResult] = await Promise.all([
+    runActivityAdvancedSearch(creds, ch.code, qlSearch, includeCsv, 1000),
+    runActivityAdvancedSearch(creds, ch.code, queuedSearch, null, 1),
+  ])
+  const rows = qlResult.rows.map(r => {
+    const mapped = { id: r.ProspectActivityId, prospectId: r.RelatedProspectId, createdOn: r.CreatedOn }
+    Object.keys(ch.fields).forEach(k => { mapped[k] = r[ch.fields[k]] || null })
+    return mapped
+  })
+  // truncated: true would mean the QL count for this channel/day exceeded 1000 -- has never
+  // been observed (real days run 150-350) but surfaced honestly rather than silently
+  // dropped, since a future exceptionally busy day could hit it.
+  return { qlCount: qlResult.recordCount, queuedCount: queuedResult.recordCount, rows, truncated: qlResult.recordCount > rows.length }
+}
+
+async function fetchLiveQlMetrics(creds, { date }) {
+  const dateKeyword = LIVE_QL_DATE_KEYWORDS[date] || LIVE_QL_DATE_KEYWORDS.today
+  const [human, ai] = await Promise.all([
+    fetchLiveQlChannel(creds, 'human', dateKeyword),
+    fetchLiveQlChannel(creds, 'ai', dateKeyword),
+  ])
+  return {
+    date: date && LIVE_QL_DATE_KEYWORDS[date] ? date : 'today',
+    human, ai,
+    totalQL: human.qlCount + ai.qlCount,
+    totalQueued: human.queuedCount + ai.queuedCount,
+    fieldLabels: {
+      country: 'Country', preferredDegree: 'Preferred Degree', intake: 'Intake',
+      disposition: 'Disposition', callDuration: 'Call Duration', dispositionReason: 'Disposition Reason',
+      opportunityType: 'Opportunity Type', opportunityCateredBy: 'Catered By', budget: 'Budget',
+      highestQualification: 'Highest Qualification', firstCampaignName: 'First Campaign Name',
+      validPassport: 'Valid Passport', currentDegreeStatus: 'Current Degree Status',
+      firstChannelSource: 'First Channel Source', programPreference: 'Program Preference',
+      firstContactChannel: 'First Contact Channel', callStatus: 'Call Status',
+      currentCity: 'Current City', preferredMode: 'Preferred Mode', preferredCourse: 'Preferred Course',
+      futworkProject: 'Futwork Project',
+    },
+  }
+}
+
 // ActivityTypes.Get -- lists every activity type configured on this account (code + real
 // display name), used to power an Activity Type filter dropdown matching LeadSquared's own
 // Manage Activity screen instead of showing raw numeric EventCodes.
@@ -2624,6 +2821,7 @@ async function handleLeadSquared(req, res, me) {
     if (mode === 'opportunities') return res.status(200).json(await fetchLeadSquaredOpportunities(creds, p))
     if (mode === 'opportunity_meta') return res.status(200).json(await fetchLeadSquaredOpportunityMeta(creds, p))
     if (mode === 'activities') return res.status(200).json(await fetchLeadSquaredActivities(creds, p))
+    if (mode === 'live_ql_metrics') return res.status(200).json(await fetchLiveQlMetrics(creds, { date: req.query.date }))
     if (mode === 'activity_types') return res.status(200).json(await fetchLeadSquaredActivityTypes(creds))
     if (mode === 'activity_schema') return res.status(200).json(await fetchLeadSquaredActivitySchema(creds, { code, refresh: refresh === '1' }))
     if (mode === 'activity_dropdown_options') return res.status(200).json(await fetchLeadSquaredDropdownOptions(creds, { code, schemaName }))

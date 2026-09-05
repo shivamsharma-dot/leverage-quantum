@@ -30,6 +30,7 @@ export const COMPONENT_IMPORTS = {
   ReferralDashboard: () => import('../pages/ReferralDashboard'),
   LeadsAssignedDashboard: () => import('../pages/LeadsAssignedDashboard'),
   LeadSquaredDashboard: () => import('../pages/LeadSquaredDashboard'),
+  LiveQLsDashboard: () => import('../pages/LiveQLsDashboard'),
   TeamMappingDashboard: () => import('../pages/TeamMappingDashboard'),
   SuperTrackerDashboard: () => import('../pages/SuperTrackerDashboard'),
   AskAI: () => import('../pages/AskAI'),
