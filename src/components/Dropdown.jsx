@@ -85,7 +85,12 @@ function Dropdown({ options = [], value, onChange, label, minWidth = 100, disabl
           }}
           onClick={toggle}
         >
-          <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis' }}>{current ? current.label : value}</span>
+          {/* minWidth:0 overrides the flex-item default of "shrink no further than my
+              own content" -- without it, overflow/textOverflow below never actually
+              engages for a long label: the button just grows past its container
+              instead (measured live: a long option label bled the whole trigger past
+              its popover's right edge rather than truncating). */}
+          <span style={{ flex: 1, minWidth: 0, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current ? current.label : value}</span>
           <svg width="10" height="6" viewBox="0 0 10 6" fill="none"
             style={{ flexShrink: 0, transition: 'transform .2s', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
             <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

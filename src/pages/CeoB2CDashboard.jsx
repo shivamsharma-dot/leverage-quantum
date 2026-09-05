@@ -80,6 +80,89 @@ function daysBetweenIncl(fromIso, toIso) {
   return Math.round((b - a) / 86400000) + 1
 }
 
+// Single-day picker for the Daily Report control below -- house rule is no
+// native <input type="date">, and DateRangePicker (imported above, used for
+// "Custom range") is a genuine two-endpoint range picker with its own
+// two-click flow, not a fit for "pick exactly one day". Same visual language
+// (tokens, cell rendering, nav arrows, today dot) as DateRangePicker's own
+// CalMonth, just a single month, single click, and a real max-date cap
+// instead of a range -- picking a day disables it here rather than only via
+// an <input max=> attribute, which a user could otherwise type past.
+const SDP_C = { navy: '#1F3C84', navyBg: 'var(--navy-tint)', blue: '#1C9FD4', border: 'var(--card-border)', text: 'var(--text)', muted: 'var(--text3)', sub: 'var(--text2)' }
+const SDP_FONT = "'Plus Jakarta Sans','Inter',sans-serif"
+const SDP_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const SDP_DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa']
+function isoOf(y, m, d) { return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0') }
+function SingleDatePicker({ value, max, onChange, onClose }) {
+  const parsed = value ? value.split('-').map(Number) : null
+  const [viewYear, setViewYear] = React.useState(parsed ? parsed[0] : new Date().getFullYear())
+  const [viewMonth, setViewMonth] = React.useState(parsed ? parsed[1] - 1 : new Date().getMonth())
+  const first = new Date(viewYear, viewMonth, 1)
+  const lastDay = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const startDow = first.getDay()
+  const cells = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= lastDay; d++) cells.push(d)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const goLeft = function () { viewMonth === 0 ? (setViewYear(function (y) { return y - 1 }), setViewMonth(11)) : setViewMonth(function (m) { return m - 1 }) }
+  const goRight = function () { viewMonth === 11 ? (setViewYear(function (y) { return y + 1 }), setViewMonth(0)) : setViewMonth(function (m) { return m + 1 }) }
+  const NavBtn = function (p) {
+    return (
+      <button onClick={p.onClick} style={{
+        width: 28, height: 28, borderRadius: 7, border: '0.5px solid ' + SDP_C.border,
+        background: 'var(--card)', cursor: 'pointer', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', color: SDP_C.sub,
+      }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          {p.dir === 'left' ? <polyline points="15 18 9 12 15 6" /> : <polyline points="9 18 15 12 9 6" />}
+        </svg>
+      </button>
+    )
+  }
+  return (
+    <div style={{ padding: '16px 18px', fontFamily: SDP_FONT, width: 240 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 10 }}>
+        <NavBtn dir="left" onClick={goLeft} />
+        <div style={{ flex: 1, textAlign: 'center', fontWeight: 700, fontSize: 13, color: SDP_C.text }}>{SDP_MONTHS[viewMonth]} {viewYear}</div>
+        <NavBtn dir="right" onClick={goRight} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
+        {SDP_DAYS.map(function (d) { return <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: SDP_C.muted, padding: '2px 0' }}>{d}</div> })}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+        {cells.map(function (d, i) {
+          if (!d) return <div key={'e' + i} />
+          const iso = isoOf(viewYear, viewMonth, d)
+          const disabled = !!max && iso > max
+          const isSel = iso === value
+          const cellDate = new Date(viewYear, viewMonth, d); cellDate.setHours(0, 0, 0, 0)
+          const isToday = cellDate.getTime() === today.getTime()
+          return (
+            <button key={iso}
+              onClick={function () { if (!disabled) { onChange(iso); onClose() } }}
+              disabled={disabled}
+              style={{
+                width: '100%', aspectRatio: '1', border: 'none', cursor: disabled ? 'default' : 'pointer',
+                borderRadius: 6, background: isSel ? SDP_C.navy : 'transparent',
+                color: disabled ? SDP_C.muted : (isSel ? 'var(--card)' : SDP_C.text),
+                opacity: disabled ? 0.4 : 1,
+                fontSize: 11.5, fontWeight: isSel ? 700 : (isToday ? 600 : 400),
+                fontFamily: SDP_FONT, position: 'relative',
+              }}
+              onMouseOver={function (e) { if (!disabled && !isSel) e.currentTarget.style.background = 'var(--bg3)' }}
+              onMouseOut={function (e) { if (!disabled && !isSel) e.currentTarget.style.background = 'transparent' }}>
+              {d}
+              {isToday && !isSel && (
+                <span style={{ position: 'absolute', bottom: 2, left: '50%', transform: 'translateX(-50%)', width: 4, height: 4, borderRadius: '50%', background: SDP_C.blue, display: 'block' }} />
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // Every total on this page is built the same way: trust the sheet's own total
 // column when it is filled, otherwise add the line items up.
 function totals(rs, revDefs) {
@@ -454,6 +537,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
   // pushed later than d1 (see the max attribute on the input below), since
   // today's row in the sheet is still filling in.
   const [dailyThroughDate, setDailyThroughDate] = useState(d1)
+  const [dailyDateOpen, setDailyDateOpen] = useState(false)
   const [dailySending, setDailySending] = useState(false)
   const [dailyMsg, setDailyMsg] = useState('')
 
@@ -683,9 +767,10 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                   <>
                     <div onClick={function () { setDailyOpen(false) }} style={{ position: 'fixed', inset: 0, zIndex: 399 }} />
                     <div style={{
-                      position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400, width: 340,
+                      position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 400, width: 320,
                       background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 14,
                       boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)', padding: 14,
+                      boxSizing: 'border-box', overflow: 'visible',
                     }}>
                       <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
                         Send the daily P&amp;L + Cash Flow report
@@ -693,15 +778,35 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                       <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
                         Send through
                       </label>
-                      <input
-                        type="date" value={dailyThroughDate} max={d1}
-                        onChange={function (e) { setDailyThroughDate(e.target.value > d1 ? d1 : e.target.value) }}
-                        style={{
+                      <div style={{ position: 'relative', marginBottom: 10 }}>
+                        <button type="button" onClick={function () { setDailyDateOpen(function (v) { return !v }) }} style={{
                           width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: 8,
-                          border: '1px solid var(--card-border)', background: 'var(--bg2)', color: 'var(--text)',
-                          fontSize: 12.5, marginBottom: 10,
-                        }}
-                      />
+                          border: '1px solid ' + (dailyDateOpen ? '#1F3C84' : 'var(--card-border)'),
+                          background: 'var(--bg2)', color: 'var(--text)', fontSize: 12.5, fontFamily: 'inherit',
+                          cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        }}>
+                          <span>{dailyThroughDate}</span>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+                          </svg>
+                        </button>
+                        {dailyDateOpen ? (
+                          <>
+                            <div onClick={function () { setDailyDateOpen(false) }} style={{ position: 'fixed', inset: 0, zIndex: 401 }} />
+                            <div style={{
+                              position: 'absolute', left: 0, top: 'calc(100% + 6px)', zIndex: 402,
+                              background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 14,
+                              boxShadow: '0 20px 60px rgba(15,23,42,0.16), 0 4px 12px rgba(15,23,42,0.06)',
+                            }}>
+                              <SingleDatePicker
+                                value={dailyThroughDate} max={d1}
+                                onChange={setDailyThroughDate}
+                                onClose={function () { setDailyDateOpen(false) }}
+                              />
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
                       <div style={{ fontSize: 10.5, color: 'var(--text3)', marginBottom: 10 }}>
                         Can't go later than {d1} &mdash; today's row is still filling in.
                       </div>
@@ -711,7 +816,7 @@ export default function CeoB2CDashboard({ statement = 'pnl' }) {
                       <Dropdown
                         value={dailyApproveDest || (dailyTestChannels[0] ? 'test:' + dailyTestChannels[0].id : 'test')}
                         onChange={saveDailyApproveDest}
-                        minWidth={310}
+                        fullWidth
                         options={[
                           ...dailyTestChannels.map(function (c) { return { value: 'test:' + c.id, label: '#dashboard-testing  →  #' + c.name } }),
                           { value: 'b2c_core', label: '#dashboard-testing  →  ' + channelHandle('b2c_core') + '  (guarded)' },
