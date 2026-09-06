@@ -4,7 +4,7 @@ import ExportButton from '../components/ExportButton'
 import Button from '../components/Button'
 import Dropdown from '../components/Dropdown'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
-import { C, FONT, Card, PremKPI, KPI_ICONS, RankedBars, fmtN } from '../ui/dashboardKit'
+import { C, FONT, Card, PremKPI, KPI_ICONS, fmtN } from '../ui/dashboardKit'
 
 // Backed by api/crm-leads.js's live_ql_metrics mode -- see the long comment there for why
 // this is fast (~10s for both channels combined) where the rest of this app's LeadSquared
@@ -203,7 +203,6 @@ export default function LiveQLsDashboard() {
   const [syncedAt, setSyncedAt] = useState(null)
   const [activeFilters, setActiveFilters] = useState({}) // { fieldKey: [values] }
   const [openFilterKey, setOpenFilterKey] = useState(null) // 'add' or a field key
-  const [breakdownField, setBreakdownField] = useState('country')
   const [page, setPage] = useState(0)
   const [showInfo, setShowInfo] = useState(false)
   const PAGE_SIZE = 25
@@ -263,13 +262,6 @@ export default function LiveQLsDashboard() {
   const totalQlUnfiltered = data ? data.human.qlCount + data.ai.qlCount : 0
   const queuedToQlPct = totalQueued > 0 ? (totalQlUnfiltered / totalQueued) * 100 : null
 
-  const breakdown = useMemo(() => {
-    const counts = {}
-    filteredRows.forEach(r => { const v = r[breakdownField] || '(blank)'; counts[v] = (counts[v] || 0) + 1 })
-    return Object.entries(counts).sort((a, b) => b[1] - a[1])
-  }, [filteredRows, breakdownField])
-
-  const maxBreakdown = breakdown.length ? breakdown[0][1] : 0
   const pageRows = filteredRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
 
@@ -294,18 +286,8 @@ export default function LiveQLsDashboard() {
           </div>
           <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', overflow: 'visible', minWidth: 0, padding: '8px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: '#F8FAFC', padding: '6px 10px', borderRadius: 12, border: '0.5px solid #E5E7EB' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: 3 }}>
-                {DATE_PRESETS.map(([key, label]) => (
-                  <button key={key} onClick={() => setDatePreset(key)}
-                    style={{
-                      padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT,
-                      background: datePreset === key ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'transparent',
-                      color: datePreset === key ? '#fff' : '#64748B',
-                      boxShadow: datePreset === key ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
-                      transition: 'all .15s',
-                    }}>{label}</button>
-                ))}
-              </div>
+              <Dropdown label="Date" value={datePreset} onChange={setDatePreset} minWidth={130}
+                options={DATE_PRESETS.map(([key, label]) => ({ value: key, label }))} />
 
               {Object.keys(activeFilters).filter(k => (activeFilters[k] || []).length).map(key => {
                 const field = BREAKDOWN_FIELDS.find(f => f.key === key)
@@ -331,9 +313,6 @@ export default function LiveQLsDashboard() {
               {Object.keys(activeFilters).some(k => (activeFilters[k] || []).length > 0) && (
                 <button onClick={() => setActiveFilters({})} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Clear all</button>
               )}
-
-              <Dropdown label="Breakdown by" value={breakdownField} onChange={setBreakdownField} minWidth={170}
-                options={BREAKDOWN_FIELDS.map(f => ({ value: f.key, label: f.label }))} />
 
               {syncedAt && !loading && (
                 <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {syncedAt.toLocaleTimeString()}</span>
@@ -403,20 +382,15 @@ export default function LiveQLsDashboard() {
                 <PremKPI label="Queued to QL %" value={queuedToQlPct == null ? '—' : `${queuedToQlPct.toFixed(1)}%`} sub="Total QLs / Total Queued, unfiltered" accent={C.navy} icon={KPI_ICONS.total} />
               </div>
 
-              <div style={{ padding: '16px 28px 28px', display: 'grid', gridTemplateColumns: 'minmax(260px,340px) minmax(0,1fr)', gap: 16 }} className="lq-grid2">
-                <Card title={BREAKDOWN_FIELDS.find(f => f.key === breakdownField)?.label || 'Breakdown'} sub={`${fmtN(totalQL)} QLs, ${datePreset.replace(/_/g, ' ')}`}>
-                  {breakdown.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No data for this selection.</div>
-                  ) : (
-                    <RankedBars data={breakdown.map(([label, count]) => ({ label, count }))} labelKey="label" max={maxBreakdown} total={totalQL} color={C.navy} />
-                  )}
-                </Card>
-
-                {/* Every field the backend maps for either channel (FULL_FIELDS above),
-                    plus Channel/Created On/a linked Prospect ID -- so this is genuinely
-                    "every field coming with the activity", not the earlier 6-column subset.
-                    Wide by design: scrolls horizontally inside its own card rather than
-                    forcing the whole page to scroll sideways. */}
+              <div style={{ padding: '16px 28px 28px' }}>
+                {/* Only one table on this page by design -- the breakdown chart that used to
+                    sit next to it was removed as redundant with the filter chips above
+                    (BREAKDOWN_FIELDS is still used there, just not for a chart anymore).
+                    Every field the backend maps for either channel (FULL_FIELDS above), plus
+                    Channel/Created On/a linked Prospect ID -- genuinely "every field coming
+                    with the activity", not the earlier 6-column subset. Full width, scrolls
+                    horizontally inside its own card rather than the whole page scrolling
+                    sideways. */}
                 <Card title="Records" sub={`${fmtN(filteredRows.length)} rows -- ${FULL_FIELDS.length + 3} columns`}>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
