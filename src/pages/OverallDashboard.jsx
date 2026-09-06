@@ -567,6 +567,16 @@ const SUMMARY_COLUMNS = [
   { key:'estimatedRoas', label:'Est. ROAS' },
 ]
 const SUMMARY_COLUMN_KEYS = SUMMARY_COLUMNS.map(c => c.key)
+// Every column that belongs to "the Futwork/Superbot story" -- queued by channel, QL'd by
+// channel, and the rate columns derived from those two. Declared adjacent in SUMMARY_COLUMNS
+// above (so a fresh column order already groups them), but a live user's saved colOrder can
+// drift out of that grouping over time (manual drag-reordering, or a schema version from
+// before this grouping existed) with no way back short of clicking Reset -- confirmed live
+// on 2026-09-06, where CPQL/Total QLs/Average QLs/day had drifted in between them. Used only
+// to give this whole block a shared, subtle header tint so it reads as one family at a
+// glance even if a future drag ever splits it up again visually before the data does.
+const FUTWORK_GROUP_KEYS = ['floorQueued', 'queued', 'futworkHumanQ', 'futworkAiQ', 'superbotQ',
+  'humanQL', 'futworkAiQl', 'superbotAiQl', 'futworkQlPct', 'futworkHumanQlPct', 'futworkAiQlPct']
 // The columns a CEO actually reads. Used ONLY for the Slack image, so the
 // picture stays legible on a phone. The CSV posted next to it still carries
 // every column, so nothing is lost.
@@ -579,13 +589,31 @@ const isPaidSource = label => PAID_SOURCE_KEYS.includes(String(label || '').trim
 const SUMMARY_COLS_STORAGE_KEY = 'lq_overall_summary_visible_cols'
 const SUMMARY_ORDER_STORAGE_KEY = 'lq_overall_summary_col_order'
 const PIN_COLS_STORAGE_KEY = 'lq_overall_summary_pin_cols'
+// Named presets of {colOrder, visibleCols, sortKey, sortDir} -- same shape/localStorage
+// pattern as the "Saved views" feature already shipped on AI/Human QL Detail and Meta Ads
+// Creatives. Only one global layout persisted per device otherwise, despite 30 columns and
+// heavy per-user customization -- e.g. no way to keep a "CEO view" and an "Ops view" both
+// ready without overwriting one every time you switch to the other.
+const SUMMARY_VIEWS_KEY = 'lq_overall_summary_views'
+// Curated subset shown on a phone instead of the full customizable column set -- 30 columns
+// of horizontal scroll past a sticky label column is technically usable but not genuinely
+// usable on a small screen. Reuses the exact set already hand-picked for the Slack CEO image
+// (CEO_IMAGE_KEYS, declared above) rather than inventing a second "what matters most" list.
+const MOBILE_TABLE_BREAKPOINT = 768
 // Bump this whenever SUMMARY_COLUMNS' declared order changes meaningfully (not just when a
 // column is added). A saved colOrder only ever gets NEW keys appended at the end, so a real
 // re-sequencing (e.g. moving Corridor next to the campaign name) would otherwise sit invisible
 // behind any already-saved order on a returning browser until someone clicks "Reset". Storing a
 // version alongside the saved order lets us detect that case and fall back to the fresh
 // declared default instead, with no manual Reset needed.
-const SUMMARY_SCHEMA_VERSION = 3
+//
+// v3 -> v4 (2026-09-06): the declared order hasn't changed, but a live audit found a real
+// browser whose SAVED colOrder had drifted the Futwork/Superbot columns apart (CPQL and Total
+// QLs sitting in between what should be one contiguous block) -- almost certainly left over
+// from before this grouping existed, or from a manual drag at some point. Bumping the version
+// is the documented, no-manual-Reset way to correct that drift for anyone carrying it, not
+// just this one browser.
+const SUMMARY_SCHEMA_VERSION = 4
 const SUMMARY_SCHEMA_VERSION_KEY = 'lq_overall_summary_schema_version'
 // Shared with Settings > Data > SR Revenue Assumptions — same rate everywhere.
 // RAU = "Registered At University". Estimated RAUs is a projection (Deposits x
@@ -669,6 +697,14 @@ function summaryValue(g, key) {
   if (key === 'cpl') return (g.costSpend > 0 && g.paidLeads > 0) ? g.costSpend / g.paidLeads : null
   if (key === 'cpql') return (g.costSpend > 0 && g.paidQL > 0) ? g.costSpend / g.paidQL : null
   if (key === 'cpa') return (g.costSpend > 0 && g.paidApps > 0) ? g.costSpend / g.paidApps : null
+  // ROAS (revenue / spend) is only a meaningful ratio once real money is on the table --
+  // confirmed live: the NON-PAID CHANNELS band showed "Est. ROAS 1074.50x" because its total
+  // spend was a mere ₹977 (from "Others") while two of its rows -- Organic, Referral -- are
+  // genuinely ₹0-spend and correctly show 0.00x on their own. The math isn't wrong, dividing
+  // real revenue by an almost-nothing cost always produces an absurd multiple; the number just
+  // isn't trustworthy below a real spend floor, same idea as CPL/CPQL/CPA returning null above.
+  const ROAS_MIN_SPEND = 10000
+  if (key === 'roas' || key === 'estimatedRoas') return g.spend >= ROAS_MIN_SPEND ? g[key] : null
   return g[key]
 }
 function summaryFmt(key, v) {
@@ -698,7 +734,7 @@ function summaryColor(key) {
   if (key === 'actSrRevenue') return C.green
   if (key === 'roas') return C.green
   if (key === 'estimatedRoas') return C.blue
-  return '#475569'
+  return 'var(--text2)'
 }
 const SUMMARY_BOLD_COLS = ['leads', 'spend', 'raus', 'qlPct', 'appPct', 'depositPct', 'futworkQlPct', 'futworkHumanQlPct', 'futworkAiQlPct', 'estSrRevenue', 'actSrRevenue', 'roas', 'estimatedRoas']
 // Text (not numeric) columns -- left-aligned, muted, no heat/bold treatment. Corridor/
@@ -807,13 +843,33 @@ function useModalA11y(open, onClose, ref) {
 }
 
 // Show/hide + reorder popover for the summary table's columns.
-function ColumnsPicker({ order, visible, onToggle, onMove, onClose, onReset }) {
+function ColumnsPicker({ order, visible, onToggle, onMove, onClose, onReset, views, onSaveView, onLoadView, onDeleteView }) {
   const panelRef = useRef(null)
   useModalA11y(true, onClose, panelRef)
+  const viewNames = views ? Object.keys(views) : []
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:399 }} />
-      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Columns — show, hide, reorder" tabIndex={-1} style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:230, maxHeight:340, overflowY:'auto' }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="Columns — show, hide, reorder" tabIndex={-1} style={{ position:'absolute', right:0, top:'calc(100% + 6px)', zIndex:400, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:12, boxShadow:'0 16px 40px rgba(15,23,42,0.14), 0 2px 8px rgba(15,23,42,0.06)', padding:8, minWidth:230, maxHeight:440, overflowY:'auto' }}>
+        {/* Saved views -- lets a whole custom layout (order + visibility + sort) be named and
+            switched back to instantly, rather than the one global layout this table otherwise
+            keeps. Same pattern/localStorage shape already shipped on AI/Human QL Detail and Meta
+            Ads Creatives, so it behaves like a feature a returning user may already know. */}
+        {onSaveView && (
+          <div style={{ padding:'4px 8px 8px', borderBottom:`0.5px solid ${C.border}`, marginBottom:6 }}>
+            <div style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:6 }}>Saved views</div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
+              {viewNames.length === 0 && <span style={{ fontSize:12, color:C.muted }}>None yet</span>}
+              {viewNames.map(name => (
+                <span key={name} style={{ display:'inline-flex', alignItems:'center', gap:4, background:'var(--bg3)', borderRadius:7, padding:'3px 4px 3px 9px' }}>
+                  <button type="button" onClick={() => { onLoadView(name); onClose() }} style={{ border:'none', background:'transparent', cursor:'pointer', fontSize:12, fontWeight:600, color:C.text, padding:0 }}>{name}</button>
+                  <button type="button" onClick={() => onDeleteView(name)} title="Delete view" style={{ border:'none', background:'transparent', cursor:'pointer', fontSize:13, color:C.muted, padding:'0 4px', lineHeight:1 }}>×</button>
+                </span>
+              ))}
+            </div>
+            <Button onClick={onSaveView} size="sm" variant="secondary" style={{ width:'100%' }}>+ Save current as view</Button>
+          </div>
+        )}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 8px 8px' }}>
           <span style={{ fontSize:11.5, fontWeight:700, color:C.muted, letterSpacing:'0.06em', textTransform:'uppercase' }}>Columns — show, hide, reorder</span>
           <Button onClick={onReset} variant="ghost" size="sm" style={{ padding:'2px 8px' }}>Reset</Button>
@@ -1287,6 +1343,44 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     else { setSortKey(key); setSortDir('desc') }
   }
   const resetCols = () => { setVisibleCols(SUMMARY_COLUMN_KEYS); setColOrder(SUMMARY_COLUMN_KEYS) }
+
+  // Saved column-layout presets -- same {name: {...}} object-in-localStorage pattern already
+  // used by AIQLDetailDashboard.jsx / HumanQLDetailDashboard.jsx / MetaAdsDashboard.jsx's own
+  // "Saved views", so this behaves identically to a pattern users may already know from those
+  // pages instead of a bespoke one just for this table.
+  const [tableViews, setTableViews] = useState(() => {
+    try { const v = JSON.parse(localStorage.getItem(SUMMARY_VIEWS_KEY) || 'null'); return v && typeof v === 'object' ? v : {} }
+    catch { return {} }
+  })
+  useEffect(() => { try { localStorage.setItem(SUMMARY_VIEWS_KEY, JSON.stringify(tableViews)) } catch {} }, [tableViews])
+  const saveTableView = () => {
+    const name = window.prompt('Name this view:')
+    if (!name || !name.trim()) return
+    setTableViews(prev => ({ ...prev, [name.trim()]: { colOrder, visibleCols, sortKey, sortDir } }))
+  }
+  const loadTableView = name => {
+    const v = tableViews[name]
+    if (!v) return
+    if (Array.isArray(v.colOrder)) setColOrder(v.colOrder.filter(k => SUMMARY_COLUMN_KEYS.includes(k)))
+    if (Array.isArray(v.visibleCols)) setVisibleCols(v.visibleCols.filter(k => SUMMARY_COLUMN_KEYS.includes(k)))
+    if (v.sortKey) setSortKey(v.sortKey)
+    if (v.sortDir) setSortDir(v.sortDir)
+  }
+  const deleteTableView = name => setTableViews(prev => { const next = { ...prev }; delete next[name]; return next })
+
+  // Curated column set on a phone -- see MOBILE_TABLE_BREAKPOINT/CEO_IMAGE_KEYS above. Tracks
+  // real viewport width (not just a CSS media query) because it changes WHICH DATA renders,
+  // not just layout -- same matchMedia-listener pattern Sidebar.jsx already uses for its own
+  // responsive breakpoint, so resizing across the line updates live, not just on reload.
+  const [isMobileTable, setIsMobileTable] = useState(() => {
+    try { return window.innerWidth <= MOBILE_TABLE_BREAKPOINT } catch { return false }
+  })
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_TABLE_BREAKPOINT}px)`)
+    const onChange = e => setIsMobileTable(e.matches)
+    mq.addEventListener ? mq.addEventListener('change', onChange) : mq.addListener(onChange)
+    return () => { mq.removeEventListener ? mq.removeEventListener('change', onChange) : mq.removeListener(onChange) }
+  }, [])
 
   // Date filter state — mirrors Daily QLs exactly: a single "active filter" is either
   // a preset (LD/L7D/MTD), the month picker, or a custom calendar range.
@@ -2375,14 +2469,20 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return out
   }, [grpBy, filtered, paidSources, withSrRevenue, isCostExcluded])
 
-  const displayCols = useMemo(() => (
-    colOrder.filter(k => visibleCols.includes(k))
+  const displayCols = useMemo(() => {
+    // On a phone, swap in the curated CEO-image column set instead of the user's full desktop
+    // layout -- their real colOrder/visibleCols stay exactly as saved underneath (nothing here
+    // ever writes to that localStorage), so switching back to a wider screen restores whatever
+    // they had, untouched.
+    const baseOrder = isMobileTable ? CEO_IMAGE_KEYS : colOrder
+    const baseVisible = isMobileTable ? CEO_IMAGE_KEYS : visibleCols
+    return baseOrder.filter(k => baseVisible.includes(k))
       // Corridor/Source/Sub Source only carry a value when grouping by campaign -- every
       // other grouping either has no such field on the row (source view's own label already
       // IS the source) or would just be noise (a column of "—" everywhere).
       .filter(k => (k !== 'corridor' && k !== 'source' && k !== 'subSource') || grpBy === 'campaign')
       .map(k => SUMMARY_COLUMNS.find(c => c.key === k)).filter(Boolean)
-  ), [colOrder, visibleCols, grpBy])
+  }, [colOrder, visibleCols, grpBy, isMobileTable])
 
   // Sorted + search-filtered, but NOT sliced to the on-screen row limit -- this is the set
   // that export should always draw from, so "Show 10/25/50" (a display-density control) never
@@ -3532,19 +3632,28 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // Source, Sub Source, Campaign) -- one definition so all four render identically instead
   // of four copies of the same styling logic silently drifting apart over time. `opts` lets
   // a kind override font size / a flat color (used by the Paid/Non-Paid band row only).
+  // A percentage this far outside a normal range is real math on a small/lagging sample --
+  // the info popover already explains ">100% can happen" -- but on a screenshot or a quick
+  // glance it reads as broken. Confirmed live: "Others" showed App % 650% (13 apps / 2 QLs).
+  // Muting (not hiding, not changing the number) is the fix: the real figure stays exactly
+  // where it is, it just stops visually competing with genuine signal for attention.
+  const PCT_EXTREME_THRESHOLD = 150
   const renderSummaryValueCells = (rowData, opts = {}) => renderCols.map(col => {
     const v = valueWithContrib(rowData, col.key)
     const isTextCol = TEXT_COL_KEYS.includes(col.key)
     const isPct = col.key.endsWith('Pct')
     const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
+    const isExtremePct = isPct && v != null && Math.abs(v) > PCT_EXTREME_THRESHOLD
     return (
-      <td key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
+      <td key={col.key}
+        title={isMoney && v != null ? fmtINRShort(v) : isExtremePct ? 'Small sample -- this stage’s real count is low enough that the ratio swings wide. Read the raw counts, not this %.' : undefined}
         style={{
           padding: opts.padding || '11px 10px', fontSize: opts.fontSize || 14,
           textAlign: isTextCol ? 'left' : 'right',
-          color: opts.colorOverride || (isTextCol ? '#64748B' : (isPct ? heatColor(v) : summaryColor(col.key))),
-          fontWeight: opts.fontWeight != null ? opts.fontWeight : (isTextCol ? 500 : (SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400)),
-          background: isPct ? heatBg(v) : 'transparent',
+          color: opts.colorOverride || (isTextCol ? 'var(--text2)' : (isExtremePct ? 'var(--text3)' : (isPct ? heatColor(v) : summaryColor(col.key)))),
+          fontStyle: isExtremePct ? 'italic' : 'normal',
+          fontWeight: opts.fontWeight != null ? opts.fontWeight : (isTextCol ? 500 : (isExtremePct ? 400 : (SUMMARY_BOLD_COLS.includes(col.key) ? 700 : 400))),
+          background: isExtremePct ? 'transparent' : (isPct ? heatBg(v) : 'transparent'),
           whiteSpace: isTextCol ? 'nowrap' : 'normal',
         }}>
         {summaryFmt(col.key, v)}
@@ -3859,15 +3968,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
                 <div style={{ position:'relative' }}>
                   <Button
-                    onClick={() => setShowColsPicker(v => !v)}
+                    onClick={() => !isMobileTable && setShowColsPicker(v => !v)}
+                    disabled={isMobileTable}
+                    title={isMobileTable ? 'Showing a compact column set on this screen size -- customize columns on a wider screen' : undefined}
                     size="sm"
                     variant="secondary"
                     icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="18" rx="1" /><rect x="14" y="3" width="7" height="18" rx="1" /></svg>}
                   >
-                    Columns
+                    {isMobileTable ? 'Compact view' : 'Columns'}
                   </Button>
-                  {showColsPicker && (
-                    <ColumnsPicker order={colOrder} visible={visibleCols} onToggle={toggleCol} onMove={moveCol} onClose={() => setShowColsPicker(false)} onReset={resetCols} />
+                  {showColsPicker && !isMobileTable && (
+                    <ColumnsPicker order={colOrder} visible={visibleCols} onToggle={toggleCol} onMove={moveCol} onClose={() => setShowColsPicker(false)} onReset={resetCols}
+                      views={tableViews} onSaveView={saveTableView} onLoadView={loadTableView} onDeleteView={deleteTableView} />
                   )}
                 </div>
 
@@ -3955,8 +4067,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           title="Click to sort — drag to reorder"
                           style={{
                             position:'relative', padding:'11px 10px', fontSize:12.5, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em',
-                            color: sortKey === col.key ? C.navy : '#64748B', textAlign: TEXT_COL_KEYS.includes(col.key) ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
+                            color: sortKey === col.key ? C.navy : 'var(--text2)', textAlign: TEXT_COL_KEYS.includes(col.key) ? 'left' : 'right', whiteSpace:'nowrap', cursor: 'grab', userSelect:'none',
                             opacity: dragKey === col.key ? 0.35 : 1,
+                            // Header-only tint on the whole Futwork/Superbot column family (queued
+                            // by channel -> QL'd by channel -> the rates derived from those) so the
+                            // group reads as one thing at a glance while scanning the header row --
+                            // adjacency alone doesn't visually read as "grouped" across 30 columns.
+                            background: FUTWORK_GROUP_KEYS.includes(col.key) ? 'var(--navy-tint)' : 'transparent',
                             boxShadow: dragOverKey === col.key && dragKey && dragKey !== col.key ? `inset 2px 0 0 ${C.blue}` : 'none',
                           }}>
                           {col.key === 'contribPct' ? (
@@ -4024,8 +4141,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                       // the plain surface, at the same size as the body, lets it read as an
                       // authoritative summary line while the column headers stay the only
                       // emphasised band.
-                      <tr style={{ background:'var(--card)', borderBottom:'2px solid #CBD5E1' }}>
-                        <th style={{ padding:'10px 12px', fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'#64748B', textAlign:'left', whiteSpace:'nowrap', ...stickyLabelStyle(pinCols, 'var(--card)') }}>
+                      <tr style={{ background:'var(--card)', borderBottom:'2px solid var(--card-border)' }}>
+                        <th style={{ padding:'10px 12px', fontSize:12, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.1em', color:'var(--text2)', textAlign:'left', whiteSpace:'nowrap', ...stickyLabelStyle(pinCols, 'var(--card)') }}>
                           Total
                         </th>
                         {renderCols.map(col => {
@@ -4034,7 +4151,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           const isMoney = col.key.endsWith('SrRevenue') || col.key === 'spend' || col.key === 'cpl' || col.key === 'cpql' || col.key === 'cpa'
                           return (
                             <th key={col.key} title={isMoney && v != null ? fmtINRShort(v) : undefined}
-                              style={{ padding:'10px 10px', fontSize:14, fontWeight:800, textAlign: isTextCol ? 'left' : 'right', color: isTextCol ? '#CBD5E1' : '#0F172A', whiteSpace:'nowrap' }}>
+                              style={{ padding:'10px 10px', fontSize:14, fontWeight:800, textAlign: isTextCol ? 'left' : 'right', color: isTextCol ? 'var(--text3)' : 'var(--text)', whiteSpace:'nowrap' }}>
                               {summaryFmt(col.key, v)}
                             </th>
                           )
@@ -4044,15 +4161,21 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   </thead>
                   <tbody>
                     {tableBodyRows.map(item => {
-                      if (item.kind === 'band') { const bg = '#EEF3FA'; return (
-                        <tr key={'band-' + item.label} style={{ background:bg, borderTop:'2px solid #D8E3F0', borderBottom:'1px solid #E2E8F0' }}>
+                      // Row surfaces below were hardcoded hex (#fff/#FAFBFC/#F8FAFC/#EEF3FA) --
+                      // every other card on this page themes via var(--card)/var(--bg3), but this
+                      // specific table's zebra/band colors were missed by that sweep, confirmed
+                      // live: it stays flat white under dark/navy/stone while everything around it
+                      // (KPI cards, other Cards) correctly goes dark. --bg3/--navy-tint are the
+                      // exact tokens already used elsewhere on this same page for this purpose.
+                      if (item.kind === 'band') { const bg = 'var(--navy-tint)'; return (
+                        <tr key={'band-' + item.label} style={{ background:bg, borderTop:'2px solid var(--navy-tint)', borderBottom:'1px solid var(--card-border)' }}>
                           <td style={{ padding:'9px 12px', fontSize:12, fontWeight:800, textTransform:'uppercase', letterSpacing:'0.08em', color:C.navy, whiteSpace:'nowrap', ...stickyLabelStyle(pinCols, bg) }}>{item.label}</td>
                           {renderSummaryValueCells(item.row, { padding:'9px 10px', fontSize:14.5, fontWeight:800, colorOverride:C.navy, rowBg:bg })}
                         </tr>
                       ) }
-                      if (item.kind === 'source') { const bg = item.i % 2 === 0 ? '#fff' : '#FAFBFC'; return (
+                      if (item.kind === 'source') { const bg = item.i % 2 === 0 ? 'var(--card)' : 'var(--bg3)'; return (
                         <tr key={'src-' + item.row.label} style={{ background:bg }}>
-                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A', cursor:'pointer', userSelect:'none', ...stickyLabelStyle(pinCols, bg) }}
+                          <td style={{ padding:'11px 12px', fontWeight:600, color:'var(--text)', cursor:'pointer', userSelect:'none', ...stickyLabelStyle(pinCols, bg) }}
                             onClick={() => toggleSourceExpand(item.row.label)}>
                             <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
                               <TreeChevron open={expandedSources.has(item.row.label)} />
@@ -4062,9 +4185,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           {renderSummaryValueCells(item.row, { rowBg:bg })}
                         </tr>
                       ) }
-                      if (item.kind === 'subsource') { const bg = '#F8FAFC'; return (
+                      if (item.kind === 'subsource') { const bg = 'var(--bg3)'; return (
                         <tr key={'sub-' + item.parentSource + '-' + item.row.label} style={{ background:bg }}>
-                          <td style={{ padding:'9px 12px 9px 32px', fontWeight:600, fontSize:14.5, color:'#334155', cursor: item.hasCampaigns ? 'pointer' : 'default', userSelect:'none', ...stickyLabelStyle(pinCols, bg) }}
+                          <td style={{ padding:'9px 12px 9px 32px', fontWeight:600, fontSize:14.5, color:'var(--text)', cursor: item.hasCampaigns ? 'pointer' : 'default', userSelect:'none', ...stickyLabelStyle(pinCols, bg) }}
                             onClick={() => item.hasCampaigns && toggleSubSourceExpand(item.parentSource, item.row.label)}>
                             <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>
                               {item.hasCampaigns && <TreeChevron open={expandedSubSources.has(item.parentSource + '||' + item.row.label)} />}
@@ -4074,21 +4197,21 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                           {renderSummaryValueCells(item.row, { fontSize:14, rowBg:bg })}
                         </tr>
                       ) }
-                      if (item.kind === 'campaign') { const bg = '#fff'; return (
+                      if (item.kind === 'campaign') { const bg = 'var(--card)'; return (
                         <tr key={'camp-' + item.parentKey + '-' + item.row.label} style={{ background:bg }}>
-                          <td style={{ padding:'8px 12px 8px 56px', fontWeight:400, fontSize:14, color:'#64748B', ...stickyLabelStyle(pinCols, bg) }}>{item.row.label}</td>
+                          <td style={{ padding:'8px 12px 8px 56px', fontWeight:400, fontSize:14, color:'var(--text2)', ...stickyLabelStyle(pinCols, bg) }}>{item.row.label}</td>
                           {renderSummaryValueCells(item.row, { fontSize:13.5, rowBg:bg })}
                         </tr>
                       ) }
-                      { const bg = item.i % 2 === 0 ? '#fff' : '#FAFBFC'; return (
+                      { const bg = item.i % 2 === 0 ? 'var(--card)' : 'var(--bg3)'; return (
                         <tr key={item.row.label} style={{ background:bg }}>
-                          <td style={{ padding:'11px 12px', fontWeight:600, color:'#0F172A', ...stickyLabelStyle(pinCols, bg) }}>{item.row.label}</td>
+                          <td style={{ padding:'11px 12px', fontWeight:600, color:'var(--text)', ...stickyLabelStyle(pinCols, bg) }}>{item.row.label}</td>
                           {renderSummaryValueCells(item.row, { rowBg:bg })}
                         </tr>
                       ) }
                     })}
                     {tableRows.length === 0 && (
-                      <tr><td colSpan={renderCols.length + 1} style={{ padding:'20px', textAlign:'center', color:'#94A3B8' }}>No data for this selection.</td></tr>
+                      <tr><td colSpan={renderCols.length + 1} style={{ padding:'20px', textAlign:'center', color:'var(--text3)' }}>No data for this selection.</td></tr>
                     )}
                   </tbody>
                 </table>
