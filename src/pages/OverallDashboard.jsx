@@ -16,6 +16,12 @@ import {
 } from '../components/QualitySections'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
 import Button from '../components/Button'
+// Aliased -- this file already has its own page-local `Dropdown` (used pervasively
+// elsewhere on this page, plain-value options only). The SHARED Dropdown supports
+// {value,label} option objects and matches the theme-aware, 32px/radius-11 control
+// spec the rest of the app was normalized to -- used here only by the advanced
+// filter builder, which needs the richer option shape.
+import SharedDropdown from '../components/Dropdown'
 import { getSession, setSession, hasLoaded } from '../lib/sessionLoad'
 import { idbGet, idbSet } from '../lib/idbCache'
 import { consumePrefetchedOverallCsv } from '../lib/overallPrefetch'
@@ -280,25 +286,34 @@ function SourceMultiSelect({ options, selected, onChange, label, minWidth = 120 
 }
 
 // ── Advanced filter — condition-based Source/Corridor/Campaign filter ──────────
-// Layered on top of the simple Source/Corridor/campaign-search controls in the
-// toolbar: stacked, removable, AND-combined conditions ("Source is Facebook",
-// "Corridor not like %Dubai%", "Campaign is defined"), applied everywhere
-// corridorFilter already applies (filtered/prevFiltered/nonDateRows/
-// monthTrendRows) -- never in Compare's custom-range path, since corridorFilter/
-// campaignQuery aren't either (Compare has its own, separate deep-filter system).
+// Same field/operator/AND-OR condition-builder pattern already shipped on Live QLs
+// (src/pages/LiveQLsDashboard.jsx) -- same 10-operator vocabulary, same one-popover-
+// many-rows layout, same shared Dropdown -- so "advanced filter" means the same
+// thing everywhere in this app, not a bespoke pill-grid design per page. `like`/
+// `not_like` are real SQL-style wildcard matches here (% = any run of characters,
+// _ = one character) rather than Live QLs' plain-substring alias, since nothing
+// here calls for weakening it. Applied everywhere corridorFilter already applies
+// (filtered/prevFiltered/nonDateRows/monthTrendRows) -- never in Compare's custom-
+// range path, since corridorFilter/campaignQuery aren't either (Compare has its
+// own, separate deep-filter system for that).
 const ADV_FIELDS = [
   { key: 'source', label: 'Source' },
   { key: 'corridor', label: 'Corridor' },
   { key: 'campaign', label: 'Campaign' },
 ]
 const ADV_OPERATORS = [
-  { key: 'is', label: 'is', needsValue: true },
-  { key: 'contain', label: 'contains', needsValue: true },
-  { key: 'like', label: 'like (% / _ wildcards)', needsValue: true },
-  { key: 'not_like', label: 'not like', needsValue: true },
-  { key: 'defined', label: 'is defined', needsValue: false },
-  { key: 'not_defined', label: 'is not defined', needsValue: false },
+  { key: 'is', label: 'is', value: 'select' },
+  { key: 'is_not', label: 'is not', value: 'select' },
+  { key: 'contains', label: 'contains', value: 'text' },
+  { key: 'not_contains', label: 'does not contain', value: 'text' },
+  { key: 'like', label: 'like (% / _ wildcards)', value: 'text' },
+  { key: 'not_like', label: 'not like', value: 'text' },
+  { key: 'starts_with', label: 'starts with', value: 'text' },
+  { key: 'ends_with', label: 'ends with', value: 'text' },
+  { key: 'defined', label: 'is defined', value: 'none' },
+  { key: 'not_defined', label: 'is not defined', value: 'none' },
 ]
+const ADV_OPERATOR_MAP = Object.fromEntries(ADV_OPERATORS.map(o => [o.key, o]))
 function advFieldValue(r, field) {
   if (field === 'source') return (r.source || '').trim()
   if (field === 'corridor') return corridorLabel(classifyCorridor(r.campaign))
@@ -313,107 +328,134 @@ function advLikeToRegex(pattern) {
   const esc = (pattern || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp('^' + esc.replace(/%/g, '.*').replace(/_/g, '.') + '$', 'i')
 }
-function advMatchesOne(r, f) {
-  const raw = advFieldValue(r, f.field)
-  const v = (f.value || '').trim()
-  switch (f.op) {
-    case 'is': return raw.toLowerCase() === v.toLowerCase()
-    case 'contain': return v ? raw.toLowerCase().includes(v.toLowerCase()) : true
-    case 'like': return advLikeToRegex(v).test(raw)
-    case 'not_like': return !advLikeToRegex(v).test(raw)
-    case 'defined': return advIsDefined(f.field, raw)
-    case 'not_defined': return !advIsDefined(f.field, raw)
+function isAdvConditionComplete(c) {
+  const op = ADV_OPERATOR_MAP[c.operator]
+  if (!c.field || !op) return false
+  if (op.value === 'none') return true
+  return (c.value || '').trim() !== ''
+}
+function matchesAdvCondition(r, c) {
+  const raw = advFieldValue(r, c.field)
+  const hay = raw.toLowerCase()
+  const needle = (c.value || '').trim().toLowerCase()
+  switch (c.operator) {
+    case 'is': return hay === needle
+    case 'is_not': return hay !== needle
+    case 'contains': return hay.includes(needle)
+    case 'not_contains': return !hay.includes(needle)
+    case 'like': return advLikeToRegex(c.value).test(raw)
+    case 'not_like': return !advLikeToRegex(c.value).test(raw)
+    case 'starts_with': return hay.startsWith(needle)
+    case 'ends_with': return hay.endsWith(needle)
+    case 'defined': return advIsDefined(c.field, raw)
+    case 'not_defined': return !advIsDefined(c.field, raw)
     default: return true
   }
 }
-function advFilterSummary(f) {
-  const field = ADV_FIELDS.find(x => x.key === f.field)?.label || f.field
-  const op = ADV_OPERATORS.find(x => x.key === f.op)
-  if (!op || !op.needsValue) return field + ' ' + (op ? op.label : f.op)
-  return field + ' ' + op.label + ' "' + f.value + '"'
-}
+let advConditionIdCounter = 0
+function newAdvCondition() { advConditionIdCounter += 1; return { id: 'advc' + advConditionIdCounter, field: 'source', operator: 'contains', value: '' } }
 
-// One popover, two roles: adding a brand-new condition (initial=null) or editing an
-// already-active chip (initial=the filter being edited). Field -> Condition -> Value,
-// each rendered as a pill row so the whole thing reads at a glance rather than as a
-// multi-step wizard.
-function AdvFilterBuilder({ initial, sourceOptions, corridorOptions, onSave, onCancel }) {
-  const [field, setField] = useState(initial?.field || 'source')
-  const [op, setOp] = useState(initial?.op || 'is')
-  const [value, setValue] = useState(initial?.value || '')
-  const opDef = ADV_OPERATORS.find(o => o.key === op)
-  const pickOptions = field === 'source' ? sourceOptions : field === 'corridor' ? corridorOptions : null
-  const showPick = op === 'is' && pickOptions && pickOptions.length > 0
-  const effectiveValue = showPick && !value ? (pickOptions[0] || '') : value
-  const canSave = !opDef.needsValue || effectiveValue.trim() !== ''
-  const pillRow = (items, activeKey, onPick) => (
-    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
-      {items.map(it => (
-        <button key={it.key} type="button" onClick={() => onPick(it.key)}
-          style={{ padding:'5px 10px', borderRadius:7, border:`0.5px solid ${activeKey === it.key ? C.navy : C.border}`, background: activeKey === it.key ? C.navyBg : 'transparent', color: activeKey === it.key ? C.navy : C.sub, fontSize:12, fontWeight:700, fontFamily:FONT, cursor:'pointer', whiteSpace:'nowrap' }}>
-          {it.label}
-        </button>
-      ))}
-    </div>
-  )
-  const label = t => <div style={{ fontSize:10, fontWeight:800, color:C.muted, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:6 }}>{t}</div>
+// Small searched single-select popover, used by 'is'/'is not' to pick from real
+// observed values for the chosen field.
+function AdvValueSelectPopover({ options, onPick, onClose }) {
+  const [q, setQ] = useState('')
+  const shown = q.trim() ? options.filter(o => o.toLowerCase().includes(q.trim().toLowerCase())) : options
   return (
     <>
-      <div onClick={onCancel} style={{ position:'fixed', inset:0, zIndex:150 }} />
-      <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:200, width:290, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)', padding:11 }}>
-        {label('Field')}
-        {pillRow(ADV_FIELDS, field, k => { setField(k); setValue('') })}
-        {label('Condition')}
-        {pillRow(ADV_OPERATORS, op, setOp)}
-        {opDef?.needsValue && (
-          <>
-            {label('Value')}
-            {showPick ? (
-              <Dropdown options={pickOptions} value={effectiveValue} minWidth={230} onChange={setValue} />
-            ) : (
-              <input autoFocus type="text" value={value} onChange={e => setValue(e.target.value)}
-                placeholder={op === 'like' || op === 'not_like' ? 'e.g. %Germany%' : 'value...'}
-                style={{ width:'100%', boxSizing:'border-box', padding:'7px 9px', border:'0.5px solid ' + C.border, borderRadius:7, fontSize:12.5, fontFamily:FONT, outline:'none', background:'var(--bg3)', color:C.text }} />
-            )}
-          </>
-        )}
-        <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:12 }}>
-          <button type="button" onClick={onCancel} style={{ padding:'6px 12px', borderRadius:7, border:'none', background:'transparent', color:C.muted, fontSize:12.5, fontWeight:700, fontFamily:FONT, cursor:'pointer' }}>Cancel</button>
-          <button type="button" disabled={!canSave} onClick={() => canSave && onSave({ field, op, value: effectiveValue.trim() })}
-            style={{ padding:'6px 14px', borderRadius:7, border:'none', background: canSave ? C.navy : C.border, color:'#fff', fontSize:12.5, fontWeight:700, fontFamily:FONT, cursor: canSave ? 'pointer' : 'default' }}>
-            {initial ? 'Save' : 'Add filter'}
-          </button>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:250 }} />
+      <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:260, width:230, background:'var(--card)', border:'1px solid ' + C.border, borderRadius:10, boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)', padding:8 }}>
+        <input autoFocus type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="Search values…"
+          style={{ width:'100%', boxSizing:'border-box', padding:'6px 9px', border:'0.5px solid ' + C.border, borderRadius:7, fontSize:12, fontFamily:FONT, outline:'none', marginBottom:6, background:'var(--bg3)', color:C.text }} />
+        <div style={{ maxHeight:200, overflowY:'auto' }}>
+          {shown.map(o => (
+            <button key={o} type="button" onClick={() => onPick(o)}
+              style={{ display:'block', width:'100%', textAlign:'left', padding:'6px 8px', border:'none', borderRadius:6, cursor:'pointer', fontSize:12, fontWeight:600, fontFamily:FONT, color:C.text, background:'transparent', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+              {o}
+            </button>
+          ))}
+          {shown.length === 0 && <div style={{ fontSize:11.5, color:C.muted, padding:'6px 7px' }}>No values</div>}
         </div>
       </div>
     </>
   )
 }
 
-function AdvancedFilterChip({ filter, sourceOptions, corridorOptions, open, onToggle, onSave, onRemove }) {
+function AdvConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, onChange, onRemove }) {
+  const op = ADV_OPERATOR_MAP[cond.operator]
   return (
-    <div style={{ position:'relative', flexShrink:0 }}>
-      <div style={{ display:'flex', alignItems:'stretch', borderRadius:8, border:'0.5px solid rgba(31,60,132,0.35)', background:C.navyBg, overflow:'hidden' }}>
-        <button type="button" onClick={onToggle} style={{ display:'flex', alignItems:'center', padding:'6px 9px 6px 11px', border:'none', background:'transparent', cursor:'pointer', fontSize:12, fontFamily:FONT, color:C.navy, fontWeight:700, whiteSpace:'nowrap', maxWidth:230, overflow:'hidden', textOverflow:'ellipsis' }}>
-          {advFilterSummary(filter)}
-        </button>
-        <button type="button" onClick={onRemove} title="Remove filter" style={{ border:'none', borderLeft:'0.5px solid rgba(31,60,132,0.2)', background:'transparent', cursor:'pointer', color:C.navy, padding:'6px 9px', display:'flex', alignItems:'center' }}>
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-        </button>
-      </div>
-      {open && <AdvFilterBuilder initial={filter} sourceOptions={sourceOptions} corridorOptions={corridorOptions} onSave={onSave} onCancel={onToggle} />}
+    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+      <SharedDropdown value={cond.field} onChange={v => onChange({ field:v, value:'' })} minWidth={110}
+        options={ADV_FIELDS.map(f => ({ value:f.key, label:f.label }))} />
+      <SharedDropdown value={cond.operator} onChange={v => onChange({ operator:v, value:'' })} minWidth={155}
+        options={ADV_OPERATORS.map(o => ({ value:o.key, label:o.label }))} />
+      {op.value === 'text' && (
+        <input type="text" value={cond.value} onChange={e => onChange({ value:e.target.value })}
+          placeholder={cond.operator === 'like' || cond.operator === 'not_like' ? 'e.g. %Germany%' : 'Value…'}
+          style={{ flex:1, minWidth:90, boxSizing:'border-box', padding:'6px 9px', border:'0.5px solid ' + C.border, borderRadius:7, fontSize:12, fontFamily:FONT, outline:'none', background:'var(--bg3)', color:C.text }} />
+      )}
+      {op.value === 'select' && (
+        <div style={{ position:'relative', flex:1, minWidth:90 }}>
+          <button type="button" onClick={onOpenValuePicker}
+            style={{ width:'100%', boxSizing:'border-box', textAlign:'left', padding:'6px 9px', border:'0.5px solid ' + C.border, borderRadius:7, fontSize:12, fontFamily:FONT, background:'var(--bg3)', color: cond.value ? C.text : C.muted, cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {cond.value || 'Select value…'}
+          </button>
+          {valuePickerOpen && (
+            <AdvValueSelectPopover options={options} onPick={v => { onChange({ value:v }); onOpenValuePicker() }} onClose={onOpenValuePicker} />
+          )}
+        </div>
+      )}
+      {op.value === 'none' && <div style={{ flex:1, minWidth:90, fontSize:11.5, color:C.muted, fontStyle:'italic' }}>no value needed</div>}
+      <button type="button" onClick={onRemove} title="Remove condition" style={{ border:'none', background:'transparent', cursor:'pointer', color:C.muted, display:'flex', alignItems:'center', padding:4, flexShrink:0 }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+      </button>
     </div>
   )
 }
 
-function AddAdvancedFilterButton({ sourceOptions, corridorOptions, open, onToggle, onAdd }) {
+function AdvFilterBuilderPopover({ conditions, combinator, filterOptions, onAdd, onUpdate, onRemove, onSetCombinator, onClearAll, onClose }) {
+  const [openValueRowId, setOpenValueRowId] = useState(null)
   return (
-    <div style={{ position:'relative', flexShrink:0 }}>
-      <button type="button" onClick={onToggle} style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:8, border:'1px dashed ' + C.border, background:'transparent', cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:FONT, color:C.muted, whiteSpace:'nowrap' }}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-        Advanced filter
-      </button>
-      {open && <AdvFilterBuilder initial={null} sourceOptions={sourceOptions} corridorOptions={corridorOptions} onSave={onAdd} onCancel={onToggle} />}
-    </div>
+    <>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:150 }} />
+      <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:200, width:480, background:'var(--card)', border:'1px solid ' + C.border, borderRadius:12, boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)', padding:12 }}>
+        <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:8 }}>Filters</div>
+        {conditions.length === 0 && (
+          <div style={{ fontSize:12, color:C.muted, padding:'4px 0 10px' }}>No conditions yet -- add one below.</div>
+        )}
+        <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:320, overflowY:'auto' }}>
+          {conditions.map(c => (
+            <AdvConditionRow key={c.id} cond={c} options={filterOptions[c.field] || []}
+              valuePickerOpen={openValueRowId === c.id}
+              onOpenValuePicker={() => setOpenValueRowId(v => v === c.id ? null : c.id)}
+              onChange={patch => onUpdate(c.id, patch)} onRemove={() => onRemove(c.id)} />
+          ))}
+        </div>
+        <button type="button" onClick={onAdd}
+          style={{ marginTop:10, display:'flex', alignItems:'center', gap:5, padding:'6px 10px', borderRadius:8, border:'1px dashed ' + C.border, background:'transparent', cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:FONT, color:C.muted }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          Add condition
+        </button>
+        {conditions.length > 1 && (
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:12, paddingTop:10, borderTop:'0.5px solid ' + C.border, flexWrap:'wrap' }}>
+            <span style={{ fontSize:11.5, color:C.muted, fontWeight:700 }}>Match</span>
+            <div style={{ display:'flex', background:'var(--bg3)', borderRadius:8, padding:2 }}>
+              {['AND', 'OR'].map(op => (
+                <button key={op} type="button" onClick={() => onSetCombinator(op)}
+                  style={{ padding:'4px 10px', borderRadius:6, border:'none', cursor:'pointer', fontSize:11.5, fontWeight:700, fontFamily:FONT, background: combinator === op ? C.navy : 'transparent', color: combinator === op ? '#fff' : C.muted }}>
+                  {op === 'AND' ? 'ALL' : 'ANY'}
+                </button>
+              ))}
+            </div>
+            <span style={{ fontSize:11.5, color:C.muted }}>of the conditions above</span>
+          </div>
+        )}
+        {conditions.length > 0 && (
+          <button type="button" onClick={onClearAll} style={{ marginTop:10, border:'none', background:'transparent', cursor:'pointer', fontSize:12, fontWeight:700, color:C.muted, fontFamily:FONT }}>Clear all</button>
+        )}
+      </div>
+    </>
   )
 }
 
@@ -1296,11 +1338,38 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // instead, so a full re-filter only runs once typing actually pauses, not per
   // keystroke -- this is what was making campaign search feel slow while typing.
   const campaignQueryDebounced = useDebouncedValue(campaignQuery, 250)
-  // Advanced filter -- stacked Source/Corridor/Campaign conditions, AND-combined.
-  // See the module-scope ADV_* helpers above for the field/operator vocabulary.
-  const [advancedFilters, setAdvancedFilters] = useState([]) // [{id, field, op, value}]
-  const [advFilterOpen, setAdvFilterOpen] = useState(null) // null | 'new' | a filter's id
-  const matchesAdvancedFilters = useCallback(r => advancedFilters.every(f => advMatchesOne(r, f)), [advancedFilters])
+  // Advanced filter -- Source/Corridor/Campaign conditions, any number, combined by
+  // one shared ALL/ANY toggle. See the module-scope ADV_* helpers above for the
+  // field/operator vocabulary (same one Live QLs' own advanced filter uses).
+  const [advConditions, setAdvConditions] = useState([]) // [{id, field, operator, value}]
+  const [advCombinator, setAdvCombinator] = useState('AND') // 'AND' | 'OR'
+  const [advFilterOpen, setAdvFilterOpen] = useState(false)
+  const advActiveConditions = useMemo(() => advConditions.filter(isAdvConditionComplete), [advConditions])
+  const matchesAdvancedFilters = useCallback(r => advCombinator === 'AND'
+    ? advActiveConditions.every(c => matchesAdvCondition(r, c))
+    : advActiveConditions.some(c => matchesAdvCondition(r, c)), [advActiveConditions, advCombinator])
+  function addAdvCondition() { setAdvConditions(prev => [...prev, newAdvCondition()]) }
+  function updateAdvCondition(id, patch) { setAdvConditions(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c)) }
+  function removeAdvCondition(id) { setAdvConditions(prev => prev.filter(c => c.id !== id)) }
+
+  // Every row matching Source/Corridor/campaign-search/advanced-filter but NOT the
+  // top date-range picker -- the shared base for anything that's meant to ignore the
+  // date filter (the Month-on-month trend chart, and the Funnel Summary table's own
+  // Month-grouping tab below). Declared this early (not down near where it used to
+  // live, right before its first consumer) specifically so byMonth/grouped -- both
+  // much further down -- can read it without a temporal-dead-zone crash; every one
+  // of its own dependencies (rows/matchesSource/corridorFilter/campaignQueryDebounced/
+  // advActiveConditions/matchesAdvancedFilters) is already declared above this line.
+  const nonDateRows = useMemo(() => {
+    let rs = rows
+    if (!sourceIsAll) rs = rs.filter(matchesSource)
+    if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
+    const q = campaignQueryDebounced.trim().toLowerCase()
+    if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
+    if (advActiveConditions.length) rs = rs.filter(matchesAdvancedFilters)
+    return rs
+  }, [rows, selectedSources, corridorFilter, campaignQueryDebounced, advActiveConditions, matchesAdvancedFilters])
+
   const [showInfo, setShowInfo] = useState(false)
   const [grpBy, setGrpBy] = useState('source')
   // A3 fix: selecting "All months" (Sheet mode, where `filtered` holds full history in
@@ -1746,6 +1815,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return list.slice(0, 8)
   }, [campaignOptions, campaignQuery])
 
+  // Real observed values per field, for the advanced filter's 'is'/'is not' value
+  // picker -- Campaign reuses campaignOptions (already sorted by relevance/leads,
+  // full dataset) rather than re-scanning rows a second time.
+  const advFilterOptions = useMemo(() => ({
+    source: sources.filter(s => s !== 'All'),
+    corridor: CORRIDORS.map(c => c.label),
+    campaign: campaignOptions.map(c => c.name),
+  }), [sources, campaignOptions])
+
   // Is the selected month the current calendar month?
   const isCurrentMonth = useMemo(() => {
     const mk = monthKeyByLabel.get(selMonth)
@@ -1781,9 +1859,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQueryDebounced.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
-    if (advancedFilters.length) rs = rs.filter(matchesAdvancedFilters)
+    if (advActiveConditions.length) rs = rs.filter(matchesAdvancedFilters)
     return rs
-  }, [dateFilteredRows, selectedSources, corridorFilter, campaignQueryDebounced, advancedFilters, matchesAdvancedFilters])
+  }, [dateFilteredRows, selectedSources, corridorFilter, campaignQueryDebounced, advActiveConditions, matchesAdvancedFilters])
 
   const sumKpis = list => {
     const sum = k => list.reduce((t, r) => t + r[k], 0)
@@ -1912,9 +1990,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQueryDebounced.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
-    if (advancedFilters.length) rs = rs.filter(matchesAdvancedFilters)
+    if (advActiveConditions.length) rs = rs.filter(matchesAdvancedFilters)
     return rs
-  }, [rows, prevWindow, selectedSources, corridorFilter, campaignQueryDebounced, advancedFilters, matchesAdvancedFilters])
+  }, [rows, prevWindow, selectedSources, corridorFilter, campaignQueryDebounced, advActiveConditions, matchesAdvancedFilters])
 
   // prevAggRows has no campaign_name (see its own state comment above), so it can ONLY
   // stand in for prevFiltered when nothing on screen is asking to slice the previous
@@ -1922,7 +2000,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // campaign name would need to match against (isCostExcludedCampaign('', ...) can
   // never correctly apply an exclusion). Any one of those active falls straight back
   // to the always-correct, campaign-level prevFiltered -- exactly today's behaviour.
-  const canUseAggPrev = bqActive && corridorFilter === 'All' && !campaignQueryDebounced.trim() && advancedFilters.length === 0 && costExclusions.length === 0 && prevAggRows.length > 0
+  const canUseAggPrev = bqActive && corridorFilter === 'All' && !campaignQueryDebounced.trim() && advActiveConditions.length === 0 && costExclusions.length === 0 && prevAggRows.length > 0
   const prevAggFiltered = useMemo(() => (sourceIsAll ? prevAggRows : prevAggRows.filter(matchesSource)), [prevAggRows, sourceIsAll, matchesSource])
   const prevKpis = useMemo(() => sumKpis(canUseAggPrev ? prevAggFiltered : prevFiltered), [canUseAggPrev, prevAggFiltered, prevFiltered])
   // Same paid-only basis as the current period -- otherwise the delta arrows would be
@@ -2407,9 +2485,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     bySource.filter(s => s.queued >= 10).map(s => ({ ...s, qlRate: s.queued > 0 ? (s.totalQL / s.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 8)
   ), [bySource])
 
+  // Month grouping deliberately reads nonDateRows (Source/Corridor/campaign/advanced-
+  // filter scoped, but NOT date-window scoped), not `filtered` -- otherwise picking
+  // "Last 7D" or a single month up top would make the table's own Month tab show only
+  // whichever 0-1 months happen to fall inside that narrow window, instead of every
+  // month actually present in the data. Every other grouping (Source/Campaign/
+  // Corridor/Day) stays correctly date-scoped via bySource/byCampaign/byCorridor/
+  // byDayFull below, which are untouched.
   const byMonth = useMemo(() => {
     const m = new Map()
-    filtered.forEach(r => {
+    nonDateRows.forEach(r => {
       if (r.mk == null) return
       const e = m.get(r.mk) || { mk:r.mk, label:monthLabel(r.mk), leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, deposits:0 }
       e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.humanQL += r.humanQL
@@ -2418,7 +2503,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       m.set(r.mk, e)
     })
     return [...m.values()].sort((a, b) => a.mk - b.mk)
-  }, [filtered])
+  }, [nonDateRows])
 
   // Daily trend — last 30 days present in the active selection, gives the "what happened
   // recently" pulse a marketer checks first thing in the morning.
@@ -2548,7 +2633,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       label:d.label, dateKey:d.key, paidLeads:d.paidLeads, paidQL:d.paidQL, paidApps:d.paidApps, leads:d.leads, queued:d.queued, floorQueued:d.floorQueued, futworkHumanQ:d.futworkHumanQ, futworkAiQ:d.futworkAiQ, superbotQ:d.superbotQ, humanQL:d.humanQL, futworkAiQl:d.futworkAiQl, superbotAiQl:d.superbotAiQl, totalQL:d.totalQL, apps:d.apps, offers:d.offers, deposits:d.deposits, raus:d.raus, spend:d.spend, costSpend:d.costSpend,
     }))
     return byMonth.map(m => {
-      const full = filtered.filter(r => r.mk === m.mk)
+      // nonDateRows, not filtered -- byMonth's own rows are already sourced from
+      // nonDateRows (see its comment above), so re-deriving apps/offers/raus/spend/
+      // paid* from the date-scoped `filtered` here would silently zero them out for
+      // any month outside the currently-selected date window.
+      const full = nonDateRows.filter(r => r.mk === m.mk)
       return {
         label:m.label, mk:m.mk, leads:m.leads, queued:m.queued, floorQueued:m.floorQueued, futworkHumanQ:m.futworkHumanQ, futworkAiQ:m.futworkAiQ, superbotQ:m.superbotQ, humanQL:m.humanQL, futworkAiQl:m.futworkAiQl, superbotAiQl:m.superbotAiQl, totalQL:m.totalQL,
         apps: full.reduce((t, r) => t + r.apps, 0), offers: full.reduce((t, r) => t + r.offers, 0),
@@ -2562,7 +2651,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         paidApps: full.reduce((t, r) => t + (paidSources.has(r.source) && !isCostExcluded(r) ? r.apps : 0), 0),
       }
     })
-  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, filtered, paidSources, isCostExcluded])
+  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, nonDateRows, paidSources, isCostExcluded])
 
   const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'corridor' ? 'Corridor' : grpBy === 'day' ? 'Date' : 'Month'
 
@@ -3024,16 +3113,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   }
   const dayLabelOf = (d) => d.toLocaleDateString('en-IN', { day:'numeric', month:'short' }) + "'" + String(d.getFullYear()).slice(2)
 
-  const nonDateRows = useMemo(() => {
-    let rs = rows
-    if (!sourceIsAll) rs = rs.filter(matchesSource)
-    if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
-    const q = campaignQueryDebounced.trim().toLowerCase()
-    if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
-    if (advancedFilters.length) rs = rs.filter(matchesAdvancedFilters)
-    return rs
-  }, [rows, selectedSources, corridorFilter, campaignQueryDebounced, advancedFilters, matchesAdvancedFilters])
-
   // "Month-on-month trend" chart is meant to always show the last 5 months (including
   // whatever the current month is) so it reads as a real trend line -- unlike every
   // other chart/KPI on this page, it deliberately does NOT follow the header's
@@ -3054,9 +3133,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQueryDebounced.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
-    if (advancedFilters.length) rs = rs.filter(matchesAdvancedFilters)
+    if (advActiveConditions.length) rs = rs.filter(matchesAdvancedFilters)
     return rs
-  }, [bqActive, monthTrendBqRows, nonDateRows, sourceIsAll, selectedSources, corridorFilter, campaignQueryDebounced, advancedFilters, matchesAdvancedFilters])
+  }, [bqActive, monthTrendBqRows, nonDateRows, sourceIsAll, selectedSources, corridorFilter, campaignQueryDebounced, advActiveConditions, matchesAdvancedFilters])
   const monthTrend = useMemo(() => {
     const m = new Map()
     monthTrendRows.forEach(r => {
@@ -4022,25 +4101,21 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               <SourceMultiSelect label="Source" options={sources.filter(s => s !== 'All')} selected={selectedSources} minWidth={110} onChange={setSelectedSources} />
               <Dropdown label="Corridor" options={['All', ...CORRIDORS.map(c => c.label)]} value={corridorFilter} minWidth={140} onChange={setCorridorFilter} />
               <CampaignSearch value={campaignQuery} onChange={setCampaignQuery} suggestions={campaignSuggestions} />
-              {advancedFilters.map(f => (
-                <AdvancedFilterChip key={f.id} filter={f}
-                  sourceOptions={sources.filter(s => s !== 'All')}
-                  corridorOptions={CORRIDORS.map(c => c.label)}
-                  open={advFilterOpen === f.id}
-                  onToggle={() => setAdvFilterOpen(v => v === f.id ? null : f.id)}
-                  onSave={updated => { setAdvancedFilters(list => list.map(x => x.id === f.id ? { ...updated, id: f.id } : x)); setAdvFilterOpen(null) }}
-                  onRemove={() => setAdvancedFilters(list => list.filter(x => x.id !== f.id))}
-                />
-              ))}
-              <AddAdvancedFilterButton
-                sourceOptions={sources.filter(s => s !== 'All')}
-                corridorOptions={CORRIDORS.map(c => c.label)}
-                open={advFilterOpen === 'new'}
-                onToggle={() => setAdvFilterOpen(v => v === 'new' ? null : 'new')}
-                onAdd={f => { setAdvancedFilters(list => [...list, { ...f, id: 'adv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) }]); setAdvFilterOpen(null) }}
-              />
-              {advancedFilters.length > 0 && (
-                <button type="button" onClick={() => setAdvancedFilters([])} style={{ border:'none', background:'transparent', color:C.muted, fontSize:12, fontWeight:700, fontFamily:FONT, cursor:'pointer', textDecoration:'underline', textUnderlineOffset:2, whiteSpace:'nowrap', flexShrink:0 }}>
+              <div style={{ position:'relative', flexShrink:0 }}>
+                <button type="button" onClick={() => setAdvFilterOpen(v => !v)}
+                  style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:8, border:'1px dashed ' + C.border, background: advActiveConditions.length ? C.navyBg : 'transparent', cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:FONT, color: advActiveConditions.length ? C.navy : C.muted, whiteSpace:'nowrap' }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                  {advActiveConditions.length ? `Filters (${advActiveConditions.length})` : 'Advanced filter'}
+                </button>
+                {advFilterOpen && (
+                  <AdvFilterBuilderPopover conditions={advConditions} combinator={advCombinator} filterOptions={advFilterOptions}
+                    onAdd={addAdvCondition} onUpdate={updateAdvCondition} onRemove={removeAdvCondition}
+                    onSetCombinator={setAdvCombinator} onClearAll={() => setAdvConditions([])}
+                    onClose={() => setAdvFilterOpen(false)} />
+                )}
+              </div>
+              {advActiveConditions.length > 0 && (
+                <button type="button" onClick={() => setAdvConditions([])} style={{ border:'none', background:'transparent', color:C.muted, fontSize:12, fontWeight:700, fontFamily:FONT, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
                   Clear all
                 </button>
               )}
@@ -4202,7 +4277,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 </div>
               }
             >
-              {sectionTitle('Funnel summary by ' + grpByLabel.toLowerCase(), 'full-funnel totals and stage conversion rates — search, sort, and customize the columns below')}
+              {sectionTitle('Funnel summary by ' + grpByLabel.toLowerCase(), grpBy === 'month'
+                ? 'every month present in the data, not scoped to the date filter above — search, sort, and customize the columns below'
+                : 'full-funnel totals and stage conversion rates — search, sort, and customize the columns below')}
 
               {/* TOOLBAR */}
               <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:14 }}>
