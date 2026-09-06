@@ -712,10 +712,6 @@ const SUMMARY_COLUMNS = [
   // see contribMetric/valueWithContrib below. Ends in "Pct" deliberately so it inherits
   // summaryFmt's percentage formatting and the heat-color treatment for free.
   { key:'contribPct', label:'Contribution %' },
-  // A colored pill, not a number -- rendered specially in renderSummaryValueCells (below) and
-  // skipped in the TOTAL row (a verdict is meaningless for a grand total). See groupedFinal's
-  // own comment above for the rule this reuses.
-  { key:'verdict', label:'Verdict' },
   { key:'floorQueued', label:'Floor Queued' },
   { key:'queued', label:'Total Queued' },
   { key:'futworkHumanQ', label:'Futwork Human Queued' },
@@ -2673,38 +2669,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
   const groupedWithRevenue = useMemo(() => grouped.map(withSrRevenue), [grouped, withSrRevenue])
 
-  // Verdict column -- reuses this page's own already-established campaign-performance
-  // heuristic (see campaignEfficiencyMap below, and the standing memory
-  // campaign-performance-heuristic.md: high CPQL is a red flag regardless of volume; low CPQL
-  // only counts as a proven best performer once real volume backs it up), generalized from
-  // "campaigns only" to whichever grouping tab is active -- Source/Corridor/Month/Day rows get
-  // judged against their OWN peers in that view the same way campaigns already were. Deliberately
-  // scoped to the top-level grouped rows only, not the Source view's nested Sub Source/Campaign
-  // drill-down rows (sourceSubBreakdown, below) -- extending it there is a separate, later call.
-  const groupedFinal = useMemo(() => {
-    const withCpql = groupedWithRevenue
-      .map(g => ({ g, cpql: (g.costSpend > 0 && g.paidQL > 0) ? g.costSpend / g.paidQL : null }))
-      .filter(x => x.cpql != null && x.g.totalQL > 0)
-    // A median off fewer than 3 peers isn't really a median -- with 1-2 comparable rows there's
-    // nothing meaningful to compare against, so nobody gets judged rather than judged against a
-    // near-arbitrary "median" of itself and one other row.
-    if (withCpql.length < 3) return groupedWithRevenue.map(g => ({ ...g, verdict:null, verdictReason:null }))
-    const medCpql = median(withCpql.map(x => x.cpql))
-    const medQL = median(withCpql.map(x => x.g.totalQL))
-    const cpqlByLabel = new Map(withCpql.map(x => [x.g.label, x.cpql]))
-    return groupedWithRevenue.map(g => {
-      const cpql = cpqlByLabel.get(g.label)
-      if (cpql == null) return { ...g, verdict:null, verdictReason:null }
-      if (cpql > medCpql) {
-        return { ...g, verdict:'flag', verdictReason:`CPQL ${fmtINR(cpql)} is above this view's median ${fmtINR(medCpql)}.` }
-      }
-      if (g.totalQL >= medQL) {
-        return { ...g, verdict:'best', verdictReason:`CPQL ${fmtINR(cpql)} is at or below the median ${fmtINR(medCpql)}, with real volume (${fmtN(g.totalQL)} QLs vs a median of ${fmtN(medQL)}).` }
-      }
-      return { ...g, verdict:'promising', verdictReason:`CPQL ${fmtINR(cpql)} is healthy, but volume (${fmtN(g.totalQL)} QLs) is still below this view's median (${fmtN(medQL)}) -- worth scaling before calling it proven.` }
-    })
-  }, [groupedWithRevenue])
-
   const maxSourceLeads = bySource.length ? Math.max(...bySource.map(s => s.leads)) : 1
   const totalSourceLeads = bySource.reduce((t, s) => t + s.leads, 0)
 
@@ -2769,7 +2733,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // sort and the row limit only ever apply to the top-level rows, matching how "Show N" and
   // search already only counted top-level rows before this feature existed.
   const sortedFilteredRows = useMemo(() => {
-    let rs = groupedFinal
+    let rs = groupedWithRevenue
     const q = tableSearch.trim().toLowerCase()
     if (q) rs = rs.filter(g => g.label.toLowerCase().includes(q))
     return [...rs].sort((a, b) => {
@@ -2785,13 +2749,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       if (sortKey === 'corridor' || sortKey === 'source' || sortKey === 'subSource') {
         const cmp = (a[sortKey] || '').localeCompare(b[sortKey] || '')
         return sortDir === 'asc' ? cmp : -cmp
-      }
-      // Ranked by severity (needs attention first), not alphabetically -- 'flag' sorting
-      // before 'promising' before 'best' is what makes sorting by this column useful at all.
-      if (sortKey === 'verdict') {
-        const rank = v => v === 'flag' ? 2 : v === 'promising' ? 1 : v === 'best' ? 0 : -1
-        const av = rank(a.verdict), bv = rank(b.verdict)
-        return sortDir === 'asc' ? av - bv : bv - av
       }
       // Contribution % of any row is (its metric value / a fixed grand total) -- dividing
       // every row by the same positive constant never changes relative order, so sorting by
@@ -2811,7 +2768,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv
       return sortDir === 'asc' ? an - bn : bn - an
     })
-  }, [groupedFinal, tableSearch, sortKey, sortDir, contribMetric])
+  }, [groupedWithRevenue, tableSearch, sortKey, sortDir, contribMetric])
 
   const tableRows = useMemo(() => (
     rowLimit === 'all' ? sortedFilteredRows : sortedFilteredRows.slice(0, rowLimit)
@@ -3922,29 +3879,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // Muting (not hiding, not changing the number) is the fix: the real figure stays exactly
   // where it is, it just stops visually competing with genuine signal for attention.
   const PCT_EXTREME_THRESHOLD = 150
-  // flag/best/promising -> a compact colored pill instead of a number. Navy for "needs
-  // attention" rather than red -- this app's own standing rule is brand colors only, never
-  // red/amber, on any data element.
-  const VERDICT_PILL = {
-    flag: { bg:'var(--navy-tint)', fg:C.navy, label:'Flag' },
-    best: { bg:'var(--green-tint,#EAF7EE)', fg:C.green, label:'Scale' },
-    promising: { bg:'var(--blue-tint,#E3F5FD)', fg:C.blue, label:'Building' },
-  }
   const renderSummaryValueCells = (rowData, opts = {}) => renderCols.map(col => {
-    if (col.key === 'verdict') {
-      const p = VERDICT_PILL[rowData.verdict]
-      return (
-        <td key={col.key} style={{ padding: opts.padding || '11px 10px', textAlign:'center' }}>
-          {p ? (
-            <span title={rowData.verdictReason} style={{ display:'inline-block', padding:'3px 10px', borderRadius:6, fontSize:11.5, fontWeight:800, background:p.bg, color:p.fg, whiteSpace:'nowrap', cursor:'help' }}>
-              {p.label}
-            </span>
-          ) : (
-            <span style={{ color:'var(--text3)' }} title="Not enough comparable peers in this view to judge yet">—</span>
-          )}
-        </td>
-      )
-    }
     const v = valueWithContrib(rowData, col.key)
     const isTextCol = TEXT_COL_KEYS.includes(col.key)
     const isPct = col.key.endsWith('Pct')
