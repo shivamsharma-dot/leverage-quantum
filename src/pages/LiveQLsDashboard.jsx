@@ -171,6 +171,7 @@ export default function LiveQLsDashboard() {
   const [openFilterKey, setOpenFilterKey] = useState(null) // 'add' or a field key
   const [breakdownField, setBreakdownField] = useState('country')
   const [page, setPage] = useState(0)
+  const [showInfo, setShowInfo] = useState(false)
   const PAGE_SIZE = 25
 
   async function load() {
@@ -245,28 +246,105 @@ export default function LiveQLsDashboard() {
     <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
       <Sidebar />
       <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid ' + C.border, boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-        <div style={{ background: 'var(--card)', borderBottom: '0.5px solid ' + C.border, padding: '10px 28px', minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
+        <div style={{
+          background: 'var(--card)', borderBottom: '0.5px solid ' + C.border,
+          padding: '0 28px', minHeight: 56, height: 'auto', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', gap: 12, flexShrink: 0, overflow: 'visible',
+        }}>
           <div>
-            <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Dashboards / Live QLs</p>
-            <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px' }}>Live QLs</h1>
+            <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: FONT }}>Dashboards / Live QLs</p>
+            <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: '2px 0 0', letterSpacing: '-0.4px', fontFamily: FONT }}>Live QLs</h1>
           </div>
-          <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: 3 }}>
-              {DATE_PRESETS.map(([key, label]) => (
-                <button key={key} onClick={() => setDatePreset(key)}
+          <div className="lq-header-controls" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', overflow: 'visible', minWidth: 0, padding: '8px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: '#F8FAFC', padding: '6px 10px', borderRadius: 12, border: '0.5px solid #E5E7EB' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--bg3)', borderRadius: 9, padding: 3 }}>
+                {DATE_PRESETS.map(([key, label]) => (
+                  <button key={key} onClick={() => setDatePreset(key)}
+                    style={{
+                      padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT,
+                      background: datePreset === key ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'transparent',
+                      color: datePreset === key ? '#fff' : '#64748B',
+                      boxShadow: datePreset === key ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
+                      transition: 'all .15s',
+                    }}>{label}</button>
+                ))}
+              </div>
+
+              {Object.keys(activeFilters).filter(k => (activeFilters[k] || []).length).map(key => {
+                const field = BREAKDOWN_FIELDS.find(f => f.key === key)
+                if (!field) return null
+                return (
+                  <FilterChip key={key} field={field} values={activeFilters[key]} options={filterOptions[key] || []}
+                    open={openFilterKey === key} onToggle={() => setOpenFilterKey(v => v === key ? null : key)}
+                    onToggleValue={v => setActiveFilters(prev => {
+                      const cur = prev[key] || []
+                      const next = cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v]
+                      return { ...prev, [key]: next }
+                    })}
+                    onRemove={() => setActiveFilters(prev => { const c = { ...prev }; delete c[key]; return c })} />
+                )
+              })}
+              <AddFilterButton allFields={BREAKDOWN_FIELDS} activeFilters={activeFilters} filterOptions={filterOptions}
+                open={openFilterKey === 'add'} onToggle={() => setOpenFilterKey(v => v === 'add' ? null : 'add')}
+                onToggleValue={(key, v) => setActiveFilters(prev => {
+                  const cur = prev[key] || []
+                  const next = cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v]
+                  return { ...prev, [key]: next }
+                })} />
+              {Object.keys(activeFilters).some(k => (activeFilters[k] || []).length > 0) && (
+                <button onClick={() => setActiveFilters({})} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Clear all</button>
+              )}
+
+              <Dropdown label="Breakdown by" value={breakdownField} onChange={setBreakdownField} minWidth={170}
+                options={BREAKDOWN_FIELDS.map(f => ({ value: f.key, label: f.label }))} />
+
+              {syncedAt && !loading && (
+                <span style={{ fontSize: 11, color: C.muted, fontFamily: FONT }}>Synced {syncedAt.toLocaleTimeString()}</span>
+              )}
+              <Button size="sm" variant="secondary" onClick={load} disabled={loading}
+                icon={
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+                    style={{ animation: loading ? 'spin .8s linear infinite' : 'none' }}>
+                    <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
+                }>
+                {loading ? 'Refreshing' : 'Refresh'}
+              </Button>
+              <ExportButton data={exportRows} filename={`live-qls-${datePreset}`} />
+
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setShowInfo(v => !v)}
                   style={{
-                    padding: '7px 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: FONT,
-                    background: datePreset === key ? 'linear-gradient(135deg,#1F3C84,#1C9FD4)' : 'transparent',
-                    color: datePreset === key ? '#fff' : C.muted,
-                    boxShadow: datePreset === key ? '0 4px 10px -3px rgba(31,60,132,0.5)' : 'none',
-                  }}>{label}</button>
-              ))}
+                    width: 30, height: 30, borderRadius: 8, border: '0.5px solid ' + C.border,
+                    background: showInfo ? C.navyBg : 'var(--card)', color: C.navy,
+                    fontSize: 14, fontWeight: 700, fontStyle: 'italic', fontFamily: 'Georgia,serif',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>i</button>
+                {showInfo && <div onClick={() => setShowInfo(false)} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />}
+                {showInfo && (
+                  <div style={{
+                    position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 200,
+                    width: 340, background: 'var(--card)', border: '0.5px solid ' + C.border,
+                    borderRadius: 12, boxShadow: '0 14px 40px rgba(15,23,42,0.16)',
+                    padding: '16px 18px', fontFamily: FONT,
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>How this page is computed</div>
+                    {[
+                      ['QL', 'An activity counts as a QL when its Note = Post (call actually completed, not still queued), Disposition Status = Final, and Disposition is one of 9 confirmed values (e.g. Discover Future Intent, Interested in Call Back, Call Transferred To Counsellor).'],
+                      ['Human / AI', 'Human = Manual Lead Qualification - Futwork (activity type 234). AI = Futwork AI Call Qualification (activity type 253). Each has its own field numbering in LeadSquared; both are normalized to the same field names here.'],
+                      ['Queued', 'Note = "Call queued successfully" for that channel -- calls that haven’t been actioned yet. Always shown unfiltered, regardless of the filter chips above.'],
+                      ['Source', 'Pulled live from LeadSquared’s own Activity Advanced Search API, not a scheduled sync -- every date preset re-fetches fresh.'],
+                      ['Filters', 'Narrow the QL rows (and the KPI cards above them) by any field. Queued counts are not affected by filters.'],
+                    ].map(([m, d]) => (
+                      <div key={m} style={{ display: 'flex', gap: 10, padding: '7px 0', borderTop: '0.5px solid #F3F4F6' }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: C.navy, width: 80, flexShrink: 0 }}>{m}</div>
+                        <div style={{ fontSize: 11.5, color: C.sub, lineHeight: 1.5 }}>{d}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            {syncedAt && !loading && (
-              <span style={{ fontSize: 11, color: C.muted }}>Synced {syncedAt.toLocaleTimeString()}</span>
-            )}
-            <Button size="sm" variant="secondary" onClick={load} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</Button>
-            <ExportButton data={exportRows} filename={`live-qls-${datePreset}`} />
           </div>
         </div>
 
@@ -277,45 +355,13 @@ export default function LiveQLsDashboard() {
             <div style={{ padding: 28, color: '#B91C1C', fontSize: 13 }}>{error}</div>
           ) : (
             <>
-              <div className="lq-kpi-grid" style={KPI_CARD_ROW}>
+              <div className="lq-kpi-grid" style={{ ...KPI_CARD_ROW, marginTop: 20 }}>
                 <PremKPI label="Human QL" value={fmtN(humanQL)} sub={data && data.human.qlCount !== humanQL ? `of ${fmtN(data.human.qlCount)} unfiltered` : 'Manual Lead Qualification'} accent={C.blue} icon={KPI_ICONS.agent} />
                 <PremKPI label="AI QL" value={fmtN(aiQL)} sub={data && data.ai.qlCount !== aiQL ? `of ${fmtN(data.ai.qlCount)} unfiltered` : 'Futwork AI Call Qualification'} accent={C.cyan} icon={KPI_ICONS.bot} />
                 <PremKPI label="Total QL" value={fmtN(totalQL)} sub="Human + AI" accent={C.navy} icon={KPI_ICONS.total} />
                 <PremKPI label="Human Queued" value={fmtN(humanQueued)} sub="not yet actioned, unfiltered" accent={C.green} icon={KPI_ICONS.agent} />
                 <PremKPI label="AI Queued" value={fmtN(aiQueued)} sub="not yet actioned, unfiltered" accent={C.green} icon={KPI_ICONS.bot} />
                 <PremKPI label="Total Queued" value={fmtN(totalQueued)} sub="Human + AI" accent={C.green} icon={KPI_ICONS.total} />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '16px 28px 0' }}>
-                {Object.keys(activeFilters).filter(k => (activeFilters[k] || []).length).map(key => {
-                  const field = BREAKDOWN_FIELDS.find(f => f.key === key)
-                  if (!field) return null
-                  return (
-                    <FilterChip key={key} field={field} values={activeFilters[key]} options={filterOptions[key] || []}
-                      open={openFilterKey === key} onToggle={() => setOpenFilterKey(v => v === key ? null : key)}
-                      onToggleValue={v => setActiveFilters(prev => {
-                        const cur = prev[key] || []
-                        const next = cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v]
-                        return { ...prev, [key]: next }
-                      })}
-                      onRemove={() => setActiveFilters(prev => { const c = { ...prev }; delete c[key]; return c })} />
-                  )
-                })}
-                <AddFilterButton allFields={BREAKDOWN_FIELDS} activeFilters={activeFilters} filterOptions={filterOptions}
-                  open={openFilterKey === 'add'} onToggle={() => setOpenFilterKey(v => v === 'add' ? null : 'add')}
-                  onToggleValue={(key, v) => setActiveFilters(prev => {
-                    const cur = prev[key] || []
-                    const next = cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v]
-                    return { ...prev, [key]: next }
-                  })} />
-                {Object.keys(activeFilters).some(k => (activeFilters[k] || []).length > 0) && (
-                  <button onClick={() => setActiveFilters({})} style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700, color: C.muted, fontFamily: FONT }}>Clear all</button>
-                )}
-                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>Breakdown by</span>
-                  <Dropdown value={breakdownField} onChange={setBreakdownField} minWidth={170}
-                    options={BREAKDOWN_FIELDS.map(f => ({ value: f.key, label: f.label }))} />
-                </div>
               </div>
 
               <div style={{ padding: '16px 28px 28px', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.4fr)', gap: 16 }} className="lq-grid2">
