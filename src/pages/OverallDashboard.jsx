@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, useTransition
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
   CartesianGrid, LineChart, Line, Legend, AreaChart, Area,
-  ScatterChart, Scatter, ZAxis, ReferenceLine,
+  ScatterChart, Scatter, ZAxis, ReferenceLine, ComposedChart,
 } from 'recharts'
 import Sidebar from '../components/Sidebar'
 import { DashboardSkeleton } from '../components/SkeletonLoader'
@@ -21,7 +21,7 @@ import { idbGet, idbSet } from '../lib/idbCache'
 import { consumePrefetchedOverallCsv } from '../lib/overallPrefetch'
 import { classifyCorridor, corridorLabel, CORRIDORS } from '../lib/corridors'
 import { isCostExcludedCampaign } from '../lib/costExclusions'
-import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, BarGrad, barFill, BAR_RADIUS_H } from '../ui/dashboardKit'
+import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, BarGrad, barFill, BAR_RADIUS, BAR_RADIUS_H } from '../ui/dashboardKit'
 // Data source: BigQuery -- see src/lib/overallBqCache.js for the why. Which
 // source this page instance reads is now fixed by the `dataSource` prop (two
 // separate routes/pages -- see App.jsx), not a per-device Settings toggle.
@@ -532,6 +532,10 @@ const SUMMARY_COLUMNS = [
   // see contribMetric/valueWithContrib below. Ends in "Pct" deliberately so it inherits
   // summaryFmt's percentage formatting and the heat-color treatment for free.
   { key:'contribPct', label:'Contribution %' },
+  // A colored pill, not a number -- rendered specially in renderSummaryValueCells (below) and
+  // skipped in the TOTAL row (a verdict is meaningless for a grand total). See groupedFinal's
+  // own comment above for the rule this reuses.
+  { key:'verdict', label:'Verdict' },
   { key:'floorQueued', label:'Floor Queued' },
   { key:'queued', label:'Total Queued' },
   { key:'futworkHumanQ', label:'Futwork Human Queued' },
@@ -2427,6 +2431,38 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
   const groupedWithRevenue = useMemo(() => grouped.map(withSrRevenue), [grouped, withSrRevenue])
 
+  // Verdict column -- reuses this page's own already-established campaign-performance
+  // heuristic (see campaignEfficiencyMap below, and the standing memory
+  // campaign-performance-heuristic.md: high CPQL is a red flag regardless of volume; low CPQL
+  // only counts as a proven best performer once real volume backs it up), generalized from
+  // "campaigns only" to whichever grouping tab is active -- Source/Corridor/Month/Day rows get
+  // judged against their OWN peers in that view the same way campaigns already were. Deliberately
+  // scoped to the top-level grouped rows only, not the Source view's nested Sub Source/Campaign
+  // drill-down rows (sourceSubBreakdown, below) -- extending it there is a separate, later call.
+  const groupedFinal = useMemo(() => {
+    const withCpql = groupedWithRevenue
+      .map(g => ({ g, cpql: (g.costSpend > 0 && g.paidQL > 0) ? g.costSpend / g.paidQL : null }))
+      .filter(x => x.cpql != null && x.g.totalQL > 0)
+    // A median off fewer than 3 peers isn't really a median -- with 1-2 comparable rows there's
+    // nothing meaningful to compare against, so nobody gets judged rather than judged against a
+    // near-arbitrary "median" of itself and one other row.
+    if (withCpql.length < 3) return groupedWithRevenue.map(g => ({ ...g, verdict:null, verdictReason:null }))
+    const medCpql = median(withCpql.map(x => x.cpql))
+    const medQL = median(withCpql.map(x => x.g.totalQL))
+    const cpqlByLabel = new Map(withCpql.map(x => [x.g.label, x.cpql]))
+    return groupedWithRevenue.map(g => {
+      const cpql = cpqlByLabel.get(g.label)
+      if (cpql == null) return { ...g, verdict:null, verdictReason:null }
+      if (cpql > medCpql) {
+        return { ...g, verdict:'flag', verdictReason:`CPQL ${fmtINR(cpql)} is above this view's median ${fmtINR(medCpql)}.` }
+      }
+      if (g.totalQL >= medQL) {
+        return { ...g, verdict:'best', verdictReason:`CPQL ${fmtINR(cpql)} is at or below the median ${fmtINR(medCpql)}, with real volume (${fmtN(g.totalQL)} QLs vs a median of ${fmtN(medQL)}).` }
+      }
+      return { ...g, verdict:'promising', verdictReason:`CPQL ${fmtINR(cpql)} is healthy, but volume (${fmtN(g.totalQL)} QLs) is still below this view's median (${fmtN(medQL)}) -- worth scaling before calling it proven.` }
+    })
+  }, [groupedWithRevenue])
+
   const maxSourceLeads = bySource.length ? Math.max(...bySource.map(s => s.leads)) : 1
   const totalSourceLeads = bySource.reduce((t, s) => t + s.leads, 0)
 
@@ -2491,7 +2527,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // sort and the row limit only ever apply to the top-level rows, matching how "Show N" and
   // search already only counted top-level rows before this feature existed.
   const sortedFilteredRows = useMemo(() => {
-    let rs = groupedWithRevenue
+    let rs = groupedFinal
     const q = tableSearch.trim().toLowerCase()
     if (q) rs = rs.filter(g => g.label.toLowerCase().includes(q))
     return [...rs].sort((a, b) => {
@@ -2507,6 +2543,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       if (sortKey === 'corridor' || sortKey === 'source' || sortKey === 'subSource') {
         const cmp = (a[sortKey] || '').localeCompare(b[sortKey] || '')
         return sortDir === 'asc' ? cmp : -cmp
+      }
+      // Ranked by severity (needs attention first), not alphabetically -- 'flag' sorting
+      // before 'promising' before 'best' is what makes sorting by this column useful at all.
+      if (sortKey === 'verdict') {
+        const rank = v => v === 'flag' ? 2 : v === 'promising' ? 1 : v === 'best' ? 0 : -1
+        const av = rank(a.verdict), bv = rank(b.verdict)
+        return sortDir === 'asc' ? av - bv : bv - av
       }
       // Contribution % of any row is (its metric value / a fixed grand total) -- dividing
       // every row by the same positive constant never changes relative order, so sorting by
@@ -2526,7 +2569,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv
       return sortDir === 'asc' ? an - bn : bn - an
     })
-  }, [groupedWithRevenue, tableSearch, sortKey, sortDir, contribMetric])
+  }, [groupedFinal, tableSearch, sortKey, sortDir, contribMetric])
 
   const tableRows = useMemo(() => (
     rowLimit === 'all' ? sortedFilteredRows : sortedFilteredRows.slice(0, rowLimit)
@@ -3638,7 +3681,29 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // Muting (not hiding, not changing the number) is the fix: the real figure stays exactly
   // where it is, it just stops visually competing with genuine signal for attention.
   const PCT_EXTREME_THRESHOLD = 150
+  // flag/best/promising -> a compact colored pill instead of a number. Navy for "needs
+  // attention" rather than red -- this app's own standing rule is brand colors only, never
+  // red/amber, on any data element.
+  const VERDICT_PILL = {
+    flag: { bg:'var(--navy-tint)', fg:C.navy, label:'Flag' },
+    best: { bg:'var(--green-tint,#EAF7EE)', fg:C.green, label:'Scale' },
+    promising: { bg:'var(--blue-tint,#E3F5FD)', fg:C.blue, label:'Building' },
+  }
   const renderSummaryValueCells = (rowData, opts = {}) => renderCols.map(col => {
+    if (col.key === 'verdict') {
+      const p = VERDICT_PILL[rowData.verdict]
+      return (
+        <td key={col.key} style={{ padding: opts.padding || '11px 10px', textAlign:'center' }}>
+          {p ? (
+            <span title={rowData.verdictReason} style={{ display:'inline-block', padding:'3px 10px', borderRadius:6, fontSize:11.5, fontWeight:800, background:p.bg, color:p.fg, whiteSpace:'nowrap', cursor:'help' }}>
+              {p.label}
+            </span>
+          ) : (
+            <span style={{ color:'var(--text3)' }} title="Not enough comparable peers in this view to judge yet">—</span>
+          )}
+        </td>
+      )
+    }
     const v = valueWithContrib(rowData, col.key)
     const isTextCol = TEXT_COL_KEYS.includes(col.key)
     const isPct = col.key.endsWith('Pct')
@@ -4252,18 +4317,28 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 : bqActive && monthTrendBqBusy
                 ? 'last 5 months, including the current month — fetching the trailing months from BigQuery in the background, chart fills in as it lands'
                 : 'last 5 months, including the current month — not affected by the date filter above')}
+              {/* Restyled from a flat 4-line chart to a bar+line combo (Leads as the volume
+                  anchor, the funnel-stage metrics as lines over it), inspired by the Marketing
+                  Performance agent's own chart treatment. Also fixes a real, pre-existing scaling
+                  problem while at it: Deposits (single/low-double digits) was sharing ONE axis
+                  with Leads (tens of thousands) -- it was drawing, just permanently flat at the
+                  bottom, functionally invisible. Deposits now gets its own right-hand axis and a
+                  dashed line, matching the "smaller-scale secondary metric" convention Marketing
+                  Performance itself already uses for CPQL against QL rate. */}
               <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={monthTrend} margin={{ left:0, right:12, top:4, bottom:4 }}>
+                <ComposedChart data={monthTrend} margin={{ left:0, right:12, top:4, bottom:4 }}>
+                  <defs><BarGrad id="g-ov-monthtrend" color={C.navy} /></defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} />
-                  <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
+                  <YAxis yAxisId="left" tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
+                  <YAxis yAxisId="right" orientation="right" tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
                   <Tooltip content={<BrandTooltip />} />
-                  <Legend wrapperStyle={{ fontSize:14, fontFamily:FONT }} />
-                  <Line type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} strokeDasharray={bqActive && monthTrendBqBusy ? '5 4' : undefined} dot={{ r:3 }} />
-                  <Line type="monotone" dataKey="queued" name="Total Queued" stroke={C.blue} strokeWidth={2.5} strokeDasharray={bqActive && monthTrendBqBusy ? '5 4' : undefined} dot={{ r:3 }} />
-                  <Line type="monotone" dataKey="totalQL" name="Total QL" stroke={C.cyan} strokeWidth={2.5} strokeDasharray={bqActive && monthTrendBqBusy ? '5 4' : undefined} dot={{ r:3 }} />
-                  <Line type="monotone" dataKey="deposits" name="Deposits" stroke={C.green} strokeWidth={2.5} strokeDasharray={bqActive && monthTrendBqBusy ? '5 4' : undefined} dot={{ r:3 }} />
-                </LineChart>
+                  <Legend wrapperStyle={{ fontSize:14, fontFamily:FONT }} iconType="circle" />
+                  <Bar yAxisId="left" dataKey="leads" name="Leads" fill={barFill('g-ov-monthtrend')} radius={BAR_RADIUS} barSize={22} opacity={bqActive && monthTrendBqBusy ? 0.45 : 0.85} />
+                  <Line yAxisId="left" type="monotone" dataKey="queued" name="Total Queued" stroke={C.blue} strokeWidth={2.5} strokeDasharray={bqActive && monthTrendBqBusy ? '5 4' : undefined} dot={{ r:3 }} />
+                  <Line yAxisId="left" type="monotone" dataKey="totalQL" name="Total QL" stroke={C.cyan} strokeWidth={2.5} strokeDasharray={bqActive && monthTrendBqBusy ? '5 4' : undefined} dot={{ r:3 }} />
+                  <Line yAxisId="right" type="monotone" dataKey="deposits" name="Deposits" stroke={C.green} strokeWidth={2} strokeDasharray={bqActive && monthTrendBqBusy ? '5 4' : '4 3'} dot={{ r:2.5 }} />
+                </ComposedChart>
               </ResponsiveContainer>
             </Card>
             </div>
