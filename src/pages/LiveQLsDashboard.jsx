@@ -23,6 +23,11 @@ const DATE_PRESETS = [
   ['last_week', 'Last Week'], ['this_month', 'This Month'], ['last_month', 'Last Month'],
 ]
 
+// Same LeadSquared contact deep-link convention used on Human/AI QL Detail and
+// Human/AI Unassigned -- prospectId is the Contact record, distinct from the
+// activity itself.
+const LEADSQUARED_CONTACT_URL = 'https://in21.leadsquared.com/LeadManagement/LeadDetails?LeadID='
+
 // Every field present on BOTH channels' row shape (see LIVE_QL_CHANNELS.fields in the
 // backend) -- these are what the advanced filter and "Breakdown by" dropdown can operate
 // on. Deliberately excludes callDuration (free-text/numeric, not a clean group-by) and
@@ -42,6 +47,35 @@ const BREAKDOWN_FIELDS = [
   { key: 'validPassport', label: 'Valid Passport' },
   { key: 'currentDegreeStatus', label: 'Current Degree Status' },
   { key: 'dispositionReason', label: 'Disposition Reason' },
+]
+
+// Every field the backend maps for EITHER channel (see LIVE_QL_CHANNELS.fields in
+// api/crm-leads.js), for the "full fledged" records table + export -- unlike
+// BREAKDOWN_FIELDS above, this includes fields that only exist on one channel
+// (marked below); those simply render "--" on rows from the other channel.
+// Shared fields first, then Human-only, then AI-only.
+const FULL_FIELDS = [
+  { key: 'country', label: 'Country' },
+  { key: 'intake', label: 'Intake' },
+  { key: 'budget', label: 'Budget' },
+  { key: 'highestQualification', label: 'Highest Qualification' },
+  { key: 'preferredDegree', label: 'Preferred Degree' },
+  { key: 'disposition', label: 'Disposition' },
+  { key: 'dispositionReason', label: 'Disposition Reason' },
+  { key: 'firstCampaignName', label: 'First Campaign Name' },
+  { key: 'firstChannelSource', label: 'First Channel Source' },
+  { key: 'opportunityType', label: 'Opportunity Type' },
+  { key: 'validPassport', label: 'Valid Passport' },
+  { key: 'currentDegreeStatus', label: 'Current Degree Status' },
+  { key: 'callDuration', label: 'Call Duration' },
+  { key: 'opportunityCateredBy', label: 'Catered By' },       // Human only
+  { key: 'programPreference', label: 'Program Preference' },  // Human only
+  { key: 'firstContactChannel', label: 'First Contact Channel' }, // AI only
+  { key: 'callStatus', label: 'Call Status' },                // AI only
+  { key: 'currentCity', label: 'Current City' },              // AI only
+  { key: 'preferredMode', label: 'Preferred Mode' },          // AI only
+  { key: 'preferredCourse', label: 'Preferred Course' },      // AI only
+  { key: 'futworkProject', label: 'Futwork Project' },        // AI only
 ]
 
 // ---- Advanced filter chips -- same pattern as AI/Human QL Detail (FilterChip/
@@ -222,6 +256,12 @@ export default function LiveQLsDashboard() {
   const humanQueued = data ? data.human.queuedCount : 0
   const aiQueued = data ? data.ai.queuedCount : 0
   const totalQueued = humanQueued + aiQueued
+  // Queued -> QL % is a conversion-rate health metric, so like the Queued cards
+  // themselves it deliberately ignores the active filter chips -- both sides use the
+  // channels' own unfiltered qlCount, not the (possibly narrowed) filteredRows count,
+  // so a filter can't quietly change what this ratio means.
+  const totalQlUnfiltered = data ? data.human.qlCount + data.ai.qlCount : 0
+  const queuedToQlPct = totalQueued > 0 ? (totalQlUnfiltered / totalQueued) * 100 : null
 
   const breakdown = useMemo(() => {
     const counts = {}
@@ -233,14 +273,11 @@ export default function LiveQLsDashboard() {
   const pageRows = filteredRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
 
-  const exportRows = filteredRows.map(r => ({
-    Channel: r.channel === 'human' ? 'Human' : 'AI',
-    'Created On': r.createdOn,
-    Country: r.country || '', Intake: r.intake || '', Budget: r.budget || '',
-    'Highest Qualification': r.highestQualification || '', 'Preferred Degree': r.preferredDegree || '',
-    Disposition: r.disposition || '', 'First Campaign Name': r.firstCampaignName || '',
-    'First Channel Source': r.firstChannelSource || '', 'Opportunity Type': r.opportunityType || '',
-  }))
+  const exportRows = filteredRows.map(r => {
+    const row = { Channel: r.channel === 'human' ? 'Human' : 'AI', 'Created On': r.createdOn, 'Prospect ID': r.prospectId || '' }
+    FULL_FIELDS.forEach(f => { row[f.label] = r[f.key] || '' })
+    return row
+  })
 
   return (
     <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
@@ -333,6 +370,7 @@ export default function LiveQLsDashboard() {
                       ['QL', 'An activity counts as a QL when its Note = Post (call actually completed, not still queued), Disposition Status = Final, and Disposition is one of 9 confirmed values (e.g. Discover Future Intent, Interested in Call Back, Call Transferred To Counsellor).'],
                       ['Human / AI', 'Human = Manual Lead Qualification - Futwork (activity type 234). AI = Futwork AI Call Qualification (activity type 253). Each has its own field numbering in LeadSquared; both are normalized to the same field names here.'],
                       ['Queued', 'Note = "Call queued successfully" for that channel -- calls that haven’t been actioned yet. Always shown unfiltered, regardless of the filter chips above.'],
+                      ['Queued to QL %', 'Total QLs ÷ Total Queued, both unfiltered -- how much of everyone queued so far became a QL. Not affected by filter chips, same as the Queued cards.'],
                       ['Source', 'Pulled live from LeadSquared’s own Activity Advanced Search API, not a scheduled sync -- every date preset re-fetches fresh.'],
                       ['Filters', 'Narrow the QL rows (and the KPI cards above them) by any field. Queued counts are not affected by filters.'],
                     ].map(([m, d]) => (
@@ -356,15 +394,16 @@ export default function LiveQLsDashboard() {
           ) : (
             <>
               <div className="lq-kpi-grid" style={{ ...KPI_CARD_ROW, marginTop: 20 }}>
-                <PremKPI label="Human QL" value={fmtN(humanQL)} sub={data && data.human.qlCount !== humanQL ? `of ${fmtN(data.human.qlCount)} unfiltered` : 'Manual Lead Qualification'} accent={C.blue} icon={KPI_ICONS.agent} />
-                <PremKPI label="AI QL" value={fmtN(aiQL)} sub={data && data.ai.qlCount !== aiQL ? `of ${fmtN(data.ai.qlCount)} unfiltered` : 'Futwork AI Call Qualification'} accent={C.cyan} icon={KPI_ICONS.bot} />
-                <PremKPI label="Total QL" value={fmtN(totalQL)} sub="Human + AI" accent={C.navy} icon={KPI_ICONS.total} />
+                <PremKPI label="Total Queued" value={fmtN(totalQueued)} sub="Human + AI" accent={C.green} icon={KPI_ICONS.total} />
                 <PremKPI label="Human Queued" value={fmtN(humanQueued)} sub="not yet actioned, unfiltered" accent={C.green} icon={KPI_ICONS.agent} />
                 <PremKPI label="AI Queued" value={fmtN(aiQueued)} sub="not yet actioned, unfiltered" accent={C.green} icon={KPI_ICONS.bot} />
-                <PremKPI label="Total Queued" value={fmtN(totalQueued)} sub="Human + AI" accent={C.green} icon={KPI_ICONS.total} />
+                <PremKPI label="Total QLs" value={fmtN(totalQL)} sub="Human + AI" accent={C.navy} icon={KPI_ICONS.total} />
+                <PremKPI label="Human QLs" value={fmtN(humanQL)} sub={data && data.human.qlCount !== humanQL ? `of ${fmtN(data.human.qlCount)} unfiltered` : 'Manual Lead Qualification'} accent={C.blue} icon={KPI_ICONS.agent} />
+                <PremKPI label="AI QLs" value={fmtN(aiQL)} sub={data && data.ai.qlCount !== aiQL ? `of ${fmtN(data.ai.qlCount)} unfiltered` : 'Futwork AI Call Qualification'} accent={C.cyan} icon={KPI_ICONS.bot} />
+                <PremKPI label="Queued to QL %" value={queuedToQlPct == null ? '—' : `${queuedToQlPct.toFixed(1)}%`} sub="Total QLs / Total Queued, unfiltered" accent={C.navy} icon={KPI_ICONS.total} />
               </div>
 
-              <div style={{ padding: '16px 28px 28px', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.4fr)', gap: 16 }} className="lq-grid2">
+              <div style={{ padding: '16px 28px 28px', display: 'grid', gridTemplateColumns: 'minmax(260px,340px) minmax(0,1fr)', gap: 16 }} className="lq-grid2">
                 <Card title={BREAKDOWN_FIELDS.find(f => f.key === breakdownField)?.label || 'Breakdown'} sub={`${fmtN(totalQL)} QLs, ${datePreset.replace(/_/g, ' ')}`}>
                   {breakdown.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '24px 0', color: C.muted, fontSize: 13 }}>No data for this selection.</div>
@@ -373,12 +412,17 @@ export default function LiveQLsDashboard() {
                   )}
                 </Card>
 
-                <Card title="Records" sub={`${fmtN(filteredRows.length)} rows`}>
+                {/* Every field the backend maps for either channel (FULL_FIELDS above),
+                    plus Channel/Created On/a linked Prospect ID -- so this is genuinely
+                    "every field coming with the activity", not the earlier 6-column subset.
+                    Wide by design: scrolls horizontally inside its own card rather than
+                    forcing the whole page to scroll sideways. */}
+                <Card title="Records" sub={`${fmtN(filteredRows.length)} rows -- ${FULL_FIELDS.length + 3} columns`}>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid ' + C.border, textAlign: 'left' }}>
-                          {['Channel', 'Created On', 'Country', 'Intake', 'Budget', 'Disposition'].map(h => (
+                          {['Channel', 'Created On', 'Prospect ID', ...FULL_FIELDS.map(f => f.label)].map(h => (
                             <th key={h} style={{ padding: '8px 10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
@@ -386,16 +430,22 @@ export default function LiveQLsDashboard() {
                       <tbody>
                         {pageRows.map(r => (
                           <tr key={r.id} style={{ borderBottom: '1px solid ' + C.border }}>
-                            <td style={{ padding: '7px 10px', fontWeight: 700, color: r.channel === 'human' ? C.blue : C.cyan }}>{r.channel === 'human' ? 'Human' : 'AI'}</td>
+                            <td style={{ padding: '7px 10px', fontWeight: 700, color: r.channel === 'human' ? C.blue : C.cyan, whiteSpace: 'nowrap' }}>{r.channel === 'human' ? 'Human' : 'AI'}</td>
                             <td style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r.createdOn}</td>
-                            <td style={{ padding: '7px 10px', color: C.text }}>{r.country || '—'}</td>
-                            <td style={{ padding: '7px 10px', color: C.text }}>{r.intake || '—'}</td>
-                            <td style={{ padding: '7px 10px', color: C.text }}>{r.budget || '—'}</td>
-                            <td style={{ padding: '7px 10px', color: C.text }}>{r.disposition || '—'}</td>
+                            <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>
+                              {r.prospectId ? (
+                                <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer"
+                                  title={'Open Contact in LeadSquared: ' + r.prospectId}
+                                  style={{ fontFamily: 'monospace', fontSize: 11, color: C.blue, textDecoration: 'none' }}>{r.prospectId.slice(0, 8)}…</a>
+                              ) : '—'}
+                            </td>
+                            {FULL_FIELDS.map(f => (
+                              <td key={f.key} style={{ padding: '7px 10px', color: C.text }}>{r[f.key] || '—'}</td>
+                            ))}
                           </tr>
                         ))}
                         {pageRows.length === 0 && (
-                          <tr><td colSpan={6} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
+                          <tr><td colSpan={FULL_FIELDS.length + 3} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
                         )}
                       </tbody>
                     </table>
