@@ -254,10 +254,10 @@ export function SpendVsQuality({ cmp, fmtINR, fmtINRShort }) {
 
 /* ===== 3. Cost trend, month on month ===== */
 export function CostTrendMonth({ data, fmtINR }) {
-  const rows = (data || []).filter(d => d.cpql != null || d.cpl != null)
+  const rows = (data || []).filter(d => d.cpql != null || d.cpl != null || d.cpa != null)
   return (
     <Card>
-      {sectionTitle('Cost per QL, month on month', 'paid sources, inside the current filters ' + MID + ' CPQL on the left axis, CPL on the right')}
+      {sectionTitle('Cost per QL, month on month', 'paid sources, inside the current filters ' + MID + ' CPQL and CPA on the left axis, CPL on the right')}
       {!rows.length ? <Empty>No paid spend in this selection.</Empty> : (
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={rows} margin={{ left: 0, right: 8, top: 18, bottom: 4 }}>
@@ -270,6 +270,7 @@ export function CostTrendMonth({ data, fmtINR }) {
             <Line yAxisId="l" type="monotone" dataKey="cpql" name="CPQL" stroke={C.navy} strokeWidth={2.5} dot={{ r: 3 }} connectNulls>
               <LabelList dataKey="cpql" position="top" formatter={v => (v == null ? '' : fmtINR(v))} style={{ fontSize: 12, fontWeight: 700, fill: C.sub }} />
             </Line>
+            <Line yAxisId="l" type="monotone" dataKey="cpa" name="CPA" stroke={C.green} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2.5 }} connectNulls />
             <Line yAxisId="r" type="monotone" dataKey="cpl" name="CPL" stroke={C.cyan} strokeWidth={2.5} dot={{ r: 3 }} connectNulls />
           </LineChart>
         </ResponsiveContainer>
@@ -280,10 +281,10 @@ export function CostTrendMonth({ data, fmtINR }) {
 
 /* ===== 4. Cost trend, day by day ===== */
 export function CostTrendDay({ data, fmtINR }) {
-  const rows = (data || []).filter(d => d.cpql != null || d.cpl != null)
+  const rows = (data || []).filter(d => d.cpql != null || d.cpl != null || d.cpa != null)
   return (
     <Card>
-      {sectionTitle('Cost per QL, day by day', 'closed days only, so a half-finished today never reads as a collapse ' + MID + ' CPQL on the left axis, CPL on the right')}
+      {sectionTitle('Cost per QL, day by day', 'closed days only, so a half-finished today never reads as a collapse ' + MID + ' CPQL and CPA on the left axis, CPL on the right')}
       {!rows.length ? <Empty>No closed day with paid spend in this selection.</Empty> : (
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={rows} margin={{ left: 0, right: 8, top: 8, bottom: 4 }}>
@@ -294,6 +295,7 @@ export function CostTrendDay({ data, fmtINR }) {
             <Tooltip content={<MoneyTip fmtINR={fmtINR} />} />
             <Legend wrapperStyle={{ fontSize: 12.5, fontFamily: FONT }} />
             <Line yAxisId="l" type="monotone" dataKey="cpql" name="CPQL" stroke={C.navy} strokeWidth={2.5} dot={false} connectNulls />
+            <Line yAxisId="l" type="monotone" dataKey="cpa" name="CPA" stroke={C.green} strokeWidth={2} strokeDasharray="4 3" dot={false} connectNulls />
             <Line yAxisId="r" type="monotone" dataKey="cpl" name="CPL" stroke={C.cyan} strokeWidth={2.5} dot={false} connectNulls />
           </LineChart>
         </ResponsiveContainer>

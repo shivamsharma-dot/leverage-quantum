@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useTransition } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
-  CartesianGrid, LineChart, Line, Legend, AreaChart, Area,
+  CartesianGrid, LineChart, Line, Legend,
   ScatterChart, Scatter, ZAxis, ReferenceLine, ComposedChart,
 } from 'recharts'
 import Sidebar from '../components/Sidebar'
@@ -11,7 +11,7 @@ import SlackReportPanel from '../components/SlackReportPanel'
 import { SlackIcon } from '../components/icons/BrandIcons'
 import { CORRIDOR_MIN_QL } from '../lib/pmReport'
 import {
-  CpqlBySource, SpendVsQuality, CostTrendMonth, CostTrendDay,
+  CpqlBySource, CostTrendMonth, CostTrendDay,
   CorridorRanking, AdRanking, NotPerforming
 } from '../components/QualitySections'
 import { captureNodePng, rowsToCsv, nextPaint } from '../lib/slackShare'
@@ -275,6 +275,144 @@ function SourceMultiSelect({ options, selected, onChange, label, minWidth = 120 
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── Advanced filter — condition-based Source/Corridor/Campaign filter ──────────
+// Layered on top of the simple Source/Corridor/campaign-search controls in the
+// toolbar: stacked, removable, AND-combined conditions ("Source is Facebook",
+// "Corridor not like %Dubai%", "Campaign is defined"), applied everywhere
+// corridorFilter already applies (filtered/prevFiltered/nonDateRows/
+// monthTrendRows) -- never in Compare's custom-range path, since corridorFilter/
+// campaignQuery aren't either (Compare has its own, separate deep-filter system).
+const ADV_FIELDS = [
+  { key: 'source', label: 'Source' },
+  { key: 'corridor', label: 'Corridor' },
+  { key: 'campaign', label: 'Campaign' },
+]
+const ADV_OPERATORS = [
+  { key: 'is', label: 'is', needsValue: true },
+  { key: 'contain', label: 'contains', needsValue: true },
+  { key: 'like', label: 'like (% / _ wildcards)', needsValue: true },
+  { key: 'not_like', label: 'not like', needsValue: true },
+  { key: 'defined', label: 'is defined', needsValue: false },
+  { key: 'not_defined', label: 'is not defined', needsValue: false },
+]
+function advFieldValue(r, field) {
+  if (field === 'source') return (r.source || '').trim()
+  if (field === 'corridor') return corridorLabel(classifyCorridor(r.campaign))
+  return (r.campaign || '').trim() // 'campaign'
+}
+// classifyCorridor('') resolves to 'unclassified' -> label 'Unclassified' -- that's
+// the real "nothing here" sentinel for corridor (it never returns an empty string).
+function advIsDefined(field, raw) { return field === 'corridor' ? raw !== 'Unclassified' : raw !== '' }
+// SQL LIKE semantics: % = any run of characters, _ = exactly one character. Every
+// other regex-special character in the typed pattern is escaped literally first.
+function advLikeToRegex(pattern) {
+  const esc = (pattern || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp('^' + esc.replace(/%/g, '.*').replace(/_/g, '.') + '$', 'i')
+}
+function advMatchesOne(r, f) {
+  const raw = advFieldValue(r, f.field)
+  const v = (f.value || '').trim()
+  switch (f.op) {
+    case 'is': return raw.toLowerCase() === v.toLowerCase()
+    case 'contain': return v ? raw.toLowerCase().includes(v.toLowerCase()) : true
+    case 'like': return advLikeToRegex(v).test(raw)
+    case 'not_like': return !advLikeToRegex(v).test(raw)
+    case 'defined': return advIsDefined(f.field, raw)
+    case 'not_defined': return !advIsDefined(f.field, raw)
+    default: return true
+  }
+}
+function advFilterSummary(f) {
+  const field = ADV_FIELDS.find(x => x.key === f.field)?.label || f.field
+  const op = ADV_OPERATORS.find(x => x.key === f.op)
+  if (!op || !op.needsValue) return field + ' ' + (op ? op.label : f.op)
+  return field + ' ' + op.label + ' "' + f.value + '"'
+}
+
+// One popover, two roles: adding a brand-new condition (initial=null) or editing an
+// already-active chip (initial=the filter being edited). Field -> Condition -> Value,
+// each rendered as a pill row so the whole thing reads at a glance rather than as a
+// multi-step wizard.
+function AdvFilterBuilder({ initial, sourceOptions, corridorOptions, onSave, onCancel }) {
+  const [field, setField] = useState(initial?.field || 'source')
+  const [op, setOp] = useState(initial?.op || 'is')
+  const [value, setValue] = useState(initial?.value || '')
+  const opDef = ADV_OPERATORS.find(o => o.key === op)
+  const pickOptions = field === 'source' ? sourceOptions : field === 'corridor' ? corridorOptions : null
+  const showPick = op === 'is' && pickOptions && pickOptions.length > 0
+  const effectiveValue = showPick && !value ? (pickOptions[0] || '') : value
+  const canSave = !opDef.needsValue || effectiveValue.trim() !== ''
+  const pillRow = (items, activeKey, onPick) => (
+    <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
+      {items.map(it => (
+        <button key={it.key} type="button" onClick={() => onPick(it.key)}
+          style={{ padding:'5px 10px', borderRadius:7, border:`0.5px solid ${activeKey === it.key ? C.navy : C.border}`, background: activeKey === it.key ? C.navyBg : 'transparent', color: activeKey === it.key ? C.navy : C.sub, fontSize:12, fontWeight:700, fontFamily:FONT, cursor:'pointer', whiteSpace:'nowrap' }}>
+          {it.label}
+        </button>
+      ))}
+    </div>
+  )
+  const label = t => <div style={{ fontSize:10, fontWeight:800, color:C.muted, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:6 }}>{t}</div>
+  return (
+    <>
+      <div onClick={onCancel} style={{ position:'fixed', inset:0, zIndex:150 }} />
+      <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:200, width:290, background:'var(--card)', border:`0.5px solid ${C.border}`, borderRadius:10, boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)', padding:11 }}>
+        {label('Field')}
+        {pillRow(ADV_FIELDS, field, k => { setField(k); setValue('') })}
+        {label('Condition')}
+        {pillRow(ADV_OPERATORS, op, setOp)}
+        {opDef?.needsValue && (
+          <>
+            {label('Value')}
+            {showPick ? (
+              <Dropdown options={pickOptions} value={effectiveValue} minWidth={230} onChange={setValue} />
+            ) : (
+              <input autoFocus type="text" value={value} onChange={e => setValue(e.target.value)}
+                placeholder={op === 'like' || op === 'not_like' ? 'e.g. %Germany%' : 'value...'}
+                style={{ width:'100%', boxSizing:'border-box', padding:'7px 9px', border:'0.5px solid ' + C.border, borderRadius:7, fontSize:12.5, fontFamily:FONT, outline:'none', background:'var(--bg3)', color:C.text }} />
+            )}
+          </>
+        )}
+        <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:12 }}>
+          <button type="button" onClick={onCancel} style={{ padding:'6px 12px', borderRadius:7, border:'none', background:'transparent', color:C.muted, fontSize:12.5, fontWeight:700, fontFamily:FONT, cursor:'pointer' }}>Cancel</button>
+          <button type="button" disabled={!canSave} onClick={() => canSave && onSave({ field, op, value: effectiveValue.trim() })}
+            style={{ padding:'6px 14px', borderRadius:7, border:'none', background: canSave ? C.navy : C.border, color:'#fff', fontSize:12.5, fontWeight:700, fontFamily:FONT, cursor: canSave ? 'pointer' : 'default' }}>
+            {initial ? 'Save' : 'Add filter'}
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function AdvancedFilterChip({ filter, sourceOptions, corridorOptions, open, onToggle, onSave, onRemove }) {
+  return (
+    <div style={{ position:'relative', flexShrink:0 }}>
+      <div style={{ display:'flex', alignItems:'stretch', borderRadius:8, border:'0.5px solid rgba(31,60,132,0.35)', background:C.navyBg, overflow:'hidden' }}>
+        <button type="button" onClick={onToggle} style={{ display:'flex', alignItems:'center', padding:'6px 9px 6px 11px', border:'none', background:'transparent', cursor:'pointer', fontSize:12, fontFamily:FONT, color:C.navy, fontWeight:700, whiteSpace:'nowrap', maxWidth:230, overflow:'hidden', textOverflow:'ellipsis' }}>
+          {advFilterSummary(filter)}
+        </button>
+        <button type="button" onClick={onRemove} title="Remove filter" style={{ border:'none', borderLeft:'0.5px solid rgba(31,60,132,0.2)', background:'transparent', cursor:'pointer', color:C.navy, padding:'6px 9px', display:'flex', alignItems:'center' }}>
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+      {open && <AdvFilterBuilder initial={filter} sourceOptions={sourceOptions} corridorOptions={corridorOptions} onSave={onSave} onCancel={onToggle} />}
+    </div>
+  )
+}
+
+function AddAdvancedFilterButton({ sourceOptions, corridorOptions, open, onToggle, onAdd }) {
+  return (
+    <div style={{ position:'relative', flexShrink:0 }}>
+      <button type="button" onClick={onToggle} style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:8, border:'1px dashed ' + C.border, background:'transparent', cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:FONT, color:C.muted, whiteSpace:'nowrap' }}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+        Advanced filter
+      </button>
+      {open && <AdvFilterBuilder initial={null} sourceOptions={sourceOptions} corridorOptions={corridorOptions} onSave={onAdd} onCancel={onToggle} />}
     </div>
   )
 }
@@ -1058,6 +1196,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // ever scrolls into view. Gated on real visibility (below) so a session
   // that never scrolls this far never pays for it at all.
   const [monthTrendVisible, setMonthTrendVisible] = useState(false)
+  // "Insights" -- every chart below the funnel/table (Leads by source through the
+  // campaign efficiency map) now lives behind this button instead of always
+  // rendering inline, so the main page reads as KPIs -> funnel -> table, with the
+  // full analytical depth one click away. Declared here (not further down with
+  // compareOpen/trendOpen) so the effect right below -- whose ref only ever
+  // attaches once this modal has actually opened and mounted its content -- can
+  // depend on it.
+  const [insightsOpen, setInsightsOpen] = useState(false)
   const monthTrendCardRef = useRef(null)
   useEffect(() => {
     const el = monthTrendCardRef.current
@@ -1068,7 +1214,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     }, { rootMargin: '200px' })
     obs.observe(el)
     return () => obs.disconnect()
-  }, [monthTrendVisible])
+    // insightsOpen: the Month-on-month card only mounts (and this ref only attaches)
+    // once the Insights modal is open -- without this dependency the effect would run
+    // once on page load with el===null, bail, and never observe anything at all.
+  }, [monthTrendVisible, insightsOpen])
   // Sidecar fetch for the previous-period KPI-delta cards ONLY (prevKpis/prevPaidKpis
   // below) -- reads the pre-aggregated overall_bq_daily_agg table (see the big comment
   // right above the main bqRows fetch effect for why that table is unsafe for bqRows
@@ -1147,6 +1296,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // instead, so a full re-filter only runs once typing actually pauses, not per
   // keystroke -- this is what was making campaign search feel slow while typing.
   const campaignQueryDebounced = useDebouncedValue(campaignQuery, 250)
+  // Advanced filter -- stacked Source/Corridor/Campaign conditions, AND-combined.
+  // See the module-scope ADV_* helpers above for the field/operator vocabulary.
+  const [advancedFilters, setAdvancedFilters] = useState([]) // [{id, field, op, value}]
+  const [advFilterOpen, setAdvFilterOpen] = useState(null) // null | 'new' | a filter's id
+  const matchesAdvancedFilters = useCallback(r => advancedFilters.every(f => advMatchesOne(r, f)), [advancedFilters])
   const [showInfo, setShowInfo] = useState(false)
   const [grpBy, setGrpBy] = useState('source')
   // A3 fix: selecting "All months" (Sheet mode, where `filtered` holds full history in
@@ -1233,9 +1387,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // actual panel div (never the backdrop) further down in the render.
   const compareModalRef = useRef(null)
   const trendModalRef = useRef(null)
+  const insightsModalRef = useRef(null)
   const ratesPickerRef = useRef(null)
   useModalA11y(compareOpen, useCallback(() => setCompareOpen(false), []), compareModalRef)
   useModalA11y(trendOpen, useCallback(() => setTrendOpen(false), []), trendModalRef)
+  useModalA11y(insightsOpen, useCallback(() => setInsightsOpen(false), []), insightsModalRef)
   useModalA11y(showRatesPicker, useCallback(() => setShowRatesPicker(false), []), ratesPickerRef)
   // Off by default -- Source/Spend only stay fixed while scrolling when the user
   // explicitly asks for it, since forcing them fixed at every table width risks the
@@ -1625,8 +1781,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQueryDebounced.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
+    if (advancedFilters.length) rs = rs.filter(matchesAdvancedFilters)
     return rs
-  }, [dateFilteredRows, selectedSources, corridorFilter, campaignQueryDebounced])
+  }, [dateFilteredRows, selectedSources, corridorFilter, campaignQueryDebounced, advancedFilters, matchesAdvancedFilters])
 
   const sumKpis = list => {
     const sum = k => list.reduce((t, r) => t + r[k], 0)
@@ -1755,8 +1912,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQueryDebounced.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
+    if (advancedFilters.length) rs = rs.filter(matchesAdvancedFilters)
     return rs
-  }, [rows, prevWindow, selectedSources, corridorFilter, campaignQueryDebounced])
+  }, [rows, prevWindow, selectedSources, corridorFilter, campaignQueryDebounced, advancedFilters, matchesAdvancedFilters])
 
   // prevAggRows has no campaign_name (see its own state comment above), so it can ONLY
   // stand in for prevFiltered when nothing on screen is asking to slice the previous
@@ -1764,7 +1922,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // campaign name would need to match against (isCostExcludedCampaign('', ...) can
   // never correctly apply an exclusion). Any one of those active falls straight back
   // to the always-correct, campaign-level prevFiltered -- exactly today's behaviour.
-  const canUseAggPrev = bqActive && corridorFilter === 'All' && !campaignQueryDebounced.trim() && costExclusions.length === 0 && prevAggRows.length > 0
+  const canUseAggPrev = bqActive && corridorFilter === 'All' && !campaignQueryDebounced.trim() && advancedFilters.length === 0 && costExclusions.length === 0 && prevAggRows.length > 0
   const prevAggFiltered = useMemo(() => (sourceIsAll ? prevAggRows : prevAggRows.filter(matchesSource)), [prevAggRows, sourceIsAll, matchesSource])
   const prevKpis = useMemo(() => sumKpis(canUseAggPrev ? prevAggFiltered : prevFiltered), [canUseAggPrev, prevAggFiltered, prevFiltered])
   // Same paid-only basis as the current period -- otherwise the delta arrows would be
@@ -2350,11 +2508,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return [...m.values()].sort((a, b) => b.key.localeCompare(a.key))
   }, [filtered, paidSources, isCostExcluded])
 
-  const topCampaignsByLeads = useMemo(() => byCampaign.slice(0, 5), [byCampaign])
-  const topCampaignsByEfficiency = useMemo(() => (
-    byCampaign.filter(c => c.queued >= 15).map(c => ({ ...c, qlRate: c.queued > 0 ? (c.totalQL / c.queued) * 100 : 0 })).sort((a, b) => b.qlRate - a.qlRate).slice(0, 5)
-  ), [byCampaign])
-
   // CPQL vs. Volume efficiency map -- high CPQL is a red flag regardless of volume; low
   // CPQL with sufficient QL volume marks the best performers (not low CPQL alone, since a
   // handful of QLs at a lucky-low CPQL isn't proof of real efficiency at scale). Median
@@ -2877,8 +3030,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQueryDebounced.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
+    if (advancedFilters.length) rs = rs.filter(matchesAdvancedFilters)
     return rs
-  }, [rows, selectedSources, corridorFilter, campaignQueryDebounced])
+  }, [rows, selectedSources, corridorFilter, campaignQueryDebounced, advancedFilters, matchesAdvancedFilters])
 
   // "Month-on-month trend" chart is meant to always show the last 5 months (including
   // whatever the current month is) so it reads as a real trend line -- unlike every
@@ -2900,8 +3054,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
     const q = campaignQueryDebounced.trim().toLowerCase()
     if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
+    if (advancedFilters.length) rs = rs.filter(matchesAdvancedFilters)
     return rs
-  }, [bqActive, monthTrendBqRows, nonDateRows, sourceIsAll, selectedSources, corridorFilter, campaignQueryDebounced])
+  }, [bqActive, monthTrendBqRows, nonDateRows, sourceIsAll, selectedSources, corridorFilter, campaignQueryDebounced, advancedFilters, matchesAdvancedFilters])
   const monthTrend = useMemo(() => {
     const m = new Map()
     monthTrendRows.forEach(r => {
@@ -2910,8 +3065,13 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.totalQL += r.totalQL; e.deposits += r.deposits
       m.set(r.mk, e)
     })
-    return [...m.values()].sort((a, b) => a.mk - b.mk).slice(-5)
-  }, [monthTrendRows])
+    const all = [...m.values()].sort((a, b) => a.mk - b.mk)
+    // BQ mode's own fetch (monthTrendBqRows/monthTrendBqSpan, above) is deliberately
+    // bounded to a trailing 5-month window to control query cost -- keep that same cap
+    // on what's rendered there. Sheet mode already holds the full history in memory at
+    // zero extra cost, so show every month actually present, not an arbitrary window.
+    return bqActive ? all.slice(-5) : all
+  }, [monthTrendRows, bqActive])
 
   // ── Deep Analysis shared plumbing ─────────────────────────────────────────────
   // One generic aggregator, keyed by dimension, used by BOTH Compare's full table
@@ -3330,10 +3490,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     return rows.map(r => ({
       mk: Number(r.label), label: monthLabel(Number(r.label)), spend: r.spend,
       cpql: r.cpql == null ? null : Math.round(r.cpql),
-      cpl: r.cpl == null ? null : Math.round(r.cpl)
+      cpl: r.cpl == null ? null : Math.round(r.cpl),
+      cpa: r.cpa == null ? null : Math.round(r.cpa)
     })).sort((a, b) => a.mk - b.mk)
   }, [filtered, paidSources, aggReport])
-  
+
   // The same one level down. Today is dropped on purpose: it is still
   // filling up, and half a day reads as a collapse that never happened.
   const costByDay = useMemo(() => {
@@ -3343,7 +3504,8 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       .map(d => ({
         label: d.label,
         cpql: d.paidQL > 0 ? Math.round(d.costSpend / d.paidQL) : null,
-        cpl: d.paidLeads > 0 ? Math.round(d.costSpend / d.paidLeads) : null
+        cpl: d.paidLeads > 0 ? Math.round(d.costSpend / d.paidLeads) : null,
+        cpa: d.paidApps > 0 ? Math.round(d.costSpend / d.paidApps) : null
       }))
   }, [byDayFull])
   
@@ -3860,7 +4022,38 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               <SourceMultiSelect label="Source" options={sources.filter(s => s !== 'All')} selected={selectedSources} minWidth={110} onChange={setSelectedSources} />
               <Dropdown label="Corridor" options={['All', ...CORRIDORS.map(c => c.label)]} value={corridorFilter} minWidth={140} onChange={setCorridorFilter} />
               <CampaignSearch value={campaignQuery} onChange={setCampaignQuery} suggestions={campaignSuggestions} />
+              {advancedFilters.map(f => (
+                <AdvancedFilterChip key={f.id} filter={f}
+                  sourceOptions={sources.filter(s => s !== 'All')}
+                  corridorOptions={CORRIDORS.map(c => c.label)}
+                  open={advFilterOpen === f.id}
+                  onToggle={() => setAdvFilterOpen(v => v === f.id ? null : f.id)}
+                  onSave={updated => { setAdvancedFilters(list => list.map(x => x.id === f.id ? { ...updated, id: f.id } : x)); setAdvFilterOpen(null) }}
+                  onRemove={() => setAdvancedFilters(list => list.filter(x => x.id !== f.id))}
+                />
+              ))}
+              <AddAdvancedFilterButton
+                sourceOptions={sources.filter(s => s !== 'All')}
+                corridorOptions={CORRIDORS.map(c => c.label)}
+                open={advFilterOpen === 'new'}
+                onToggle={() => setAdvFilterOpen(v => v === 'new' ? null : 'new')}
+                onAdd={f => { setAdvancedFilters(list => [...list, { ...f, id: 'adv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7) }]); setAdvFilterOpen(null) }}
+              />
+              {advancedFilters.length > 0 && (
+                <button type="button" onClick={() => setAdvancedFilters([])} style={{ border:'none', background:'transparent', color:C.muted, fontSize:12, fontWeight:700, fontFamily:FONT, cursor:'pointer', textDecoration:'underline', textUnderlineOffset:2, whiteSpace:'nowrap', flexShrink:0 }}>
+                  Clear all
+                </button>
+              )}
             </div>
+
+            <Button
+              onClick={() => setInsightsOpen(true)}
+              size="sm"
+              variant="secondary"
+              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.5.5.8 1 .9 1.7l.1.8h6l.1-.8c.1-.7.4-1.2.9-1.7A6 6 0 0012 3z"/></svg>}
+            >
+              Insights
+            </Button>
 
             <Button
               onClick={() => setCompareOpen(true)}
@@ -4287,8 +4480,28 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             </Card>
           </div>
 
+          {/* INSIGHTS -- every chart below the funnel/table (previously always inline) now
+              lives behind the "Insights" button in the header instead, so the main page
+              reads as KPIs -> funnel -> table, with the full analytical depth one click
+              away. Nothing here was deleted, only moved -- same components, same data. */}
+          {insightsOpen && (
+            <div onClick={e => { if (e.target === e.currentTarget) setInsightsOpen(false) }}
+              style={{ position:'fixed', inset:0, zIndex:600, background:'rgba(15,23,42,0.45)', display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'20px 20px' }}>
+              <div ref={insightsModalRef} role="dialog" aria-modal="true" aria-labelledby="insights-modal-title" tabIndex={-1} style={{ background:'var(--bg2)', borderRadius:18, width:'min(1400px, 97vw)', maxHeight:'94vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
+                <div style={{ position:'sticky', top:0, zIndex:2, background:'var(--card)', padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div>
+                    <div id="insights-modal-title" style={{ fontSize:18, fontWeight:800, color:C.text }}>Insights</div>
+                    <div style={{ fontSize:15, color:C.muted, marginTop:2 }}>Every chart on this page, one click away from the KPIs and funnel</div>
+                  </div>
+                  <button onClick={() => setInsightsOpen(false)} style={{ border:'none', background:'transparent', color:C.muted, cursor:'pointer', display:'flex', padding:4 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  </button>
+                </div>
+
+                <div style={{ padding:'20px 24px 28px' }}>
+
           {/* SOURCE VOLUME + SOURCE EFFICIENCY */}
-          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
+          <div className="lq-grid2" style={{ ...grid2 }}>
             <Card>
               {sectionTitle('Leads by source', 'volume leaders this period')}
               <RankedBars data={bySource.slice(0, 8).map(s => ({ source:s.source, count:s.leads }))} labelKey="source" max={maxSourceLeads} total={totalSourceLeads} showRank />
@@ -4303,8 +4516,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           <div style={{ marginTop:16 }}>
             <CpqlBySource cmp={reportCmp} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
           </div>
-          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
-            <SpendVsQuality cmp={reportCmp} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
+          <div style={{ marginTop:16 }}>
             <CostTrendMonth data={costByMonth} fmtINR={fmtINR} />
           </div>
 
@@ -4316,7 +4528,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 ? 'last 5 months, including the current month — will fetch from BigQuery once this card is actually in view'
                 : bqActive && monthTrendBqBusy
                 ? 'last 5 months, including the current month — fetching the trailing months from BigQuery in the background, chart fills in as it lands'
-                : 'last 5 months, including the current month — not affected by the date filter above')}
+                : 'every month present in the data, including the current month — not affected by the date filter above')}
               {/* Restyled from a flat 4-line chart to a bar+line combo (Leads as the volume
                   anchor, the funnel-stage metrics as lines over it), inspired by the Marketing
                   Performance agent's own chart treatment. Also fixes a real, pre-existing scaling
@@ -4324,7 +4536,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   with Leads (tens of thousands) -- it was drawing, just permanently flat at the
                   bottom, functionally invisible. Deposits now gets its own right-hand axis and a
                   dashed line, matching the "smaller-scale secondary metric" convention Marketing
-                  Performance itself already uses for CPQL against QL rate. */}
+                  Performance itself already uses for CPQL against QL rate. Sheet mode shows every
+                  month actually present (no artificial 5-month cap); BQ mode stays capped at a
+                  trailing 5 months, matching what monthTrendBqSpan actually fetches. */}
               <ResponsiveContainer width="100%" height={260}>
                 <ComposedChart data={monthTrend} margin={{ left:0, right:12, top:4, bottom:4 }}>
                   <defs><BarGrad id="g-ov-monthtrend" color={C.navy} /></defs>
@@ -4343,21 +4557,25 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             </Card>
             </div>
             <Card>
-              {sectionTitle('Daily pulse', 'last 30 days of lead volume in the active selection')}
+              {sectionTitle('Daily pulse', 'last 30 days in the active selection — leads, total queued, and Total QL')}
+              {/* Same bar+line design language as Month-on-month trend, right next to it --
+                  Leads as the volume anchor, Queued/Total QL as lines over it. All three sit
+                  on one axis here (unlike the month card's Deposits) since day-level Queued/
+                  Total QL are the same order of magnitude as Leads, not orders smaller. Both
+                  fields were already computed in byDay -- this was previously just leaving
+                  them uncharted. */}
               <ResponsiveContainer width="100%" height={260}>
-                <AreaChart data={byDay} margin={{ left:0, right:12, top:4, bottom:4 }}>
-                  <defs>
-                    <linearGradient id="ovLeadsFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={C.navy} stopOpacity={0.35} />
-                      <stop offset="100%" stopColor={C.navy} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
+                <ComposedChart data={byDay} margin={{ left:0, right:12, top:4, bottom:4 }}>
+                  <defs><BarGrad id="g-ov-dailypulse" color={C.navy} /></defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
                   <XAxis dataKey="label" tick={axis} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                   <YAxis tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
                   <Tooltip content={<BrandTooltip />} />
-                  <Area type="monotone" dataKey="leads" name="Leads" stroke={C.navy} strokeWidth={2.5} fill="url(#ovLeadsFill)" />
-                </AreaChart>
+                  <Legend wrapperStyle={{ fontSize:14, fontFamily:FONT }} iconType="circle" />
+                  <Bar dataKey="leads" name="Leads" fill={barFill('g-ov-dailypulse')} radius={BAR_RADIUS} barSize={14} opacity={0.85} />
+                  <Line type="monotone" dataKey="queued" name="Total Queued" stroke={C.blue} strokeWidth={2.5} dot={{ r:2.5 }} />
+                  <Line type="monotone" dataKey="totalQL" name="Total QL" stroke={C.cyan} strokeWidth={2.5} dot={{ r:2.5 }} />
+                </ComposedChart>
               </ResponsiveContainer>
             </Card>
           </div>
@@ -4365,18 +4583,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           {/* COST TREND, DAY BY DAY - the cost twin of the daily pulse above */}
           <div style={{ marginTop:16 }}>
             <CostTrendDay data={costByDay} fmtINR={fmtINR} />
-          </div>
-
-          {/* TOP MOVERS — what to scale, framed for decisions */}
-          <div className="lq-grid2" style={{ ...grid2, marginTop:16 }}>
-            <Card>
-              {sectionTitle('Top campaigns by volume', 'where the leads are coming from right now')}
-              <RankedBars data={topCampaignsByLeads.map(c => ({ campaign:c.campaign, count:c.leads }))} labelKey="campaign" max={topCampaignsByLeads.length ? topCampaignsByLeads[0].leads : 1} total={totalSourceLeads} showRank />
-            </Card>
-            <Card>
-              {sectionTitle('Best campaigns to scale', 'highest Total QL rate among campaigns with real volume (min. 15 queued)')}
-              <EfficiencyList data={topCampaignsByEfficiency} labelKey="campaign" rateKey="qlRate" subKey="queued" />
-            </Card>
           </div>
 
           {/* CPQL vs. VOLUME EFFICIENCY MAP — bubble size = spend. Median lines split the
@@ -4426,6 +4632,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           <AdRanking cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
           <NotPerforming cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
 
+                </div>
+              </div>
+            </div>
+          )}
 
           {compareOpen && (
             <div onClick={e => { if (e.target === e.currentTarget) setCompareOpen(false) }}
