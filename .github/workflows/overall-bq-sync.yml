@@ -411,10 +411,25 @@ jobs:
               # two things: a second/third chance at a transient blip, and the
               # actual Supabase error text if it keeps failing, instead of a dead
               # end that has to be reproduced all over again to even see why.
-              for attempt in range(3):
+              #
+              # 2026-09-06: confirmed live that 3 attempts (120s each, 3/6/9s
+              # backoff) was NOT enough during real daytime load -- the very
+              # first automated 9am IST fire (cron-job.org -> workflow_dispatch)
+              # timed out 3/3 on this exact step ("57014 canceling statement due
+              # to statement timeout"), even though every one of the 384,617
+              # upserted rows landed correctly beforehand. The predicate here
+              # (sync_id != X OR sync_id IS NULL) can't use a simple equality
+              # index the way sync_id = X could, so it competes for a real scan
+              # against whoever is using the Overall dashboard at that moment.
+              # Widened to 6 attempts / longer per-attempt timeout / longer
+              # backoff so a retry has real breathing room to land in a quieter
+              # moment, instead of giving up inside the same few minutes of
+              # sustained load. The workflow's own 30-minute runner budget has
+              # plenty of room for this (worst case here is still well under it).
+              for attempt in range(6):
                   try:
                       req = sb(url, 'DELETE', None, {'Prefer': 'return=minimal'})
-                      with urllib.request.urlopen(req, timeout=120) as r:
+                      with urllib.request.urlopen(req, timeout=180) as r:
                           r.read()
                       return
                   except Exception as e:
@@ -425,9 +440,9 @@ jobs:
                       except Exception:
                           pass
                       print(label, 'prune attempt', attempt, 'failed:', repr(e) + detail)
-                      if attempt == 2:
+                      if attempt == 5:
                           raise
-                      time.sleep(3 * (attempt + 1))
+                      time.sleep(min(5 * (2 ** attempt), 60))
 
 
           upsert_url = SB_URL + '/rest/v1/' + TABLE + '?on_conflict=row_key'
