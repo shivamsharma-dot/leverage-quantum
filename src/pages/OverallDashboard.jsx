@@ -4261,9 +4261,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 Total QLs and Superbot QLs are deliberately NOT wired: Total QLs sums
                 three sources (Human + AI + Superbot) and there's no single detail page
                 that covers all three, and there's no Superbot QL detail page anywhere
-                in the app -- so a click on either would have nowhere honest to go. */}
+                in the app -- so a click on either would have nowhere honest to go.
+                onClickCapture, not onClick: kpiVariants.jsx's own "click to reveal the
+                previous-period value" toggle calls e.stopPropagation() on click, which
+                silently ate a plain onClick here before it ever bubbled up -- confirmed
+                live (a click landed, the internal toggle fired, the modal never opened).
+                Capture-phase fires top-down before that stopPropagation runs, so it's
+                unaffected either way. */}
             <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying Human QL records"
-              onClick={() => setQlDrillOpen('human')}
+              onClickCapture={() => setQlDrillOpen('human')}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('human') } }}>
               <PremKPI label="HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
             </div>
@@ -4273,7 +4279,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               Same auto-fit grid as row 1, same 10 items, so columns match at any width. */}
           <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(190px, 1fr))', gap:12, marginBottom:20 }}>
             <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying AI QL records"
-              onClick={() => setQlDrillOpen('ai')}
+              onClickCapture={() => setQlDrillOpen('ai')}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('ai') } }}>
               <PremKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
             </div>
