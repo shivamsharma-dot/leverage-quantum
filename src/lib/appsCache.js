@@ -8,9 +8,13 @@
 // Schema     : supabase/sql/apps_feed_setup.sql -- one row per application
 //              (user_id_uuid, destination_country[_group/_original],
 //              intake_category, intake_date, school_name, course_name,
-//              first_app_month, first_app_date, prospect_id, opportunity_id,
-//              source, futwork_human, futwork_ai, opp_first_campaign_name),
-//              plus row_key / sync_id / synced_at.
+//              first_app_submitted_at, first_app_month, first_app_date,
+//              prospect_id, opportunity_id, source, vertical, country2,
+//              futwork_human, futwork_ai, sub_source, opp_first_campaign_name),
+//              plus row_key / sync_id / synced_at. first_app_submitted_at
+//              (added with appv2, 2026-09-07) is a real 'YYYY-MM-DD' date --
+//              the one to filter a date range on, rather than re-parsing
+//              first_app_date's 'DD-Mon-YY' display string.
 // Read by    : src/pages/AppsDashboard.jsx.
 //
 // No since/until on this table -- the underlying BigQuery query has none
@@ -27,7 +31,7 @@
 const SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
 const TABLE = 'apps_feed'
-const SELECT = 'user_id_uuid,destination_country,destination_country_group,destination_country_original,intake_category,intake_date,school_name,course_name,first_app_month,first_app_date,prospect_id,opportunity_id,source,futwork_human,futwork_ai,opp_first_campaign_name'
+const SELECT = 'user_id_uuid,destination_country,destination_country_group,destination_country_original,intake_category,intake_date,school_name,course_name,first_app_submitted_at,first_app_month,first_app_date,prospect_id,opportunity_id,source,vertical,country2,futwork_human,futwork_ai,sub_source,opp_first_campaign_name'
 
 const headers = extra => Object.assign({ apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, extra || {})
 

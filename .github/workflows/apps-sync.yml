@@ -2,10 +2,11 @@ name: Apps BigQuery Cache Sync
 
 # Refreshes public.apps_feed (see supabase/sql/apps_feed_setup.sql) by calling
 # the apps_sync mode on api/crm-leads.js -- that endpoint owns the BigQuery
-# query (APPS_SQL, mirroring Settings > Data > BigQuery Console's "Apps"
-# saved query verbatim), the Supabase upsert, and the prune step, so this
-# workflow is just the scheduled trigger. Every run lands in bigquery_jobs
-# automatically the same way any other BigQuery call does.
+# query (APPS_SQL, mirroring Settings > Data > BigQuery Console's "appv2"
+# saved query, minus one unused join that risked duplicate rows -- see the
+# comment on APPS_SQL itself), the Supabase upsert, and the prune step, so
+# this workflow is just the scheduled trigger. Every run lands in
+# bigquery_jobs automatically the same way any other BigQuery call does.
 #
 # Once/day only, per explicit instruction ("no real time refresh") -- not
 # 3x/day like Leverage Careers. 9:00 AM IST = 3:30 UTC.

@@ -41,7 +41,7 @@ import {
 // modal below -- see those files' own top-of-component comment for what that means.
 const HumanQLDetailEmbed = React.lazy(() => import('./HumanQLDetailDashboard'))
 const AIQLDetailEmbed = React.lazy(() => import('./AIQLDetailDashboard'))
-// Same idea, for the real Apps page -- scoped by first_app_date via its own
+// Same idea, for the real Apps page -- scoped by first_app_submitted_at via its own
 // embedded/initialFrom/initialTo props (that page has no toolbar at all normally,
 // synced once a day; see its own top-of-file comment for why this is additive).
 const AppsDetailEmbed = React.lazy(() => import('./AppsDashboard'))
@@ -4839,7 +4839,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                     <div style={{ fontSize:15, color:C.muted, marginTop:2 }}>
                       {qlDrillOpen === 'apps'
                         ? (activeDrillDownRange
-                            ? `The real per-application records behind that number, scoped by First App Date to ${activeDrillDownRange.from} → ${activeDrillDownRange.to} — a separate, once-daily BigQuery sync, so it won't reconcile exactly with Overall's own figure`
+                            ? `The real per-application records behind that number, scoped by application submission date to ${activeDrillDownRange.from} → ${activeDrillDownRange.to} — a separate, once-daily BigQuery sync, so it won't reconcile exactly with Overall's own figure`
                             : "The real per-application records behind that number — a separate, once-daily BigQuery sync, so it won't reconcile exactly with Overall's own figure")
                         : (activeDrillDownRange
                             ? `The real per-lead records behind that number, ${activeDrillDownRange.from} to ${activeDrillDownRange.to} — every control below is live, not a preview`

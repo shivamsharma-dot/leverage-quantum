@@ -3327,6 +3327,23 @@ ORDER BY lead_date, campaign`
 // row per application (not date-bucketed like Overall/Careers), joining
 // direct_monthly_apps against the enrolled-students funnel and a
 // dedup'd-to-latest-opportunity slice of source_attribution_v3.
+// Mirrors Settings > Data > BigQuery Console's "appv2" saved query, with one
+// deliberate change: the original also LEFT JOINs leverage_direct.
+// coach_referral_intake_funnel but selects none of its columns. Verified live
+// before dropping it (2026-09-07): that table has 2,595 rows for only 2,480
+// distinct user_id_uuid -- 115 users with more than one row -- so the join,
+// as saved, can genuinely fan a dma row out into duplicates for any of those
+// users. row_key's own ordinal disambiguator (below) only stops those
+// duplicates from COLLIDING in Supabase; it does nothing to stop them being
+// double-counted in KPIs/charts once synced. Since nothing downstream ever
+// reads a column from that join, removing it is a straight correctness fix,
+// not a judgment call -- if a future revision of appv2 actually needs a real
+// column from coach_referral_intake_funnel, the join has to come back
+// filtered down to one row per user_id_uuid (e.g. its own ROW_NUMBER() dedup,
+// same pattern as v1/v3 below) rather than joined unfiltered.
+// First_App_Submitted_At is new -- a real ISO date, not just the two derived
+// display strings the original query has -- so the app can filter on it
+// directly instead of re-parsing 'DD-Mon-YY' back into a Date.
 const APPS_SQL = `WITH v1 AS (
  SELECT *,
  ROW_NUMBER() OVER (PARTITION BY prospectid ORDER BY opportunity_created_date DESC) AS r_num
@@ -3345,13 +3362,17 @@ SELECT
  dma.intake_date,
  dma.school_name,
  dma.course_name,
+ FORMAT_DATE('%Y-%m-%d', DATE(dma.first_app_submitted_at)) AS First_App_Submitted_At,
  FORMAT_DATE("%b'%y", DATE(dma.first_app_submitted_at)) AS First_App_Month,
  FORMAT_DATE('%d-%b-%y', DATE(dma.first_app_submitted_at)) AS First_App_Date,
  v2.prospect_id,
  v3.opportunity_id,
  v3.source,
+ case when v3.Country2 in ('UK','Canada','USA','Australia','New Zealand','Dubai','France (Private)','Germany (Private)','Ireland','Nigeria','Italy (Private)','Malta') then 'SR' else 'AC' END AS Vertical,
+ v3.country2,
  case when v3.last_disposition_from_futwork is not null then 'Human_QL' else 'Floor' END as Futwork_Human,
  case when v3.last_disposition_ai_futwork is not null then 'AI_QL' else 'Floor' END as Futwork_AI,
+ v3.sub_source,
  v3.opp_first_campaign_name,
 FROM
  \`leverage_direct.direct_monthly_apps\` dma
@@ -3359,10 +3380,8 @@ LEFT JOIN
  \`leverage_direct.enrolled_students_funnel_v2\` v2 ON dma.user_id_uuid = v2.user_id_uuid
 LEFT JOIN
  v3 ON v2.prospect_id = v3.prospectid
-LEFT JOIN
- \`leverage_direct.coach_referral_intake_funnel\` ref ON dma.user_id_uuid = ref.user_id_uuid
 WHERE
- v3. opportunity_created_date > '2025-12-31' ;`
+ date(dma.first_app_submitted_at) > '2025-12-31' ;`
 
 // The saved query named "Overall", copied verbatim from the BigQuery Console
 // (same text .github/workflows/overall-bq-sync.yml's standalone Python script
@@ -3595,11 +3614,11 @@ async function handleBigQuery(req, res, me) {
     if (mode === 'apps_sync') {
       const { supabaseAdmin } = await import('../lib/auth.mjs')
       const crypto = await import('crypto')
-      // Real cost: BigQuery reported needing 36.35GB billed for this join
-      // (source_attribution_v3's dedup window function scans the whole
-      // table) -- well above careers_sync's 20GB cap, so this gets its own
-      // higher ceiling with headroom, still far under the server-side
-      // BQ_BYTES_CEILING safety valve in lib/bigquery.mjs.
+      // Real cost: a dry run of this exact query (2026-09-07, after dropping
+      // the unused coach_referral_intake_funnel join) came back at 33.9GB --
+      // still comfortably under careers_sync's 20GB floor's sibling ceiling
+      // here, kept with headroom, far under the server-side BQ_BYTES_CEILING
+      // safety valve in lib/bigquery.mjs.
       const out = await bq.bigQuerySelectAll(APPS_SQL, {
         maxBytes: 60_000_000_000, mode: 'apps_sync', dashboardId: 'apps', userEmail: me.email,
       })
@@ -3618,13 +3637,17 @@ async function handleBigQuery(req, res, me) {
           intake_date: r.intake_date || null,
           school_name: r.school_name || null,
           course_name: r.course_name || null,
+          first_app_submitted_at: r.First_App_Submitted_At || null,
           first_app_month: r.First_App_Month || null,
           first_app_date: r.First_App_Date || null,
           prospect_id: r.prospect_id || null,
           opportunity_id: r.opportunity_id || null,
           source: r.source || null,
+          vertical: r.Vertical || null,
+          country2: r.country2 || null,
           futwork_human: r.Futwork_Human || null,
           futwork_ai: r.Futwork_AI || null,
+          sub_source: r.sub_source || null,
           opp_first_campaign_name: r.opp_first_campaign_name || null,
           sync_id: syncId,
           synced_at: syncedAt,
