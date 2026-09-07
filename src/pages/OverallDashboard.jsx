@@ -34,6 +34,13 @@ import { C, FONT, brandColor, fmtN, pct, Card, PremKPI, KPI_ICONS, RankedBars, B
 import {
   fetchOverallBqRows, fetchOverallBqAggRows, fetchOverallBqBounds, fetchOverallBqSyncedAt,
 } from '../lib/overallBqCache'
+// Lazy -- these are the real Human/AI QL Detail pages (App.jsx already lazy-loads
+// them for their own routes; a dynamic import() to the same module path shares that
+// one chunk rather than duplicating ~50KB x2 into Overall's own bundle for every
+// visitor who never opens a drill-down). Rendered `embedded` inside qlDrillOpen's
+// modal below -- see those files' own top-of-component comment for what that means.
+const HumanQLDetailEmbed = React.lazy(() => import('./HumanQLDetailDashboard'))
+const AIQLDetailEmbed = React.lazy(() => import('./AIQLDetailDashboard'))
 
 // "Overall PM" — added by the admin as a custom Data Source (Settings > Data > Google Sheets).
 // Not part of the original SHEET_PREF_KEYS set, so this page resolves its own override the same
@@ -1495,6 +1502,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   useModalA11y(trendOpen, useCallback(() => setTrendOpen(false), []), trendModalRef)
   useModalA11y(insightsOpen, useCallback(() => setInsightsOpen(false), []), insightsModalRef)
   useModalA11y(showRatesPicker, useCallback(() => setShowRatesPicker(false), []), ratesPickerRef)
+  // QL drill-down -- clicking "Futwork Human QL" / "Futwork AI QL" on the funnel below
+  // opens the real Human/AI QL Detail page, embedded, scoped to whatever date window
+  // Overall currently has active (activeDrillDownRange above).
+  const [qlDrillOpen, setQlDrillOpen] = useState(null) // null | 'human' | 'ai'
+  const qlDrillModalRef = useRef(null)
+  useModalA11y(!!qlDrillOpen, useCallback(() => setQlDrillOpen(null), []), qlDrillModalRef)
   // Off by default -- Source/Spend only stay fixed while scrolling when the user
   // explicitly asks for it, since forcing them fixed at every table width risks the
   // sticky cell's own fixed pixel width being narrower than a genuinely long value
@@ -1878,6 +1891,19 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     }
     return null
   }, [datePreset, customFrom, customTo])
+
+  // Concrete YYYY-MM-DD range for the QL drill-down modals (see qlDrillOpen below) --
+  // whatever window is active on screen, translated into the one shape those two
+  // pages' own Custom-range control understands, regardless of whether that window
+  // came from a preset/custom range (dateWindow) or a picked month (selMonth). "All
+  // months" (no real dateWindow AND no real month key) has no concrete range to hand
+  // over, so the drill-down opens on its own default (MTD) rather than a fabricated one.
+  const activeDrillDownRange = useMemo(() => {
+    if (dateWindow) return { from: dayKey(dateWindow.from), to: dayKey(dateWindow.to) }
+    const mk = monthKeyByLabel.get(selMonth)
+    if (mk != null) return { from: dayKey(monthStartDate(mk)), to: dayKey(monthEndDate(mk)) }
+    return null
+  }, [dateWindow, selMonth, monthKeyByLabel])
 
   const dateFilteredRows = useMemo(() => {
     if (!dateWindow) {
@@ -4226,7 +4252,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
           {/* FUNNEL + STAGE CONVERSION */}
           <Card>
-            {sectionTitle('Overall funnel', 'lead → revenue path for the selected period and source')}
+            {sectionTitle('Overall funnel', 'lead → revenue path for the selected period and source — click Futwork Human QL or Futwork AI QL to see the underlying records')}
             <ResponsiveContainer width="100%" height={460}>
               <BarChart data={funnel} layout="vertical" margin={{ left:20, right:50, top:4, bottom:4 }}>
                 <defs><BarGrad id="g-ov-funnel" color={C.navy} dir="h"/></defs>
@@ -4234,8 +4260,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 <XAxis type="number" tick={axis} axisLine={false} tickLine={false} tickFormatter={fmtN} />
                 <YAxis type="category" dataKey="stage" tick={axis} axisLine={false} tickLine={false} width={150} />
                 <Tooltip content={<BrandTooltip />} cursor={{ fill:'rgba(31,60,132,0.04)' }} />
-                <Bar dataKey="count" name="Count" fill={barFill('g-ov-funnel')} radius={BAR_RADIUS_H} barSize={20}>
-                  
+                <Bar dataKey="count" name="Count" fill={barFill('g-ov-funnel')} radius={BAR_RADIUS_H} barSize={20}
+                  onClick={d => {
+                    if (d.stage === 'Futwork Human QL') setQlDrillOpen('human')
+                    else if (d.stage === 'Futwork AI QL') setQlDrillOpen('ai')
+                  }}>
+                  {funnel.map((f, i) => (
+                    <Cell key={i} cursor={f.stage === 'Futwork Human QL' || f.stage === 'Futwork AI QL' ? 'pointer' : 'default'} />
+                  ))}
                   <LabelList dataKey="count" position="right" formatter={fmtN} style={{ fontSize:14, fontWeight:700, fill:C.sub }} />
                 </Bar>
               </BarChart>
@@ -4690,6 +4722,34 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           <AdRanking cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
           <NotPerforming cmp={reportCmp} minQL={CORRIDOR_MIN_QL} prevLabel={prevLabel} fmtINR={fmtINR} fmtINRShort={fmtINRShort} />
 
+                </div>
+              </div>
+            </div>
+          )}
+
+          {qlDrillOpen && (
+            <div onClick={e => { if (e.target === e.currentTarget) setQlDrillOpen(null) }}
+              style={{ position:'fixed', inset:0, zIndex:600, background:'rgba(15,23,42,0.45)', display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'20px 20px' }}>
+              <div ref={qlDrillModalRef} role="dialog" aria-modal="true" aria-labelledby="ql-drill-modal-title" tabIndex={-1} style={{ background:'var(--bg2)', borderRadius:18, width:'min(1400px, 97vw)', maxHeight:'94vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
+                <div style={{ position:'sticky', top:0, zIndex:2, background:'var(--card)', padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div>
+                    <div id="ql-drill-modal-title" style={{ fontSize:18, fontWeight:800, color:C.text }}>{qlDrillOpen === 'human' ? 'Human QL Detail' : 'AI QL Detail'}</div>
+                    <div style={{ fontSize:15, color:C.muted, marginTop:2 }}>
+                      {activeDrillDownRange
+                        ? `The real per-lead records behind that number, ${activeDrillDownRange.from} to ${activeDrillDownRange.to} — every control below is live, not a preview`
+                        : "The real per-lead records behind that number — every control below is live, not a preview"}
+                    </div>
+                  </div>
+                  <button onClick={() => setQlDrillOpen(null)} style={{ border:'none', background:'transparent', color:C.muted, cursor:'pointer', display:'flex', padding:4 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  </button>
+                </div>
+                <div style={{ padding:'20px 24px 28px' }}>
+                  <React.Suspense fallback={<DashboardSkeleton />}>
+                    {qlDrillOpen === 'human'
+                      ? <HumanQLDetailEmbed embedded initialFrom={activeDrillDownRange?.from} initialTo={activeDrillDownRange?.to} />
+                      : <AIQLDetailEmbed embedded initialFrom={activeDrillDownRange?.from} initialTo={activeDrillDownRange?.to} />}
+                  </React.Suspense>
                 </div>
               </div>
             </div>

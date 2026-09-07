@@ -455,17 +455,25 @@ function RecordingPlayer({ row, onClose }) {
   )
 }
 
-export default function HumanQLDetailDashboard() {
+// embedded/initialFrom/initialTo -- used when this page is rendered INSIDE another
+// page's drill-down modal (Overall's funnel, see OverallDashboard.jsx) instead of at
+// its own route: embedded=true skips the Sidebar + full-page shell (the caller
+// supplies its own chrome), and initialFrom/initialTo (YYYY-MM-DD) seed a Custom
+// date range matching whatever window the caller had active, instead of defaulting
+// to this page's own MTD. Once inside, every control here (date presets, column
+// filters, sort, export) still works exactly as it does on the real route -- this
+// is genuinely the same page, not a stripped-down preview.
+export default function HumanQLDetailDashboard({ embedded, initialFrom, initialTo } = {}) {
   const [rows, setRows] = useState([])
   const [autoCols, setAutoCols] = useState([]) // columns discovered from the sheet that aren't hand-named above
   const ALL_COLS = useMemo(() => [...HUMAN_QL_COLS, ...autoCols], [autoCols])
   const FILTERABLE_FIELDS = useMemo(() => ALL_COLS.filter(c => !FILTER_EXCLUDE_KEYS.includes(c.key)), [ALL_COLS])
   const [loading, setLoading] = useState(true)
   const [monthDay, setMonthDay] = useState('all')
-  const [datePreset, setDatePreset] = useState('MTD')
+  const [datePreset, setDatePreset] = useState(initialFrom && initialTo ? 'custom' : 'MTD')
   const [selMonth, setSelMonth] = useState('')
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
+  const [customFrom, setCustomFrom] = useState(initialFrom || '')
+  const [customTo, setCustomTo] = useState(initialTo || '')
   const [customOpen, setCustomOpen] = useState(false)
   const prevPresetRef = useRef({ datePreset: 'MTD', selMonth: '', monthDay: 'all' })
   const [lastSync, setLastSync] = useState(null)
@@ -782,6 +790,7 @@ export default function HumanQLDetailDashboard() {
   const td = { padding: '9px 12px', fontSize: 12.5, color: C.text, borderTop: '0.5px solid #F1F4F9', whiteSpace: 'nowrap' }
 
   if (loading) {
+    if (embedded) return <DashboardSkeleton />
     return (
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
         <Sidebar />
@@ -792,10 +801,12 @@ export default function HumanQLDetailDashboard() {
 
   const activeFilterKeys = Object.keys(activeFilters)
 
-  return (
-    <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
-      <Sidebar />
-      <div style={{ margin: '12px 14px 0', borderRadius: 14, border: '1px solid #EEF1F6', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+  // Embedded mode drops the Sidebar + full-page 100vh shell (the caller's own modal
+  // supplies that) and lets this card size to its own content -- the modal's outer
+  // overflowY:'auto' becomes the one scroll region instead of this page's own.
+  const content = (
+    <>
+      <div style={{ margin: embedded ? 0 : '12px 14px 0', borderRadius: 14, border: '1px solid #EEF1F6', boxShadow: embedded ? 'none' : '0 1px 3px rgba(31,60,132,0.06)', flex: embedded ? undefined : 1, display: 'flex', flexDirection: 'column', overflow: embedded ? 'visible' : 'hidden', minWidth: 0 }}>
         <div style={{ background: 'var(--card)', borderBottom: '0.5px solid ' + C.border, padding: '10px 28px', minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
           <div>
             <p style={{ fontSize: 10.5, color: C.muted, margin: 0, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Lead Qualification / Human QL Detail</p>
@@ -1063,6 +1074,14 @@ export default function HumanQLDetailDashboard() {
       </div>
 
       {playingRow && <RecordingPlayer row={playingRow} onClose={() => setPlayingRow(null)} />}
+    </>
+  )
+
+  if (embedded) return content
+  return (
+    <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg, fontFamily: FONT }}>
+      <Sidebar />
+      {content}
     </div>
   )
 }
