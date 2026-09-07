@@ -425,12 +425,22 @@ function AdvConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, on
   )
 }
 
-function AdvFilterBuilderPopover({ conditions, combinator, filterOptions, onAdd, onUpdate, onRemove, onSetCombinator, onClearAll, onClose }) {
+function AdvFilterBuilderPopover({ conditions, combinator, filterOptions, anchor, onAdd, onUpdate, onRemove, onSetCombinator, onClearAll, onClose }) {
   const [openValueRowId, setOpenValueRowId] = useState(null)
+  // position:fixed (anchored via getBoundingClientRect, not the CSS-flow position:
+  // absolute this used to be) so the panel is positioned relative to the VIEWPORT,
+  // not to the page's own scrollable content ancestor. A position:absolute panel is
+  // still clipped by any scrolling ancestor's overflow REGARDLESS of z-index (the
+  // exact bug already fixed once, one level in, for the condition-list wrapper --
+  // this is the SAME bug at the page-scroll level instead, since the panel itself
+  // sits deep inside the page's own overflow-y:auto content area). Escaping to
+  // position:fixed is what already makes Compare/Trend/Insights immune to this.
+  const top = anchor ? anchor.bottom + 6 : 0
+  const left = anchor ? anchor.left : 0
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:150 }} />
-      <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:200, width:'min(560px, 92vw)', background:'var(--card)', border:'1px solid ' + C.border, borderRadius:12, boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)', padding:12, boxSizing:'border-box' }}>
+      <div style={{ position:'fixed', top, left, zIndex:200, width:'min(560px, 92vw)', background:'var(--card)', border:'1px solid ' + C.border, borderRadius:12, boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)', padding:12, boxSizing:'border-box' }}>
         <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:8 }}>Filters</div>
         {conditions.length === 0 && (
           <div style={{ fontSize:12, color:C.muted, padding:'4px 0 10px' }}>No conditions yet -- add one below.</div>
@@ -1361,6 +1371,12 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const [advConditions, setAdvConditions] = useState([]) // [{id, field, operator, value}]
   const [advCombinator, setAdvCombinator] = useState('AND') // 'AND' | 'OR'
   const [advFilterOpen, setAdvFilterOpen] = useState(false)
+  // The popover itself is position:fixed, anchored to this button's own screen
+  // position at the moment it opens -- see AdvFilterBuilderPopover's own comment
+  // for why (a position:absolute panel gets clipped by the page's own scrollable
+  // content ancestor regardless of z-index, once its content grows tall enough).
+  const advFilterBtnRef = useRef(null)
+  const [advFilterAnchor, setAdvFilterAnchor] = useState(null)
   const advActiveConditions = useMemo(() => advConditions.filter(isAdvConditionComplete), [advConditions])
   const matchesAdvancedFilters = useCallback(r => advCombinator === 'AND'
     ? advActiveConditions.every(c => matchesAdvCondition(r, c))
@@ -4058,13 +4074,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               <Dropdown label="Corridor" options={['All', ...CORRIDORS.map(c => c.label)]} value={corridorFilter} minWidth={140} onChange={setCorridorFilter} />
               <CampaignSearch value={campaignQuery} onChange={setCampaignQuery} suggestions={campaignSuggestions} />
               <div style={{ position:'relative', flexShrink:0 }}>
-                <button type="button" onClick={() => setAdvFilterOpen(v => !v)}
+                <button type="button" ref={advFilterBtnRef} onClick={() => {
+                    if (!advFilterOpen && advFilterBtnRef.current) setAdvFilterAnchor(advFilterBtnRef.current.getBoundingClientRect())
+                    setAdvFilterOpen(v => !v)
+                  }}
                   style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:8, border:'1px dashed ' + C.border, background: advActiveConditions.length ? C.navyBg : 'transparent', cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:FONT, color: advActiveConditions.length ? C.navy : C.muted, whiteSpace:'nowrap' }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                   {advActiveConditions.length ? `Filters (${advActiveConditions.length})` : 'Advanced filter'}
                 </button>
                 {advFilterOpen && (
-                  <AdvFilterBuilderPopover conditions={advConditions} combinator={advCombinator} filterOptions={advFilterOptions}
+                  <AdvFilterBuilderPopover conditions={advConditions} combinator={advCombinator} filterOptions={advFilterOptions} anchor={advFilterAnchor}
                     onAdd={addAdvCondition} onUpdate={updateAdvCondition} onRemove={removeAdvCondition}
                     onSetCombinator={setAdvCombinator} onClearAll={() => setAdvConditions([])}
                     onClose={() => setAdvFilterOpen(false)} />
