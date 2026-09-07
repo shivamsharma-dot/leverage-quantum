@@ -444,8 +444,6 @@ function AdvConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, on
 }
 
 function AdvFilterBuilderPopover({
-  corridorFilter, onSetCorridor, corridorOptions,
-  campaignQuery, onSetCampaign, campaignSuggestions,
   conditions, combinator, filterOptions, anchor, onAdd, onUpdate, onRemove, onSetCombinator, onClearAll, onClose
 }) {
   const [openValueRowId, setOpenValueRowId] = useState(null)
@@ -465,22 +463,17 @@ function AdvFilterBuilderPopover({
       <div style={{ position:'fixed', top, left, zIndex:200, width:'min(560px, 92vw)', background:'var(--card)', border:'1px solid ' + C.border, borderRadius:12, boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)', padding:12, boxSizing:'border-box' }}>
         <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:10 }}>Filters</div>
 
-        {/* Corridor + Campaign search used to be their own always-visible toolbar
-            controls -- consolidated in here so the toolbar itself stays short enough
-            to never wrap or need a scroll. Same state (corridorFilter/campaignQuery),
-            same filtering logic downstream -- this is a UI relocation only. */}
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, flexWrap:'wrap' }}>
-          <Dropdown label="Corridor" options={corridorOptions} value={corridorFilter} minWidth={150} onChange={onSetCorridor} />
-          <div style={{ flex:'1 1 220px', minWidth:180 }}>
-            <CampaignSearch value={campaignQuery} onChange={onSetCampaign} suggestions={campaignSuggestions} minWidth={0} />
-          </div>
-        </div>
-
-        <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em', borderTop:'0.5px solid ' + C.border, paddingTop:10, marginBottom:8 }}>
-          Advanced conditions
-        </div>
+        {/* Corridor and Campaign search were briefly relocated into this popover as
+            quick-select controls, then removed outright per explicit instruction --
+            both are already available as condition fields below (field: Corridor /
+            Campaign), so a separate quick-select for the same two fields was
+            redundant. Their underlying corridorFilter/campaignQuery state and its
+            place in the filter pipeline (filtered/prevFiltered/nonDateRows/
+            monthTrendRows) is untouched -- it simply has no UI left to set it away
+            from its default, since Advanced Conditions is now the one place to
+            filter by Corridor or Campaign. */}
         {conditions.length === 0 && (
-          <div style={{ fontSize:12, color:C.muted, padding:'4px 0 10px' }}>No conditions yet -- add one below.</div>
+          <div style={{ fontSize:12, color:C.muted, padding:'4px 0 10px' }}>No conditions yet — add one below.</div>
         )}
         {/* Deliberately no maxHeight/overflowY here -- a scrollable ancestor clips any
             position:absolute descendant to its own box regardless of z-index, which was
@@ -1415,10 +1408,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const advFilterBtnRef = useRef(null)
   const [advFilterAnchor, setAdvFilterAnchor] = useState(null)
   const advActiveConditions = useMemo(() => advConditions.filter(isAdvConditionComplete), [advConditions])
-  // Corridor + Campaign search now live inside the same "Filters" popover as the
-  // advanced conditions (see the .lq-filterbar comment in the JSX below), so the
-  // trigger button's badge counts all three together, not just advActiveConditions.
-  const totalActiveFilters = advActiveConditions.length + (corridorFilter !== 'All' ? 1 : 0) + (campaignQuery.trim() ? 1 : 0)
   const matchesAdvancedFilters = useCallback(r => advCombinator === 'AND'
     ? advActiveConditions.every(c => matchesAdvCondition(r, c))
     : advActiveConditions.some(c => matchesAdvCondition(r, c)), [advActiveConditions, advCombinator])
@@ -4163,33 +4152,32 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               </div>
 
               <SourceMultiSelect label="Source" options={sources.filter(s => s !== 'All')} selected={selectedSources} minWidth={110} onChange={setSelectedSources} />
-              {/* Corridor / Campaign search / Advanced conditions all live under this one
-                  button now -- see the .lq-filterbar comment above the header style tag
-                  for why (the horizontal-scroll version of this row clipped the Custom-
-                  range calendar and this Corridor dropdown, since both are position:
-                  absolute popovers anchored to a now-scrolling ancestor). */}
+              {/* Advanced conditions only now -- Corridor and Campaign search were
+                  removed from this popover entirely (they're already available as
+                  condition fields: Field -> Corridor / Campaign), not merely hidden.
+                  corridorFilter/campaignQuery state and its place in the filter
+                  pipeline is untouched but now permanently at its default, since
+                  nothing sets it away from that anymore. */}
               <div style={{ position:'relative', flexShrink:0 }}>
                 <button type="button" ref={advFilterBtnRef} onClick={() => {
                     if (!advFilterOpen && advFilterBtnRef.current) setAdvFilterAnchor(advFilterBtnRef.current.getBoundingClientRect())
                     setAdvFilterOpen(v => !v)
                   }}
-                  style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:8, border:'1px dashed ' + C.border, background: totalActiveFilters ? C.navyBg : 'transparent', cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:FONT, color: totalActiveFilters ? C.navy : C.muted, whiteSpace:'nowrap' }}>
+                  style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:8, border:'1px dashed ' + C.border, background: advActiveConditions.length ? C.navyBg : 'transparent', cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:FONT, color: advActiveConditions.length ? C.navy : C.muted, whiteSpace:'nowrap' }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                  {totalActiveFilters ? `Filters (${totalActiveFilters})` : 'Filters'}
+                  {advActiveConditions.length ? `Filters (${advActiveConditions.length})` : 'Filters'}
                 </button>
                 {advFilterOpen && (
                   <AdvFilterBuilderPopover
-                    corridorFilter={corridorFilter} onSetCorridor={setCorridorFilter} corridorOptions={['All', ...CORRIDORS.map(c => c.label)]}
-                    campaignQuery={campaignQuery} onSetCampaign={setCampaignQuery} campaignSuggestions={campaignSuggestions}
                     conditions={advConditions} combinator={advCombinator} filterOptions={advFilterOptions} anchor={advFilterAnchor}
                     onAdd={addAdvCondition} onUpdate={updateAdvCondition} onRemove={removeAdvCondition}
                     onSetCombinator={setAdvCombinator}
-                    onClearAll={() => { setAdvConditions([]); setCorridorFilter('All'); setCampaignQuery('') }}
+                    onClearAll={() => setAdvConditions([])}
                     onClose={() => setAdvFilterOpen(false)} />
                 )}
               </div>
-              {totalActiveFilters > 0 && (
-                <button type="button" onClick={() => { setAdvConditions([]); setCorridorFilter('All'); setCampaignQuery('') }} style={{ border:'none', background:'transparent', color:C.muted, fontSize:12, fontWeight:700, fontFamily:FONT, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+              {advActiveConditions.length > 0 && (
+                <button type="button" onClick={() => setAdvConditions([])} style={{ border:'none', background:'transparent', color:C.muted, fontSize:12, fontWeight:700, fontFamily:FONT, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
                   Clear all
                 </button>
               )}
@@ -4295,8 +4283,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               190px is wide enough for every current label at the KPI card's own
               uppercase/bold/letter-spaced type, confirmed by measuring the widest
               label against the card's real inner width (card width minus its 20px
-              side padding), not guessed. */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(190px, 1fr))', gap:12, marginBottom:12 }}>
+              side padding), not guessed.
+              Widening the floor to 190px traded that 8-column remainder for a 6-column
+              one instead -- a real desktop content width of ~1200-1400px (measured
+              live: 1276px, a common laptop-with-sidebar size, not an edge case) computes
+              exactly 6 columns for 10 items, leaving 4 real cards plus 2 genuinely empty
+              trailing cells every time -- flagged live via a screenshot circling the
+              dead space. minmax(max(190px, calc((100% - 4*gap)/5)), 1fr) caps this at 5
+              columns max (10 only divides evenly by 1/2/5/10 in any plausible range) --
+              the minimum column width scales up to claim a full 1/5 of the row on a wide
+              screen, so 6+ columns can never form; below that width it degrades to fewer
+              columns exactly like plain auto-fit (same overflow-safety as before). */}
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(max(190px, calc((100% - 48px) / 5)), 1fr))', gap:12, marginBottom:12 }}>
             <PremKPI label="EST. SR REVENUE" value={<span title={fmtINR(estSrRevenue)}>{fmtINRShort(estSrRevenue)}</span>} sub={'Est. RAUs ' + fmtN(estimatedRaus) + ' × SR Fee'} delta={deltaPct(estSrRevenue, prevEstSrRevenue)} prevValue={fmtINR(prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="SPEND" value={<span title={fmtINR(kpis.spend)}>{fmtINRShort(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} prevValue={fmtINR(prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={kpiDelta(kpis.leads, prevKpis.leads)} prevValue={fmtN(prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
@@ -4327,7 +4325,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
           {/* KPI ROW 2 — remaining QL breakdown + cost efficiency + downstream conversion + ROAS.
               Same auto-fit grid as row 1, same 10 items, so columns match at any width. */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(190px, 1fr))', gap:12, marginBottom:20 }}>
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(max(190px, calc((100% - 48px) / 5)), 1fr))', gap:12, marginBottom:20 }}>
             <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying AI QL records"
               onClickCapture={() => setQlDrillOpen('ai')}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('ai') } }}>
