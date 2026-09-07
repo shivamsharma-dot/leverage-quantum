@@ -435,7 +435,17 @@ function AdvFilterBuilderPopover({ conditions, combinator, filterOptions, onAdd,
         {conditions.length === 0 && (
           <div style={{ fontSize:12, color:C.muted, padding:'4px 0 10px' }}>No conditions yet -- add one below.</div>
         )}
-        <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:320, overflowY:'auto', paddingRight:4 }}>
+        {/* Deliberately no maxHeight/overflowY here -- a scrollable ancestor clips any
+            position:absolute descendant to its own box regardless of z-index, which was
+            silently trapping the Field/Operator SharedDropdown's option list (and the
+            value picker) inside a near-invisible sliver, making every dropdown in this
+            builder unclickable for a real mouse user even though a programmatic .click()
+            on the DOM node still "worked" (clipping is a paint-time effect, not something
+            getBoundingClientRect or an event dispatch notices) -- see the identical fix
+            and root-cause writeup on Live QLs' own FilterBuilderPopover. If this ever
+            needs a height cap for many conditions, it has to go on the OUTER popover
+            instead, never here, with the same caveat in mind. */}
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
           {conditions.map(c => (
             <AdvConditionRow key={c.id} cond={c} options={filterOptions[c.field] || []}
               valuePickerOpen={openValueRowId === c.id}
