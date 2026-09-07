@@ -174,7 +174,15 @@ function FilterBuilderPopover({ conditions, combinator, filterOptions, onAdd, on
         {conditions.length === 0 && (
           <div style={{ fontSize: 12, color: C.muted, padding: '4px 0 10px' }}>No conditions yet -- add one below.</div>
         )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+        {/* Deliberately no maxHeight/overflowY here -- a scrollable ancestor clips any
+            position:absolute descendant to its own box regardless of z-index, which was
+            silently trapping the Field/Operator Dropdown's option list (and the value
+            picker) inside an ~40px sliver whenever this list was short, making every
+            dropdown in the filter builder invisible and unclickable. Confirmed live via
+            elementFromPoint + getBoundingClientRect before this fix, and confirmed fixed
+            the same way after. If this ever needs a height cap again for many conditions,
+            it has to go on the OUTER popover (still with the same caveat), never here. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {conditions.map(c => (
             <ConditionRow key={c.id} cond={c} options={filterOptions[c.field] || []}
               valuePickerOpen={openValueRowId === c.id}
