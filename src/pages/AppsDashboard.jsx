@@ -258,6 +258,10 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
   const filterBtnRef = useRef(null)
   const [filterAnchor, setFilterAnchor] = useState(null)
 
+  // Records table sort -- null sortKey means "natural (unsorted) order".
+  const [sortKey, setSortKey] = useState(null)
+  const [sortDir, setSortDir] = useState('asc')
+
   const load = () => {
     setLoading(true); setError('')
     Promise.all([fetchAppsCacheRows(), fetchAppsCacheSyncedAt()])
@@ -352,6 +356,11 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
   // convention as Human/AI QL Detail's own "Daily Trend" chart: an always-on
   // pulse check for "what's happening this month," independent of whatever
   // else someone is currently narrowing the rest of the page to.
+  //
+  // Trimmed to the last day that actually has data, rather than rendering
+  // every remaining (unhappened) day of the month as an empty bar -- a plain
+  // fixed-length "1 through daysInMonth" array left most of the chart blank
+  // for the back half of any month still in progress.
   const dailyTrendCurrentMonth = useMemo(() => {
     const now = new Date()
     const y = now.getFullYear(), m = now.getMonth()
@@ -362,11 +371,37 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
       const d = new Date(r.first_app_submitted_at + 'T00:00:00')
       if (d.getFullYear() === y && d.getMonth() === m) counts[d.getDate()] += 1
     }
-    return Array.from({ length: daysInMonth }, (_, i) => ({ day: String(i + 1) + ' ' + MONTHS_SHORT[m], count: counts[i + 1] }))
+    let lastDay = 1
+    for (let i = daysInMonth; i >= 1; i--) { if (counts[i] > 0) { lastDay = i; break } }
+    return Array.from({ length: lastDay }, (_, i) => ({ day: String(i + 1) + ' ' + MONTHS_SHORT[m], count: counts[i + 1] }))
   }, [rows])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  // Click-to-sort table headers -- same convention as the rest of this app
+  // (Overall's summary table, Live QLs' records table): click toggles
+  // asc/desc on that column, clicking a different column resets to asc.
+  // Sorts on the real underlying value, not the display string -- dates sort
+  // on the ISO first_app_submitted_at rather than the DD-Mon-YY label.
+  const sortValue = (r, key) => {
+    if (key === 'first_app_submitted_at') return r.first_app_submitted_at || ''
+    return (r[key] || '').toString().toLowerCase()
+  }
+  const toggleSort = key => {
+    if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir('asc') }
+  }
+  const sortedFiltered = useMemo(() => {
+    if (!sortKey) return filtered
+    const dir = sortDir === 'asc' ? 1 : -1
+    return [...filtered].sort((a, b) => {
+      const av = sortValue(a, sortKey), bv = sortValue(b, sortKey)
+      if (av < bv) return -1 * dir
+      if (av > bv) return 1 * dir
+      return 0
+    })
+  }, [filtered, sortKey, sortDir]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const totalPages = Math.max(1, Math.ceil(sortedFiltered.length / PAGE_SIZE))
+  const pageRows = sortedFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   useEffect(() => { setPage(1) }, [search, destFilter, intakeFilter, sourceFilter, humanQlFilter, aiQlFilter, activeConditions, combinator, customFrom, customTo])
 
   const exportRows = filtered.map(r => ({
@@ -505,7 +540,7 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
-                <Card title="Applications, day by day" sub="Current calendar month, fixed -- not affected by any filter above">
+                <Card title="Applications, day by day" sub="Current calendar month, through the most recent day with data — not affected by any filter above">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={dailyTrendCurrentMonth} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
                       <defs><BarGrad id="appsDayGrad" color={C.blue} /></defs>
@@ -532,11 +567,29 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
                   <Dropdown label="AI QL" value={aiQlFilter} onChange={setAiQlFilter} options={[ALL, 'AI_QL', 'Floor']} minWidth={110} />
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1000 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 1100 }}>
                     <thead>
                       <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--card-border)' }}>
-                        {['First App Date', 'Destination', 'Intake', 'School', 'Course', 'Source', 'Campaign', 'Human QL', 'AI QL'].map(h => (
-                          <th key={h} style={{ padding: '9px 14px', fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
+                        {[
+                          { key: 'first_app_submitted_at', label: 'First App Date' },
+                          { key: 'destination_country', label: 'Destination' },
+                          { key: 'intake_category', label: 'Intake' },
+                          { key: 'school_name', label: 'School' },
+                          { key: 'course_name', label: 'Course' },
+                          { key: 'source', label: 'Source' },
+                          { key: 'opp_first_campaign_name', label: 'Campaign' },
+                          { key: 'vertical', label: 'Vertical' },
+                          { key: 'futwork_human', label: 'Human QL' },
+                          { key: 'futwork_ai', label: 'AI QL' },
+                        ].map(col => (
+                          <th
+                            key={col.key} onClick={() => toggleSort(col.key)}
+                            title="Click to sort"
+                            style={{ padding: '9px 14px', fontSize: 10.5, fontWeight: 700, color: sortKey === col.key ? C.navy : C.muted, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}
+                          >
+                            {col.label}
+                            <span style={{ marginLeft: 4, opacity: sortKey === col.key ? 1 : 0.35 }}>{sortKey === col.key ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                          </th>
                         ))}
                       </tr>
                     </thead>
@@ -550,6 +603,7 @@ export default function AppsDashboard({ embedded, initialFrom, initialTo } = {})
                           <td style={{ padding: '8px 14px', color: C.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.course_name || '—'}</td>
                           <td style={{ padding: '8px 14px', color: C.text }}>{r.source || '—'}</td>
                           <td style={{ padding: '8px 14px', color: C.text, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.opp_first_campaign_name || '—'}</td>
+                          <td style={{ padding: '8px 14px', color: C.text }}>{r.vertical || '—'}</td>
                           <td style={{ padding: '8px 14px' }}>
                             <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 999, color: r.futwork_human === 'Human_QL' ? '#178A54' : C.muted, background: r.futwork_human === 'Human_QL' ? '#E9F8EF' : 'var(--bg3)' }}>{r.futwork_human || '—'}</span>
                           </td>
