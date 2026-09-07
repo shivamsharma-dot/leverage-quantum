@@ -35,9 +35,16 @@ const SELECT = 'user_id_uuid,destination_country,destination_country_group,desti
 
 const headers = extra => Object.assign({ apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }, extra || {})
 
+// Both throws below include the response body, not just the status -- a
+// PostgREST error for a column the migration hasn't added yet ('column
+// apps_feed.first_app_submitted_at does not exist') only shows up in the
+// body, and AppsDashboard.jsx's own error-message matching needs that exact
+// text to tell "the table isn't set up at all" apart from "the table exists
+// but is missing the newer appv2 columns" -- a bare '(400)' collapses both
+// into the same unhelpful message.
 async function sbGet(params, extraHeaders) {
   const r = await fetch(SB_URL + '/rest/v1/' + TABLE + '?' + params.toString(), { headers: headers(extraHeaders) })
-  if (!r.ok) throw new Error(TABLE + ' read failed (' + r.status + ')')
+  if (!r.ok) throw new Error(TABLE + ' read failed (' + r.status + '): ' + await r.text())
   const j = await r.json()
   if (!Array.isArray(j)) throw new Error(TABLE + ' returned a non-array response')
   return j
@@ -49,7 +56,7 @@ async function sbGetPage(cursor) {
   const p = new URLSearchParams({ select: SELECT + ',row_key', order: 'row_key.asc', limit: String(PAGE) })
   if (cursor != null) p.set('row_key', 'gt.' + cursor)
   const r = await fetch(SB_URL + '/rest/v1/' + TABLE + '?' + p.toString(), { headers: headers() })
-  if (!r.ok) throw new Error(TABLE + ' read failed (' + r.status + ')')
+  if (!r.ok) throw new Error(TABLE + ' read failed (' + r.status + '): ' + await r.text())
   const rows = await r.json()
   if (!Array.isArray(rows)) throw new Error(TABLE + ' returned a non-array response')
   return rows
