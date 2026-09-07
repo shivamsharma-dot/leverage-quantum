@@ -2473,12 +2473,18 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       { stage:'Futwork AI Queued', count:kpis.futworkAiQ },
       { stage:'Futwork Human Queued', count:kpis.futworkHumanQ },
     ].sort((a, b) => b.count - a.count)
+    // Same "ranked by its own value, highest first" treatment as floorVsFutwork above --
+    // AI QL and Human QL should never be in a fixed order, since which one is actually
+    // higher genuinely varies by period/filter.
+    const aiVsHumanQl = [
+      { stage:'Futwork AI QL', count:kpis.futworkAiQl },
+      { stage:'Futwork Human QL', count:kpis.humanQL },
+    ].sort((a, b) => b.count - a.count)
     return [
       { stage:'Leads Generated', count:kpis.leads },
       ...floorVsFutwork,
       { stage:'Total QL', count:kpis.totalQL },
-      { stage:'Futwork AI QL', count:kpis.futworkAiQl },
-      { stage:'Futwork Human QL', count:kpis.humanQL },
+      ...aiVsHumanQl,
       { stage:'Applications', count:kpis.apps },
       { stage:'Offers', count:kpis.offers },
       { stage:'Deposits', count:kpis.deposits },
