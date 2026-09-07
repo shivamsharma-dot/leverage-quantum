@@ -41,7 +41,7 @@ function countBy(rows, key, fallback = 'Unknown') {
   return Array.from(map.entries()).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count)
 }
 
-export default function AppsDashboard() {
+export default function AppsDashboard({ embedded, initialFrom, initialTo } = {}) {
   const [rows, setRows] = useState(null)
   const [syncedAt, setSyncedAt] = useState(null)
   const [error, setError] = useState('')
@@ -65,12 +65,31 @@ export default function AppsDashboard() {
   }
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const destOptions = useMemo(() => [ALL, ...new Set((rows || []).map(r => r.destination_country_group).filter(Boolean))].sort((a, b) => a === ALL ? -1 : b === ALL ? 1 : a.localeCompare(b)), [rows])
-  const intakeOptions = useMemo(() => [ALL, ...new Set((rows || []).map(r => r.intake_category).filter(Boolean))].sort((a, b) => a === ALL ? -1 : b === ALL ? 1 : a.localeCompare(b)), [rows])
-  const sourceOptions = useMemo(() => [ALL, ...new Set((rows || []).map(r => r.source).filter(Boolean))].sort((a, b) => a === ALL ? -1 : b === ALL ? 1 : a.localeCompare(b)), [rows])
+  // Embedded mode (opened from Overall's "Applications" KPI card/funnel bar) scopes
+  // this page to a specific window on first_app_date -- the only date field this
+  // BigQuery-synced, once-a-day snapshot carries (see the file header comment: no
+  // Day/Week/Month/Year toolbar exists here by design, so this is additive, not a
+  // toolbar the routed page gained). Standalone /dashboard/apps passes neither prop,
+  // so dateFilteredRows === rows and nothing here changes for that route.
+  const dateFrom = initialFrom ? new Date(initialFrom + 'T00:00:00') : null
+  const dateTo = initialTo ? new Date(initialTo + 'T23:59:59') : null
+  const dateFilteredRows = useMemo(() => {
+    if (!dateFrom && !dateTo) return rows || []
+    return (rows || []).filter(r => {
+      const d = parseDDMonYY(r.first_app_date)
+      if (!d) return false
+      if (dateFrom && d < dateFrom) return false
+      if (dateTo && d > dateTo) return false
+      return true
+    })
+  }, [rows, initialFrom, initialTo]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const destOptions = useMemo(() => [ALL, ...new Set(dateFilteredRows.map(r => r.destination_country_group).filter(Boolean))].sort((a, b) => a === ALL ? -1 : b === ALL ? 1 : a.localeCompare(b)), [dateFilteredRows])
+  const intakeOptions = useMemo(() => [ALL, ...new Set(dateFilteredRows.map(r => r.intake_category).filter(Boolean))].sort((a, b) => a === ALL ? -1 : b === ALL ? 1 : a.localeCompare(b)), [dateFilteredRows])
+  const sourceOptions = useMemo(() => [ALL, ...new Set(dateFilteredRows.map(r => r.source).filter(Boolean))].sort((a, b) => a === ALL ? -1 : b === ALL ? 1 : a.localeCompare(b)), [dateFilteredRows])
 
   const filtered = useMemo(() => {
-    const list = rows || []
+    const list = dateFilteredRows
     const q = search.trim().toLowerCase()
     return list.filter(r => {
       if (destFilter !== ALL && r.destination_country_group !== destFilter) return false
@@ -84,7 +103,7 @@ export default function AppsDashboard() {
       }
       return true
     })
-  }, [rows, search, destFilter, intakeFilter, sourceFilter, humanQlFilter, aiQlFilter])
+  }, [dateFilteredRows, search, destFilter, intakeFilter, sourceFilter, humanQlFilter, aiQlFilter])
 
   const kpis = useMemo(() => {
     const total = filtered.length
@@ -129,10 +148,8 @@ export default function AppsDashboard() {
     'Prospect ID': r.prospect_id || '', 'Opportunity ID': r.opportunity_id || '',
   }))
 
-  return (
-    <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg }}>
-      <Sidebar />
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+  const content = (
+    <div style={{ flex: 1, overflowY: embedded ? 'visible' : 'auto', display: 'flex', flexDirection: 'column' }}>
         <div style={{
           margin: '12px 14px 0', borderRadius: 14, border: '1px solid var(--card-border)',
           background: 'var(--card)', boxShadow: '0 1px 3px rgba(31,60,132,0.06)', padding: '14px 20px',
@@ -141,6 +158,11 @@ export default function AppsDashboard() {
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: FONT }}>Analytics</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: C.text, fontFamily: FONT, letterSpacing: '-0.3px' }}>Apps</div>
+            {(initialFrom || initialTo) && (
+              <div style={{ fontSize: 12, fontWeight: 600, color: C.blue, fontFamily: FONT, marginTop: 2 }}>
+                Scoped to {initialFrom || '…'} → {initialTo || '…'} (by First App Date)
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 11.5, color: C.muted, fontFamily: FONT }}>
@@ -263,6 +285,12 @@ export default function AppsDashboard() {
           )}
         </div>
       </div>
+  )
+  if (embedded) return content
+  return (
+    <div className="lq-page-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.bg }}>
+      <Sidebar />
+      {content}
     </div>
   )
 }

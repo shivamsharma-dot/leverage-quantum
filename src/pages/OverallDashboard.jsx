@@ -41,6 +41,10 @@ import {
 // modal below -- see those files' own top-of-component comment for what that means.
 const HumanQLDetailEmbed = React.lazy(() => import('./HumanQLDetailDashboard'))
 const AIQLDetailEmbed = React.lazy(() => import('./AIQLDetailDashboard'))
+// Same idea, for the real Apps page -- scoped by first_app_date via its own
+// embedded/initialFrom/initialTo props (that page has no toolbar at all normally,
+// synced once a day; see its own top-of-file comment for why this is additive).
+const AppsDetailEmbed = React.lazy(() => import('./AppsDashboard'))
 
 // "Overall PM" — added by the admin as a custom Data Source (Settings > Data > Google Sheets).
 // Not part of the original SHEET_PREF_KEYS set, so this page resolves its own override the same
@@ -307,6 +311,7 @@ const ADV_FIELDS = [
   { key: 'source', label: 'Source' },
   { key: 'corridor', label: 'Corridor' },
   { key: 'campaign', label: 'Campaign' },
+  { key: 'paidStatus', label: 'Paid status' },
 ]
 const ADV_OPERATORS = [
   { key: 'is', label: 'is', value: 'select' },
@@ -329,6 +334,12 @@ const ADV_OPERATOR_MAP = Object.fromEntries(ADV_OPERATORS.map(o => [o.key, o]))
 function advFieldValue(r, field) {
   if (field === 'source') return (r.source || '').trim()
   if (field === 'corridor') return corridorLabel(classifyCorridor(r.campaign))
+  // Same Paid/Non-Paid split already used everywhere else on this page (the cost
+  // charts, the Slack PM reports' Paid/Non-Paid banded table) -- isPaidSource is
+  // declared further down this module, but this function's BODY only runs when
+  // called at render time, long after module evaluation finishes, so referencing
+  // it here is safe (unlike a component-scope useMemo, which runs immediately).
+  if (field === 'paidStatus') return isPaidSource(r.source) ? 'Paid' : 'Non-Paid'
   return (r.campaign || '').trim() // 'campaign'
 }
 // classifyCorridor('') resolves to 'unclassified' -> label 'Unclassified' -- that's
@@ -432,7 +443,11 @@ function AdvConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, on
   )
 }
 
-function AdvFilterBuilderPopover({ conditions, combinator, filterOptions, anchor, onAdd, onUpdate, onRemove, onSetCombinator, onClearAll, onClose }) {
+function AdvFilterBuilderPopover({
+  corridorFilter, onSetCorridor, corridorOptions,
+  campaignQuery, onSetCampaign, campaignSuggestions,
+  conditions, combinator, filterOptions, anchor, onAdd, onUpdate, onRemove, onSetCombinator, onClearAll, onClose
+}) {
   const [openValueRowId, setOpenValueRowId] = useState(null)
   // position:fixed (anchored via getBoundingClientRect, not the CSS-flow position:
   // absolute this used to be) so the panel is positioned relative to the VIEWPORT,
@@ -448,7 +463,22 @@ function AdvFilterBuilderPopover({ conditions, combinator, filterOptions, anchor
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:150 }} />
       <div style={{ position:'fixed', top, left, zIndex:200, width:'min(560px, 92vw)', background:'var(--card)', border:'1px solid ' + C.border, borderRadius:12, boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)', padding:12, boxSizing:'border-box' }}>
-        <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:8 }}>Filters</div>
+        <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:10 }}>Filters</div>
+
+        {/* Corridor + Campaign search used to be their own always-visible toolbar
+            controls -- consolidated in here so the toolbar itself stays short enough
+            to never wrap or need a scroll. Same state (corridorFilter/campaignQuery),
+            same filtering logic downstream -- this is a UI relocation only. */}
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, flexWrap:'wrap' }}>
+          <Dropdown label="Corridor" options={corridorOptions} value={corridorFilter} minWidth={150} onChange={onSetCorridor} />
+          <div style={{ flex:'1 1 220px', minWidth:180 }}>
+            <CampaignSearch value={campaignQuery} onChange={onSetCampaign} suggestions={campaignSuggestions} minWidth={0} />
+          </div>
+        </div>
+
+        <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:'uppercase', letterSpacing:'0.05em', borderTop:'0.5px solid ' + C.border, paddingTop:10, marginBottom:8 }}>
+          Advanced conditions
+        </div>
         {conditions.length === 0 && (
           <div style={{ fontSize:12, color:C.muted, padding:'4px 0 10px' }}>No conditions yet -- add one below.</div>
         )}
@@ -1385,6 +1415,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   const advFilterBtnRef = useRef(null)
   const [advFilterAnchor, setAdvFilterAnchor] = useState(null)
   const advActiveConditions = useMemo(() => advConditions.filter(isAdvConditionComplete), [advConditions])
+  // Corridor + Campaign search now live inside the same "Filters" popover as the
+  // advanced conditions (see the .lq-filterbar comment in the JSX below), so the
+  // trigger button's badge counts all three together, not just advActiveConditions.
+  const totalActiveFilters = advActiveConditions.length + (corridorFilter !== 'All' ? 1 : 0) + (campaignQuery.trim() ? 1 : 0)
   const matchesAdvancedFilters = useCallback(r => advCombinator === 'AND'
     ? advActiveConditions.every(c => matchesAdvCondition(r, c))
     : advActiveConditions.some(c => matchesAdvCondition(r, c)), [advActiveConditions, advCombinator])
@@ -1503,9 +1537,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   useModalA11y(insightsOpen, useCallback(() => setInsightsOpen(false), []), insightsModalRef)
   useModalA11y(showRatesPicker, useCallback(() => setShowRatesPicker(false), []), ratesPickerRef)
   // QL drill-down -- clicking "Futwork Human QL" / "Futwork AI QL" on the funnel below
-  // opens the real Human/AI QL Detail page, embedded, scoped to whatever date window
-  // Overall currently has active (activeDrillDownRange above).
-  const [qlDrillOpen, setQlDrillOpen] = useState(null) // null | 'human' | 'ai'
+  // (or the matching KPI card) opens the real Human/AI QL Detail page, embedded,
+  // scoped to whatever date window Overall currently has active
+  // (activeDrillDownRange above). 'apps' does the same for the Applications KPI
+  // card, embedding the real Apps page instead.
+  const [qlDrillOpen, setQlDrillOpen] = useState(null) // null | 'human' | 'ai' | 'apps'
   const qlDrillModalRef = useRef(null)
   useModalA11y(!!qlDrillOpen, useCallback(() => setQlDrillOpen(null), []), qlDrillModalRef)
   // Off by default -- Source/Spend only stay fixed while scrolling when the user
@@ -1868,6 +1904,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     source: sources.filter(s => s !== 'All'),
     corridor: CORRIDORS.map(c => c.label),
     campaign: campaignOptions.map(c => c.name),
+    paidStatus: ['Paid', 'Non-Paid'],
   }), [sources, campaignOptions])
 
   // Is the selected month the current calendar month?
@@ -3995,13 +4032,19 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       <Sidebar />
       <style>{`.kpiCard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(15,23,42,0.05),0 16px 32px -14px rgba(31,60,132,0.22)!important}
         /* Filter bar: was flex-wrap so Corridor/Search/Advanced filter fell to an
-           accidental second row the moment the group got tight -- now genuinely one
-           row always, degrading to a horizontal scroll on a narrow screen instead of
-           wrapping (same convention as a mobile tab bar). Scrollbar hidden since the
-           bar itself is the affordance -- a control just off the visible edge is
-           enough of a hint without a visible scrollbar competing with it. */
-        .lq-filterbar{scrollbar-width:none;-ms-overflow-style:none}
-        .lq-filterbar::-webkit-scrollbar{display:none}
+           accidental second row the moment the group got tight. A horizontal-scroll
+           version of this rule (overflowX:'auto') was tried and reverted -- it
+           introduced a genuine regression: overflow-x other than 'visible' computes
+           overflow-y to 'auto' too per the CSS spec, and every position:absolute
+           popover anchored to a DIRECT CHILD of this row (the Custom-range calendar,
+           the Corridor dropdown) got clipped to a near-invisible sliver by that new
+           scrolling ancestor -- confirmed live, the calendar rendered squeezed inside
+           the bar instead of floating below the Custom button. Fixed at the root
+           instead: Corridor, Campaign search and Advanced filter are now consolidated
+           into ONE combined "Filters" popover (position:fixed, immune to this class of
+           bug by construction), so the always-visible row is short enough -- Last Day/
+           Last 7D/MTD, Month, Custom, Source, Filters -- to never need to wrap or
+           scroll at any real width. */
         .lq-filterbar>*{flex-shrink:0}
         /* Clickable KPI cards -- PremKPI has no onClick of its own (it delegates to
            20 different kpiVariants render functions; threading a click handler
@@ -4031,7 +4074,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           </div>
           <div className="lq-header-controls" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflow:'visible', flexShrink:1, minWidth:0 }}>
 
-            <div className="lq-filterbar" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflowX:'auto', background:'var(--bg3,#F8FAFC)', padding:'6px 10px', borderRadius:12, border:'0.5px solid var(--card-border,#E5E7EB)' }}>
+            <div className="lq-filterbar" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', background:'var(--bg3,#F8FAFC)', padding:'6px 10px', borderRadius:12, border:'0.5px solid var(--card-border,#E5E7EB)' }}>
               {isCurrentMonth && (
                 <div style={{ display:'flex', alignItems:'center', gap:4, background:'var(--bg3)', borderRadius:9, padding:3 }}>
                   {[['LD', 'Last Day'], ['L7D', 'Last 7D'], ['MTD', 'MTD']].map(([key, lbl2]) => {
@@ -4120,26 +4163,33 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               </div>
 
               <SourceMultiSelect label="Source" options={sources.filter(s => s !== 'All')} selected={selectedSources} minWidth={110} onChange={setSelectedSources} />
-              <Dropdown label="Corridor" options={['All', ...CORRIDORS.map(c => c.label)]} value={corridorFilter} minWidth={140} onChange={setCorridorFilter} />
-              <CampaignSearch value={campaignQuery} onChange={setCampaignQuery} suggestions={campaignSuggestions} />
+              {/* Corridor / Campaign search / Advanced conditions all live under this one
+                  button now -- see the .lq-filterbar comment above the header style tag
+                  for why (the horizontal-scroll version of this row clipped the Custom-
+                  range calendar and this Corridor dropdown, since both are position:
+                  absolute popovers anchored to a now-scrolling ancestor). */}
               <div style={{ position:'relative', flexShrink:0 }}>
                 <button type="button" ref={advFilterBtnRef} onClick={() => {
                     if (!advFilterOpen && advFilterBtnRef.current) setAdvFilterAnchor(advFilterBtnRef.current.getBoundingClientRect())
                     setAdvFilterOpen(v => !v)
                   }}
-                  style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:8, border:'1px dashed ' + C.border, background: advActiveConditions.length ? C.navyBg : 'transparent', cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:FONT, color: advActiveConditions.length ? C.navy : C.muted, whiteSpace:'nowrap' }}>
+                  style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:8, border:'1px dashed ' + C.border, background: totalActiveFilters ? C.navyBg : 'transparent', cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:FONT, color: totalActiveFilters ? C.navy : C.muted, whiteSpace:'nowrap' }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                  {advActiveConditions.length ? `Filters (${advActiveConditions.length})` : 'Advanced filter'}
+                  {totalActiveFilters ? `Filters (${totalActiveFilters})` : 'Filters'}
                 </button>
                 {advFilterOpen && (
-                  <AdvFilterBuilderPopover conditions={advConditions} combinator={advCombinator} filterOptions={advFilterOptions} anchor={advFilterAnchor}
+                  <AdvFilterBuilderPopover
+                    corridorFilter={corridorFilter} onSetCorridor={setCorridorFilter} corridorOptions={['All', ...CORRIDORS.map(c => c.label)]}
+                    campaignQuery={campaignQuery} onSetCampaign={setCampaignQuery} campaignSuggestions={campaignSuggestions}
+                    conditions={advConditions} combinator={advCombinator} filterOptions={advFilterOptions} anchor={advFilterAnchor}
                     onAdd={addAdvCondition} onUpdate={updateAdvCondition} onRemove={removeAdvCondition}
-                    onSetCombinator={setAdvCombinator} onClearAll={() => setAdvConditions([])}
+                    onSetCombinator={setAdvCombinator}
+                    onClearAll={() => { setAdvConditions([]); setCorridorFilter('All'); setCampaignQuery('') }}
                     onClose={() => setAdvFilterOpen(false)} />
                 )}
               </div>
-              {advActiveConditions.length > 0 && (
-                <button type="button" onClick={() => setAdvConditions([])} style={{ border:'none', background:'transparent', color:C.muted, fontSize:12, fontWeight:700, fontFamily:FONT, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+              {totalActiveFilters > 0 && (
+                <button type="button" onClick={() => { setAdvConditions([]); setCorridorFilter('All'); setCampaignQuery('') }} style={{ border:'none', background:'transparent', color:C.muted, fontSize:12, fontWeight:700, fontFamily:FONT, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
                   Clear all
                 </button>
               )}
@@ -4286,7 +4336,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
             <PremKPI label="CPL" value={<span title={fmtINR(cpl)}>{fmtINRShort(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} prevValue={fmtINR(prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
             <PremKPI label="CPQL" value={<span title={fmtINR(cpql)}>{fmtINRShort(cpql)}</span>} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} prevValue={fmtINR(prevCpql)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.totalQL) + ' of QL'} delta={kpiDelta(kpis.apps, prevKpis.apps)} prevValue={fmtN(prevKpis.apps)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
+            {/* onClickCapture, not onClick -- see the identical comment on the Human/AI
+                QLs cards above for why (kpiVariants.jsx's own prev-value toggle calls
+                stopPropagation() on click and would otherwise eat this). */}
+            <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying application records (Apps page)"
+              onClickCapture={() => setQlDrillOpen('apps')}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('apps') } }}>
+              <PremKPI label="APPLICATIONS" value={fmtN(kpis.apps)} sub={pct(kpis.apps, kpis.totalQL) + ' of QL'} delta={kpiDelta(kpis.apps, prevKpis.apps)} prevValue={fmtN(prevKpis.apps)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
+            </div>
             <PremKPI label="CPA" value={<span title={fmtINR(cpa)}>{fmtINRShort(cpa)}</span>} sub="cost per application" delta={deltaPct(cpa, prevCpa)} prevValue={fmtINR(prevCpa)} invert accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.globe} />
             <PremKPI label="OFFERS" value={fmtN(kpis.offers)} sub={pct(kpis.offers, kpis.apps) + ' of apps'} delta={kpiDelta(kpis.offers, prevKpis.offers)} prevValue={fmtN(prevKpis.offers)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
             <PremKPI label="DEPOSITS" value={fmtN(kpis.deposits)} sub={pct(kpis.deposits, kpis.offers) + ' of offers'} delta={kpiDelta(kpis.deposits, prevKpis.deposits)} prevValue={fmtN(prevKpis.deposits)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.globe} />
@@ -4296,7 +4353,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
 
           {/* FUNNEL + STAGE CONVERSION */}
           <Card>
-            {sectionTitle('Overall funnel', 'lead → revenue path for the selected period and source — click Futwork Human QL or Futwork AI QL to see the underlying records')}
+            {sectionTitle('Overall funnel', 'lead → revenue path for the selected period and source — click Futwork Human QL, Futwork AI QL, or Applications to see the underlying records')}
             <ResponsiveContainer width="100%" height={460}>
               <BarChart data={funnel} layout="vertical" margin={{ left:20, right:50, top:4, bottom:4 }}>
                 <defs><BarGrad id="g-ov-funnel" color={C.navy} dir="h"/></defs>
@@ -4308,9 +4365,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   onClick={d => {
                     if (d.stage === 'Futwork Human QL') setQlDrillOpen('human')
                     else if (d.stage === 'Futwork AI QL') setQlDrillOpen('ai')
+                    else if (d.stage === 'Applications') setQlDrillOpen('apps')
                   }}>
                   {funnel.map((f, i) => (
-                    <Cell key={i} cursor={f.stage === 'Futwork Human QL' || f.stage === 'Futwork AI QL' ? 'pointer' : 'default'} />
+                    <Cell key={i} cursor={['Futwork Human QL', 'Futwork AI QL', 'Applications'].includes(f.stage) ? 'pointer' : 'default'} />
                   ))}
                   <LabelList dataKey="count" position="right" formatter={fmtN} style={{ fontSize:14, fontWeight:700, fill:C.sub }} />
                 </Bar>
@@ -4777,11 +4835,17 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               <div ref={qlDrillModalRef} role="dialog" aria-modal="true" aria-labelledby="ql-drill-modal-title" tabIndex={-1} style={{ background:'var(--bg2)', borderRadius:18, width:'min(1400px, 97vw)', maxHeight:'94vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(15,23,42,0.28)', fontFamily:FONT }}>
                 <div style={{ position:'sticky', top:0, zIndex:2, background:'var(--card)', padding:'20px 24px', borderBottom:`0.5px solid ${C.border}`, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div>
-                    <div id="ql-drill-modal-title" style={{ fontSize:18, fontWeight:800, color:C.text }}>{qlDrillOpen === 'human' ? 'Human QL Detail' : 'AI QL Detail'}</div>
+                    <div id="ql-drill-modal-title" style={{ fontSize:18, fontWeight:800, color:C.text }}>
+                      {qlDrillOpen === 'human' ? 'Human QL Detail' : qlDrillOpen === 'ai' ? 'AI QL Detail' : 'Apps'}
+                    </div>
                     <div style={{ fontSize:15, color:C.muted, marginTop:2 }}>
-                      {activeDrillDownRange
-                        ? `The real per-lead records behind that number, ${activeDrillDownRange.from} to ${activeDrillDownRange.to} — every control below is live, not a preview`
-                        : "The real per-lead records behind that number — every control below is live, not a preview"}
+                      {qlDrillOpen === 'apps'
+                        ? (activeDrillDownRange
+                            ? `The real per-application records behind that number, scoped by First App Date to ${activeDrillDownRange.from} → ${activeDrillDownRange.to} — a separate, once-daily BigQuery sync, so it won't reconcile exactly with Overall's own figure`
+                            : "The real per-application records behind that number — a separate, once-daily BigQuery sync, so it won't reconcile exactly with Overall's own figure")
+                        : (activeDrillDownRange
+                            ? `The real per-lead records behind that number, ${activeDrillDownRange.from} to ${activeDrillDownRange.to} — every control below is live, not a preview`
+                            : "The real per-lead records behind that number — every control below is live, not a preview")}
                     </div>
                   </div>
                   <button onClick={() => setQlDrillOpen(null)} style={{ border:'none', background:'transparent', color:C.muted, cursor:'pointer', display:'flex', padding:4 }}>
@@ -4792,7 +4856,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   <React.Suspense fallback={<DashboardSkeleton />}>
                     {qlDrillOpen === 'human'
                       ? <HumanQLDetailEmbed embedded initialFrom={activeDrillDownRange?.from} initialTo={activeDrillDownRange?.to} />
-                      : <AIQLDetailEmbed embedded initialFrom={activeDrillDownRange?.from} initialTo={activeDrillDownRange?.to} />}
+                      : qlDrillOpen === 'ai'
+                        ? <AIQLDetailEmbed embedded initialFrom={activeDrillDownRange?.from} initialTo={activeDrillDownRange?.to} />
+                        : <AppsDetailEmbed embedded initialFrom={activeDrillDownRange?.from} initialTo={activeDrillDownRange?.to} />}
                   </React.Suspense>
                 </div>
               </div>
