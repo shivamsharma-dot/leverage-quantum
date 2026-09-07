@@ -3993,7 +3993,24 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   return (
     <div className="lq-page-shell" style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:FONT }}>
       <Sidebar />
-      <style>{`.kpiCard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(15,23,42,0.05),0 16px 32px -14px rgba(31,60,132,0.22)!important}`}</style>
+      <style>{`.kpiCard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(15,23,42,0.05),0 16px 32px -14px rgba(31,60,132,0.22)!important}
+        /* Filter bar: was flex-wrap so Corridor/Search/Advanced filter fell to an
+           accidental second row the moment the group got tight -- now genuinely one
+           row always, degrading to a horizontal scroll on a narrow screen instead of
+           wrapping (same convention as a mobile tab bar). Scrollbar hidden since the
+           bar itself is the affordance -- a control just off the visible edge is
+           enough of a hint without a visible scrollbar competing with it. */
+        .lq-filterbar{scrollbar-width:none;-ms-overflow-style:none}
+        .lq-filterbar::-webkit-scrollbar{display:none}
+        .lq-filterbar>*{flex-shrink:0}
+        /* Clickable KPI cards -- PremKPI has no onClick of its own (it delegates to
+           20 different kpiVariants render functions; threading a click handler
+           through all of them is real surface area for zero benefit here), so the
+           click/hover/focus affordance lives on a plain wrapping div instead. */
+        .lq-kpi-clickable{cursor:pointer;border-radius:12px;transition:transform .15s,box-shadow .15s}
+        .lq-kpi-clickable:hover{transform:translateY(-2px);box-shadow:0 10px 24px -12px rgba(31,60,132,0.35)}
+        .lq-kpi-clickable:focus-visible{outline:2px solid #1C9FD4;outline-offset:2px}
+      `}</style>
       <div style={{ margin:'12px 14px 0', borderRadius:14, border:'1px solid #EEF1F6', boxShadow:'0 1px 3px rgba(31,60,132,0.06)', flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
 
         {/* HEADER — same structure/behavior as the Daily QLs header (QL Ops): inline filter
@@ -4014,7 +4031,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
           </div>
           <div className="lq-header-controls" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflow:'visible', flexShrink:1, minWidth:0 }}>
 
-            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', background:'var(--bg3,#F8FAFC)', padding:'6px 10px', borderRadius:12, border:'0.5px solid var(--card-border,#E5E7EB)' }}>
+            <div className="lq-filterbar" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflowX:'auto', background:'var(--bg3,#F8FAFC)', padding:'6px 10px', borderRadius:12, border:'0.5px solid var(--card-border,#E5E7EB)' }}>
               {isCurrentMonth && (
                 <div style={{ display:'flex', alignItems:'center', gap:4, background:'var(--bg3)', borderRadius:9, padding:3 }}>
                   {[['LD', 'Last Day'], ['L7D', 'Last 7D'], ['MTD', 'MTD']].map(([key, lbl2]) => {
@@ -4221,8 +4238,15 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               rows at any width. A fixed repeat(10, minmax(120px,1fr)) was tried instead
               and reliably overflowed the container by 300-900px at every width between
               the 768px and ~1310px breakpoints, forcing the whole page to scroll
-              sideways -- auto-fit degrades to fewer, wider columns there instead. */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:12, marginBottom:12 }}>
+              sideways -- auto-fit degrades to fewer, wider columns there instead.
+              Floor raised 150px -> 190px: at 150px, a 100% Chrome zoom settled into 8
+              columns per row (never a clean 10, 5, or 2), and labels like FUTWORK
+              QUEUED / SUPERBOT QUEUED truncated to "...QUE…" in the narrower cards --
+              190px is wide enough for every current label at the KPI card's own
+              uppercase/bold/letter-spaced type, confirmed by measuring the widest
+              label against the card's real inner width (card width minus its 20px
+              side padding), not guessed. */}
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(190px, 1fr))', gap:12, marginBottom:12 }}>
             <PremKPI label="EST. SR REVENUE" value={<span title={fmtINR(estSrRevenue)}>{fmtINRShort(estSrRevenue)}</span>} sub={'Est. RAUs ' + fmtN(estimatedRaus) + ' × SR Fee'} delta={deltaPct(estSrRevenue, prevEstSrRevenue)} prevValue={fmtINR(prevEstSrRevenue)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.total} />
             <PremKPI label="SPEND" value={<span title={fmtINR(kpis.spend)}>{fmtINRShort(kpis.spend)}</span>} sub="total ad spend" delta={deltaPct(kpis.spend, prevKpis.spend)} prevValue={fmtINR(prevKpis.spend)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.total} />
             <PremKPI label="TOTAL LEADS" value={fmtN(kpis.leads)} sub="generated" delta={kpiDelta(kpis.leads, prevKpis.leads)} prevValue={fmtN(prevKpis.leads)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.total} />
@@ -4232,13 +4256,27 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
             <PremKPI label="AI QUEUED" value={fmtN(kpis.futworkAiQ)} sub={pct(kpis.futworkAiQ, totalFutworkQ) + ' of Futwork queued'} delta={kpiDelta(kpis.futworkAiQ, prevKpis.futworkAiQ)} prevValue={fmtN(prevKpis.futworkAiQ)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
             <PremKPI label="SUPERBOT QUEUED" value={fmtN(kpis.superbotQ)} sub={pct(kpis.superbotQ, totalQueued) + ' of total queued'} delta={kpiDelta(kpis.superbotQ, prevKpis.superbotQ)} prevValue={fmtN(prevKpis.superbotQ)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
             <PremKPI label="TOTAL QLs" value={fmtN(kpis.totalQL)} sub={pct(kpis.totalQL, totalQueued) + ' of queued'} delta={kpiDelta(kpis.totalQL, prevKpis.totalQL)} prevValue={fmtN(prevKpis.totalQL)} accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.ai} />
-            <PremKPI label="HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            {/* Human/AI QLs — same drill-down as the funnel bars below (setQlDrillOpen),
+                since this is literally the same figure (kpis.humanQL / kpis.futworkAiQl).
+                Total QLs and Superbot QLs are deliberately NOT wired: Total QLs sums
+                three sources (Human + AI + Superbot) and there's no single detail page
+                that covers all three, and there's no Superbot QL detail page anywhere
+                in the app -- so a click on either would have nowhere honest to go. */}
+            <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying Human QL records"
+              onClick={() => setQlDrillOpen('human')}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('human') } }}>
+              <PremKPI label="HUMAN QLs" value={fmtN(kpis.humanQL)} sub={pct(kpis.humanQL, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.humanQL, prevKpis.humanQL)} prevValue={fmtN(prevKpis.humanQL)} accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.agent} />
+            </div>
           </div>
 
           {/* KPI ROW 2 — remaining QL breakdown + cost efficiency + downstream conversion + ROAS.
               Same auto-fit grid as row 1, same 10 items, so columns match at any width. */}
-          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(150px, 1fr))', gap:12, marginBottom:20 }}>
-            <PremKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+          <div className="lq-kpi-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(190px, 1fr))', gap:12, marginBottom:20 }}>
+            <div className="lq-kpi-clickable" role="button" tabIndex={0} title="Click to view the underlying AI QL records"
+              onClick={() => setQlDrillOpen('ai')}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQlDrillOpen('ai') } }}>
+              <PremKPI label="AI QLs" value={fmtN(kpis.futworkAiQl)} sub={pct(kpis.futworkAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.futworkAiQl, prevKpis.futworkAiQl)} prevValue={fmtN(prevKpis.futworkAiQl)} accent={C.cyan} accentBg={C.cyanBg} icon={KPI_ICONS.ai} />
+            </div>
             <PremKPI label="SUPERBOT QLs" value={fmtN(kpis.superbotAiQl)} sub={pct(kpis.superbotAiQl, kpis.totalQL) + ' of total QL'} delta={kpiDelta(kpis.superbotAiQl, prevKpis.superbotAiQl)} prevValue={fmtN(prevKpis.superbotAiQl)} accent={C.green} accentBg={C.greenBg} icon={KPI_ICONS.bot} />
             <PremKPI label="CPL" value={<span title={fmtINR(cpl)}>{fmtINRShort(cpl)}</span>} sub="cost per lead" delta={deltaPct(cpl, prevCpl)} prevValue={fmtINR(prevCpl)} invert accent={C.navy} accentBg={C.navyBg} icon={KPI_ICONS.agent} />
             <PremKPI label="CPQL" value={<span title={fmtINR(cpql)}>{fmtINRShort(cpql)}</span>} sub="cost per qualified lead" delta={deltaPct(cpql, prevCpql)} prevValue={fmtINR(prevCpql)} invert accent={C.blue} accentBg={C.blueBg} icon={KPI_ICONS.ai} />
