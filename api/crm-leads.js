@@ -610,6 +610,10 @@ const LIVE_QL_CHANNELS = {
       firstCampaignName: 'mx_Custom_37', validPassport: 'mx_Custom_51',
       currentDegreeStatus: 'mx_Custom_53', firstChannelSource: 'mx_Custom_63',
       programPreference: 'mx_Custom_64',
+      // "Relevant Opportunity ID" per GetActivitySetting -- distinct from
+      // RelatedProspectId (the Contact), this points at the University Admission
+      // Opportunity this QL call is for.
+      opportunityId: 'mx_Custom_55',
     },
   },
   ai: {
@@ -627,6 +631,9 @@ const LIVE_QL_CHANNELS = {
       preferredDegree: 'mx_Custom_22', preferredCourse: 'mx_Custom_23',
       futworkProject: 'mx_Custom_24', dispositionReason: 'mx_Custom_26',
       currentDegreeStatus: 'mx_Custom_28',
+      // "Opportunity ID" per GetActivitySetting -- same University Admission
+      // Opportunity concept as Human's mx_Custom_55 above, different field number.
+      opportunityId: 'mx_Custom_7',
     },
   },
 }
@@ -733,7 +740,7 @@ async function fetchLiveQlMetrics(creds, { date }) {
       firstChannelSource: 'First Channel Source', programPreference: 'Program Preference',
       firstContactChannel: 'First Contact Channel', callStatus: 'Call Status',
       currentCity: 'Current City', preferredMode: 'Preferred Mode', preferredCourse: 'Preferred Course',
-      futworkProject: 'Futwork Project',
+      futworkProject: 'Futwork Project', opportunityId: 'Opportunity ID',
     },
   }
 }

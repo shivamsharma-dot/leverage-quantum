@@ -27,6 +27,12 @@ const DATE_PRESETS = [
 // Human/AI Unassigned -- prospectId is the Contact record, distinct from the
 // activity itself.
 const LEADSQUARED_CONTACT_URL = 'https://in21.leadsquared.com/LeadManagement/LeadDetails?LeadID='
+// Same LeadSquared opportunity deep-link convention used on Human/AI QL Detail --
+// opportunityId is the University Admission Opportunity this QL call is for
+// (Human's "Relevant Opportunity ID" / AI's "Opportunity ID" custom fields, per
+// GetActivitySetting -- see LIVE_QL_CHANNELS.fields in api/crm-leads.js).
+const LEADSQUARED_OPPORTUNITY_URL = 'https://in21.leadsquared.com/OpportunityManagement/OpportunityDetails?opportunityId='
+const LEADSQUARED_OPPORTUNITY_EVENT = '12003'
 
 // Every field the backend maps for EITHER channel (see LIVE_QL_CHANNELS.fields in
 // api/crm-leads.js) -- the single field registry for the records table, export, the
@@ -360,7 +366,7 @@ export default function LiveQLsDashboard() {
   const pageRows = filteredRows.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
 
   const exportRows = filteredRows.map(r => {
-    const row = { Channel: r.channel === 'human' ? 'Human' : 'AI', 'Created On': r.createdOn, 'Prospect ID': r.prospectId || '' }
+    const row = { Channel: r.channel === 'human' ? 'Human' : 'AI', 'Created On': r.createdOn, 'Prospect ID': r.prospectId || '', 'Opportunity ID': r.opportunityId || '' }
     FULL_FIELDS.forEach(f => { row[f.label] = r[f.key] || '' })
     return row
   })
@@ -480,17 +486,18 @@ export default function LiveQLsDashboard() {
               <div style={{ padding: '16px 28px 28px' }}>
                 {/* Only one table on this page by design. Every field the backend maps for
                     either channel (FULL_FIELDS above), plus Channel/Created On/a linked
-                    Prospect ID -- genuinely "every field coming with the activity". Full
-                    width, scrolls horizontally inside its own card rather than the whole
-                    page scrolling sideways. Pagination lives in the card's own header (via
-                    the `action` slot) instead of a plain text strip under the table. */}
-                <Card title="Records" sub={`${fmtN(filteredRows.length)} rows -- ${FULL_FIELDS.length + 3} columns`}
+                    Prospect ID/a linked Opportunity ID -- genuinely "every field coming
+                    with the activity". Every cell is nowrap by request -- this table is
+                    meant to be scanned, not read paragraph-style, so it scrolls
+                    horizontally inside its own card rather than wrapping text and
+                    producing uneven row heights. */}
+                <Card title="Records" sub={`${fmtN(filteredRows.length)} rows -- ${FULL_FIELDS.length + 4} columns`}
                   action={totalPages > 1 ? <PaginationControl page={safePage} totalPages={totalPages} onPrev={() => setPage(safePage - 1)} onNext={() => setPage(safePage + 1)} /> : null}>
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid ' + C.border, textAlign: 'left' }}>
-                          {['Channel', 'Created On', 'Prospect ID', ...FULL_FIELDS.map(f => f.label)].map(h => (
+                          {['Channel', 'Created On', 'Prospect ID', 'Opportunity ID', ...FULL_FIELDS.map(f => f.label)].map(h => (
                             <th key={h} style={{ padding: '8px 10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', fontSize: 10.5, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
@@ -504,16 +511,23 @@ export default function LiveQLsDashboard() {
                               {r.prospectId ? (
                                 <a href={LEADSQUARED_CONTACT_URL + encodeURIComponent(r.prospectId)} target="_blank" rel="noreferrer"
                                   title={'Open Contact in LeadSquared: ' + r.prospectId}
-                                  style={{ fontFamily: 'monospace', fontSize: 11, color: C.blue, textDecoration: 'none' }}>{r.prospectId.slice(0, 8)}…</a>
+                                  style={{ fontFamily: 'monospace', fontSize: 11, color: C.blue, textDecoration: 'none' }}>{r.prospectId}</a>
+                              ) : '—'}
+                            </td>
+                            <td style={{ padding: '7px 10px', whiteSpace: 'nowrap' }}>
+                              {r.opportunityId ? (
+                                <a href={LEADSQUARED_OPPORTUNITY_URL + encodeURIComponent(r.opportunityId) + '&opportunityEvent=' + LEADSQUARED_OPPORTUNITY_EVENT} target="_blank" rel="noreferrer"
+                                  title={'Open Opportunity in LeadSquared: ' + r.opportunityId}
+                                  style={{ fontFamily: 'monospace', fontSize: 11, color: C.blue, textDecoration: 'none' }}>{r.opportunityId}</a>
                               ) : '—'}
                             </td>
                             {FULL_FIELDS.map(f => (
-                              <td key={f.key} style={{ padding: '7px 10px', color: C.text }}>{r[f.key] || '—'}</td>
+                              <td key={f.key} style={{ padding: '7px 10px', color: C.text, whiteSpace: 'nowrap' }}>{r[f.key] || '—'}</td>
                             ))}
                           </tr>
                         ))}
                         {pageRows.length === 0 && (
-                          <tr><td colSpan={FULL_FIELDS.length + 3} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
+                          <tr><td colSpan={FULL_FIELDS.length + 4} style={{ padding: '18px 10px', textAlign: 'center', color: C.muted }}>No records.</td></tr>
                         )}
                       </tbody>
                     </table>
