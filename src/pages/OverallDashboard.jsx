@@ -306,7 +306,12 @@ const ADV_OPERATORS = [
   { key: 'is_not', label: 'is not', value: 'select' },
   { key: 'contains', label: 'contains', value: 'text' },
   { key: 'not_contains', label: 'does not contain', value: 'text' },
-  { key: 'like', label: 'like (% / _ wildcards)', value: 'text' },
+  // The '(% / _ wildcards)' hint used to live in this label -- it's what pushed the
+  // Operator dropdown wide enough to overflow the popover's own width (see the row-
+  // overflow fix below). The value input's placeholder ('e.g. %Germany%') already
+  // teaches the wildcard syntax once this operator is picked, so the label itself
+  // can stay short.
+  { key: 'like', label: 'like', value: 'text' },
   { key: 'not_like', label: 'not like', value: 'text' },
   { key: 'starts_with', label: 'starts with', value: 'text' },
   { key: 'ends_with', label: 'ends with', value: 'text' },
@@ -385,18 +390,24 @@ function AdvValueSelectPopover({ options, onPick, onClose }) {
 function AdvConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, onChange, onRemove }) {
   const op = ADV_OPERATOR_MAP[cond.operator]
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-      <SharedDropdown value={cond.field} onChange={v => onChange({ field:v, value:'' })} minWidth={110}
+    // flexWrap -- a long operator label ("does not contain") plus the value field could
+    // out-grow the popover's own width; wrapping to a second line here keeps every part
+    // of the row reachable instead of silently overflowing past the popover's edge (which
+    // its OWN overflowY:'auto' scroll container was clipping horizontally -- once one axis
+    // is non-'visible', the other computes to 'auto' too per the CSS overflow spec, so the
+    // row's excess width was being hidden, not just visually squeezed).
+    <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+      <SharedDropdown value={cond.field} onChange={v => onChange({ field:v, value:'' })} minWidth={100}
         options={ADV_FIELDS.map(f => ({ value:f.key, label:f.label }))} />
-      <SharedDropdown value={cond.operator} onChange={v => onChange({ operator:v, value:'' })} minWidth={155}
+      <SharedDropdown value={cond.operator} onChange={v => onChange({ operator:v, value:'' })} minWidth={120}
         options={ADV_OPERATORS.map(o => ({ value:o.key, label:o.label }))} />
       {op.value === 'text' && (
         <input type="text" value={cond.value} onChange={e => onChange({ value:e.target.value })}
           placeholder={cond.operator === 'like' || cond.operator === 'not_like' ? 'e.g. %Germany%' : 'Value…'}
-          style={{ flex:1, minWidth:90, boxSizing:'border-box', padding:'6px 9px', border:'0.5px solid ' + C.border, borderRadius:7, fontSize:12, fontFamily:FONT, outline:'none', background:'var(--bg3)', color:C.text }} />
+          style={{ flex:'1 1 120px', minWidth:100, boxSizing:'border-box', padding:'6px 9px', border:'0.5px solid ' + C.border, borderRadius:7, fontSize:12, fontFamily:FONT, outline:'none', background:'var(--bg3)', color:C.text }} />
       )}
       {op.value === 'select' && (
-        <div style={{ position:'relative', flex:1, minWidth:90 }}>
+        <div style={{ position:'relative', flex:'1 1 120px', minWidth:100 }}>
           <button type="button" onClick={onOpenValuePicker}
             style={{ width:'100%', boxSizing:'border-box', textAlign:'left', padding:'6px 9px', border:'0.5px solid ' + C.border, borderRadius:7, fontSize:12, fontFamily:FONT, background:'var(--bg3)', color: cond.value ? C.text : C.muted, cursor:'pointer', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
             {cond.value || 'Select value…'}
@@ -406,7 +417,7 @@ function AdvConditionRow({ cond, options, valuePickerOpen, onOpenValuePicker, on
           )}
         </div>
       )}
-      {op.value === 'none' && <div style={{ flex:1, minWidth:90, fontSize:11.5, color:C.muted, fontStyle:'italic' }}>no value needed</div>}
+      {op.value === 'none' && <div style={{ flex:'1 1 120px', minWidth:100, fontSize:11.5, color:C.muted, fontStyle:'italic' }}>no value needed</div>}
       <button type="button" onClick={onRemove} title="Remove condition" style={{ border:'none', background:'transparent', cursor:'pointer', color:C.muted, display:'flex', alignItems:'center', padding:4, flexShrink:0 }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
       </button>
@@ -419,12 +430,12 @@ function AdvFilterBuilderPopover({ conditions, combinator, filterOptions, onAdd,
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:150 }} />
-      <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:200, width:480, background:'var(--card)', border:'1px solid ' + C.border, borderRadius:12, boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)', padding:12 }}>
+      <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:200, width:'min(560px, 92vw)', background:'var(--card)', border:'1px solid ' + C.border, borderRadius:12, boxShadow:'0 12px 32px -8px rgba(15,23,42,0.22)', padding:12, boxSizing:'border-box' }}>
         <div style={{ fontSize:12.5, fontWeight:800, color:C.text, marginBottom:8 }}>Filters</div>
         {conditions.length === 0 && (
           <div style={{ fontSize:12, color:C.muted, padding:'4px 0 10px' }}>No conditions yet -- add one below.</div>
         )}
-        <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:320, overflowY:'auto' }}>
+        <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:320, overflowY:'auto', paddingRight:4 }}>
           {conditions.map(c => (
             <AdvConditionRow key={c.id} cond={c} options={filterOptions[c.field] || []}
               valuePickerOpen={openValueRowId === c.id}
