@@ -1,0 +1,545 @@
+name: Monthly QLs BigQuery Cache Sync
+
+# Mirrors the BigQuery saved query "Monthly QLs (with Vertical SR/AC)" (Quantum:
+# Settings > Data > BigQuery Console) into public.monthly_qls_daily, one row per
+# (date, source) -- the grain the query's own all_dims/join structure already
+# guarantees is unique, so no ordinal-disambiguator is needed the way
+# overall_bq_daily's row_key needed one.
+#
+# This REPLACES the Monthly QLs page's dependency on the external QLSnapshot
+# Google Sheet CSV (see CLAUDE.md, 2026-09-08, "do not depend on sheet now") --
+# LeadQualificationDashboard.jsx reads this table directly via
+# src/lib/monthlyQlsCache.js instead of fetching a published Sheet CSV.
+#
+# The table DDL is supabase/sql/monthly_qls_daily_setup.sql and must have been
+# run once in the Supabase SQL editor before this workflow first runs.
+#
+# Required repository Actions secrets (same values already used by
+# overall-bq-sync.yml -- nothing new to create):
+#   SUPABASE_ANON_KEY      already present (RLS is disabled on this table)
+#   BIGQUERY_CLIENT_ID     same value as Vercel env
+#   BIGQUERY_CLIENT_SECRET same value as Vercel env
+#   BIGQUERY_REFRESH_TOKEN same value as Vercel env
+# THE REPO IS PUBLIC -- never inline any of these.
+#
+# workflow_dispatch only, deliberately -- GitHub Actions' own `schedule:` was
+# confirmed live (2026-09-05, see CLAUDE.md) to silently DROP scheduled runs on
+# this repo entirely, not just run them late. This workflow is triggered by a
+# cron-job.org job calling GitHub's own workflow_dispatch REST API instead --
+# the same proven pattern overall-bq-sync.yml now uses. Quantum's own BigQuery
+# Console also timed out running this exact query directly (even on a narrowed
+# date window -- the underlying tables get fully scanned regardless), which is
+# why this needs a real GitHub Actions runner (30-minute budget) rather than a
+# Vercel-endpoint sync the way careers_sync/apps_sync work.
+on:
+  workflow_dispatch:
+
+# One sync at a time. Two overlapping runs would interleave their sync_id
+# stamps and the loser's prune step would delete the winner's freshly written
+# rows.
+concurrency:
+  group: monthly-qls-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Query "Monthly QLs (with Vertical SR/AC)" and upsert into monthly_qls_daily
+        env:
+          SB_URL: https://tsyekthwthxszmsgqfej.supabase.co
+          SB_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          BQ_CLIENT_ID: ${{ secrets.BIGQUERY_CLIENT_ID }}
+          BQ_CLIENT_SECRET: ${{ secrets.BIGQUERY_CLIENT_SECRET }}
+          BQ_REFRESH_TOKEN: ${{ secrets.BIGQUERY_REFRESH_TOKEN }}
+          BQ_PROJECT: leverage-production
+          BQ_LOCATION: asia-south1
+        run: |
+          python3 << 'PYEOF'
+          import json, os, re, time, hashlib
+          import urllib.request, urllib.parse, urllib.error
+          from datetime import datetime, timezone
+
+          SB_URL = os.environ['SB_URL']
+          SB_KEY = os.environ['SB_KEY']
+          TABLE = 'monthly_qls_daily'
+
+          CLIENT_ID = os.environ.get('BQ_CLIENT_ID', '')
+          CLIENT_SECRET = os.environ.get('BQ_CLIENT_SECRET', '')
+          REFRESH_TOKEN = os.environ.get('BQ_REFRESH_TOKEN', '')
+          PROJECT = os.environ.get('BQ_PROJECT') or 'leverage-production'
+          LOCATION = os.environ.get('BQ_LOCATION') or 'asia-south1'
+
+          # Exit 0, not 1, when the credentials are absent -- a red run every
+          # time this fires before the secrets exist is noise, not signal.
+          if not (CLIENT_ID and CLIENT_SECRET and REFRESH_TOKEN):
+              print('::warning::BigQuery credentials are not set as repository Actions '
+                    'secrets (BIGQUERY_CLIENT_ID, BIGQUERY_CLIENT_SECRET, '
+                    'BIGQUERY_REFRESH_TOKEN). Nothing was read and nothing was written. '
+                    'Add them with the same values already in Vercel env, then re-run.')
+              raise SystemExit(0)
+
+          # Copied verbatim from the "Monthly QLs (with Vertical SR/AC)" saved
+          # query in Settings > Data > BigQuery Console -- if that saved query
+          # is ever edited, edit this too (saved queries are console-only
+          # objects, not reachable over the REST API, so the text has to live
+          # here). The Vertical SR/AC split (2026-09-08) is derived per row via
+          # country_interested (Futwork human) / Country_Preference (Futwork
+          # AI) against the same fixed 12-country SR destination list; AC is
+          # total-minus-SR so the two always reconcile exactly by construction.
+          SQL = '''
+          WITH v3 as (select * from leverage_direct.source_attribution_v3),
+          opp_agg AS (
+            SELECT
+              DATE(opportunity_created_date) AS opp_date,
+              source,
+              COUNT(opportunity_id) AS opp_count,
+              COUNT(CASE WHEN last_disposition_from_futwork IS NULL THEN opportunity_id END) AS floor_queued,
+              COUNT(CASE WHEN last_disposition_from_futwork IS NOT NULL THEN opportunity_id END) AS futwork_queued,
+              COUNT(CASE WHEN last_disposition_from_superbot IS NOT NULL THEN opportunity_id END) AS superbot_queued
+            FROM v3
+            WHERE DATE(opportunity_created_date) > '2026-05-31'
+            GROUP BY 1, 2
+          ),
+
+          futwork_qual AS (
+            SELECT
+              DATE(f.activity_creation_date) AS act_date,
+              s.source,
+              COUNT(f.prospect_id) AS futwork_qualified,
+              COUNT(CASE WHEN f.country_interested IN ('UK','Canada','USA','Australia','New Zealand','Dubai','France (Private)','Germany (Private)','Ireland','Nigeria','Italy (Private)','Malta') THEN f.prospect_id END) AS futwork_qualified_sr
+            FROM leverage_direct.lsq_activities_futwork f
+            LEFT JOIN v3 as s ON s.opportunity_id = f.opportunity_id_futwork
+            WHERE LOWER(f.note) LIKE '%post%'
+              AND f.disposition IN (
+                'Interested in Call Back',
+                'Interested Post 2025 Intakes',
+                'Interested spoken to parents',
+                'Discover Future Intent',
+                'Interested in 2026 Intakes',
+                'Interested in 2027 Intakes',
+                'Call Transferred To Counsellor'
+              )
+              AND DATE(f.activity_creation_date) > '2026-05-31'
+            GROUP BY 1, 2
+          ),
+
+          superbot_qual AS (
+            SELECT
+              DATE(bot.activity_creation_date) AS act_date,
+              COALESCE(s.source, 'Unknown') AS source,
+              COUNT(bot.reference_id) AS superbot_qualified
+            FROM leverage_direct.lsq_activity_superbot_call_details bot
+            LEFT JOIN v3 as s ON s.opportunity_id = bot.reference_id
+            WHERE DATE(bot.activity_creation_date) > '2026-05-31'
+              AND LOWER(bot.note) LIKE '%post%'
+              AND bot.disposition IN (
+                'Interested In Study Abroad',
+                'Interested Post 2025 Intakes',
+                'Call Transferred To Counsellor',
+                'Call Missed By Counsellor',
+                'Interested but Budget Issue',
+                'Future Prospect',
+                'Interested to Study Abroad',
+                'Call missed by Counsellor',
+                'Call Transferred to counsellor'
+              )
+            GROUP BY 1, 2
+          ),
+
+          futwork_ai_queued AS (
+            SELECT
+              DATE(f.activity_creation_date) AS act_date,
+              s.source,
+              COUNT(f.opportunity_id) AS futwork_ai_queued
+            FROM leverage_direct.lsq_activities_futwork_ai f
+            LEFT JOIN v3 as s ON s.opportunity_id = f.opportunity_id
+            WHERE LOWER(f.notes) LIKE '%que%'
+              AND DATE(f.activity_creation_date) > '2026-05-31'
+            GROUP BY 1, 2
+          ),
+
+          futwork_ai_qual AS (
+            SELECT
+              DATE(f.activity_creation_date) AS act_date,
+              s.source,
+              COUNT(f.opportunity_id) AS futwork_ai_qualified,
+              COUNT(CASE WHEN f.Country_Preference IN ('UK','Canada','USA','Australia','New Zealand','Dubai','France (Private)','Germany (Private)','Ireland','Nigeria','Italy (Private)','Malta') THEN f.opportunity_id END) AS futwork_ai_qualified_sr
+            FROM leverage_direct.lsq_activities_futwork_ai f
+            LEFT JOIN v3 as s ON s.opportunity_id = f.opportunity_id
+            WHERE LOWER(f.notes) LIKE '%post%'
+              AND f.disposition IN (
+                'Interested in Callback',
+                'Interested Post 2025 Intakes',
+                'Interested spoken to parents',
+                'Discover Future Intent',
+                'Low Intent Lead',
+                'Interested in 2026 Intakes',
+                'Interested in 2027 Intakes',
+                'Call Transferred To Counsellor'
+              )
+              AND DATE(f.activity_creation_date) > '2026-05-31'
+            GROUP BY 1, 2
+          ),
+
+          all_dims AS (
+            SELECT opp_date AS date, source FROM opp_agg
+            UNION DISTINCT
+            SELECT act_date, source FROM superbot_qual
+          )
+
+          SELECT
+            FORMAT_DATE('%b-%Y', d.date) AS period,
+            FORMAT_DATE('%d-%b-%Y', d.date) AS date,
+            d.source,
+            COALESCE(o.opp_count, 0) AS opp_count,
+            COALESCE(o.floor_queued, 0) AS floor_queued,
+            COALESCE(o.futwork_queued, 0) AS futwork_queued,
+            COALESCE(o.superbot_queued, 0) AS superbot_queued,
+            COALESCE(faq.futwork_ai_queued, 0) AS futwork_ai_queued,
+            COALESCE(fq.futwork_qualified, 0) AS futwork_qualified,
+            COALESCE(fq.futwork_qualified_sr, 0) AS futwork_qualified_sr,
+            COALESCE(fq.futwork_qualified, 0) - COALESCE(fq.futwork_qualified_sr, 0) AS futwork_qualified_ac,
+            COALESCE(sq.superbot_qualified, 0) AS superbot_qualified,
+            COALESCE(faiq.futwork_ai_qualified, 0) AS futwork_ai_qualified,
+            COALESCE(faiq.futwork_ai_qualified_sr, 0) AS futwork_ai_qualified_sr,
+            COALESCE(faiq.futwork_ai_qualified, 0) - COALESCE(faiq.futwork_ai_qualified_sr, 0) AS futwork_ai_qualified_ac
+
+          FROM all_dims d
+          LEFT JOIN opp_agg o ON o.opp_date = d.date AND o.source = d.source
+          LEFT JOIN futwork_qual fq ON fq.act_date = d.date AND fq.source = d.source
+          LEFT JOIN superbot_qual sq ON sq.act_date = d.date AND sq.source = d.source
+          LEFT JOIN futwork_ai_queued faq ON faq.act_date = d.date AND faq.source = d.source
+          LEFT JOIN futwork_ai_qual faiq ON faiq.act_date = d.date AND faiq.source = d.source
+          '''
+
+          EXPECTED = [
+              'period', 'date', 'source', 'opp_count', 'floor_queued',
+              'futwork_queued', 'superbot_queued', 'futwork_ai_queued',
+              'futwork_qualified', 'futwork_qualified_sr', 'futwork_qualified_ac',
+              'superbot_qualified',
+              'futwork_ai_qualified', 'futwork_ai_qualified_sr', 'futwork_ai_qualified_ac',
+          ]
+
+          TOKEN_URL = 'https://oauth2.googleapis.com/token'
+          BQ = 'https://bigquery.googleapis.com/bigquery/v2'
+          PAGE = 20000
+          BATCH = 500
+
+          MONTHS = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+                    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12}
+
+
+          def access_token():
+              # Same refresh-token exchange as lib/bigquery.mjs. Never printed.
+              body = urllib.parse.urlencode({
+                  'client_id': CLIENT_ID,
+                  'client_secret': CLIENT_SECRET,
+                  'refresh_token': REFRESH_TOKEN,
+                  'grant_type': 'refresh_token',
+              }).encode('utf-8')
+              req = urllib.request.Request(
+                  TOKEN_URL, data=body, method='POST',
+                  headers={'Content-Type': 'application/x-www-form-urlencoded'})
+              try:
+                  with urllib.request.urlopen(req, timeout=60) as r:
+                      d = json.loads(r.read().decode('utf-8'))
+              except urllib.error.HTTPError as e:
+                  # Deliberately does not echo the response body: the request that
+                  # produced it carried the client secret and the refresh token.
+                  raise SystemExit('BigQuery token refresh failed: HTTP %s' % e.code)
+              tok = d.get('access_token')
+              if not tok:
+                  raise SystemExit('BigQuery token refresh failed: no access_token returned.')
+              return tok
+
+
+          def bq(url, token, payload=None):
+              last = None
+              for attempt in range(3):
+                  headers = {'Authorization': 'Bearer ' + token}
+                  if payload is None:
+                      req = urllib.request.Request(url, headers=headers)
+                  else:
+                      headers['Content-Type'] = 'application/json'
+                      req = urllib.request.Request(
+                          url, data=json.dumps(payload).encode('utf-8'),
+                          method='POST', headers=headers)
+                  try:
+                      with urllib.request.urlopen(req, timeout=180) as r:
+                          return json.loads(r.read().decode('utf-8'))
+                  except urllib.error.HTTPError as e:
+                      detail = ''
+                      try:
+                          detail = e.read().decode('utf-8')[:500]
+                      except Exception:
+                          pass
+                      last = 'HTTP %s %s' % (e.code, detail)
+                      # A 4xx will not fix itself; fail fast instead of retry-spam.
+                      if e.code < 500 and e.code != 429:
+                          raise SystemExit('BigQuery request failed: ' + last)
+                  except Exception as e:
+                      last = repr(e)
+                  time.sleep(2 * (attempt + 1))
+              raise SystemExit('BigQuery request failed after 3 attempts: ' + str(last))
+
+
+          def iso_date(s):
+              m = re.match(r'^(\d{1,2})-([A-Za-z]{3})-(\d{4})$', (s or '').strip())
+              if not m:
+                  return None
+              mo = MONTHS.get(m.group(2).lower())
+              if not mo:
+                  return None
+              try:
+                  return '%04d-%02d-%02d' % (int(m.group(3)), mo, int(m.group(1)))
+              except ValueError:
+                  return None
+
+
+          def as_int(v):
+              # BigQuery hands every scalar back as a string. This query's own
+              # COALESCE(...,0) already guarantees no NULLs, but stay defensive.
+              if v is None:
+                  return 0
+              s = str(v).strip()
+              if s == '':
+                  return 0
+              try:
+                  return int(s)
+              except ValueError:
+                  try:
+                      return int(float(s))
+                  except ValueError:
+                      return 0
+
+
+          token = access_token()
+          print('Running the Monthly QLs query against', PROJECT, 'in', LOCATION, '...')
+          res = bq(BQ + '/projects/' + urllib.parse.quote(PROJECT) + '/queries', token, {
+              'query': SQL,
+              'useLegacySql': False,
+              'location': LOCATION,
+              'timeoutMs': 55000,
+              'maxResults': PAGE,
+          })
+
+          job = res.get('jobReference') or {}
+          job_id = job.get('jobId')
+          job_loc = job.get('location') or LOCATION
+
+
+          def results_page(page_token=None):
+              u = (BQ + '/projects/' + urllib.parse.quote(PROJECT)
+                   + '/queries/' + urllib.parse.quote(job_id)
+                   + '?location=' + urllib.parse.quote(job_loc)
+                   + '&maxResults=' + str(PAGE) + '&timeoutMs=55000')
+              if page_token:
+                  u += '&pageToken=' + urllib.parse.quote(page_token)
+              return bq(u, token)
+
+
+          waited = 0
+          while not res.get('jobComplete', True):
+              if waited >= 1200:
+                  raise SystemExit('BigQuery job %s did not complete within 20 minutes.' % job_id)
+              time.sleep(5)
+              waited += 5
+              res = results_page()
+
+          total_rows = int(res.get('totalRows') or 0)
+          print('job', job_id, '| location', job_loc,
+                '| totalRows', total_rows,
+                '| bytesProcessed', res.get('totalBytesProcessed'),
+                '| cacheHit', res.get('cacheHit'))
+
+          fields = [f.get('name') for f in ((res.get('schema') or {}).get('fields') or [])]
+          if fields != EXPECTED:
+              raise SystemExit(
+                  'Schema drift. BigQuery returned %r but this workflow and '
+                  'monthly_qls_daily are built for %r. Refusing to write mismatched data.'
+                  % (fields, EXPECTED))
+          print('Schema matches the %d expected columns, in order.' % len(EXPECTED))
+
+          # getQueryResults is paginated. One page is NOT everything.
+          raw = []
+          page = res
+          n_pages = 0
+          while True:
+              n_pages += 1
+              for row in (page.get('rows') or []):
+                  raw.append([(c or {}).get('v') for c in (row.get('f') or [])])
+              next_token = page.get('pageToken')
+              print('  page', n_pages, '-> cumulative rows', len(raw))
+              if not next_token:
+                  break
+              page = results_page(next_token)
+
+          # Pagination-drop guard. Without it a silently short read just looks
+          # like a smaller month, and there is no fidelity check downstream to
+          # catch it before it reaches the dashboard.
+          if total_rows and len(raw) != total_rows:
+              raise SystemExit(
+                  'Pagination drop: collected %d rows over %d page(s) but BigQuery '
+                  'reported totalRows=%d. Refusing to write.'
+                  % (len(raw), n_pages, total_rows))
+          print('Read', len(raw), 'rows over', n_pages, 'page(s) -- matches totalRows.')
+
+          # (date, source) IS unique here -- all_dims is built via UNION DISTINCT
+          # and every joined CTE is itself GROUP BY (date, source) -- so a plain
+          # md5 of the pair is a safe row_key with no ordinal disambiguator
+          # needed (unlike overall_bq_daily, whose Source CASE collapses several
+          # raw values into one and genuinely produces duplicate triples).
+          sync_id = (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+                     + '-' + str(os.environ.get('GITHUB_RUN_ID') or 'manual'))
+          now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+          records = []
+          seen_keys = set()
+          for vals in raw:
+              period, date_, source = vals[0], vals[1], vals[2]
+              key = (date_ or '', source or '')
+              row_key = hashlib.md5((key[0] + '\x1f' + key[1]).encode('utf-8')).hexdigest()
+              if row_key in seen_keys:
+                  raise SystemExit(
+                      'Duplicate (date, source) pair encountered: %r. The query is '
+                      'supposed to guarantee this grain is unique -- refusing to '
+                      'write until that assumption is re-checked.' % (key,))
+              seen_keys.add(row_key)
+              records.append({
+                  'row_key': row_key,
+                  'period': period,
+                  'lead_date': date_,
+                  'lead_date_iso': iso_date(date_),
+                  'source': source,
+                  'opp_count': as_int(vals[3]),
+                  'floor_queued': as_int(vals[4]),
+                  'futwork_queued': as_int(vals[5]),
+                  'superbot_queued': as_int(vals[6]),
+                  'futwork_ai_queued': as_int(vals[7]),
+                  'futwork_qualified': as_int(vals[8]),
+                  'futwork_qualified_sr': as_int(vals[9]),
+                  'futwork_qualified_ac': as_int(vals[10]),
+                  'superbot_qualified': as_int(vals[11]),
+                  'futwork_ai_qualified': as_int(vals[12]),
+                  'futwork_ai_qualified_sr': as_int(vals[13]),
+                  'futwork_ai_qualified_ac': as_int(vals[14]),
+                  'sync_id': sync_id,
+                  'synced_at': now_iso,
+              })
+
+          if len(records) != len(raw):
+              raise SystemExit('Built %d records from %d rows. Refusing to write.'
+                               % (len(records), len(raw)))
+          bad_dates = sum(1 for r in records if r['lead_date_iso'] is None)
+          if bad_dates:
+              raise SystemExit('%d row(s) had a date that did not parse as '
+                               'DD-Mon-YYYY. Refusing to write.' % bad_dates)
+          print('Built', len(records), 'records, all row_keys unique. sync_id =', sync_id)
+
+
+          def sb(url, method, data=None, extra=None):
+              headers = {'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY}
+              if data is not None:
+                  headers['Content-Type'] = 'application/json'
+              if extra:
+                  headers.update(extra)
+              return urllib.request.Request(url, data=data, method=method, headers=headers)
+
+
+          def delete_with_retry(url, label):
+              # Same widened retry as overall-bq-sync.yml's delete_with_retry
+              # (2026-09-06): a plain DELETE on a "not this sync_id" predicate
+              # can't use a simple equality index and competes for a real scan
+              # against live dashboard traffic, so a retry needs real breathing
+              # room, not just a couple of quick re-tries.
+              for attempt in range(6):
+                  try:
+                      req = sb(url, 'DELETE', None, {'Prefer': 'return=minimal'})
+                      with urllib.request.urlopen(req, timeout=180) as r:
+                          r.read()
+                      return
+                  except Exception as e:
+                      detail = ''
+                      try:
+                          if hasattr(e, 'read'):
+                              detail = ' | body: ' + e.read().decode('utf-8')[:800]
+                      except Exception:
+                          pass
+                      print(label, 'prune attempt', attempt, 'failed:', repr(e) + detail)
+                      if attempt == 5:
+                          raise
+                      time.sleep(min(5 * (2 ** attempt), 60))
+
+
+          upsert_url = SB_URL + '/rest/v1/' + TABLE + '?on_conflict=row_key'
+          for i in range(0, len(records), BATCH):
+              body = json.dumps(records[i:i + BATCH]).encode('utf-8')
+              for attempt in range(3):
+                  try:
+                      req = sb(upsert_url, 'POST', body,
+                               {'Prefer': 'resolution=merge-duplicates,return=minimal'})
+                      with urllib.request.urlopen(req, timeout=60) as r:
+                          r.read()
+                      break
+                  except Exception as e:
+                      detail = ''
+                      try:
+                          if hasattr(e, 'read'):
+                              detail = ' | body: ' + e.read().decode('utf-8')[:500]
+                      except Exception:
+                          pass
+                      print('batch', i, 'attempt', attempt, 'failed:', repr(e) + detail)
+                      if attempt == 2:
+                          raise
+                      time.sleep(2 * (attempt + 1))
+              done = min(i + BATCH, len(records))
+              if (i // BATCH) % 25 == 0 or done == len(records):
+                  print('  upserted', done, '/', len(records))
+
+          # Prune, so a corrected or removed (date, source) pair cannot linger as
+          # a ghost. Only after every batch above has landed, so a mid-sync
+          # failure leaves the previous good snapshot intact rather than a hole.
+          #
+          # NOTE the PostgREST gotcha documented in CLAUDE.md: filter values are
+          # percent-encoded and NOT wrapped in double quotes -- quotes are
+          # matched as literal characters and would silently make this a no-op.
+          prune_url = (SB_URL + '/rest/v1/' + TABLE + '?or=(sync_id.neq.'
+                       + urllib.parse.quote(sync_id) + ',sync_id.is.null)')
+          delete_with_retry(prune_url, TABLE)
+          print('Pruned every row not stamped with this sync_id.')
+
+          # Final proof, server-side: the table must now hold exactly as many
+          # rows as this run built.
+          req = sb(SB_URL + '/rest/v1/' + TABLE + '?select=row_key&limit=1', 'GET',
+                   None, {'Prefer': 'count=exact', 'Range': '0-0'})
+          with urllib.request.urlopen(req, timeout=60) as r:
+              r.read()
+              content_range = r.headers.get('Content-Range') or ''
+          after = content_range.split('/')[-1]
+          print('Rows in', TABLE, 'after sync:', after, '| expected:', len(records))
+          if after.isdigit() and int(after) != len(records):
+              raise SystemExit('Post-sync row count mismatch: table holds %s, expected %d.'
+                               % (after, len(records)))
+
+          # Log this sync's own BigQuery job into bigquery_jobs, so Settings >
+          # Data > BigQuery Usage reflects every real job Quantum triggers.
+          # Best-effort: a failure here must never fail the sync itself, since
+          # the real cache write already succeeded.
+          try:
+              job_log = json.dumps({
+                  'job_id': job_id, 'project_id': PROJECT, 'location': job_loc,
+                  'mode': 'monthly_qls_sync', 'dashboard_id': None, 'user_email': None,
+                  'total_bytes_processed': int(res.get('totalBytesProcessed') or 0),
+                  'total_rows': total_rows, 'cache_hit': bool(res.get('cacheHit')),
+                  'latency_ms': None,
+              }).encode('utf-8')
+              req = sb(SB_URL + '/rest/v1/bigquery_jobs', 'POST', job_log, {'Prefer': 'return=minimal'})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  r.read()
+          except Exception as e:
+              print('bigquery_jobs log failed (non-fatal):', repr(e))
+
+          print('Sync complete.')
+          PYEOF

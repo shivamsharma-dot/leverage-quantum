@@ -17,12 +17,18 @@ import { classifyCorridor, corridorLabel, CORRIDORS, classifyCampaignTypeFromNam
 import { usePresence } from '../hooks/usePresence'
 import { useAuth } from '../hooks/useAuth'
 import { resolveSheetUrl } from '../lib/dataSources'
+import { fetchMonthlyQlsRows, fetchMonthlyQlsSyncedAt } from '../lib/monthlyQlsCache'
 
 const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=Qlops';
-const MONTHLY_CSV = 'https://docs.google.com/spreadsheets/d/1r-e6pBCN5ysfeD3Eq6sxgLmf97mdeTtloMPylqnx6Ew/gviz/tq?tqx=out:csv&sheet=QLSnapshot';
+// Monthly QLs no longer reads a sheet -- it reads Quantum's own BigQuery-backed
+// Supabase cache directly (monthlyQlsCache.js, populated by .github/workflows/
+// monthly-qls-sync.yml). See CLAUDE.md, 2026-09-08, "do not depend on sheet
+// now". QL_VIEWS keeps a 'monthly' entry (still used for the View label/id
+// elsewhere) but it carries no csv field -- loadData() branches on cfg.id and
+// never reads .csv for the monthly case.
 const QL_VIEWS = [
   { id: 'daily', label: 'Daily QLs', csv: SHEET_CSV },
-  { id: 'monthly', label: 'Monthly QLs', csv: MONTHLY_CSV },
+  { id: 'monthly', label: 'Monthly QLs' },
 ]
 
 const C = {
@@ -75,45 +81,6 @@ function parseCSV(csv) {
     count:           1,  // one row = one qualified lead
     corridorId:      classifyCorridor(r[h('opp_first_campaign_name')] || ''),
     category:        isGoogleSource(r[h('source')] || '') ? classifyCampaignTypeFromName(r[h('opp_first_campaign_name')] || '') : null,
-  }))
-}
-
-function parseMonthlyCSV(csv) {
-  const rows = csv.trim().split('\n').map(r => {
-    const cols = []; let buf = '', inQ = false
-    for (const ch of r) {
-      if (ch === '"') { inQ = !inQ }
-      else if (ch === ',' && !inQ) { cols.push(buf.trim()); buf = '' }
-      else buf += ch
-    }
-    cols.push(buf.trim())
-    return cols
-  })
-  const [hdr, ...data] = rows
-  const h = k => hdr.map(x => x.toLowerCase().trim()).indexOf(k.toLowerCase())
-  const num = v => { const n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n }
-  return data.filter(r => r.length > 1 && (r[h('period')] || '').trim()).map(r => ({
-    period:               (r[h('period')] || '').trim(),
-    date:                 (r[h('date')] || '').trim(),
-    source:               (r[h('source')] || '').trim(),
-    sub_source:           (r[h('sub_source')] || '').trim(),
-    opp_count:            num(r[h('opp_count')]),
-    floor_queued:         num(r[h('floor_queued')]),
-    futwork_queued:       num(r[h('futwork_queued')]),
-    superbot_queued:      num(r[h('superbot_queued')]),
-    futwork_ai_queued:    num(r[h('futwork_ai_queued')]),
-    futwork_qualified:    num(r[h('futwork_qualified')]),
-    // SR/AC vertical split -- both default to 0 (h() returns -1, num(undefined)=0)
-    // until the QLSnapshot sheet is refreshed with the BigQuery query that adds
-    // these two columns ("Monthly QLs (with Vertical SR/AC)" in Settings > Data
-    // > BigQuery Console). futwork_qualified/futwork_ai_qualified stay the real
-    // totals either way -- SR+AC always reconciles to them by construction.
-    futwork_qualified_sr:    num(r[h('futwork_qualified_sr')]),
-    futwork_qualified_ac:    num(r[h('futwork_qualified_ac')]),
-    superbot_qualified:   num(r[h('superbot_qualified')]),
-    futwork_ai_qualified: num(r[h('futwork_ai_qualified')]),
-    futwork_ai_qualified_sr: num(r[h('futwork_ai_qualified_sr')]),
-    futwork_ai_qualified_ac: num(r[h('futwork_ai_qualified_ac')]),
   }))
 }
 
@@ -398,35 +365,33 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   const [mCustomTo, setMCustomTo]      = useState('')
   const [showMCustom, setShowMCustom]  = useState(false)
 
-  const processCsv = useCallback((csv, cfg) => {
+  // Only ever called for the 'daily' view now -- Monthly QLs no longer parses
+  // CSV text at all (see loadData's monthly branch below).
+  const processCsv = useCallback((csv) => {
     const parsed = parseCSV(csv)
-    if (cfg.id !== 'daily') {
-      setMonthlyRows(parseMonthlyCSV(csv))
-    } else {
-      // Normalize month to clean 'Mon-YYYY' from qualified_date (raw
-      // qualified_month column mixes '01-Apr-2026','Apr-2026' & stray values).
-      const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-      const _norm=(raw)=>{ const m=String(raw||'').match(/([A-Za-z]{3})[a-z]*[-\s]*(\d{4})/); return m?(m[1][0].toUpperCase()+m[1].slice(1,3).toLowerCase()+'-'+m[2]):'' }
-      parsed.forEach(r=>{ const d=new Date(r.qualified_date); if(!isNaN(d)){ r.month=MON[d.getMonth()]+'-'+d.getFullYear() } else { const c=_norm(r.month); r.month = c || '' } })
-      setRows(parsed)
-      // Build month list sorted by actual qualified_date (earliest per month)
-      const monthMap = {}
-      parsed.forEach(r => {
-        const dateVal = r.qualified_date
-        if (r.month && dateVal) {
-          // keep the earliest date per month so sort is stable
-          if (!monthMap[r.month] || dateVal < monthMap[r.month])
-            monthMap[r.month] = dateVal
-        }
-      })
-      const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
-        .sort((a, b) => new Date(monthMap[a] || 0) - new Date(monthMap[b] || 0))
-      setMonths(ms)
-      setMonthStartMap(monthMap)
-      const _now=new Date(); const _curKey=MON[_now.getMonth()]+'-'+_now.getFullYear()
-      const _def = ms.includes(_curKey) ? _curKey : (ms[ms.length-1] || '')
-      setSelMonth(prev => prev || _def)
-    }
+    // Normalize month to clean 'Mon-YYYY' from qualified_date (raw
+    // qualified_month column mixes '01-Apr-2026','Apr-2026' & stray values).
+    const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    const _norm=(raw)=>{ const m=String(raw||'').match(/([A-Za-z]{3})[a-z]*[-\s]*(\d{4})/); return m?(m[1][0].toUpperCase()+m[1].slice(1,3).toLowerCase()+'-'+m[2]):'' }
+    parsed.forEach(r=>{ const d=new Date(r.qualified_date); if(!isNaN(d)){ r.month=MON[d.getMonth()]+'-'+d.getFullYear() } else { const c=_norm(r.month); r.month = c || '' } })
+    setRows(parsed)
+    // Build month list sorted by actual qualified_date (earliest per month)
+    const monthMap = {}
+    parsed.forEach(r => {
+      const dateVal = r.qualified_date
+      if (r.month && dateVal) {
+        // keep the earliest date per month so sort is stable
+        if (!monthMap[r.month] || dateVal < monthMap[r.month])
+          monthMap[r.month] = dateVal
+      }
+    })
+    const ms = [...new Set(parsed.map(r => r.month))].filter(Boolean)
+      .sort((a, b) => new Date(monthMap[a] || 0) - new Date(monthMap[b] || 0))
+    setMonths(ms)
+    setMonthStartMap(monthMap)
+    const _now=new Date(); const _curKey=MON[_now.getMonth()]+'-'+_now.getFullYear()
+    const _def = ms.includes(_curKey) ? _curKey : (ms[ms.length-1] || '')
+    setSelMonth(prev => prev || _def)
   }, [])
 
   // Fetch-once-per-session, plus instant-paint-from-localStorage on a cold tab: if
@@ -434,14 +399,37 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   // if a snapshot survived from a prior session (localStorage), render it immediately
   // instead of blocking on a fresh fetch of a very large sheet, then quietly fetch the
   // real thing in the background and swap it in once ready.
+  //
+  // Monthly QLs is a separate branch entirely: it reads Quantum's own
+  // BigQuery-backed Supabase cache (monthlyQlsCache.js) instead of a Google
+  // Sheet CSV -- see CLAUDE.md, 2026-09-08, "do not depend on sheet now". No
+  // session/localStorage caching layer here on purpose: that layer exists
+  // specifically to avoid re-hitting a slow/rate-limited sheet export, and a
+  // Supabase read (a handful of cheap paginated queries) doesn't have that
+  // problem, so it's simplest and safest to always fetch it fresh.
   const loadData = useCallback(async (bust = false) => {
     const t0 = Date.now()
     const cfg = QL_VIEWS.find(v => v.id === view) || QL_VIEWS[0]
+
+    if (cfg.id !== 'daily') {
+      setLoading(true)
+      try {
+        const [monthlyData, syncedAt] = await Promise.all([
+          fetchMonthlyQlsRows(),
+          fetchMonthlyQlsSyncedAt(),
+        ])
+        setMonthlyRows(monthlyData)
+        setLastSync(syncedAt || new Date())
+      } catch (e) { console.error('Monthly QLs fetch', e) }
+      finally { setTimeout(() => setLoading(false), Math.max(0, 750 - (Date.now() - t0))) }
+      return
+    }
+
     const cacheKey = 'qlops_' + cfg.id
     const cached = getSession(cacheKey)
 
     if (!bust && cached) {
-      processCsv(cached.data, cfg)
+      processCsv(cached.data)
       setLastSync(new Date(cached.ts))
       setLoading(false)
       return
@@ -451,7 +439,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
     if (!bust) {
       const persisted = getPersisted(cacheKey)
       if (persisted) {
-        processCsv(persisted.data, cfg)
+        processCsv(persisted.data)
         setLastSync(new Date(persisted.ts))
         setLoading(false)
         paintedFromCache = true
@@ -459,11 +447,11 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
     }
     if (!paintedFromCache) setLoading(true)
     try {
-      const baseCsv = await resolveSheetUrl(cfg.id === 'daily' ? 'qlopsDaily' : 'qlopsMonthly', cfg.csv)
+      const baseCsv = await resolveSheetUrl('qlopsDaily', cfg.csv)
       const url = bust ? baseCsv + (baseCsv.includes('?') ? '&' : '?') + '_=' + Date.now() : baseCsv
       const res = await fetch(url)
       const csv = await res.text()
-      processCsv(csv, cfg)
+      processCsv(csv)
       setSession(cacheKey, csv)
       setLastSync(new Date())
     } catch (e) { console.error('QL fetch', e) }
