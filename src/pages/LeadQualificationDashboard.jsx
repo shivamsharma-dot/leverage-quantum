@@ -201,14 +201,20 @@ const fmtShort = d => {
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
 }
 
-const ExportMenu = ({ exportData, exportView, setExportView, C, FONT }) => {
+const DAILY_EXPORT_VIEWS = [
+  { key:'day',      label:'Day on day',     desc:'One row per date - provider - campaign' },
+  { key:'month',    label:'Month on month',  desc:'Totals grouped by month + provider' },
+  { key:'source',   label:'By source',       desc:'Totals grouped by source + provider' },
+  { key:'campaign', label:'By campaign',     desc:'Campaigns ranked by qualified count' },
+]
+const MONTHLY_EXPORT_VIEWS = [
+  { key:'day',    label:'Day on day',      desc:'One row per date - source, every queued/QL/SR-AC column' },
+  { key:'month',  label:'Month on month',  desc:'One row per period, summed across sources' },
+  { key:'source', label:'By source',       desc:'Qualified + queued totals grouped by source' },
+]
+const ExportMenu = ({ exportData, exportView, setExportView, C, FONT, views }) => {
   const [open, setOpen] = React.useState(false)
-  const views = [
-    { key:'day',      label:'Day on day',     desc:'One row per date - provider - campaign' },
-    { key:'month',    label:'Month on month',  desc:'Totals grouped by month + provider' },
-    { key:'source',   label:'By source',       desc:'Totals grouped by source + provider' },
-    { key:'campaign', label:'By campaign',     desc:'Campaigns ranked by qualified count' },
-  ]
+  views = views || DAILY_EXPORT_VIEWS
   const download = (type) => {
     if (!exportData || !exportData.length) return
     let content, mime, ext
@@ -891,7 +897,16 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
   }, [filtered, search, sortCol, sortDir])
 
   // Export datasets - all respect active filters (date + provider + source)
+  // Monthly QLs has its own data model (per date+source aggregate rows, no
+  // per-row provider/campaign/count the way the daily sheet does), so it gets
+  // its own three export views instead of reusing the daily 'filtered' rows
+  // (which are always empty here -- monthly never populates that dataset).
   const exportData = React.useMemo(() => {
+    if (view === 'monthly') {
+      if (exportView === 'month') return monthExportRows
+      if (exportView === 'source') return monthlyBySource.map(s => ({ source: s.source, qualified_count: s.qualified, queued: s.queued }))
+      return dayExportRows
+    }
     const label = exportView
     if (label === 'day') {
       // Raw day-level rows
@@ -936,7 +951,13 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
       return Object.values(map).sort((a,b) => b.qualified_count - a.qualified_count)
     }
     return filtered.map(r => ({ ...r, qualified_count: r.count }))
-  }, [filtered, exportView])
+  }, [filtered, exportView, view, dayExportRows, monthExportRows, monthlyBySource])
+
+  // Export view options are different per page (monthly has no per-row campaign
+  // data) -- reset to the first, always-valid option ('day') whenever the page
+  // switches, so a stale selection from the other view can't silently pick a
+  // key that doesn't exist in the new view's list.
+  React.useEffect(() => { setExportView('day') }, [view])
 
   const totalPages = Math.ceil(tableRows.length / PAGE_SIZE)
   const pageRows   = tableRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -1200,7 +1221,7 @@ export default function LeadQualificationDashboard({ forcedView } = {}) {
 
             {/* Export button with view selector */}
             <div style={{position:'relative'}}>
-              <ExportMenu exportData={exportData} exportView={exportView} setExportView={setExportView} C={C} FONT={FONT} />
+              <ExportMenu exportData={exportData} exportView={exportView} setExportView={setExportView} C={C} FONT={FONT} views={view === 'monthly' ? MONTHLY_EXPORT_VIEWS : DAILY_EXPORT_VIEWS} />
             </div>
 
             {/* Info popover */}
