@@ -9,7 +9,7 @@
 //              sync_id / synced_at, in Supabase's overall_bq_daily table.
 // Read by    : the admin-only /dashboard/overall-bigquery page.
 //
-// 2026-09-08 -- moved off a direct-from-browser Supabase read.
+// 2026-09-08 -- moved off a direct-from-browser Supabase read, WITH a fallback.
 // This used to fetch overall_bq_daily straight from the browser with the public
 // Supabase anon key, one request per page of up to 1000 rows. Investigated live via
 // Supabase's own Logs Explorer (grouped by request path, last 24h): overall_bq_daily
@@ -17,19 +17,29 @@
 // table on the whole project -- and the math lines up almost exactly with the org's
 // real measured egress (~580MB/day average against Supabase's 5GB/month free-tier
 // cap), which is what pushed the account over its usage quota two billing cycles
-// running. See api/crm-leads.js's handleBigQuery (mode=overall_bq_*) for the fix: a
-// small server-side endpoint that keeps a short (5-minute) in-memory copy of whatever
-// was last fetched for a given (since, until, sources) combination, instead of every
-// browser tab re-querying Supabase from scratch. The underlying table only actually
-// changes 2-3x/day (the sync workflow above), so a 5-minute-old cached answer is
-// never meaningfully stale -- nobody using the page can tell the difference.
+// running. See api/crm-leads.js's handleBigQuery (mode=overall_bq_*) for the main
+// fix: a small server-side endpoint that keeps a short (5-minute) in-memory copy of
+// whatever was last fetched for a given (since, until, sources) combination, instead
+// of every browser tab re-querying Supabase from scratch.
+//
+// REAL BUG FOUND LIVE, SAME DAY: a wide range against the raw overall_bq_daily table
+// (one row per campaign, not the small pre-aggregated companion) can need far more
+// sequential keyset pages than the server function's own 60-second ceiling allows --
+// the OLD direct-from-browser version had no such ceiling and would just take longer.
+// A 2-month range genuinely timed out (502) the first time this shipped. Fixed by
+// having the server bail out cleanly at a safe time budget with `truncated:true` plus
+// the cursor of the last row it actually fetched, and having fetchOverallBqRows /
+// fetchOverallBqAggRows below pick up EXACTLY there via the same direct-to-Supabase
+// pagination the old version always used -- so a wide query still always succeeds,
+// it just does not get the caching benefit for whatever tail the server couldn't
+// finish in time. The two rules that direct path had to learn the hard way still
+// apply here: PostgREST caps every response at 1000 rows regardless of 'limit', and
+// paging must be keyed on row_key (the table's primary key) or page boundaries are
+// not stable.
 //
 // Every exported function below keeps its EXACT original name, arguments and return
-// shape, so OverallDashboard.jsx (the only consumer) needed zero changes for this.
-// The two rules the old direct-Supabase version had to learn the hard way (PostgREST
-// caps every response at 1000 rows regardless of 'limit', and paging must be keyed on
-// row_key or page boundaries are not stable) still apply -- they just now live
-// server-side, in api/crm-leads.js, instead of here.
+// shape, so OverallDashboard.jsx (the only consumer) needed zero changes for any of
+// this -- caching or the fallback.
 
 const API = '/api/crm-leads?source=bigquery'
 
@@ -57,24 +67,77 @@ async function apiGet(mode, params) {
   return j || {}
 }
 
+// --- Direct-to-Supabase fallback, used ONLY to finish a range the cached server
+// endpoint above couldn't complete inside its own time budget. Same technique the
+// whole file used to run unconditionally: keyset pagination on row_key, PostgREST's
+// 1000-row page cap, quoting rule for the Source IN-list.
+const SB_URL = 'https://tsyekthwthxszmsgqfej.supabase.co'
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRzeWVrdGh3dGh4c3ptc2dxZmVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjkzMDIsImV4cCI6MjA5NTM0NTMwMn0.bdM9h5c3PDu9hgggjBdbA-eb7kfF-79c6txOnCUxRhY'
+const BQ_COLUMNS = [
+  'lead_date', 'month', 'Source', 'Sub_Source', 'campaign_name',
+  'Total Leads Generated', 'floor_queued', 'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
+  'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
+  'Total_Spends', 'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
+]
+const AGG_COLUMNS = [
+  'lead_date', 'month', 'Source',
+  'Total Leads Generated', 'floor_queued', 'Queued on Futwork Human', 'Queued on Futwork AI', 'Queued on Superbot',
+  'Futwork Human QL', 'Futwork AI QL', 'Superbot AI QL',
+  'Total_Spends', 'Total Apps', 'Total Offers', 'Total Deposits', 'Total RAUs',
+]
+const inList = vals => '(' + vals.map(v => '"' + String(v).replace(/"/g, '') + '"').join(',') + ')'
+const PAGE = 1000
+
+async function fetchTailDirect({ table, columns, since, until, sources, cursor }) {
+  const select = columns.map(c => (/^[a-z_]+$/.test(c) ? c : '"' + c + '"')).join(',')
+  const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
+  const rows = []
+  let cur = cursor || null
+  for (let guard = 0; guard < 2000; guard++) { // 20,00,000-row safety valve
+    const p = new URLSearchParams({ select: select + ',row_key', order: 'row_key.asc', limit: String(PAGE) })
+    p.set('lead_date_iso', 'gte.' + since)
+    p.append('lead_date_iso', 'lte.' + until)
+    const list = (sources || []).filter(s => s && s !== 'All')
+    if (list.length) p.set('Source', 'in.' + inList(list))
+    if (cur != null) p.set('row_key', 'gt.' + cur)
+    const r = await fetch(SB_URL + '/rest/v1/' + table + '?' + p.toString(), { headers })
+    if (!r.ok) throw new Error(table + ' fallback read failed (' + r.status + ')')
+    const page = await r.json()
+    if (!Array.isArray(page)) throw new Error(table + ' returned a non-array response')
+    if (!page.length) break
+    for (const row of page) { const { row_key, ...rest } = row; rows.push(rest) }
+    if (page.length < PAGE) break
+    cur = page[page.length - 1].row_key
+  }
+  return rows
+}
+
+async function fetchRowsWithFallback(mode, table, columns, { since, until, sources }) {
+  const list = (sources || []).filter(s => s && s !== 'All')
+  const j = await apiGet(mode, { since, until, sources: list.join(',') })
+  const rows = Array.isArray(j.rows) ? j.rows : []
+  if (!j.truncated) return rows
+  // The server got through `rows` before hitting its own time budget -- pick up
+  // exactly where it left off (j.cursor) instead of re-fetching them.
+  const tail = await fetchTailDirect({ table, columns, since, until, sources, cursor: j.cursor })
+  return rows.concat(tail)
+}
+
 // since / until are inclusive 'YYYY-MM-DD' strings, matched server-side against
 // lead_date_iso. sources may be omitted, empty, or ['All'] to mean "no Source filter".
 export async function fetchOverallBqRows({ since, until, sources }) {
   if (!since || !until) throw new Error('fetchOverallBqRows needs both since and until')
-  const list = (sources || []).filter(s => s && s !== 'All')
-  const j = await apiGet('overall_bq_rows', { since, until, sources: list.join(',') })
-  return Array.isArray(j.rows) ? j.rows : []
+  return fetchRowsWithFallback('overall_bq_rows', 'overall_bq_daily', BQ_COLUMNS, { since, until, sources })
 }
 
 // Same contract as fetchOverallBqRows, against the pre-aggregated day+Source
 // companion table instead -- callers that only need Source/Month/Day-level numbers
 // (not per-campaign) get the same date-range behaviour, just fast regardless of how
-// wide the range is.
+// wide the range is (this table stays at most a few thousand rows for the whole
+// history, so it is not expected to ever hit the server's time budget in practice).
 export async function fetchOverallBqAggRows({ since, until, sources }) {
   if (!since || !until) throw new Error('fetchOverallBqAggRows needs both since and until')
-  const list = (sources || []).filter(s => s && s !== 'All')
-  const j = await apiGet('overall_bq_agg_rows', { since, until, sources: list.join(',') })
-  return Array.isArray(j.rows) ? j.rows : []
+  return fetchRowsWithFallback('overall_bq_agg_rows', 'overall_bq_daily_agg', AGG_COLUMNS, { since, until, sources })
 }
 
 // Oldest and newest lead_date_iso in the cache -- the page's Month dropdown is built

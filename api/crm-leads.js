@@ -3630,7 +3630,21 @@ async function handleBigQuery(req, res, me) {
         const PAGE = 1000
         const rows = []
         let cursor = null
+        // A wide range against overall_bq_daily (raw, one row per campaign -- unlike
+        // the small agg table) can need far more sequential pages than this function's
+        // own 60s ceiling (export const maxDuration below) allows -- confirmed live
+        // 2026-09-08: a 2-month range against the raw table genuinely timed out here,
+        // where the OLD client-side version had no such ceiling and would just take
+        // longer. Rather than let Vercel kill the function outright (a hard failure
+        // that the old design never had), bail out cleanly at a safe budget and say so
+        // -- overallBqCache.js falls back to fetching the rest directly from Supabase
+        // itself for exactly this case, so a wide query still succeeds, just without
+        // the caching benefit for its own tail end.
+        const startedAt = Date.now()
+        const TIME_BUDGET_MS = 40000
+        let truncated = false
         for (let guard = 0; guard < 2000; guard++) { // 20,00,000-row safety valve
+          if (Date.now() - startedAt > TIME_BUDGET_MS) { truncated = true; break }
           let path = table + '?select=' + encodeURIComponent(select + ',row_key')
             + '&lead_date_iso=gte.' + since + '&lead_date_iso=lte.' + until
             + '&order=row_key.asc&limit=' + PAGE
@@ -3650,6 +3664,12 @@ async function handleBigQuery(req, res, me) {
           if (page.length < PAGE) break
           cursor = page[page.length - 1].row_key
         }
+        // A truncated result is never cached and never labeled fromCache -- it is
+        // incomplete by construction, so it must never be handed to a later caller as
+        // if it were the whole answer. cursor is the last row_key actually fetched, so
+        // the client's fallback can resume from exactly there instead of re-fetching
+        // (and re-billing egress for) rows this call already retrieved.
+        if (truncated) return res.status(200).json({ rows, truncated: true, cursor, fromCache: false })
         payload = { rows }
       }
       overallBqCacheSet(cacheKey, payload)
