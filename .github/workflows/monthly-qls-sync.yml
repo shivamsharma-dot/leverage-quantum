@@ -88,6 +88,14 @@ jobs:
           # country_interested (Futwork human) / Country_Preference (Futwork
           # AI) against the same fixed 12-country SR destination list; AC is
           # total-minus-SR so the two always reconcile exactly by construction.
+          #
+          # Date filter (2026-09-08): originally a hardcoded '> 2026-05-31',
+          # which meant the "last 6 months" ask silently degraded by one more
+          # month every month that passed and needed a manual edit to widen.
+          # Replaced with a real rolling window -- the start of the month
+          # 5 months back from whenever this actually runs -- so the Monthly
+          # QLs page always shows the trailing 6 calendar months (current
+          # partial month included) with zero maintenance going forward.
           SQL = '''
           WITH v3 as (select * from leverage_direct.source_attribution_v3),
           opp_agg AS (
@@ -99,7 +107,7 @@ jobs:
               COUNT(CASE WHEN last_disposition_from_futwork IS NOT NULL THEN opportunity_id END) AS futwork_queued,
               COUNT(CASE WHEN last_disposition_from_superbot IS NOT NULL THEN opportunity_id END) AS superbot_queued
             FROM v3
-            WHERE DATE(opportunity_created_date) > '2026-05-31'
+            WHERE DATE(opportunity_created_date) >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 5 MONTH), MONTH)
             GROUP BY 1, 2
           ),
 
@@ -121,7 +129,7 @@ jobs:
                 'Interested in 2027 Intakes',
                 'Call Transferred To Counsellor'
               )
-              AND DATE(f.activity_creation_date) > '2026-05-31'
+              AND DATE(f.activity_creation_date) >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 5 MONTH), MONTH)
             GROUP BY 1, 2
           ),
 
@@ -132,7 +140,7 @@ jobs:
               COUNT(bot.reference_id) AS superbot_qualified
             FROM leverage_direct.lsq_activity_superbot_call_details bot
             LEFT JOIN v3 as s ON s.opportunity_id = bot.reference_id
-            WHERE DATE(bot.activity_creation_date) > '2026-05-31'
+            WHERE DATE(bot.activity_creation_date) >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 5 MONTH), MONTH)
               AND LOWER(bot.note) LIKE '%post%'
               AND bot.disposition IN (
                 'Interested In Study Abroad',
@@ -156,7 +164,7 @@ jobs:
             FROM leverage_direct.lsq_activities_futwork_ai f
             LEFT JOIN v3 as s ON s.opportunity_id = f.opportunity_id
             WHERE LOWER(f.notes) LIKE '%que%'
-              AND DATE(f.activity_creation_date) > '2026-05-31'
+              AND DATE(f.activity_creation_date) >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 5 MONTH), MONTH)
             GROUP BY 1, 2
           ),
 
@@ -179,7 +187,7 @@ jobs:
                 'Interested in 2027 Intakes',
                 'Call Transferred To Counsellor'
               )
-              AND DATE(f.activity_creation_date) > '2026-05-31'
+              AND DATE(f.activity_creation_date) >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 5 MONTH), MONTH)
             GROUP BY 1, 2
           ),
 
