@@ -5,3 +5,4 @@ dist
 .env.vercel-source
 .vercel
 .DS_Store
+.claude/worktrees/
