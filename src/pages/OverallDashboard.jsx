@@ -520,6 +520,44 @@ function AdvFilterBuilderPopover({
   )
 }
 
+// One trigger, three destinations -- replaces what used to be three separate
+// header buttons (Insights/Compare/Trend). Same position:fixed pattern as
+// AdvFilterBuilderPopover above, for the same reason (immune to the page's own
+// scrolling ancestor clipping a position:absolute panel regardless of z-index).
+function AnalyzeMenu({ anchor, onClose, onInsights, onCompare, onTrend }) {
+  const top = anchor ? anchor.bottom + 6 : 0
+  const right = anchor ? window.innerWidth - anchor.right : 0
+  const items = [
+    { key: 'insights', label: 'Insights', desc: 'Every chart below the funnel and table', onClick: onInsights,
+      icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.5.5.8 1 .9 1.7l.1.8h6l.1-.8c.1-.7.4-1.2.9-1.7A6 6 0 0012 3z" /></svg> },
+    { key: 'compare', label: 'Compare', desc: 'Two periods, side by side', onClick: onCompare,
+      icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3m0 8v3a2 2 0 002 2h3m8 0h3a2 2 0 002-2v-3m0-8V5a2 2 0 00-2-2h-3" /><line x1="8" y1="12" x2="16" y2="12" /></svg> },
+    { key: 'trend', label: 'Trend', desc: 'Any dimension, over time', onClick: onTrend,
+      icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 17 9 11 13 15 21 6" /><polyline points="15 6 21 6 21 12" /></svg> },
+  ]
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 150 }} />
+      <div style={{ position: 'fixed', top, right, zIndex: 200, width: 224, background: 'var(--card)', border: '1px solid ' + C.border, borderRadius: 12, boxShadow: '0 12px 32px -8px rgba(15,23,42,0.22)', padding: 6, boxSizing: 'border-box' }}>
+        {items.map(it => (
+          <button
+            key={it.key} type="button" onClick={it.onClick}
+            style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg3)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+          >
+            <span style={{ color: C.navy, display: 'flex', flexShrink: 0 }}>{it.icon}</span>
+            <span>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{it.label}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>{it.desc}</div>
+            </span>
+          </button>
+        ))}
+      </div>
+    </>
+  )
+}
+
 // Delays adopting a fast-changing value (a search box keystroke) until it's been
 // stable for `delay`ms. The INPUT stays bound to the raw value (so typing itself
 // is instant/responsive) -- only the expensive row-filtering that reacts to it
@@ -1407,6 +1445,16 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // content ancestor regardless of z-index, once its content grows tall enough).
   const advFilterBtnRef = useRef(null)
   const [advFilterAnchor, setAdvFilterAnchor] = useState(null)
+
+  // Insights/Compare/Trend used to be three separate header buttons, wide enough
+  // on their own to be most of why the header didn't fit on one line at real
+  // widths. Collapsed into one "Analyze" menu -- same three destinations, one
+  // trigger. Anchored via e.currentTarget's own rect at click time rather than a
+  // ref (Button doesn't forward one), same position:fixed-panel technique as
+  // AdvFilterBuilderPopover so it's immune to the page's own scrolling ancestor.
+  const [analyzeOpen, setAnalyzeOpen] = useState(false)
+  const [analyzeAnchor, setAnalyzeAnchor] = useState(null)
+
   const advActiveConditions = useMemo(() => advConditions.filter(isAdvConditionComplete), [advConditions])
   const matchesAdvancedFilters = useCallback(r => advCombinator === 'AND'
     ? advActiveConditions.every(c => matchesAdvCondition(r, c))
@@ -4061,19 +4109,20 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   : <span>{selMonth || '-'}</span>}
             </h1>
           </div>
-          {/* Two DETERMINISTIC rows, not one that hopes to wrap in time -- the filter
-              controls and the action buttons never share a row, at any width. Earlier
-              versions kept everything in one nowrap flex row and relied on the header's
-              own flexWrap to bail it out once it got too wide for the viewport; once
-              Insights/Compare/Trend were added on top of an already-full filter row,
-              that stopped fitting on real laptop widths and the excess got silently
-              clipped by this card's own overflow:hidden (the bug this replaces). Each
-              row below is independently narrow enough to fit on one line at any real
-              desktop width, and still carries flexWrap:'wrap' as a safety net for a
-              genuinely tiny window rather than a hard assumption. */}
-          <div className="lq-header-controls" style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:8, minWidth:0 }}>
+          {/* ONE row, everything on it -- the two-row split from a prior pass fit
+              cleanly but genuinely didn't need two rows; the real fix was shrinking
+              what has to be there in the first place. Insights/Compare/Trend used to
+              be three separate buttons (see AnalyzeMenu below) -- now one "Analyze"
+              trigger. The always-visible "Synced HH:MM:SS" text is now the Refresh
+              button's own title tooltip instead of a permanent ~150px label. Together
+              that's roughly 470px of savings, comfortably enough for the filter group
+              (LD/L7D/MTD, Month, Custom, Source, Filters -- already verified to sit
+              around 686px on its own) plus Analyze + Refresh + info to share one line
+              at any real desktop width. flexWrap:'wrap' stays on as a safety net for a
+              genuinely tiny window, not as the thing actually doing the fitting. */}
+          <div className="lq-header-controls" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end', minWidth:0 }}>
 
-            <div className="lq-filterbar" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end', background:'var(--bg3,#F8FAFC)', padding:'6px 10px', borderRadius:12, border:'0.5px solid var(--card-border,#E5E7EB)' }}>
+            <div className="lq-filterbar" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', background:'var(--bg3,#F8FAFC)', padding:'6px 10px', borderRadius:12, border:'0.5px solid var(--card-border,#E5E7EB)' }}>
               {isCurrentMonth && (
                 <div style={{ display:'flex', alignItems:'center', gap:4, background:'var(--bg3)', borderRadius:9, padding:3 }}>
                   {[['LD', 'Last Day'], ['L7D', 'Last 7D'], ['MTD', 'MTD']].map(([key, lbl2]) => {
@@ -4193,33 +4242,29 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               )}
             </div>
 
-            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
-            <Button
-              onClick={() => setInsightsOpen(true)}
-              size="sm"
-              variant="secondary"
-              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.5.5.8 1 .9 1.7l.1.8h6l.1-.8c.1-.7.4-1.2.9-1.7A6 6 0 0012 3z"/></svg>}
-            >
-              Insights
-            </Button>
-
-            <Button
-              onClick={() => setCompareOpen(true)}
-              size="sm"
-              variant="secondary"
-              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3m0 8v3a2 2 0 002 2h3m8 0h3a2 2 0 002-2v-3m0-8V5a2 2 0 00-2-2h-3"/><line x1="8" y1="12" x2="16" y2="12"/></svg>}
-            >
-              Compare
-            </Button>
-
-            <Button
-              onClick={() => setTrendOpen(true)}
-              size="sm"
-              variant="secondary"
-              icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 17 9 11 13 15 21 6"/><polyline points="15 6 21 6 21 12"/></svg>}
-            >
-              Trend
-            </Button>
+            <div style={{ position:'relative' }}>
+              <Button
+                onClick={e => {
+                  if (!analyzeOpen) setAnalyzeAnchor(e.currentTarget.getBoundingClientRect())
+                  setAnalyzeOpen(v => !v)
+                }}
+                size="sm"
+                variant="secondary"
+                icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.5.5.8 1 .9 1.7l.1.8h6l.1-.8c.1-.7.4-1.2.9-1.7A6 6 0 0012 3z"/></svg>}
+              >
+                Analyze
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft:2, transform: analyzeOpen ? 'rotate(180deg)' : 'none', transition:'transform .15s' }}><polyline points="6 9 12 15 18 9" /></svg>
+              </Button>
+              {analyzeOpen && (
+                <AnalyzeMenu
+                  anchor={analyzeAnchor}
+                  onClose={() => setAnalyzeOpen(false)}
+                  onInsights={() => { setInsightsOpen(true); setAnalyzeOpen(false) }}
+                  onCompare={() => { setCompareOpen(true); setAnalyzeOpen(false) }}
+                  onTrend={() => { setTrendOpen(true); setAnalyzeOpen(false) }}
+                />
+              )}
+            </div>
 
             {bqMode && (
               <span
@@ -4229,7 +4274,10 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                 {bqError ? 'BigQuery — fell back to sheet' : (bqBusy ? 'BigQuery — loading' : 'BigQuery (beta)')}
               </span>
             )}
-            {lastSync && <span style={{ fontSize:12.5, color:C.muted, fontFamily:FONT }}>Synced {syncFmt.format(lastSync)}</span>}
+            {/* The always-visible "Synced HH:MM:SS" text is gone -- it's now the
+                Refresh button's own title tooltip (hover to see it), the same way
+                any "last updated" timestamp collapses in a tight toolbar. Nothing is
+                lost, it's one hover away instead of permanently on screen. */}
             {bgRefreshing && <span title="Showing a cached snapshot from your last visit while a fresh copy loads in the background" style={{ fontSize:11.5, fontWeight:700, color:C.blue, fontFamily:FONT, whiteSpace:'nowrap' }}>Refreshing…</span>}
             {!lastSync && bqMode && bqSyncUnknown && <span style={{ fontSize:12.5, color:C.muted, fontFamily:FONT }}>Sync time unknown</span>}
             <Button
@@ -4237,6 +4285,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               disabled={loading || bqBusy}
               size="sm"
               variant="secondary"
+              title={lastSync ? 'Synced ' + syncFmt.format(lastSync) : undefined}
               icon={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: (loading || bqBusy) ? 'spin .8s linear infinite' : 'none' }}><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>}
             >
               {(loading || bqBusy) ? 'Refreshing' : 'Refresh'}
@@ -4260,7 +4309,6 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   </div>
                 </div>
               )}
-            </div>
             </div>
           </div>
         </div>
