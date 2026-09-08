@@ -4061,9 +4061,19 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   : <span>{selMonth || '-'}</span>}
             </h1>
           </div>
-          <div className="lq-header-controls" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', overflow:'visible', flexShrink:1, minWidth:0 }}>
+          {/* Two DETERMINISTIC rows, not one that hopes to wrap in time -- the filter
+              controls and the action buttons never share a row, at any width. Earlier
+              versions kept everything in one nowrap flex row and relied on the header's
+              own flexWrap to bail it out once it got too wide for the viewport; once
+              Insights/Compare/Trend were added on top of an already-full filter row,
+              that stopped fitting on real laptop widths and the excess got silently
+              clipped by this card's own overflow:hidden (the bug this replaces). Each
+              row below is independently narrow enough to fit on one line at any real
+              desktop width, and still carries flexWrap:'wrap' as a safety net for a
+              genuinely tiny window rather than a hard assumption. */}
+          <div className="lq-header-controls" style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:8, minWidth:0 }}>
 
-            <div className="lq-filterbar" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'nowrap', background:'var(--bg3,#F8FAFC)', padding:'6px 10px', borderRadius:12, border:'0.5px solid var(--card-border,#E5E7EB)' }}>
+            <div className="lq-filterbar" style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end', background:'var(--bg3,#F8FAFC)', padding:'6px 10px', borderRadius:12, border:'0.5px solid var(--card-border,#E5E7EB)' }}>
               {isCurrentMonth && (
                 <div style={{ display:'flex', alignItems:'center', gap:4, background:'var(--bg3)', borderRadius:9, padding:3 }}>
                   {[['LD', 'Last Day'], ['L7D', 'Last 7D'], ['MTD', 'MTD']].map(([key, lbl2]) => {
@@ -4183,6 +4193,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               )}
             </div>
 
+            <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
             <Button
               onClick={() => setInsightsOpen(true)}
               size="sm"
@@ -4249,6 +4260,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
                   </div>
                 </div>
               )}
+            </div>
             </div>
           </div>
         </div>
