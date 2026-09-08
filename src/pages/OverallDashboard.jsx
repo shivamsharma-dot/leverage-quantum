@@ -144,6 +144,10 @@ const dateFromIso = s => { const p = String(s || '').split('-').map(Number); ret
 // failing after every retry falls through to the caller's own catch/fallback.
 const retryFetch = (fn, attempts = 3, delay = 400) => {
   const attempt = n => fn().catch(e => {
+    // An intentional cancellation (a superseded fetch's own effect cleanup aborting
+    // it) is not a transient failure -- retrying it would just refire the exact
+    // request the caller was trying to stop.
+    if (e && e.name === 'AbortError') throw e
     if (n >= attempts - 1) throw e
     return new Promise(res => setTimeout(res, delay * (n + 1))).then(() => attempt(n + 1))
   })
@@ -2355,9 +2359,19 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       return
     }
     let dead = false
+    // Real bug found live (2026-09-08): bqRange can briefly compute a full-history
+    // fallback range on a cold load (its own month-lookup table hasn't populated yet),
+    // fire a request for it, then moments later recompute the correct narrow range and
+    // fire a second, better one -- but with no way to actually cancel the first, it
+    // kept paging through the whole ~1.5-year table in the background even after its
+    // result became irrelevant, stalling the page for 40+ seconds on real Supabase/
+    // Vercel resources shared with the fetch that mattered. The AbortController below
+    // genuinely cancels a superseded fetch from this same cleanup that already flips
+    // `dead`, instead of merely discarding its eventual result.
+    const controller = new AbortController()
     setBqBusy(true)
     const fetcher = fetchOverallBqRows
-    retryFetch(() => fetcher({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources }))
+    retryFetch(() => fetcher({ since: bqSince, until: bqUntil, sources: sourceIsAll ? [] : selectedSources, signal: controller.signal }))
       .then(raw => {
         if (dead) return
         setBqRows(raw.map(mapRow))
@@ -2376,14 +2390,14 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         while (cache.size > BQ_ROWS_CACHE_MAX) cache.delete(cache.keys().next().value)
       })
       .catch(e => {
-        if (dead) return
+        if (dead || (e && e.name === 'AbortError')) return
         // Fall back to the sheet instead of showing a broken page. loadData() is
         // session-cached, so this is instant if the CSV was already parsed once.
         setBqError(e.message)
         loadData()
       })
       .finally(() => { if (!dead) { setBqBusy(false); setLoading(false) } })
-    return () => { dead = true }
+    return () => { dead = true; controller.abort() }
   }, [bqMode, bqSince, bqUntil, sourceIsAll, selectedSources, bqNonce, loadData])
 
   // Same "read on primitives, not the span object" rule as bqSince/bqUntil above --

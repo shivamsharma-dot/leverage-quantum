@@ -59,9 +59,9 @@ export function writeBqBeta(on) {
   try { window.dispatchEvent(new CustomEvent(BQ_BETA_EVENT, { detail: { on: !!on } })) } catch (_) {}
 }
 
-async function apiGet(mode, params) {
+async function apiGet(mode, params, signal) {
   const qs = new URLSearchParams(Object.assign({ mode }, params || {}))
-  const r = await fetch(API + '&' + qs.toString())
+  const r = await fetch(API + '&' + qs.toString(), signal ? { signal } : undefined)
   const j = await r.json().catch(() => null)
   if (!r.ok) throw new Error((j && j.error) || ('overall_bq ' + mode + ' failed (' + r.status + ')'))
   return j || {}
@@ -88,7 +88,7 @@ const AGG_COLUMNS = [
 const inList = vals => '(' + vals.map(v => '"' + String(v).replace(/"/g, '') + '"').join(',') + ')'
 const PAGE = 1000
 
-async function fetchTailDirect({ table, columns, since, until, sources, cursor }) {
+async function fetchTailDirect({ table, columns, since, until, sources, cursor, signal }) {
   const select = columns.map(c => (/^[a-z_]+$/.test(c) ? c : '"' + c + '"')).join(',')
   const headers = { apikey: SB_KEY, Authorization: 'Bearer ' + SB_KEY }
   const rows = []
@@ -100,7 +100,7 @@ async function fetchTailDirect({ table, columns, since, until, sources, cursor }
     const list = (sources || []).filter(s => s && s !== 'All')
     if (list.length) p.set('Source', 'in.' + inList(list))
     if (cur != null) p.set('row_key', 'gt.' + cur)
-    const r = await fetch(SB_URL + '/rest/v1/' + table + '?' + p.toString(), { headers })
+    const r = await fetch(SB_URL + '/rest/v1/' + table + '?' + p.toString(), signal ? { headers, signal } : { headers })
     if (!r.ok) throw new Error(table + ' fallback read failed (' + r.status + ')')
     const page = await r.json()
     if (!Array.isArray(page)) throw new Error(table + ' returned a non-array response')
@@ -112,22 +112,33 @@ async function fetchTailDirect({ table, columns, since, until, sources, cursor }
   return rows
 }
 
-async function fetchRowsWithFallback(mode, table, columns, { since, until, sources }) {
+// signal (optional AbortSignal) lets a caller genuinely cancel this instead of just
+// discarding its eventual result. Real bug found live (2026-09-08): on a cold Overall
+// (BigQuery) load, bqRange can briefly compute a full-history fallback range (its own
+// month-lookup table hasn't loaded yet) and fire a request for it, then moments later
+// recompute the correct narrow range and fire a second, better one -- but without a way
+// to actually cancel the first, it kept paging through the whole ~1.5-year table in the
+// background even after its result became irrelevant, competing for the same Supabase/
+// Vercel resources as the fetch that was actually going to be shown and stalling the
+// page for 40+ seconds. The caller aborts the stale one from its effect cleanup once a
+// newer bqSince/bqUntil supersedes it.
+async function fetchRowsWithFallback(mode, table, columns, { since, until, sources, signal }) {
   const list = (sources || []).filter(s => s && s !== 'All')
-  const j = await apiGet(mode, { since, until, sources: list.join(',') })
+  const j = await apiGet(mode, { since, until, sources: list.join(',') }, signal)
   const rows = Array.isArray(j.rows) ? j.rows : []
   if (!j.truncated) return rows
   // The server got through `rows` before hitting its own time budget -- pick up
   // exactly where it left off (j.cursor) instead of re-fetching them.
-  const tail = await fetchTailDirect({ table, columns, since, until, sources, cursor: j.cursor })
+  const tail = await fetchTailDirect({ table, columns, since, until, sources, cursor: j.cursor, signal })
   return rows.concat(tail)
 }
 
 // since / until are inclusive 'YYYY-MM-DD' strings, matched server-side against
 // lead_date_iso. sources may be omitted, empty, or ['All'] to mean "no Source filter".
-export async function fetchOverallBqRows({ since, until, sources }) {
+// signal: optional AbortSignal -- see the comment on fetchRowsWithFallback.
+export async function fetchOverallBqRows({ since, until, sources, signal }) {
   if (!since || !until) throw new Error('fetchOverallBqRows needs both since and until')
-  return fetchRowsWithFallback('overall_bq_rows', 'overall_bq_daily', BQ_COLUMNS, { since, until, sources })
+  return fetchRowsWithFallback('overall_bq_rows', 'overall_bq_daily', BQ_COLUMNS, { since, until, sources, signal })
 }
 
 // Same contract as fetchOverallBqRows, against the pre-aggregated day+Source
@@ -135,9 +146,9 @@ export async function fetchOverallBqRows({ since, until, sources }) {
 // (not per-campaign) get the same date-range behaviour, just fast regardless of how
 // wide the range is (this table stays at most a few thousand rows for the whole
 // history, so it is not expected to ever hit the server's time budget in practice).
-export async function fetchOverallBqAggRows({ since, until, sources }) {
+export async function fetchOverallBqAggRows({ since, until, sources, signal }) {
   if (!since || !until) throw new Error('fetchOverallBqAggRows needs both since and until')
-  return fetchRowsWithFallback('overall_bq_agg_rows', 'overall_bq_daily_agg', AGG_COLUMNS, { since, until, sources })
+  return fetchRowsWithFallback('overall_bq_agg_rows', 'overall_bq_daily_agg', AGG_COLUMNS, { since, until, sources, signal })
 }
 
 // Oldest and newest lead_date_iso in the cache -- the page's Month dropdown is built
