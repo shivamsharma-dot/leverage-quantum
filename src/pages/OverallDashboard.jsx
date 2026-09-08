@@ -1331,6 +1331,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // once it lands, mirroring how the Trend modal itself behaves on open.
   const [monthTrendBqRows, setMonthTrendBqRows] = useState([])
   const [monthTrendBqBusy, setMonthTrendBqBusy] = useState(false)
+  // Backs the Funnel summary table's Month tab -- see summaryMonthBqSpan's comment.
+  const [summaryMonthBqRows, setSummaryMonthBqRows] = useState([])
+  const [summaryMonthBqBusy, setSummaryMonthBqBusy] = useState(false)
   // Already deliberately off the main page's critical path (see the comment
   // above) -- but it still fired this real, multi-month BigQuery cursor
   // fetch on EVERY load with BQ mode on, whether or not this specific card
@@ -2241,6 +2244,21 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
     const endMk = monthKey(trendAnchorDate)
     return { from: monthStartDate(endMk - 4), to: monthEndDate(endMk) }
   }, [bqActive, trendAnchorDate])
+  // Funnel summary table's own Month tab -- deliberately wider than the trend chart's
+  // trailing-5-month window above: the table's whole premise ("every month present in
+  // the data") means January of the current year onward, not a moving 5-month slice
+  // (real bug reported live 2026-09-08: Jan-Jul showed real Spend -- from the synthetic
+  // affiliate-manual-entry rows, which are NOT date-range-fetched -- but zero Leads/
+  // Queued/QL, since in BQ mode byMonth read nonDateRows, which only ever holds the
+  // narrow bqRange window, roughly the on-screen month plus its comparison period).
+  // Same anti-circular-dependency anchor (trendAnchorDate) and deliberately-deferred,
+  // independent-fetch pattern as monthTrendBqSpan -- but gated on the user actually
+  // viewing the Month tab (grpBy==='month'), not on scroll visibility, since this table
+  // sits on the main page rather than inside the Insights modal the chart lives in.
+  const summaryMonthBqSpan = useMemo(() => {
+    if (!bqActive || !trendAnchorDate) return null
+    return { from: new Date(trendAnchorDate.getFullYear(), 0, 1), to: trendAnchorDate }
+  }, [bqActive, trendAnchorDate])
   const trendBqSpan = useMemo(() => {
     if (!trendOpen || !bqActive || !trendAnchorDate) return null
     const end = trendAnchorDate
@@ -2425,6 +2443,32 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       .finally(() => { if (!dead) setMonthTrendBqBusy(false) })
     return () => { dead = true }
   }, [bqActive, monthTrendVisible, monthTrendBqSince, monthTrendBqUntil, bqNonce])
+
+  // Same "read on primitives" rule as monthTrendBqSince/Until above.
+  const summaryMonthBqSince = summaryMonthBqSpan ? dayKey(summaryMonthBqSpan.from) : null
+  const summaryMonthBqUntil = summaryMonthBqSpan ? dayKey(summaryMonthBqSpan.to) : null
+
+  // Gated on the user actually being on the Month tab (grpBy==='month'), not on scroll
+  // visibility -- fetches ALL sources, unfiltered, same "filter client-side from here"
+  // reasoning as the trend-chart fetch above. Carries its own AbortController (same
+  // fix as the main bqRows effect, 2026-09-08) so switching off the Month tab -- or a
+  // date/source change recomputing summaryMonthBqSpan -- genuinely cancels a
+  // still-in-flight fetch instead of letting it run to completion for nothing.
+  useEffect(() => {
+    if (!bqActive || grpBy !== 'month' || !summaryMonthBqSince || !summaryMonthBqUntil) return
+    let dead = false
+    const controller = new AbortController()
+    setSummaryMonthBqBusy(true)
+    retryFetch(() => fetchOverallBqRows({ since: summaryMonthBqSince, until: summaryMonthBqUntil, sources: [], signal: controller.signal }))
+      .then(raw => { if (!dead) setSummaryMonthBqRows(raw.map(mapRow)) })
+      .catch(e => { /* an AbortError here is expected and harmless; any other failure
+                        just leaves the table on whatever it last had, same as the
+                        trend chart's own fetch above -- the page-level BQ outage
+                        fallback (main bqRows effect) already handles a real error. */
+        void e })
+      .finally(() => { if (!dead) setSummaryMonthBqBusy(false) })
+    return () => { dead = true; controller.abort() }
+  }, [bqActive, grpBy, summaryMonthBqSince, summaryMonthBqUntil, bqNonce])
 
   // prevWindow (declared above) resolves to either {type:'month', mk} or {type:'range',
   // from, to} -- normalised to plain since/until day-key strings here, same "read on
@@ -2645,9 +2689,29 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
   // month actually present in the data. Every other grouping (Source/Campaign/
   // Corridor/Day) stays correctly date-scoped via bySource/byCampaign/byCorridor/
   // byDayFull below, which are untouched.
+  //
+  // In BQ mode `nonDateRows` alone is NOT enough, though -- it only ever holds
+  // whatever narrow window the main page's own selection fetched (roughly the
+  // on-screen month plus its comparison period), so months outside that window
+  // showed real Spend (from the synthetic affiliate-manual-entry rows, which are
+  // merged in regardless of date range) but zero Leads/Queued/QL (real bug reported
+  // live 2026-09-08). summaryMonthRows (declared with its own fetch above) is the
+  // wider, independently-fetched dataset that actually covers January of the
+  // current year onward -- same "apply the same filters against a different
+  // dataset" principle as monthTrendRows uses for the trend chart.
+  const summaryMonthRows = useMemo(() => {
+    if (!bqActive) return nonDateRows
+    let rs = [...summaryMonthBqRows, ...buildSyntheticAffiliateRows(affiliateManual)]
+    if (!sourceIsAll) rs = rs.filter(matchesSource)
+    if (corridorFilter !== 'All') rs = rs.filter(r => corridorLabel(classifyCorridor(r.campaign)) === corridorFilter)
+    const q = campaignQueryDebounced.trim().toLowerCase()
+    if (q) rs = rs.filter(r => r.campaign.toLowerCase().includes(q))
+    if (advActiveConditions.length) rs = rs.filter(matchesAdvancedFilters)
+    return rs
+  }, [bqActive, summaryMonthBqRows, affiliateManual, nonDateRows, sourceIsAll, selectedSources, corridorFilter, campaignQueryDebounced, advActiveConditions, matchesAdvancedFilters])
   const byMonth = useMemo(() => {
     const m = new Map()
-    nonDateRows.forEach(r => {
+    summaryMonthRows.forEach(r => {
       if (r.mk == null) return
       const e = m.get(r.mk) || { mk:r.mk, label:monthLabel(r.mk), leads:0, queued:0, floorQueued:0, futworkHumanQ:0, futworkAiQ:0, superbotQ:0, humanQL:0, futworkAiQl:0, superbotAiQl:0, totalQL:0, deposits:0 }
       e.leads += r.leads; e.queued += r.futworkHumanQ + r.futworkAiQ + r.superbotQ; e.humanQL += r.humanQL
@@ -2656,7 +2720,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       m.set(r.mk, e)
     })
     return [...m.values()].sort((a, b) => a.mk - b.mk)
-  }, [nonDateRows])
+  }, [summaryMonthRows])
 
   // Daily trend — last 30 days present in the active selection, gives the "what happened
   // recently" pulse a marketer checks first thing in the morning.
@@ -2786,11 +2850,11 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
       label:d.label, dateKey:d.key, paidLeads:d.paidLeads, paidQL:d.paidQL, paidApps:d.paidApps, leads:d.leads, queued:d.queued, floorQueued:d.floorQueued, futworkHumanQ:d.futworkHumanQ, futworkAiQ:d.futworkAiQ, superbotQ:d.superbotQ, humanQL:d.humanQL, futworkAiQl:d.futworkAiQl, superbotAiQl:d.superbotAiQl, totalQL:d.totalQL, apps:d.apps, offers:d.offers, deposits:d.deposits, raus:d.raus, spend:d.spend, costSpend:d.costSpend,
     }))
     return byMonth.map(m => {
-      // nonDateRows, not filtered -- byMonth's own rows are already sourced from
-      // nonDateRows (see its comment above), so re-deriving apps/offers/raus/spend/
-      // paid* from the date-scoped `filtered` here would silently zero them out for
-      // any month outside the currently-selected date window.
-      const full = nonDateRows.filter(r => r.mk === m.mk)
+      // summaryMonthRows, not filtered -- byMonth's own rows are already sourced from
+      // summaryMonthRows (see its comment above), so re-deriving apps/offers/raus/
+      // spend/paid* from the date-scoped `filtered` here would silently zero them out
+      // for any month outside the currently-selected date window.
+      const full = summaryMonthRows.filter(r => r.mk === m.mk)
       return {
         label:m.label, mk:m.mk, leads:m.leads, queued:m.queued, floorQueued:m.floorQueued, futworkHumanQ:m.futworkHumanQ, futworkAiQ:m.futworkAiQ, superbotQ:m.superbotQ, humanQL:m.humanQL, futworkAiQl:m.futworkAiQl, superbotAiQl:m.superbotAiQl, totalQL:m.totalQL,
         apps: full.reduce((t, r) => t + r.apps, 0), offers: full.reduce((t, r) => t + r.offers, 0),
@@ -2804,7 +2868,7 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
         paidApps: full.reduce((t, r) => t + (paidSources.has(r.source) && !isCostExcluded(r) ? r.apps : 0), 0),
       }
     })
-  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, nonDateRows, paidSources, isCostExcluded])
+  }, [grpBy, bySource, byCampaign, byCorridor, byDayFull, byMonth, summaryMonthRows, paidSources, isCostExcluded])
 
   const grpByLabel = grpBy === 'source' ? 'Source' : grpBy === 'campaign' ? 'Campaign' : grpBy === 'corridor' ? 'Corridor' : grpBy === 'day' ? 'Date' : 'Month'
 
@@ -4465,7 +4529,9 @@ export default function OverallDashboard({ dataSource = 'sheet' }) {
               }
             >
               {sectionTitle('Funnel summary by ' + grpByLabel.toLowerCase(), grpBy === 'month'
-                ? 'every month present in the data, not scoped to the date filter above — search, sort, and customize the columns below'
+                ? (bqActive
+                    ? 'January ' + new Date().getFullYear() + ' onward, not scoped to the date filter above' + (summaryMonthBqBusy ? ' — fetching the full year, this can take a moment' : ' — search, sort, and customize the columns below')
+                    : 'every month present in the data, not scoped to the date filter above — search, sort, and customize the columns below')
                 : 'full-funnel totals and stage conversion rates — search, sort, and customize the columns below')}
 
               {/* TOOLBAR */}
